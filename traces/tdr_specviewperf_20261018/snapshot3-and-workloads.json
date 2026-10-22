@@ -1,0 +1,408 @@
+{
+  "label": "MEASURED: snapshot3 and VF1-exported text read only; no VF1 action requested",
+  "source": {
+    "basename": "qemu.log.snapshot3",
+    "bytes": 68014597,
+    "lines": 307562,
+    "sha256": "c8c27014a1b123495ae7459f9e7e7a87cc73a8ade117183afe607caf70c6803c",
+    "snapshot2_is_byte_prefix": true
+  },
+  "status_samples": 6097,
+  "nonzero_unreconciled_samples": 0,
+  "nonzero_root_moves_samples": 0,
+  "refusals": [
+    {
+      "line": 113366,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00188:0xff040031 host 0x61: USER_RING_GP_FORMAT Budget entry=0x0faa26023110102c source_va=0x4101ee0 cursor=0x3bdc put=0x3c76 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 1026596
+    },
+    {
+      "line": 126035,
+      "text": "kf3: USER_RING_REFUSED 0xc1d001e7:0xff04002b host 0x5a: USER_RING_GP_FORMAT Budget entry=0x0ef7d2001dd1002c source_va=0x40f6800 cursor=0x2500 put=0x2501 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 980944
+    },
+    {
+      "line": 139098,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00273:0xff040029 host 0x58: USER_RING_GP_FORMAT Budget entry=0x0efa82026dd7002c source_va=0x40e7e30 cursor=0x7c6 put=0x7c7 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 981632
+    },
+    {
+      "line": 146095,
+      "text": "kf3: USER_RING_REFUSED 0xc1d002bc:0xff040025 host 0x54: USER_RING_GP_FORMAT Budget entry=0x0ef926027cb7002c source_va=0x1139bfb8 cursor=0x37f7 put=0x3807 entries=65536; no completion/reuse credit",
+      "decoded_length_bytes": 981284
+    },
+    {
+      "line": 152469,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00308:0xff040025 host 0x54: USER_RING_GP_FORMAT Budget entry=0x0ef28a024a28002c source_va=0x411d0e0 cursor=0x721c put=0x721e entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 979592
+    },
+    {
+      "line": 158444,
+      "text": "kf3: USER_RING_REFUSED 0xc1d0034f:0xff040023 host 0x52: USER_RING_GP_FORMAT Budget entry=0x0efafe02693b002c source_va=0x40f9620 cursor=0x2ac4 put=0x2ac5 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 981756
+    },
+    {
+      "line": 168353,
+      "text": "kf3: USER_RING_REFUSED 0xc1d003af:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0ef906027231002c source_va=0x4102a18 cursor=0x3d43 put=0x3d44 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 981252
+    },
+    {
+      "line": 174914,
+      "text": "kf3: USER_RING_REFUSED 0xc1d003f9:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0ef7de026f3b002c source_va=0x41168b0 cursor=0x6516 put=0x6517 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 980956
+    },
+    {
+      "line": 182651,
+      "text": "kf3: USER_RING_REFUSED 0xc1d0044b:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0e92620298b16558 source_va=0x1f3d52b0 cursor=0xaa56 put=0xaa57 entries=65536; no completion/reuse credit",
+      "decoded_length_bytes": 954976
+    },
+    {
+      "line": 190085,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00495:0xff040027 host 0x56: USER_RING_GP_FORMAT Budget entry=0x0efac602c42c002c source_va=0x1273cdd8 cursor=0x79bb put=0x79bd entries=131072; no completion/reuse credit",
+      "decoded_length_bytes": 981700
+    },
+    {
+      "line": 200701,
+      "text": "kf3: USER_RING_REFUSED 0xc1d004f3:0xff040021 host 0x50: USER_RING_GP_FORMAT Budget entry=0x0ef9aa024511002c source_va=0x40fef08 cursor=0x35e1 put=0x35e3 entries=32768; no completion/reuse credit",
+      "decoded_length_bytes": 981416
+    },
+    {
+      "line": 207504,
+      "text": "kf3: USER_RING_REFUSED 0xc1d00537:0xff040021 host 0x50: USER_RING_GP_FORMAT Budget entry=0x0e748e0283da84a0 source_va=0x173f8ea8 cursor=0xf1d5 put=0xf206 entries=65536; no completion/reuse credit",
+      "decoded_length_bytes": 947340
+    }
+  ],
+  "unloads": [
+    {
+      "line": 115421,
+      "uptime_seconds": 9761.968,
+      "seed_label": 3
+    },
+    {
+      "line": 127691,
+      "uptime_seconds": 9914.191,
+      "seed_label": 4
+    },
+    {
+      "line": 131357,
+      "uptime_seconds": 9919.806,
+      "seed_label": 5
+    },
+    {
+      "line": 140832,
+      "uptime_seconds": 9999.208,
+      "seed_label": 6
+    },
+    {
+      "line": 147735,
+      "uptime_seconds": 10034.814,
+      "seed_label": 7
+    },
+    {
+      "line": 154047,
+      "uptime_seconds": 10056.791,
+      "seed_label": 8
+    },
+    {
+      "line": 161763,
+      "uptime_seconds": 10079.804,
+      "seed_label": 9
+    },
+    {
+      "line": 169900,
+      "uptime_seconds": 10137.52,
+      "seed_label": 10
+    },
+    {
+      "line": 176466,
+      "uptime_seconds": 10162.98,
+      "seed_label": 11
+    },
+    {
+      "line": 184311,
+      "uptime_seconds": 10202.242,
+      "seed_label": 12
+    },
+    {
+      "line": 191728,
+      "uptime_seconds": 10253.914,
+      "seed_label": 13
+    },
+    {
+      "line": 202285,
+      "uptime_seconds": 10350.306,
+      "seed_label": 14
+    },
+    {
+      "line": 209142,
+      "uptime_seconds": 10389.552,
+      "seed_label": 15
+    }
+  ],
+  "pre_first_tdr_deferred_context_count": 10,
+  "pre_first_tdr_deferred_contexts": [
+    {
+      "line": 103748,
+      "text": "kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634549, chid: 51, chan_client: 3251634551, object: 4279107584 } on 0xc1d00177:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: host channel(s) off the runlist, context UNBOUND (owner ruling B / \u00a7U / \u00a7V) (227 us, off the GSP lock)"
+    },
+    {
+      "line": 105327,
+      "text": "kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634555, chid: 51, chan_client: 3251634557, object: 4279107584, virt_memory: 0, phys_address: 7878012928, phys_attr: 0, dma_handle: 0, index: 51, size: 901888 } on 0xc1d0017d:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: satisfied by each twin's own host context (owner ruling B / \u00a7U / \u00a7V) (13 us, off the GSP lock)"
+    },
+    {
+      "line": 105328,
+      "text": "kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634555, chid: 51, chan_client: 3251634557, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 901888, entry_count: 0 } on 0xc1d0017d:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: satisfied by each twin's own host context (owner ruling B / \u00a7U / \u00a7V) (3 us, off the GSP lock)"
+    },
+    {
+      "line": 106789,
+      "text": "kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634538, chid: 58, chan_client: 3251634540, object: 4279107584 } on 0xc1d0016c:0xff0e0000 -> Windows user-work Passthrough twin(s) [6a]: host channel(s) off the runlist, context UNBOUND (owner ruling B / \u00a7U / \u00a7V) (260 us, off the GSP lock)"
+    },
+    {
+      "line": 109462,
+      "text": "kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634555, chid: 51, chan_client: 3251634557, object: 4279107584 } on 0xc1d0017d:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: host channel(s) off the runlist, context UNBOUND (owner ruling B / \u00a7U / \u00a7V) (228 us, off the GSP lock)"
+    },
+    {
+      "line": 109930,
+      "text": "kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634560, chid: 51, chan_client: 3251634562, object: 4279107584, virt_memory: 0, phys_address: 7878012928, phys_attr: 0, dma_handle: 0, index: 51, size: 901888 } on 0xc1d00182:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: satisfied by each twin's own host context (owner ruling B / \u00a7U / \u00a7V) (11 us, off the GSP lock)"
+    },
+    {
+      "line": 109931,
+      "text": "kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634560, chid: 51, chan_client: 3251634562, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 901888, entry_count: 0 } on 0xc1d00182:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: satisfied by each twin's own host context (owner ruling B / \u00a7U / \u00a7V) (3 us, off the GSP lock)"
+    },
+    {
+      "line": 111607,
+      "text": "kf3: act deferred API context: EvictCtx { engine_type: 1, h_client: 3251634560, chid: 51, chan_client: 3251634562, object: 4279107584 } on 0xc1d00182:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: host channel(s) off the runlist, context UNBOUND (owner ruling B / \u00a7U / \u00a7V) (228 us, off the GSP lock)"
+    },
+    {
+      "line": 112652,
+      "text": "kf3: act deferred API context: InitializeCtx { engine_type: 1, h_client: 3251634566, chid: 51, chan_client: 3251634568, object: 4279107584, virt_memory: 0, phys_address: 7878012928, phys_attr: 0, dma_handle: 0, index: 51, size: 901888 } on 0xc1d00188:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: satisfied by each twin's own host context (owner ruling B / \u00a7U / \u00a7V) (13 us, off the GSP lock)"
+    },
+    {
+      "line": 112653,
+      "text": "kf3: act deferred API context: PromoteCtx { engine_type: 1, h_client: 3251634566, chid: 51, chan_client: 3251634568, object: 4279107584, virt_memory: 0, virt_address: 69632, size: 901888, entry_count: 0 } on 0xc1d00188:0xff0e0000 -> Windows user-work Passthrough twin(s) [61]: satisfied by each twin's own host context (owner ruling B / \u00a7U / \u00a7V) (3 us, off the GSP lock)"
+    }
+  ],
+  "pre_first_tdr_caps": {
+    "count": 56,
+    "minimum_slots_held": 24,
+    "maximum_slots_held": 24,
+    "maximum_ceilings": 0
+  },
+  "translated_retire_comparison": [
+    {
+      "label": "seed3 teardown",
+      "count": 13,
+      "rows": [
+        {
+          "line": 113520,
+          "text": "kf3: TSPACE-RETIRE tok=0x80b host=0x10038 key=VasKey(13965662577603119184) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113549,
+          "text": "kf3: TSPACE-RETIRE tok=0xd host=0x3a key=VasKey(13965662590488021072) ring_va=0xff00000000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113819,
+          "text": "kf3: TSPACE-RETIRE tok=0x1805 host=0x30032 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113833,
+          "text": "kf3: TSPACE-RETIRE tok=0x806 host=0x10033 key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113848,
+          "text": "kf3: TSPACE-RETIRE tok=0x2007 host=0xc0034 key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113862,
+          "text": "kf3: TSPACE-RETIRE tok=0x2008 host=0xc0035 key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113876,
+          "text": "kf3: TSPACE-RETIRE tok=0x2809 host=0x50036 key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113890,
+          "text": "kf3: TSPACE-RETIRE tok=0x200a host=0xc0037 key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113904,
+          "text": "kf3: TSPACE-RETIRE tok=0x804 host=0x10031 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 113918,
+          "text": "kf3: TSPACE-RETIRE tok=0x80c host=0x10039 key=VasKey(13965662590488021072) ring_va=0xff00100000 released=true stale_binds=0/1149366 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 114999,
+          "text": "kf3: TSPACE-RETIRE tok=0x802 host=0x1002f key=VasKey(13965662457344034928) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 115018,
+          "text": "kf3: TSPACE-RETIRE tok=0x3 host=0x30 key=VasKey(13965662457344034928) ring_va=0xff00a00000 released=true stale_binds=0/810 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 115406,
+          "text": "kf3: TSPACE-RETIRE tok=0x801 host=0x1002e key=VasKey(13970166078463016970) ring_va=0xff00c00000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        }
+      ]
+    },
+    {
+      "label": "seed9 teardown",
+      "count": 13,
+      "rows": [
+        {
+          "line": 160299,
+          "text": "kf3: TSPACE-RETIRE tok=0x80d host=0x1003a key=VasKey(13965665936267544656) ring_va=0xff00200000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160328,
+          "text": "kf3: TSPACE-RETIRE tok=0xc host=0x39 key=VasKey(13965662590488021072) ring_va=0xff00000000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160593,
+          "text": "kf3: TSPACE-RETIRE tok=0x1805 host=0x30032 key=VasKey(13965665811713493104) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160607,
+          "text": "kf3: TSPACE-RETIRE tok=0x806 host=0x10033 key=VasKey(13965665811713493104) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160622,
+          "text": "kf3: TSPACE-RETIRE tok=0x2007 host=0xc0034 key=VasKey(13965665811713493104) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160636,
+          "text": "kf3: TSPACE-RETIRE tok=0x2008 host=0xc0035 key=VasKey(13965665811713493104) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160650,
+          "text": "kf3: TSPACE-RETIRE tok=0x2809 host=0x50036 key=VasKey(13965665811713493104) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160664,
+          "text": "kf3: TSPACE-RETIRE tok=0x200a host=0xc0037 key=VasKey(13965665811713493104) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160678,
+          "text": "kf3: TSPACE-RETIRE tok=0x80b host=0x10038 key=VasKey(13965662590488021072) ring_va=0xff00900000 released=true stale_binds=0/41356 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 160693,
+          "text": "kf3: TSPACE-RETIRE tok=0x804 host=0x10031 key=VasKey(13965665811713493104) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 161403,
+          "text": "kf3: TSPACE-RETIRE tok=0x802 host=0x1002f key=VasKey(13965665811713493104) ring_va=0xff00b00000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 161422,
+          "text": "kf3: TSPACE-RETIRE tok=0x3 host=0x30 key=VasKey(13965665811713493104) ring_va=0xff00a00000 released=true stale_binds=0/122 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        },
+        {
+          "line": 161748,
+          "text": "kf3: TSPACE-RETIRE tok=0x801 host=0x1002e key=VasKey(13970169432832475146) ring_va=0xff00c00000 released=true stale_binds=0/6 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]"
+        }
+      ]
+    }
+  ],
+  "all_translated_retire": {
+    "count": 197,
+    "released_false": 0,
+    "stale_nonzero": 0
+  },
+  "workload_run_logs": [
+    {
+      "basename": "run-log.txt",
+      "sha256": "24461da701389003c5a2f50b70c759cbaa50283c7c956007480abf813f241ff0",
+      "bytes": 864,
+      "lines": [
+        "[2026-10-21|22:27:14] [Workload:blender-01] Starting",
+        "[2026-10-21|22:27:14] Starting Workload 1 of 9, Iteration 1 of 1",
+        "[2026-10-21|22:35:26] [Workload: blender-01] Failed -- check logs for errors",
+        "[2026-10-21|22:35:26] Starting Workload 2 of 9, Iteration 1 of 1",
+        "[2026-10-21|22:35:26] [Workload:catia-07] Starting",
+        "[2026-10-21|22:41:33] [Workload: catia-07] Failed -- check logs for errors",
+        "[2026-10-21|22:41:33] Starting Workload 3 of 9, Iteration 1 of 1",
+        "[2026-10-21|22:41:33] [Workload:creo-04] Starting",
+        "[2026-10-21|22:49:28] [Workload: creo-04] Failed -- check logs for errors",
+        "[2026-10-21|22:49:28] Starting Workload 4 of 9, Iteration 1 of 1",
+        "[2026-10-21|22:49:28] [Workload:energy-04] Starting",
+        "[2026-10-21|22:53:03] [Workload: energy-04] Completed",
+        "[2026-10-21|22:53:03] Starting Workload 5 of 9, Iteration 1 of 1",
+        "[2026-10-21|22:53:03] [Workload:enscape-01] Starting"
+      ]
+    },
+    {
+      "basename": "catia-07/run-log.txt",
+      "sha256": "9d28f7fb8a3604ff6fdd5ec89a83954af37a95c0dafe6c3bf3b7d95f59a2039b",
+      "bytes": 1030,
+      "lines": [
+        "[2026-10-21|22:35:53] [workload: catia-07 / subtest: 01_FourICDCarsWhite] Started",
+        "[2026-10-21|22:37:32] [workload: catia-07 / subtest: 01_FourICDCarsWhite] Completed",
+        "[2026-10-21|22:37:32] [workload: catia-07 / subtest: 02_MultiJetEngines] Started",
+        "[2026-10-21|22:38:18] [workload: catia-07 / subtest: 02_MultiJetEngines] Completed",
+        "[2026-10-21|22:38:18] [workload: catia-07 / subtest: 03_ThreeLoftJetsDarkMirror] Started",
+        "[2026-10-21|22:39:04] [workload: catia-07 / subtest: 03_ThreeLoftJetsDarkMirror] Failed -- check logs for errors",
+        "[2026-10-21|22:39:04] [workload: catia-07 / subtest: 04_ThreeLoftJetsWhite] Started",
+        "[2026-10-21|22:40:03] [workload: catia-07 / subtest: 04_ThreeLoftJetsWhite] Completed",
+        "[2026-10-21|22:40:03] [workload: catia-07 / subtest: 05_ConceptCars] Started",
+        "[2026-10-21|22:41:09] [workload: catia-07 / subtest: 05_ConceptCars] Completed",
+        "[2026-10-21|22:41:09] [workload: catia-07 / subtest: 06_LoftJets] Started",
+        "[2026-10-21|22:41:33] [workload: catia-07 / subtest: 06_LoftJets] Failed -- check logs for errors"
+      ]
+    },
+    {
+      "basename": "creo-04/run-log.txt",
+      "sha256": "b6259c957c2c206e10609661157fe598585e48ea00a8793e9985bd61948e96e7",
+      "bytes": 2436,
+      "lines": [
+        "[2026-10-21|22:42:01] [workload: creo-04 / subtest: 01_ScorpionShadedReflections] Started",
+        "[2026-10-21|22:42:58] [workload: creo-04 / subtest: 01_ScorpionShadedReflections] Failed -- check logs for errors",
+        "[2026-10-21|22:42:58] [workload: creo-04 / subtest: 02_SubmarineShadedReflections] Started",
+        "[2026-10-21|22:43:34] [workload: creo-04 / subtest: 02_SubmarineShadedReflections] Failed -- check logs for errors",
+        "[2026-10-21|22:43:34] [workload: creo-04 / subtest: 03_WorldCarShadedReflections] Started",
+        "[2026-10-21|22:43:55] [workload: creo-04 / subtest: 03_WorldCarShadedReflections] Failed -- check logs for errors",
+        "[2026-10-21|22:43:55] [workload: creo-04 / subtest: 04_WorldCarShaded] Started",
+        "[2026-10-21|22:44:18] [workload: creo-04 / subtest: 04_WorldCarShaded] Failed -- check logs for errors",
+        "[2026-10-21|22:44:18] [workload: creo-04 / subtest: 05_ScorpionShaded] Started",
+        "[2026-10-21|22:44:57] [workload: creo-04 / subtest: 05_ScorpionShaded] Completed",
+        "[2026-10-21|22:44:57] [workload: creo-04 / subtest: 06_SubmarineShaded] Started",
+        "[2026-10-21|22:45:16] [workload: creo-04 / subtest: 06_SubmarineShaded] Failed -- check logs for errors",
+        "[2026-10-21|22:45:16] [workload: creo-04 / subtest: 07_WorldCarShadedEdges] Started",
+        "[2026-10-21|22:45:42] [workload: creo-04 / subtest: 07_WorldCarShadedEdges] Failed -- check logs for errors",
+        "[2026-10-21|22:45:42] [workload: creo-04 / subtest: 08_ScorpionShadedEdges] Started",
+        "[2026-10-21|22:46:21] [workload: creo-04 / subtest: 08_ScorpionShadedEdges] Failed -- check logs for errors",
+        "[2026-10-21|22:46:21] [workload: creo-04 / subtest: 09_SubmarineShadedHQEdges] Started",
+        "[2026-10-21|22:47:13] [workload: creo-04 / subtest: 09_SubmarineShadedHQEdges] Failed -- check logs for errors",
+        "[2026-10-21|22:47:13] [workload: creo-04 / subtest: 10_WorldCarHiddenLines] Started",
+        "[2026-10-21|22:47:42] [workload: creo-04 / subtest: 10_WorldCarHiddenLines] Completed",
+        "[2026-10-21|22:47:42] [workload: creo-04 / subtest: 11_ScorpionHiddenLines] Started",
+        "[2026-10-21|22:48:27] [workload: creo-04 / subtest: 11_ScorpionHiddenLines] Completed",
+        "[2026-10-21|22:48:27] [workload: creo-04 / subtest: 12_SubmarineNoHidden] Started",
+        "[2026-10-21|22:48:52] [workload: creo-04 / subtest: 12_SubmarineNoHidden] Failed -- check logs for errors",
+        "[2026-10-21|22:48:52] [workload: creo-04 / subtest: 13_ScorpionNoHidden] Started",
+        "[2026-10-21|22:49:28] [workload: creo-04 / subtest: 13_ScorpionNoHidden] Failed -- check logs for errors"
+      ]
+    },
+    {
+      "basename": "energy-04/run-log.txt",
+      "sha256": "db73d7d22d2618a5bc06e991bad9077138deac7da75f7d505f1c2cb969387b45",
+      "bytes": 1020,
+      "lines": [
+        "[2026-10-21|22:49:29] [workload: energy-04 / subtest: 01_BlakeRidgeVolume] Started",
+        "[2026-10-21|22:50:03] [workload: energy-04 / subtest: 01_BlakeRidgeVolume] Completed",
+        "[2026-10-21|22:50:03] [workload: energy-04 / subtest: 02_F3NetherlandsVolume] Started",
+        "[2026-10-21|22:50:26] [workload: energy-04 / subtest: 02_F3NetherlandsVolume] Completed",
+        "[2026-10-21|22:50:26] [workload: energy-04 / subtest: 03_OpunakeVolume] Started",
+        "[2026-10-21|22:51:23] [workload: energy-04 / subtest: 03_OpunakeVolume] Completed",
+        "[2026-10-21|22:51:23] [workload: energy-04 / subtest: 04_BlakeRidgeAnimated] Started",
+        "[2026-10-21|22:51:43] [workload: energy-04 / subtest: 04_BlakeRidgeAnimated] Completed",
+        "[2026-10-21|22:51:43] [workload: energy-04 / subtest: 05_F3NetherlandsAnimated] Started",
+        "[2026-10-21|22:52:05] [workload: energy-04 / subtest: 05_F3NetherlandsAnimated] Completed",
+        "[2026-10-21|22:52:05] [workload: energy-04 / subtest: 06_OpunakeAnimated] Started",
+        "[2026-10-21|22:53:03] [workload: energy-04 / subtest: 06_OpunakeAnimated] Completed"
+      ]
+    }
+  ]
+}
