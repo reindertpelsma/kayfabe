@@ -72,4 +72,3 @@ not submission-compliant scores. Retain resolution, driver, foreground observati
 and vsync settings with comparisons. Vendor references:
 [SPEC user guide](https://gwpg.spec.org/wp-content/uploads/2025/12/SPECviewperf15-User-Guide.pdf),
 [systemd descriptor store](https://systemd.io/FILE_DESCRIPTOR_STORE/).
-
