@@ -18,7 +18,6 @@ crons = ["*/5 * * * *"]
 RENTING_ENABLED = "false"
 OWNER_GITHUB_ID = "REPLACE_ME"
 REPOSITORY = "reindertpelsma/kayfabe"
-WORKER_URL = "https://REPLACE-ME.workers.dev"
 APPROVAL_MODE = "owner_push_or_review"
 RENT_DRAFTS = "false"
 ALLOWED_BASE_BRANCHES = '["master"]'
@@ -34,7 +33,8 @@ MAX_REPORTS = "2000"
 MAX_REPORT_BYTES = "4194304"
 REPORT_RATE_LIMIT = "20"
 
-# Secret bindings: VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
+# Secret bindings: WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
+# Optional secret BROKER_PATH_PREFIX: one random base64url segment, 32-128 chars.
 # RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
 # GitHub bearer remains request-only, never a binding.
 # No Cloudflare or Vast secret belongs in GitHub Actions.

@@ -10,3 +10,6 @@ import './reporting.test.js';
 import './callback-wiring.test.js';
 import './local-smoke.test.js';
 import './native-fetch.test.js';
+import './secret-boundary.test.js';
+import './path-prefix.test.js';
+import './secret-client.test.js';

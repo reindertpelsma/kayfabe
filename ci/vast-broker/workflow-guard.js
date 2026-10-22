@@ -28,6 +28,44 @@ function jobsIn(text){
     return {...job,body,needs,grants,unsupported,danger,opaque:/^    uses:/m.test(body)};
   });
 }
+function endpointBoundary(filename,text,jobs){
+  const errors=[],fail=reason=>errors.push('Broker endpoint '+reason);
+  const primary=filename==='gpu-vast.yml'?jobs.find(x=>x.id==='gpu'):null;
+  let remaining=text,outside=text;
+  if(primary){
+    const parts=primary.body.split(/(?=^      - )/m),steps=parts.slice(1);
+    if(steps.length!==1||!/^        id: broker\s*$/m.test(steps[0]))fail('secrets require the sole broker step'); // MUTANT secret-step
+    const header=parts[0];
+    if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(header))fail('secrets cannot enter job env or outputs');
+    const output=header.split('    outputs:\n')[1]?.split(/^    \S/m)[0];
+    if(output&&output.trim()!=="state: ${{ steps.broker.outputs.state }}\n      verdict: ${{ steps.broker.outputs.verdict }}")fail('job outputs must be fixed state and verdict'); // MUTANT secret-output
+    let sanitised=header;
+    for(const step of steps){
+      if(!/^        run: \|[ \t]*$/m.test(step))fail('requires literal broker run syntax'); // MUTANT secret-run-style
+      let environment=false;const found=new Set(),kept=[];
+      for(const line of step.split('\n')){
+        if(/^        env:\s*$/.test(line))environment=true;
+        else if(/^        \S/.test(line))environment=false;
+        const match=/^          (WORKER_URL|WORKER_PATH): \$\{\{ secrets\.(VAST_BROKER_URL|VAST_BROKER_PATH) \}\}$/.exec(line);
+        if(environment&&steps.length===1&&/^        id: broker\s*$/m.test(step)&&match&&((match[1]==='WORKER_URL'&&match[2]==='VAST_BROKER_URL')||(match[1]==='WORKER_PATH'&&match[2]==='VAST_BROKER_PATH'))){found.add(match[1]);continue;}
+        kept.push(line);
+      }
+      if(!['WORKER_URL','WORKER_PATH'].every(x=>found.has(x)))fail('requires two step-env secret bindings'); // MUTANT secret-binding
+      const run=step.split(/^        run: \|\s*$/m)[1]||'';
+      for(const line of run.split('\n')){
+        if(/GITHUB_STEP_SUMMARY|GITHUB_ENV/.test(line))fail('cannot enter summary or environment channels');
+        if(/GITHUB_OUTPUT/.test(line)&&line.trim()!==String.raw`printf 'state=%s\nverdict=%s\n' "$state" "$verdict" >> "$GITHUB_OUTPUT"`)fail('cannot enter step outputs');
+        if(/^\s*(?:echo|printf|cat|tee)\b/.test(line)&&/\b(?:WORKER_URL|WORKER_PATH|broker_origin|broker_host|broker_base|host_parts|audience)\b/.test(line))fail('cannot be printed'); // MUTANT secret-print
+      }
+      sanitised+=kept.join('\n');
+    }
+    remaining=text.replace(primary.body,sanitised);outside=text.replace(primary.body,'');
+  }
+  if(/VAST_BROKER_(?:URL|PATH)/.test(remaining))fail('secret reference outside approved step env'); // MUTANT secret-reference
+  if(/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(outside))fail('aliases outside broker step'); // MUTANT secret-alias
+  for(const expression of text.match(/\$\{\{[\s\S]*?\}\}/g)||[])if(/\bsecrets\b(?!\s*\.)/.test(expression))fail('opaque secret context is unsupported'); // MUTANT secret-object
+  return errors;
+}
 export function checkWorkflows(workflows){
   const errors=[];const gpuName='gpu-vast.yml';
   if(!workflows[gpuName])return ['GPU workflow missing'];
@@ -42,6 +80,7 @@ export function checkWorkflows(workflows){
   }
   for(const [filename,text] of Object.entries(workflows)){
     const jobs=jobsIn(text),map=new Map(jobs.map(j=>[j.id,j]));
+    errors.push(...endpointBoundary(filename,text,jobs));
     const reaches=(job,seen=new Set())=>{if(seen.has(job.id))return false;seen.add(job.id);return job.needs.some(n=>gpu.some(g=>g.id===n)||map.has(n)&&reaches(map.get(n),seen));};
     for(const job of jobs){
       if(job.unsupported)errors.push(filename+': unsupported dynamic permission/needs in '+job.id);
