@@ -25,7 +25,12 @@ handle range and is not used to authorize kernel_channel.
 MEASURED: tests-first commits d66fa3933 and 714631b96 contain tests only. Before
 the fix, the six focused tests reported 1 passed / 5 failed. After the fix, the
 whole kf-rm suite reported 756 passed / 0 failed / 0 ignored across 59 summaries,
-including doc tests. The final six-test run after restoring mutants is queued under the shared build lock; its result is pending.
+including doc tests. The final six-test run after restoring mutants did not start: the prescribed
+shared-build-lock wait timed out after 600 seconds. The lane stopped at that
+refusal, without retrying or bypassing the lock. The 756-test green run preceded
+the hand mutations; the final source was restored by the mutation runner and
+committed unchanged apart from comments and unit-assertion formatting. No
+post-restoration execution result is claimed.
 
 | Hand mutation | MEASURED killed tests |
 |---|---:|
