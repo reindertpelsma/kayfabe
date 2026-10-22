@@ -59,7 +59,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
   async function oidc(bearer,cfg){
     const selected=cfg.testIdentity?(localVerifier??=new OidcVerifier(fetcher,now,cfg.testIdentity)):verifier;
     const c=await selected.verify(bearer,cfg.audience);
-    if(c.repository!==cfg.repo||!numericId(c.actor_id)||!numericId(c.run_id)||!numericId(c.run_attempt)||!['pull_request','workflow_dispatch'].includes(c.event_name))refuse('UNAUTHORIZED',401);
+    if(c.repository!==cfg.repo||!numericId(c.actor_id)||!numericId(c.run_id)||!numericId(c.run_attempt)||!['pull_request','pull_request_target','workflow_dispatch'].includes(c.event_name)||c.workflow_ref!==cfg.repo+'/.github/workflows/gpu-vast.yml@refs/heads/master')refuse('UNAUTHORIZED',401);
     return c;
   }
   async function rate(r,cfg){
@@ -168,7 +168,7 @@ export function createService({env,storage,fetch:fetcher=fetch,now=Date.now,rand
       const admittedPr=await ledger.get('run-pr:'+key);
       return json(expose(r,key,admittedPr===undefined?r.pr:admittedPr));
     }
-    const target=await github.authorize(c);
+    const target=await github.authorize(c,rentRequest);
     if(rentRequest.tested_sha!==target.sha||rentRequest.pr_number!==target.pr)refuse('BINDING_MISMATCH',409);
     if(target.notNeeded)return json({...expose({...target,key,id:null,started:now(),ended:now(),ttl:0,grace:0,price:0,verdict:'PASS',resultAt:now(),runnerNonce:rentRequest.runner_nonce}),state:'NOT_NEEDED'});
     const prior=await ledger.granted(key);

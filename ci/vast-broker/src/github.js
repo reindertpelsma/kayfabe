@@ -33,18 +33,24 @@ export class Github {
     }
     return skippedFiles(files,count,this.cfg.patterns);
   }
-  async authorize(c){
+  async authorize(c,hint){
     const cfg=this.cfg;
     if(c.repository!==cfg.repo||!numericId(c.actor_id)||!numericId(c.run_id)||!numericId(c.run_attempt)||!hexSha(c.sha))refuse('UNAUTHORIZED',401);
-    if(!['pull_request','workflow_dispatch'].includes(c.event_name))refuse('UNAUTHORIZED',401);
-    const r=await this.run(c.run_id);
+    if(!['pull_request','pull_request_target','workflow_dispatch'].includes(c.event_name))refuse('UNAUTHORIZED',401);
+    let r=await this.run(c.run_id);
     if(String(r.id)!==c.run_id||String(r.run_attempt)!==c.run_attempt||r.event!==c.event_name||
       String(r.actor?.id)!==c.actor_id||r.repository?.full_name!==cfg.repo||!hexSha(r.head_sha)||typeof r.head_branch!=='string'||
       !numericId(String(r.triggering_actor?.id)))refuse('UNAUTHORIZED',401);
     if(c.triggering_actor!==undefined&&String(c.triggering_actor)!==String(r.triggering_actor.id))refuse('UNAUTHORIZED',401);
     let p;
-    const automatic=c.event_name==='pull_request';
-    if(automatic){
+    const automatic=['pull_request','pull_request_target'].includes(c.event_name);
+    if(c.event_name==='pull_request_target'){
+      if(c.ref!=='refs/heads/master'||c.sha!==r.head_sha||c.workflow_sha!==r.head_sha||c.workflow_ref!==cfg.repo+'/.github/workflows/gpu-vast.yml@refs/heads/master'||!Number.isSafeInteger(hint?.pr_number))refuse('UNAUTHORIZED',401);
+      const member=r.pull_requests?.filter(x=>x.number===hint.pr_number&&x.head?.sha===hint.tested_sha);if(member?.length!==1)refuse('UNAUTHORIZED',401);
+      p=await this.pr(hint.pr_number);if(p.head?.repo?.full_name!==cfg.repo)refuse('NOT_ELIGIBLE',403);
+      if(p.head?.sha!==hint.tested_sha)refuse('UNAUTHORIZED',401);
+      r={...r,head_sha:hint.tested_sha,head_branch:p.head.ref};
+    }else if(automatic){
       const m=/^refs\/pull\/([1-9][0-9]*)\/merge$/.exec(c.ref||'');if(!m)refuse('UNAUTHORIZED',401);
       const member=r.pull_requests?.filter(x=>String(x.number)===m[1]&&x.head?.sha===r.head_sha);
       if(member?.length!==1)refuse('UNAUTHORIZED',401);

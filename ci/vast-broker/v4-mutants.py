@@ -210,6 +210,9 @@ def changed(source,before,after,kind):
         result=result.replace('if pending and (len(pending)>=8192 or current-last>=1):','if pending and current-last>=1:')
     return result
 
+# Inline shell/renderer guard probes are replaced by the BASE runner campaign.
+MUTATIONS=[m for m in MUTATIONS if m[0] not in {'public-summary-guard','workflow-fail-grace','workflow-cursor','stale-status-cursor'}]
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preflight',action='store_true')
