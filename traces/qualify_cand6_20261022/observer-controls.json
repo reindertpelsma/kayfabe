@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "controls_passed": 3,
+  "expected_exits": [
+    0,
+    7,
+    9
+  ],
+  "observed_exits": [
+    0,
+    7,
+    9
+  ]
+}

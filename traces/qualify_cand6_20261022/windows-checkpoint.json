@@ -1,0 +1,35 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-22T08:38:51.834875+02:00",
+  "samples": 36,
+  "completed": [
+    "blender-01",
+    "catia-07"
+  ],
+  "failed": [],
+  "latest_subtest": [
+    "catia-07",
+    "06_LoftJets"
+  ],
+  "guest_153_4101": 0,
+  "boot_unchanged": true,
+  "viewperf_nonzero_exits": [],
+  "budget_refusals": 0,
+  "counter_maxima": {
+    "pointer_large_entries": 8005,
+    "pointer_entry_max_bytes": 1042740,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "task": 4,
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "host_snapshot": {
+    "classification": "MEASURED",
+    "time": "2026-10-22T08:40:43.263930+02:00",
+    "new_host_xids": 0,
+    "rm_unloads_15min": 0,
+    "reason": null,
+    "qemu_pid": 2057581
+  },
+  "final": false
+}

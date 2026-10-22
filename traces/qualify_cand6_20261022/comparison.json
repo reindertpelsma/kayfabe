@@ -1,0 +1,107 @@
+{
+  "classification": "INFERRED",
+  "input_classification": "MEASURED",
+  "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "active": true,
+  "rows": [
+    {
+      "workload": "blender-01",
+      "candidate": 36.03,
+      "candidate_status": "Completed",
+      "baseline": 35.85,
+      "baseline_status": "Completed",
+      "vfio_1": 61.61,
+      "vfio_2": 60.61,
+      "candidate_over_baseline": 1.0050209205020921,
+      "candidate_over_vfio_mean": 0.5895925380461463
+    },
+    {
+      "workload": "catia-07",
+      "candidate": 50.53,
+      "candidate_status": "Completed",
+      "baseline": null,
+      "baseline_status": "Failed",
+      "vfio_1": 63.1,
+      "vfio_2": 63.13,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": 0.8006020755763289
+    },
+    {
+      "workload": "creo-04",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "Incomplete",
+      "vfio_1": 104.94,
+      "vfio_2": 103.97,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    },
+    {
+      "workload": "energy-04",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "NotRun",
+      "vfio_1": 54.57,
+      "vfio_2": 54.67,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    },
+    {
+      "workload": "enscape-01",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "NotRun",
+      "vfio_1": 37.26,
+      "vfio_2": 37.39,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    },
+    {
+      "workload": "maya-07",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "NotRun",
+      "vfio_1": 162.14,
+      "vfio_2": 160.37,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    },
+    {
+      "workload": "medical-04",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "NotRun",
+      "vfio_1": 50.54,
+      "vfio_2": 50.58,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    },
+    {
+      "workload": "solidworks-08",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "NotRun",
+      "vfio_1": 29.51,
+      "vfio_2": 29.19,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    },
+    {
+      "workload": "unreal_engine-01",
+      "candidate": null,
+      "candidate_status": "Pending",
+      "baseline": null,
+      "baseline_status": "NotRun",
+      "vfio_1": 63.58,
+      "vfio_2": 63.7,
+      "candidate_over_baseline": null,
+      "candidate_over_vfio_mean": null
+    }
+  ]
+}
