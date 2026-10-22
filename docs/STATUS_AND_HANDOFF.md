@@ -1,5 +1,26 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — F1 audit fixes, draft only; stopped at scan test setup
+
+MEASURED: [draft PR73](https://github.com/reindertpelsma/kayfabe/pull/73)
+records the restored SA-02 check (6/6) after owner resume.
+[draft PR74](https://github.com/reindertpelsma/kayfabe/pull/74) fixes SA-03/VA-2
+with bounded walk chunks: kf-mem 199 passed, 0 failed, 3 existing ignored;
+mutants killed by 13/11/2/2 tests, restored regressions 13/13, Clippy added 0.
+CODE READ: VA-1 aggregate diff overflow remains deferred; blindly clearing can
+retain stale mappings. [draft PR75](https://github.com/reindertpelsma/kayfabe/pull/75)
+contains only three VA-4 red regressions. Its product proposal was rejected:
+UNSET_PAGE_DIRECTORY keeps host mappings but frees the directory, so a retry
+needs explicit withdrawal/retirement semantics before any clear.
+
+MEASURED: F1 stopped at item 4 after its own red-proof check refused a test-target
+setup failure with zero tests executed. No scan fix is present. The candidate
+scan tests are backed up on codex/audit-fixes-scan-wake-20261022; details and the
+resume boundary are in traces/scan_wake_20261018/README.md on that branch.
+CODE READ: AT-1, SA-04, SA-06, SA-14, SA-07 and SA-01 remain pending. All topic
+branches start from master e64b8e5f6; nothing was merged; hardware is later.
+
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event
