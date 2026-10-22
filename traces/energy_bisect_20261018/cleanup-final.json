@@ -1,0 +1,10 @@
+{
+  "classification": "MEASURED",
+  "run": 4265,
+  "time": "2026-10-22T10:10:48.977220+02:00",
+  "cuInit": 0,
+  "gdm": "active",
+  "nvidia_bound": true,
+  "own_active": [],
+  "gpu_lock_reacquired": true
+}

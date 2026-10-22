@@ -1,0 +1,101 @@
+{
+  "classification": "MEASURED",
+  "run": 4262,
+  "arm": "C1",
+  "revision": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+  "result": {
+    "classification": "MEASURED",
+    "arm": "C1",
+    "run": 4262,
+    "rev": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+    "workloads": [
+      "energy-04"
+    ],
+    "iterations": 1,
+    "resolution": "FullHD",
+    "verdict": "FAIL",
+    "reason": "GUEST_EVENT",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T09:39:25.294234+02:00",
+      "arm": "C1",
+      "run": 4262,
+      "sample": 9,
+      "completed": false,
+      "failed": false,
+      "subtest": "06_OpunakeAnimated",
+      "guest153": 3,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 61928,
+        "refused_scan_budget": 0,
+        "poisoned": 1
+      },
+      "task": 4,
+      "qemu_before": 3064658,
+      "qemu_after": 3079787
+    },
+    "events": [
+      {
+        "record": 15053,
+        "time": "2026-10-22T07:39:10.9890834+02:00",
+        "provider": "nvlddmkm",
+        "id": 153,
+        "message": null
+      },
+      {
+        "record": 15052,
+        "time": "2026-10-22T07:39:10.9752713+02:00",
+        "provider": "nvlddmkm",
+        "id": 153,
+        "message": null
+      },
+      {
+        "record": 15051,
+        "time": "2026-10-22T07:39:10.3286115+02:00",
+        "provider": "nvlddmkm",
+        "id": 153,
+        "message": null
+      }
+    ],
+    "ended": "2026-10-22T09:39:38.437926+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T09:39:38.551005+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 1,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2067991
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T09:39:55.870147+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "qemu_bytes": 3360311,
+  "qemu_sha256": "f9d208f2b5701a93ebab52dec93382b7f412782c6eb4ab43447927dbf30b408b",
+  "NoCeObject_first_line": 18606,
+  "NoCeObject_refusal_count": 1,
+  "backing": {
+    "classification": "MEASURED",
+    "size_unchanged": true,
+    "mtime_unchanged": true
+  },
+  "process_observer_controls_passed": true,
+  "export_errors": [],
+  "vendor_scores": []
+}

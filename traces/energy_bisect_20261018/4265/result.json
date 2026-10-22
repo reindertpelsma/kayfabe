@@ -1,0 +1,55 @@
+{
+  "classification": "MEASURED",
+  "run": 4265,
+  "arm": "A2",
+  "revision": "40583bc297264fb57a20d84cc795d05d493197b5",
+  "result": {
+    "classification": "MEASURED",
+    "arm": "A2",
+    "run": 4265,
+    "rev": "40583bc297264fb57a20d84cc795d05d493197b5",
+    "workloads": [
+      "energy-04"
+    ],
+    "iterations": 1,
+    "resolution": "FullHD",
+    "verdict": "FAIL",
+    "reason": "HOST_CONTROLLER_STOP",
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T10:09:59.359515+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 0,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2070844
+    },
+    "ended": "2026-10-22T10:10:02.060404+02:00",
+    "controller_exit": 0,
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-22T10:10:11.670063+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "qemu_bytes": 2443594,
+  "qemu_sha256": "ce6156541a8007b56adac8c8aeb7aa848d450625c1f6d9fd50d55852d2fc79a5",
+  "NoCeObject_first_line": null,
+  "NoCeObject_refusal_count": 0,
+  "backing": {
+    "classification": "MEASURED",
+    "size_unchanged": true,
+    "mtime_unchanged": true
+  },
+  "process_observer_controls_passed": true,
+  "eligible_energy_sample": false,
+  "interpretation": "INCONCLUSIVE: explicitly interrupted by the required claims gate; raw supervisor FAIL denotes control interruption, not an Energy failure."
+}

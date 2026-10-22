@@ -1,0 +1,27 @@
+{
+  "classification": "MEASURED",
+  "revision": "c80522d70f4980316ab33194991eafbebe5067e4",
+  "command": "python3 scripts/ci/debt.py claims",
+  "exit": 1,
+  "summary": "claims: existing-debt=3756 new=74 resolved=2",
+  "new_claims": 74,
+  "new_claim_paths": [
+    "crates/kf-chan/tests/fixtures/run3440.rs",
+    "crates/kf-rm/src/chanlink.rs",
+    "docs/design/V3_TDR_SPECVIEWPERF_20261022.md",
+    "docs/design/V3_USER_DESCRIPTOR_BOUND_20261022.md",
+    "docs/design/V3_USER_DESCRIPTOR_DECISION_20261022.md",
+    "traces/descriptor_bound_20261018/phase1.md",
+    "traces/energy_bisect_20261022/PLAN.md",
+    "traces/energy_bisect_20261022/source-analysis.md",
+    "traces/qualify_cand6_20261022/README.md",
+    "traces/qualify_cand6_20261022/attempt-history.md",
+    "traces/qualify_cand6_20261022/comparison.md",
+    "traces/sa02_20261018/README.md",
+    "traces/tdr_specviewperf_20261018/README.md",
+    "traces/va_batch_20261018/README.md"
+  ],
+  "output_sha256": "d02280853fcdd6aa19b38a2699d597e4e65be52a9ec24c6b361843bcb2fb6c83",
+  "q2_paths_flagged": false,
+  "decision": "STOP: no push; do not reword claims or add debt exceptions to bypass the gate"
+}

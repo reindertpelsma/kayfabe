@@ -1,0 +1,12 @@
+{
+  "classification": "MEASURED",
+  "revision": "c80522d70f4980316ab33194991eafbebe5067e4",
+  "time": "2026-10-22T10:11:56.226830+02:00",
+  "own_target_exists": false,
+  "own_source_archive_exists": false,
+  "cargo_waiter_3203184_exists": false,
+  "cargo_lock_acquired_by_q2": false,
+  "cargo_wait_cancelled": true,
+  "gpu_lock_released_and_reacquired": true,
+  "host_proof": "cleanup-final.json"
+}
