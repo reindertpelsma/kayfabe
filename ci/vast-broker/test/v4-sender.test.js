@@ -1,58 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
-import { onstart } from './repo-onstart.js';
-import { sha, nonce, env } from './helpers.js';
-// FALSIFIER: a fast bounded workload loses its first bytes before callback flush,
-// or its final-result tail repeats already-delivered log lines.
+import { probe, repoSource } from './repo-onstart.js';
 for (const exitCode of [0, 7])
-  test('V4 sender preserves fast full bounded output once ' + exitCode, async () => {
-    const dir = await mkdtemp(tmpdir() + '/v4-sender-');
-    try {
-      const script = onstart(sha, nonce, 20, env.REPOSITORY, {
-        url: env.WORKER_URL,
-        run: '123-1',
-        token: 'v1.123.1.1800009000.' + 'A'.repeat(43),
-      });
-      const python = script.split("python3 - <<'KF_REPORT'\n")[1].split('\nKF_REPORT')[0];
-      await writeFile(
-        dir + '/curl',
-        "#!/usr/bin/env python3\nimport json,os,sys\nwith open(os.environ['CAPTURE'],'a') as out: out.write(json.dumps(json.load(sys.stdin))+'\\n')\nprint(json.dumps({'grace_remaining_seconds':60}))\n",
-        { mode: 0o700 },
-      );
-      const output = Array.from(
-        { length: 3000 },
-        (_, i) => `message ${i} of bounded output\n`,
-      ).join('');
-      await writeFile(dir + '/payload', output);
-      const prelude =
-        "import builtins,subprocess,os\noriginal_open=builtins.open\ndef sandbox_open(path,*args,**kwargs):\n    return original_open(os.environ['BACKUP'] if path=='/workspace/kf-ci-output.log' else path,*args,**kwargs)\nbuiltins.open=sandbox_open\noriginal_popen=subprocess.Popen\ndef workload(args,*pos,**kwargs):\n    if args==['bash','-s']: args=['bash','-c',os.environ['WORK']]\n    return original_popen(args,*pos,**kwargs)\nsubprocess.Popen=workload\n";
-      const run = spawnSync('python3', ['-c', prelude + python], {
-        encoding: 'utf8',
-        timeout: 10000,
-        env: {
-          ...process.env,
-          PATH: dir + ':' + process.env.PATH,
-          CAPTURE: dir + '/capture',
-          BACKUP: dir + '/backup',
-          WORK: 'cat >/dev/null; cat ' + dir + '/payload; exit ' + exitCode,
-        },
-      });
-      assert.equal(run.status, exitCode || 1, run.stderr);
-      assert.match(run.stdout, /Worker reports 1 minutes remaining/);
-      const calls = (await readFile(dir + '/capture', 'utf8')).trim().split('\n').map(JSON.parse);
-      assert.equal(
-        calls
-          .filter((x) => x.kind === 'log')
-          .map((x) => x.text)
-          .join(''),
-        output,
-      );
-      assert.doesNotMatch(calls.at(-1).text ?? '', /message 2999/);
-      assert.equal(calls.at(-1).result.verdict, 'FAIL');
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+  test('V4 sender preserves fast full bounded output once ' + exitCode, () => {
+    const r = probe(
+      `
+import contextlib,io
+output=''.join('message %d of bounded output\\n'%i for i in range(3000))
+with tempfile.TemporaryDirectory() as d:
+ log=pathlib.Path(d)/'log';log.write_text(output);done=pathlib.Path(d)/'done';done.write_text('rc='+sys.argv[3]+'\\ntimeout=0\\n')
+ args=types.SimpleNamespace(log=str(log),done=str(done),result=str(pathlib.Path(d)/'missing'))
+ m.make_reporter=lambda *_:sender
+ printed=io.StringIO()
+ with contextlib.redirect_stdout(printed):rc=m.run_daemon(args,env)
+ assert log.read_text()==output
+assert 'Worker reports 1 minutes remaining' in printed.getvalue()
+ack=sender.ack
+assert ack['grace_remaining_seconds']==60
+assert ''.join(c['body'].get('text','') for c in transport.calls if c['body']['kind']=='log')==output
+assert 'message 2999' not in transport.calls[-1]['body'].get('text','')
+assert transport.calls[-1]['body']['result']['verdict']=='FAIL'
+`,
+      {},
+      [String(exitCode)],
+    );
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(repoSource('vast_onstart.sh'), />>"\$log" 2>&1 <\/dev\/null/);
   });
