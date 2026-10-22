@@ -29,3 +29,4 @@ import './v4-delimiters.test.js';
 import './ssh-launch.test.js';
 import './provider-pending.test.js';
 import './smoke-preflight.test.js';
+import './live-tunnel.test.js';
