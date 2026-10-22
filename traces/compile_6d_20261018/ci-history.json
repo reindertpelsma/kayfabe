@@ -1,0 +1,22 @@
+{
+  "classification": "MEASURED / CODE READ",
+  "checked_local_date": "2026-10-23",
+  "ci_run": 39772369971,
+  "ci_url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39772369971",
+  "ci_head": "6f823a88a8816c563aa4f80f78ddfd50b2bdaa76",
+  "ci_rejected_missing_initializers": true,
+  "jobs": [
+    "stable Build",
+    "aarch64 check"
+  ],
+  "file_present_on_ce_base": true,
+  "initializer_origin": "01870988bc",
+  "origin_date": "2026-10-07",
+  "candidate6d_changed_harness": false,
+  "cause": [
+    "PR90 added a required field without updating the existing harness consumer.",
+    "The local three-crate validation omitted kf-harness.",
+    "The hosted build failure was not resolved before the earlier handoff."
+  ],
+  "source_sha256": "62a39d60c4b28607ad507a3a3c0fdeba9cb3eed22b5ca1b9a44ad2e53162cea8"
+}

@@ -1,0 +1,8 @@
+{
+  "master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "fix": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "scope": "workspace --all-targets",
+  "master_fingerprints": 532,
+  "fixed_fingerprints": 532,
+  "added": 0
+}

@@ -1,0 +1,45 @@
+{
+  "classification": "MEASURED / CODE READ",
+  "checked_local_date": "2026-10-23",
+  "run_id": 39867898257,
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39867898257",
+  "head": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "jobs": [
+    {
+      "name": "firmware",
+      "conclusion": "success"
+    },
+    {
+      "name": "stable",
+      "conclusion": "failure"
+    },
+    {
+      "name": "broker",
+      "conclusion": "success"
+    },
+    {
+      "name": "aarch64",
+      "conclusion": "success"
+    },
+    {
+      "name": "slow",
+      "conclusion": "skipped"
+    }
+  ],
+  "stable_build": "success",
+  "os_free_test": "failure",
+  "summaries": 355,
+  "passed": 5753,
+  "failed": 1,
+  "ignored": 21,
+  "failed_tests": [
+    {
+      "module": "census::tests",
+      "test": "the_census_counts_at_the_syscall_logs_in_order_and_survives_the_log_being_off"
+    }
+  ],
+  "assertion": "counted with the log off: left 3, right 2",
+  "census_unchanged_from_candidate6d": true,
+  "failure_source": "crates/kayfabe-linux-raw/src/census.rs:279",
+  "inferred_cause": "Another concurrent test can increment the process-global ioctl census."
+}

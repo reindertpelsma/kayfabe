@@ -1,0 +1,37 @@
+[
+  {
+    "mutant": "graphics-implicit-ce",
+    "distinct_assertion_killers": 3,
+    "tests": [
+      "graphics_c5_host_keeps_its_explicit_grce_binding",
+      "graphics_c7_host_keeps_its_explicit_grce_binding",
+      "graphics_c8_host_keeps_its_explicit_grce_binding"
+    ]
+  },
+  {
+    "mutant": "copy-unseeded",
+    "distinct_assertion_killers": 3,
+    "tests": [
+      "dedicated_copy_c5_uses_its_allocated_host_class",
+      "dedicated_copy_c7_uses_its_allocated_host_class",
+      "dedicated_copy_c8_uses_its_allocated_host_class"
+    ]
+  },
+  {
+    "mutant": "copy-guessed-C7B5",
+    "distinct_assertion_killers": 2,
+    "tests": [
+      "dedicated_copy_c5_uses_its_allocated_host_class",
+      "dedicated_copy_c8_uses_its_allocated_host_class"
+    ]
+  },
+  {
+    "mutant": "copy-wrong-host-ring",
+    "distinct_assertion_killers": 3,
+    "tests": [
+      "dedicated_copy_c5_uses_its_allocated_host_class",
+      "dedicated_copy_c7_uses_its_allocated_host_class",
+      "dedicated_copy_c8_uses_its_allocated_host_class"
+    ]
+  }
+]

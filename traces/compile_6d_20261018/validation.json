@@ -1,0 +1,82 @@
+{
+  "classification": "MEASURED",
+  "local_date": "2026-10-23",
+  "timezone": "Europe/Amsterdam",
+  "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
+  "red_commit": "3c07f8a33702f158bb2e70c731e386496be5a384",
+  "fix_commit": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "red_assertions_failed": 6,
+  "green_focused_passed": 6,
+  "real_harness_check_exit": 0,
+  "workspace_passed": 5754,
+  "workspace_failed": 0,
+  "workspace_ignored": 21,
+  "result_summaries": 355,
+  "test_log_sha256": "a62488fe8b0c4356bac01b8195a68abe3d410bfb660b426f4aea487754010332",
+  "restored_sha256": "5f4f5353bb3eaa49a97280f1990163bc9542b3610be094c9ffd3c72f3dc52ec4",
+  "new_ignores": 0,
+  "loosened_assertions": 0,
+  "execution": {
+    "build_exit": 0,
+    "test_exit": 0,
+    "KAYFABE_NO_KVM": "1",
+    "KAYFABE_SLOW": "unset",
+    "profile": "owner-required release",
+    "scope": "whole workspace --no-fail-fast",
+    "global_flock": true,
+    "jobs": 2,
+    "nice": 19
+  },
+  "global_lock_wait_seconds": 3600,
+  "ci_consumers": [
+    {
+      "step": "KVM-gate reached-count (floor, not an exact match)",
+      "exit": 0
+    },
+    {
+      "step": "SANDBOX-gate reached-count (floor, not an exact match)",
+      "exit": 0
+    },
+    {
+      "step": "CAP-gate \u2014 the live capability tests, reached unprivileged and run as root",
+      "exit": 0
+    },
+    {
+      "step": "UDMABUF-gate reached-count (floor, not an exact match)",
+      "exit": 0
+    }
+  ],
+  "clippy": {
+    "master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+    "fix": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+    "scope": "workspace --all-targets",
+    "master_fingerprints": 532,
+    "fixed_fingerprints": 532,
+    "added": 0
+  },
+  "clippy_debt_new": 0,
+  "fmt_exit": 0,
+  "fast_gates_exit": 0,
+  "fast_gate_steps": 14,
+  "hardware_runs": 0,
+  "gate_counters": {
+    "KVM": [
+      "KVM-gate: ran=0 skipped=34 total=34 (floor 30)"
+    ],
+    "SANDBOX": [
+      "SANDBOX-gate: ran=10 skipped=0 total=10 (floor 10)"
+    ],
+    "CAP": [
+      "CAP-gate, runner user: ran=6 vacuous=0 (reached floor 6)",
+      "CAP-gate, root: ran=6 vacuous=0 (floor 6; vacuous must be 0)"
+    ],
+    "UDMABUF": [
+      "UDMABUF-gate: ran=4 skipped=0 total=4 (floor 2)"
+    ]
+  },
+  "claims": {
+    "existing_debt": 3756,
+    "new": 0,
+    "resolved": 2
+  }
+}
