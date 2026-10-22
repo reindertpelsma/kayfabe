@@ -62,11 +62,14 @@ pub struct Experiments {
     /// `[measured, runs 98/99, RTX 4070, 2026-10-09]` Windows arms window 0's ILUT and head 0's OLUT
     /// with control `0x4050a` (DIRECT10, 1029 entries, MIRROR=1); the shipped decoder refuses it
     /// and the refusal halts every display channel (the guest's later flips and core updates are
-    /// never consumed → 0x116). `[inferred]` MIRROR reflects the table about zero, i.e. changes
-    /// only NEGATIVE inputs; NVKMS and nouveau never set it. The kernels do not implement the
-    /// negative side, so a mirrored table is accepted only where no negative value can reach it:
-    /// the ILUT always (its index is a UNORM8 component), the OLUT only when every armed matrix
-    /// before it is nonnegative ([`mirror_inert`]); otherwise it is still refused.
+    /// never consumed → 0x116). `[inferred]` MIRROR extends the table to negative inputs and
+    /// changes only those; NVKMS and nouveau never set it and no public text defines it. The
+    /// kernels read it as the ODD extension, `lut(-x) = -lut(x)` (2026-10-22, run 4500: the NVIDIA
+    /// app's Hue and Digital Vibrance sliders put signed coefficients in OCSC0 behind Windows'
+    /// mirrored OLUT; refusing that froze the console). The ILUT's index is a UNORM8 component and
+    /// never negative; the OLUT's input is negative only behind a signed matrix
+    /// ([`negative_side_reachable`]). **Open: hardware must confirm odd over even** (see
+    /// [`model`]).
     pub lut_mirror: bool,
     /// `KF3_DISPLAY_ILUT_OFFSET_256`: `SET_OFFSET_ILUT` in 256-byte units, as `SET_OFFSET_OLUT` and
     /// `SET_OFFSET_TMO_LUT` already are. `[source]` nouveau (linux 6f3ed7fec,
@@ -90,34 +93,24 @@ pub struct Lut {
     pub mirror: bool,
 }
 
-/// Can a mirrored OLUT be sampled exactly by kernels without a negative side? Yes when every armed
-/// matrix on the way is nonnegative: the ILUT is validated to `[0, 1]`, CSC0 entries are UNORM16,
-/// CSC1 entries are checked nonnegative, the tone curve is UNORM, blend factors are nonnegative, so
-/// only a negative coefficient or offset can produce a negative OLUT input.
+/// Is the mirrored table's NEGATIVE side unreachable? Yes when every armed matrix on the way is
+/// nonnegative: the ILUT is validated to `[0, 1]`, CSC0 entries are UNORM16, CSC1 entries are
+/// checked nonnegative, the tone curve is UNORM, blend factors are nonnegative, so only a negative
+/// coefficient or offset can produce a negative OLUT input. (The kernels handle both cases; this
+/// says which one a program is in, for the log and for reading a trace.)
 #[must_use]
 pub fn mirror_inert<'a>(matrices: impl IntoIterator<Item = &'a [i32; 12]>) -> bool {
     matrices.into_iter().all(|m| m.iter().all(|&v| v >= 0))
 }
 
-/// The refusal text for a mirrored OLUT whose input may be negative (named once, so the console
-/// log, the tests and the docs quote the same words).
-pub const MIRROR_SIGNED: &str = "mirrored OLUT behind a signed matrix (input may be negative)";
-
-/// May the console render this decoded program with the kernels as they are? `matrices` are the
-/// armed window pipelines' four stages (every composed window); `out` is the head's output
-/// transform. The only refusal here is the mirrored OLUT behind a possibly-negative input.
-///
-/// # Errors
-/// [`MIRROR_SIGNED`].
-pub fn program_verdict<'a>(
+/// Does this decoded program exercise the negative side of a mirrored OLUT? `matrices` are the
+/// armed window pipelines' stages (every composed window); `out` is the head's output transform.
+#[must_use]
+pub fn negative_side_reachable<'a>(
     matrices: impl IntoIterator<Item = &'a [i32; 12]>,
     out: &'a Output,
-) -> Result<(), &'static str> {
-    if out.lut.is_some_and(|l| l.mirror) && !mirror_inert(matrices.into_iter().chain([&out.matrix]))
-    {
-        return Err(MIRROR_SIGNED);
-    }
-    Ok(())
+) -> bool {
+    out.lut.is_some_and(|l| l.mirror) && !mirror_inert(matrices.into_iter().chain([&out.matrix]))
 }
 
 /// An output transform: signed coefficients stored in the class's encoded S5.14 format.
@@ -499,7 +492,7 @@ pub fn output(
     let a = Address::resolve(t, c, Some(head), "OLUT", 8).ok_or("missing OLUT vocabulary")?;
     let ctl = Control::resolve(t, c, Some(head), "HEAD_SET_OLUT_CONTROL")
         .ok_or("missing OLUT control")?;
-    // a mirrored OLUT is decoded here; the caller accepts it only under `mirror_inert`
+    // a mirrored OLUT is decoded here; the output kernel samples its negative side (`model::value`)
     let lut = a
         .read(&read)?
         .map(|b| ctl.read(b, &read, x.lut_mirror))
@@ -1177,16 +1170,41 @@ mod tests {
                         o.matrix, m,
                         "{what}: the signed coefficients decode exactly"
                     );
-                    assert!(o.matrix.iter().any(|&v| v < 0));
-                    assert!(
-                        !mirror_inert(p.matrices.iter().chain([&o.matrix])),
-                        "{what}: a negative can reach the table"
-                    );
+                }
+                let signed = o.matrix.iter().any(|&v| v < 0);
+                assert_eq!(
+                    negative_side_reachable(p.matrices.iter(), &o),
+                    signed,
+                    "{what} ({version}): the negative side is reachable exactly behind a signed matrix"
+                );
+                // register words -> pixels: the decoded program, through the CPU oracle, with a
+                // table whose black is lifted. A channel that goes negative is black; the rest
+                // sample the table.
+                let l = o.lut.unwrap();
+                let entries = model::fixture::lifted_black();
+                let table = model::Table {
+                    entries: &entries,
+                    interpolate: l.interpolate,
+                    mirror: l.mirror,
+                };
+                let mut hit = 0;
+                for src in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.5; 3]] {
+                    let px = model::output_rgb(src, &o.matrix, Some(&table));
+                    for c in 0..3 {
+                        let k = |i: usize| f64::from(o.matrix[c * 4 + i]) / 65536.0;
+                        let pre = (0..3).map(|i| f64::from(src[i]) * k(i)).sum::<f64>() + k(3);
+                        if pre < -0.01 {
+                            hit += 1;
+                            assert_eq!(px[c], 0, "{what} {src:?} channel {c} ({pre})");
+                        } else if pre > 0.01 {
+                            assert!(px[c] >= 64, "{what} {src:?} channel {c} ({pre})");
+                        }
+                    }
                 }
                 assert_eq!(
-                    program_verdict(p.matrices.iter(), &o),
-                    Ok(()),
-                    "{what} ({version})"
+                    hit > 0,
+                    signed,
+                    "{what}: a primary reaches the negative side"
                 );
             }
         }

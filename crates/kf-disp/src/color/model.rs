@@ -15,9 +15,9 @@ pub struct Table<'a> {
     pub entries: &'a [[u16; 3]],
     /// Interpolate between adjacent samples instead of taking the lower one.
     pub interpolate: bool,
-    /// `HEAD_SET_OLUT_CONTROL_MIRROR`: the guest armed the mirrored form. As the kernel ships
-    /// today it has no effect (the program gate admits a mirrored table only where no input can be
-    /// negative, so the form cannot matter).
+    /// `HEAD_SET_OLUT_CONTROL_MIRROR`: the guest armed the mirrored form, read as the odd extension
+    /// of the table, `lut(-x) = -lut(x)` (see [`value`]). `[inferred]`: ogkm names the bit and
+    /// NVKMS never sets it; nothing public says what it does.
     pub mirror: bool,
 }
 
@@ -52,6 +52,18 @@ pub fn lookup(t: &Table<'_>, x: f32, c: usize) -> f32 {
     }
 }
 
+/// The table at `x` for channel `c`, including the negative side of a mirrored table: the odd
+/// extension, `-lookup(-x)` for `x < 0`. An unmirrored table clamps a negative `x` to its first
+/// sample. A NaN is not negative (it samples the first entry, as the kernel's `sat` makes it).
+#[must_use]
+pub fn value(t: &Table<'_>, x: f32, c: usize) -> f32 {
+    if t.mirror && x < 0.0 {
+        -lookup(t, -x, c)
+    } else {
+        lookup(t, x, c)
+    }
+}
+
 /// One pixel through OCSC0 (`matrix`, the encoded 3x4 with 65536 = 1.0) and the OLUT (or bypass),
 /// to the 8-bit channels the console frame holds.
 #[must_use]
@@ -62,7 +74,7 @@ pub fn output_rgb(src: [f32; 3], matrix: &[i32; 12], lut: Option<&Table<'_>>) ->
             + src[1] * (m[1] as f32 / 65536.0)
             + src[2] * (m[2] as f32 / 65536.0)
             + m[3] as f32 / 65536.0;
-        let v = lut.map_or_else(|| sat(v), |t| lookup(t, v, c));
+        let v = lut.map_or_else(|| sat(v), |t| value(t, v, c));
         ((sat(v) * 256.0) as u32).min(255) as u8
     })
 }

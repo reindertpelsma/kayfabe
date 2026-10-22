@@ -1422,6 +1422,47 @@ impl LatchedDmas {
     }
 }
 
+/// What [`ReasonLog::admit`] decided about a refusal reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Admit {
+    /// Logged before (or beyond the bound): count it, say nothing.
+    Seen,
+    /// The first time: log it.
+    New,
+    /// The bound was just reached: log that new reasons are now only counted.
+    Full,
+}
+
+/// A refusal is a visible state, not a silent skip: each distinct reason is logged once, so a
+/// frozen console always has its cause in the log however many frames were refused. Bounded
+/// ([`ReasonLog::MAX`] reasons of at most [`ReasonLog::LEN`] bytes), because a refusal text can
+/// carry a guest-chosen number: a hostile guest cannot grow the log or this set without bound.
+#[derive(Debug, Default)]
+struct ReasonLog {
+    seen: Vec<String>,
+    full: bool,
+}
+
+impl ReasonLog {
+    const MAX: usize = 64;
+    const LEN: usize = 160;
+
+    fn admit(&mut self, why: &str) -> Admit {
+        let key: String = why.chars().take(Self::LEN).collect();
+        if self.seen.contains(&key) {
+            Admit::Seen
+        } else if self.seen.len() < Self::MAX {
+            self.seen.push(key);
+            Admit::New
+        } else if !self.full {
+            self.full = true;
+            Admit::Full
+        } else {
+            Admit::Seen
+        }
+    }
+}
+
 /// A resolved colour binding belongs to one armed channel incarnation. Unlike the
 /// framebuffer cache, its token also names the immutable GPU snapshot of the LUT.
 struct ColorDmas {
@@ -1496,6 +1537,7 @@ impl ColorDmas {
             entries: lut.entries,
             src,
             interpolate: lut.interpolate,
+            mirror: lut.mirror,
             token: self.next,
         };
         *s = Some((key, resolved));
@@ -4273,7 +4315,8 @@ struct ScanState {
     /// The check clock of a picture with no armed head (the boot layer, a preserved scanout).
     idle_at: Option<Instant>,
     serial: u64,
-    refusals_logged: u32,
+    /// Which scanout refusals were already logged: one line per distinct reason ([`ReasonLog`]).
+    refusal_log: ReasonLog,
     /// The last copy number logged as late but not lost ([`ScanState::give_up_if_stuck`]).
     slow_logged: u64,
     /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
@@ -4920,9 +4963,15 @@ impl ScanState {
 
     fn note_refusal(&mut self, c: &DispCounters, why: &str) {
         c.scanout_refused.fetch_add(1, Ordering::Relaxed);
-        if self.refusals_logged < 16 {
-            self.refusals_logged += 1;
-            eprintln!("kf3: display: scanout REFUSED {why}");
+        match self.refusal_log.admit(why) {
+            Admit::Seen => {}
+            Admit::New => eprintln!(
+                "kf3: display: scanout REFUSED {why} (logged once per distinct reason; repeats are counted in scanout_refused)"
+            ),
+            Admit::Full => eprintln!(
+                "kf3: display: scanout refusals: {} distinct reasons logged; further new ones are only counted",
+                ReasonLog::MAX
+            ),
         }
     }
 
@@ -5200,15 +5249,24 @@ impl ScanState {
                     x,
                 )
                 .map_err(str::to_owned)?;
-                // ⚠ KF3_DISPLAY_LUT_MIRROR: the kernels have no negative side, so a mirrored
-                // OLUT is taken only when no armed matrix can make its input negative
-                kf_disp::color::program_verdict(matrices.iter(), &out).map_err(str::to_owned)?;
+                // ⚠ KF3_DISPLAY_LUT_MIRROR: the output kernel samples a mirrored OLUT's negative side
+                // as the odd extension (`[inferred]`, `kf_disp::color::model::value`). A signed
+                // matrix in front of it (the NVIDIA app's Hue / Digital Vibrance, run 4500) used to
+                // be refused here, which froze the console; it is rendered now.
                 if ilut_mirror || out.lut.is_some_and(|l| l.mirror) {
                     static NOTED: std::sync::Once = std::sync::Once::new();
                     NOTED.call_once(|| {
                         eprintln!(
-                            "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored={ilut_mirror}, OLUT {:?}; every input provably nonnegative)",
+                            "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored={ilut_mirror}, OLUT {:?})",
                             out.lut
+                        );
+                    });
+                }
+                if kf_disp::color::negative_side_reachable(matrices.iter(), &out) {
+                    static NEGATIVE: std::sync::Once = std::sync::Once::new();
+                    NEGATIVE.call_once(|| {
+                        eprintln!(
+                            "kf3: display: a mirrored OLUT is behind a signed matrix: its negative side is sampled as the odd extension, lut(-x) = -lut(x) [inferred, unconfirmed on hardware]"
                         );
                     });
                 }
@@ -5870,6 +5928,81 @@ mod tests {
         );
     }
 
+    /// Run 4500: a mirrored OLUT reaches the output kernel as mirrored (the flag the kernel reads
+    /// is the one the register decode produced), and arming MIRROR on the same table is a new
+    /// binding, never the cached one without it.
+    #[test]
+    fn a_mirrored_olut_reaches_the_kernel_as_mirrored() {
+        use kf_disp::color::{Binding, LUT_BYTES, Lut};
+        let mut cache = ColorDmas::default();
+        let dma = CtxDma {
+            target: Target::Vidmem,
+            base: 4096,
+            limit: 4096 + 256 + LUT_BYTES - 1,
+            block_linear: false,
+            writable: false,
+        };
+        let lut = |mirror| {
+            Some(Lut {
+                entries: 1025,
+                binding: Binding::Dma {
+                    handle: 9,
+                    offset: 256,
+                },
+                interpolate: true,
+                mirror,
+            })
+        };
+        let plain = cache
+            .resolve(64, 7, 0, 1, lut(false), |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        assert!(!plain.mirror);
+        let mirrored = cache
+            .resolve(64, 7, 0, 1, lut(true), |_| Ok(dma))
+            .unwrap()
+            .unwrap();
+        assert!(mirrored.mirror, "the kernel is told the table is mirrored");
+        assert!(
+            mirrored.token > plain.token,
+            "a changed control is a new binding"
+        );
+        assert_eq!((mirrored.src, mirrored.entries), (plain.src, plain.entries));
+        let again = cache
+            .resolve(64, 7, 0, 1, lut(true), |_| Err("cached".into()))
+            .unwrap()
+            .unwrap();
+        assert_eq!((again.token, again.mirror), (mirrored.token, true));
+    }
+
+    /// A refusal is logged once per distinct reason, however often it repeats (run 4500 repeated
+    /// one reason for thousands of frames; a different reason after sixteen earlier ones was never
+    /// logged at all), and the set is bounded against a guest that varies the text.
+    #[test]
+    fn each_distinct_refusal_reason_is_logged_once_and_the_set_is_bounded() {
+        let mut log = ReasonLog::default();
+        let signed = "SDR colour program: x";
+        assert_eq!(log.admit(signed), Admit::New);
+        for _ in 0..1000 {
+            assert_eq!(log.admit(signed), Admit::Seen, "repeats are silent");
+        }
+        assert_eq!(log.admit("SDR colour program: y"), Admit::New);
+        for i in 0..ReasonLog::MAX {
+            let r = log.admit(&format!("a {i}x1 composition"));
+            if i + 2 < ReasonLog::MAX {
+                assert_eq!(r, Admit::New, "{i}");
+            }
+        }
+        assert_eq!(log.seen.len(), ReasonLog::MAX, "bounded");
+        assert_eq!(log.admit("one more"), Admit::Seen, "full: counted only");
+        assert_eq!(log.admit(signed), Admit::Seen);
+        // a long text is keyed by its prefix: one reason, not one per tail
+        let mut log = ReasonLog::default();
+        let long = "z".repeat(ReasonLog::LEN + 40);
+        assert_eq!(log.admit(&long), Admit::New);
+        assert_eq!(log.admit(&format!("{long}tail")), Admit::Seen);
+    }
+
     /// ★ §O: the worker's hover/grab switch. Without a cursor-capable broker (nothing read) and under
     /// grab the cursor is composed; in hover it is left out unless the host cannot show it.
     /// ⊘ CORRECTED 2026-10-04 (`display-max-fps`, §8.16): a cursor move no longer makes a copy of
@@ -6314,6 +6447,7 @@ mod tests {
                 entries: 1025,
                 src: 0,
                 interpolate: false,
+                mirror: false,
                 token: 1,
             },
         ));

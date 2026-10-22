@@ -68,6 +68,9 @@ pub struct ColorLut {
     pub src: u64,
     /// Interpolate between entries instead of selecting the lower entry.
     pub interpolate: bool,
+    /// `*_LUT_CONTROL_MIRROR`: sample the table's negative side as the odd extension
+    /// (`lut(-x) = -lut(x)`). Read by the output kernel only; a snapshot's bytes do not depend on it.
+    pub mirror: bool,
     /// Worker-authored identity of the armed binding. A new UPDATE/free/reallocation
     /// changes it even if the guest reuses the same store address.
     pub token: u64,
@@ -162,6 +165,8 @@ pub struct ColorFixture<'a> {
     pub size: (u32, u32),
     /// Exercise fractional output indices.
     pub interpolate: bool,
+    /// Arm the output table MIRRORED (its negative side is the odd extension).
+    pub output_mirror: bool,
     /// Mutate the synthetic input source after its snapshot was consumed, then
     /// compose again to check retention. Never modifies guest memory.
     pub mutate_input: Option<&'a [u8]>,
@@ -1255,6 +1260,9 @@ impl DisplayGpu {
                 .to_vec(),
             matrix.iter().flat_map(|v| v.to_le_bytes()).collect(),
             lut.map_or(0, |v| v.entries).to_le_bytes().to_vec(),
+            u32::from(lut.is_some_and(|v| v.mirror))
+                .to_le_bytes()
+                .to_vec(),
         ];
         self.cu
             .launch_args(self.stream, f, h, 256, 0, &mut args, what)?;
@@ -1635,12 +1643,14 @@ impl DisplayGpu {
                 entries: (input.len() / 8 - 4) as u32,
                 src: surface.len() as u64,
                 interpolate: false,
+                mirror: false,
                 token: 1,
             });
             let tone_lut = fixture.tone.map(|t| ColorLut {
                 entries: (t.table.len() / 8 - 4) as u32,
                 src: tone_src,
                 interpolate: true,
+                mirror: false,
                 token: 4,
             });
             self.color_pipeline_layer(
@@ -1666,6 +1676,7 @@ impl DisplayGpu {
                         entries: (tone.table.len() / 8 - 4) as u32,
                         src: tone_src,
                         interpolate: true,
+                        mirror: false,
                         token: if tone.rearm { 5 } else { 4 },
                     }),
                     Some(tone.pipeline),
@@ -1685,6 +1696,7 @@ impl DisplayGpu {
                         entries: (input.len() / 8 - 4) as u32,
                         src: surface.len() as u64,
                         interpolate: false,
+                        mirror: false,
                         token: if fixture.rearm { 3 } else { 1 },
                     }),
                     w,
@@ -1698,6 +1710,7 @@ impl DisplayGpu {
                     entries: (output.len() / 8 - 4) as u32,
                     src: (surface.len() + input.len()) as u64,
                     interpolate: fixture.interpolate,
+                    mirror: fixture.output_mirror,
                     token: 2,
                 }),
                 matrix,
