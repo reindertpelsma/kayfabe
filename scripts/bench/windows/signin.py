@@ -40,6 +40,7 @@ def main():
     if len(sys.argv) != 3:
         raise ValueError("usage: signin.py QMP_SOCKET QGA_SOCKET")
     password = os.environ.get("KF_GUEST_PW", "")
+    user = os.environ.get("KF_GUEST_USER", "vast").lower()
     if not password:
         raise ValueError("KF_GUEST_PW must be set")
     chords = keycodes(password)  # Validate everything before sending any input.
@@ -52,7 +53,7 @@ def main():
              "if ($u -and -not (Get-Process LogonUI -ErrorAction SilentlyContinue)) { $u }"],
             capture_output=True, text=True, timeout=20, check=False,
         )
-        return r.returncode == 0 and r.stdout.strip().lower().endswith("\\vast")
+        return r.returncode == 0 and r.stdout.strip().lower().endswith("\\" + user)
 
     if session():
         print("SIGNIN_VERIFIED already signed in")

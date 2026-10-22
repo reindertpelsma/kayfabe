@@ -17,3 +17,24 @@
 13. MEASURED in `mutation_gate_failure.json`: zero new leases, zero hardware runs, zero lane rental spend; hardware n=0, spread unavailable; no RPC ordinal or event timestamp from a new run exists.
 14. INFERRED owner decision: authorize resumption of harness proof development after this stop; recommendation is to strengthen independent positive health fixtures and require every mutant to have at least two killers before renting Ada.
 15. MEASURED in `claims_gate_failure.json` at rev `3f157816d`: claims check reports `new=188`, required zero; no push. CODE READ: no cargo build, target directory, GPU lock or rental process was created; cleanup is recorded in the external S4 report.
+
+## Resumed 2026-10-22
+
+CODE READ: the owner's resumption instruction authorizes continued harness repair
+and an evidence-only push using only S4-added or changed files for claims review.
+This supersedes the stop and pending-decision statements above. No debt baseline
+is expanded. INFERRED H2, before hardware: explicit sign-in plus provider/desktop
+classification lets a healthy Ada desktop reach the app matrix and hold. FALSIFIER:
+Code43, NVIDIA153/Display4101/bugcheck, missing Explorer, or an application failure.
+
+MEASURED in `desktop_green.log`, run S4-local-20261022: 33 S4 tests pass;
+`appmatrix_tests.log` records 76 existing app-matrix tests passing. MEASURED in
+`health_mutations.json`, `plan_mutations.json`, `controller_mutations.json`, run
+S4-local-20261022: twelve mutants have at least two distinct killing tests each.
+MEASURED in `unigine_mock.res`, run S4-local-20261022: four Unigine rows traverse
+the existing guest-agent mock protocol and host verdicts. This exercises no GPU.
+CODE READ: the controller freezes the source-matched native baseline before
+starting the existing fatal-Xid watcher, then runs install, bind and desktop.
+CODE READ: the attached runner uses the existing PowerShell app definitions,
+supervisor and verdicts, covers all 112 rows with Unigine early, and requires the
+full 600-second hold. A restart or health fault ends GPU work in that VM.

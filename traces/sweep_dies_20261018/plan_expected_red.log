@@ -1,0 +1,167 @@
+test_failure_verdict_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_failure_verdict_is_not_a_pass) ... ERROR
+test_health_failure_after_app_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_after_app_is_fatal) ... ERROR
+test_health_failure_before_apps_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_before_apps_is_fatal) ... ERROR
+test_missing_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_missing_hold_is_not_accepted) ... ERROR
+test_notrun_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_notrun_is_not_a_pass) ... ERROR
+test_restart_reason_refuses_a_passed_row (test_desktop_plan.DesktopPlanTests.test_restart_reason_refuses_a_passed_row) ... ERROR
+test_short_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_short_hold_is_not_accepted) ... ERROR
+test_timeout_does_not_start_more_gpu_work (test_desktop_plan.DesktopPlanTests.test_timeout_does_not_start_more_gpu_work) ... ERROR
+test_unigine_rows_run_before_hold (test_desktop_plan.DesktopPlanTests.test_unigine_rows_run_before_hold) ... ERROR
+
+======================================================================
+ERROR: test_failure_verdict_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_failure_verdict_is_not_a_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 48, in test_failure_verdict_is_not_a_pass
+    self.assertEqual(self.run_plan(verdict='FAIL')[0], 1)
+                     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_health_failure_after_app_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_after_app_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 67, in test_health_failure_after_app_is_fatal
+    self.run_plan(fail_health_at=2)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_health_failure_before_apps_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_before_apps_is_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 63, in test_health_failure_before_apps_is_fatal
+    self.run_plan(fail_health_at=1)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_missing_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_missing_hold_is_not_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 75, in test_missing_hold_is_not_accepted
+    self.run_plan(seconds=0)
+    ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_notrun_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_notrun_is_not_a_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 51, in test_notrun_is_not_a_pass
+    self.assertEqual(self.run_plan(verdict='NOTRUN')[0], 1)
+                     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_restart_reason_refuses_a_passed_row (test_desktop_plan.DesktopPlanTests.test_restart_reason_refuses_a_passed_row)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 59, in test_restart_reason_refuses_a_passed_row
+    self.run_plan(restart='guest-rebooted')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_short_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_short_hold_is_not_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 71, in test_short_hold_is_not_accepted
+    self.run_plan(seconds=599)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_timeout_does_not_start_more_gpu_work (test_desktop_plan.DesktopPlanTests.test_timeout_does_not_start_more_gpu_work)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 55, in test_timeout_does_not_start_more_gpu_work
+    self.run_plan(verdict='TIMEOUT', restart='app-timeout')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+======================================================================
+ERROR: test_unigine_rows_run_before_hold (test_desktop_plan.DesktopPlanTests.test_unigine_rows_run_before_hold)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 41, in test_unigine_rows_run_before_hold
+    rc, calls, records = self.run_plan()
+                         ~~~~~~~~~~~~~^^
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 20, in run_plan
+    m = load()
+  File "CHECKOUT/scripts/bench/tests/test_desktop_plan.py", line 14, in load
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: 'CHECKOUT/scripts/bench/diesweep/desktop/matrix.py'
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.004s
+
+FAILED (errors=9)

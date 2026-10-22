@@ -1,0 +1,57 @@
+test_bind_failure_prevents_gpu_app_work (test_desktop_controller.ControllerTests.test_bind_failure_prevents_gpu_app_work) ... ok
+test_bind_failure_propagates (test_desktop_controller.ControllerTests.test_bind_failure_propagates) ... FAIL
+test_desktop_failure_does_not_claim_completion (test_desktop_controller.ControllerTests.test_desktop_failure_does_not_claim_completion) ... FAIL
+test_native_failure_never_starts_windows (test_desktop_controller.ControllerTests.test_native_failure_never_starts_windows) ... FAIL
+test_success_runs_native_then_watched_windows (test_desktop_controller.ControllerTests.test_success_runs_native_then_watched_windows) ... FAIL
+test_watch_is_required_before_bind_and_desktop (test_desktop_controller.ControllerTests.test_watch_is_required_before_bind_and_desktop) ... FAIL
+
+======================================================================
+FAIL: test_bind_failure_propagates (test_desktop_controller.ControllerTests.test_bind_failure_propagates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_controller.py", line 46, in test_bind_failure_propagates
+    self.assertEqual(self.run_controller('bind').returncode, 42)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 42
+
+======================================================================
+FAIL: test_desktop_failure_does_not_claim_completion (test_desktop_controller.ControllerTests.test_desktop_failure_does_not_claim_completion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_controller.py", line 53, in test_desktop_failure_does_not_claim_completion
+    self.assertEqual(p.returncode, 42)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 42
+
+======================================================================
+FAIL: test_native_failure_never_starts_windows (test_desktop_controller.ControllerTests.test_native_failure_never_starts_windows)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_controller.py", line 41, in test_native_failure_never_starts_windows
+    self.assertEqual(p.returncode, 42)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 42
+
+======================================================================
+FAIL: test_success_runs_native_then_watched_windows (test_desktop_controller.ControllerTests.test_success_runs_native_then_watched_windows)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_controller.py", line 29, in test_success_runs_native_then_watched_windows
+    self.assertEqual(p.returncode, 0, p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : bash: line 2: CHECKOUT/scripts/bench/diesweep/desktop/controller.sh: No such file or directory
+
+
+======================================================================
+FAIL: test_watch_is_required_before_bind_and_desktop (test_desktop_controller.ControllerTests.test_watch_is_required_before_bind_and_desktop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "CHECKOUT/scripts/bench/tests/test_desktop_controller.py", line 35, in test_watch_is_required_before_bind_and_desktop
+    self.assertEqual(p.stdout.count('WATCH_STARTED'), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 1
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.028s
+
+FAILED (failures=5)

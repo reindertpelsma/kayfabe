@@ -1,0 +1,861 @@
+CHECKOUT/scripts/bench/windows/appmatrix/tests/helpers.py:14: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/apps.json' mode='r' encoding='UTF-8'>
+  return json.load(open(os.path.join(AM, "apps.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/helpers.py:18: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/manifest.json' mode='r' encoding='UTF-8'>
+  return json.load(open(os.path.join(AM, "manifest.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/apps.json' mode='r' encoding='UTF-8'>
+  self.assertEqual(open(os.path.join(H.AM, "apps.json")).read(), want, "apps.json is stale: run gen_apps.py")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..CHECKOUT/scripts/bench/windows/appmatrix/gen_doc.py:117: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/manifest.json' mode='r' encoding='UTF-8'>
+  man = json.load(open(os.path.join(HERE, "manifest.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/gen_doc.py:118: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/apps.json' mode='r' encoding='UTF-8'>
+  doc = json.load(open(os.path.join(HERE, "apps.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/gen_doc.py:119: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/docs/design/V3_WINDOWS_APP_MATRIX.md' mode='r' encoding='UTF-8'>
+  cur = open(DOC).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/gen_doc.py:50: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/apps/run_apps.sh' mode='r' encoding='UTF-8'>
+  txt = open(os.path.join(REPO, "scripts", "apps", "run_apps.sh")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:64: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/apps/run_apps.sh' mode='r' encoding='UTF-8'>
+  txt = open(os.path.join(H.REPO, "scripts", "apps", "run_apps.sh")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+....CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/atomics_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/bandwidthTest_demo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/blackscholes_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/blender_cycles.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cdp_quicksort.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cg_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/clpeak_cuda.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/clpeak_ocl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cuda_callback.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cuda_occupancy.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cup2_ladder.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cup3_ladder.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cup8_ladder.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cupy_asynccopy.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cupy_cg.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cupy_check.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/cupy_sha256.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/d3d11va_h264.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/d3d12_signal_probe.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/deviceQuery_demo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/driver_status.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/dxdiag_report.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/dxgi_adapters.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/dxprobe_d3d11.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/dxprobe_d3d12.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/dxva2_h264.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/edge_video_h264.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/edge_video_vp9.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/edge_webgl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/edge_webgl_headless.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/edge_webgpu.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/fft_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/furmark_gl_bench.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/furmark_gl_stress.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/furmark_glinfo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/furmark_knot_gl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/furmark_vk_bench.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/furmark_vkinfo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/fwt_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/glgears_wgl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gputest_fur.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gputest_gi.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gputest_pixmark_piano.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gputest_plot3d.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gputest_tess.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gputest_triangle.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/graphs_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gravitymark_d3d11.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gravitymark_d3d12.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gravitymark_d3d12_raster.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gravitymark_d3d12_rt.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gravitymark_gl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/gravitymark_vk.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/hashcat.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/heaven_d3d11.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/heaven_opengl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/hf_generate.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/hist_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/llama_cuda_bench.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/llama_cuda_gen.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/llama_vulkan_bench.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/managed_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/mandelbrot_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/matmul_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/memcpy2d_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nbody_demo_bench.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nbody_demo_gl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nbody_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nvdec_h264.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nvenc_av1.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nvenc_h264.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nvenc_hevc.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/nvidia_smi.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/oceanFFT_demo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/opencl_icd.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/ort_directml.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_fullscreen.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_hide.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_move.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_occlude.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_probe.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_recreate.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_resize.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/overlay_yuv_soak.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/randomFog_demo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/reduce_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/rng_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/scale_cuda_nvenc.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/scan_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/sort_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/stream_created2nd_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/stream_created_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/stream_default_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/stream_nonblocking_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/stream_perthread_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/stream_two_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/streams_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/tc16_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/tcbf16_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/torch_ai_bench.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/torch_burn.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/torch_correct.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/transpose_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/triad_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/valley_d3d11.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/valley_opengl.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/vectorAdd_demo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/vkcube.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/vkpeak.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/vulkan_video_decode.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/vulkaninfo.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_apps.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmp4kxdr94v/zerocopy_t.ps1' mode='w' encoding='UTF-8'>
+  open(p, "w", newline="").write(winapps.render_app_script(self.doc["prelude"], a, "E:"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/helpers.py:44: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpihy7f7zw/parse_many.ps1' mode='w' encoding='UTF-8'>
+  open(sp, "w").write(PARSE_MANY)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-e9nk_fgr/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:760: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/apps.json' mode='r' encoding='UTF-8'>
+  doc = json.load(open(a.apps_json))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:761: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/manifest.json' mode='r' encoding='UTF-8'>
+  man = json.load(open(a.manifest))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-e9nk_fgr/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_common.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_apphelpers.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_guest_setup.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_stage.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_run_app.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_launch.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_health.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_cleanup.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_edge.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:378: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/../d3d12_signal_probe.ps1'>
+  q.file_write(g, open(os.path.join(HERE, rel), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:380: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/web/webgl.html'>
+  q.file_write(rf"C:\kf\web\{w}.html", open(os.path.join(HERE, "guest", "web", f"{w}.html"), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:380: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/web/webgpu.html'>
+  q.file_write(rf"C:\kf\web\{w}.html", open(os.path.join(HERE, "guest", "web", f"{w}.html"), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:380: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/web/video.html'>
+  q.file_write(rf"C:\kf\web\{w}.html", open(os.path.join(HERE, "guest", "web", f"{w}.html"), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/win_cuda_equiv.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/torch_burn.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/ort_dml.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/cupy_nvrtc.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/kf_runpy.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/hf_generate.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/cdp_quicksort.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:382: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/stream_perthread.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(HERE, "guest", "py", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:384: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/apps/src/torch_correct.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(REPO, "scripts", "apps", "src", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:384: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/apps/src/ai_bench.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(REPO, "scripts", "apps", "src", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:384: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/apps/src/cupy_check.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(REPO, "scripts", "apps", "src", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:384: ResourceWarning: unclosed file <_io.BufferedReader name='CHECKOUT/scripts/apps/src/blender_render.py'>
+  q.file_write(rf"C:\kf\py\{p}", open(os.path.join(REPO, "scripts", "apps", "src", p), "rb").read()); n += 1
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-e9nk_fgr/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-e9nk_fgr/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-e9nk_fgr/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-e9nk_fgr/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-e9nk_fgr/session.log' mode='r' encoding='UTF-8'>
+  return open(os.path.join(d, "session.log")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:86: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-e9nk_fgr/matrix.json' mode='r' encoding='UTF-8'>
+  self.assertEqual(json.load(open(os.path.join(d, "matrix.json")))["apps"][0], "nvidia_smi")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-n656m003/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-n656m003/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-n656m003/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-n656m003/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-n656m003/mock/qga3.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-n656m003/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-n656m003/session.log' mode='r' encoding='UTF-8'>
+  return open(os.path.join(d, "session.log")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-yw01rz9i/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-yw01rz9i/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-yw01rz9i/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-yw01rz9i/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-yw01rz9i/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-s5sw9w67/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-s5sw9w67/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-s5sw9w67/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-s5sw9w67/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-s5sw9w67/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-vc2qoas2/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-vc2qoas2/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-vc2qoas2/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-vc2qoas2/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-vc2qoas2/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-ou8ofufr/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-ou8ofufr/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-ou8ofufr/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-ou8ofufr/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-ou8ofufr/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:724: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-ou8ofufr/mock/qga3.sock>
+  fin = one_guest([a], res_iso, "i")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-ou8ofufr/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-8ybe8pis/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/matrix.json' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/scen.json' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/session.log' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/win.res' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/apps/nvidia_smi.log' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/apps/nvidia_smi.json' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/apps/nvidia_smi.verdict.json' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/guests/g1/health-after-nvidia_smi.json' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:184: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8ybe8pis/guests/g1/setup.json' mode='r' encoding='UTF-8'>
+  self.assertNotIn("mockpw", open(os.path.join(root, f), errors="replace").read(), f)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-kng4uz22/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-kng4uz22/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-kng4uz22/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-kng4uz22/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-kng4uz22/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:724: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-kng4uz22/mock/qga3.sock>
+  fin = one_guest([a], res_iso, "i")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-kng4uz22/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-kng4uz22/win_isolated.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-kng4uz22/session.log' mode='r' encoding='UTF-8'>
+  return open(os.path.join(d, "session.log")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8br2gu07/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8br2gu07/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-8br2gu07/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-8br2gu07/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8br2gu07/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8br2gu07/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-8br2gu07/session.log' mode='r' encoding='UTF-8'>
+  return open(os.path.join(d, "session.log")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-tzj4alk4/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-tzj4alk4/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-tzj4alk4/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-tzj4alk4/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-tzj4alk4/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:176: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-tzj4alk4/win.res' mode='r' encoding='UTF-8'>
+  lines = [l for l in open(os.path.join(d, "win.res")) if l.startswith("APPRES")]
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-gi9pl8ep/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-gi9pl8ep/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-gi9pl8ep/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-gi9pl8ep/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-gi9pl8ep/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-czmsf6tw/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-czmsf6tw/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-czmsf6tw/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-czmsf6tw/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-czmsf6tw/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-czmsf6tw/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:40: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-czmsf6tw/session.log' mode='r' encoding='UTF-8'>
+  return open(os.path.join(d, "session.log")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-aeweexss/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-aeweexss/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-aeweexss/mock/qga1.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-aeweexss/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-aeweexss/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:724: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-aeweexss/mock/qga3.sock>
+  fin = one_guest([a], res_iso, "i")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-aeweexss/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:21: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-lyx1cwve/scen.json' mode='w' encoding='UTF-8'>
+  json.dump(scenario or {}, open(sc, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:778: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-lyx1cwve/scen.json' mode='r' encoding='UTF-8'>
+  scen = json.load(open(a.mock_scenario)) if a.mock_scenario else {}
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:713: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-lyx1cwve/mock/qga2.sock>
+  fin = one_guest(batch, res, "g")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:655: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-lyx1cwve/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:724: ResourceWarning: unclosed <socket.socket fd=4, family=1, type=1, proto=0, raddr=/tmp/kfwa-t-lyx1cwve/mock/qga3.sock>
+  fin = one_guest([a], res_iso, "i")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-lyx1cwve/win.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_driver.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/kfwa-t-lyx1cwve/win_isolated.res' mode='r' encoding='UTF-8'>
+  for line in open(p):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.....CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:415: ResourceWarning: unclosed file <_io.BufferedReader name='/tmp/tmpnyk94jrb/kf_probe.exe'>
+  data = open(os.path.join(self.cfg.override_dir, name), "rb").read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/winapps.py:415: ResourceWarning: unclosed file <_io.BufferedReader name='/tmp/tmprzpai9dd/kf_probe.exe'>
+  data = open(os.path.join(self.cfg.override_dir, name), "rb").read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_run_app.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_health.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_edge.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_common.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_launch.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_apphelpers.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_guest_setup.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_stage.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:27: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/kf_cleanup.ps1' mode='r' encoding='UTF-8'>
+  txt = re.sub(r"'[^'\n]*'", "''", open(f).read())      # ignore string literals
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/helpers.py:44: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpuf82_qdn/parse_many.ps1' mode='w' encoding='UTF-8'>
+  open(sp, "w").write(PARSE_MANY)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:42: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/web/webgl.html' mode='r' encoding='UTF-8'>
+  js = re.search(r"<script>(.*)</script>", open(f).read(), re.S).group(1)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:42: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/web/video.html' mode='r' encoding='UTF-8'>
+  js = re.search(r"<script>(.*)</script>", open(f).read(), re.S).group(1)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:42: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/web/webgpu.html' mode='r' encoding='UTF-8'>
+  js = re.search(r"<script>(.*)</script>", open(f).read(), re.S).group(1)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_guest_scripts.py:71: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/guest/py/win_cuda_equiv.py' mode='r' encoding='UTF-8'>
+  src = open(os.path.join(H.AM, "guest", "py", "win_cuda_equiv.py")).read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/test_manifest.py:92: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpn7q901wz/m.json' mode='w' encoding='UTF-8'>
+  mp = os.path.join(d, "m.json"); json.dump(man, open(mp, "w"))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+
+  0      0   0      0   0      0      0      0                              0
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+
+  0      0   0      0   0      0      0      0                              0
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+
+  0      0   0      0   0      0      0      0                              0
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_manifest.py:94: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpn7q901wz/m.json' mode='r' encoding='UTF-8'>
+  m2 = json.load(open(mp))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_manifest.py:99: ResourceWarning: unclosed file <_io.BufferedWriter name='/tmp/tmpn7q901wz/tools/kf_x.exe'>
+  tools = os.path.join(d, "tools"); os.makedirs(tools); open(os.path.join(tools, "kf_x.exe"), "wb").write(b"MZ")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_manifest.py:102: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpn7q901wz/out/manifest.json' mode='r' encoding='UTF-8'>
+  built = json.load(open(os.path.join(out, "manifest.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_manifest.py:112: ResourceWarning: unclosed file <_io.BufferedWriter name='/tmp/tmpn7q901wz/dl/tool/tool.zip'>
+  open(os.path.join(d, "dl", "tool", "tool.zip"), "ab").write(b"x")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..CHECKOUT/scripts/bench/windows/appmatrix/tests/helpers.py:18: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/manifest.json' mode='r' encoding='UTF-8'>
+  return json.load(open(os.path.join(AM, "manifest.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.CHECKOUT/scripts/bench/windows/appmatrix/tests/helpers.py:14: ResourceWarning: unclosed file <_io.TextIOWrapper name='CHECKOUT/scripts/bench/windows/appmatrix/apps.json' mode='r' encoding='UTF-8'>
+  return json.load(open(os.path.join(AM, "apps.json")))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...........CHECKOUT/scripts/bench/windows/appmatrix/tests/test_qga.py:66: ResourceWarning: unclosed file <_io.BufferedWriter name='/tmp/tmpws_hnqdq/a.ppm'>
+  open(p, "wb").write(b"P6\n2 2\n255\n" + bytes(range(12)))
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_qga.py:68: ResourceWarning: unclosed file <_io.BufferedReader name='/tmp/tmpws_hnqdq/a.png'>
+  png = open(os.path.join(d, "a.png"), "rb").read()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...CHECKOUT/scripts/bench/windows/appmatrix/tests/test_summarize.py:15: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/run/win.res' mode='w' encoding='UTF-8'>
+  open(os.path.join(run, "win.res"), "w").write(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_summarize.py:20: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/run/win_isolated.res' mode='w' encoding='UTF-8'>
+  open(os.path.join(run, "win_isolated.res"), "w").write(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_summarize.py:22: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/lin/guest.res' mode='w' encoding='UTF-8'>
+  open(os.path.join(lin, "guest.res"), "w").write(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/tests/test_summarize.py:25: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/ref.res' mode='w' encoding='UTF-8'>
+  open(os.path.join(d, "ref.res"), "w").write("APPDIG side=host app=llama_cuda_gen OUTSHA llama_cpp bbbb\n")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/summarize.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/run/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/summarize.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/run/win_isolated.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/summarize.py:43: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/run/win.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/summarize.py:43: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/run/win_isolated.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/summarize.py:43: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/ref.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+CHECKOUT/scripts/bench/windows/appmatrix/summarize.py:32: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpjnqs_7vr/lin/guest.res' mode='r' encoding='UTF-8'>
+  for line in open(path, errors="replace"):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+....................
+----------------------------------------------------------------------
+Ran 76 tests in 28.774s
+
+OK
+document tables up to date

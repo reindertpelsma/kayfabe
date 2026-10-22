@@ -1,0 +1,44 @@
+[
+  {
+    "mutant": "all_153_fatal",
+    "exit": 1,
+    "killers": [
+      "test_boot_153_before_desktop_does_not_refuse ",
+      "test_boot_153_is_retained_with_its_epoch "
+    ]
+  },
+  {
+    "mutant": "allow_nvidia_153",
+    "exit": 1,
+    "killers": [
+      "test_boot_provider_after_desktop_refuses ",
+      "test_late_boot_event_never_claims_health_pass ",
+      "test_nvidia_153_before_and_after_desktop_refuses "
+    ]
+  },
+  {
+    "mutant": "ignore_boot_epoch",
+    "exit": 1,
+    "killers": [
+      "test_boot_provider_after_desktop_refuses ",
+      "test_late_boot_event_never_claims_health_pass "
+    ]
+  },
+  {
+    "mutant": "ignore_interactive_user",
+    "exit": 1,
+    "killers": [
+      "test_no_interactive_user_refuses ",
+      "test_null_interactive_user_refuses "
+    ]
+  },
+  {
+    "mutant": "hardcode_vast",
+    "exit": 1,
+    "killers": [
+      "test_configured_account_match_is_case_insensitive ",
+      "test_kf_session_is_verified_without_typing ",
+      "test_different_account_is_never_accepted "
+    ]
+  }
+]

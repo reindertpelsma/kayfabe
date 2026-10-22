@@ -1,0 +1,42 @@
+[
+  {
+    "mutant": "forge_pass",
+    "killers": [
+      "test_failure_verdict_is_not_a_pass ",
+      "test_notrun_is_not_a_pass "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "ignore_restart",
+    "killers": [
+      "test_restart_reason_refuses_a_passed_row ",
+      "test_timeout_does_not_start_more_gpu_work "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "short_hold",
+    "killers": [
+      "test_missing_hold_is_not_accepted ",
+      "test_short_hold_is_not_accepted "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "omit_health",
+    "killers": [
+      "test_health_failure_after_app_is_fatal ",
+      "test_health_failure_after_unigine_prevents_hold "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "omit_usb_controller",
+    "killers": [
+      "test_app_disk_uses_the_new_controller ",
+      "test_controller_is_created_before_attaching_cd "
+    ],
+    "exit": 1
+  }
+]

@@ -1,0 +1,43 @@
+test_bind_failure_prevents_gpu_app_work (test_desktop_controller.ControllerTests.test_bind_failure_prevents_gpu_app_work) ... ok
+test_bind_failure_propagates (test_desktop_controller.ControllerTests.test_bind_failure_propagates) ... ok
+test_desktop_failure_does_not_claim_completion (test_desktop_controller.ControllerTests.test_desktop_failure_does_not_claim_completion) ... ok
+test_native_failure_never_starts_windows (test_desktop_controller.ControllerTests.test_native_failure_never_starts_windows) ... ok
+test_success_runs_native_then_watched_windows (test_desktop_controller.ControllerTests.test_success_runs_native_then_watched_windows) ... ok
+test_watch_is_required_before_bind_and_desktop (test_desktop_controller.ControllerTests.test_watch_is_required_before_bind_and_desktop) ... ok
+test_boot_153_before_desktop_does_not_refuse (test_desktop_health.DesktopHealthTests.test_boot_153_before_desktop_does_not_refuse) ... ok
+test_boot_153_is_retained_with_its_epoch (test_desktop_health.DesktopHealthTests.test_boot_153_is_retained_with_its_epoch) ... ok
+test_boot_provider_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_boot_provider_after_desktop_refuses) ... ok
+test_clean_desktop_passes (test_desktop_health.DesktopHealthTests.test_clean_desktop_passes) ... ok
+test_display_4101_and_bugcheck_refuse (test_desktop_health.DesktopHealthTests.test_display_4101_and_bugcheck_refuse) ... ok
+test_late_boot_event_never_claims_health_pass (test_desktop_health.DesktopHealthTests.test_late_boot_event_never_claims_health_pass) ... ok
+test_missing_explorer_refuses_even_with_dwm (test_desktop_health.DesktopHealthTests.test_missing_explorer_refuses_even_with_dwm) ... ok
+test_no_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_no_interactive_user_refuses) ... ok
+test_null_interactive_user_refuses (test_desktop_health.DesktopHealthTests.test_null_interactive_user_refuses) ... ok
+test_nvidia_153_before_and_after_desktop_refuses (test_desktop_health.DesktopHealthTests.test_nvidia_153_before_and_after_desktop_refuses) ... ok
+test_unreadable_log_refuses (test_desktop_health.DesktopHealthTests.test_unreadable_log_refuses) ... ok
+test_app_disk_uses_the_new_controller (test_desktop_plan.AppDiskTests.test_app_disk_uses_the_new_controller) ... ok
+test_controller_is_created_before_attaching_cd (test_desktop_plan.AppDiskTests.test_controller_is_created_before_attaching_cd) ... ok
+test_failure_verdict_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_failure_verdict_is_not_a_pass) ... ok
+test_health_failure_after_app_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_after_app_is_fatal) ... ok
+test_health_failure_after_unigine_prevents_hold (test_desktop_plan.DesktopPlanTests.test_health_failure_after_unigine_prevents_hold) ... ok
+test_health_failure_before_apps_is_fatal (test_desktop_plan.DesktopPlanTests.test_health_failure_before_apps_is_fatal) ... ok
+test_missing_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_missing_hold_is_not_accepted) ... ok
+test_notrun_is_not_a_pass (test_desktop_plan.DesktopPlanTests.test_notrun_is_not_a_pass) ... ok
+test_restart_reason_refuses_a_passed_row (test_desktop_plan.DesktopPlanTests.test_restart_reason_refuses_a_passed_row) ... ok
+test_short_hold_is_not_accepted (test_desktop_plan.DesktopPlanTests.test_short_hold_is_not_accepted) ... ok
+test_timeout_does_not_start_more_gpu_work (test_desktop_plan.DesktopPlanTests.test_timeout_does_not_start_more_gpu_work) ... ok
+test_unigine_rows_run_before_hold (test_desktop_plan.DesktopPlanTests.test_unigine_rows_run_before_hold) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 13.391s
+
+OK
+test_configured_account_match_is_case_insensitive (test_signin_user.SigninUserTests.test_configured_account_match_is_case_insensitive) ... ok
+test_different_account_is_never_accepted (test_signin_user.SigninUserTests.test_different_account_is_never_accepted) ... ok
+test_existing_vast_caller_still_works (test_signin_user.SigninUserTests.test_existing_vast_caller_still_works) ... ok
+test_kf_session_is_verified_without_typing (test_signin_user.SigninUserTests.test_kf_session_is_verified_without_typing) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.009s
+
+OK

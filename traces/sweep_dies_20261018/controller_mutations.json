@@ -1,0 +1,18 @@
+[
+  {
+    "mutant": "skip_watch",
+    "killers": [
+      "test_success_runs_native_then_watched_windows ",
+      "test_watch_is_required_before_bind_and_desktop "
+    ],
+    "exit": 1
+  },
+  {
+    "mutant": "ignore_bind_failure",
+    "killers": [
+      "test_bind_failure_prevents_gpu_app_work ",
+      "test_bind_failure_propagates "
+    ],
+    "exit": 1
+  }
+]
