@@ -1246,10 +1246,10 @@ impl Pump {
             } => self.trace_slots(|| {
                 vec![format!(
                     "guest {} cursor={cursor} entry={entry:#018x}",
-                    if kind == PubKind::Pointer {
-                        "pointer"
-                    } else {
-                        "control"
+                    match kind {
+                        PubKind::Pointer => "pointer",
+                        PubKind::Control => "control",
+                        PubKind::Stream => "stream",
                     }
                 )]
             }),
