@@ -21,7 +21,7 @@ use kf_chan::user_gate::Marks;
 use kf_chan::user_lifecycle::Lifecycle;
 use kf_chan::user_loop::{Need, Wait, wait_of};
 use kf_chan::user_scan::{Fetch, Scan};
-use kf_chan::user_stream::{Source, inspect_entry};
+use kf_chan::user_stream::{Source, inspect_format};
 use kf_chan::user_turn::{self as turn, Fail, GpSegment, Io, PubKind, Staged, Step, SwView, Turn};
 use std::ops::{Deref, DerefMut};
 
@@ -181,7 +181,7 @@ pub fn seg_va(id: u8) -> u64 {
 
 /// Which guest entry id an 8-byte GP entry names (`None` for a value that names none).
 pub fn entry_id(raw: u64) -> Option<u8> {
-    match inspect_entry(raw, 1 << 20).ok()? {
+    match inspect_format(raw).ok()? {
         Source::Nop => u8::try_from((raw & 0xffff_ffff) >> 2).ok(),
         Source::Segment(d) => u8::try_from((d.gpu_va / 0x1000).checked_sub(1)?).ok(),
     }

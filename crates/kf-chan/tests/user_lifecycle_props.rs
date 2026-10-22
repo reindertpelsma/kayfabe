@@ -1106,10 +1106,10 @@ fn a4_every_single_bit_flip_of_a_valid_entry_is_refused_by_name_or_forwarded_val
             assert_eq!(sim.out.torn, 0);
         }
     }
-    assert!(
-        refused > 50 && forwarded > 50,
-        "refused {refused} forwarded {forwarded}"
-    );
+    // All 384 bit flips are checked word-by-word above. Hardware-format-only
+    // admission has 4 direct bases x 3 unsupported bits + 2 NOP bases x 9 illegal
+    // high bits = 30 invalid encodings, leaving 354 valid words in this corpus.
+    assert_eq!((refused, forwarded), (30, 354));
 }
 
 #[test]
@@ -1966,7 +1966,24 @@ fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usiz
         ] {
             h = (h ^ v).wrapping_mul(0x0000_0100_0000_01b3);
         }
-        for b in format!("{:?}|{}", relay.life.counts(), relay.state_key()).bytes() {
+        // Preserve the pre-change golden: omit only the three newly added
+        // observation fields, while retaining EVERY old counter, state and I/O call.
+        // The new counters have independent production-relay tests.
+        let counts = format!("{:?}", relay.life.counts());
+        let legacy_counts = counts
+            .split(", ")
+            .filter(|field| {
+                ![
+                    "pointer_large_entries: ",
+                    "pointer_entry_max_bytes: ",
+                    "refused_scan_budget: ",
+                ]
+                .iter()
+                .any(|prefix| field.starts_with(prefix))
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        for b in format!("{legacy_counts}|{}", relay.state_key()).bytes() {
             h = (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
