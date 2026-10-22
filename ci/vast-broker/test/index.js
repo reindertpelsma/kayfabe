@@ -34,3 +34,4 @@ import './live-ingress.test.js';
 import './round3-runner.test.js';
 import './round3-binding.test.js';
 import './round3-isolation.test.js';
+import './round3-release.test.js';
