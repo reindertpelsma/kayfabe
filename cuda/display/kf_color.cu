@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  * Bounded SDR: RGB8888 -> DIRECT10 FP16 ILUT -> FP16 blend -> OCSC0 ->
  * DIRECT10 unsigned fixed-point OLUT -> RGB8888. LUT snapshots contain four
- * header entries and 1025 RGB/padding entries; no segmented or mirrored mode.
+ * header entries and 1025 RGB/padding entries; no segmented mode. A mirrored
+ * OLUT is sampled on its negative side (output_lookup).
  * All buffer extents are checked by DisplayGpu before launching any kernel.
  */
 #define DEV static __attribute__((device))
@@ -205,8 +206,20 @@ extern "C" __attribute__((global)) void kf_color_compose(
     }
 }
 
+/* The output table at v, including the negative side of a MIRRORED table
+ * (HEAD_SET_OLUT_CONTROL_MIRROR): the odd extension lut(-x) = -lut(x).
+ * [inferred] ogkm names the bit and no public text defines it; docs/design/V3_SDR_COLOR.md
+ * records the reading and the hardware step that must confirm it. An unmirrored
+ * table clamps a negative index to its first sample (sat() inside lookup). The final
+ * clamp to [0,1] makes a negative result black. NaN is not < 0: it samples sat(NaN) = 0.
+ */
+DEV float output_lookup(const H *lut, float v, U c, U interpolate, U entries, U mirror) {
+    if (mirror && v < 0) return -lookup(lut, -v, c, interpolate, 0, entries);
+    return lookup(lut, v, c, interpolate, 0, entries);
+}
+
 extern "C" __attribute__((global)) void kf_color_output(
-    const float *src, U *dst, U width, const H *lut, U interpolate, Matrix matrix, U entries) {
+    const float *src, U *dst, U width, const H *lut, U interpolate, Matrix matrix, U entries, U mirror) {
     U row = __nvvm_read_ptx_sreg_ctaid_x();
     for (U x = __nvvm_read_ptx_sreg_tid_x(); x < width; x += 256) {
         Q p = (Q)row * width + x;
@@ -214,7 +227,7 @@ extern "C" __attribute__((global)) void kf_color_output(
         for (U c = 0; c < 3; ++c) {
             const int *m = matrix.v + c * 4;
             float v = src[p * 4] * (m[0] / 65536.0f) + src[p * 4 + 1] * (m[1] / 65536.0f) + src[p * 4 + 2] * (m[2] / 65536.0f) + m[3] / 65536.0f;
-            v = lut ? lookup(lut, v, c, interpolate, 0, entries) : sat(v);
+            v = lut ? output_lookup(lut, v, c, interpolate, entries, mirror) : sat(v);
             U q = (U)(sat(v) * 256.0f);
             if (q > 255) q = 255;
             packed |= q << (16 - 8 * c);

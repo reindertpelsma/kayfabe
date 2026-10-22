@@ -74,6 +74,7 @@ fn main() -> Result<(), String> {
         matrix: &unit,
         size: (8, 1),
         interpolate: true,
+        output_mirror: false,
         mutate_input: None,
         rearm: false,
         tone: Some(ColorTone {

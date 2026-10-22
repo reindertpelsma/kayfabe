@@ -760,6 +760,28 @@ power control, thermal and process, preempt management is host"*.
   objects for real (it is non-privileged, but its effect on the host GPU is unknown); (c) refuse it,
   which returns Windows to Code43 at VFIO 2861.
 
+**§S applied to notifier 196, `USE_GC6_REDUCED_THRESHOLD` (owner APPROVED 2026-10-21, relayed by the
+coordinator).** Arming the Blackwell GC6 reduced-threshold notifier (196) is a §S.1 stub: it is accepted
+silently, no event is posted and nothing reaches the host. Reason (owner): power is managed by the host
+driver and mostly by GSP, the guest does not manage it, it is not used by guest userspace, and the
+system must remain unprivileged. §S.3's "real host events" for power would apply only if an event were
+needed for correctness, which is unlikely; monitoring is never a reason to allow a privileged verb.
+This settles the open question on draft PR 56 (the predecessor's S.1 reading is now the ruling, no
+longer an assumption); promoting the code to master still needs its hardware verification.
+
+**RE scope clarification (owner 2026-10-21).** Inspecting NVIDIA code that is not under an open-source
+licence, compiled or decompiled (disassembly, Ghidra, decompiler output, disassembly of a crash dump),
+is reverse engineering and falls under the RE rules (the constant ruling, kayfabe-private only, nothing
+derived, no public references), not only the use of RE tools. Traces (interfaces, ordinals, RPC and
+event logs, observed behaviour) are not about the code and may be inspected freely. Earlier private RE
+work may be built upon. Following assembly of open-source-licensed code is NOT RE: the open GPU kernel
+modules (ogkm) are OSS-licensed, so a disassembly of a full ogkm build, whether built by us or
+distributed by NVIDIA, contains nothing proprietary and may be inspected freely. That applies only to
+full ogkm builds (Linux guests), not to the proprietary driver, whose binaries stay under the RE rules. Only code whose licence is open source is covered: a binary
+payload that merely ships inside OSS-licensed files (the GSP firmware as a C array, for example) is
+not, because the file is open source but the meaning of the contents is not covered by that licence,
+so inspecting the contents of such a payload is RE. When in doubt, it is RE (owner's safe side).
+
 ## T. Directives recovered from earlier sessions (filtered 2026-10-08)
 
 **STATUS: LIVE, 2026-10-08.** Recovered from earlier sessions (an audit of the owner's messages,

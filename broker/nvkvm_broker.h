@@ -327,6 +327,19 @@ void nb_cursor_load(struct nb_cursor *dst, const uint8_t *src, uint32_t w,
 /* Make `dst` a copy of `src`: every field, and the w*h packed pixels when an
  * image is defined (the rest of px is never read).  How the core publishes. */
 void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src);
+
+/*
+ * The image the HOST pointer is given: the tight box around the cursor's
+ * non-clear pixels (plus one clear pixel of margin and always including the hot
+ * spot), not the whole 256x256 hardware-cursor buffer a guest draws a 32x32
+ * arrow into.  A pointer surface that large is outside what compositors and
+ * remote views are built for (owner 2026-10-21: the hover pointer is invisible
+ * with the large one).  Returns true and fills `dst` (w, h, hot_x, hot_y and
+ * the packed pixels; gen/defined/visible copied; no XOR mask) when that box is
+ * smaller than the image; false when there is nothing to crop (undefined, fully
+ * clear, or already tight) and the caller keeps using `src`.
+ */
+bool nb_cursor_crop(const struct nb_cursor *src, struct nb_cursor *dst);
 /*
  * The cursor's size and hot spot after scaling by num_x/den_x horizontally and
  * num_y/den_y vertically -- the same factors the frame is scaled by.
