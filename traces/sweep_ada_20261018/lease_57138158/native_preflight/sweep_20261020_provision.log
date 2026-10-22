@@ -1,0 +1,12 @@
+SWEEP_PROVISION_START own_instance=57138158 2026-10-22T01:20:09+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                35ff2820e5573199072ab2d274f5f0b91a1826a8 -> FETCH_HEAD
+HEAD is now at 35ff2820e fix(s2): prove exact guest negative controls before advancing the suite
+NVIDIA GeForce RTX 4090, 595.91.07, 24564 MiB
+VERDICT=SOUND
+PROBE_START pid=76507 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x190 impl=0x2 die=AD102
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
