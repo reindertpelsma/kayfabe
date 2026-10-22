@@ -227,3 +227,17 @@ CREATED blackwell-resume own57108853 at 2026-10-21T20:41Z (third attempt, owner-
 CLOSED blackwell-resume own57108853, APIabsence2026-10-21T21:58:42.731754+00:00 (<3h; created 2026-10-21T20:42:06.005091+00:00): runtime estimate1.243140USD (0.9733USD/h observed), account credit delta1.204854USD (not settled attribution). Native GB202 health PASS (gates9/9+10, kernel-GR oracle, CUDA4/4; raw suite 29/30, one concurrent-fuzz flake, alone 3/3 clean), arms on_a (0x50) and on_b (page B: no 0x50; Xid32 x2 then 0x116) run; lane stopped by the Xid policy (Xid32 pair in an ON arm, outside the off_c exception). Lane spend ~1.55USD of the 4.0USD cap (6USD hard stop); reserve untouched; no lease open; timer cancelled only after absence; minidumps (data, not inspected) in /root/kf-private-data/blackwell_20261021 outside git.
 
 CREATED blackwell-resume own57117614 at 2026-10-22T00:05CEST (second approved lease, bisect lane), RTX 5090 offer35126136/machine55678 Netherlands (reliability0.943, relaxed from 0.98 for this offer), quote0.6956USD/h, --disk180, auto-destroy170min PID2537232 armed FIRST. Host-key fix in place: READINESS_PASS and controller started within 2 min. Lane budget: cap4.0USD (hard stop6, reserve5), spent before ~1.55USD.
+
+
+2026-10-22 SW2 Blackwell continuation accounting correction (MEASURED runtime estimates, not settled invoices):
+transferred predecessor total2.640452USD; first fresh57132969 closed/APIabsent01:30:18UTC,
+0.824240USD ->3.464692USD. Provider-start failure57142142 closed/APIabsent02:07:19UTC,
+0.148704USD ->3.613396USD. Unreachable replacement57143789 closed/APIabsent02:36:32UTC,
+0.314967USD ->3.928363USD. All timer cancellation followed exact-ID API absence; neither failed
+replacement ran N0 or Windows. Per-ID receipts are validation/validation2/validation3 owned ledgers.
+Owner latest hardstop7USD/reserve5. Current57148807 created02:55:07UTC, RTX5090 Japanverified,
+quote1.000926USD/h, actual1.033333USD/h, APIcredit42.053593USD before creation. Required170min
+auto armedFIRST2913269 (clamped04:50UTC), independent budgetwatch2913272 cutoff04:47:07UTC.
+Reservation2.648654USD +prior3.928363=6.577017USD is a guard, NOT measured spend; no timer extension.
+NativeN0PASS, disabled580.88bind22, precision-only ON0x50; remaining approved arms within same lease.
+Another owner-authorized Ada lane has its own budget; shared account debit is not exclusive attribution.

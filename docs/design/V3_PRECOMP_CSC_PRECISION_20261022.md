@@ -1,4 +1,17 @@
-**STATUS: RESEARCH, 2026-10-22.** Public-source precision candidate; hardware validation UNRUN.
+**STATUS: RESEARCH, 2026-10-22 03:45 UTC.** Public-source precision candidate; precision-only Windows sufficiency FALSIFIED on a clean native baseline.
+
+MEASURED correction above the original hypothesis: own RTX 5090 lease `57148807`, product
+`8f3a9bb3a5d652b3f536ca015bf95735ec588924`, passed native 595.91.07 N0 (raw30/30,
+CUDA4/4, gates9/9+10 and corrected GR/CE); no unmatched Xid. Windows580.88 was sealed disabled
+(Code22), then a fresh display/GOP ON sibling crashed with bugcheck0x50 after the fourth successful
+CA7A allocation. Actual Code0 was not observed. The canonical trace has278 RPC rows, zero unparsed
+records and reached EOF; the old276 summary omits two Other(4) records. WER and dump-header
+metadata independently confirm0x50. This clean precision-only run triggers the stated falsifier.
+FVLUT necessity, complete numerical fidelity and the crash's instruction-level cause remain UNRESOLVED;
+none is proved by this failure. No captured-word fallback is authorized by it. Evidence:
+[arm receipts](../../traces/blackwell_validation4_20261022/arms/on_precision/),
+[native verdict](../../traces/blackwell_validation4_20261022/lease_metadata/N0_verdict.json).
+AD104 behavior remains hardware UNRUN after this declaration. Keep PR69 draft.
 Draft [PR #69](https://github.com/reindertpelsma/kayfabe/pull/69) is isolated on
 `codex/bw-resume-cont-20261022-capc`, based on the read-only Claude product lineage.
 

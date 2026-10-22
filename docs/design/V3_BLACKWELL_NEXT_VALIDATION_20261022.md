@@ -1,4 +1,16 @@
 **STATUS: LIVE, 2026-10-22.** Owner GO authorizes ONE RTX 5090 lease with the tested guard and N0 gate.
+
+2026-10-22 03:45 UTC amendment supersedes the earlier one-lease exhaustion/census STOP narrative below:
+owner classified the immediate post-shutdown census as a harness race and authorized the tested
+bounded census plus a fresh continuation. Current own lease57148807 has clean N0 and disabled580.88
+bind22; derived-CAPC ON reproduced0x50 (canonical278 rows/EOF, no new hostXid). Precision-only
+sufficiency is falsified. Approved empty-ROM OFF/TDR is now running; separate merged B1 source
+2add71e8c remains next, within the unchanged earlier budget cutoff04:47:07UTC and arm-start
+cutoff04:22:07UTC. Auto-destroy170min was armed first and clamped04:50UTC. No new product arm,
+captured fallback or unapproved Xid exception is introduced. Current actual rate1.033333USD/h,
+prior lane runtime3.928363USD, hard stop7USD/reserve5. See current validation4 receipts.
+The separate Ada lane is explicitly authorized in parallel under its own budget; one-box applies
+to SW2's owned IDs. Account credit deltas are not assigned to this lane.
 The earlier documentation-only restriction below is superseded by that explicit GO. Native Xid32 stays fatal.
 
 Owner follow-up supersedes the old B1 readiness/no-merge paragraph below **only for an isolated
