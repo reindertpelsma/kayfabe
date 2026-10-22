@@ -1,3 +1,5 @@
+STATUS UPDATE: SUPERSEDED BY CLOSED PARTIAL, 2026-10-22. Owner approved AD102; one lease ran native PASS then stopped at the omitted guest-image path. Lease destroyed/API-absent. Current outcome: MATRIX.md and lease_57138158/LINUX_NOTRUN_STOP.md. Historical text below.
+
 STATUS UPDATE: SUPERSEDED, 2026-10-22. Owner explicitly resumed S2 to implement the approved guard and then rent. Guard is now verified; see GUARD_RESULT.md. The preflight stop below is historical, not the resumed outcome.
 
 STATUS: RESEARCH, 2026-10-22. S2 stopped at the required GPU-free prerequisite.

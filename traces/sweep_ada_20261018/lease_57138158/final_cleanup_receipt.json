@@ -1,0 +1,19 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-22T01:44:40.815238+00:00",
+  "own_id": 57138158,
+  "api_absent": true,
+  "timer_absent": true,
+  "timer_cancelled_only_after_absence": true,
+  "pre_destroy_own_controller_qemu_guard_absent": true,
+  "windows_vm_never_created": true,
+  "local_target_absent": true,
+  "local_cargo_builds": 0,
+  "host_or_cargo_locks_acquired": false,
+  "runtime_guard_source_unchanged": true,
+  "pinned_ssh_key_fingerprints": [
+    "SHA256:VzC9z0/uxcqE+U/I/0QOg6EwY7crznRXCXqsBpLIqPU",
+    "SHA256:mee+O1eSbdUJMBSYS3xisyP3ls6WnlN1ZLkn9gxFt14",
+    "SHA256:G+kn20aLM0BckPoYXIGGaFUAyxLFMLrDdRTMt9KF6/o"
+  ]
+}

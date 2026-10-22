@@ -1,0 +1,25 @@
+{
+  "kind": "MEASURED invoice observation, not final settlement",
+  "utc": "2026-10-22T01:42:48.973778+00:00",
+  "own_id": 57138158,
+  "charge_rows": [
+    {
+      "instance_id": 57138158,
+      "amount": "0.171",
+      "quantity": "0.389",
+      "rate": "0.4400",
+      "timestamp": 1792627200,
+      "type": "charge"
+    },
+    {
+      "instance_id": 57138158,
+      "amount": "0.022",
+      "quantity": "0.441",
+      "rate": "0.0500",
+      "timestamp": 1792627200,
+      "type": "charge"
+    }
+  ],
+  "invoiced_so_far_usd": 0.193,
+  "note": "Charges may lag; zero current rows would not mean free. Shared-account credit delta is not own spend."
+}

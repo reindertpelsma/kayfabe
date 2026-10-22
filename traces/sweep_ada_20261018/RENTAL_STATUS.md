@@ -1,3 +1,5 @@
+STATUS UPDATE: SUPERSEDED BY CLOSED PARTIAL, 2026-10-22. Owner approved AD102; one lease ran native PASS then stopped at the omitted guest-image path. Lease destroyed/API-absent. Current outcome: MATRIX.md and lease_57138158/LINUX_NOTRUN_STOP.md. Historical text below.
+
 STATUS: LIVE, 2026-10-22. Guard verified and pushed; rental not started.
 
 MEASURED: 97 software tests pass, including the unchanged original 23; 22 mutants
