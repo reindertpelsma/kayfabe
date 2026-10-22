@@ -1,0 +1,12 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_no_positive_verdict_no_approval_missing",
+    "test_guest_xid_guard.GuestGuardTests.test_recovery_required_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_recovery_required_missing",
+    "test_guest_xid_guard.GuestGuardTests.test_wrong_primitive_refused"
+  ],
+  "errors": [],
+  "mutant": "skip_completed_recovery_proof"
+}

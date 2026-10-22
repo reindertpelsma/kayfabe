@@ -1,0 +1,15 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_guard_runner.RunnerIdentityTests.test_changed_executable_is_fatal",
+    "test_guest_guard_runner.RunnerIdentityTests.test_changed_starttime_is_fatal",
+    "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_defer_changed_leader_starttime_still_fatal",
+    "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_defer_live_missing_executable_still_fatal",
+    "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_defer_wrong_worker_executable_still_fatal",
+    "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_missing_changed_leader_starttime_still_fatal",
+    "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_missing_live_missing_executable_still_fatal",
+    "test_guest_thread_exit_guard.ThreadLeaderExitTests.test_missing_wrong_worker_executable_still_fatal"
+  ],
+  "errors": [],
+  "mutant": "skip_live_identity_recheck"
+}

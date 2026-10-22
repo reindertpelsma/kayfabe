@@ -1,0 +1,9 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_unrelated_pci_fatal_missing"
+  ],
+  "errors": [],
+  "mutant": "ignore_pci"
+}

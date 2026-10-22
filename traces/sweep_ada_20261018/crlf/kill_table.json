@@ -1,0 +1,20 @@
+[
+  {
+    "mutant": "omit_CRLF_framing",
+    "failures": [
+      "test_guest_xid_guard.GuestGuardTests.test_complete_missing_page_CRLF_proof_accepts_exact_one",
+      "test_guest_xid_guard.GuestGuardTests.test_live_missing_page_CRLF_marker_matches_pending_source_operation"
+    ],
+    "errors": [],
+    "tests": 61
+  },
+  {
+    "mutant": "strip_embedded_CR",
+    "failures": [
+      "test_guest_xid_guard.GuestGuardTests.test_complete_CR_inside_address_is_not_line_framing",
+      "test_guest_xid_guard.GuestGuardTests.test_live_CR_inside_address_is_not_line_framing"
+    ],
+    "errors": [],
+    "tests": 61
+  }
+]

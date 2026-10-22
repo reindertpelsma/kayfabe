@@ -1,0 +1,10 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_revision_required",
+    "test_guest_xid_guard.GuestGuardTests.test_source_pin_required",
+    "test_guest_xid_guard.GuestGuardTests.test_starttime_required"
+  ],
+  "errors": [],
+  "mutant": "skip_context_provenance"
+}

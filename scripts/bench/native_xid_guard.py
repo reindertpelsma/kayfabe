@@ -232,6 +232,7 @@ def _doorbells(text):
 
 def _guest_operations(serial, arm, final):
     """Source-shaped operations; partial observations never approve a baseline."""
+    serial = serial.replace('\r\n', '\n')
     lines = serial.splitlines()
     if final:
         if not re.search(r'^FASTGUEST: arms ' + re.escape(arm) + r' --probe-launch-dma  deadline ', serial, re.M):

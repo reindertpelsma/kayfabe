@@ -1,0 +1,9 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_xid_guard.PinTests.test_changed_raw_source_refused",
+    "test_guest_xid_guard.PinTests.test_changed_runner_source_refused"
+  ],
+  "errors": [],
+  "mutant": "ignore_local_source_changes"
+}

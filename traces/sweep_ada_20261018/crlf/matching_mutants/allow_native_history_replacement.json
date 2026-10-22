@@ -1,0 +1,9 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_defer",
+    "test_guest_xid_guard.GuestGuardTests.test_native_history_immutable_missing"
+  ],
+  "errors": [],
+  "mutant": "allow_native_history_replacement"
+}

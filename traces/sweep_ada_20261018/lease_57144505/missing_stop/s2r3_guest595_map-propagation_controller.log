@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-10-22T03:09:44+00:00 arms=1 budget=180s
+rev=f8432eed2
+ARM                          VERDICT   secs  why
+--map-propagation            PASS      22s   22s
+FAST_CELL_ARM arm=map-propagation verdict=PASS secs=22 client_ms=1790
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0

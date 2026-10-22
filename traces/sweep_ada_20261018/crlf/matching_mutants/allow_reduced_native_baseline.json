@@ -1,0 +1,9 @@
+{
+  "tests": 123,
+  "failures": [
+    "test_guest_xid_guard.NativeExactFiveTests.test_prior_lease_cannot_approve_four_native_faults",
+    "test_guest_xid_guard.NativeExactFiveTests.test_second_lease_cannot_approve_four_native_faults"
+  ],
+  "errors": [],
+  "mutant": "allow_reduced_native_baseline"
+}
