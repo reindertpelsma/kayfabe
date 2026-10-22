@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — G1 Phase 2 bounded worker classification GPU-free green
+
+CODE READ: separate draft PR #79 streams Scan/Window classification through
+<=917504-byte parts, one per Pump turn, <=10 per descriptor. Parser state crosses
+parts, END stops later reads, and publication re-admits every part before
+forwarding the original word. Oversized triggered staging refuses by name.
+Pointer relay remains worker-only; inline stage 2 remains unbuilt and may never
+block a vCPU/drainer. Phase 1 PR #76 stays unchanged.
+MEASURED (G1 validation, 2026-10-22): master/Phase 1 wrap characterization 6/6 each;
+production Plane/Relay fairness K=1; fourteen mutations with >=2 killers each;
+full suites 1087 passed / 0 failed / 4 existing ignores; final kf-qemu rerun
+404/404; clippy 379 warnings before/after, added 0; claims new=0.
+Evidence and hardware/log handoff: [Phase 2](../traces/descriptor_bound_20261018/phase2.md).
+INFERRED: catia-07 subtest 03 on run-3440 configuration and
+`pointer_large_entries > 0` still need hardware; no TDR/performance claim.
+
 ## UPDATE 2026-10-22 — G1 Phase 1 descriptor admission GPU-free green
 
 CODE READ: the authoritative descriptor decision resolves the earlier stop.

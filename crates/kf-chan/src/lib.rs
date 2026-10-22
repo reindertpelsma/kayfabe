@@ -28,6 +28,7 @@ pub mod translated;
 pub mod tspace_unsafe;
 pub mod ttables;
 pub mod user_batch;
+pub mod user_chunk;
 pub mod user_consumption;
 pub mod user_gate;
 pub mod user_lazy;

@@ -2,7 +2,7 @@
 
 **STATUS: LIVE-RESEARCH, 2026-10-22.**
 
-MEASURED: `snapshot2-summary.json` contains bounded line-numbered excerpts and
+MEASURED (T1 record 2026-10-22, run 3440): `snapshot2-summary.json` contains bounded line-numbered excerpts and
 counter summaries, hashes of the original supplied files, the eight refusal
 words, and the nominal last ninety status heartbeats before first display loss.
 `snapshot3-and-workloads.json` adds the third snapshot's hash/prefix verification,
@@ -10,7 +10,7 @@ twelve refusal words, thirteen unload markers, T-space retirement comparison,
 and four already-exported workload run logs. Original large logs remain on the
 trusted host; private paths are in the local T1 report, not committed here.
 
-MEASURED: collection used Python text extraction through SSH stdin, with no
+MEASURED (T1 record 2026-10-22, run 3440): collection used Python text extraction through SSH stdin, with no
 remote file writes. Line numbers count original log lines from one. Status lines
 were recognized by `kf3: family=`; fields were extracted by their named brackets.
 Refusal length uses the public C56F entry1 LENGTH field, bits 30:10 in dwords.

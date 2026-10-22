@@ -1966,7 +1966,7 @@ fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usiz
         ] {
             h = (h ^ v).wrapping_mul(0x0000_0100_0000_01b3);
         }
-        // Preserve the pre-change golden: omit only the three newly added
+        // Preserve the pre-change golden: omit only the newly added
         // observation fields, while retaining EVERY old counter, state and I/O call.
         // The new counters have independent production-relay tests.
         let counts = format!("{:?}", relay.life.counts());
@@ -1977,6 +1977,7 @@ fn fingerprint(cfg: Option<kf_chan::user_lazy::LazyConfig>) -> (u64, usize, usiz
                     "pointer_large_entries: ",
                     "pointer_entry_max_bytes: ",
                     "refused_scan_budget: ",
+                    "refused_staged_span_budget: ",
                 ]
                 .iter()
                 .any(|prefix| field.starts_with(prefix))

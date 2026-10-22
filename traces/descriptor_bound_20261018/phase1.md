@@ -7,14 +7,14 @@ NOP words use hardware-format admission, remain bit-exact and copy no PB bytes.
 Scan/Window above 917504 bytes refuse as `USER_RING_SCAN_BUDGET` before a PB read
 or gate. Snapshot/staging bounds remain unchanged; no native descriptor is split.
 
-MEASURED: test-only RED `149bc39e0` compiled and produced 227 passes / 15 failures;
+MEASURED (G1 validation record 2026-10-22): test-only RED `149bc39e0` compiled and produced 227 passes / 15 failures;
 RED `eb9e513e0` separately proves the 917508-byte boundary (0 passes / 1 failure).
 The production Relay tests passed 38/38 after the fix. The real Storage tests
 cover all twelve T1 words, maximum format length, malformed encodings and real
 credit fields. The 1026596-byte relay test reaches marker observation and guest
 GP_GET write-back; these are simulated native observations, not GPU execution.
 
-MEASURED: all 13 source mutations below have at least two independent killing
+MEASURED (G1 validation record 2026-10-22): all 13 source mutations below have at least two independent killing
 tests. Every mutation was restored. Full logs stay outside git; this table is
 the small evidence record.
 
@@ -34,11 +34,11 @@ the small evidence record.
 | scan_budget_event_dropped | 2 | `scan_mode_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate`; `seeded_window_oversized_descriptor_is_refused_as_scan_budget_before_any_read_or_gate` |
 | large_counter_gates_publication | 9 | `a_1026596_byte_pointer_descriptor_completes_through_marker_and_get_writeback`; `a_large_captured_descriptor_is_not_reloaded_after_guest_mutation` |
 
-MEASURED: identical baseline/final clippy commands emit 379 warnings each,
+MEASURED (G1 validation record 2026-10-22): identical baseline/final clippy commands emit 379 warnings each,
 261 distinct sites each, zero added sites and zero errors. The kf-qemu non-test
 deny set remains active. No warning suppression was added.
 
-MEASURED: the small-entry action transcripts agree before/after in default and
+MEASURED (G1 validation record 2026-10-22): the small-entry action transcripts agree before/after in default and
 always-scan modes. The original long randomized I/O golden remains unchanged
 and passes: its legacy counter serialization omits only the three newly added
 observation fields, which have independent counter tests. The bit-flip coverage
@@ -46,7 +46,7 @@ is now exact: 4 direct bases x 3 unsupported bits + 2 NOP bases x 9 illegal high
 bits = 30 invalid / 354 valid encodings, each still checked word-by-word. The
 fixture ID decoder no longer confuses a legal large length with a torn word.
 
-MEASURED: the first full run exposed those oracle maintenance issues; the two
+MEASURED (G1 validation record 2026-10-22): the first full run exposed those oracle maintenance issues; the two
 corrected targets then passed 63 model tests (3 existing ignores) and 38 property
 tests. A fresh full `kf-chan` + `kf-qemu` run then exited 0: 1046 passed,
 0 failed, 4 existing ignores across 36 test binaries/doc-test groups.
@@ -75,6 +75,7 @@ rg -n 'USER_RING_LIFECYCLE|poisoned=' "$candidate_log"
 
 INFERRED: no budget matches are required (rg exits 1 for no matches); zero large
 Pointer count means the catia case was not exercised. G1 did not query production
-logs or use a GPU/VM. Local builds used the repository cargo lock, two jobs,
+logs or run a GPU workload/trusted-host VM. CODE READ: the GPU-free Rust suite
+includes local KVM integration fixtures. Local builds used the repository cargo lock, two jobs,
 release, nice 19 and the lane-owned target. One initial 600-second lock wait
 expired; the next acquired it without disturbing the holder. Phase 2 begins only after this green Phase 1 handoff is pushed, on a separate branch/PR.
