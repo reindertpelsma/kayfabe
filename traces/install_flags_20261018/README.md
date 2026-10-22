@@ -78,7 +78,9 @@ MEASURED: QEMU 10.2.4 official release source built through `scripts/bench/build
 Cargo and ninja constrained to 2 jobs and nice 19. Product Rust/C source is unchanged after
 `33f7a1703`; the first binary was labelled `e76209d8-dirty` because only this guide/inventory
 were being refined. All 24 custom properties appear in [device help](qemu-device-help.txt)
-(39 including inherited PCI properties). A clean revision-stamped build is recorded below when complete.
+(39 including inherited PCI properties). A later clean-stamp attempt did not start: its
+60-second Cargo-lock wait expired while another job held the shared lock. That step stopped;
+the held lock was left intact. It is not counted as a successful clean-stamped build.
 
 MEASURED: [16 argument cases](qemu-property-results.txt) include the production list, dropping
 each of its 12 properties/placement arguments individually, bare `kf3-gpu`, and the guide's
@@ -102,3 +104,48 @@ commands, real installed guest disks and driver/display functionality remain har
 CODE READ: historical revisions selected by the launchers (`0452613b`, `0d7ba743`) also have
 no lifecycle count/period reader in their tracked product source. This closes the source-level
 cross-revision concern for dropping the hitch extras; private replacement binaries were not inspected.
+
+## Final suite and source identity
+
+MEASURED: all **22 kf-* packages**, `KAYFABE_NO_KVM=1 cargo test --release -j2`:
+**3757 passed / 0 failed / 20 ignored**, 212 result groups including doc tests, final exit 0.
+Matching seven-crate scope: **2438/0/19 -> 2446/0/19** (passed/failed/ignored).
+The additional 8 passing Rust tests are the colour regressions; the 8 launcher Python tests
+also pass separately. No ignored test was enabled, removed or relabelled by D1.
+
+| Matching scope | Before passed | After passed | Ignored before/after |
+|---|---:|---:|---:|
+| kf-broker | 162 | 162 | 9/9 |
+| kf-chan | 636 | 636 | 4/4 |
+| kf-disp | 247 | 247 | 3/3 |
+| kf-host | 66 | 66 | 0/0 |
+| kf-mem | 186 | 186 | 3/3 |
+| kf-qemu | 391 | 399 | 0/0 |
+| kf-rm | 750 | 750 | 0/0 |
+
+MEASURED: `git diff --exit-code 33f7a1703 HEAD -- crates qemu scripts broker` is empty:
+only documentation/evidence changed after the final product/test/script revision. The successful
+patched build's dirty suffix denotes documentation edits, not an unrecorded product patch.
+A clean-stamped rebuild remains unverified because the bounded shared-lock wait expired;
+no lock was bypassed, broken, or replaced. Public source/commands, parser results and all
+GPU-free suite outcomes are preserved; no GPU was used, no guest was booted, hardware n=0.
+
+MEASURED: every commit diff and the final branch diff were scanned for credential patterns,
+private machine paths and public IP literals before publication. No sensitive launcher identity
+files were read; no credentials, closed-binary-derived material or private per-die data were added.
+
+Reproduce the 22-package scope (with an isolated target directory and the repository's build lock):
+
+```bash
+KAYFABE_NO_KVM=1 cargo test --release -j2 \
+  -p kf-mem -p kf-trap -p kf-rm -p kf-core -p kf-qemu -p kf-trace -p kf-crec \
+  -p kf-util -p kf-arch -p kf-abi -p kf-gsp -p kf-linux-raw -p kf-host -p kf-chip \
+  -p kf-harness -p kf-chan -p kf-cuda -p kf-disp -p kf-broker -p kf-oprom \
+  -p kf-census -p kf-gop-image
+```
+
+MEASURED cleanup: no process using D1's build/test executables remains. The lane's Cargo target,
+QEMU source and build directories were deleted, broker outputs cleaned, and temporary binary
+fixtures removed. All D1 Cargo/build-lock holders exited; no host GPU/VM lock was taken and the
+other job's shared Cargo lock was left untouched. Text logs remain on the dev host for the owner;
+the private lane report identifies their location. README.md is unchanged.
