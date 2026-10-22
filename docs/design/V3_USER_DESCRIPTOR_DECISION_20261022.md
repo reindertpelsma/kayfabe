@@ -1,9 +1,12 @@
 # Oversized USER descriptors: the decision
 
-**STATUS: LIVE-DESIGN, 2026-10-22. Design authority decision on G1's stop
-([`V3_USER_DESCRIPTOR_BOUND_20261022.md`](V3_USER_DESCRIPTOR_BOUND_20261022.md)) using T1's evidence
-([`V3_TDR_SPECVIEWPERF_20261022.md`](V3_TDR_SPECVIEWPERF_20261022.md)). Nothing here is implemented. The
-base is `03715b7d3`. Product code is unchanged by this note.**
+**STATUS: LIVE, 2026-10-22. Phase 1 implemented in candidate-6
+(mode-scoped Pointer/control admission; GPU-free evidence in
+[`descriptor_bound_20261018/phase1.md`](../../traces/descriptor_bound_20261018/phase1.md)).
+Hardware validation: see K1. Phase 2 remains design only. The decision below
+was authored against `03715b7d3`, using G1's stop
+([`V3_USER_DESCRIPTOR_BOUND_20261022.md`](V3_USER_DESCRIPTOR_BOUND_20261022.md)) and T1's evidence
+([`V3_TDR_SPECVIEWPERF_20261022.md`](V3_TDR_SPECVIEWPERF_20261022.md)).**
 
 Tags: **MEASURED** means observed in a run, a log or a probe executed for this note. **CODE READ** means read in source at
 `03715b7d3`. **INFERRED** means reasoning that a test or hardware run still has to confirm.

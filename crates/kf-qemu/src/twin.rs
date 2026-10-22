@@ -2,8 +2,8 @@
 //! ★★ P1+P2 inc D (`docs/design/V3_P1P2_TSPACE.md` §4.2) — **the per-twin state: ONE atomic word.**
 //!
 //! A mirrored space is `Unclassified`, `User(n)` (n live passthrough channels the guest created
-//! non-kernel) or `Kernel` (a Translated channel — the guest kernel's — runs in it, or its client
-//! is one of the guest RM's internal clients). Before this, `mirror.live` and `kernel_vas` were
+//! non-kernel) or `Kernel` (an RM-KERNEL-stamped Translated channel runs in it).
+//! Guest-selected client handles never classify a mirror. Before this, `mirror.live` and `kernel_vas` were
 //! separate atomics flipped on different threads, so a passthrough statement, a Translated
 //! statement, the deferred passthrough birth and a walk could interleave into a live USER channel
 //! in a space holding privileged guest leaves.
@@ -56,9 +56,9 @@ pub enum TwinRefusal {
 }
 
 impl TwinState {
-    /// The state a space starts in: `Kernel` for one of the guest RM's own internal clients (a
-    /// handle range no guest process can hold, `kf_rm::chanlink::is_rm_internal_client`),
-    /// `Unclassified` otherwise.
+    /// Construct a state with an already established kernel classification. A client
+    /// handle is not such proof: production mirrors start Unclassified and the
+    /// channel statement path requires the RM KERNEL stamp before `try_kernel`.
     #[must_use]
     pub fn for_kernel(kernel: bool) -> TwinState {
         TwinState(AtomicU64::new(if kernel { KERNEL } else { 0 }))
@@ -253,8 +253,8 @@ mod tests {
         assert!(checked > 10_000);
     }
 
-    /// ★ Reset on recycle: a recycled space is classified afresh — `Kernel` only for an RM-internal
-    /// client — and `Kernel` is sticky until then.
+    /// Reset on recycle: a recycled space starts Unclassified until a stamped
+    /// Translated birth; `Kernel` is sticky until retirement.
     #[test]
     fn kernel_is_sticky_and_a_recycled_space_is_reclassified() {
         let st = TwinState::default();

@@ -7110,9 +7110,9 @@ impl ChanPlane {
         // userspace cannot produce), so this space is the kernel's and mirrors privileged leaves
         // from its next walk on — set above by `try_kernel`, in statement order. ⚠ A privileged
         // leaf walked BEFORE this birth was withheld (never committed) and is placed at the
-        // space's next walk (its next invalidate or split). `[measured 5fead67d]` no privileged
-        // leaf was ever walked in a space that turned kernel this way (UVM's): they live in
-        // RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
+        // space's next walk (its next invalidate or split). All mirrors, including those
+        // with RM-looking client handles, start Unclassified (`kernel_vas_for`); only
+        // the RM KERNEL stamp authorizes this transition.
         // ⊘ 2026-10-10: the legacy `force_kernel` arm (no refusal) is deleted with `KF3_TSPACE`.
         self.defer(
             "birth translated",

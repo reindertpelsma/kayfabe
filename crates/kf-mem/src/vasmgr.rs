@@ -699,7 +699,7 @@ struct Batch {
     walked: BTreeMap<VasKey, (u32, u64)>,
     /// Objects still owed by this batch after the current ABI-bounded chunk.
     remaining: BTreeMap<VasKey, (u32, u64)>,
-    /// Earlier chunks, retained to reject a root move before the batch finishes.
+    /// Earlier chunks, retained to retry a root move before the batch finishes.
     finished: BTreeMap<VasKey, (u32, u64)>,
     /// This walk is part of a multi-submission obligation (reset drops later work).
     chunked: bool,
@@ -1737,6 +1737,27 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         batch
             .finished
             .extend(batch.walked.iter().map(|(&k, &v)| (k, v)));
+        // A continuation is a new GPU read. Revalidate its captured objects just
+        // before submission: never read a retired slot or a superseded directory.
+        batch.remaining.retain(|key, (slot, root)| {
+            let Some(space) = self.table.spaces.get(key) else {
+                return false;
+            };
+            if space.slot != Some(*slot) {
+                return false;
+            }
+            if let Some(current) = space.root {
+                *root = current;
+                true
+            } else {
+                // Withdrawal does not prove that the old target's rows are gone.
+                // Preserve the existing withheld-clear rule for this separate case.
+                failed.insert(*key);
+                self.stats
+                    .refuse(format!("{key:?}: root withdrawn before continuation"));
+                false
+            }
+        });
         if !batch.remaining.is_empty() {
             // Commit-on-ack is unchanged: this chunk's verdict is consumed by the next
             // submission. Keep hard failures and asynchronous settlement obligations
@@ -1749,6 +1770,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Self::split_chunk(&mut batch);
             batch.id = self.stats.walks_submitted.saturating_add(1);
             self.submit_batch(batch);
+            // A refused continuation has no completion fd left to wake us. Pump
+            // independent pending work now, just as after a refused report.
+            self.pump(trigger);
             return out;
         }
         for (&key, &(slot, root)) in &batch.finished {
@@ -1758,7 +1782,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 && !rewalk.contains(&key)
             {
                 // The batch still owes its earlier chunks until the final clear.
-                // Preserve the same root-move refusal as an individual walk.
+                // The original invalidate must wait for a walk of the new root.
                 failed.insert(key);
                 rewalk.insert(key);
                 self.pending.push(Want::Root(key));
@@ -1829,11 +1853,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 && keys.iter().all(|k| {
                     !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k))
                 });
-            if bad.is_some() && !absent_ok {
+            let retry_root = keys.iter().any(|k| rewalk.contains(k));
+            let retryable = keys.iter().all(|k| {
+                !failed.contains(k)
+                    || (rewalk.contains(k) && self.table.root(*k).is_some())
+                    || (self.clear_absent && absent_only.contains(k) && !rewalk.contains(k))
+            });
+            if !retryable {
                 self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                 out.unreconciled.push(r.seq);
-            } else if again {
-                // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
+            } else if again || retry_root {
+                // Capacity-withheld maps or a moved root still owe this invalidate
+                // a complete walk. Requeue the original request, preserving its age.
                 requeue.push((*w, *at));
             } else {
                 // ★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the
