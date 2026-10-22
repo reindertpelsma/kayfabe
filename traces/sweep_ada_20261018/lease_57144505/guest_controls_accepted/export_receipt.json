@@ -1,0 +1,189 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T03:31:15.759770+00:00",
+  "files": {
+    "s2_crlf_controller.log": {
+      "sha256": "cace4053b377fdf7f387f23bfe7f1a843ac15e5cd8349da3f65cc819b15cc665",
+      "bytes": 2276,
+      "tail_only": false
+    },
+    "s2_crlf_host_tests.log": {
+      "sha256": "8a575ea7087217e8233a3bc96647b3ce89a31c963bdaadb1c704293d30cc13ba",
+      "bytes": 4906,
+      "tail_only": false
+    },
+    "s2_crlf_host_preflight.log": {
+      "sha256": "98201e3f78e31bb8aece94967f385932de621d0e82dd8c41972a530f857c7dd2",
+      "bytes": 524,
+      "tail_only": false
+    },
+    "s2_crlf_gates.log": {
+      "sha256": "8edf6f31a00da9cd60b835ad53b725546666d3fd41a0519807dcaec30a619e7a",
+      "bytes": 25203,
+      "tail_only": false
+    },
+    "s2_crlf_boot_id": {
+      "sha256": "72cdbd4103bbf1269846124fdb4c335b4d6f16c33acaea976b00ce08f91e9d9c",
+      "bytes": 37,
+      "tail_only": false
+    },
+    "sweep_native_baseline.log": {
+      "sha256": "8638ce418291fb244292cf22dc3f4edb80788abff3701718896a3038306f7bd6",
+      "bytes": 351,
+      "tail_only": false
+    },
+    "sweep_bare595.log": {
+      "sha256": "14dd52c607878f3dbbeb2f16521265a0ec2c6a3d9ed85f62f4d7c645452621db",
+      "bytes": 5881,
+      "tail_only": false
+    },
+    "sweep_cuda_host.log": {
+      "sha256": "64ce4205923588033ab97ff8e1ebc0578a3a77b99ad185760722d6b78c643f5b",
+      "bytes": 2368,
+      "tail_only": false
+    },
+    "sweep_native_grtier.log": {
+      "sha256": "73d1d38b5de98b1ced04f0ad1b3932b3edc8ee1fbf8e81a9afc9fd3b8d89dca6",
+      "bytes": 3056,
+      "tail_only": false
+    },
+    "sweep_linux_guest595.log": {
+      "sha256": "92c734d6b6154db8baa190bc37ff1e8a3d61abaa6446d6fa40fd3678dafd8e36",
+      "bytes": 1042,
+      "tail_only": false
+    },
+    "native_xid_baseline.json": {
+      "sha256": "30fce6a69a8bc40e3bd4f94360609c584df8a991a8d66cc3272bcbed4284ccaf",
+      "bytes": 1428,
+      "tail_only": false
+    },
+    "s2_accepted_xid_history.json": {
+      "sha256": "580ac7702ad5a0a8d33eee65fabf73a26dd480aa5d3d99a249ff4687db2dccfd",
+      "bytes": 16671,
+      "tail_only": false
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "23d62bb77cf34025c8dd548e0811f85d42c6375eeccc7ad283f6cb640111a249",
+      "bytes": 120,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "721c4eea57ac10dde9aa3683a332559e7373f0e58d40dc8083fb4753cda583d4",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "sweep7f6f7e7a_ad102_native595_defer-liveness.log": {
+      "sha256": "9e32e9f68a1e5c5a788b43bd3319fdfa14ef7e37f1bf8a3e0158786d650836b9",
+      "bytes": 14220,
+      "tail_only": false
+    },
+    "sweep7f6f7e7a_ad102_native595_missing-page-fault.log": {
+      "sha256": "774b0ecdce485e2e3469a6fb1ded7d0630650a5f5e69a1025ddf2d7ef3d6076a",
+      "bytes": 2461,
+      "tail_only": false
+    },
+    "s2r4_guest595_missing-page-fault_controller.log": {
+      "sha256": "23b7965d7053b3cbe5e048352745d1406f4a5ba713fd501fdb8d234e16e7d52e",
+      "bytes": 337,
+      "tail_only": false
+    },
+    "s2r4_guest595_alias-two-vas_controller.log": {
+      "sha256": "5744ea634c071664ebf8fc5e2d3405204fadd291a948607249b67bbf1d3e57aa",
+      "bytes": 332,
+      "tail_only": false
+    },
+    "s2r4_guest595_uvm-mean_controller.log": {
+      "sha256": "4927545a687d9f9cc4b310cbc3e4528efb8b7f60b7c1034b3b804b9c133cc864",
+      "bytes": 327,
+      "tail_only": false
+    },
+    "s2r4_guest595_late-map-race_controller.log": {
+      "sha256": "41fa1f38e481582280744446fbbb4426d4ffb82fa554dd024f44d62de261c6c9",
+      "bytes": 332,
+      "tail_only": false
+    },
+    "s2r4_guest595_timer_controller.log": {
+      "sha256": "442fbc744f492ee370b8103e7f42810f2c3b1ac9f0c216f8ccbb4399224df19f",
+      "bytes": 324,
+      "tail_only": false
+    },
+    "s2r4_guest595_gpu-info-sweep_controller.log": {
+      "sha256": "e98140edbe72e7c09fd39f1d82a1ff1f07caedebc1eedc33ac6d68a2dffdb0ba",
+      "bytes": 333,
+      "tail_only": false
+    },
+    "s2r4_guest595_map-propagation_controller.log": {
+      "sha256": "a7365de76088851aef8878af5176d2ed979c77f0729299618eb22b49188f8f33",
+      "bytes": 334,
+      "tail_only": false
+    },
+    "s2r4_guest595_blockage-coverage_controller.log": {
+      "sha256": "8c934f6cbb5d95e2c80d989cc2f0d2bbf4db7538286da608a871f5195d81823c",
+      "bytes": 336,
+      "tail_only": false
+    },
+    "s2r4_guest595_defer-liveness_controller.log": {
+      "sha256": "c552d3a3fd734da28e43467126f3222498d5c9bfcfbca770919c5739bf977ac2",
+      "bytes": 334,
+      "tail_only": false
+    },
+    "s2r4_guest595_bus-info-sweep_controller.log": {
+      "sha256": "aca1087eb98016b6341bc684a6bf273533a1dafc9d9283fbf863c53fb35eb238",
+      "bytes": 333,
+      "tail_only": false
+    },
+    "s2r4_guest595_engines_controller.log": {
+      "sha256": "ec6c83b537343a1a3d0849c3370c0a16d9c723b06c01e27fe94f3baf2037bec2",
+      "bytes": 326,
+      "tail_only": false
+    },
+    "s2r4_guest595_executor-vas_controller.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false
+    },
+    "s2r4_guest595_uvm-invalidate_controller.log": {
+      "sha256": "ece2ca0dd4976a21d2181294907f92542c9ade82ce8e9f42b6819237d7a18c3a",
+      "bytes": 333,
+      "tail_only": false
+    },
+    "s2r4_guest595_concurrency_controller.log": {
+      "sha256": "7eb9819873ec4916c71b2b4f49c8e9da0019f95f4d195208aebdb394578db55b",
+      "bytes": 331,
+      "tail_only": false
+    },
+    "s2r4_guest595_doorbell-census_controller.log": {
+      "sha256": "a445a8c74da657231674971e9595481768ae27077b7f7ee7d59314088b17494b",
+      "bytes": 334,
+      "tail_only": false
+    },
+    "s2r4_guest595_alias-unmap-observe_controller.log": {
+      "sha256": "c2413dc82b4d9a439f7d41ec41fea895774d60000d783edc5d62d7780077e365",
+      "bytes": 338,
+      "tail_only": false
+    },
+    "fast_s2r4_guest595_defer-liveness_defer-liveness_serial.log": {
+      "sha256": "0cfe521e0cc62b5e5f44aac7bc57b58f1e6c7c8726316c4abbdfc2f33a8e78a8",
+      "bytes": 28643,
+      "tail_only": false
+    },
+    "fast_s2r4_guest595_missing-page-fault_missing-page-fault_serial.log": {
+      "sha256": "01821c31d73a2b02c7ff7010b7da377c672651b584cc7f23e0ac386d7c03197e",
+      "bytes": 18200,
+      "tail_only": false
+    },
+    "fast_s2r4_guest595_missing-page-fault_missing-page-fault_qemu.log.projection.txt": {
+      "sha256": "5be6806aca678d3fa5a85c40e55b686d83b5a1bba69c34cea3e9b258eaad6fd7",
+      "bytes": 106663,
+      "projection": true
+    },
+    "fast_s2r4_guest595_defer-liveness_defer-liveness_qemu.log.projection.txt": {
+      "sha256": "3962da7159eefbe6d4460aa9406f55e24a81e9a16266281ab233b98b5cbed79f",
+      "bytes": 147986,
+      "projection": true
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1142
+    }
+  }
+}

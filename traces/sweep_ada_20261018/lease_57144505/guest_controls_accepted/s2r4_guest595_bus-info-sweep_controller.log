@@ -1,0 +1,8 @@
+FAST_SUITE_STARTED=2026-10-22T03:25:44+00:00 arms=1 budget=180s
+rev=7f6f7e7a7
+ARM                          VERDICT   secs  why
+--bus-info-sweep             PASS      25s   25s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=25 client_ms=4739
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0
