@@ -1,0 +1,43 @@
+MEASURED: run 4266; QEMU runtime diagnostics, raw guest payload omitted.
+19184: kf3: GSP rpc RmControl seq=0
+19185: kf3: act timeslice: 0xc1d000e4:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (204 us, off the GSP lock)
+19186: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+19187: kf3: GSP rpc RmControl seq=0
+19188: kf3: GSP rpc RmControl seq=0
+19189: kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+19190: kf3: GSP rpc RmControl seq=0
+19191: kf3: act timeslice: 0xc1d000e2:0xff0e0000 SET_TIMESLICE 400 us on 1 twin group(s) (334 us, off the GSP lock)
+19192: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+19193: kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+19194: kf3: GSP rpc RmControl seq=0
+19195: kf3: act timeslice: 0xc1d0009d:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (259 us, off the GSP lock)
+19196: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+19197: kf3: GSP rpc RmControl seq=0
+19198: kf3: GSP rpc RmControl seq=0
+19199: kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+19200: kf3: GSP rpc RmControl seq=0
+19201: kf3: act timeslice: 0xc1d0009c:0xff0e0000 SET_TIMESLICE 1000 us on 1 twin group(s) (205 us, off the GSP lock)
+19202: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+19203: kf3: GSP rpc RmControl seq=0
+19205: kf3: chan token 0x806 (VasKey(13965662457344034928)) DEAD: ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }
+19206: kf3: chan token 0x806 death mirror: own space=0xcafe001a rows=52 log_epoch=52 last row commits (epoch, lo, hi, ms ago)=[(2d, 120528000, 12052c000, 31c3f), (2e, 12052c000, 12052e000, 31c3f), (2f, 12052e000, 12052f000, 31c3f), (30, 12052f000, 120530000, 31c3c), (31, 120530000, 120531000, 31c39), (32, 120531000, 120536000, 31c39), (33, 120536000, 120537000, 31c39), (34, 120537000, 120538000, 31c35)]; plane's mirror for the key now (same rows, space, rows): Some(Some((true, 3405643802, 52)))
+19207: kf3: kernel channel host 0x1002d REFUSED-AND-POISONED (§7)
+19208: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=40.63 clamped=0 late_max_us=214180 kms=5.9 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=5.9 skipped=1 checks=34.6 same=7997 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale=0 probation=0]]
+19210: kf3: display fps[cap=75(unset) h0[armed=60.000 tick=59.95 clamped=0 late_max_us=214180 kms=0.0 tear=0.0 core_imm=1 vblirq=0.0 src=free ho=0/0] copies=0.0 skipped=1 checks=59.9 same=8117 ondemand=0 over=0 lock[ticks_coalesced=0 credits_coalesced=0 mailbox_coalesced=0 credits_deferred=1 granted=0 stale=0 probation=0]]
+19211: kf3: GSP rpc RmControl seq=0
+19212: kf3: GSP rpc RmControl seq=0
+19213: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+19214: kf3: GSP rpc RmControl seq=0
+19215: kf3: GSP rpc RmControl seq=0
+19216: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+19217: kf3: GSP rpc RmControl seq=0
+19218: kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+19219: kf3: GSP rpc Free seq=0
+19220: kf3: act free: 0xc1d000e4:0xff1fe034: engine object host 0xcafe13be freed (491 us, off the GSP lock)
+19221: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+19222: kf3: GSP rpc Free seq=0
+19223: kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+1662: kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(308) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335800800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)
+1666: kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965662457344034928) gpfifo=0x120512000x2048 userd=Some(Sysmem { base: 13782484992, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (2144 us, off the GSP lock)
+19605: kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=35 submissions=1 splits=0/0 serves=2 last_put=Some(35) gp_get=None store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=Some("ring: Rewrite { gp: 34, why: NoCeObject { subch: 4, method: 576 } }") inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+25553: kf3: chan token 0x806 (host 0x1002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)

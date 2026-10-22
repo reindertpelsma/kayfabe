@@ -1,0 +1,145 @@
+[
+  {
+    "classification": "MEASURED",
+    "run": 3454,
+    "label": "K1",
+    "qemu_sha256": "d9aac8f56a182cb71fb99b19a0e899b295aa86f54b4624cce760125541c34f21",
+    "channel_alloc_facts": 254,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 51972,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  },
+  {
+    "classification": "MEASURED",
+    "run": 4260,
+    "label": "C-mixed",
+    "qemu_sha256": "7cd1355bc410fb1e6ef10b8c9e57aa69e7c4868c71e9c1c117ef1ea32f4fe319",
+    "channel_alloc_facts": 344,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 50438,
+        "forwarded": 35,
+        "submissions": 1,
+        "dead": true
+      },
+      {
+        "line": 57463,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  },
+  {
+    "classification": "MEASURED",
+    "run": 4262,
+    "label": "C1",
+    "qemu_sha256": "f9d208f2b5701a93ebab52dec93382b7f412782c6eb4ab43447927dbf30b408b",
+    "channel_alloc_facts": 155,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 19007,
+        "forwarded": 35,
+        "submissions": 1,
+        "dead": true
+      },
+      {
+        "line": 25429,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  },
+  {
+    "classification": "MEASURED",
+    "run": 4263,
+    "label": "A1",
+    "qemu_sha256": "39ed4851e3701120d61bb973b9eed2dc67e17c3374bc68da562ed2d8b2f8d884",
+    "channel_alloc_facts": 159,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 19453,
+        "forwarded": 35,
+        "submissions": 1,
+        "dead": true
+      },
+      {
+        "line": 26474,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  },
+  {
+    "classification": "MEASURED",
+    "run": 4266,
+    "label": "A2",
+    "qemu_sha256": "a6b3b61e9a049ba21439137ed6d7376096a75fa5ce5d6f5794ac44436450f0ae",
+    "channel_alloc_facts": 155,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 19605,
+        "forwarded": 35,
+        "submissions": 1,
+        "dead": true
+      },
+      {
+        "line": 25553,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  },
+  {
+    "classification": "MEASURED",
+    "run": 4267,
+    "label": "C2",
+    "qemu_sha256": "eaffca5ca2ab0fef5df6ae5e084ce1191d50de7766c0cf6c61c9ec7d005ec119",
+    "channel_alloc_facts": 120,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 21025,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  },
+  {
+    "classification": "MEASURED",
+    "run": 4264,
+    "label": "B1",
+    "qemu_sha256": "7a80cfdea8eb209aa0240d473f3a309e491ebf76b20b3e2c3326fdc577f57c34",
+    "channel_alloc_facts": 124,
+    "predicate_differences": [],
+    "host_1002d_retirements": [
+      {
+        "line": 22212,
+        "forwarded": 0,
+        "submissions": 0,
+        "dead": false
+      }
+    ],
+    "predicate_comparison_classification": "CODE READ: evaluate old/new source predicates on recorded birth facts, not an execution of both policies"
+  }
+]

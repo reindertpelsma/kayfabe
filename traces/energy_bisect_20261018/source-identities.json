@@ -1,0 +1,62 @@
+{
+  "classification": "CODE READ",
+  "revisions": {
+    "master": "e64b8e5f6d0f64c41c9c4d40775e74be08de7164",
+    "descriptor": "468a35c9d845afc1938683540acc251bdef90e5a",
+    "A": "40583bc297264fb57a20d84cc795d05d493197b5",
+    "B": "a83394e66e960d8017caa0ef19fa579f1724806b",
+    "candidate": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38"
+  },
+  "source_blobs": {
+    "crates/kf-qemu/src/chan.rs": {
+      "master": "2747ebe8ba372c8e5d462d675fb1993510858db3",
+      "descriptor": "2747ebe8ba372c8e5d462d675fb1993510858db3",
+      "A": "2747ebe8ba372c8e5d462d675fb1993510858db3",
+      "B": "2747ebe8ba372c8e5d462d675fb1993510858db3",
+      "candidate": "2747ebe8ba372c8e5d462d675fb1993510858db3"
+    },
+    "crates/kf-qemu/src/device.rs": {
+      "master": "435c0bcd65237a4215e876389ca969d457663901",
+      "descriptor": "435c0bcd65237a4215e876389ca969d457663901",
+      "A": "435c0bcd65237a4215e876389ca969d457663901",
+      "B": "435c0bcd65237a4215e876389ca969d457663901",
+      "candidate": "435c0bcd65237a4215e876389ca969d457663901"
+    },
+    "crates/kf-chan/src/tmode.rs": {
+      "master": "1b05d02b75c70c158e7bec676a69bc7d152f1262",
+      "descriptor": "1b05d02b75c70c158e7bec676a69bc7d152f1262",
+      "A": "1b05d02b75c70c158e7bec676a69bc7d152f1262",
+      "B": "1b05d02b75c70c158e7bec676a69bc7d152f1262",
+      "candidate": "1b05d02b75c70c158e7bec676a69bc7d152f1262"
+    },
+    "crates/kf-chan/src/ring.rs": {
+      "master": "90ba1ba5fc3a9839fb0633f4af153533c4f42534",
+      "descriptor": "90ba1ba5fc3a9839fb0633f4af153533c4f42534",
+      "A": "90ba1ba5fc3a9839fb0633f4af153533c4f42534",
+      "B": "90ba1ba5fc3a9839fb0633f4af153533c4f42534",
+      "candidate": "90ba1ba5fc3a9839fb0633f4af153533c4f42534"
+    },
+    "crates/kf-chan/src/host.rs": {
+      "master": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd",
+      "descriptor": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd",
+      "A": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd",
+      "B": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd",
+      "candidate": "8bb54a04f58e9411379a0033c868bcee0fb9bdcd"
+    },
+    "crates/kf-chan/src/ttables.rs": {
+      "master": "9c516eed023bc971a4531a1025629c5000a0ec4b",
+      "descriptor": "9c516eed023bc971a4531a1025629c5000a0ec4b",
+      "A": "9c516eed023bc971a4531a1025629c5000a0ec4b",
+      "B": "9c516eed023bc971a4531a1025629c5000a0ec4b",
+      "candidate": "9c516eed023bc971a4531a1025629c5000a0ec4b"
+    },
+    "crates/kf-abi/src/notifier.rs": {
+      "master": "f964c971ab8504b3d510af9e0642c6a279f35eb3",
+      "descriptor": "f964c971ab8504b3d510af9e0642c6a279f35eb3",
+      "A": "f964c971ab8504b3d510af9e0642c6a279f35eb3",
+      "B": "f964c971ab8504b3d510af9e0642c6a279f35eb3",
+      "candidate": "f964c971ab8504b3d510af9e0642c6a279f35eb3"
+    }
+  },
+  "all_listed_blobs_identical": true
+}

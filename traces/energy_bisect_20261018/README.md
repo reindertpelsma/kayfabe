@@ -6,10 +6,14 @@ MEASURED at rev afe00b3c / A rev 40583bc2: Q1 candidate run 4262 and A run 4263 
 
 MEASURED at rev 40583bc2: A repeat run 4265 used a fresh CoW, the same FullHD/one-iteration/energy-04 task, and matching flags (4265/config.json). It was explicitly interrupted at the claims stop, before any observed event153; it is INCONCLUSIVE, not a second Energy failure or pass. Raw supervisor status FAIL/HOST_CONTROLLER_STOP is preserved with this interpretation in 4265/result.json. Owner backing size/mtime stayed unchanged.
 
-MEASURED: tests-B.json records no executed tests and exit -15: Q2 canceled its own still-waiting cargo-lock process after the claims refusal. B hardware was not launched. No product behavior changed and no new mutation campaign ran.
+MEASURED: tests-B.json records no executed tests and exit -15: Q2 canceled its own still-waiting cargo-lock process after the claims refusal. B hardware was not launched during the initial stop; resumed checks and run4264 supersede that stop state. No product behavior changed and no new mutation campaign ran.
 
 CODE READ: inherited ../energy_bisect_20261022/source-analysis.md describes the refusing path; Q2 inspected kernel_channel, ChannelPolicy allocation facts, TranslatedRing::new_tmode and tmode::one/host. The failing KERNEL stamp remains kernel with both predicates. An unseeded decoder CE tier reaches NoCeObject at subchannel4/method0x240; this does not establish absence of a physical host CE object.
 
 INFERRED: no responsible-topic verdict or product fix is justified without B and a completed A repeat. An exact full-RPC replay is unavailable. The owner authorized resumption; B, a completed A repeat and a second matched Energy-only candidate sample are now planned.
 
 MEASURED at rev 40583bc2: cleanup-final.json for run 4265 records cuInit0, GDM active, NVIDIA bound, no own active host process, and successful GPU-lock reacquisition. The prior restoration needed no module reload.
+
+MEASURED at rev 40583bc2 / afe00b3c / a83394e6: resumed A run4266 failed with the same NoCeObject; candidate run4267 and B run4264 Completed with zero guest153/4101, poison and fresh host Xids. The clean runs did not submit work on the corresponding host0x1002d channel. Requested matrix is A FAIL/FAIL, B PASS, candidate Energy-only FAIL/PASS; mixed-workload run4260 is an additional candidate failure. See analysis.md and per-run result/config/excerpts.
+
+MEASURED at rev a83394e6: fresh all22-kf CPU suite passed3781/failed0/ignored20 (tests-B-resumed.json). Additional source characterizations and a matched descriptor-only control remain in progress.
