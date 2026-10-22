@@ -189,8 +189,20 @@ def validate_phase_owner(phase,proc_root='/proc'):
 
 
 def abort_owned_qemu(phase):
-    """Detached-VM abort seam; never wired before the following failing tests."""
-    return False
+    """Stop only the previously verified VM, including after it daemonized."""
+    if not phase or int(phase.get('pid',0))<=1:
+        return False
+    descriptor=None
+    try:
+        descriptor=os.pidfd_open(int(phase['pid']),0)
+        validate_phase_owner(phase)
+        signal.pidfd_send_signal(descriptor,signal.SIGKILL)
+        return True
+    except (OSError,N.GuardRefused):
+        return False  # Already exited or identity changed: never signal a reused PID.
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def main():
@@ -212,6 +224,7 @@ def main():
         receipt = json.loads(N.bounded(a.receipt))
         accepted = tuple(receipt['approved_native_xid_lines'])
         phase_key = None
+        owned_phase = None
         phase_lines = ()
         atomic_json(a.receipt + '.ready.json', {'owned_pgid':root})
         while True:
@@ -224,6 +237,7 @@ def main():
                     if key[0] is not None:
                         phase['expected_pci']=receipt['pci']
                         validate_phase_owner(phase)
+                        owned_phase = dict(phase)
                     phase_lines = ()
                     phase_key = key
                 proof = init_time(phase.get('rpc_path'))
@@ -237,7 +251,8 @@ def main():
                 atomic_json(a.receipt + '.accepted.json', {'approved_native_xid_lines': accepted, 'phase': phase_key, 'init_utc': proof})
             except Exception as error:  # Any observer failure is fatal, including subprocess timeouts.
                 try:
-                    atomic_json(a.fatal, {'STOP': str(error), 'phase': phase_key, 'owned_pgid': root})
+                    stopped = abort_owned_qemu(owned_phase)
+                    atomic_json(a.fatal, {'STOP': str(error), 'phase': phase_key, 'owned_pgid': root, 'detached_qemu_stopped':stopped})
                 finally:
                     N.terminate_owned_tree(root)
                 raise
