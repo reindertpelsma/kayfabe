@@ -15,4 +15,3 @@ test chanrc::tests::the_firmware_carveout_is_never_a_guest_notifier_destination 
 test chanrc::tests::the_posting_permit_covers_the_actual_queue_write ... ok
 
 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 400 filtered out; finished in 0.00s
-
