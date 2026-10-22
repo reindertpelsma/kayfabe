@@ -115,5 +115,18 @@
     "verdict": "PASS",
     "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
     "restored": true
+  },
+  {
+    "classification": "MEASURED",
+    "order": 10,
+    "run": 4310,
+    "arm": "C4",
+    "rev": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+    "started": "2026-10-22T12:02:22.826559+02:00",
+    "ended": "2026-10-22T12:05:55.190169+02:00",
+    "exit": 0,
+    "verdict": "FAIL",
+    "reason": "GUEST_EVENT",
+    "restored": true
   }
 ]

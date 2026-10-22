@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "table.json",
   "scope": "Q3 fresh standalone Energy trials plus explicitly separated prior standalone observations; K1 mixed3454 and candidate mixed4260 excluded from rate denominators",
-  "completed": 9,
+  "completed": 10,
   "counts": {
     "D": {
       "q3_pass": 3,
@@ -70,8 +70,8 @@
     },
     "C": {
       "q3_pass": 0,
-      "q3_fail": 1,
-      "q3_n": 1,
+      "q3_fail": 2,
+      "q3_n": 2,
       "q3_failure_rate": 1.0,
       "prior_energy_only_pass": 1,
       "prior_energy_only_fail": 1,
@@ -80,8 +80,8 @@
         4267
       ],
       "pooled_pass": 1,
-      "pooled_fail": 2,
-      "pooled_n": 3,
+      "pooled_fail": 3,
+      "pooled_n": 4,
       "scores": [],
       "score_min": null,
       "score_max": null,
@@ -300,6 +300,37 @@
       "restored": true,
       "failing_channels": [],
       "matching_forwarded": [
+        0
+      ],
+      "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
+    },
+    {
+      "order": 10,
+      "run": 4310,
+      "arm": "C4",
+      "build": "C",
+      "revision": "afe00b3cbc7e345e2953b1bc199d9cce1054cc38",
+      "started": "2026-10-22T12:02:22.826559+02:00",
+      "ended": "2026-10-22T12:05:55.190169+02:00",
+      "verdict": "FAIL",
+      "score": null,
+      "first153_guest": "2026-10-22T10:05:16.4176729+02:00",
+      "first153_detected_host": "2026-10-22T12:05:28.546489+02:00",
+      "guest153": 3,
+      "guest4101": 0,
+      "host_xids": 0,
+      "poisoned": 1,
+      "restored": true,
+      "failing_channels": [
+        {
+          "host": "0x1002d",
+          "token": "0x806",
+          "forwarded": 35,
+          "gp": 34
+        }
+      ],
+      "matching_forwarded": [
+        35,
         0
       ],
       "rpc_limit": "Production trace logs RmAlloc seq=0 context and CHAN-FACTS/birth linkage, not a unique full RPC transaction replay."
