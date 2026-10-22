@@ -97,3 +97,36 @@ fn zero_budget_keeps_a_low_bit_pending() {
 fn zero_budget_keeps_the_last_bit_pending() {
     no_budget((kf_trap::bitmap::N_TOKENS - 1) as u32);
 }
+
+fn leave_prefix_for_wrap(low: u32) {
+    let bits = RungBitmap::new();
+    for token in [low, low + 1, low + 63] {
+        bits.publish(token);
+    }
+    let mut out = Vec::new();
+    bits.scan(&mut out, 1);
+    assert_eq!(out, vec![low]);
+    bits.publish(low);
+    bits.scan(&mut out, 1);
+    assert_eq!(
+        out,
+        vec![low + 1],
+        "the last returned token defines the next start"
+    );
+    assert!(
+        bits.bit(low),
+        "an excluded prefix bit must survive for the wrap range"
+    );
+    assert!(
+        bits.bit(low + 63),
+        "the unreturned suffix must also stay published"
+    );
+}
+#[test]
+fn a_republished_low_prefix_survives_advancing_inside_word_zero() {
+    leave_prefix_for_wrap(0);
+}
+#[test]
+fn a_republished_low_prefix_survives_advancing_inside_word_one() {
+    leave_prefix_for_wrap(64);
+}
