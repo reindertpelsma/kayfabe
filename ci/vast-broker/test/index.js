@@ -32,3 +32,4 @@ import './smoke-preflight.test.js';
 import './live-tunnel.test.js';
 import './live-ingress.test.js';
 import './round3-runner.test.js';
+import './round3-binding.test.js';
