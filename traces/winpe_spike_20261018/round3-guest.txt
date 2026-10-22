@@ -1,0 +1,13 @@
+MEASURED (run WP1-R3-a1-20261022, 2026-10-22): filtered guest output. Repetitive baseline repository filenames omitted.
+
+Microsoft Windows [Version 10.0.26100.1]
+WP1_R3_ENTER 
+VOLUME root=X:\ fs=NTFS flags=0x3e72aff total=538371072 free=533479424 reparse=1
+VOLUME root=W:\ fs=NTFS flags=0x3e72eff total=4293914624 free=2308997120 reparse=1
+RAMDISK total=538371072 free=533479424 avail=533479424 MEMORY total=2677747712 avail=1858854912
+605 File(s) copied
+REPO_COPY_RC=0 
+Incorrect function.
+Incorrect function.
+REDIRECTION_FAILED 
+WP1_S2_FAIL 

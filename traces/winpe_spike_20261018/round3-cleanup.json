@@ -1,0 +1,23 @@
+{
+  "run": "WP1-R3-cleanup-20261022",
+  "utc": "2026-10-22T17:09:17.065766+00:00",
+  "own_processes_remaining": [],
+  "known_r3_qemu_pid": 2153583,
+  "known_r3_qemu_absent": true,
+  "owner_pid": 2150823,
+  "owner_start_ticks": "111915729",
+  "owner_state": "S",
+  "owner_identity_live": true,
+  "own_lock_free": true,
+  "own_loops_remaining": [],
+  "own_mounts_remaining": [],
+  "removed_own_root_entries": [
+    "tools",
+    "round2",
+    "dl",
+    "build",
+    "round3",
+    "STOP"
+  ],
+  "retained": "evidence only, including text reproduction sources; no media/driver images retained"
+}

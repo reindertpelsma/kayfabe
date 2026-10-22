@@ -1,5 +1,19 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — WP1 round 3: low-RAM PE boot; redirection preparation RED
+
+CODE READ (ROUND3.md owner instruction, 2026-10-22): WP1 was unpaused with one
+PE VM only, no helper VM, max 2560 MiB RAM and 6/5 GiB host admission/stop rules.
+MEASURED (run WP1-R3-a1-20261022, rev e636236c): PE booted with -m2560; the first
+RED cell was FileRepository redirection preparation (`Incorrect function.`),
+48.772 seconds, before NVIDIA installation. Neither mount mechanism was verified;
+S3–S5 NOT RUN. Sampled MemAvailable minimum 9.713 GiB, peak QEMU RSS 3.863 GiB;
+unique/PSS allocation was not collected. No new host OOM/Xid; owner PID/start
+identity and live state unchanged. MEASURED (run WP1-R3-cleanup-20261022): no own
+process/mount/loop remains, own lock free, vendor media/tools/images removed.
+[Size table, mount limits and evidence](../traces/winpe_spike_20261018/WP1.md).
+The earlier OOM/pause record below is historical. CI adoption/licensing stays open.
+
 ## UPDATE 2026-10-22 — WP1 PAUSED: host OOM killed the owner VM
 
 MEASURED (run WP1-s2-r2a1-20261022, 2026-10-22): the kernel OOM killer killed

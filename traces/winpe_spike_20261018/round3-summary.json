@@ -1,0 +1,46 @@
+{
+  "run": "WP1-R3-a1-20261022",
+  "utc_end": "2026-10-22T17:04:45.975006+00:00",
+  "verdict": "RED",
+  "reason": "first guest failure marker",
+  "passed_stages": [],
+  "wall_seconds": 48.772,
+  "own_pid": 2153583,
+  "own_exit": 0,
+  "owner_before": {
+    "utc": "2026-10-22T17:03:57.212882+00:00",
+    "owner": {
+      "pid": 2150823,
+      "start_ticks": "111915729",
+      "state": "S",
+      "rss_pages": 6367743
+    },
+    "MemAvailable_KiB": 13134196
+  },
+  "owner_after": {
+    "pid": 2150823,
+    "start_ticks": "111915729",
+    "state": "S",
+    "rss_pages": 6368584
+  },
+  "owner_identity_live": true,
+  "ram_mib": 2560,
+  "share_on": true,
+  "explicit_hugepages": false,
+  "fb_mb": 1536,
+  "MemAvailable_min_KiB": 10185112,
+  "own_qemu_peak_rss_KiB": 4050552,
+  "stage_admissions": [],
+  "new_oom_xid_lines": [],
+  "loop_detached": true,
+  "scratch_default_documented_MiB": 512,
+  "scratch_volume_total_bytes": 538371072,
+  "scratch_volume_free_at_entry_bytes": 533479424,
+  "data_volume_total_bytes": 4293914624,
+  "data_volume_free_at_entry_bytes": 2308997120,
+  "base_repository_files_copied": 605,
+  "mount_method_verified": null,
+  "command_attribution": "CMD did not emit individual rename/junction/mount return codes; exact failing operator is unresolved",
+  "S2_driver_install_reached": false,
+  "hypothesis_evaluated": "storage preparation falsified; driver/CUDA/D3D hypotheses untested"
+}

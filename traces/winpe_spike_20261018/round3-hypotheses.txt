@@ -1,0 +1,5 @@
+Recorded before run 2026-10-22T17:03:57.209772+00:00
+S2: data-backed FileRepository permits NVIDIA Code0/SMI enumeration. Falsifier: redirection readback failure, package install failure, nonzero Code, or SMI failure.
+S3: own CUDA kernel returns42. Falsifier: CUDA API error/value mismatch.
+S4: NVIDIA hardware D3D11 triangle reads back red center/blue corner. Falsifier: missing runtime, non-NVIDIA/software adapter, HRESULT or pixel mismatch.
+S5: S4 loop runs600seconds without errors. Falsifier: loop/pixel failure or test-attributable Xid/153/TDR; new host OOM/Xid triggers immediate safety stop.
