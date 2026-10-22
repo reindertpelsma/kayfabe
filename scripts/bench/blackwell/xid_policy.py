@@ -12,7 +12,7 @@ import json
 import re
 import sys
 
-XID = re.compile(r"NVRM: Xid \(PCI:[^)]*\): (\d+), pid=(\d+), name=\S+, channel (0x[0-9a-fA-F]+) intr ([0-9a-fA-F]+)")
+XID = re.compile(r"NVRM: Xid \(PCI:[^)]*\): (\d+), pid=(\d+), name=qemu-system-x86(?:_64)?, channel (0x[0-9a-fA-F]+) intr ([0-9a-fA-F]{8})\s*$")
 EXCEPTION_ARMS = ("off_c", "on_")  # exact name, or prefix for the on_* arms
 EXCEPTION_CODE = 32
 EXCEPTION_INTR = "00200000"
@@ -23,7 +23,7 @@ def judge(lines, arm: str, qemu_pid: int, code0_seen: bool) -> dict:
     xids = []
     unparsed = []
     for l in lines:
-        m = XID.search(l)
+        m = XID.search(l) if l.count("NVRM: Xid") == 1 else None
         if m:
             xids.append({"code": int(m[1]), "pid": int(m[2]), "channel": m[3], "intr": m[4], "line": l.strip()[:240]})
         elif "NVRM: Xid" in l:
@@ -39,6 +39,7 @@ def judge(lines, arm: str, qemu_pid: int, code0_seen: bool) -> dict:
     arm_ok = arm == "off_c" or arm.startswith("on_")
     allowed = (
         arm_ok
+        and qemu_pid > 1
         and shape_ok
         and code0_seen
         and len(xids) <= EXCEPTION_MAX
