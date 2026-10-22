@@ -86,3 +86,21 @@ ROUND 3 — LIVE 2026-10-22 (supersedes preliminary coverage counts)
 13. MEASURED (lease57262021, `lease_57262021/native_deployment.json`): stock595.91.07 open module prepared; public full provisioning currently live; native engine/Xid observation pending.
 14. MEASURED (`round3/pending_runtime_admission_red.log`): Round2 replay remains6/8 with2 expected nonpasses; Ampere/Turing Windows acceptance not resumed because derived-and-green admission remains unmet.
 15. INFERRED (`round3/TIER4_RESIDUE.md`): owner decides separate narrow private investigation after legal review; recommend current-host routing mechanism, no incomplete production table and no RE in S4.
+
+OWNER-APPROVED RESUME — 2026-10-22
+
+1. CODE READ (2026-10-22, `docs/design/S4_XID_ADMISSION_20261022.md`): owner replaces exact CE-instance derivation with exact source channel/VA/type plus CE-client family; no per-die table.
+2. CODE READ (commit 597d60fe1): native and guest guards implement that rule; native GR/ESC control, guest PID/twins/recovery and immutable prior history stay exact.
+3. MEASURED (2026-10-22, `round3/owner_family_red.log`): EXPECTED RED tests-only commit0ae9e6c35 ran21 tests with5 nonpasses before implementation.
+4. MEASURED (2026-10-22, `round3/owner_family_green.log`):138/138 tests pass, including authentic AD102 exact-five, GA102 four-CE-plus-GR, wrong channel/VA/type, extra and non-CE refusal.
+5. MEASURED (2026-10-22, `round3/owner_family_mutants.json`): six mutants killed by3/2/5/5/5/3 tests; source restored and138 green.
+6. MEASURED (2026-10-22, `round3/pre_resume_guard_discovery.log`):127/127 tests matching the actual provisioning guard-discovery pattern pass.
+7. CODE READ (commit 597d60fe1): no Rust/product change; added Rust lint sites0, clippy not rerun; historical tier/coverage facts remain distinct from approved admission policy.
+8. MEASURED (2026-10-22, `lease_57262021/TEARDOWN.json`): TU106 preparation lease destroyed22:02:29Z/API-absent; timer cancelled afterward; no new GPU/engine/Windows test ran there.
+9. INFERRED (2026-10-22, `lease_57262021/TEARDOWN.json`): TU106 runtime estimate$0.420407, conservative$1.420407; prior lane conservative total$5.224025 before resume.
+10. MEASURED (2026-10-22, `lease_57280778/START.json`): new RTX3090 lease57280778 at$0.29/h,23GB advertised RAM, unverified provider; KVM180,170-minute auto-destroy armed first, source905a8bd75.
+11. MEASURED (2026-10-22, `lease_57280778/START.json`): prior accounting plus full new exposure$7.045692 below$12; Round3 exposure$3.242074 below$8; reserve$5 untouched.
+12. CODE READ (2026-10-22, `lease_57280778/harness_recipe/provision.sh`): first require actual KVM/device health and native exact-source baseline; then Windows580.88 bind/ON/desktop/appmatrix/Unigine/600-second hold.
+13. CODE READ (2026-10-22): Ampere is booting and all new hardware outcomes pending; Turing follows after Ampere exact-id teardown, within the same budget.
+14. CODE READ (2026-10-22, `round3/coverage.json`): historical constants still14/20 dies, inherited0, missing6/20; this does not claim Windows acceptance or changed physical topology.
+15. CODE READ (2026-10-22): current owned lease only57280778; its deadline00:58:58Z; public evidence before teardown and verified API absence remain required.
