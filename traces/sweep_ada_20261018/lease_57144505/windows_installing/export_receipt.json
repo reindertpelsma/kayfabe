@@ -1,0 +1,54 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T03:48:23.059681+00:00",
+  "files": {
+    "native_xid_watch.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false
+    },
+    "s2_windows_controller.log": {
+      "sha256": "98d32551b69b518394ad59e40a1dc72d4bb26017ae6aa2904eafe5c4622e983b",
+      "bytes": 65,
+      "tail_only": false
+    },
+    "sweep_windows_prereq_install.log": {
+      "sha256": "a21762a818a04bcecd4b0d4a3e0056152680ad02d8ad193ec8a1537aaef0604e",
+      "bytes": 7288,
+      "tail_only": false
+    },
+    "s2_windows_apt_refresh.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "tail_only": false
+    },
+    "s2_windows_apt_candidates.log": {
+      "sha256": "cba6b4e2c128bb99e9c25df20e0fa5a020576e540ef4fd35086fc1b08c1f07fa",
+      "bytes": 1090,
+      "tail_only": false
+    },
+    "s2_frozen_xid_history.json": {
+      "sha256": "bde95c6d870fc2a18a6556377188ec1472619bba21052bc48dc005dcfea5a973",
+      "bytes": 2628,
+      "tail_only": false
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "23d62bb77cf34025c8dd548e0811f85d42c6375eeccc7ad283f6cb640111a249",
+      "bytes": 120,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "721c4eea57ac10dde9aa3683a332559e7373f0e58d40dc8083fb4753cda583d4",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "sweep_windows_install.log": {
+      "sha256": "c2d78a06ac408d3796eba3f25b0b915372c6c097ba412cf95b012ba023620232",
+      "bytes": 3893,
+      "tail_only": false
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1202
+    }
+  }
+}

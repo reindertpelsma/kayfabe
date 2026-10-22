@@ -1,0 +1,7 @@
+STATUS: LIVE,2026-10-22. Linux30complete,pushed; frozen10history unchanged.
+MEASURED: WindowsfirstAPTattempt failedbecause currentmirror had noindexes;
+standardapt-getupdate restoredallpinnedOSpackagecandidates,theninstallpassed.
+MEASURED: LTSCstandardVGAinstallboot1PID13736started03:44:42UTC; inspected
+PNG showsnormalWindows11install6percent. No acceptance/GPUdesktopclaimyet.
+Exactwatcherrearmedundercontroller12572beforeVMboot;ownsame57144505,noextra
+lease,timeroriginal05:05:42UTCdeadline. ProductionWindowsbind/ON/holds pending.
