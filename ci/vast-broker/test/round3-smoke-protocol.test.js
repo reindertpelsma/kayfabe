@@ -25,6 +25,6 @@ for (const credit of [6, 8.1])
 for (const text of ['workflow_ref', 'workflow_sha'])
   test('R3 local test identity includes BASE claim ' + text, async () => {
     const s = await readFile(new URL('../native-identity.mjs', import.meta.url), 'utf8');
-    assert.ok(s.includes(text));
+    assert.match(s, new RegExp('^\\s+' + text + ':', 'm'));
     assert.match(s, /event_name: 'pull_request_target'/);
   });
