@@ -1,0 +1,17 @@
+SWEEP_THREAD_START own_instance=57144505 2026-10-22T03:03:57+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                f8432eed2d07b9e42e120aaf0fbdacc9fcb580ea -> FETCH_HEAD
+Warning: you are leaving 1 commit behind, not connected to
+any of your branches:
+
+  31b56f52a test(s2): refresh all matching mutants and preserve exit-race hardware evidence
+
+If you want to keep it by creating a new branch, this may be a good time
+to do so with:
+
+ git branch <new-branch-name> 31b56f52a
+
+HEAD is now at f8432eed2 fix(s2): verify retained worker images after owned leader exit
+VERDICT=SOUND
+LINUX_GUEST_START source=f8432eed2d07b9e42e120aaf0fbdacc9fcb580ea native_source=31b56f52a2f1adec4ef72c7a05ec2964dd857739 2026-10-22T03:04:52+00:00
+SWEEP_THREAD_EXIT rc=7 2026-10-22T03:11:00+00:00

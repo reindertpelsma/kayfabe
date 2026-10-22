@@ -1,0 +1,5 @@
+GUARDED_ARM_START --timer
+GUARDED_ARM_PASS --timer
+GUARDED_ARM_START --engines
+GUARDED_ARM_PASS --engines
+GUARDED_ARM_START --doorbell-census

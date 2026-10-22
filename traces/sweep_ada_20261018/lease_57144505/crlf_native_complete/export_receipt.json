@@ -1,0 +1,114 @@
+{
+  "kind": "MEASURED bounded text export",
+  "utc": "2026-10-22T03:24:56.100809+00:00",
+  "files": {
+    "s2_crlf_controller.log": {
+      "sha256": "cace4053b377fdf7f387f23bfe7f1a843ac15e5cd8349da3f65cc819b15cc665",
+      "bytes": 2276,
+      "tail_only": false
+    },
+    "s2_crlf_host_tests.log": {
+      "sha256": "8a575ea7087217e8233a3bc96647b3ce89a31c963bdaadb1c704293d30cc13ba",
+      "bytes": 4906,
+      "tail_only": false
+    },
+    "s2_crlf_host_preflight.log": {
+      "sha256": "98201e3f78e31bb8aece94967f385932de621d0e82dd8c41972a530f857c7dd2",
+      "bytes": 524,
+      "tail_only": false
+    },
+    "s2_crlf_gates.log": {
+      "sha256": "8edf6f31a00da9cd60b835ad53b725546666d3fd41a0519807dcaec30a619e7a",
+      "bytes": 25203,
+      "tail_only": false
+    },
+    "s2_crlf_build.log": {
+      "sha256": "e6e56754413baa9b173048fd8aa44b3ba1d82d87d97a9173338304a1d9f48a67",
+      "bytes": 65480,
+      "tail_only": false
+    },
+    "s2_crlf_boot_id": {
+      "sha256": "72cdbd4103bbf1269846124fdb4c335b4d6f16c33acaea976b00ce08f91e9d9c",
+      "bytes": 37,
+      "tail_only": false
+    },
+    "s2_thread_controller.log": {
+      "sha256": "6921adf174dbe67dedf6527e4f9a3b1ce08eb4beb4b6005b940003453e2355bd",
+      "bytes": 797,
+      "tail_only": false
+    },
+    "s2_thread_host_tests.log": {
+      "sha256": "fe4a5e2486a2e44bc54b036e11fe57f71224a70c5ac80d83eaaa58cecad8bf61",
+      "bytes": 4900,
+      "tail_only": false
+    },
+    "s2_thread_host_preflight.log": {
+      "sha256": "8ef3b9dddccf07e2bee2690e83274f52128822e44312c517a028c320655642c1",
+      "bytes": 411,
+      "tail_only": false
+    },
+    "s2_thread_build.log": {
+      "sha256": "a4557550c9a5dc10c1fe32777ebe638ad1ad1f64b4a210c4f1784cbadcd7346f",
+      "bytes": 65480,
+      "tail_only": false
+    },
+    "sweep_native_baseline.log": {
+      "sha256": "8638ce418291fb244292cf22dc3f4edb80788abff3701718896a3038306f7bd6",
+      "bytes": 351,
+      "tail_only": false
+    },
+    "sweep_bare595.log": {
+      "sha256": "14dd52c607878f3dbbeb2f16521265a0ec2c6a3d9ed85f62f4d7c645452621db",
+      "bytes": 5881,
+      "tail_only": false
+    },
+    "sweep_cuda_host.log": {
+      "sha256": "64ce4205923588033ab97ff8e1ebc0578a3a77b99ad185760722d6b78c643f5b",
+      "bytes": 2368,
+      "tail_only": false
+    },
+    "sweep_native_grtier.log": {
+      "sha256": "73d1d38b5de98b1ced04f0ad1b3932b3edc8ee1fbf8e81a9afc9fd3b8d89dca6",
+      "bytes": 3056,
+      "tail_only": false
+    },
+    "sweep_linux_guest595.log": {
+      "sha256": "55d1056d97ff39db57f451e190b97b69de0a1103eec7855aa74495ec7b113cbc",
+      "bytes": 142,
+      "tail_only": false
+    },
+    "native_xid_baseline.json": {
+      "sha256": "30fce6a69a8bc40e3bd4f94360609c584df8a991a8d66cc3272bcbed4284ccaf",
+      "bytes": 1428,
+      "tail_only": false
+    },
+    "s2_accepted_xid_history.json": {
+      "sha256": "6ee3d134082cc5f78ef5762453505ad4971f2381493f93ebfc8585bf44590ea9",
+      "bytes": 2892,
+      "tail_only": false
+    },
+    "sweep_qemu_sha256": {
+      "sha256": "23d62bb77cf34025c8dd548e0811f85d42c6375eeccc7ad283f6cb640111a249",
+      "bytes": 120,
+      "tail_only": false
+    },
+    "sweep_product_source": {
+      "sha256": "721c4eea57ac10dde9aa3683a332559e7373f0e58d40dc8083fb4753cda583d4",
+      "bytes": 41,
+      "tail_only": false
+    },
+    "sweep7f6f7e7a_ad102_native595_defer-liveness.log": {
+      "sha256": "9e32e9f68a1e5c5a788b43bd3319fdfa14ef7e37f1bf8a3e0158786d650836b9",
+      "bytes": 14220,
+      "tail_only": false
+    },
+    "sweep7f6f7e7a_ad102_native595_missing-page-fault.log": {
+      "sha256": "774b0ecdce485e2e3469a6fb1ded7d0630650a5f5e69a1025ddf2d7ef3d6076a",
+      "bytes": 2461,
+      "tail_only": false
+    },
+    "kernel_xids.log": {
+      "journal_lines": 1089
+    }
+  }
+}

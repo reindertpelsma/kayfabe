@@ -1,0 +1,20 @@
+SWEEP_CRLF_START own_instance=57144505 2026-10-22T03:20:32+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0 -> FETCH_HEAD
+Warning: you are leaving 1 commit behind, not connected to
+any of your branches:
+
+  f8432eed2 fix(s2): verify retained worker images after owned leader exit
+
+If you want to keep it by creating a new branch, this may be a good time
+to do so with:
+
+ git branch <new-branch-name> f8432eed2
+
+HEAD is now at 7f6f7e7a7 fix(s2): normalize CRLF source-marker framing without weakening guest proof
+VERDICT=SOUND
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_CRLF_BUILD_READY source=7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0 2026-10-22T03:22:12+00:00
+GR_TIER_VERDICT=PASS
+LINUX_GUEST_START source=7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0 2026-10-22T03:24:01+00:00
+{"approved_native_xid_lines": ["2026-10-22T03:22:37.671973+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T03:22:40.690209+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T03:22:43.691201+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T03:22:46.715221+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-22T03:22:59.255356+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3149, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"], "count": 5, "rule": "owner decision1: source-matched controls only; all later changes fatal"}

@@ -1,0 +1,15 @@
+=== kayfabe host preflight 2026-10-22T03:20:38+00:00 on ubuntu ===
+  ✔ /dev/kvm present
+  ✔ CPU virt extensions present
+  ✔ GPU: NVIDIA GeForce RTX 4090  driver: 595.91.07
+  ✔ /dev/nvidiactl present
+  ✔ /dev/nvidia0 present
+  ✔ /dev/nvidia-uvm present
+  ✔ disk free 145G
+  ✔ RAM 98G
+  ✔ cores 30
+  ⚠ apt mirror only 121790 B/s — provision_box.sh will switch mirrors; if it cannot find one over 200 kB/s this box is not provisionable
+  ✔ https egress works
+=== PREFLIGHT DONE ===
+VERDICT=SOUND
+EXIT=0

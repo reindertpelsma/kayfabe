@@ -1,0 +1,39 @@
+{
+  "approved_native_xid_lines": [
+    "2026-10-22T03:22:37.671973+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:22:40.690209+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:22:43.691201+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:22:46.715221+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3092, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-22T03:22:59.255356+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=3149, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "count": 5,
+  "rule": "owner decision1: source-matched controls only; all later changes fatal",
+  "completed_arms": [
+    {
+      "pid": 3650,
+      "starttime": 39456,
+      "exe": "/workspace/bench/kf3-bins/7f6f7e7a/qemu-system-x86_64",
+      "arm": "--timer",
+      "revision": "7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "f6d4c7c9099320cb901caf0606656a47a4337a38f26c075c08f2e1e6d6f8f3c8",
+        "scripts/fastguest/fast_suite.sh": "c34de7371f0ac514a5aa3871135ef801ff56c94dc3f45de91602215189410616",
+        "scripts/fastguest/run_fast_guest.sh": "ad2fd510fd45a8bd007e19262796ab95d9026c8f64b15319e2c761b7b8c0f2b7",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    },
+    {
+      "pid": 3937,
+      "starttime": 41963,
+      "exe": "/workspace/bench/kf3-bins/7f6f7e7a/qemu-system-x86_64",
+      "arm": "--engines",
+      "revision": "7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0",
+      "source_pin": {
+        "crates/kayfabe-rm-ladder/src/main.rs": "f6d4c7c9099320cb901caf0606656a47a4337a38f26c075c08f2e1e6d6f8f3c8",
+        "scripts/fastguest/fast_suite.sh": "c34de7371f0ac514a5aa3871135ef801ff56c94dc3f45de91602215189410616",
+        "scripts/fastguest/run_fast_guest.sh": "ad2fd510fd45a8bd007e19262796ab95d9026c8f64b15319e2c761b7b8c0f2b7",
+        "scripts/fastguest/build_fast_guest.sh": "95497e770d9f7fc1ba03f6040e9ac9291ebf758194c94b611d58abc5717773f9"
+      }
+    }
+  ]
+}
