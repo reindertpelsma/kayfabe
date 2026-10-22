@@ -57,6 +57,13 @@ enscape37.26, maya162.14, medical50.54, solidworks29.51, unreal63.58.
 The final four workloads still have only one complete sample; the second full
 iteration is not yet complete. These are diagnostic reference results.
 
+MEASURED at04:18CEST: second-iteration Maya160.37 and Medical50.58 completed;
+seven workloads now have two complete samples. SolidWorks and Unreal remain
+in progress/pending. The later WER batch is old fault reporting:81loggedrecords
+verify pre-native EventTime, zero verify post-native, and one CitySample RADAR
+record has unknown underlying fault time. SystemDisplay/nvlddmkm and
+ApplicationError1000 counts since native boot remain zero.
+
 INFERRED hypothesis before baseline score read: completed Energy has a saved
 vendor composite. FALSIFIER: no result.json or original run-log lacks Completed.
 MEASURED: original Energy result.json reports45.60; run-log confirms Completed.
