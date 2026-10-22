@@ -2,9 +2,9 @@
   "enabled": true,
   "tests_verified_before_arms": true,
   "verification_head": "1c6452a276d7014bece3adf42d68cbd4edffbc18",
-  "source": "d8c1e65ef5a3df15c0ca4d1d3f551a43683ede6f",
-  "binary": "/workspace/bench/kf3-bins/d8c1e65e/qemu-system-x86_64",
-  "binary_sha256": "e4890b89e64823c5961f03172b32b7c525eecc5cc1d5a1874f87a8ca0e32961b",
+  "source": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4",
+  "binary": "/workspace/bench/kf3-bins/2add71e8/qemu-system-x86_64",
+  "binary_sha256": "275afe2c276204777d2d3dc383e793b9d8d5716b8b9f7de76ff9e98edbaeb905",
   "full_tests": "3999/0/22, 22 crates",
   "mutants": "15 variants/16 runs, minimum2killers",
   "clippy_added": 0,
@@ -15,5 +15,13 @@
     "1c6452a276d7014bece3adf42d68cbd4edffbc18"
   ],
   "merge_conflicts": [],
-  "primary_windows_arms_state": "UNRUN; pending post-bind census decision"
+  "primary_windows_arms_state": "UNRUN; pending post-bind census decision",
+  "previous_standalone_source": "d8c1e65ef5a3df15c0ca4d1d3f551a43683ede6f",
+  "merged_release_tests": {
+    "passed": 1127,
+    "failed": 0,
+    "ignored": 4,
+    "targets": 60
+  },
+  "hardware": "UNRUN; lease closed at bind census STOP"
 }

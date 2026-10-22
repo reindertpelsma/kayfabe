@@ -1,0 +1,38 @@
+{
+  "source": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4",
+  "parents": [
+    "8f3a9bb3a5d652b3f536ca015bf95735ec588924",
+    "1c6452a276d7014bece3adf42d68cbd4edffbc18"
+  ],
+  "command": "nice -n 19 env CARGO_TARGET_DIR=/workspace/bw-b1-validation-target cargo test --release -j2 -p kf-chan -p kf-qemu -p kf-harness",
+  "exit_code": 0,
+  "counts": {
+    "kf-chan": {
+      "passed": 672,
+      "failed": 0,
+      "ignored": 4,
+      "targets": 27
+    },
+    "kf-qemu": {
+      "passed": 436,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 10
+    },
+    "kf-harness": {
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 23
+    }
+  },
+  "totals": {
+    "passed": 1127,
+    "failed": 0,
+    "ignored": 4,
+    "targets": 60
+  },
+  "comparison": "B1 verified source chan672/0/4 and qemu436/0/0 unchanged; main fixture harness19/0/0 retained. No dropped tests. No new source beyond automatic merge.",
+  "hardware": "UNRUN",
+  "full_log_sha256": "fd03838acb65498719fae658d16ad45bcbd5c10e88c65f78e1667b02e0faf3f8"
+}
