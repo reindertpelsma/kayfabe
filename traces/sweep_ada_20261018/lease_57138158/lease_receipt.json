@@ -1,0 +1,32 @@
+{
+  "id": 57138158,
+  "created_utc": "2026-10-22T01:15:51.043786+00:00",
+  "auto_destroy_minutes": 170,
+  "quote_dph": 0.49,
+  "offer": {
+    "id": 54367439,
+    "machine_id": 17049,
+    "gpu_name": "RTX 4090",
+    "gpu_ram": 24564,
+    "cpu_cores_effective": 32.0,
+    "cpu_ram": 64469,
+    "disk_space": 1038.125,
+    "dph_total": 0.49,
+    "inet_down": 656.8,
+    "inet_down_cost": 0.0026041666666666665,
+    "inet_up_cost": 0.00390625,
+    "geolocation": "California, US"
+  },
+  "credit_before": 43.23929889476176,
+  "budget_cap_usd": 4,
+  "reserve_usd": 5,
+  "price_guard_usd_h": 0.6,
+  "source": "35ff2820e5573199072ab2d274f5f0b91a1826a8",
+  "owner_authorized_AD102": true,
+  "destroyed": false,
+  "auto_destroy_pid": 2770303,
+  "auto_destroy_verified": true,
+  "actual_dph": 0.49,
+  "ssh_ready_utc": "2026-10-22T01:19:05.970958+00:00",
+  "host_key_pinned": true
+}
