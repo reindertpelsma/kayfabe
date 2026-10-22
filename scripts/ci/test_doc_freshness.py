@@ -329,11 +329,22 @@ class FreshnessTests(unittest.TestCase):
         row = next(row for row in self.run_check()["documents"] if row["path"].endswith("old.md"))
         self.assertEqual(row["status"], "ARCHIVED")
 
+    def test_nested_design_archive_is_excluded(self):
+        original = "# Frozen design\n\n[old link](missing.md)\n"
+        self.write("docs/design/archive/old.md", original)
+        self.run_check()
+        self.assertEqual((self.root / "docs/design/archive/old.md").read_text(), original)
+
     def test_non_markdown_assets_are_inventoried_without_status_edits(self):
         self.write("docs/reference/data.json", '{"historical": true}\n')
         row = next(
             row for row in self.run_check()["documents"] if row["path"].endswith("data.json")
         )
+        self.assertEqual(row["status"], "ASSET")
+
+    def test_evidence_log_status_word_is_not_document_metadata(self):
+        self.write("docs/reference/run.log", "STATUS: invalid evidence output\n")
+        row = next(row for row in self.run_check()["documents"] if row["path"].endswith("run.log"))
         self.assertEqual(row["status"], "ASSET")
 
     def test_legacy_baseline_is_explicit_and_green(self):
