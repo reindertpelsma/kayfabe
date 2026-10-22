@@ -102,7 +102,10 @@ cat "/root/prov/arm_${run}_enable.txt"
 timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag.txt" 2>&1
 cat "/root/prov/arm_${run}_diag.txt"
 export KF_GUEST_USER=kf
-KF_GUEST_PW=$(cat "$VM/secrets/win_password") python3 scripts/bench/windows/signin.py "$VM/run/qmp.sock" "$VM/run/qga.sock" >"/root/prov/arm_${run}_signin.txt" 2>&1
+if KF_GUEST_PW=$(cat "$VM/secrets/win_password") python3 scripts/bench/windows/signin.py "$VM/run/qmp.sock" "$VM/run/qga.sock" >"/root/prov/arm_${run}_signin.txt" 2>&1; then :; else
+ timeout 90 bash "$W" ssh '[pscustomobject]@{utc=[DateTime]::UtcNow.ToString("o");user=(Get-CimInstance Win32_ComputerSystem).UserName;logon=@(Get-Process LogonUI -ErrorAction SilentlyContinue | Select-Object Id,SessionId,StartTime);explorer=@(Get-Process explorer -ErrorAction SilentlyContinue | Select-Object Id,SessionId,StartTime)} | ConvertTo-Json -Compress' </dev/null >"/root/prov/arm_${run}_signin_state.txt" 2>&1 || true
+ exit 1
+fi
 grep '^SIGNIN_VERIFIED ' "/root/prov/arm_${run}_signin.txt"
 bash "$W" shot "${run}_signed_in" || true
 python3 -B scripts/bench/diesweep/desktop/matrix.py --vm-root "$VM" --qlog "$QLOG" --out "/root/prov/matrix_$run" --iso /workspace/bench/kfapps.iso --guest-iso --override-dir /root/s2/apps --manifest scripts/bench/windows/appmatrix/manifest.json --lease /root/s2/lease.json >"/root/prov/arm_${run}_matrix.log" 2>&1
