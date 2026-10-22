@@ -1,0 +1,37 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57209908,
+  "source": "e27444a6f775143c0edcda55445215d0f0eaf00b",
+  "utc": "2026-10-22T12:48:43.618521+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 610,
+      "sha256": "c7ad67287b3808e2996c03aef24b6dbf6505b7f72ebc20bc86df82947b1788b9"
+    },
+    "sweep_host_die.log": {
+      "bytes": 209,
+      "sha256": "ddd528ff99274aed949cbf0d7ce83d5e05745f49d45f8264f348a98d589db04c"
+    },
+    "sweep_windows_media_controller.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sweep_host_preflight.log": {
+      "bytes": 410,
+      "sha256": "906f06be5168ec68b0dbe90ddc5b18ce69d223df8415eea33e0e660ff92c4c13"
+    },
+    "sweep_gates.log": {
+      "bytes": 25215,
+      "sha256": "f6d104dc2e482a25b8b1e5a27f9698252dda0f2f57c59f9243c7422a447497b8"
+    },
+    "sweep_windows_media.log": {
+      "bytes": 20389,
+      "sha256": "3b98e265da0b28bd7da09daa3e3e9f56a6a64b02b2a0e50f36d6acae0f795ee5"
+    },
+    "sweep_probe_build.log": {
+      "bytes": 32267,
+      "sha256": "00e6a4a6ece038b7822feb0235bcecfd8c107c5bd074031f5deb510d36427647"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}

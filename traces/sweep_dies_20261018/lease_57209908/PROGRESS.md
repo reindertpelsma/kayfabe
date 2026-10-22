@@ -1,0 +1,3 @@
+MEASURED (2026-10-22, lease57209908, controller/probe logs): stock host driver595.91.07 open installed, preflightSOUND, probearch0x170/impl0x2 identifiesGA102. Gates1-9 andgate10PASS;12USERbirths,0refused. QEMU sourcee27444a6f is building; raw/CUDA/GR and exact native-Xid baseline pending.
+MEASURED (2026-10-22, lease57209908, appdisk_receipt.json): complete6785255424-byte app ISO matches SHA183c13aa6b2c3c20475f7e1c5eed9979ca973056886d2b519c013386ba4da652. The supplemental314608748-byte NVRTC archive separately passed its remote pinned SHA check.
+CODE READ: Windows580.88 binding/ON, signed-in desktop, matrix, Unigine and600-second hold are pending. No full desktop acceptance or new Linux guest-suite result is claimed.
