@@ -1,7 +1,5 @@
 """Freshness contracts extending C1's parser; temporary repositories, no GPU."""
 
-from datetime import date
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -394,6 +392,24 @@ class FreshnessTests(unittest.TestCase):
             "docs/ok.md", self.document(day="2026-01-01", body="`KF3_REMOVED_OPTION` revised")
         )
         self.assertGreater(self.run_check(1)["new"], 0)
+
+    def test_fixing_one_legacy_environment_reference_does_not_create_new_debt(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_GONE_A` `KF3_GONE_B`"))
+        self.run_check(0, "--record")
+        self.write("crates/kf-example/src/lib.rs", "// KF3_GONE_A\n")
+        self.assertEqual(self.run_check()["new"], 0)
+
+    def test_fixing_one_legacy_flag_reference_does_not_create_new_debt(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`--gone-a` `--gone-b`"))
+        self.run_check(0, "--record")
+        self.write("crates/kf-example/src/lib.rs", "// --gone-a\n")
+        self.assertEqual(self.run_check()["new"], 0)
+
+    def test_existing_stale_doc_fails_on_an_additional_dead_reference(self):
+        self.write("docs/ok.md", self.document(day="2026-01-01", body="`KF3_GONE_A` `KF3_ALIVE`"))
+        self.run_check(0, "--record")
+        self.write("crates/kf-example/src/lib.rs", "// option removed\n")
+        self.assertIn("stale-suspect", self.kinds())
 
     def test_removal_does_not_buy_new_debt(self):
         self.write("docs/old.md", "# Legacy\n")
