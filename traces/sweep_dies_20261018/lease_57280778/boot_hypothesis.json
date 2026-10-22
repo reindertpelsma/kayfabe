@@ -1,0 +1,6 @@
+{
+  "kind": "INFERRED",
+  "hypothesis": "actual_status may lag SSH readiness while cur_state=running",
+  "falsifier": "ssh-keyscan cannot complete against the own contract SSH port",
+  "utc": "2026-10-22T22:16:00.155390+00:00"
+}

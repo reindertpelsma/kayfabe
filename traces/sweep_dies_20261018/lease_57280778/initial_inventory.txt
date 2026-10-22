@@ -1,0 +1,9 @@
+2026-10-22T22:17:13+00:00
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+KVM_PRESENT
+8
+               total        used        free      shared  buff/cache   available
+Mem:           17949         524       16768           1         656       17144
+Swap:              0           0           0
+NVIDIA GeForce RTX 3090, 575.51.03
