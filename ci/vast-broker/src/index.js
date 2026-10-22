@@ -198,7 +198,20 @@ export class BrokerLedger {
   constructor(ctx,env){this.service=createService({env,storage:ctx.storage});}
   async fetch(request){if(new URL(request.url).origin==='https://internal.invalid'&&new URL(request.url).pathname==='/cron'){await this.service.sweep();return new Response('ok');}return this.service.fetch(request);}
 }
+// Buffer only the admitted prefix before entering the serialized ledger. An
+// unfinished network upload must never hold its busy flag or block cron.
+async function detachedUpload(request,path){
+  if(!request.body)return request;
+  const limit=(/^\/report\//.test(path)?65536:/^\/kill\//.test(path)?256:0)+1;
+  const reader=request.body.getReader(),chunks=[];let length=0;
+  try{while(length<limit){const {value,done}=await reader.read();if(done)break;const kept=value.slice(0,limit-length);chunks.push(kept);length+=kept.byteLength;}}
+  finally{await reader.cancel().catch(()=>{});}
+  const bytes=new Uint8Array(length);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.byteLength;}
+  const headers=new Headers(request.headers);headers.delete('Transfer-Encoding');headers.set('Content-Length',String(length));
+  return new Request(request.url,{method:request.method,headers,body:bytes});
+}
 export default {
-  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|kill|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(request);},
+  async fetch(request,env){const path=await routePath(request,env);if(path===null||!/^\/(?:rent|stop-all|(?:report|kill|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(path))return notFound();let buffered;try{buffered=await detachedUpload(request,path);}catch{return Response.json({state:'UNAVAILABLE',verdict:'UNAVAILABLE',log_tail_sanitised:'',bytes_dropped:0},{status:503,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
+    return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(buffered);},
   scheduled(_event,env,ctx){ctx.waitUntil(env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(new Request('https://internal.invalid/cron',{method:'POST'})));}
 };
