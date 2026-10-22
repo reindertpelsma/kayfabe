@@ -1908,6 +1908,8 @@ mod tests {
                 ".u64 .ptr .align 1",
                 ".u32",
                 ".align 4 .b8",
+                ".u32",
+                // the mirrored-table flag: odd extension of the OLUT for a negative input
                 ".u32"
             ]
         );

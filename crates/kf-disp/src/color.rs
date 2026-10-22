@@ -1130,4 +1130,65 @@ mod tests {
         tables[1].segments.fill(Some(7));
         assert!(pipeline(t, c, |m| b.get(&m).copied().unwrap_or(0), &tables).is_err());
     }
+
+    /// Run 4500 (rev baa29775, 2026-10-22): the NVIDIA app's Hue and Digital Vibrance sliders
+    /// re-arm OCSC0 with SIGNED coefficients while Windows' mirrored OLUT stays armed; the console
+    /// refused the program ("mirrored OLUT behind a signed matrix") on every frame and froze at 0
+    /// fps. The program Windows arms (run 99's measured words) with a hue or saturation matrix in
+    /// OCSC0 must be renderable, in every family row that has the C77D core.
+    #[test]
+    fn hue_and_vibrance_behind_the_windows_mirrored_olut_are_rendered_not_refused() {
+        use super::model::fixture::{hue, saturation};
+        let (win, core) = (0xc67e, 0xc77d);
+        let both = Experiments {
+            lut_mirror: true,
+            ilut_offset_256: true,
+        };
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            let tables = std::array::from_fn(|_| InlineLut::default());
+            let mut matrices = vec![("windows as measured", None)];
+            for deg in [30.0, 120.0, 210.0, 330.0] {
+                matrices.push(("hue", Some(hue(deg))));
+            }
+            for s in [0.5, 1.5, 2.0] {
+                matrices.push(("saturation", Some(saturation(s))));
+            }
+            for (what, m) in matrices {
+                let mut b = run99_windows_program(t);
+                if let Some(m) = m {
+                    for (i, v) in m.iter().enumerate() {
+                        set(
+                            &mut b,
+                            t,
+                            core,
+                            &format!("HEAD_SET_OCSC0COEFFICIENT_C{}{}", i / 4, i % 4),
+                            Some(0),
+                            *v as u32 & 0x1f_ffff,
+                        );
+                    }
+                }
+                let r = |w: u32| b.get(&w).copied().unwrap_or(0);
+                let p = pipeline(t, win, r, &tables).unwrap();
+                let o = output(t, core, 0, r, both).unwrap();
+                assert!(o.lut.unwrap().mirror, "{what}: the OLUT is mirrored");
+                if let Some(m) = m {
+                    assert_eq!(
+                        o.matrix, m,
+                        "{what}: the signed coefficients decode exactly"
+                    );
+                    assert!(o.matrix.iter().any(|&v| v < 0));
+                    assert!(
+                        !mirror_inert(p.matrices.iter().chain([&o.matrix])),
+                        "{what}: a negative can reach the table"
+                    );
+                }
+                assert_eq!(
+                    program_verdict(p.matrices.iter(), &o),
+                    Ok(()),
+                    "{what} ({version})"
+                );
+            }
+        }
+    }
 }
