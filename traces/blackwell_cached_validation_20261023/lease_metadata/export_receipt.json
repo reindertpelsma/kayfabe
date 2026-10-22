@@ -1,0 +1,54 @@
+{
+  "sweep_20261020_provision.log": {
+    "source_sha256": "8400d97fd713fe8c6a08acf9fbded9b00a00bbb1f09e83b64ddda291196bdcde",
+    "export_sha256": "8400d97fd713fe8c6a08acf9fbded9b00a00bbb1f09e83b64ddda291196bdcde"
+  },
+  "sweep_host_die.log": {
+    "source_sha256": "59cb02a20415a0bc2ca968313803bc53b25f03c978b6235ff96a658f5843f822",
+    "export_sha256": "59cb02a20415a0bc2ca968313803bc53b25f03c978b6235ff96a658f5843f822"
+  },
+  "sweep_host_preflight.log": {
+    "source_sha256": "d3130501d0bdb1875c80052c7d8239f5f0b2629f914b2836b843afefea7f132a",
+    "export_sha256": "d3130501d0bdb1875c80052c7d8239f5f0b2629f914b2836b843afefea7f132a"
+  },
+  "sweep_gates.log": {
+    "source_sha256": "49e06eb03294d31f15f33ae9df18ead08a7f7a45a898272b9bca764d021ddd88",
+    "export_sha256": "186efe39397dafb2c755f7537d66438fa174a964de949b41fe0f3d79c8e85f7d"
+  },
+  "sweep_product_source": {
+    "source_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13",
+    "export_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13"
+  },
+  "media_cache_receipt.json": {
+    "source_sha256": "f55aa6d99027bfa777c452ea3b07bc12535c9712a25ce3e1bd1c3e96a992695d",
+    "export_sha256": "f55aa6d99027bfa777c452ea3b07bc12535c9712a25ce3e1bd1c3e96a992695d"
+  },
+  "audit_gb205_zbc.log": {
+    "source_sha256": "d0e6ad32b64b5601bf9a25b078dd516f2e2cffb51ed66c6aab799244c7e1ee2e",
+    "export_sha256": "d0e6ad32b64b5601bf9a25b078dd516f2e2cffb51ed66c6aab799244c7e1ee2e"
+  },
+  "audit_gb205_8162.log": {
+    "source_sha256": "a73f0fa18bde0f8b6cc010460501ef113ba3136723024956bc19db83fb10570c",
+    "export_sha256": "a73f0fa18bde0f8b6cc010460501ef113ba3136723024956bc19db83fb10570c"
+  },
+  "precomp_runtime.txt": {
+    "source_sha256": "3ad8a5089fadf80b4cee8ec101c07edfc10fabebc8b4e83124797a4d55fe1a01",
+    "export_sha256": "3ad8a5089fadf80b4cee8ec101c07edfc10fabebc8b4e83124797a4d55fe1a01"
+  },
+  "precomp_exit.txt": {
+    "source_sha256": "1cbe6ca13b7ff22c2af9686f1d533d73eb529b804fb1795b02e8ccf14cbb7112",
+    "export_sha256": "1cbe6ca13b7ff22c2af9686f1d533d73eb529b804fb1795b02e8ccf14cbb7112"
+  },
+  "sweep_windows_media.log": {
+    "source_sha256": "cff4a986a98734569f71b20d4210b93882446c99a10ab3755cf438869d9e855b",
+    "export_sha256": "cff4a986a98734569f71b20d4210b93882446c99a10ab3755cf438869d9e855b"
+  },
+  "kernel_xids.json": {
+    "source_sha256": "d1bc2718c6b46ae199840744223ca15afd9847538549c575d012f1f714722ba8",
+    "export_sha256": "65985f358483481b8304a31a802feec8a4ffef45f7c93e68a605549464c462f4"
+  },
+  "precomp_kernel_permission.json": {
+    "source_sha256": "d1bc2718c6b46ae199840744223ca15afd9847538549c575d012f1f714722ba8",
+    "export_sha256": "fb09f069915ffeee3f817b070f072b5cad49588fdba27bad2ba5f2271521abe0"
+  }
+}
