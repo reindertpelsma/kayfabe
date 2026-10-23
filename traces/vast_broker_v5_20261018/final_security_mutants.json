@@ -1,0 +1,118 @@
+[
+  {
+    "mutant": "preauth-before-ledger",
+    "count": 2,
+    "killers": [
+      "security unauthenticated JWKS cannot starve cron",
+      "security unauthenticated JWKS cannot starve stop-all"
+    ]
+  },
+  {
+    "mutant": "definitive-refusal-settlement",
+    "count": 4,
+    "killers": [
+      "definitive refusal permits the next same-SHA workflow attempt 200",
+      "definitive refusal permits the next same-SHA workflow attempt 400",
+      "security definitive rental refusal releases reservation 200",
+      "security definitive rental refusal releases reservation 400"
+    ]
+  },
+  {
+    "mutant": "authenticated-admission",
+    "count": 2,
+    "killers": [
+      "security unauthorized requests cannot spend valid admission /rent",
+      "security unauthorized requests cannot spend valid admission /availability?profile=check"
+    ]
+  },
+  {
+    "mutant": "JWKS-cooldown",
+    "count": 2,
+    "killers": [
+      "security unknown-kid cooldown has bounded fetches 100",
+      "security unknown-kid cooldown has bounded fetches 1000"
+    ]
+  },
+  {
+    "mutant": "JWKS-single-flight",
+    "count": 2,
+    "killers": [
+      "security concurrent valid tokens share JWKS flight 5",
+      "security concurrent valid tokens share JWKS flight 10"
+    ]
+  },
+  {
+    "mutant": "id-less-absence",
+    "count": 2,
+    "killers": [
+      "ambiguous absent create settles after spaced boot-expiry observations false",
+      "ambiguous absent create settles after spaced boot-expiry observations true"
+    ]
+  },
+  {
+    "mutant": "spaced-absence-settlement",
+    "count": 2,
+    "killers": [
+      "ambiguous absent create settles after spaced boot-expiry observations false",
+      "ambiguous absent create settles after spaced boot-expiry observations true"
+    ]
+  },
+  {
+    "mutant": "hold-result-gate",
+    "count": 2,
+    "killers": [
+      "box hold requires a recorded result false",
+      "box hold requires a recorded result true"
+    ]
+  },
+  {
+    "mutant": "hold-window-cap",
+    "count": 2,
+    "killers": [
+      "unconfirmed MANUAL retains cancellation and bounded hold run",
+      "unconfirmed MANUAL retains cancellation and bounded hold pr"
+    ]
+  },
+  {
+    "mutant": "manual-cancellation",
+    "count": 2,
+    "killers": [
+      "unconfirmed MANUAL retains cancellation and bounded hold run",
+      "unconfirmed MANUAL retains cancellation and bounded hold pr"
+    ]
+  },
+  {
+    "mutant": "front-signature",
+    "count": 4,
+    "killers": [
+      "front auth rejects before Durable Object garbage",
+      "front auth rejects before Durable Object forged",
+      "front auth validates claims before Durable Object repository",
+      "front auth validates claims before Durable Object ref"
+    ]
+  },
+  {
+    "mutant": "front-claims",
+    "count": 2,
+    "killers": [
+      "front auth validates claims before Durable Object repository",
+      "front auth validates claims before Durable Object ref"
+    ]
+  },
+  {
+    "mutant": "hashed-deploy",
+    "count": 2,
+    "killers": [
+      "production deploy binds hashed module main",
+      "production deploy binds hashed module no-bundle"
+    ]
+  },
+  {
+    "mutant": "retry-SHA-release",
+    "count": 2,
+    "killers": [
+      "definitive refusal permits the next same-SHA workflow attempt 200",
+      "definitive refusal permits the next same-SHA workflow attempt 400"
+    ]
+  }
+]

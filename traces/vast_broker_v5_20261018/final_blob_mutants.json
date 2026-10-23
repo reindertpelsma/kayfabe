@@ -1,0 +1,89 @@
+[
+  {
+    "mutant": "capability",
+    "count": 2,
+    "killers": [
+      "blob capability/config fail closed wrong-run",
+      "blob capability/config fail closed bad-token"
+    ]
+  },
+  {
+    "mutant": "mint-limits",
+    "count": 2,
+    "killers": [
+      "blob bounded mint attempts run",
+      "blob bounded mint attempts day"
+    ]
+  },
+  {
+    "mutant": "github-redirect-only",
+    "count": 3,
+    "killers": [
+      "blob refuses hostile provider 200",
+      "blob refuses hostile provider 307",
+      "blob refuses hostile provider chain"
+    ]
+  },
+  {
+    "mutant": "signed-hosts",
+    "count": 2,
+    "killers": [
+      "blob refuses hostile provider evil",
+      "blob refuses hostile provider evil-suffix"
+    ]
+  },
+  {
+    "mutant": "never-binary-body",
+    "count": 7,
+    "killers": [
+      "blob exact asset resolution without binary read blob-a.txt",
+      "blob exact asset resolution without binary read blob-b.txt",
+      "blob bounded mint attempts run",
+      "blob bounded mint attempts day",
+      "blob remains available in unexpired result grace",
+      "blob public entrypoint forwards exact route 32",
+      "blob public entrypoint forwards exact route 48"
+    ]
+  },
+  {
+    "mutant": "cancel-binary-body",
+    "count": 11,
+    "killers": [
+      "blob exact asset resolution without binary read blob-a.txt",
+      "blob exact asset resolution without binary read blob-b.txt",
+      "blob refuses hostile provider 200",
+      "blob refuses hostile provider 307",
+      "blob refuses hostile provider chain",
+      "blob refuses hostile provider evil",
+      "blob refuses hostile provider evil-suffix",
+      "blob refuses hostile provider http",
+      "blob refuses hostile provider userinfo",
+      "blob refuses hostile provider port",
+      "blob refuses hostile provider no-location"
+    ]
+  },
+  {
+    "mutant": "worker-url-redaction",
+    "count": 2,
+    "killers": [
+      "blob signed locator independently scrubbed release-assets.githubusercontent.com",
+      "blob signed locator independently scrubbed objects.githubusercontent.com"
+    ]
+  },
+  {
+    "mutant": "runner-url-redaction",
+    "count": 2,
+    "killers": [
+      "blob signed locator independently scrubbed release-assets.githubusercontent.com",
+      "blob signed locator independently scrubbed objects.githubusercontent.com"
+    ]
+  },
+  {
+    "mutant": "scoped-helper",
+    "count": 2,
+    "killers": [
+      "blob helper scoped URL and HTTPS 0",
+      "blob helper scoped URL and HTTPS 32"
+    ]
+  }
+]

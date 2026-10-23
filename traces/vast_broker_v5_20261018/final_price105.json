@@ -1,0 +1,22 @@
+{
+  "run": "v5-price105-readonly-20261023",
+  "provider_searches": 1,
+  "provider_writes": 0,
+  "shipping_cap_unchanged": 1,
+  "rows": [
+    {
+      "cap_usd_h": 1,
+      "eligible": 4,
+      "classes": {
+        "AD102": 4
+      }
+    },
+    {
+      "cap_usd_h": 1.05,
+      "eligible": 4,
+      "classes": {
+        "AD102": 4
+      }
+    }
+  ]
+}
