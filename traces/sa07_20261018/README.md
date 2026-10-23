@@ -47,7 +47,7 @@ MEASURED whole kf-gsp/rm/qemu GPU-free release suite1194 passed /0 failed /
 killing tests; bypass-macro-guard mutant2. Restored floods2 passed. Clippy all
 targets257 ->257 source fingerprints, added0. No assertions, deny sets or lint
 baselines loosened; restored tests additionally print their observed counts.
-All Cargo runs held the shared owner lock, release/two jobs/nice19/own target.
+All Cargo runs held the shared owner lock, release/two jobs/nice19/own target. (recorded in commit 26b2999a4, 2026-10-22)
 
 INFERRED hardware obligations later: normal boot/work/reset diagnostics remain
 useful under the shared budget, stderr latency in the real deployment, and hostile
