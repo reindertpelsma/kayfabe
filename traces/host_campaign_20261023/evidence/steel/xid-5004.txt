@@ -1,0 +1,7 @@
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: SKEDCHECK03_LOCAL_MEMORY_HIGH_SIZE failed
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: SKEDCHECK11_TOTAL_THREADS failed
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: SKEDCHECK14_SHARED_MEMORY_SIZE failed
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: SKEDCHECK16_CTA_THREAD_DIMENSION_ZERO failed
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x407020=0xa40400 0x407028=0x0 0x40702c=0x44e4950 0x407030=0x0
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 13, pid=2556069, name=qemu-system-x86, Graphics Exception: channel 0x0000005e, Class 0000c9c0, Offset 00000000, Data 00000000
+[Fri Oct 23 23:59:58 2026] NVRM: Xid (PCI:0000:01:00): 32, pid=2556069, name=qemu-system-x86, channel 0x0000005e intr0 00040000

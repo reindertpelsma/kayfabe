@@ -1,0 +1,98 @@
+[
+ {
+  "run": 5101,
+  "verdict": "PASS",
+  "restored": true,
+  "host_new_xids": 0,
+  "rm_unloads_15min": 0,
+  "born_translated": 14,
+  "ce_seed_nonzero": 6,
+  "ce_seed_zero": 8,
+  "ce_seed_values": [
+   "0x0",
+   "0xc7b5"
+  ],
+  "seeded_launches_lines": 14,
+  "seeded_launches_max": 0,
+  "kernel_copy_lifetimes": 6,
+  "forwarded_total": 623138,
+  "submissions_total": 118513,
+  "positive_seeded": 0,
+  "NoCeObject": 0,
+  "ForeignClass": 0,
+  "qemu_log_NoCeObject": 0,
+  "poisoned_mentions": 0
+ },
+ {
+  "run": 5102,
+  "verdict": "PASS",
+  "restored": true,
+  "host_new_xids": 0,
+  "rm_unloads_15min": 0,
+  "born_translated": 14,
+  "ce_seed_nonzero": 6,
+  "ce_seed_zero": 8,
+  "ce_seed_values": [
+   "0x0",
+   "0xc7b5"
+  ],
+  "seeded_launches_lines": 14,
+  "seeded_launches_max": 0,
+  "kernel_copy_lifetimes": 6,
+  "forwarded_total": 648580,
+  "submissions_total": 121918,
+  "positive_seeded": 0,
+  "NoCeObject": 0,
+  "ForeignClass": 0,
+  "qemu_log_NoCeObject": 0,
+  "poisoned_mentions": 0
+ },
+ {
+  "run": 5103,
+  "verdict": "PASS",
+  "restored": true,
+  "host_new_xids": 0,
+  "rm_unloads_15min": 0,
+  "born_translated": 14,
+  "ce_seed_nonzero": 6,
+  "ce_seed_zero": 8,
+  "ce_seed_values": [
+   "0x0",
+   "0xc7b5"
+  ],
+  "seeded_launches_lines": 14,
+  "seeded_launches_max": 0,
+  "kernel_copy_lifetimes": 6,
+  "forwarded_total": 628735,
+  "submissions_total": 118599,
+  "positive_seeded": 0,
+  "NoCeObject": 0,
+  "ForeignClass": 0,
+  "qemu_log_NoCeObject": 0,
+  "poisoned_mentions": 0
+ },
+ {
+  "run": 5104,
+  "verdict": "PASS",
+  "restored": true,
+  "host_new_xids": 0,
+  "rm_unloads_15min": 0,
+  "born_translated": 14,
+  "ce_seed_nonzero": 6,
+  "ce_seed_zero": 8,
+  "ce_seed_values": [
+   "0x0",
+   "0xc7b5"
+  ],
+  "seeded_launches_lines": 14,
+  "seeded_launches_max": 0,
+  "kernel_copy_lifetimes": 6,
+  "forwarded_total": 619529,
+  "submissions_total": 117915,
+  "positive_seeded": 0,
+  "NoCeObject": 0,
+  "ForeignClass": 0,
+  "qemu_log_NoCeObject": 0,
+  "poisoned_mentions": 0
+ }
+]

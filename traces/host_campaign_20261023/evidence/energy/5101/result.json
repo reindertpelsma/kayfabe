@@ -1,0 +1,63 @@
+{
+  "classification": "MEASURED",
+  "arm": "hc-6d-ce-at-birth",
+  "run": 5101,
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "workloads": [
+    "energy-04"
+  ],
+  "iterations": 1,
+  "resolution": "FullHD",
+  "verdict": "PASS",
+  "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+  "sample": {
+    "classification": "MEASURED",
+    "time": "2026-10-24T00:36:35.089931+02:00",
+    "arm": "hc-6d-ce-at-birth",
+    "run": 5101,
+    "sample": 12,
+    "completed": true,
+    "failed": false,
+    "subtest": "06_OpunakeAnimated",
+    "guest153": 0,
+    "guest4101": 0,
+    "boot_unchanged": true,
+    "budget_refusals": 0,
+    "counters": {
+      "pointer_large_entries": 0,
+      "pointer_entry_max_bytes": 59352,
+      "refused_scan_budget": 0,
+      "poisoned": 0
+    },
+    "task": 3,
+    "qemu_before": 3098227,
+    "qemu_after": 3105868,
+    "viewperf_nonzero_exits": [],
+    "ce_class_refusal": false
+  },
+  "events": [],
+  "ended": "2026-10-24T00:36:47.222208+02:00",
+  "controller_exit": 0,
+  "host_stop": {
+    "classification": "MEASURED",
+    "time": "2026-10-24T00:36:47.500907+02:00",
+    "new_host_xids": 0,
+    "rm_unloads_15min": 0,
+    "reason": "COMPLETE_REQUESTED",
+    "qemu_pid": 3601675
+  },
+  "agent_exit": -15,
+  "restoration": {
+    "classification": "MEASURED",
+    "time": "2026-10-24T00:36:59.822797+02:00",
+    "cuda": {
+      "before": 0,
+      "after": 0,
+      "reloaded": false
+    },
+    "gdm": "active",
+    "nvidia_bound": true,
+    "smi_exit": 0
+  },
+  "restored": true
+}

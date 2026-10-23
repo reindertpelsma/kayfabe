@@ -1,0 +1,12 @@
+{
+  "classification": "MEASURED",
+  "time": "2026-10-24T00:48:15.047170+02:00",
+  "cuda": {
+    "before": 0,
+    "after": 0,
+    "reloaded": false
+  },
+  "gdm": "active",
+  "nvidia_bound": true,
+  "smi_exit": 0
+}

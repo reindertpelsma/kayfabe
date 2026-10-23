@@ -1,0 +1,1 @@
+pc-bios/qemu-bundle: symlinks to /var/lib/kf-windows-20261005/qemu-build-kf3 (original bundle had dangling symlinks to deleted qemu-src)

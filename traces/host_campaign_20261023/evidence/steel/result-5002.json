@@ -1,0 +1,26 @@
+{
+ "run": "5002",
+ "rev": "0d7ba743",
+ "mirror": "off",
+ "ready": true,
+ "boot_s": 1,
+ "sn": [
+  {
+   "i": 1,
+   "wait": "BUSY_START 23:46:55 END 23:48:00",
+   "shot": "/data/claude-hc-20261023/W/boundary-kayfabe-5002/ui/res1.png"
+  },
+  {
+   "i": 2,
+   "wait": "BUSY_START 23:48:50 END 23:49:54",
+   "shot": "/data/claude-hc-20261023/W/boundary-kayfabe-5002/ui/res2.png"
+  }
+ ],
+ "xid_before": 15,
+ "events": "BOOT=10/23/2026 21:41:59 nvlddmkm_or_tdr_events=0 153=0 4101=0 141=0",
+ "xid_after": 15,
+ "mirror_last": "mirror=[OFF(KF3_TSG_MIRROR=0) groups=0 ctx_created=0 ctx_freed=0 mode_refused=0 flag_refused=0 ctx_unknown=0 cap_refused=0 latejoin_skipped=0 unwind_failed=0]",
+ "unload_fn47": 0,
+ "birth_lines": 208,
+ "refused_acts": 134
+}

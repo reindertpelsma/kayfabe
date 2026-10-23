@@ -1,0 +1,7 @@
+ARM_EXIT 5102 0 2026-10-24T00:42:52+02:00
+{"run": 5102, "copy_lives": 6, "seeded_launches": 0, "positive": 0, "refusals": {"NoCeObject": 0, "ForeignClass": 0}}
+ARM_EXIT 5103 0 2026-10-24T00:48:15+02:00
+{"run": 5103, "copy_lives": 6, "seeded_launches": 0, "positive": 0, "refusals": {"NoCeObject": 0, "ForeignClass": 0}}
+ARM_EXIT 5104 0 2026-10-24T00:53:43+02:00
+{"run": 5104, "copy_lives": 6, "seeded_launches": 0, "positive": 0, "refusals": {"NoCeObject": 0, "ForeignClass": 0}}
+ALL_DONE
