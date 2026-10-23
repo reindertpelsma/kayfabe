@@ -168,6 +168,13 @@ def bounded_command(command, limit):
                                            out.decode(errors='replace'), err.decode(errors='replace'))
 
 
+
+def ssh_route_is_ready(row):
+    """Provider candidate only; caller must still pin SSH, price, own ID and KVM."""
+    running = row.get('actual_status') == 'running' or row.get('cur_state') == 'running'
+    return running and bool(row.get('ports', {}).get('22/tcp'))
+
+
 def utc():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 

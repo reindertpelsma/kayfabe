@@ -1,0 +1,31 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-23T00:40:23.255788+00:00",
+  "mutants": [
+    {
+      "mutant": "actual_only",
+      "kills": 2,
+      "tests": [
+        "provider_tests.ProviderState.test_created_actual_with_running_current_can_be_probed",
+        "provider_tests.ProviderState.test_missing_actual_with_running_current_can_be_probed"
+      ]
+    },
+    {
+      "mutant": "ignore_running_state",
+      "kills": 2,
+      "tests": [
+        "provider_tests.ProviderState.test_loading_without_running_state_is_not_a_candidate",
+        "provider_tests.ProviderState.test_stopped_without_running_state_is_not_a_candidate"
+      ]
+    },
+    {
+      "mutant": "ignore_ssh_route",
+      "kills": 2,
+      "tests": [
+        "provider_tests.ProviderState.test_empty_ssh_route_is_not_a_candidate",
+        "provider_tests.ProviderState.test_missing_ssh_route_is_not_a_candidate"
+      ]
+    }
+  ],
+  "source_restored": true
+}
