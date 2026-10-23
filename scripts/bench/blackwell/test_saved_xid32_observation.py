@@ -5,6 +5,7 @@ import datetime as dt
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 import test_windows_observation as old
 
@@ -73,6 +74,21 @@ class SavedPairObservation(unittest.TestCase):
     def test_long_high_channel_raw_record_is_retained_without_truncation(self):
         line = old.xid(0x1000000B).replace(" ubuntu ", " " + "h" * 180 + " ")
         self.assertEqual(self.judge([line])[0]["line"], line)
+
+    def python310_iso(self, value):
+        if value.endswith("+0000"):
+            raise ValueError("Python3.10 fromisoformat rejects compact offset")
+        return old.aware(value)
+
+    def test_kernel_record_accepts_compact_offset_with_python310_iso_parser(self):
+        with patch.object(O, "aware", side_effect=self.python310_iso):
+            self.assertEqual(len(self.judge()), 2)
+
+    def test_kernel_context_accepts_compact_offset_with_python310_iso_parser(self):
+        record = self.judge()[0]
+        with patch.object(O, "aware", side_effect=self.python310_iso):
+            item = O.context(record, [{"line": record["line"]}], record["line"])
+        self.assertEqual(item["kernel_context"], [record["line"]])
 
     def test_original_observer_still_refuses_the_new_high_channel(self):
         with self.assertRaises(ValueError):
