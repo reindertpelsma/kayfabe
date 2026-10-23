@@ -34,8 +34,8 @@ provider billing bound during an outage.
 [CODE READ: defaults.json, src/offers.js, runner.py] `PREFERRED_COUNTRIES` is an
 ordered JSON list, default `["US","CA"]`. All forced eligibility checks and die
 preferences run first. Within the chosen class, country rank precedes effective
-price and offer ID. It never filters countries or relaxes a requirement; a
-qualifying non-US offer remains usable. The provider's `geolocation` suffix is
+price and offer ID. The separate DENIED_COUNTRIES filter first rejects CU/IR/KP/SY; country preference does not relax it.
+Unknown metadata is allowed by default, configurable with ALLOW_UNKNOWN_COUNTRY=false. The provider's `geolocation` suffix is
 used, and missing/odd location ranks last. Structured status records `country`;
 the runner independently validates and labels it untrusted. See
 [region evidence](../../traces/vast_broker_v5_20261018/COUNTRIES.md).
@@ -157,7 +157,7 @@ Worker code checkpoint. The owner deploys; this lane leaves renting disabled.
 
 [CODE READ: DEPLOY.md] Worker secrets are `WORKER_URL`, `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN` and `BROKER_PATH_PREFIX` (required with renting enabled).
 
-Follow the [nine-step owner deployment guide](DEPLOY.md), including the exact configured OIDC identities, required path secret, private blob credential and bundle hash. The [box environment contract](docs/BOX_PROTOCOL.md) is the stable Worker/repository interface.
+Follow the [owner deployment guide](DEPLOY.md), including the exact configured OIDC identities, required path secret, private blob credential and bundle hash. The [box environment contract](docs/BOX_PROTOCOL.md) is the stable Worker/repository interface.
 
 ## No-CLI namespace bootstrap
 
@@ -197,7 +197,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 
 [CODE READ: 2026-10-22 V4 addendum 3, src/index.js] PASS, FAIL and UNAVAILABLE structured results retain the box for POST_RESULT_GRACE_MINUTES (default 5, maximum 15), capped by TTL_MINUTES (default 20, maximum 60). First accepted callback must arrive within PROVISION_MINUTES (default and maximum 10). Known pending provider states do not establish liveness: reports receive NOT_READY until actual_status=running; pending state alone does not destroy a boot before provisioning expiry. This is a bounded refusal policy, not evidence that cur_state proves VM readiness.
 
-[CODE READ: 2026-10-22 V4 addendum 3, src/onstart.js] The payload installs `kf-box-kill [reason]` (shell and curl only). It POSTs to /kill/<run> with exactly the report HMAC capability. That capability cannot rent, read status, stop another run or use owner stop-all. A pre-result kill records FAIL/STOPPED. A completed own kill can replay a fixed receipt without authority or further provider calls; reports remain revoked. Kill shares the report rate limiter. Stop/stop-all are immediate; all destruction requires exact owned-ID/label inspection and a subsequent API absence check before ledger settlement. A delete acknowledgement alone keeps liability open for cron retry.
+[CODE READ: 2026-10-22 V4 addendum 3, src/onstart.js] The payload installs `kf-box-kill [reason]` (shell and curl only). It POSTs to /kill/<run> with exactly the report HMAC capability. That capability cannot rent, read status, stop another run or use owner stop-all. A pre-result kill records FAIL/STOPPED. A completed own kill can replay a fixed receipt without authority or further provider calls; reports remain revoked. Kill shares the report rate limiter. Stop/stop-all are immediate; destruction requires a ledger-owned ID (exact label for reconciled IDs) and a subsequent API absence check before ledger settlement. A delete acknowledgement alone keeps liability open for cron retry.
 
 [CODE READ: 2026-10-22 [Cloudflare cron documentation](https://developers.cloudflare.com/workers/configuration/cron-triggers/)] The configured schedule is every minute, with no Durable Object alarms. Healthy-scheduler nominal bounds are provisioning <11 minutes, default hard TTL <21 minutes (maximum <61), and result grace <6 minutes (maximum <16), plus provider request/absence latency. These are not outage guarantees: missed cron/API failures leave liability open. Budget and prepaid checks reserve hard TTL plus the one-minute cron period; failed cleanup keeps accumulating estimated actual cost, without a false TTL cap on the external bill. Only cron enforces unattended destruction; the box timeout limits honest test work and cannot destroy provider resources.
 
@@ -263,9 +263,13 @@ ingress and workflow mutation sites were moved to their equivalent V5 guards;
 no mutation threshold or debt baseline was relaxed.
 
 [CODE READ: 2026-10-22 src/github.js, src/index.js and [GitHub API limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)]
-CI supplies only OIDC. The Worker reads public GitHub metadata without an App/PAT;
-shared unauthenticated rate limits can refuse a long run. GitHub authentication
-for higher read limits can follow separately and is not a blob-route prerequisite.
+CI supplies OIDC and optional runner Access A headers. Optional Worker GITHUB_API_TOKEN authenticates read-only checks and asset metadata; the deprecated BLOB_GITHUB_TOKEN fallback applies only to assets. Client X-GH-Token is ignored. Lifecycle reads cache for 60 seconds and authenticated 401/403 reads retain public fallback. Blob tag prefixes default-deny when unset; see DEPLOY.md for repositories and fine-grained read permissions.
 Hosted OIDC and Cloudflare billed CPU remain unverified. The owner has replaced the
 next acceptance with short non-VM dummy FAIL/PASS runs; the real KVM/full-suite
 payload and SSH MANUAL polish are deferred. No deployment is performed here.
+
+## Security fixes round (2026-10-23)
+
+[CODE READ: src/tokens.js, src/access.js, ../vast-reaper/worker.js] v2 callback capabilities bind run, attempt, nonce, tested SHA and short hard-limit expiry, with MAC/expiry checked before the ledger. Closed/ended rentals refuse before queue entry; ended kill receipts bypass it. Bounded queues and runner infrastructure retries preserve cleanup availability. The independent reaper and per-GB/contract guards reduce paid-run exposure; they do not prove a hard bill ceiling. The optional hostname-wide Access application uses distinct A/B service tokens and a Worker-side signed-assertion route allow-list. Secret URL/prefix knowledge remains a noise defense, not authentication. See [deployment and rotation](DEPLOY.md) and [the round design](../../docs/design/V3_CI_VAST_FIXES_20261023.md). No live deployment or rental was performed in this round.
+
+[CODE READ: src/workflow-authority.js, src/github.js, trigger-policy.mjs, gpu-vast.yml] The 18:20 owner ruling separates workflow trigger choices from Worker authorization. The YAML defaults to master pushes and non-draft master PRs, with complete file-list exclusions decided by trusted BASE code and explicit successful status. Uncertainty requests a run. The Worker accepts signed target-PR, owner push and owner dispatch identities; a pure rule permits an owner-authorized own-repository branch copy of gpu-vast.yml only with API actor/triggering-actor/head/run checks. Manual dispatch can select a reachable branch commit while keeping the trusted controller at BASE. workflow_run and pull_request remain unsupported. Workflow edits are a separate owner-review commit.
