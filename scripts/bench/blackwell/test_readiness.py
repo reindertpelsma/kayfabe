@@ -110,6 +110,29 @@ class AdaptiveReadiness(unittest.TestCase):
             R.first_query(fetch, R.Budget(300, 900), 40)
         self.assertEqual(len(calls), 2)
 
+    def check_reserved_retry(self, seconds):
+        self.policy(1)
+        clock = [0]
+        calls = []
+
+        def fetch(timeout):
+            calls.append(timeout)
+            if len(calls) == 1:
+                clock[0] += timeout
+                raise subprocess.TimeoutExpired("fixture", timeout)
+            return "actual"
+
+        result = R.first_query(fetch, R.Budget(seconds, 900, clock=lambda: clock[0]), 720)
+        self.assertEqual(result, "actual")
+        self.assertEqual(len(calls), 2)
+        self.assertLessEqual(sum(calls), seconds)
+
+    def test_verify_query_reserves_time_for_its_one_retry(self):
+        self.check_reserved_retry(240)
+
+    def test_short_remaining_budget_also_reserves_a_retry(self):
+        self.check_reserved_retry(30)
+
     def test_unknown_failure_is_not_retried(self):
         self.policy(1)
         calls = []
