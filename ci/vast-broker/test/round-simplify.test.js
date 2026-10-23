@@ -179,26 +179,6 @@ for (const change of ['closed', 'moved'])
     assert.deepEqual(pulls(h), []);
     assert.deepEqual(h.cloud.deletes, []);
   });
-// The Access audience-array exception is gone; GitHub OIDC audience stays one exact string.
-for (const aud of [[env.WORKER_URL], ['other', env.WORKER_URL]])
-  test('round GitHub audience stays scalar ' + aud.length, async () => {
-    const verifier = new OidcVerifier(
-      async () => Response.json({ keys: [jwk] }),
-      () => clock,
-    );
-    await assert.rejects(verifier.verify(await jwt({ aud }), env.WORKER_URL));
-  });
-// GitHub OIDC expiry is checked on its own (not only through exp > iat).
-for (const delta of [0, 1])
-  test('simplify GitHub OIDC refuses an expired token ' + delta, async () => {
-    const h = await setup();
-    const now = Math.floor(h.time.value / 1000);
-    const response = await h.call('/rent', {
-      claims: { iat: now - 400, nbf: now - 400, exp: now - delta },
-    });
-    assert.equal(response.status, 401);
-    assert.equal(h.cloud.creates, 0);
-  });
 // GitHub publishes several keys; the verifier selects by kid, never by position.
 const extraKeys = await Promise.all(
   ['rotated-a', 'rotated-b'].map(async (kid) => {

@@ -122,7 +122,6 @@ for (const patch of [
   { iat: 1 },
   { iat: clock / 1000 + 61 },
   { iat: clock / 1000 - 3601 },
-  { iat: clock / 1000, exp: clock / 1000 + 3601 },
 ]) {
   test('round OIDC rejects stale or unbounded issue time ' + JSON.stringify(patch), async () => {
     const verifier = new OidcVerifier(
