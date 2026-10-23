@@ -16,7 +16,7 @@ RC_NEGCTL_SUBMITTED run=linux-rc-1 host=0x19
 kf3: RC Translated host 0x19 guest chid 0x5 engine 0x9 Xid 32 — channel in error
 kf3: RC_TRIGGERED posted: guest chid 0x5 engine 0x9 except_type 0x20 (host 0x19)
 """
-    guest = """KF_RC_PROBE_BEGIN run=linux-rc-1 mode=on chid=0x5 engine=0x9 class=0xc56f owner=17
+    guest = """KF_RC_PROBE_BEGIN run=linux-rc-1 mode=on chid=0x5 engine=0x9 class=0xc56f async_ce=1 owner=17
 KF_RC_BYSTANDER run=linux-rc-1 phase=before value=1
 KF_RC_EVENT chid=0x5 engine=0x9 xid=32 scope=0
 KF_RC_NOTIFIER run=linux-rc-1 chid=0x5 timestamp=0x1234 info32=32 info16=9 status=0xffff get=0
@@ -40,6 +40,8 @@ class GuardTests(unittest.TestCase):
         m,q,g,j=fixture();self.assertEqual(check(m,"boot\n"+q,g+"poweroff\n",j)["verdict"],"PASS")
     def test_supported_ce2_capture_accepts(self):
         m,q,g,j=fixture();q=q.replace("engine=0x9","engine=0xb").replace("engine 0x9","engine 0xb");g=g.replace("engine=0x9","engine=0xb").replace("info16=9","info16=11");self.assertEqual(check(m,q,g,j)["verdict"],"PASS")
+    def test_guest_engine_must_be_qualified_async(self): self.reject(g=fixture()[2].replace("async_ce=1", "async_ce=0"))
+    def test_missing_async_engine_qualification_rejected(self): self.reject(g=fixture()[2].replace(" async_ce=1", ""))
     def test_no_notifier_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_NOTIFIER", "NO_NOTIFIER"))
     def test_no_guest_event_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_EVENT", "NO_EVENT"))
     def test_host_post_alone_cannot_prove_guest_receipt(self): self.reject(g=fixture()[2].replace("KF_RC_EVENT", "NO_EVENT").replace("KF_RC_NOTIFIER", "NO_NOTIFIER"))
