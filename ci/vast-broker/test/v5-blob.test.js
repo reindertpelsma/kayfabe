@@ -154,7 +154,8 @@ for (const mode of [
             : {};
     const x = await harness('ok', extra);
     let t = x.token;
-    if (mode === 'wrong-run') t = t.replace('.123.', '.124.');
+    if (mode === 'wrong-run')
+      t = callbackToken(await x.h.storage.get('record:123-1'), undefined, { run: '124' });
     if (mode === 'bad-token') t = 'bad';
     if (['closed', 'expired'].includes(mode)) {
       const r = await x.h.storage.get('record:123-1');

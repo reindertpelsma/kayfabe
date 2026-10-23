@@ -11,7 +11,7 @@ env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_re
 
 Env (protocol 7, declared by `BOX_PROTOCOL` in `vast_report.py`). Required: `KF_PROTOCOL`,
 `KF_BROKER_URL` (https origin + secret path, no
-trailing slash), `KF_RUN_ID`, `KF_RUN_TOKEN` (must match the run id), `KF_NONCE` (32 hex), `KF_SHA`
+trailing slash), `KF_RUN_ID`, `KF_RUN_TOKEN` (a compact HS256 JWT; the box only checks its shape), `KF_NONCE` (32 hex), `KF_SHA`
 (40), `KF_RUNNER_NONCE` (64), `KF_REPO`, `KF_SOFT_DEADLINE` (epoch s), `KF_HEARTBEAT_SECONDS`,
 `KF_GRACE_FAIL`. Checked if present: `KF_BOOT_DEADLINE`, `KF_HARD_DEADLINE`, `KF_GRACE_PASS`,
 `KF_ACCESS_ID`, `KF_ACCESS_SECRET`. A

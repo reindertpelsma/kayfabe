@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, env, jwt, callbackToken, sha, nonce, sampleResult } from './helpers.js';
+import { timingSafeEqual } from 'node:crypto';
+import { useTimingSafeEqual } from '../src/tokens.js';
 import { createGateway, BrokerLedger } from '../src/index.js';
 // Component tests inject auth; v5-front-auth tests the real gateway.
 const worker = createGateway({ authorize: async () => {} });
@@ -97,19 +99,15 @@ for (const suffix of ['/unknown', '/cron', '//rent'])
     assert.equal(await r.text(), 'Not found');
   });
 for (const candidate of ['', 'different-' + 'z'.repeat(32)])
-  test('prefix compares through native crypto ' + candidate.length, async () => {
+  test('prefix compares through the platform timingSafeEqual ' + candidate.length, async () => {
     const h = await setup({ BROKER_PATH_PREFIX: prefix });
-    const original = crypto.subtle.verify;
     let calls = 0;
-    crypto.subtle.verify = function (...args) {
-      calls++;
-      return original.apply(this, args);
-    };
+    useTimingSafeEqual((a, b) => (calls++, timingSafeEqual(a, b)));
     try {
       await request(h, '/' + candidate + '/rent');
       assert.ok(calls >= 1);
     } finally {
-      crypto.subtle.verify = original;
+      useTimingSafeEqual(timingSafeEqual);
     }
   });
 for (const path of ['/rent', '/stop-all', '/' + prefix + '/unknown', '/' + prefix + '/cron'])

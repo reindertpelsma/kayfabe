@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { configuration } from '../src/policy.js';
-import { repoSource, helperProbe } from './repo-onstart.js';
+import { boxEnv, repoSource, helperProbe } from './repo-onstart.js';
 import { setup, env, nonce, sha, callbackToken } from './helpers.js';
 // FALSIFIERS: early result deletion; cross-run kill; ACK-only settlement;
 // reserve excludes cron; pending boots destroyed before provisioning bound.
@@ -220,7 +220,7 @@ for (const reason of ['done', 'a reason with spaces'])
     assert.equal(r.args.at(-1), 'https://broker.example/kill/123-1');
     assert.ok(r.args.includes(reason));
     assert.ok(!r.args.includes('-L'));
-    assert.ok(r.stdin.includes('Authorization: Bearer v2.123.1.'));
+    assert.ok(r.stdin.includes('Authorization: Bearer ' + boxEnv().KF_RUN_TOKEN + '"'));
     assert.ok(!r.args.join(' ').includes('v1.123.1.'));
   });
 test('V4 hard TTL survives restart with accepted progress and no result', async () => {

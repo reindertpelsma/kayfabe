@@ -4,16 +4,13 @@ import { createHmac } from 'node:crypto';
 import { createGateway } from '../src/index.js';
 import { OidcVerifier } from '../src/oidc.js';
 import { RunTokens } from '../src/tokens.js';
-import { setup, env, clock, nonce, sha, jwt, jwk } from './helpers.js';
+import { setup, env, clock, nonce, sha, jwt, jwk, callbackToken } from './helpers.js';
 
 // FALSIFIER H1: a forged/expired capability enters the DO or stale state enters its queue.
 const prefix = 'round-fixture-' + 'p'.repeat(32);
 function tokenV2(patch = {}) {
-  const r = { run: '123', attempt: '1', expiry: clock / 1000 + 120, nonce, sha, ...patch };
-  const label = 'kf-ci-' + r.run + '-' + r.attempt;
-  const message = ['v2', r.run, r.attempt, r.sha, label, r.expiry, r.nonce].join('|');
-  const tag = createHmac('sha256', env.RUN_TOKEN_SECRET).update(message).digest('base64url');
-  return ['v2', r.run, r.attempt, r.expiry, r.nonce, r.sha, tag].join('.');
+  const exp = patch.expiry ?? clock / 1000 + 120;
+  return callbackToken({ run: '123', attempt: '1', reportExpiry: exp, nonce, sha, ...patch });
 }
 async function ingress(path, token, count = 1) {
   let entries = 0;
@@ -73,8 +70,8 @@ for (const changed of ['nonce', 'sha']) {
     await h.call();
     const record = await h.storage.get('record:123-1');
     const token = await new RunTokens(env.RUN_TOKEN_SECRET).issue(record);
-    assert.ok(token.startsWith('v2.'));
-    assert.ok(token.includes('.' + record[changed] + '.'));
+    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url'));
+    assert.equal(claims[changed], record[changed]);
   });
 }
 for (const closed of ['stopped', 'closed', 'unknown']) {

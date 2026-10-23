@@ -89,8 +89,7 @@ for (const grace of ['5', '10'])
     const h = await setup({ FAIL_GRACE_MINUTES: grace });
     await h.call();
     const r = await h.storage.get('record:123-1');
-    assert.ok(r.reportExpiry * 1000 <= r.hardDeadline + 11 * 60000);
-    assert.ok(r.reportExpiry * 1000 >= r.hardDeadline);
+    assert.equal(r.reportExpiry, Math.floor(r.hardDeadline / 1000));
   });
 for (const field of ['inet_up_cost', 'inet_down_cost'])
   test('round provider query carries per GB ceiling ' + field, async () => {

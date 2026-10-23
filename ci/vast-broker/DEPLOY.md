@@ -140,8 +140,9 @@ head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'
 signing/owner secrets accept 32-256 characters and the prefix 32-128. Raw padded base64 with `+`,
 `/` or `=` refuses. An owner-authenticated availability request reports
 CONFIG_SECRET_FORMAT:<name> without the value; other callers receive a generic refusal. URL and
-prefix secrecy reduce scanning noise; OIDC, the run read, live-ledger checks and the per-run HMAC
-are the authentication. A Vast operator can read its KF_* env and callback URL; the box holds only
+prefix secrecy reduce scanning noise; OIDC, the run read, live-ledger checks and the per-run
+HS256 JWT run token (jose; signed with RUN_TOKEN_SECRET, expires at the hard limit) are the
+authentication. Owner-token and prefix comparisons use the platform's `timingSafeEqual`. A Vast operator can read its KF_* env and callback URL; the box holds only
 its own limited capability.
 
 [CODE READ: src/github.js, src/blobs.js, src/index.js] Optional Worker secret GITHUB_API_TOKEN is
@@ -250,8 +251,9 @@ start_date/labels can still prevent deletion. Keep the prepaid balance small.
 [CODE READ: docs/BOX_PROTOCOL.md, src/github.js, scripts/ci/vast_report.py] Box protocol is 7.
 Before any Vast call the Worker reads `scripts/ci/vast_report.py` at the exact tested sha and
 refuses `NOT_ELIGIBLE` unless it contains the line `BOX_PROTOCOL = "7"` (V6), so commits from
-before this round cannot burn a boot window. v1 run capabilities are rejected; disable admission
-and drain existing rentals before upgrading, and keep the ledger namespace.
+before this round cannot burn a boot window. Earlier (v1/v2) run capabilities are rejected: run
+tokens are HS256 JWTs since protocol 7. Disable admission and drain existing rentals before
+upgrading, and keep the ledger namespace.
 
 [INFERRED: unexercised infrastructure] Deploy with renting off first, deploy the reaper and confirm
 its schedule, verify owner stop and bundle metadata, then do hosted acceptance: OIDC claims, the
