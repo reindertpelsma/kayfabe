@@ -113,6 +113,14 @@ class GuestDelegation(unittest.TestCase):
         self.assertIn("SERIAL_DIAGNOSTIC_EVIDENCE", output)
         self.assertIn("QEMU_DIAGNOSTIC_EVIDENCE", output)
 
+    def test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs(self):
+        rc, output, allowed, failed, _ = self.invoke("--missing-page-fault", refused=True)
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(failed)
+        self.assertEqual(allowed, "")
+        self.assertIn("SERIAL_DIAGNOSTIC_EVIDENCE", output)
+        self.assertIn("QEMU_DIAGNOSTIC_EVIDENCE", output)
+
 
 class GuestHook(unittest.TestCase):
     def invoke(self, arm):
@@ -165,11 +173,3 @@ class GuestHook(unittest.TestCase):
 
     def test_missing_hook_keeps_real_regular_log_and_original_timeout(self):
         self.invoke("--missing-page-fault")
-
-    def test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs(self):
-        rc, output, allowed, failed, _ = self.invoke("--missing-page-fault", refused=True)
-        self.assertNotEqual(rc, 0)
-        self.assertTrue(failed)
-        self.assertEqual(allowed, "")
-        self.assertIn("SERIAL_DIAGNOSTIC_EVIDENCE", output)
-        self.assertIn("QEMU_DIAGNOSTIC_EVIDENCE", output)

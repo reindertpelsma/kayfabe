@@ -12,6 +12,26 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 SOURCE = (HERE / "vast_payload.py").read_text()
 HOOK = (HERE / "vast_payload_hooks.sh").read_text()
+GUARD = (HERE.parent / "bench/native_xid_guard.py").read_text()
+
+
+def guard_replace(old, new):
+    assert GUARD.count(old) == 1, old
+    return GUARD.replace(old, new)
+
+
+def guard_scoped(name, old, new):
+    node = next(
+        n for n in ast.parse(GUARD).body if isinstance(n, ast.FunctionDef) and n.name == name
+    )
+    lines = GUARD.splitlines(keepends=True)
+    value = "".join(lines[node.lineno - 1 : node.end_lineno])
+    assert value.count(old) == 1, (name, old)
+    return (
+        "".join(lines[: node.lineno - 1])
+        + value.replace(old, new)
+        + "".join(lines[node.end_lineno :])
+    )
 
 
 def function(name, body):
@@ -126,14 +146,33 @@ CASES = [
             "    if rc or red_line(text):",
         ),
     ),
-    ("wrong-control-va", SOURCE.replace("0xA11000000", "0xA12000000")),
+    (
+        "wrong-control-va",
+        guard_scoped(
+            "expected_defer_faults", "va = int(marker[2], 16)", "va = int(marker[2], 16) + 4096"
+        ),
+        "native_xid_guard.py",
+    ),
     ("unreadable-watch-admitted", function("watch_delta", "    return []")),
     (
         "other-page-type-admitted",
-        replace(r're.search(r"\bFAULT_PDE\b", line)', r're.search(r"\bFAULT_(?:PDE|PTE)\b", line)'),
+        guard_replace(
+            "Counter(actual) != Counter(expected)",
+            "Counter(x[:3]+x[4:] for x in actual) != Counter(x[:3]+x[4:] for x in expected)",
+        ),
+        "native_xid_guard.py",
     ),
-    ("non-ce-client-admitted", replace("            and client\n", "")),
-    ("wrong-arm-admitted", replace('arm != "--missing-page-fault" or ', "")),
+    (
+        "non-ce-client-admitted",
+        guard_replace(
+            'return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None', "return True"
+        ),
+        "native_xid_guard.py",
+    ),
+    (
+        "wrong-arm-admitted",
+        replace("            return not delta", '            arm = "--defer-liveness"'),
+    ),
     ("xid-refusal-status-forged", replace("    return 0 if ok else 6", "    return 0")),
     (
         "arm-watch-not-installed",
@@ -144,8 +183,120 @@ CASES = [
     ),
 ]
 
-COLLECT = """import io,json,unittest
+CASES += [
+    ("diagnostics-not-posted", replace("    arm_diagnostic(arm, text, rc, ok)", "    pass")),
+    ("diagnostics-head-lost", replace("raw[:16384]", "b''")),
+    ("diagnostics-tail-lost", replace("raw[-16384:]", "b''")),
+    ("diagnostics-unbounded", replace("if len(raw) > 32768:", "if False:")),
+    ("diagnostics-no-fault-reserve", replace("1048576 - (65536 if admitted else 0)", "1048576")),
+    ("failed-arm-row-lost", replace("            append_arm_failure(result)", "            pass")),
+    (
+        "guest-supervisor-bypassed",
+        replace(
+            "result = xid_guard.supervise_guest(binary, argv, receipt, revision, root, serial, qlog)",
+            "result = 0",
+        ),
+    ),
+    (
+        "guest-refusal-status-forged",
+        scoped("guest_command", "    rc = 6", "    rc = 0"),
+    ),
+    (
+        "guest-allowed-records-lost",
+        scoped("guest_command", 'approved.write(json.dumps(xid_record_key(line)) + "\\n")', "pass"),
+    ),
+    (
+        "native-source-channel-ignored",
+        guard_replace(
+            "Counter(actual) != Counter(expected)",
+            "Counter(x[:1]+x[2:] for x in actual) != Counter(x[:1]+x[2:] for x in expected)",
+        ),
+        "native_xid_guard.py",
+    ),
+    (
+        "native-source-va-ignored",
+        guard_replace(
+            "Counter(actual) != Counter(expected)",
+            "Counter(x[:2]+x[3:] for x in actual) != Counter(x[:2]+x[3:] for x in expected)",
+        ),
+        "native_xid_guard.py",
+    ),
+    (
+        "native-extra-record-ignored",
+        guard_replace("Counter(actual) != Counter(expected)", "set(actual) != set(expected)"),
+        "native_xid_guard.py",
+    ),
+    (
+        "native-ce-instance-hardcoded",
+        guard_replace(
+            'return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None',
+            'return name == "HUBCLIENT_CE1"',
+        ),
+        "native_xid_guard.py",
+    ),
+    (
+        "guest-ce-instance-hardcoded",
+        guard_replace(
+            "not copy_engine_client(record['client'])", "record['client'] != 'HUBCLIENT_CE1'"
+        ),
+        "native_xid_guard.py",
+    ),
+    (
+        "native-entire-proof-bypassed",
+        guard_replace("Counter(actual) != Counter(expected)", "False"),
+        "native_xid_guard.py",
+    ),
+    (
+        "native-receipt-not-created",
+        scoped("guard_command", "            retain_native_control(arm, text)", "            pass"),
+    ),
+    (
+        "native-receipt-refusal-ignored",
+        scoped("guard_command", "            ok = False", "            ok = True"),
+    ),
+    (
+        "guest-diagnostics-not-posted",
+        replace(
+            '        arm_diagnostic(arm, "\\n".join(parts), rc, admitted, mode="guest")',
+            "        pass",
+        ),
+    ),
+    (
+        "guest-stop-flag-lost",
+        scoped(
+            "guest_command",
+            '        Path(os.environ["KF_PAYLOAD_XID_FAILED"]).touch()',
+            "        pass",
+        ),
+    ),
+    (
+        "timeout-options-mistaken-for-arm",
+        HOOK.replace("--missing-page-fault|--defer-liveness)", "--missing-page-fault)").replace(
+            '[ "$kind" != raw ] || [ -n "$arm" ] || arm=$arg', '[ -n "$arm" ] || arm=$arg'
+        ),
+        "vast_payload_hooks.sh",
+    ),
+    (
+        "guest-log-descriptor-becomes-subshell-pipe",
+        HOOK.replace(
+            'qlog=$(readlink "/proc/$caller_pid/fd/1")', 'qlog=$(readlink "/proc/$BASHPID/fd/1")'
+        ),
+        "vast_payload_hooks.sh",
+    ),
+]
+
+COLLECT = """import io,json,unittest,importlib.util
+from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
+for filename,names in [
+ ('test_native_xid_guard',['NativeXidGuardTests']),
+ ('test_native_xid_route_round2',['Round2NativeRouteReplay']),
+ ('test_guest_xid_guard',['GuestGuardTests','NativeExactFiveTests']),
+ ('test_owner_copy_family_rule',['OwnerCopyFamilyRule'])]:
+ p=Path('scripts/bench/tests')/(filename+'.py')
+ spec=importlib.util.spec_from_file_location(filename,p)
+ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+ for name in names:s.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(getattr(m,name)))
 r=unittest.TextTestRunner(stream=io.StringIO()).run(s)
 print('KF_MUTATION_RESULT='+json.dumps({'tests':r.testsRun,
 'killers':[t.id() for t,_ in r.failures+r.errors]}))
@@ -173,24 +324,49 @@ def main():
             "vast_payload_hooks.sh",
             "test_vast_payload.py",
             "test_vast_payload_v7.py",
+            "test_vast_payload_admission.py",
+            "test_vast_payload_diagnostics.py",
+            "test_vast_payload_guest_guard.py",
             "vast_report.py",
         ]:
             shutil.copyfile(HERE / name, ci / name)
         bench = root / "scripts/bench"
         bench.mkdir()
         shutil.copyfile(HERE.parent / "bench/host_xid_watch.sh", bench / "host_xid_watch.sh")
+        shutil.copyfile(HERE.parent / "bench/native_xid_guard.py", bench / "native_xid_guard.py")
+        (bench / "tests").mkdir()
+        for name in (
+            "test_native_xid_guard.py",
+            "test_native_xid_route_round2.py",
+            "test_guest_xid_guard.py",
+            "test_owner_copy_family_rule.py",
+        ):
+            shutil.copyfile(HERE.parent / "bench/tests" / name, bench / "tests" / name)
+        for name in ("sweep_ada_20261018", "sweep_dies_20261018", "sweep_windows_20261021"):
+            shutil.copytree(HERE.parents[1] / "traces" / name, root / "traces" / name)
         baseline = run(root)
         assert not baseline["killers"], baseline
-        for name, source in CASES:
-            assert source != SOURCE, name
-            ast.parse(source)
-            (ci / "vast_payload.py").write_text(source)
+        for case in CASES:
+            name, source = case[:2]
+            shared = len(case) == 3 and case[2] == "native_xid_guard.py"
+            shell = len(case) == 3 and case[2] == "vast_payload_hooks.sh"
+            assert source != (GUARD if shared else HOOK if shell else SOURCE), name
+            if not shell:
+                ast.parse(source)
+            (ci / "vast_payload.py").write_text(SOURCE)
+            (ci / "vast_payload_hooks.sh").write_text(HOOK)
+            (bench / "native_xid_guard.py").write_text(GUARD)
+            target = (
+                bench / case[2] if shared else ci / case[2] if shell else ci / "vast_payload.py"
+            )
+            target.write_text(source)
             result = run(root)
             killers = sorted(set(result["killers"]))
             assert len(killers) >= 2, (name, killers)
             rows.append({"mutant": name, "killers": killers, "count": len(killers)})
             print(name + ": " + str(len(killers)) + " killers", file=sys.stderr, flush=True)
         (ci / "vast_payload.py").write_text(SOURCE)
+        (bench / "native_xid_guard.py").write_text(GUARD)
         (ci / "vast_payload_hooks.sh").write_text(
             '#!/bin/bash\ntimeout() { command timeout "$@"; }\n'
         )

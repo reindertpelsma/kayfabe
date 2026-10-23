@@ -1,0 +1,12 @@
+{
+  "run": "v9-xid-kvm-20261023",
+  "authorised_leases": 1,
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "independent_reaper_minutes": 150,
+  "hypothesis": "One shared exact-source matcher admits the native/guest intentional controls and no other new Xid; the approved checkout completes raw30,thin30,census,fatCUDA to a bound verdict, with bounded callback per-arm diagnostics even on refusal.",
+  "falsifier": "A genuine approved replay fails, altered/extra fault is admitted, a later stage runs after refusal, new receipt loses kernel history, required diagnostics disappear, or the real pipeline lacks a bound verdict. Kayfabe-side failures are findings.",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "prior_v8_exact_fault_journal_available": false,
+  "no_overlay_or_source_restart": true
+}

@@ -155,8 +155,8 @@ class PayloadTests(unittest.TestCase):
     def test_progress_text_is_never_a_verdict(self):
         self.assertFalse(self.m.red_line("a discussion of FAIL and PASS"))
 
-    def test_xid_named_missing_page_control_allowed(self):
-        self.assertTrue(self.m.xid_ok(watch(XID, 0, 1), 6, "--missing-page-fault", MARK))
+    def test_missing_page_marker_without_channel_and_recovery_refuses(self):
+        self.assertFalse(self.m.xid_ok(watch(XID, 0, 1), 6, "--missing-page-fault", MARK))
 
     def test_xid_positive_arm_cannot_borrow_control(self):
         self.assertFalse(self.m.xid_ok(watch(XID, 0, 1), 6, "--timer", MARK))

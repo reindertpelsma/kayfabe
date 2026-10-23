@@ -355,7 +355,9 @@ class V7Tests(unittest.TestCase):
             ), patch.object(
                 self.m, "hardware", side_effect=[initial_hardware or hardware, hardware]
             ), patch.object(
-                self.m, "bounded_text", side_effect=lambda p: original_bounded_text(mapped(p))
+                self.m,
+                "bounded_text",
+                side_effect=lambda p, *args: original_bounded_text(mapped(p), *args),
             ), patch.object(
                 self.m.shutil, "copyfile"
             ), patch.object(
@@ -490,8 +492,8 @@ class V7Tests(unittest.TestCase):
             )
             return p.returncode, (root / "failed").exists(), (root / "allowed").exists()
 
-    def test_real_hook_accepts_only_marked_raw_fault(self):
-        self.assertEqual(self._hook_fixture("--missing-page-fault", XID), (0, False, True))
+    def test_real_hook_refuses_marker_without_exact_source_proof(self):
+        self.assertEqual(self._hook_fixture("--missing-page-fault", XID), (6, True, False))
 
     def test_real_hook_refuses_other_raw_arm(self):
         rc, failed, allowed = self._hook_fixture("--timer", XID)

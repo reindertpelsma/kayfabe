@@ -52,13 +52,10 @@ def channel_before(text, end):
     return int(hits[-1])
 
 
-def expected_faults(defer_log, missing_log):
+def expected_defer_faults(defer_log):
     for line in ("DEFER_PRIME_FAULTS=3/3", "DEFER_RIGCTL=PASS", "DEFER_NEGCTL=PASS", "RUNG_defer_liveness=PASS"):
         if line not in defer_log.splitlines():
             raise GuardRefused("native defer positive-control proof missing")
-    for line in ("RUNGCTL_missing_page=PASS", "RUNG_missing_page=PASS"):
-        if line not in missing_log.splitlines():
-            raise GuardRefused("native missing-page positive-control proof missing")
     result = []
     markers = list(re.finditer(r"^FAULT_MARK=defer_liveness_prime arm=(\S+) va=(0x[0-9a-f]+)", defer_log, re.M))
     if len(markers) != 3:
@@ -77,6 +74,14 @@ def expected_faults(defer_log, missing_log):
             if marker[1] != "DEFER(the-question)" or "DL rescue copy     = Live" not in tail:
                 raise GuardRefused("unrecovered/unexpected test-channel fault")
             result.append((31, channel_before(tail, test.start()), va, "FAULT_PTE", "ACCESS_TYPE_VIRT_READ", "CE0", COPY_ENGINE_CLIENT, "kayfabe-rm-ladd"))
+    return result
+
+
+def expected_missing_faults(missing_log):
+    for line in ("RUNGCTL_missing_page=PASS", "RUNG_missing_page=PASS"):
+        if line not in missing_log.splitlines():
+            raise GuardRefused("native missing-page positive-control proof missing")
+    result = []
     markers = list(re.finditer(r"^FAULT_MARK=victim_release va=(0x[0-9a-f]+)", missing_log, re.M))
     if len(markers) != 1 or "bystander before = Landed" not in missing_log or "bystander after  = Landed" not in missing_log:
         raise GuardRefused("missing-page marker/bystander proof absent")
@@ -88,10 +93,35 @@ def expected_faults(defer_log, missing_log):
     return result
 
 
+
+def expected_faults(defer_log, missing_log):
+    return expected_defer_faults(defer_log) + expected_missing_faults(missing_log)
+
+
 def approve_native(journal, defer_log, missing_log):
     expected = expected_faults(defer_log, missing_log)
     if len(expected) != 5:
         raise GuardRefused('approved native baseline requires exactly five source faults')
+    return approve_native_records(journal, expected)
+
+
+def approve_native_arm(journal, arm, source):
+    """Same source proof and matcher, exposed before the next native arm runs."""
+    if arm == '--defer-liveness':
+        expected = expected_defer_faults(source)
+        count = 4
+    elif arm == '--missing-page-fault':
+        expected = expected_missing_faults(source)
+        count = 1
+    else:
+        raise GuardRefused('no native negative-control admission for this arm')
+    if len(expected) != count:
+        raise GuardRefused('native arm has an incomplete source-control fault shape')
+    return approve_native_records(journal, expected)
+
+
+def approve_native_records(journal, expected):
+    """Single native matcher for complete baselines and per-arm receipts."""
     actual = []
     lines = xid_lines(journal)
     pattern = re.compile(r"NVRM: Xid \(PCI:[^)]+\): (?P<code>[0-9]+), pid=[0-9]+, name=(?P<name>[^,]+), channel (?P<channel>0x[0-9a-f]+),.*?MMU Fault: ENGINE (?P<engine>\S+) (?P<client>\S+) faulted @ (?P<va>0x[0-9a-f_]+)\. Fault is of type (?P<fault>\S+) (?P<access>\S+)$")

@@ -7,6 +7,9 @@ No provider/CI credentials or network clone machinery belongs here.
 import collections, json, os, re, select, shutil, signal, subprocess, sys, time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+import native_xid_guard as xid_guard
+
 STOP = False
 
 
@@ -156,37 +159,17 @@ def watch_delta(text, rc):
 
 
 def xid_ok(text, rc, arm, arm_output=""):
-    """V7 first version: one raw marked missing-page fault, scoped to one arm.
-    Replace only this admission function with S4's exact-channel guard when available.
-    No defer/executor or per-die allowances. Everything else fails closed.
-    """
+    """Admission delegates to the single S4 exact-source implementation."""
     try:
         delta = watch_delta(text, rc)
-        if not delta:
-            return True
-        marks = re.findall(
-            r"^FAULT_MARK=victim_release va=(0x[0-9a-fA-F_]{1,20})$", arm_output, re.M
-        )
-        if arm != "--missing-page-fault" or len(marks) != 1 or len(delta) != 1:
+        if arm not in ("--defer-liveness", "--missing-page-fault"):
+            return not delta
+        journal = "\n".join(delta)
+        if len(xid_guard.xid_lines(journal)) != len(delta):
             return False
-        if int(marks[0].replace("_", ""), 16) != 0xA11000000:
-            return False
-        line = delta[0]
-        code = re.search(r"Xid \(PCI:[^)]+\):\s*([0-9]+),", line)
-        va = re.search(r"faulted @ (0x[0-9a-fA-F_]{1,20})\b", line)
-        channel = re.search(r"\bCh [0-9a-fA-F]+\b", line)
-        client = re.search(r"\bHUBCLIENT_CE[0-9]+\b", line)
-        return bool(
-            code
-            and code[1] == "31"
-            and va
-            and int(va[1].replace("_", ""), 16) == 0xA11000000
-            and channel
-            and client
-            and re.search(r"\bFAULT_PDE\b", line)
-            and re.search(r"\bACCESS_TYPE_VIRT_WRITE\b", line)
-        )
-    except (EvidenceError, ValueError, TypeError):
+        xid_guard.approve_native_arm(journal, arm, arm_output)
+        return True
+    except (EvidenceError, xid_guard.GuardRefused, ValueError, TypeError):
         return False
 
 
@@ -347,6 +330,7 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             result["suites"].extend(error.rows)
             failure = "timeout" if rc == 124 else error.name
             result["suites"].append(row(failure, failed=1))
+            append_arm_failure(result)
             result["verdict"] = "FAIL"
             persist_result(destination, result)
             print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)
@@ -356,19 +340,179 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
     return 0
 
 
+def arm_diagnostic(arm, text, rc, admitted, mode="native"):
+    """Send a bounded head/tail through the existing reporter, even on refusal."""
+    destination = os.environ.get("KF_PAYLOAD_LOG")
+    state_path = os.environ.get("KF_PAYLOAD_DIAGNOSTIC_STATE")
+    if not destination or not state_path:
+        return
+    if not re.fullmatch(r"--[a-z0-9-]{1,40}|guest", arm) or mode not in ("native", "guest"):
+        raise EvidenceError("diagnostics")
+    path = Path(state_path)
+    state = json.loads(bounded_text(path, 65536)) if path.exists() else {"bytes": 0, "events": []}
+    if (
+        set(state) != {"bytes", "events"}
+        or type(state["bytes"]) is not int
+        or not 0 <= state["bytes"] <= 1048576
+        or not isinstance(state["events"], list)
+        or len(state["events"]) >= 128
+    ):
+        raise EvidenceError("diagnostics")
+    raw = text.encode("utf-8")
+    if len(raw) > 32768:
+        raw = raw[:16384] + b"\n[arm diagnostic truncated; head and tail retained]\n" + raw[-16384:]
+    content = raw.decode("utf-8", errors="replace")
+    frame = (
+        "KF_ARM_DIAG_BEGIN arm="
+        + arm
+        + " wrapper_rc="
+        + str(rc)
+        + " admitted="
+        + str(int(admitted))
+        + "\n"
+        + content
+        + "\nKF_ARM_DIAG_END arm="
+        + arm
+        + "\n"
+    ).encode("utf-8")
+    limit = 1048576 - (65536 if admitted else 0)
+    remaining = max(0, limit - state["bytes"])
+    frame = frame[:remaining].decode("utf-8", errors="ignore").encode("utf-8")
+    descriptor = os.open(destination, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "ab") as output:
+        output.write(frame)
+    state["bytes"] += len(frame)
+    state["events"].append({"arm": arm, "rc": rc, "admitted": bool(admitted), "mode": mode})
+    temporary = path.with_suffix(".next")
+    temporary.write_text(json.dumps(state) + "\n")
+    temporary.replace(path)
+
+
+def append_arm_failure(result):
+    path = os.environ.get("KF_PAYLOAD_DIAGNOSTIC_STATE")
+    if not path or not Path(path).is_file():
+        return
+    events = json.loads(bounded_text(path, 65536))["events"]
+    if not isinstance(events, list) or len(events) > 128:
+        raise EvidenceError("diagnostics")
+    for event in reversed(events):
+        if event.get("admitted") is False:
+            arm = event.get("arm", "")
+            if not re.fullmatch(r"--[a-z0-9-]{1,40}|guest", arm):
+                raise EvidenceError("diagnostics")
+            prefix = "guest_" if event.get("mode") == "guest" else "arm_"
+            name = prefix + arm.removeprefix("--").replace("-", "_")
+            if name not in {r["name"] for r in result["suites"]}:
+                result["suites"].append(row(name, failed=1))
+            break
+
+
+def xid_record_key(line):
+    if line.count("NVRM: Xid") != 1:
+        raise EvidenceError("host_xid")
+    return line[line.index("NVRM: Xid") :]
+
+
+def retain_native_control(arm, text):
+    directory = os.environ.get("KF_PAYLOAD_CONTROL_DIR")
+    receipt = os.environ.get("KF_PAYLOAD_NATIVE_RECEIPT")
+    if not directory or not receipt or arm not in ("--defer-liveness", "--missing-page-fault"):
+        return
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / (arm.removeprefix("--") + ".log")).write_text(text)
+    defer = directory / "defer-liveness.log"
+    missing = directory / "missing-page-fault.log"
+    if defer.is_file() and missing.is_file():
+        lines = xid_guard.approve_native(
+            xid_guard.kernel_snapshot(), bounded_text(defer), bounded_text(missing)
+        )
+        persist_result(receipt, {"approved_native_xid_lines": list(lines)})
+
+
 def guard_command(arm, log_path, rc):
     text = bounded_text(log_path)
     ok = xid_ok(text, rc, arm, text)
+    if ok:
+        try:
+            retain_native_control(arm, text)
+        except (xid_guard.GuardRefused, EvidenceError, OSError, ValueError) as error:
+            text += "\nKF_NATIVE_RECEIPT_REFUSED reason=" + str(error) + "\n"
+            ok = False
+    arm_diagnostic(arm, text, rc, ok)
     if ok:
         delta = watch_delta(text, rc)
         if delta:
             with open(os.environ["KF_PAYLOAD_XID_ALLOWED"], "a") as approved:
                 for line in delta:
-                    approved.write(json.dumps(line) + "\n")
+                    approved.write(json.dumps(xid_record_key(line)) + "\n")
     else:
         Path(os.environ["KF_PAYLOAD_XID_FAILED"]).touch()
         print("KF_XID_REFUSED arm=" + arm, flush=True)
     return 0 if ok else 6
+
+
+def guest_command(qlog, arguments):
+    """Keep the caller's timeout; S4 owns and validates the actual QEMU child."""
+    qlog = Path(qlog)
+    arm = "guest"
+    admitted = False
+    serial = None
+    error = ""
+    rc = 6
+    try:
+        binary = Path(arguments[0])
+        argv = arguments[1:]
+        arm = xid_guard.guest_launch_arm(argv)
+        serials = [
+            argv[i + 1].split("path=", 1)[1]
+            for i, arg in enumerate(argv[:-1])
+            if arg == "-chardev" and argv[i + 1].startswith("file,id=kfcon0,path=")
+        ]
+        if len(serials) != 1 or not qlog.is_file():
+            raise EvidenceError("host_xid")
+        serial = Path(serials[0])
+        root = Path(os.environ["KF_PAYLOAD_ROOT"])
+        revision = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        ).strip()
+        receipt = Path(os.environ["KF_PAYLOAD_NATIVE_RECEIPT"])
+        before = json.loads(xid_guard.bounded(receipt))
+        baseline = before.get("accepted_xid_lines", before["approved_native_xid_lines"])
+        result = xid_guard.supervise_guest(binary, argv, receipt, revision, root, serial, qlog)
+        if result != 0:
+            raise EvidenceError("host_xid")
+        state = json.loads(xid_guard.bounded(receipt))
+        accepted = state.get("accepted_xid_lines", state["approved_native_xid_lines"])
+        if accepted[: len(baseline)] != baseline:
+            raise EvidenceError("host_xid")
+        with open(os.environ["KF_PAYLOAD_XID_ALLOWED"], "a") as approved:
+            for line in accepted[len(baseline) :]:
+                approved.write(json.dumps(xid_record_key(line)) + "\n")
+        rc = 0
+        admitted = True
+    except (
+        EvidenceError,
+        xid_guard.GuardRefused,
+        OSError,
+        ValueError,
+        KeyError,
+        subprocess.SubprocessError,
+    ) as failure:
+        error = "KF_GUEST_XID_REFUSED reason=" + str(failure) + "\n"
+        Path(os.environ["KF_PAYLOAD_XID_FAILED"]).touch()
+    finally:
+        parts = [error]
+        for label, path in (("SERIAL", serial), ("QEMU", qlog)):
+            if path is not None and path.is_file():
+                with path.open("rb") as source:
+                    size = path.stat().st_size
+                    head = source.read(16384)
+                    source.seek(max(0, size - 16384))
+                    tail = source.read(16384) if size > 16384 else b""
+                parts.append(label + "\n" + (head + tail).decode("utf-8", errors="replace"))
+        arm_diagnostic(arm, "\n".join(parts), rc, admitted, mode="guest")
+    return rc
 
 
 def watched(command, root, name):
@@ -380,9 +524,9 @@ def stage_grade(root, tag, log, grade, rc):
         return grade(rc)
     text = bounded_text(log)
     try:
-        delta = watch_delta(text, rc)
+        delta = [xid_record_key(line) for line in watch_delta(text, rc)]
         allowed_path = Path(os.environ["KF_PAYLOAD_XID_ALLOWED"])
-        allowed = [json.loads(s) for s in allowed_path.read_text().splitlines()]
+        allowed = [xid_record_key(json.loads(s)) for s in allowed_path.read_text().splitlines()]
         if collections.Counter(delta) != collections.Counter(allowed):
             raise EvidenceError("host_xid")
         allowed_path.write_text("")
@@ -400,6 +544,8 @@ def main():
     global STOP
     if len(sys.argv) == 5 and sys.argv[1] == "--grade-xid":
         return guard_command(sys.argv[2], Path(sys.argv[3]), int(sys.argv[4]))
+    if len(sys.argv) > 3 and sys.argv[1] == "--guest-exec":
+        return guest_command(sys.argv[2], sys.argv[3:])
     sha = sys.argv[1] if len(sys.argv) > 1 else ""
     nonce = sys.argv[2] if len(sys.argv) > 2 else ""
     if not re.fullmatch("[0-9a-f]{40}", sha) or not re.fullmatch("[0-9a-f]{32}", nonce):
@@ -444,6 +590,13 @@ def main():
             KF_PAYLOAD_ROOT=str(root),
             KF_PAYLOAD_XID_ALLOWED=str(evidence / "xid-allowed.jsonl"),
             KF_PAYLOAD_XID_FAILED=str(evidence / "xid-failed"),
+            KF_PAYLOAD_LOG="/workspace/kf-ci-output.log",
+            KF_PAYLOAD_DIAGNOSTIC_STATE=str(evidence / "arm-diagnostics.json"),
+            KF_PAYLOAD_CONTROL_DIR=str(evidence / "native-controls"),
+            KF_PAYLOAD_NATIVE_RECEIPT=str(evidence / "native-receipt.json"),
+        )
+        Path(os.environ["KF_PAYLOAD_DIAGNOSTIC_STATE"]).write_text(
+            json.dumps({"bytes": 0, "events": []}) + "\n"
         )
         Path(os.environ["KF_PAYLOAD_XID_ALLOWED"]).write_text("")
         Path(os.environ["KF_PAYLOAD_XID_FAILED"]).unlink(missing_ok=True)
