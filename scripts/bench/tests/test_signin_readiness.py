@@ -63,3 +63,66 @@ class SigninReadinessTests(unittest.TestCase):
             return subprocess.CompletedProcess(argv, 0, 'KFWIN\\kf\n', '')
         self.assertTrue(signin.session_probe(Path('qmp.py'), 'sock', 'kf', execute=execute))
         self.assertEqual(calls, [20])
+
+
+class SigninContextTests(unittest.TestCase):
+    def context(self, wrong_box=False, wrong_digest=False):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        import readiness
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            profile = readiness.make_profile(60, 2, box_id=123, source='a' * 40)
+            (root / 'profile').write_text(json.dumps(profile))
+            stage = {'box_id': 999 if wrong_box else 123,
+                     'profile_sha256': 'bad' if wrong_digest else readiness.digest(profile),
+                     'end_monotonic': 1000}
+            (root / 'stage').write_text(json.dumps(stage))
+            env = {'WINVM_READINESS_PROFILE': str(root / 'profile'),
+                   'WINVM_READINESS_STAGE': str(root / 'stage')}
+            with patch.dict(signin.os.environ, env, clear=True):
+                return signin.readiness_context()
+
+    def test_stage_from_another_owned_box_refuses(self):
+        with self.assertRaises(ValueError):
+            self.context(wrong_box=True)
+
+    def test_stage_from_another_calibration_refuses(self):
+        with self.assertRaises(ValueError):
+            self.context(wrong_digest=True)
+
+    def test_unconfigured_context_preserves_legacy_default(self):
+        from unittest.mock import patch
+        with patch.dict(signin.os.environ, {}, clear=True):
+            self.assertEqual(signin.readiness_context(), (None, None))
+
+
+class SigninArmWiringTests(unittest.TestCase):
+    def run_arm_call(self):
+        import os
+        import tempfile
+        arm = WINDOWS.parents[0] / 'diesweep/desktop/arm.sh'
+        call = arm.read_text().split('if KF_GUEST_PW=', 1)[1].split('; then', 1)[0]
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / 'secrets').mkdir()
+            (root / 'secrets/win_password').write_text('fixture-only')
+            call = call.replace('/root/prov/', td + '/')
+            script = '''set -e
+VM=$FIXTURE
+READINESS_STAGE=owned-stage.json
+run=fixture
+readiness_step() { echo "MODE=$1 STAGE=$WINVM_READINESS_STAGE"; }
+KF_GUEST_PW=''' + call
+            env = dict(os.environ, FIXTURE=td)
+            p = subprocess.run(['bash', '-c', script], env=env,
+                               capture_output=True, text=True, timeout=5)
+            out = root / 'arm_fixture_signin.txt'
+            return out.read_text() if out.exists() else p.stdout + p.stderr
+
+    def test_signin_action_uses_single_attempt_wrapper(self):
+        self.assertIn('MODE=once', self.run_arm_call())
+
+    def test_signin_observer_receives_persisted_arm_stage(self):
+        self.assertIn('STAGE=owned-stage.json', self.run_arm_call())
