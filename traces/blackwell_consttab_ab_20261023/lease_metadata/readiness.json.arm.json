@@ -1,0 +1,1 @@
+{"box": 57324106, "probe_seconds": 56.54592699500017, "policy": {"factor": 10, "first_query": 100, "steady_query": 25, "banner_query": 100, "handshake": 202, "observer_total": 360, "verify_stage": 240, "ssh_stage": 600, "readiness_total": 900}, "readiness_end": 3850.697187582}

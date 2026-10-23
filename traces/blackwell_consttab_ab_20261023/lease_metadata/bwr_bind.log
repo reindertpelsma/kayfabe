@@ -1,0 +1,12 @@
+BIND_START source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-23T05:55:37+00:00 (bind only, no enable; not a measured init arm)
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-23T05:55:40Z] KF_GOP_SIGNED /workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi sha256=8f479f77ea53b0fb06f57f8c63270bdee50f537fcbdf476d763041cf7ccc64bc unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+[2026-10-23T05:55:40Z] detached: tag=bw580_bind, log logs/bw580_bind_run.log (stdout logs/bw580_bind_run.out)
+READINESS_CALIBRATED {"box": 57324106, "probe_seconds": 56.54592699500017, "policy": {"factor": 10, "first_query": 100, "steady_query": 25, "banner_query": 100, "handshake": 202, "observer_total": 360, "verify_stage": 240, "ssh_stage": 600, "readiness_total": 900}, "readiness_end": 3850.697187582}
+{"pid": 111874, "exe": "/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64", "sha256": "9aff3cc4688e7c417ea1100491da34d91f075e3f365cd48c1fd31efd63475424", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06"}
+[2026-10-23T05:58:10Z] START nv-extract
+[2026-10-23T05:58:45Z] NV_EXTRACTED /workspace/bw-capc-validation/cache/nv580.88/Display.Driver (2.6G)
+[2026-10-23T05:58:45Z] EXIT nv-extract rc=0
+[2026-10-23T05:59:02Z] START nv-copy
