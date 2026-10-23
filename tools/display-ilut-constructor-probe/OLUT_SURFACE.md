@@ -1,5 +1,14 @@
 # OLUT surface constructor experiment O
 
+**Configuration update, 2026-10-22 (CODE READ):** SDR processing remains opt-in
+in the [current inventory](../../docs/design/V3_FLAG_INVENTORY_20261022.md).
+This standalone constructor flag works with `KF3_DISPLAY_SDR_COLOR` **unset**;
+no `SDR_COLOR=0` is required by this arm or its runner. Do not inherit
+`KF3_DISPLAY_SDR_COLOR=1`: explicit SDR plus any constructor probe still refuses
+at realize. Leave CAPS_PROBE unset to inspect the authored constructor page;
+explicit CAPS_PROBE retains its existing class/base-limited page replacement.
+All display methods remain refused in the constructor arm.
+
 **STATUS: RESEARCH, 2026-10-05.** Default-off child of N (`9312854d`). This probe does not
 implement output LUT processing or working display initialization.
 
