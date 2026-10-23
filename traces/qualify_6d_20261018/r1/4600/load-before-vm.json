@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "evidence": "load-before-vm.json",
+  "stage": "windows-4600",
+  "time": "2026-10-22T23:50:47.776304+00:00",
+  "uptime": "01:50:47 up 13 days,  6:12,  4 users,  load average: 22.81, 11.70, 4.86",
+  "load_average": [
+    22.80615234375,
+    11.7001953125,
+    4.859375
+  ],
+  "logical_cpus": 24,
+  "host_quiet": true
+}

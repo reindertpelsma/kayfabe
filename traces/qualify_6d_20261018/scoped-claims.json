@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "3334528b19d2ad73df720944a3d597297886534c",
+  "head": "46d6c149a9228040226d8fabb4359984427ebc92",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/qualify_6d_20261018/README.md",
@@ -24,11 +24,15 @@
     "traces/qualify_6d_20261018/plan.md",
     "traces/qualify_6d_20261018/pr99-checks.json",
     "traces/qualify_6d_20261018/process-audit.json",
+    "traces/qualify_6d_20261018/r1/4600/desktop-hold-result.json",
+    "traces/qualify_6d_20261018/r1/4600/desktop-hold.jsonl",
+    "traces/qualify_6d_20261018/r1/4600/load-before-vm.json",
     "traces/qualify_6d_20261018/r1/candidate-tests-ci.json",
     "traces/qualify_6d_20261018/r1/ci-gate-excerpts.txt",
     "traces/qualify_6d_20261018/r1/ci-wait-context.json",
     "traces/qualify_6d_20261018/r1/local-not-started.json",
     "traces/qualify_6d_20261018/r1/plan.md",
+    "traces/qualify_6d_20261018/r1/sa02-positive-census.json",
     "traces/qualify_6d_20261018/r1/stage1-ci.json",
     "traces/qualify_6d_20261018/r1/stage2-hardware.json",
     "traces/qualify_6d_20261018/rustfmt.json",
@@ -38,5 +42,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-22T23:51:36.449004+00:00"
+  "time": "2026-10-23T00:02:28.220433+00:00"
 }
