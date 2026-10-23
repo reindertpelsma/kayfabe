@@ -61,7 +61,7 @@ Host actions are authored: ctxshare kind is SYNC/ASYNC decoded from validated fl
 consumed or refused by name: bits 1:0, 2, 25, 26, thread 3), hVASpace never 0, 64-subcontext cap refused by name, mode/engine/space/parent contradictions refused 0x1f before any host call, unknown ctxshare
 0x57, host failure unwinds exactly what the birth made. No flag is required to boot.
 
-## Still unknown / must be verified before this may become the default launcher
+## Still unknown / must be verified before this may become the default launcher (state of 2026-10-19, rev 0d7ba743)
 1. **Linux CUDA** (explicit single-ctxshare, probably ASYNC VEID 0x3f, 8 channels, real kernels, the SKEDCHECK05 non-default-stream case): G2 unrun. 2. **Linux Vulkan** async compute + graphics (the old Xid 69 shape) and the
    runqueue-bit theory: G3 unrun. 3. **Video lane** (legacy, expected unchanged): G4 unrun. 4. UVM lane, `broker_lane.sh` / `interactive.sh` (the act path changed): unrun. 5. Windows: only D3D11/D3D12 Steel Nomad + the
    probe were exercised; D3D12 games / Edge / GPU-P compute, driver unload/reload and S3 resume on the new shape are unrun. 6. Hop 4 (marker -> first GPU interrupt) not re-traced. 7. The VFIO gap (3900 vs 2900) remains.

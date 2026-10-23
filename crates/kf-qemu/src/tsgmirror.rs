@@ -25,10 +25,10 @@ pub const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
 pub const NV_ERR_NO_MEMORY: u32 = 0x51;
 /// `NV_ERR_OBJECT_NOT_FOUND` - a channel that names a ctxshare the link never saw allocated.
 pub const NV_ERR_OBJECT_NOT_FOUND: u32 = 0x57;
-/// Subcontexts one TSG may hold: host RM's own limit, `MAX_SUBCONTEXT_PER_GROUP = 64` (1 SYNC + 63 ASYNC, measured).
+/// Subcontexts one TSG may hold: host RM's own limit, `MAX_SUBCONTEXT_PER_GROUP = 64` (1 SYNC + 63 ASYNC; probe 00, host 595.91.07, 2026-10-18).
 pub const MAX_SUBCTX_PER_TSG: usize = 64;
 
-/// `KF3_TSG_MIRROR` - measurement class, default ON, read once. `0` restores the base behaviour.
+/// `KF3_TSG_MIRROR` - a measurement-class flag (2026-10-18), default ON, read once. `0` restores the base behaviour.
 #[must_use]
 pub fn enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();

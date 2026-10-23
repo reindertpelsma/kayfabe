@@ -1,6 +1,6 @@
 # V3 — one host TSG with real host context shares: feasibility study
 
-**STATUS: RESEARCH, 2026-10-18; IMPLEMENTATION DESIGN (section 10) LIVE, 2026-10-18, branch `claude/tsg-mirror-20261018`.** Phase A (source + repo reading) and Phase B (native, unprivileged, bare-metal probe on the
+**STATUS: RESEARCH, 2026-10-18; IMPLEMENTATION DESIGN (section 10) LIVE, 2026-10-18, branch `claude/tsg-mirror-20261018`; MERGED INTO CANDIDATE 6d OFFLINE, 2026-10-24 (section 11, branch `claude/cand6d-mirror-20261024`: GPU-free tests only, no hardware run of the merged binary yet).** Phase A (source + repo reading) and Phase B (native, unprivileged, bare-metal probe on the
 host RTX 4070 / driver 595.91.07, 72 runs, 0 Xid) are both done. Nothing in a `kf-*` crate was changed. Not merged.
 Branch `claude/tsg-subctx-feasibility-20261018` (from `integration/prod-candidate-4-20261017`). Probe:
 `scripts/bench/tsg_subctx_probe/`. Evidence summaries: `traces/tsg_subctx_probe_20261018/summaries_all_batches.txt`. Raw logs
@@ -34,7 +34,7 @@ ctxshare of a D3D12 TSG arrives after the first channel was born and scheduled, 
 (section 6). The late-joiner patch becomes unnecessary under A' (a member added to a scheduled TSG runs without its own
 schedule, 60-62, 64-66, 90) but only after the Windows gate in section 7.
 
-**The latency motivation is supported natively (MEASURED, section 4.2):** three tiny jobs on three channels that kayfabe
+**The latency motivation is supported natively (MEASURED 2026-10-18, host 595.91.07, section 4.2):** three tiny jobs on three channels that kayfabe
 puts in three host TSGs complete serially (compute-only ~60 us per extra TSG, 180 us for three; with a 3D context in the mix
 ~290 us per extra TSG, 578 us for three), in ONE host TSG with three subcontexts they complete concurrently in 6 us. That
 the same cost is what the guest sees (390 / 1213 us GPU leg) remains INFERRED: the probe has no relay and no guest.
@@ -48,7 +48,7 @@ the same cost is what the guest sees (390 / 1213 us GPU leg) remains INFERRED: t
   stores it (`kernel_channel_group_api.c:161-179`, [580]); `kchangrpInit` takes `kfifoGetDefaultRunlist(engineType)`
   (`kernel_channel_group.c:152-154`). Without MIG only GR0 is accepted of the GR types (`:212-219`).
 * A channel that names an engine type must equal the TSG's, else `NV_ERR_INVALID_ARGUMENT`
-  (`kernel_channel.c:730-742`, [580]); engine 0 inherits the TSG's (`:746`). **MEASURED** a COPY0 channel in a GR TSG: status
+  (`kernel_channel.c:730-742`, [580]); engine 0 inherits the TSG's (`:746`). **MEASURED** (2026-10-18, host 595.91.07) a COPY0 channel in a GR TSG: status
   0x1f (22). A COPY0 TSG with a COPY0 channel runs (23).
 * The runlist is finally fixed at object alloc: `chandesConstruct` ends in `kfifoRunlistSetIdByEngine` (`channel_descendant.c:242-252`),
   which refuses (`NV_ERR_INVALID_STATE`) an object whose engine has another runlist than the TSG's
@@ -67,7 +67,7 @@ the same cost is what the guest sees (390 / 1213 us GPU leg) remains INFERRED: t
 * Params `{hVASpace, flags, subctxId}`; flags 1:0 = SYNC 0 / ASYNC 1 / SPECIFIED 2 / ASYNC_PREFER_LOWER 3 (`nvos.h:3226-3245`,
   [580]=[595]). The whole 32-bit flag word is compared, any extra bit = `NV_ERR_INVALID_ARGUMENT` (`kernel_ctxshare.c:442-446`).
 * VEIDs: SYNC = fixed 0; ASYNC = highest free (grows down) falling back to 0; PREFER_LOWER = lowest free >= 1; SPECIFIED = the
-  given id (`kernel_ctxshare.c:408-441`). **MEASURED** (00_veid_rules, 00_info_ctxcount): SYNC -> 0; a second SYNC -> 0x51
+  given id (`kernel_ctxshare.c:408-441`). **MEASURED** (00_veid_rules, 00_info_ctxcount; 2026-10-18, host 595.91.07): SYNC -> 0; a second SYNC -> 0x51
   (`NV_ERR_NO_MEMORY`); ASYNC -> 0x3f, 0x3e, ...; PREFER_LOWER -> 0x80000001 (bit 31 = success, VEID 1); SPECIFIED 3 works,
   repeated 3 fails 0x51, SPECIFIED 0 after SYNC fails 0x51; **63 ASYNC + 1 SYNC = 64**, the 64th ASYNC fails 0x51.
   `NV2080_CTRL_CMD_FIFO_GET_INFO` on the AD104: `MAX_SUBCONTEXT_PER_GROUP = 64`, `MAX_LOWER_SUBCONTEXT = 64`.
@@ -90,7 +90,7 @@ the same cost is what the guest sees (390 / 1213 us GPU leg) remains INFERRED: t
   of its ctxshare (`kernel_channel.c:988-994`). TSG BIND (`NVA06C_CTRL_CMD_BIND`) binds existing members only
   (`kernel_channel_group_api.c:1209-1275`); TSG schedule walks the members present at the call (`:1065-1203`, 1.4).
 
-**1.2a Measured class/runqueue rule (firmware, not in the open code).** Table, all with the TSG schedule and the objects allocated
+**1.2a Measured class/runqueue rule (firmware, not in the open code; 2026-10-18, host 595.91.07).** Table, all with the TSG schedule and the objects allocated
 after the channels (scripts in section 4.1):
 
 | SYNC subcontext holds | ASYNC channel (runqueue 0) | ASYNC channel (runqueue 1) |
@@ -118,7 +118,7 @@ is for GR / GRCE / SW" (`kernel_fifo_gp102.c:75-119`).
 ### 1.4 Controls, privilege, scope
 
 * Export flags (generated tables, [580]): TSG schedule, BIND, SET_TIMESLICE, GET_TIMESLICE, PREEMPT, channel schedule/BIND: `NON_PRIVILEGED`; SET_INTERLEAVE_LEVEL
-  `NON_PRIVILEGED|PRIVILEGED_IF_RS_ACCESS_DISABLED` with `RS_ACCESS_DEBUG`; MAKE_REALTIME needs `RS_ACCESS_NICE`. **MEASURED as uid 1000**: SET_TIMESLICE, TSG schedule,
+  `NON_PRIVILEGED|PRIVILEGED_IF_RS_ACCESS_DISABLED` with `RS_ACCESS_DEBUG`; MAKE_REALTIME needs `RS_ACCESS_NICE`. **MEASURED as uid 1000** (2026-10-18, host 595.91.07): SET_TIMESLICE, TSG schedule,
   channel schedule, PREEMPT (bWait, with and without manual timeout), `DISABLE_CHANNELS` all succeed on a 3-subcontext TSG.
 * **MEASURED scope** (97, 98, 99, 9a, 9b): channel-level `GPFIFO_SCHEDULE(bEnable=0)` stops THAT channel only and `bEnable=1` brings it back (98);
   `DISABLE_CHANNELS` on one channel stops only that channel, `enable` restores it (99); naming every channel stops all (9a). **TSG-level `GPFIFO_SCHEDULE(bEnable=0)`
@@ -267,7 +267,7 @@ Hostile-guest rules for A' (host actions authored from validated facts, never fo
   ASYNC otherwise. The host picks the VEID; the guest's echoed `subctxId` is never forwarded to the host (the guest cannot name a VEID).
 * The host channel flags are built from an allowlist: `DENY_PHYSICAL_MODE_CE` (as now), runqueue bit 4 (guest value, 0 or 1), thread bits 29:28 only for legacy-mode
   TSGs (0 or 1, 1 only together with runqueue 1). `DELAY_CHANNEL_SCHEDULING`, `PRIVILEGED_CHANNEL`, `SKIP_SCRUBBER` and every other bit are never set.
-* Cap the number of ctxshares per guest TSG that a client may realise (the host limit is 64 VEIDs: 63 ASYNC + 1 SYNC, measured) at a kayfabe constant well
+* Cap the number of ctxshares per guest TSG that a client may realise (the host limit is 64 VEIDs: 63 ASYNC + 1 SYNC, measured 2026-10-18, host 595.91.07) at a kayfabe constant well
   below that; host `NO_MEMORY` is returned to the guest as a named error.
 * A second SYNC from the guest cannot be allocated on the host (0x51): the host ctxshare is allocated lazily at the first channel of that guest ctxshare, so a
   hostile or buggy guest meets the refusal at its channel alloc; reply with the host status, unwind (free channel, then the ctxshare if it was new, then the TSG if it was
@@ -424,9 +424,49 @@ same params as the TSG one, forced `bSkipSubmit = bSkipEnable = 0`).
 
 ### 10.7 Kill switch, counters, logs
 
-`KF3_TSG_MIRROR=0` (measurement class, default ON, read once at plane construction) restores base behaviour: shard = ctxshare handle,
+`KF3_TSG_MIRROR=0` (measurement class since 2026-10-18, default ON, read once at plane construction) restores base behaviour: shard = ctxshare handle,
 mode always LEGACY, no ctxshare, no allowlist, late-joiner call as at base, STOP/evict/preempt as at base. Counters (plain atomics,
 bounded by construction, in the `chan[...]` status line as `mirror=[...]`): host ctxshares created / freed, groups created, `mode_refused`,
 `flag_refused`, `ctx_unknown`, `cap_refused`, `latejoin_skipped`, `unwind_failed`. Logs: one `TSG-MIRROR BIRTH` line per guest TSG
 (mode, first ctxshare, kinds, guest flags and host rq bit), one `TSG-MIRROR CTX` line per host ctxshare created (guest handle, kind,
 host handle, host-returned VEID); both capped at 512 lines per process.
+
+## 11. The mirror merged into candidate 6d (2026-10-24, offline)
+
+**STATUS: LIVE, 2026-10-24.** Branch `claude/cand6d-mirror-20261024` = candidate 6d `714ec29d3` + `origin/claude/tsg-mirror-20261018` (head `c2685412e`),
+a plain merge. Nothing here was run on a GPU: the hardware record below is the mirror's own (rev `0d7ba743` = candidate 5 + the mirror, host 595.91.07) and the
+host campaign of 2026-10-23/24 on the same binary (`/root/host_campaign_20261023/REPORT.md`). The merged tree has NO hardware run. Labels as in section 0.
+
+**What the mirror does.** A guest TSG whose first channel names a context share (every Windows D3D12 device, every Vulkan device, probably CUDA) becomes ONE host
+TSG holding one REAL host `FERMI_CONTEXT_SHARE_A` per guest context share (SYNC or ASYNC, decoded from the guest's flags; the host picks the VEID), where the base
+made one host TSG per guest context share. Tiny jobs on different guest queues then run in subcontexts of one host TSG instead of being switched between host TSGs
+(section 4.2: three tiny jobs complete serially in three TSGs, concurrently in one). A guest TSG whose first channel names no context share (kernel driver, UVM, video)
+is LEGACY and unchanged, bit for bit. Mode is fixed by the first channel; a contradicting channel is refused by name (0x1f) before any host call. Host channel flags are
+built from an allowlist (belt + the runqueue bit only). STOP, evict and re-enable on an explicit group use the CHANNEL-level `GPFIFO_SCHEDULE` (`0xa06f0103`, a listed
+`HOST_CONTROLS` row); PREEMPT is one verb per host TSG; a joiner of a standing explicit group is not given an authored late-joiner schedule. Free order is channel,
+ctxshare (last member), TSG (last member). Code: `crates/kf-qemu/src/tsgmirror.rs` (pure rule, host verbs behind the `ExplicitHost` seam), glue in `chan.rs` and
+`userrelay.rs`, host verbs in `kf-host/src/channel.rs`, ctxshare facts in `kf-rm/src/chanlink.rs`. Section 10 is the design; this section changes none of it.
+
+**Default state in the merged tree: ON, and the code was NOT changed.** `tsgmirror::enabled()` is `KF3_TSG_MIRROR` unset or anything but `0`; the status line prints
+`mirror=[on ...]` or `mirror=[OFF(KF3_TSG_MIRROR=0) ...]`. `KF3_TSG_MIRROR=0` is the A/B kill switch (a measurement-class flag, never required to boot). Evidence that ON is the
+better default (MEASURED, rev `0d7ba743`, Windows 11 Steel Nomad, 3DMark Demo): 2026-10-19 ON 2876-2996 vs OFF 2469-2493 (+18 %); host campaign 2026-10-23/24 runs 5001-5008
+(interleaved ON/OFF, fresh overlay per boot) ON n=8 runs mean 2882 (range 2745-2984) vs OFF n=6 valid runs mean 2361 (range 2272-2429), ratio of means 1.22, no ON run below the best OFF run.
+Windows D3D12 tiny-job round trip DIRECT 840-851 us (base) to 262-279 us, COMPUTE 1483-1558 us to 229-239 us (2026-10-19, `traces/tsg_mirror_20261018/README.md`).
+Owner decision NOT needed on the default value; an owner decision IS open on whether to keep it ON through the three risks below before the hardware checks at the end of this section pass.
+
+**Known risks (all MEASURED on rev `0d7ba743` or unmatched, none re-run on the merged tree).**
+1. **M2, mixed load (2026-10-19, `codex/tsg-mirror-win-gates-20261019@24b122a33`):** Vulkan + 2 CUDA + NVENC H.264 together, mirror ON, run 3014: more than 111 s encode stall, TDR,
+   CUDA 999, FFmpeg 0xC0000005; each of Vulkan, CUDA and video alone PASSED. There is NO matched mirror-OFF control (n=1), so the mirror is neither convicted nor cleared; the
+   earlier OFF-side mixed load (Heaven D3D11 + GravityMark Vulkan, run 3402, mirror OFF) also failed, which says the failure class may be independent of the mirror (INFERRED).
+2. **Run 5004 (host campaign, 2026-10-23, mirror OFF, first Steel Nomad run of the boot):** host Xid 13 (SKEDCHECK03/11/14/16, channel 0x5e, class c9c0) then Xid 32, guest 153 x3 and one
+   driver unload; 1 fault in 4 OFF boots, 0 in 4 ON boots. n is too small for a rate. INFERRED only: a legacy-TSG compute-launch problem that the mirror shape avoids, or a flake.
+3. **Unrun on hardware (mirror's own README, 2026-10-19):** Linux CUDA, Linux Vulkan async compute + graphics (the old Xid 69 shape), video lane, UVM lane, `broker_lane.sh` / `interactive.sh`
+   (the act path changed), Windows driver unload/reload and S3 resume on the explicit shape, D3D12 games and Edge. `latejoin.rs` is not deleted: legacy groups still use it.
+   One defect was found only on hardware (the `0xa06f0103` row, fixed); a second class like it cannot be excluded by GPU-free tests.
+
+**Merge note.** One textual conflict, `kf-qemu/tests/channel_budget_lazy.rs` (6d: rustfmt reflow; mirror: adds `tsgmirror.rs` to the files allowed to birth a channel and a new assertion
+that only the two act files call `birth_explicit`). Both intents kept: the merged test is 6d's formatting, the three-file allowlist, and the mirror's `birth_explicit` assertion. No assertion was removed.
+
+**Hardware checks the merged binary still needs (none run):** the Linux gates (`v3_gates.sh` 9/9, `fast_suite.sh` 30/30, `broker_lane.sh`, `interactive.sh`); the CUDA ladder, `gfx_suite.sh`, `video_lane.sh`
+(mirror's G2-G4); the M2 mixed load with a matched control (mirror ON, mirror OFF, n >= 3 each, same binary); SPECviewperf, all viewsets, mirror ON and OFF (same binary, interleaved); Steel Nomad ON/OFF on the
+merged binary (the 6d changes touch lazy observe, CE birth wiring and lifecycle, which the `0d7ba743` record predates); a 15-minute Windows hold with 0 TDR and 0 host Xid.

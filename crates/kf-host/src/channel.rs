@@ -1514,7 +1514,7 @@ impl HostRm {
     }
 
     /// ★ tsg-mirror: a host `FERMI_CONTEXT_SHARE_A` (a subcontext) under the group `tsg`, in the VA
-    /// space `space` (a host VA space handle, NEVER 0: `[measured probe 42]` a ctxshare with
+    /// space `space` (a host VA space handle, NEVER 0: `[measured probe 42, host 595.91.07, 2026-10-18]` a ctxshare with
     /// `hVASpace = 0` allocates and its channel never fetches). The VEID is host RM's choice, read
     /// back from the reply; the guest cannot name one.
     ///
@@ -1546,7 +1546,7 @@ impl HostRm {
         Ok(CtxShare { handle, veid })
     }
 
-    /// Free a host context share (after its channels: `[measured probe 95]` freeing it under a live
+    /// Free a host context share (after its channels: `[measured probe 95, host 595.91.07, 2026-10-18]` freeing it under a live
     /// channel kills the channel silently).
     ///
     /// # Errors
@@ -2076,7 +2076,7 @@ impl HostRm {
     }
 
     /// ★ tsg-mirror: `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) on the CHANNEL, `bEnable = enable`.
-    /// `[measured probe 98]` with several subcontexts in one host TSG this stops (and restarts) exactly
+    /// `[measured probe 98, host 595.91.07, 2026-10-18]` with several subcontexts in one host TSG this stops (and restarts) exactly
     /// that channel, where the TSG-level verb is not a stop at all (probe 97, 9a).
     ///
     /// # Errors

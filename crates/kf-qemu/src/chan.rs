@@ -5985,7 +5985,7 @@ impl ChanPlane {
 
     /// ★ tsg-mirror (act thread): take a twin off (or put it back on) the host runlist. LEGACY groups: the
     /// base's group verb, untouched. EXPLICIT groups: the CHANNEL-level `GPFIFO_SCHEDULE` - `[measured probe
-    /// 97-9a, 98]` the TSG-level verb is not a stop, and a channel-level one stops exactly that channel while
+    /// 97-9a, 98, host 595.91.07, 2026-10-18]` the TSG-level verb is not a stop, and a channel-level one stops exactly that channel while
     /// its siblings in other subcontexts keep running.
     fn twin_schedule(
         &self,
