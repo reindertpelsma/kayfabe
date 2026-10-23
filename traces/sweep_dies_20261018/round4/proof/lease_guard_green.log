@@ -1,0 +1,27 @@
+test_above_owner_price_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_above_owner_price_refuses) ... ok
+test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) ... ok
+test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) ... ok
+test_expensive_quote_cannot_spend_stop_reserve (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_expensive_quote_cannot_spend_stop_reserve) ... ok
+test_five_dollar_credit_reserve_is_untouched (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_five_dollar_credit_reserve_is_untouched) ... ok
+test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) ... ok
+test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) ... ok
+test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) ... ok
+test_owner_price_boundary_is_inclusive (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_owner_price_boundary_is_inclusive) ... ok
+test_prior_round_spend_is_included (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_prior_round_spend_is_included) ... ok
+test_reservation_stays_below_stop_and_three_hours (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_reservation_stays_below_stop_and_three_hours) ... ok
+test_transfer_quotes_have_explicit_reservation (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_transfer_quotes_have_explicit_reservation) ... ok
+test_created_exact_id_is_registered (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_created_exact_id_is_registered) ... ok
+test_failed_create_never_registers_any_id (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_failed_create_never_registers_any_id) ... ok
+test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) ... ok
+test_guard_is_ready_before_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_guard_is_ready_before_create) ... ok
+test_missing_id_is_never_a_destroy_target (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_id_is_never_a_destroy_target) ... ok
+test_missing_ready_marker_refuses_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_ready_marker_refuses_create) ... ok
+test_real_guard_never_destroys_other_account_ids (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_real_guard_never_destroys_other_account_ids) ... ok
+test_real_guard_signals_ready_before_any_api_action (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_real_guard_signals_ready_before_any_api_action) ... ok
+test_transient_api_error_keeps_only_owned_destroy_target (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_transient_api_error_keeps_only_owned_destroy_target) ... ok
+test_transient_api_error_retries_until_absence (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_transient_api_error_retries_until_absence) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 6.666s
+
+OK

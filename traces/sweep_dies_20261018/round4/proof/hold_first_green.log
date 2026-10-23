@@ -1,0 +1,8 @@
+test_completed_first_hold_is_not_repeated (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_completed_first_hold_is_not_repeated) ... ok
+test_explicit_hold_precedes_first_application (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_explicit_hold_precedes_first_application) ... ok
+test_short_first_hold_refuses_before_app_dispatch (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_short_first_hold_refuses_before_app_dispatch) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.014s
+
+OK

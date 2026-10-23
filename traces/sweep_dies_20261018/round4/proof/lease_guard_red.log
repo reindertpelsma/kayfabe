@@ -1,0 +1,548 @@
+test_above_owner_price_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_above_owner_price_refuses) ... ERROR
+test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) ... 
+  test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='CU') ... ERROR
+  test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='IR') ... ERROR
+  test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='KP') ... ERROR
+  test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='SY') ... ERROR
+test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) ... 
+  test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='Cuba') ... ERROR
+  test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='Iran') ... ERROR
+  test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='North Korea') ... ERROR
+  test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='Syria') ... ERROR
+test_expensive_quote_cannot_spend_stop_reserve (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_expensive_quote_cannot_spend_stop_reserve) ... ERROR
+test_five_dollar_credit_reserve_is_untouched (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_five_dollar_credit_reserve_is_untouched) ... ERROR
+test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) ... 
+  test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'geolocation': ''}) ... ERROR
+  test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'dph_total': nan}) ... ERROR
+  test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'dph_total': inf}) ... ERROR
+  test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'dph_total': 0}) ... ERROR
+test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) ... 
+  test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) (changes={'spent': -1}) ... ERROR
+  test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) (changes={'minutes': 181}) ... ERROR
+  test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) (changes={'minutes': 0}) ... ERROR
+test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) ... 
+  test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) (changes={'vms_enabled': False}) ... ERROR
+  test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) (changes={'disk_space': 179}) ... ERROR
+  test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) (changes={'num_gpus': 2}) ... ERROR
+test_owner_price_boundary_is_inclusive (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_owner_price_boundary_is_inclusive) ... ERROR
+test_prior_round_spend_is_included (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_prior_round_spend_is_included) ... ERROR
+test_reservation_stays_below_stop_and_three_hours (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_reservation_stays_below_stop_and_three_hours) ... ERROR
+test_transfer_quotes_have_explicit_reservation (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_transfer_quotes_have_explicit_reservation) ... ERROR
+test_created_exact_id_is_registered (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_created_exact_id_is_registered) ... ERROR
+test_failed_create_never_registers_any_id (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_failed_create_never_registers_any_id) ... ERROR
+test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) ... 
+  test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) (plan={'intent': 'foreign', 'id': 123}) ... ERROR
+  test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) (plan={'intent': 'fixture', 'id': 0}) ... ERROR
+  test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) (plan={'intent': 'fixture', 'id': '123'}) ... ERROR
+test_guard_is_ready_before_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_guard_is_ready_before_create) ... ERROR
+test_missing_id_is_never_a_destroy_target (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_id_is_never_a_destroy_target) ... ERROR
+test_missing_ready_marker_refuses_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_ready_marker_refuses_create) ... ERROR
+
+======================================================================
+ERROR: test_above_owner_price_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_above_owner_price_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 30, in test_above_owner_price_refuses
+    policy().validate_offer(offer(dph_total=2.51))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='CU')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 35, in test_denied_country_codes_refuse
+    policy().validate_offer(offer(geolocation='region, ' + country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='IR')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 35, in test_denied_country_codes_refuse
+    policy().validate_offer(offer(geolocation='region, ' + country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='KP')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 35, in test_denied_country_codes_refuse
+    policy().validate_offer(offer(geolocation='region, ' + country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) (country='SY')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 35, in test_denied_country_codes_refuse
+    policy().validate_offer(offer(geolocation='region, ' + country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='Cuba')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 40, in test_denied_country_names_refuse
+    policy().validate_offer(offer(geolocation=country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='Iran')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 40, in test_denied_country_names_refuse
+    policy().validate_offer(offer(geolocation=country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='North Korea')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 40, in test_denied_country_names_refuse
+    policy().validate_offer(offer(geolocation=country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) (country='Syria')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 40, in test_denied_country_names_refuse
+    policy().validate_offer(offer(geolocation=country))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_expensive_quote_cannot_spend_stop_reserve (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_expensive_quote_cannot_spend_stop_reserve)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 61, in test_expensive_quote_cannot_spend_stop_reserve
+    policy().reservation(offer(dph_total=1), spent=0, credit=28.8, now=1000)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_five_dollar_credit_reserve_is_untouched (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_five_dollar_credit_reserve_is_untouched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 69, in test_five_dollar_credit_reserve_is_untouched
+    policy().reservation(offer(), spent=0, credit=5.1, now=1000)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'geolocation': ''})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 46, in test_missing_country_and_nonfinite_price_refuse
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'dph_total': nan})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 46, in test_missing_country_and_nonfinite_price_refuse
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'dph_total': inf})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 46, in test_missing_country_and_nonfinite_price_refuse
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) (changes={'dph_total': 0})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 46, in test_missing_country_and_nonfinite_price_refuse
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) (changes={'spent': -1})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 80, in test_negative_spend_and_invalid_duration_refuse
+    policy().reservation(offer(), **args)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) (changes={'minutes': 181})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 80, in test_negative_spend_and_invalid_duration_refuse
+    policy().reservation(offer(), **args)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) (changes={'minutes': 0})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 80, in test_negative_spend_and_invalid_duration_refuse
+    policy().reservation(offer(), **args)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) (changes={'vms_enabled': False})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 51, in test_non_kvm_or_small_disk_refuses
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) (changes={'disk_space': 179})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 51, in test_non_kvm_or_small_disk_refuses
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) (changes={'num_gpus': 2})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 51, in test_non_kvm_or_small_disk_refuses
+    policy().validate_offer(offer(**changes))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_owner_price_boundary_is_inclusive (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_owner_price_boundary_is_inclusive)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 26, in test_owner_price_boundary_is_inclusive
+    policy().validate_offer(offer(dph_total=2.50))
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_prior_round_spend_is_included (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_prior_round_spend_is_included)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 65, in test_prior_round_spend_is_included
+    policy().reservation(offer(), spent=2, credit=28.8, now=1000)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_reservation_stays_below_stop_and_three_hours (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_reservation_stays_below_stop_and_three_hours)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 54, in test_reservation_stays_below_stop_and_three_hours
+    plan = policy().reservation(offer(), spent=0, credit=28.8, now=1000)
+           ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_transfer_quotes_have_explicit_reservation (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_transfer_quotes_have_explicit_reservation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 72, in test_transfer_quotes_have_explicit_reservation
+    plan = policy().reservation(offer(), spent=0, credit=28.8, now=1000)
+           ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_created_exact_id_is_registered (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_created_exact_id_is_registered)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 102, in test_created_exact_id_is_registered
+    result, calls = self.execute()
+                    ~~~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 94, in execute
+    result = policy().armed_create(arm, create, save)
+             ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_failed_create_never_registers_any_id (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_failed_create_never_registers_any_id)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 113, in test_failed_create_never_registers_any_id
+    policy().armed_create(lambda: True, lambda: {'success': False}, calls.append)
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) (plan={'intent': 'foreign', 'id': 123})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 123, in test_foreign_intent_and_invalid_ids_refuse
+    policy().owned_id(plan, 'fixture')
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) (plan={'intent': 'fixture', 'id': 0})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 123, in test_foreign_intent_and_invalid_ids_refuse
+    policy().owned_id(plan, 'fixture')
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) (plan={'intent': 'fixture', 'id': '123'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 123, in test_foreign_intent_and_invalid_ids_refuse
+    policy().owned_id(plan, 'fixture')
+    ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_guard_is_ready_before_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_guard_is_ready_before_create)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 98, in test_guard_is_ready_before_create
+    _, calls = self.execute()
+               ~~~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 94, in execute
+    result = policy().armed_create(arm, create, save)
+             ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_missing_id_is_never_a_destroy_target (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_id_is_never_a_destroy_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 117, in test_missing_id_is_never_a_destroy_target
+    self.assertIsNone(policy().owned_id({'intent': 'fixture'}, 'fixture'))
+                      ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+======================================================================
+ERROR: test_missing_ready_marker_refuses_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_ready_marker_refuses_create)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 108, in test_missing_ready_marker_refuses_create
+    self.execute(False)
+    ~~~~~~~~~~~~^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 94, in execute
+    result = policy().armed_create(arm, create, save)
+             ~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 13, in policy
+    spec.loader.exec_module(module)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 755, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 892, in get_code
+  File "<frozen importlib._bootstrap_external>", line 950, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/s4-wt/scripts/bench/diesweep/lease_guard.py'
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.012s
+
+FAILED (errors=33)

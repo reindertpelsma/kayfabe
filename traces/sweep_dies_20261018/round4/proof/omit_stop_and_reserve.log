@@ -1,0 +1,44 @@
+test_above_owner_price_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_above_owner_price_refuses) ... ok
+test_denied_country_codes_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_codes_refuse) ... ok
+test_denied_country_names_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_denied_country_names_refuse) ... ok
+test_expensive_quote_cannot_spend_stop_reserve (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_expensive_quote_cannot_spend_stop_reserve) ... FAIL
+test_five_dollar_credit_reserve_is_untouched (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_five_dollar_credit_reserve_is_untouched) ... FAIL
+test_missing_country_and_nonfinite_price_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_missing_country_and_nonfinite_price_refuse) ... ok
+test_negative_spend_and_invalid_duration_refuse (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_negative_spend_and_invalid_duration_refuse) ... ok
+test_non_kvm_or_small_disk_refuses (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_non_kvm_or_small_disk_refuses) ... ok
+test_owner_price_boundary_is_inclusive (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_owner_price_boundary_is_inclusive) ... ok
+test_prior_round_spend_is_included (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_prior_round_spend_is_included) ... FAIL
+test_reservation_stays_below_stop_and_three_hours (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_reservation_stays_below_stop_and_three_hours) ... ok
+test_transfer_quotes_have_explicit_reservation (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_transfer_quotes_have_explicit_reservation) ... ok
+
+======================================================================
+FAIL: test_expensive_quote_cannot_spend_stop_reserve (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_expensive_quote_cannot_spend_stop_reserve)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 60, in test_expensive_quote_cannot_spend_stop_reserve
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_five_dollar_credit_reserve_is_untouched (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_five_dollar_credit_reserve_is_untouched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 68, in test_five_dollar_credit_reserve_is_untouched
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_prior_round_spend_is_included (scripts.bench.tests.test_round4_lease_guard.BudgetTests.test_prior_round_spend_is_included)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 64, in test_prior_round_spend_is_included
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.011s
+
+FAILED (failures=3)

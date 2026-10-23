@@ -1,0 +1,36 @@
+test_created_exact_id_is_registered (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_created_exact_id_is_registered) ... ok
+test_failed_create_never_registers_any_id (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_failed_create_never_registers_any_id) ... ok
+test_foreign_intent_and_invalid_ids_refuse (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_foreign_intent_and_invalid_ids_refuse) ... ok
+test_guard_is_ready_before_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_guard_is_ready_before_create) ... FAIL
+test_missing_id_is_never_a_destroy_target (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_id_is_never_a_destroy_target) ... ok
+test_missing_ready_marker_refuses_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_ready_marker_refuses_create) ... FAIL
+
+======================================================================
+FAIL: test_guard_is_ready_before_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_guard_is_ready_before_create)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 99, in test_guard_is_ready_before_create
+    self.assertEqual(calls[:2], ['armed', 'create'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['create', ('registered', 123)] != ['armed', 'create']
+
+First differing element 0:
+'create'
+'armed'
+
+- ['create', ('registered', 123)]
++ ['armed', 'create']
+
+======================================================================
+FAIL: test_missing_ready_marker_refuses_create (scripts.bench.tests.test_round4_lease_guard.PrearmTests.test_missing_ready_marker_refuses_create)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 107, in test_missing_ready_marker_refuses_create
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.007s
+
+FAILED (failures=2)

@@ -1,0 +1,56 @@
+test_completed_first_hold_is_not_repeated (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_completed_first_hold_is_not_repeated) ... ERROR
+test_explicit_hold_precedes_first_application (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_explicit_hold_precedes_first_application) ... ERROR
+test_short_first_hold_refuses_before_app_dispatch (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_short_first_hold_refuses_before_app_dispatch) ... ERROR
+
+======================================================================
+ERROR: test_completed_first_hold_is_not_repeated (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_completed_first_hold_is_not_repeated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_hold_first.py", line 32, in test_completed_first_hold_is_not_repeated
+    self.observe()
+    ~~~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_hold_first.py", line 23, in observe
+    return module.run_plan(SimpleNamespace(run_app=app), [{'id': 'fixture'}],
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           lambda result: None, lambda: self.calls.append('health'),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           hold, hold_first=True)
+                           ^^^^^^^^^^^^^^^^^^^^^^
+TypeError: run_plan() got an unexpected keyword argument 'hold_first'
+
+======================================================================
+ERROR: test_explicit_hold_precedes_first_application (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_explicit_hold_precedes_first_application)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_hold_first.py", line 28, in test_explicit_hold_precedes_first_application
+    self.assertEqual(self.observe(), 0)
+                     ~~~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_hold_first.py", line 23, in observe
+    return module.run_plan(SimpleNamespace(run_app=app), [{'id': 'fixture'}],
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           lambda result: None, lambda: self.calls.append('health'),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           hold, hold_first=True)
+                           ^^^^^^^^^^^^^^^^^^^^^^
+TypeError: run_plan() got an unexpected keyword argument 'hold_first'
+
+======================================================================
+ERROR: test_short_first_hold_refuses_before_app_dispatch (scripts.bench.tests.test_desktop_hold_first.HoldFirstTests.test_short_first_hold_refuses_before_app_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_hold_first.py", line 38, in test_short_first_hold_refuses_before_app_dispatch
+    self.observe(599)
+    ~~~~~~~~~~~~^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_hold_first.py", line 23, in observe
+    return module.run_plan(SimpleNamespace(run_app=app), [{'id': 'fixture'}],
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           lambda result: None, lambda: self.calls.append('health'),
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           hold, hold_first=True)
+                           ^^^^^^^^^^^^^^^^^^^^^^
+TypeError: run_plan() got an unexpected keyword argument 'hold_first'
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.025s
+
+FAILED (errors=3)

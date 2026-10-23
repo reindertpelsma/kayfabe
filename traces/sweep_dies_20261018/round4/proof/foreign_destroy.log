@@ -1,0 +1,54 @@
+test_real_guard_never_destroys_other_account_ids (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_real_guard_never_destroys_other_account_ids) ... FAIL
+test_real_guard_signals_ready_before_any_api_action (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_real_guard_signals_ready_before_any_api_action) ... FAIL
+test_transient_api_error_keeps_only_owned_destroy_target (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_transient_api_error_keeps_only_owned_destroy_target) ... FAIL
+test_transient_api_error_retries_until_absence (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_transient_api_error_retries_until_absence) ... ok
+
+======================================================================
+FAIL: test_real_guard_never_destroys_other_account_ids (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_real_guard_never_destroys_other_account_ids)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 190, in test_real_guard_never_destroys_other_account_ids
+    self.assertTrue(all('999' not in row for row in calls))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_real_guard_signals_ready_before_any_api_action (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_real_guard_signals_ready_before_any_api_action)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 184, in test_real_guard_signals_ready_before_any_api_action
+    self.assertEqual(calls[0], ['destroy', 'instance', '123', '-y'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['destroy', 'instance', '999', '-y'] != ['destroy', 'instance', '123', '-y']
+
+First differing element 2:
+'999'
+'123'
+
+- ['destroy', 'instance', '999', '-y']
+?                          ^^^
+
++ ['destroy', 'instance', '123', '-y']
+?                          ^^^
+
+
+======================================================================
+FAIL: test_transient_api_error_keeps_only_owned_destroy_target (scripts.bench.tests.test_round4_lease_guard.WatchTests.test_transient_api_error_keeps_only_owned_destroy_target)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_round4_lease_guard.py", line 200, in test_transient_api_error_keeps_only_owned_destroy_target
+    self.assertEqual([row[2] for row in calls if row[0] == 'destroy'], ['123', '123'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['999', '999'] != ['123', '123']
+
+First differing element 0:
+'999'
+'123'
+
+- ['999', '999']
++ ['123', '123']
+
+----------------------------------------------------------------------
+Ran 4 tests in 6.486s
+
+FAILED (failures=3)

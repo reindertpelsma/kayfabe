@@ -1,0 +1,65 @@
+{
+  "kind": "MEASURED",
+  "run": "round4 GPU-free mutation fixtures",
+  "utc": "2026-10-23T14:39:28.051692+00:00",
+  "mutants": [
+    {
+      "mutant": "omit_prearm",
+      "killers": 2,
+      "failing_assertions_or_subcases": 2,
+      "tests": [
+        "test_guard_is_ready_before_create",
+        "test_missing_ready_marker_refuses_create"
+      ]
+    },
+    {
+      "mutant": "omit_country",
+      "killers": 2,
+      "failing_assertions_or_subcases": 8,
+      "tests": [
+        "test_denied_country_codes_refuse",
+        "test_denied_country_names_refuse"
+      ]
+    },
+    {
+      "mutant": "omit_stop_and_reserve",
+      "killers": 3,
+      "failing_assertions_or_subcases": 3,
+      "tests": [
+        "test_expensive_quote_cannot_spend_stop_reserve",
+        "test_five_dollar_credit_reserve_is_untouched",
+        "test_prior_round_spend_is_included"
+      ]
+    },
+    {
+      "mutant": "foreign_destroy",
+      "killers": 3,
+      "failing_assertions_or_subcases": 3,
+      "tests": [
+        "test_real_guard_never_destroys_other_account_ids",
+        "test_real_guard_signals_ready_before_any_api_action",
+        "test_transient_api_error_keeps_only_owned_destroy_target"
+      ]
+    },
+    {
+      "mutant": "exit_on_transient_api",
+      "killers": 2,
+      "failing_assertions_or_subcases": 2,
+      "tests": [
+        "test_transient_api_error_keeps_only_owned_destroy_target",
+        "test_transient_api_error_retries_until_absence"
+      ]
+    },
+    {
+      "mutant": "omit_first_hold",
+      "killers": 3,
+      "failing_assertions_or_subcases": 3,
+      "tests": [
+        "test_completed_first_hold_is_not_repeated",
+        "test_explicit_hold_precedes_first_application",
+        "test_short_first_hold_refuses_before_app_dispatch"
+      ]
+    }
+  ],
+  "source_restored": true
+}

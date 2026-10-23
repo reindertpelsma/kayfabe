@@ -52,8 +52,12 @@ def budget_items(apps, end, skipped, now=lambda:datetime.datetime.now(datetime.t
         raise ObservationBudgetExhausted('lease observation/export budget exhausted')
 
 
-def run_plan(session, apps, record, health, hold):
+def run_plan(session, apps, record, health, hold, hold_first=False):
     health()
+    if hold_first:
+        if hold() < 600:
+            raise RuntimeError('incomplete stability hold')
+        health()
     failed = False
     partial = False
     try:
@@ -67,7 +71,7 @@ def run_plan(session, apps, record, health, hold):
     except ObservationBudgetExhausted:
         partial = True
         health()
-    if hold() < 600:
+    if not hold_first and hold() < 600:
         raise RuntimeError('incomplete stability hold')
     health()
     return 2 if partial else int(failed)
@@ -115,6 +119,7 @@ def main():
     p.add_argument('--manifest', required=True)
     p.add_argument('--lease', required=True)
     p.add_argument('--guest-iso', action='store_true')
+    p.add_argument('--hold-first', action='store_true')
     p.add_argument('--override-dir', default='')
     a = p.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=False)
@@ -189,7 +194,7 @@ def main():
     rc = 7
     try:
         log(f'MATRIX_START apps={len(ordered)} source={os.environ.get("S4_SOURCE", "unknown")}')
-        rc = run_plan(g, rows(), record, health, hold)
+        rc = run_plan(g, rows(), record, health, hold, hold_first=a.hold_first)
         vm.screendump(str(out / 'desktop_after.png'))
         return rc
     finally:
