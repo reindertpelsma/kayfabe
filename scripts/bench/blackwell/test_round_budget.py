@@ -54,9 +54,7 @@ class RoundBudget(unittest.TestCase):
 
     def test_teardown_has_one_minute_before_cost_stop(self):
         row = self.plan(2)
-        self.assertLessEqual(
-            row["seconds"] + 60, int((2.5 - 0.5) * 3600 / row["rate_bound"])
-        )
+        self.assertLessEqual(row["seconds"] + 60, int((2.5 - 0.5) * 3600 / row["rate_bound"]))
 
     def test_reserve_is_checked_before_any_allocation(self):
         for credit in (0, 7.99, 8, 9, 9.74):
@@ -67,6 +65,10 @@ class RoundBudget(unittest.TestCase):
         row = self.plan(credit=9.75)
         self.assertEqual(row["credit_after_reservation"], 8.0)
 
+    def test_high_price_reservation_preserves_the_same_account_reserve(self):
+        with self.assertRaises(ValueError):
+            self.plan(rate=2.5, credit=10.4)
+
     def test_invalid_rate_never_creates_a_plan(self):
         for rate in (0, -1, 2.50001, float("inf"), float("nan"), True, "0.4"):
             with self.assertRaises(ValueError):
@@ -76,6 +78,10 @@ class RoundBudget(unittest.TestCase):
         for credit in (-1, float("inf"), float("nan"), True, "28.8"):
             with self.assertRaises(ValueError):
                 self.plan(credit=credit)
+
+    def test_rate_above_owner_limit_refuses_even_with_plenty_of_credit(self):
+        with self.assertRaises(ValueError):
+            self.plan(rate=3, credit=100)
 
     def test_naive_arm_time_is_refused(self):
         with self.assertRaises(ValueError):
@@ -90,6 +96,16 @@ class RoundBudget(unittest.TestCase):
         row = self.plan()
         for minutes in (150, 151, 200):
             self.assertEqual(B.remaining(row, NOW + dt.timedelta(minutes=minutes)), 0)
+
+    def test_readiness_cannot_replace_fixed_deadline_with_a_later_one(self):
+        row = self.plan()
+        row["deadline_utc"] = (NOW + dt.timedelta(minutes=170)).isoformat()
+        with self.assertRaises(ValueError):
+            B.remaining(row, NOW)
+
+    def test_clock_before_watchdog_arm_is_refused(self):
+        with self.assertRaises(ValueError):
+            B.remaining(self.plan(), NOW - dt.timedelta(seconds=1))
 
 
 if __name__ == "__main__":
