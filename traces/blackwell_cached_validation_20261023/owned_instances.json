@@ -21,7 +21,7 @@
     "budget_cutoff_minutes": 170,
     "guard_rate": 0.5133888888888889,
     "product_head": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
-    "destroyed": false,
+    "destroyed": true,
     "authority": "owner cached-media continuation approval after57280677 closed; prefer unmeasured GB203/205/207 over repeating GB206; actual die established by own host probe; phase cap8 stop6 reserve5",
     "auto_destroy_requested_minutes": 170,
     "auto_destroy_pid": 565895,
@@ -33,6 +33,13 @@
     "budget_watch_pid_starttime": 237494965,
     "ssh_ready_utc": "2026-10-22T22:52:00.848134+00:00",
     "ssh_hostkey_fingerprint": "SHA256:d4w2+trM5QF508VdWZocqr550l5cPsomEzW21UeZlSA",
-    "observed_dph_total": 0.46199999999999997
+    "observed_dph_total": 0.46199999999999997,
+    "absence_verified_utc": "2026-10-23T00:05:16.556788+00:00",
+    "elapsed_hours_until_absence": 1.2651901616666665,
+    "runtime_cost_estimate_usd": 0.58451785469,
+    "lane_runtime_total_usd": 1.028135286387037,
+    "credit_after_observed": 35.622229970261856,
+    "auto_destroy_cancelled_after_absence": true,
+    "budget_watch_cancelled_after_absence": true
   }
 ]
