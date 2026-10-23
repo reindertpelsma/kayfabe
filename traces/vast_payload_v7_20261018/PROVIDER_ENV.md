@@ -20,9 +20,11 @@ canonical mutations are killed under PR #104's separate two-mutants-per-behavior
 and checked out exact source 28084b96cebad2a853d72171f72f8d776946b8ba. The initial unattended
 entry left no reporter or payload process and no /run/kf-ci/env. All fourteen contract names
 were present in the VM provider file and login environment; the original validator accepts
-that login environment. Initial startup output has not been recovered. Loss of the non-login
-exported environment is therefore an INFERRED explanation, not a conclusive root-cause claim.
-Its falsifier is initial startup output showing a different failure.
+that login environment. [MEASURED: 2026-10-23, run v7-kvm-20261023;
+startup_missing_contract.json] The provider-issued startup log confirms cloud-init ran the
+entrypoint and validation refused every required KF_* field as missing. This confirms the
+non-login environment failure; the earlier hypothesis would have been falsified by startup
+output showing another failure.
 
 [MEASURED: 2026-10-23, run v7-kvm-20261023; startup_recovery.json, controlled recovery at 02:00:03 UTC] The unchanged approved
 repo-side entrypoint was restarted via the VM's valid login environment on the SAME instance.
