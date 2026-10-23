@@ -3868,6 +3868,48 @@ mod tests {
             );
         }
     }
+    // ---- 2026-10-24: relay observability (`docs/design/V3_RELAY_LIFECYCLE_LOG.md`): where each line is printed
+
+    /// Each relay line has ONE print site and goes through the `kf_chan::user_log` formatting; the pump keeps no
+    /// second copy of the per-relay line, the final line is guarded by a per-relay flag, and the VM-wide tallies are
+    /// bumped once per relay event.
+    #[test]
+    fn relay_observability_lines_have_one_print_site_each() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(pump.matches("user_log::lifecycle_line(").count(), 1);
+        assert_eq!(pump.matches("user_log::bound_line(").count(), 1);
+        assert_eq!(pump.matches("fn report_final(").count(), 1);
+        assert!(
+            !pump.contains("USER_RING_LIFECYCLE {:x?} mode="),
+            "the per-relay line is formatted by kf_chan::user_log only"
+        );
+        assert_eq!(pump.matches("self.report_final(").count(), 2, "retire and exit");
+        assert!(pump.contains("std::mem::replace(&mut self.final_reported, true)"));
+        assert_eq!(pump.matches("life.relay_born()").count(), 1, "in Pump::new");
+        assert_eq!(pump.matches("life.relay_bound()").count(), 1, "in turn()");
+        assert_eq!(pump.matches("life.relay_switching()").count(), 1, "in turn()");
+        let turn = pump
+            .split("fn turn(&mut self, me: &ChanPlane")
+            .nth(1)
+            .unwrap();
+        let turn = turn.split("fn report_lifecycle_notices").next().unwrap();
+        for needle in ["relay_bound()", "relay_switching()", "take_first_switch()"] {
+            assert!(turn.contains(needle), "turn() must call {needle}");
+        }
+        // the exit pass never blocks: `try_lock` only, and it is called from the device stop
+        let relay = include_str!("userrelay.rs");
+        let exit = relay
+            .split("fn report_user_ring_exit")
+            .nth(1)
+            .unwrap()
+            .split("fn finish_user_ring_free")
+            .next()
+            .unwrap();
+        assert!(exit.contains("try_lock()") && !exit.contains(".lock()"));
+        assert!(include_str!("device.rs").contains("self.chans.report_user_ring_exit();"));
+    }
+
     // ---- PHASE 1c (review 2, mutants R and W): the two pump lines that decide whether a Window ever opens
 
     fn test_software(guest: u32) -> Software {

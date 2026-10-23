@@ -12,6 +12,7 @@ pub mod bar0trace;
 pub mod bar1phys;
 pub mod bootclean;
 pub mod broker;
+pub mod buildinfo;
 pub mod cardbudget;
 pub mod chan;
 pub mod defapi;
