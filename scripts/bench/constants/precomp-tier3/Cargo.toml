@@ -2,7 +2,7 @@
 name = "kf-precomp-tier3"
 version = "0.1.0"
 edition = "2024"
-license = "ISC"
+license = "Apache-2.0 OR GPL-2.0-or-later"
 
 [workspace]
 
