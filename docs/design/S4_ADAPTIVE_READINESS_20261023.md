@@ -21,3 +21,7 @@ MEASURED (2026-10-23, `adaptive/green.log`, `adaptive/sw2_shared_green.log`, `ad
 MEASURED (2026-10-23, `adaptive/mutants.json`, `adaptive/bundle_proof.json`): ten mutants killed by15/6/10/6/9/2/2/3/3/2 tests; source restored. Package checks verify calibration exports precede install, source-relative bind binary selection, canonical wrappers and shell syntax.
 
 INFERRED hypothesis (2026-10-23): measured readiness prevents this lane from treating a slow nested-host banner/query as driver failure. FALSIFIER before the new rental: the frozen calibrated bind still fails to reach a complete actual reply within its stage. That result remains inconclusive about the driver; only actual Windows/RPC/event observations can establish a driver outcome.
+
+MEASURED (2026-10-23, lease57296386, `traces/sweep_dies_20261018/lease_57296386/stopped_complete/arm_ampere_s4.log`): after two diagnostic query timeouts, the300s outer cleanup bound interrupted win_vm stop before its QMP quit fallback; the VM was still running. MEASURED (same lease, `stopped_complete/s4_manual_stop_receipt.json`): direct documented QMP quit succeeded and owned PID exited. CODE READ: arm cleanup now reaches an independent20s local QMP quit fallback when the owned PID remains live and the PID file still matches; final exit verification remains mandatory, with no signal kill or guest-health acceptance.
+
+MEASURED (2026-10-23, `traces/sweep_dies_20261018/adaptive/cleanup/`): tests-first4cases,2RED→4GREEN; restoring omitted fallback kills2tests; full existing desktop suite74/74PASS.

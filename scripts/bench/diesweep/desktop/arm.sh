@@ -26,6 +26,12 @@ cleanup(){
  echo OWN_VM_ALREADY_EXITED
  elif [ -f "$VM/run/qemu.pid" ] && [ "$(cat "$VM/run/qemu.pid")" = "$owned_pid" ]; then
  timeout 300 bash "$W" stop
+ # Guest SSH plus powerdown can exhaust the wrapper before win_vm.sh reaches
+ # its QMP quit. Always reach that documented fallback for this same owned VM.
+ if [ -e "/proc/$owned_pid/exe" ] && [ -f "$VM/run/qemu.pid" ] && [ "$(cat "$VM/run/qemu.pid")" = "$owned_pid" ]; then
+   echo OWN_VM_FALLBACK_QMP_QUIT
+   timeout 20 python3 scripts/bench/windows/qmp.py "$VM/run/qmp.sock" cmd quit
+ fi
  else echo OWN_VM_PID_CHANGED_STOP; rc=17; fi
  if [ -n "$owned_pid" ]; then
    for i in $(seq 1 60); do [ ! -e "/proc/$owned_pid/exe" ] && break; sleep 1; done
