@@ -1,0 +1,95 @@
+test_cuda_process_failure_stops (test_windows_observation.HostHealth.test_cuda_process_failure_stops) ... ok
+test_cuinit_failure_stops (test_windows_observation.HostHealth.test_cuinit_failure_stops) ... ok
+test_gpu_fallen_off_bus_text_stops (test_windows_observation.HostHealth.test_gpu_fallen_off_bus_text_stops) ... ok
+test_no_cuda_device_stops (test_windows_observation.HostHealth.test_no_cuda_device_stops) ... ok
+test_nvidia_smi_failure_stops (test_windows_observation.HostHealth.test_nvidia_smi_failure_stops) ... ok
+test_probe_timeout_stops (test_windows_observation.HostHealth.test_probe_timeout_stops) ... ok
+test_stock_smi_and_cuda_health_must_both_pass (test_windows_observation.HostHealth.test_stock_smi_and_cuda_health_must_both_pass) ... ok
+test_blocking_pipe_cannot_escape_the_external_deadline (test_windows_observation.KernelSnapshot.test_blocking_pipe_cannot_escape_the_external_deadline) ... ERROR
+test_kernel_pipe_has_an_external_deadline_before_read (test_windows_observation.KernelSnapshot.test_kernel_pipe_has_an_external_deadline_before_read) ... FAIL
+test_absent_permit_does_not_enable_the_mode (test_windows_observation.Observation.test_absent_permit_does_not_enable_the_mode) ... ok
+test_actual_pair_is_recorded_with_identity_intr_and_timestamps (test_windows_observation.Observation.test_actual_pair_is_recorded_with_identity_intr_and_timestamps) ... ok
+test_different_executable_stops (test_windows_observation.Observation.test_different_executable_stops) ... ok
+test_eight_records_from_the_same_pair_are_recorded (test_windows_observation.Observation.test_eight_records_from_the_same_pair_are_recorded) ... ok
+test_error_text_at_warning_priority_also_stops (test_windows_observation.Observation.test_error_text_at_warning_priority_also_stops) ... ok
+test_expired_authority_stops (test_windows_observation.Observation.test_expired_authority_stops) ... ok
+test_fallen_bus_79_stops (test_windows_observation.Observation.test_fallen_bus_79_stops) ... ok
+test_fault_before_enable_stops (test_windows_observation.Observation.test_fault_before_enable_stops) ... ok
+test_foreign_pid_beside_owned_record_stops (test_windows_observation.Observation.test_foreign_pid_beside_owned_record_stops) ... ok
+test_foreign_pid_stops (test_windows_observation.Observation.test_foreign_pid_stops) ... ok
+test_future_authority_stops (test_windows_observation.Observation.test_future_authority_stops) ... ok
+test_future_fault_stops (test_windows_observation.Observation.test_future_fault_stops) ... ok
+test_high_suffix_overflow_stops (test_windows_observation.Observation.test_high_suffix_overflow_stops) ... ok
+test_kernel_error_beside_the_allowed_pair_stops (test_windows_observation.Observation.test_kernel_error_beside_the_allowed_pair_stops) ... ok
+test_limit_cannot_be_raised_stops (test_windows_observation.Observation.test_limit_cannot_be_raised_stops) ... ok
+test_lost_kernel_history_stops (test_windows_observation.Observation.test_lost_kernel_history_stops) ... ok
+test_malformed_xid_stops (test_windows_observation.Observation.test_malformed_xid_stops) ... ok
+test_missing_timestamp_stops (test_windows_observation.Observation.test_missing_timestamp_stops) ... ok
+test_native_31_stops (test_windows_observation.Observation.test_native_31_stops) ... ok
+test_native_profile_stops (test_windows_observation.Observation.test_native_profile_stops) ... ok
+test_ninth_record_stops (test_windows_observation.Observation.test_ninth_record_stops) ... ok
+test_off_profile_stops (test_windows_observation.Observation.test_off_profile_stops) ... ok
+test_only_exact_recorded_xids_are_excluded_from_new_kernel_errors (test_windows_observation.Observation.test_only_exact_recorded_xids_are_excluded_from_new_kernel_errors) ... ok
+test_permit_is_bound_to_each_fresh_arm_and_pid_life (test_windows_observation.Observation.test_permit_is_bound_to_each_fresh_arm_and_pid_life) ... ok
+test_previous_arm_permit_does_not_enable_the_next_arm (test_windows_observation.Observation.test_previous_arm_permit_does_not_enable_the_next_arm) ... ok
+test_replaced_kernel_history_stops (test_windows_observation.Observation.test_replaced_kernel_history_stops) ... ok
+test_reused_pid_life_stops (test_windows_observation.Observation.test_reused_pid_life_stops) ... ok
+test_second_enable_stops (test_windows_observation.Observation.test_second_enable_stops) ... ok
+test_second_high_channel_stops (test_windows_observation.Observation.test_second_high_channel_stops) ... ok
+test_second_plain_channel_stops (test_windows_observation.Observation.test_second_plain_channel_stops) ... ok
+test_single_record_can_precede_the_second_half_of_the_pair (test_windows_observation.Observation.test_single_record_can_precede_the_second_half_of_the_pair) ... ok
+test_tenth_record_stops (test_windows_observation.Observation.test_tenth_record_stops) ... ok
+test_wrong_high_prefix_stops (test_windows_observation.Observation.test_wrong_high_prefix_stops) ... ok
+test_wrong_intr_stops (test_windows_observation.Observation.test_wrong_intr_stops) ... ok
+test_wrong_lease_stops (test_windows_observation.Observation.test_wrong_lease_stops) ... ok
+test_wrong_pci_stops (test_windows_observation.Observation.test_wrong_pci_stops) ... ok
+test_xid_45_stops (test_windows_observation.Observation.test_xid_45_stops) ... ok
+test_xid_61_stops (test_windows_observation.Observation.test_xid_61_stops) ... ok
+test_xid_62_stops (test_windows_observation.Observation.test_xid_62_stops) ... ok
+test_zero_intr_stops (test_windows_observation.Observation.test_zero_intr_stops) ... ok
+test_guest_exit_without_new_faults_can_reach_collection (test_windows_observation.WatcherLifecycle.test_guest_exit_without_new_faults_can_reach_collection) ... ok
+test_new_fault_after_owned_qemu_exits_is_fatal (test_windows_observation.WatcherLifecycle.test_new_fault_after_owned_qemu_exits_is_fatal) ... ok
+test_new_fault_after_pid_reuse_is_fatal (test_windows_observation.WatcherLifecycle.test_new_fault_after_pid_reuse_is_fatal) ... ok
+test_phase_gap_does_not_reset_the_ninth_record_limit (test_windows_observation.WatcherLifecycle.test_phase_gap_does_not_reset_the_ninth_record_limit) ... ok
+test_phase_gap_does_not_reset_the_tenth_record_limit (test_windows_observation.WatcherLifecycle.test_phase_gap_does_not_reset_the_tenth_record_limit) ... ok
+test_pid_reuse_without_new_faults_does_not_signal_the_replacement (test_windows_observation.WatcherLifecycle.test_pid_reuse_without_new_faults_does_not_signal_the_replacement) ... ok
+
+======================================================================
+ERROR: test_blocking_pipe_cannot_escape_the_external_deadline (test_windows_observation.KernelSnapshot.test_blocking_pipe_cannot_escape_the_external_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 296, in test_blocking_pipe_cannot_escape_the_external_deadline
+    rows, _ = self.snapshot(require_outer_deadline=True)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 287, in snapshot
+    rows = O.kernel_rows()
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/windows_observation.py", line 156, in kernel_rows
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1247, in _execute_mock_call
+    result = effect(*args, **kwargs)
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 279, in popen
+    raise RuntimeError("pipe read has no external wall bound")
+RuntimeError: pipe read has no external wall bound
+
+======================================================================
+FAIL: test_kernel_pipe_has_an_external_deadline_before_read (test_windows_observation.KernelSnapshot.test_kernel_pipe_has_an_external_deadline_before_read)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 292, in test_kernel_pipe_has_an_external_deadline_before_read
+    self.assertEqual(calls[0][0], "timeout")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'journalctl' != 'timeout'
+- journalctl
++ timeout
+
+
+----------------------------------------------------------------------
+Ran 55 tests in 0.025s
+
+FAILED (failures=1, errors=1)

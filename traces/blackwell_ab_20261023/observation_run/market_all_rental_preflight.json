@@ -1,0 +1,46 @@
+{
+  "utc": "2026-10-23T09:57:33.246394+00:00",
+  "credit_usd": 29.757424765660858,
+  "offers": [
+    {
+      "id": 43994880,
+      "machine_id": 69146,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "deverified",
+      "dph_total": 0.38805555555555554,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 64468,
+      "reliability": 0.9960254,
+      "inet_down": 1374.8,
+      "disk_space": 331.125
+    },
+    {
+      "id": 57254352,
+      "machine_id": 41012,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "deverified",
+      "dph_total": 0.5347222222222222,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 63400,
+      "reliability": 0.9911933,
+      "inet_down": 940.0,
+      "disk_space": 1440.0
+    },
+    {
+      "id": 55429765,
+      "machine_id": 152912,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "unverified",
+      "dph_total": 0.6680555555555555,
+      "cpu_cores_effective": 24.0,
+      "cpu_ram": 64473,
+      "reliability": 0.9894479,
+      "inet_down": 949.1,
+      "disk_space": 373.125
+    }
+  ],
+  "authority": "owner11:05 one verified GB202 observation lease; fixed150minutes"
+}

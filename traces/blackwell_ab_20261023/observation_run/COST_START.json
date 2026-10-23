@@ -1,0 +1,8 @@
+{
+  "phase_prior_usd": 5.148077591179074,
+  "stop_usd": 7.5,
+  "cap_usd": 8,
+  "reserve_usd": 5,
+  "duration_minutes": 150,
+  "prior_receipt": "../bfirst_run/FINAL_API_AUDIT.json"
+}

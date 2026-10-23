@@ -1,0 +1,14 @@
+{
+  "python_blackwell_tests": 228,
+  "observation_tests": 63,
+  "projection_tests": 15,
+  "protocol_tests": 7,
+  "mutation_count": 26,
+  "minimum_distinct_killers": 2,
+  "native_journal_render_smoke_lines": 5,
+  "kit_shell_syntax": "PASS",
+  "kit_python_ast": "PASS",
+  "new_code_columns": 100,
+  "default_native_phase_guards_changed": false,
+  "hardware_observation_run": "UNRUN_NO_ELIGIBLE_VERIFIED_GB202"
+}

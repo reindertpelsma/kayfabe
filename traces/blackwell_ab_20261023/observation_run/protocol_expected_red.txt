@@ -1,0 +1,76 @@
+test_baseline_safety_refusal_prevents_b1 (test_observation_protocol.Protocol.test_baseline_safety_refusal_prevents_b1) ... FAIL
+test_baseline_then_b1_uses_the_same_two_observation_cells (test_observation_protocol.Protocol.test_baseline_then_b1_uses_the_same_two_observation_cells) ... FAIL
+test_early_code0_still_holds_after_diagnostic_timeout (test_observation_protocol.Protocol.test_early_code0_still_holds_after_diagnostic_timeout) ... FAIL
+test_early_code0_still_holds_after_ssh_disconnect (test_observation_protocol.Protocol.test_early_code0_still_holds_after_ssh_disconnect) ... FAIL
+test_failed_b1_build_is_skipped (test_observation_protocol.Protocol.test_failed_b1_build_is_skipped) ... FAIL
+test_late_b1_start_is_skipped (test_observation_protocol.Protocol.test_late_b1_start_is_skipped) ... FAIL
+
+======================================================================
+FAIL: test_baseline_safety_refusal_prevents_b1 (test_observation_protocol.Protocol.test_baseline_safety_refusal_prevents_b1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_observation_protocol.py", line 42, in test_baseline_safety_refusal_prevents_b1
+    self.assertEqual(result.returncode, 7)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 7
+
+======================================================================
+FAIL: test_baseline_then_b1_uses_the_same_two_observation_cells (test_observation_protocol.Protocol.test_baseline_then_b1_uses_the_same_two_observation_cells)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_observation_protocol.py", line 28, in test_baseline_then_b1_uses_the_same_two_observation_cells
+    self.assertEqual(cells, ["CELL on_observe_b", "CELL on_observe_b1"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['CELL on_measured', 'CELL on_derived'] != ['CELL on_observe_b', 'CELL on_observe_b1']
+
+First differing element 0:
+'CELL on_measured'
+'CELL on_observe_b'
+
+- ['CELL on_measured', 'CELL on_derived']
+?           ^ ---  ^            ^  -  ^
+
++ ['CELL on_observe_b', 'CELL on_observe_b1']
+?           ^^^  + ^^            ^^^    ^^^
+
+
+======================================================================
+FAIL: test_early_code0_still_holds_after_diagnostic_timeout (test_observation_protocol.Protocol.test_early_code0_still_holds_after_diagnostic_timeout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_observation_protocol.py", line 73, in test_early_code0_still_holds_after_diagnostic_timeout
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 124 != 0 :
+
+======================================================================
+FAIL: test_early_code0_still_holds_after_ssh_disconnect (test_observation_protocol.Protocol.test_early_code0_still_holds_after_ssh_disconnect)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_observation_protocol.py", line 68, in test_early_code0_still_holds_after_ssh_disconnect
+    self.assertEqual(result.returncode, 0, result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 255 != 0 :
+
+======================================================================
+FAIL: test_failed_b1_build_is_skipped (test_observation_protocol.Protocol.test_failed_b1_build_is_skipped)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_observation_protocol.py", line 32, in test_failed_b1_build_is_skipped
+    self.assertIn("CELL on_observe_b\n", result.stdout)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CELL on_observe_b\n' not found in 'CELL on_measured\nCELL on_derived\nVALIDATION_FINAL_DONE 2026-10-23T09:35:27+00:00\n'
+
+======================================================================
+FAIL: test_late_b1_start_is_skipped (test_observation_protocol.Protocol.test_late_b1_start_is_skipped)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_observation_protocol.py", line 37, in test_late_b1_start_is_skipped
+    self.assertIn("CELL on_observe_b\n", result.stdout)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CELL on_observe_b\n' not found in 'CELL on_measured\nCELL_UNRUN_BUDGET on_derived\nVALIDATION_FINAL_DONE 2026-10-23T09:35:27+00:00\n'
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.031s
+
+FAILED (failures=6)
