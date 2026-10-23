@@ -13,7 +13,7 @@ fn reply(cmd: u32, params: &mut [u8], ops: &mut [u8]) -> Result<(), String> {
         u32::from_le_bytes(params[20..24].try_into().unwrap()) as usize * 32,
         ops.len()
     );
-    for op in ops.chunks_exact_mut(32) {
+    for op in ops.as_chunks_mut::<32>().0 {
         assert_eq!((op[0], op[1]), (0, 0), "READ32/GLOBAL only");
         for (i, byte) in op.iter().enumerate() {
             if i != 2 && !(12..16).contains(&i) {
