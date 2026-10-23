@@ -1,0 +1,12 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-23T16:46:12.299352+00:00",
+  "closed_ids": [
+    57385378,
+    57384343
+  ],
+  "conservative_estimate_usd": 1.1479520309583333,
+  "stop_usd": 2.5,
+  "cap_usd": 3,
+  "not_invoice": true
+}
