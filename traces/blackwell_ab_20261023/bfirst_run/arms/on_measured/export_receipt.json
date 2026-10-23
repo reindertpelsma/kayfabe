@@ -1,0 +1,142 @@
+{
+  "arm_on_measured_start_receipt.json": {
+    "rental_path": "/root/prov/arm_on_measured_start_receipt.json",
+    "original_bytes": 585,
+    "original_sha256": "ac471da2b626255cf2b0457af3a89d112d794653ab3cc4d4d6d718ecd39de1c9",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "ac471da2b626255cf2b0457af3a89d112d794653ab3cc4d4d6d718ecd39de1c9"
+  },
+  "arm_on_measured_process_receipt.json": {
+    "rental_path": "/root/prov/arm_on_measured_process_receipt.json",
+    "original_bytes": 1240,
+    "original_sha256": "e5ba33fd44206d1a79d57ac39b129d4c1d207708c476f81f997cd3b1c92c4250",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e5ba33fd44206d1a79d57ac39b129d4c1d207708c476f81f997cd3b1c92c4250"
+  },
+  "arm_on_measured_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_on_measured_pre_enable.txt",
+    "original_bytes": 422,
+    "original_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  "arm_on_measured_enable.txt": {
+    "rental_path": "/root/prov/arm_on_measured_enable.txt",
+    "original_bytes": 503,
+    "original_sha256": "16fd9c16e75f55f5fea7b7f0a4817caaca37302e440e0a8319cfc7e514614d60",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "d3800bb4c78cb3b5496cecfee63e06abccb6b9a8069fb35bfa88a4e47110342f"
+  },
+  "arm_on_measured_diag.txt": {
+    "rental_path": "/root/prov/arm_on_measured_diag.txt",
+    "original_bytes": 48,
+    "original_sha256": "138644feac9a90519ea062e71704f2087a623470d9f991db9110943552fec422",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "885ee5ee9e1af63b26d9152a8cd3421bc71ef38a5944b14a015e501bda0b0cf3"
+  },
+  "arm_on_measured_accepted_start.json": {
+    "rental_path": "/root/prov/arm_on_measured_accepted_start.json",
+    "original_bytes": 1327,
+    "original_sha256": "6afb5611a5f4464aeca3f8907a474a6f92962054c66f6331ea69effcb5c82197",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "6afb5611a5f4464aeca3f8907a474a6f92962054c66f6331ea69effcb5c82197"
+  },
+  "arm_on_measured.log": {
+    "rental_path": "/root/prov/arm_on_measured.log",
+    "original_bytes": 1641,
+    "original_sha256": "edf5a3b4215919ddcd4d90236ab7c427f4dafdb0b44f010cb1719a7f067a98d9",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "037cf1e7c2e99fad4966ce8fe84d3be5e377d232981f2d15b6deb4da1f707ec2"
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/on_measured/api.tsv",
+    "original_bytes": 110624,
+    "original_sha256": "edbd93f136e645ffbd03df127f9a5d4af75cfad2507b1119b56eb06a9cf70aec",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "edbd93f136e645ffbd03df127f9a5d4af75cfad2507b1119b56eb06a9cf70aec"
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/on_measured/allocations.jsonl",
+    "original_bytes": 183439,
+    "original_sha256": "67840ec51e91597950f64f08f74d6904e466992db0888623825dc4d4306f9d20",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "67840ec51e91597950f64f08f74d6904e466992db0888623825dc4d4306f9d20"
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/on_measured/allocations.receipt.json",
+    "original_bytes": 490,
+    "original_sha256": "9d265233e522770a86e9b6542c88c0d3e7c7b073fe975ae6f96864f4ed0a8847",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "9d265233e522770a86e9b6542c88c0d3e7c7b073fe975ae6f96864f4ed0a8847"
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/on_measured/summary.json",
+    "original_bytes": 36137,
+    "original_sha256": "a9d643c073277bd807a7d5808d6c9e6008f4ea23e3e52f648fb653ec415453b1",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "a9d643c073277bd807a7d5808d6c9e6008f4ea23e3e52f648fb653ec415453b1"
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/on_measured/abort_context.txt",
+    "original_bytes": 1,
+    "original_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/on_measured/kf_line_census.txt",
+    "original_bytes": 7467,
+    "original_sha256": "07714f169f89dbd4dadb15b75f054042ad1c842d552fba393f18aaf3b5caae07",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "434bf9061d601b2f69e26d638d13458f44f99c407c521cabdb760b6aa956ad5d"
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/on_measured/rpc_timing.jsonl",
+    "original_bytes": 861237,
+    "original_sha256": "13a964d922de341c4322accd2ee7bbae02f9d5ad7dc805043b9901a72c874b2f",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "13a964d922de341c4322accd2ee7bbae02f9d5ad7dc805043b9901a72c874b2f"
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/on_measured/rpc_timing.receipt.json",
+    "original_bytes": 392,
+    "original_sha256": "1c9aec46bbeab26d2215c66bd6b0adc20ca421db7a8943b61cdb4b509615cec6",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "1c9aec46bbeab26d2215c66bd6b0adc20ca421db7a8943b61cdb4b509615cec6"
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/on_measured/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/on_measured/host_kernel.log",
+    "original_bytes": 914,
+    "original_sha256": "641366e845fad45b97c60fbec45b1457115ca143d01391d222f77d521de502d2",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "641366e845fad45b97c60fbec45b1457115ca143d01391d222f77d521de502d2"
+  },
+  "early_code0.txt": {
+    "rental_path": "/root/prov/arms/on_measured/early_code0.txt",
+    "original_bytes": 135,
+    "original_sha256": "609fe072d5700888a521eb960a8f272793bead191934058a7a83946689cb8a5a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "609fe072d5700888a521eb960a8f272793bead191934058a7a83946689cb8a5a"
+  },
+  "init_observer.ready.json": {
+    "rental_path": "/root/prov/arms/on_measured/init_observer.ready.json",
+    "original_bytes": 87,
+    "original_sha256": "cf1490876f28fccf6982d73c5486c775003717d595a58cf718c01e3aadc428ea",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cf1490876f28fccf6982d73c5486c775003717d595a58cf718c01e3aadc428ea"
+  },
+  "init_observer.log": {
+    "rental_path": "/root/prov/arms/on_measured/init_observer.log",
+    "original_bytes": 74,
+    "original_sha256": "12fe1b4c1bcf067390751321c9bb38ccf80d8c6943d84ba2a3dbd05c36bd456c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "12fe1b4c1bcf067390751321c9bb38ccf80d8c6943d84ba2a3dbd05c36bd456c"
+  }
+}

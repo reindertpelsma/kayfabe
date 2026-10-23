@@ -1,0 +1,5 @@
+2026-10-23 post-live publication check
+claims: existing-debt=3141 new=814 resolved=13
+BW3 evidence diagnostics: 0
+Inherited unchanged diagnostics: 814
+Publication held; no gate/debt changes.

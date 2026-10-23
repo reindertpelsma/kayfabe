@@ -1,11 +1,13 @@
-STATUS: LIVE, 2026-10-23. BW3 takeover of lease57324106 only.
+STATUS: ANSWERED, 2026-10-23. BW3 crash-header evidence parsing and B-first validation.
 
-CODE READ: evidence parsing aborted on a zero-signature WATCHDOG public header after parsing a valid minidump. Strict header parsing and malformed transport refusal remain unchanged; the collector now records unsupported bytes without assigning a bugcheck. No safety/Xid policy, guest flag, product binary or timer changes.
+CODE READ: commit `5e3f448c1` makes collector-level parsing retain unsupported public headers as "unparsed header, raw bytes retained in evidence". Strict parsing and malformed transport refusal remain unchanged; no safety/Xid policy was changed.
 
-2026-10-23 Hypothesis and falsifier before replay: unsupported headers alone interrupt evidence parsing; a saved guard refusal would disprove this. MEASURED lease57324106 in collect_on_derived.log: only ValueError in dump_header.parse; no XID_STOP reported by the takeover snapshot.
+MEASURED on 2026-10-23, lease57324106: `dump_headers_on_derived.jsonl` reports arm A bugcheck0x50; `arms/on_derived/rpc_timing.jsonl` has278 canonical RPCs, ending at fourth CA7A ordinal277. The WATCHDOG header remains explicitly unparsed with raw header hex.
 
-MEASURED lease57324106 in dump_headers_on_derived.jsonl and collect_on_derived.txt: arm A minidump reports bugcheck0x50. The WATCHDOG header is unparsed, with raw bytes retained. Header times are guest times, not host observation times.
+MEASURED at commit `3d72c7097`, expected_red.txt:4 tests with3 expected errors. At commit `5e3f448c1`, green.txt/capture_green.txt show4+18 pass; reverting the fallback kills3 new tests in mutant_revert_fallback.txt.
 
-MEASURED EXPECTED RED 3d72c7097, expected_red.txt: 4 tests, 3 errors. Fixed replay green.txt: 4 pass; prior capture_green.txt: 18 pass. Mutation mutant_revert_fallback.txt: removing the fallback kills 3 tests.
+MEASURED on 2026-10-23, lease57340681: measured-page B48b027267 passed the historical fourth-CA7A boundary, continued through four0073010c controls at ordinals278–281, reached3987 canonical RPCs and actual8088/Code0. The unchanged guard then stopped on two Xid32 records with "unprovable fault/init timestamp". No10-minute hold, app validation, fresh A replay or post-fault VM boot occurred. See bfirst_run/RESULT.md and bfirst_run/REFUSAL_STATE.json.
 
-INFERRED A/B falsifier, stated before B: A should reproduce fourth-CA7A/0x50; B48b027267 should progress beyond it. The same fourth-CA7A/0x50 in B falsifies measured-page sufficiency. If A does not reproduce, no causal attribution. B remains unrun at this checkpoint. Deadline07:49:39UTC, unchanged latest start07:24:39UTC.
+INFERRED falsifier stated on 2026-10-23 before B: repeating fourth-CA7A/0x50 would disprove page sufficiency. That result was not observed before the safety stop; stability remains unresolved. Historical A and current B share dieGB202/host595.91.07/guest580.88 but use different leases.
+
+MEASURED on 2026-10-23: lease57324106 APIabsence07:18:51UTC and lease57340681 APIabsence08:40:20UTC were verified before cancelling their timers. Phase runtime estimate5.148077591USD; bfirst_run/COST.md records the arithmetic. Both leases are retired, with no extension or additional allocation.

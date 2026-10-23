@@ -1,0 +1,18 @@
+{
+  "id": 57324106,
+  "operation": "exact handed-over id only",
+  "timer_cancellation": [
+    {
+      "kind": "auto_destroy",
+      "pid": 1089302,
+      "verified_gone": true
+    },
+    {
+      "kind": "budget_watch",
+      "pid": 1089314,
+      "verified_gone": true
+    }
+  ],
+  "absence_verified_utc": "2026-10-23T07:18:51.364057+00:00",
+  "completed_utc": "2026-10-23T07:18:51.564862+00:00"
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "mutant": "derived_before_measured",
+    "distinct_killers": 2,
+    "status": "KILLED"
+  },
+  {
+    "mutant": "optional_derived_ignores_budget",
+    "distinct_killers": 2,
+    "status": "KILLED"
+  }
+]

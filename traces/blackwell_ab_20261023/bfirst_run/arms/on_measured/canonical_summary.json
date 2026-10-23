@@ -1,0 +1,105 @@
+{
+  "rpc_count": 3987,
+  "final_ordinal": 3986,
+  "sha256": "13a964d922de341c4322accd2ee7bbae02f9d5ad7dc805043b9901a72c874b2f",
+  "ca7a": [
+    {
+      "ordinal": 271,
+      "sequence": 0,
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0xca7a",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 273,
+      "sequence": 0,
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0xca7a",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 275,
+      "sequence": 0,
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0xca7a",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 277,
+      "sequence": 0,
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0xca7a",
+      "trace_result": "0x0"
+    }
+  ],
+  "tail": [
+    {
+      "ordinal": 3979,
+      "sequence": 0,
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0x5080",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 3980,
+      "sequence": 0,
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0xcab5",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 3981,
+      "sequence": 0,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0xa06c0103",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 3982,
+      "sequence": 0,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0xa06c0101",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 3983,
+      "sequence": 0,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x20801111",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 3984,
+      "sequence": 0,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0090010b",
+      "trace_result": "none"
+    },
+    {
+      "ordinal": 3985,
+      "sequence": 0,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x90f10106",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 3986,
+      "sequence": 0,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x20800a9a",
+      "trace_result": "none"
+    }
+  ]
+}

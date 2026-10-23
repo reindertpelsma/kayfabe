@@ -1,0 +1,9 @@
+{
+  "lease": 57340681,
+  "export_receipt_sha256": "9dba96cb91cc22b1d4bc7569f02510ba3e7429316c657acd37fcbe06a8d9230f",
+  "raw": 30,
+  "cuda": 4,
+  "gr": 15,
+  "exact_native_faults": 5,
+  "publication_deferred": true
+}
