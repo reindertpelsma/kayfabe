@@ -119,7 +119,14 @@ export function configuration(env) {
     !/^repo:[-\w.]+\/[-\w.]+:environment:[A-Za-z0-9_-]+$/.test(oidcSubject)
   )
     refuse();
+  const preferredCountries = list('PREFERRED_COUNTRIES', DEFAULTS.preferredCountries);
+  if (
+    !preferredCountries.every((x) => /^[A-Z]{2}$/.test(x)) ||
+    new Set(preferredCountries).size !== preferredCountries.length
+  )
+    refuse();
   const cfg = {
+    preferredCountries,
     repositoryId: env.REPOSITORY_GITHUB_ID,
     checkWorkflows,
     sweepWorkflow,

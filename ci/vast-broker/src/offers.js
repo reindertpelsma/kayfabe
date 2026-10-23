@@ -2,6 +2,22 @@
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
 import {gpuClass,offerPrice,offerRejections,refuse} from './policy.js';
+// Vast currently returns geolocation as "region, ISO country code". Region text
+// is discarded. Missing/odd metadata ranks last and never removes an offer.
+export function offerCountry(offer) {
+  if (
+    typeof offer.geolocation !== 'string' ||
+    offer.geolocation.length > 256 ||
+    !offer.geolocation.includes(',')
+  )
+    return 'UNKNOWN';
+  const country = offer.geolocation.split(',').at(-1).trim();
+  return /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
+}
+function countryRank(offer, cfg) {
+  const index = cfg.preferredCountries.indexOf(offer.country);
+  return index < 0 ? cfg.preferredCountries.length : index;
+}
 // One account/DO, one bounded market read per minute, shared across profiles.
 export class OfferBook {
   constructor(now) {
@@ -59,7 +75,13 @@ export class OfferBook {
           : null;
       const reasons = offerRejections(offer, cfg, { profile, median, badMachines });
       for (const reason of reasons) rejected[reason] = (rejected[reason] ?? 0) + 1;
-      if (!reasons.length) allowed.push({ ...offer, die, pricing: offerPrice(offer, cfg) });
+      if (!reasons.length)
+        allowed.push({
+          ...offer,
+          die,
+          country: offerCountry(offer),
+          pricing: offerPrice(offer, cfg),
+        });
     }
     const grouped = new Map();
     for (const offer of allowed) {
@@ -130,6 +152,7 @@ export class OfferBook {
       .sort(
         (a, b) =>
           order.indexOf(a.die) - order.indexOf(b.die) ||
+          countryRank(a, cfg) - countryRank(b, cfg) ||
           a.pricing.effective - b.pricing.effective ||
           a.id - b.id,
       );

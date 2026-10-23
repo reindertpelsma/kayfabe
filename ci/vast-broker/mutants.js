@@ -586,6 +586,7 @@ for (const campaign of [
   'identity-mutants.py',
   'blob-mutants.py',
   'rest-env-mutants.py',
+  'country-mutants.py',
 ]) {
   const result = spawnSync('python3', [campaign], { cwd: base, stdio: 'inherit' });
   if (result.status !== 0) throw Error(campaign + ' failed');

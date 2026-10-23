@@ -779,18 +779,18 @@
       "    def pairs(items):\n        result = {}\n        for key, value in items:\n            if False:\n                raise Invalid()\n            result[key] = value\n        return result\n"
     ],
     [
-      "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if (\n        not set(data) <= STATUS_KEYS\n        or data.get(\"state\") not in STATES\n        or data.get(\"verdict\") not in VERDICTS\n    ):\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n",
+      "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if (\n        not set(data) <= STATUS_KEYS | OPTIONAL_STATUS_KEYS\n        or data.get(\"state\") not in STATES\n        or data.get(\"verdict\") not in VERDICTS\n    ):\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n",
       "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if False or data.get(\"state\") not in STATES or data.get(\"verdict\") not in VERDICTS:\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n"
     ],
     [
-      "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n",
+      "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n",
       "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if False:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n"
     ]
   ],
   "r3:runner-binding": [
     [
-      "        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n        or data[\"sha\"] != ctx[\"sha\"]\n        or data[\"pr\"] != ctx[\"pr\"]\n        or type(data[\"pr\"]) not in {int, type(None)}\n    ):\n        raise Invalid()\n    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n",
-      "        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n"
+      "        return data\n    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n        or data[\"sha\"] != ctx[\"sha\"]\n        or data[\"pr\"] != ctx[\"pr\"]\n        or type(data[\"pr\"]) not in {int, type(None)}\n    ):\n        raise Invalid()\n    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n",
+      "        return data\n    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n"
     ]
   ],
   "r3:runner-log-hash": [
@@ -1149,6 +1149,10 @@
     [
       "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (\n      !r ||\n      !(await tokens.verify(bearer, r)) ||\n      r.ended !== null ||\n      r.closed ||\n      now() >= r.reportExpiry * 1000\n    )\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n",
       "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.ended !== null || r.closed || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n"
+    ],
+    [
+      "      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);",
+      "      if (!record || (box[1] !== 'hold' && !(await tokens.verify(bearer, record)))) refuse('UNAUTHORIZED', 401);"
     ]
   ],
   "v5:owner-timer-auth": [

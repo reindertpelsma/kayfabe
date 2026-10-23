@@ -68,11 +68,11 @@ for (const country of ['CA', 'GB'])
   });
 for (const [field, value] of [
   ['verified', false],
-  ['reliability2', 0.1],
+  ['reliability', 0.1],
   ['cpu_cores_effective', 1],
   ['inet_down', 1],
   ['disk_bw', 1],
-  ['has_vm', false],
+  ['vms_enabled', false],
   ['dlperf', 0],
   ['dph_total', 2],
   ['driver_version', '1.0'],
@@ -113,4 +113,18 @@ else:raise AssertionError('hostile country accepted')
       { input: JSON.stringify(data), encoding: 'utf8' },
     );
     assert.equal(p.status, 0, p.stderr);
+  });
+for (const geolocation of [undefined, { country: 'US' }, 'Region, us', 'Region, USA'])
+  test('unknown location remains eligible ' + JSON.stringify(geolocation), async () => {
+    const selected = await choose([offer(1, 'CA', { geolocation })]);
+    assert.equal(selected.id, 1);
+    assert.equal(selected.country, 'UNKNOWN');
+  });
+for (const countries of ['["US","CA"]', '["CA","US"]'])
+  test('country preference never narrows provider query ' + countries, async () => {
+    const h = await setup({ PREFERRED_COUNTRIES: countries });
+    assert.equal((await h.call()).status, 200);
+    const request = h.cloud.calls.find((c) => c.url.includes('/bundles/')).body;
+    assert.equal('geolocation' in request, false);
+    assert.equal('country' in request, false);
   });
