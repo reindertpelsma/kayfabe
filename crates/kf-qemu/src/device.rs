@@ -4004,6 +4004,10 @@ impl Device {
 /// ★ The host side of the plane, as the device serves it. P2: the register drainer's writes go to
 /// the GSP FSM; channel verbs arrive with P5 (`kf-chan`).
 impl HostOps for Device {
+    fn wake_worker(&self) {
+        let _ = self.worker_efd.signal();
+    }
+
     fn ring_host(&self, host_token: u32) {
         let _ = self.rm.doorbell(host_token);
     }

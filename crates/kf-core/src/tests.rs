@@ -50,6 +50,8 @@ struct RecordingHost {
     teardown: std::sync::Mutex<Vec<lifetime::Step>>,
 }
 impl plane::HostOps for RecordingHost {
+    fn wake_worker(&self) {}
+
     fn ring_host(&self, _t: u32) {
         self.rung.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }

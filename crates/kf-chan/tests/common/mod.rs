@@ -155,6 +155,8 @@ pub struct Host {
     pub serves: Mutex<Vec<u32>>,
 }
 impl HostOps for Host {
+    fn wake_worker(&self) {}
+
     fn ring_host(&self, _: u32) {}
     fn run_translated(&self, host_token: u32, _: u64) -> bool {
         self.serves.lock().unwrap().push(host_token);

@@ -1,5 +1,24 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-22 — F1 race-audit tests imported correctly; shared-lock timeout
+
+MEASURED: codex/audit-fixes-scan-service-20261022 imports all three race-audit
+files unchanged in tests-only EXPECTED RED commit b5a068eb6. Separate valid
+per-crate runs reach real assertion failures: core1 passed/3 failed, trap1/7,
+dbfast1/2. The original dbfast watchdog passed on master; deterministic refill
+checks supply the two actual PR-2 failures. Product remains unchanged.
+
+MEASURED: a later red check waited600s for the prescribed shared Cargo lock,
+then exited before Cargo started. F1 stopped at its own guard without retrying
+or bypassing the lock. Two added conservation checks remain unexecuted. Evidence
+and an explicitly unvalidated token-cursor proposal are in
+traces/scan_service_20261018/ on that branch. No fix, mutant success or final
+Clippy delta is claimed for item4; the baseline completed with four style
+warnings in imported audit tests still to remove. CODE READ: VA-1 and VA-4 stay
+deferred per owner; items5–7 and SA-01 remain pending. Earlier SA-02 and VA-batch
+drafts are unchanged. Nothing was merged; hardware validation is later. (recorded in commit 08cf1f7ec, 2026-10-22)
+
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event
