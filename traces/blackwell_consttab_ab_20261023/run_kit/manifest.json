@@ -43,7 +43,7 @@
     "phase_begin.py": "72ce5ac2ddd9221a97caee0f0f140bd6658fd8f861d3be13ee9e30f81c6ebe67",
     "prepare_cold580.ps1": "5f51cac6a1f8d717de70c4ebd9cc9411569f68c6ddc714d64b8e0bda4c84cb67",
     "rpc_timing.py": "be45a303b43ca56a205b016d876a8c0c2f2d57686c4b66e58ffc3c2c887600e0",
-    "start_secondary.sh": "46ecfd7e27db6b36694eb0a4295f784d89959216efdc2d71db1b704740e4f482",
+    "start_secondary.sh": "e6ecc95b2ec161a182cd5e6daae3585d5cc636a3f94b02107381c4074c1ac178",
     "test_lease_timer.py": "0e2cd1bfc77e5617076c73b44ca946222420304eebf01e31fe6c96b1e16be338",
     "upload.py": "f70c942e262675a639023bc2b2d678a51e7f3a57cc65b5fc768cdc5c17da3c52",
     "verify_stage580.ps1": "62a76988a62a6f05586e856e54b5c9dfe61838727a11f6de45fd387a5641ae3c",
