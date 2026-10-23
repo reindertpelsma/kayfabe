@@ -1,9 +1,10 @@
 # Owner deployment and independent cleanup
 
-[CODE READ: wrangler.toml, deployment.json, src/index.js] The owner/controller deploys; no round
+[CODE READ: wrangler.toml, deployment.json, deploy.mjs] The owner/controller deploys; no round
 performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
-`main=dist/worker.js` and `no_bundle=true` upload the reviewed single-file module. No Cloudflare
-token belongs in GitHub.
+`main = "src/index.js"`: wrangler bundles the source with the lockfile-pinned dependencies (there
+is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equals
+`deployment.json`. No Cloudflare token belongs in GitHub.
 
 ## Authorization policy
 
@@ -51,17 +52,26 @@ Owner `stop`, `stop-all` and the box `kf-box-kill` switch remain.
 
 ## Build and test
 
-In `ci/vast-broker`, run `npm test`; from the repository root, run `node --test ci/vast-broker/test`
-(the CI form). Both run the same suite. Build with `npm run bundle` (or `node bundle.js`) and
-compare `sha256sum dist/worker.js` with `deployment.json`, `dist/deployment.json` and
-`DEPLOYED_BUNDLE_SHA256` in `wrangler.toml`. This is a candidate bundle, not proof of what is
-deployed. Preserve the SQLite LEDGER namespace and migration when updating.
+[CODE READ: package.json, package-lock.json] Install first: `npm ci --ignore-scripts` in
+`ci/vast-broker` (tests alone need `npm ci --omit=dev --ignore-scripts`: only `jose`). In
+`ci/vast-broker`, run `npm test`; from the repository root, run `node --test ci/vast-broker/test`
+(the CI form). Both run the same suite.
+`--ignore-scripts` skips the install scripts of esbuild and workerd; their platform binaries
+arrive as optional dependencies, and `npm ci` checks every tarball against the lockfile's sha512.
+
+[MEASURED 2026-10-23, wrangler 4.152.0 / esbuild 0.28.2] The reviewed bundle is wrangler's own
+output: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` writes `<dir>/index.js`
+(byte-identical across runs and checkout paths), and its SHA-256 is `bundle_sha256` in
+`deployment.json` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` (vars are not part of the
+module). `test/bundle.test.js` re-checks this when the dev dependencies are installed. After any
+change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
+the SQLite LEDGER namespace and migration when updating.
 
 ## Deploy the main Worker
 
-[CODE READ: package.json; deploy.mjs] Install Node 22+ and the pinned CLI outside the checkout:
-`npm install --prefix /tmp/kf-vast-wrangler wrangler@4.152.0`. This pins the CLI version, not the
-transitive dependency integrity; keep the owner's reviewed installation for reproducible tooling.
+[CODE READ: package-lock.json; deploy.mjs] Install Node 22+ and run `npm ci --ignore-scripts` in
+`ci/vast-broker`: the lockfile pins wrangler 4.152.0 and every transitive package by integrity
+(review F6). The helper uses `ci/vast-broker/node_modules/.bin/wrangler`.
 
 Keep public vars in a local file outside the checkout (it is never committed). Example with
 placeholders:
@@ -80,10 +90,13 @@ The helper refuses before running wrangler when: the file is inside the checkout
 symlink is followed); a line is not `KEY=VALUE`; a key repeats; a key is not a listed public var
 (secret names, `ALLOW_TEST_ISSUER`, `TEST_ISSUER`); a key is a retired `ACCESS_*` var or a
 `BOX_ACCESS_*` secret (so an old Access vars file is refused); `OWNER_GITHUB_ID` is missing,
-non-numeric or differs from `wrangler.toml`; `dist/worker.js` does not match `deployment.json`
-and `DEPLOYED_BUNDLE_SHA256`; or the wrangler at the pinned path is not 4.152.0. It then passes
-one `--var KEY:VALUE` per entry and redacts every value from wrangler's output; refusals name a
-key or line number, never a value. `WRANGLER=<path>` selects another binary of the same version.
+non-numeric or differs from `wrangler.toml`; `deployment.json` and `DEPLOYED_BUNDLE_SHA256`
+differ; the wrangler at the pinned path is not 4.152.0; or the module wrangler emits for
+`--dry-run --outdir <temp>` does not hash to `deployment.json`. It then uploads exactly that
+verified file (`wrangler deploy --no-bundle <temp>/index.js`, so wrangler does not bundle twice)
+with one `--var KEY:VALUE` per entry, runs wrangler with `WRANGLER_SEND_METRICS=false`, and
+redacts every value from wrangler's output; refusals name a key or line number, never a value.
+`WRANGLER=<path>` selects another binary of the same version (tests use a fake).
 
 [INFERRED: wrangler 4.152.0 `deploy --help`] Without `--keep-vars`, a deploy replaces dashboard
 vars with the toml plus `--var` values, so every public var must be in `wrangler.toml` or the vars
@@ -207,9 +220,9 @@ secret (a `secret put` before the first deploy would prompt to create the Worker
 
 ```sh
 cd ci/vast-reaper
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy --dry-run
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler secret put REAPER_VAST_API_KEY
+../vast-broker/node_modules/.bin/wrangler deploy --dry-run
+../vast-broker/node_modules/.bin/wrangler deploy
+../vast-broker/node_modules/.bin/wrangler secret put REAPER_VAST_API_KEY
 ```
 
 Reaper cron schedule: `*/5 * * * *`

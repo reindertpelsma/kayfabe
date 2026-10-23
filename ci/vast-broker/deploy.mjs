@@ -1,16 +1,20 @@
-// Owner deploy helper (zero dependencies): node ci/vast-broker/deploy.mjs <vars-file> [--dry-run]
-// Reads public Worker vars from a local KEY=VALUE file kept OUTSIDE the checkout, verifies the
-// reviewed bundle hash, then runs the pinned wrangler with one --var per entry. It never prints
-// a value: wrangler output is redacted and refusals name only the key or line number.
-import { readFileSync, statSync, realpathSync } from 'node:fs';
+// Owner deploy helper (no dependencies of its own): node ci/vast-broker/deploy.mjs <vars-file>
+// [--dry-run]. Reads public Worker vars from a local KEY=VALUE file kept OUTSIDE the checkout,
+// lets the lockfile-pinned wrangler bundle src/ (`deploy --dry-run --outdir`), refuses unless the
+// emitted module's SHA-256 equals deployment.json and wrangler.toml, then uploads exactly that
+// verified file (`--no-bundle`) with one --var per entry. It never prints a value: wrangler output
+// is redacted and refusals name only the key or line number.
+import { mkdtempSync, readFileSync, rmSync, statSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { dirname, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const broker = process.env.KF_DEPLOY_ROOT ?? dirname(fileURLToPath(import.meta.url));
 const checkout = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const wrangler = process.env.WRANGLER ?? '/tmp/kf-vast-wrangler/node_modules/.bin/wrangler';
+// Installed by `npm ci --ignore-scripts` from package-lock.json.
+const wrangler = process.env.WRANGLER ?? resolve(broker, 'node_modules/.bin/wrangler');
 export const WRANGLER_VERSION = '4.152.0';
 // Public, non-secret vars a deploy may set. Everything else is refused: secrets belong in
 // `wrangler secret put`, and Cloudflare Access is dashboard-only (the Worker reads no ACCESS_*;
@@ -30,9 +34,9 @@ export const ALLOWED = new Set([
   'BLOB_REPO',
   'BLOB_ALLOWED_TAG_PREFIXES',
 ]);
+class Refusal extends Error {}
 const fail = (message) => {
-  process.stderr.write('deploy: refused: ' + message + '\n');
-  process.exit(2);
+  throw new Refusal(message);
 };
 
 export function parseVars(text) {
@@ -81,49 +85,76 @@ function main(argv) {
   const toml = readFileSync(resolve(broker, 'wrangler.toml'), 'utf8');
   if (tomlVar(toml, 'OWNER_GITHUB_ID') !== vars.get('OWNER_GITHUB_ID'))
     fail('OWNER_GITHUB_ID differs from wrangler.toml');
-  let bundle;
-  try {
-    bundle = readFileSync(resolve(broker, 'dist/worker.js'));
-  } catch {
-    fail('dist/worker.js missing: run node bundle.js first');
-  }
-  const digest = createHash('sha256').update(bundle).digest('hex');
   const manifest = JSON.parse(readFileSync(resolve(broker, 'deployment.json'), 'utf8'));
-  if (digest !== manifest.bundle_sha256) fail('dist/worker.js does not match deployment.json');
-  if (digest !== tomlVar(toml, 'DEPLOYED_BUNDLE_SHA256'))
-    fail('dist/worker.js does not match wrangler.toml DEPLOYED_BUNDLE_SHA256');
+  if (manifest.bundle_sha256 !== tomlVar(toml, 'DEPLOYED_BUNDLE_SHA256'))
+    fail('deployment.json and wrangler.toml DEPLOYED_BUNDLE_SHA256 differ');
 
   const version = spawnSync(wrangler, ['--version'], { encoding: 'utf8', timeout: 60000 });
   if (version.status !== 0 || !/(?:^|[^0-9.])4\.152\.0(?:$|[^0-9.])/m.test(String(version.stdout)))
-    fail('wrangler ' + WRANGLER_VERSION + ' not found at the pinned path');
+    fail(
+      'wrangler ' + WRANGLER_VERSION + ' not found at the pinned path (npm ci --ignore-scripts)',
+    );
 
-  const redact = (text) => {
-    let out = String(text ?? '');
-    for (const [key, value] of vars) out = out.split(value).join('<' + key + '>');
-    return out;
-  };
-  process.stdout.write(
-    'deploy: bundle ' +
-      digest +
-      ' verified; vars ' +
-      [...vars.keys()].join(',') +
-      ' (values withheld)' +
-      (dryRun ? '; dry run' : '') +
-      '\n',
-  );
-  const run = spawnSync(
-    wrangler,
-    [
-      'deploy',
+  // Telemetry off. The bundling dry run needs no Cloudflare credentials.
+  const env = { ...process.env, WRANGLER_SEND_METRICS: 'false' };
+  const wrangle = (args) =>
+    spawnSync(wrangler, ['deploy', '--config', 'wrangler.toml', ...args], {
+      cwd: broker,
+      env,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  const out = mkdtempSync(join(tmpdir(), 'kf-vast-bundle-'));
+  try {
+    const build = wrangle(['--dry-run', '--outdir', out]);
+    if (build.status !== 0) fail('wrangler could not bundle src/ (dry run failed)');
+    let bundle;
+    try {
+      bundle = readFileSync(join(out, 'index.js'));
+    } catch {
+      fail('wrangler emitted no index.js');
+    }
+    const digest = createHash('sha256').update(bundle).digest('hex');
+    if (digest !== manifest.bundle_sha256)
+      fail('wrangler bundle ' + digest + ' does not match deployment.json');
+
+    const redact = (text) => {
+      let result = String(text ?? '');
+      for (const [key, value] of vars) result = result.split(value).join('<' + key + '>');
+      return result;
+    };
+    process.stdout.write(
+      'deploy: bundle ' +
+        digest +
+        ' (' +
+        bundle.length +
+        ' bytes) verified; vars ' +
+        [...vars.keys()].join(',') +
+        ' (values withheld)' +
+        (dryRun ? '; dry run' : '') +
+        '\n',
+    );
+    // Upload exactly the verified bytes; wrangler does not bundle a second time.
+    const run = wrangle([
       ...(dryRun ? ['--dry-run'] : []),
+      '--no-bundle',
+      join(out, 'index.js'),
       ...[...vars].flatMap(([key, value]) => ['--var', key + ':' + value]),
-    ],
-    { cwd: broker, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
-  );
-  process.stdout.write(redact(run.stdout));
-  process.stderr.write(redact(run.stderr));
-  process.exit(run.status ?? 1);
+    ]);
+    process.stdout.write(redact(run.stdout));
+    process.stderr.write(redact(run.stderr));
+    process.exitCode = run.status ?? 1;
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url))
-  main(process.argv);
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    main(process.argv);
+  } catch (error) {
+    if (!(error instanceof Refusal)) throw error;
+    process.stderr.write('deploy: refused: ' + error.message + '\n');
+    process.exitCode = 2;
+  }
+}

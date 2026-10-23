@@ -1,6 +1,5 @@
 name = "kayfabe-vast-broker"
-main = "dist/worker.js"
-no_bundle = true
+main = "src/index.js"
 compatibility_date = "2026-10-21"
 workers_dev = true
 # No per-version preview hostnames (wrangler 4.152.0 schema: top-level boolean).
@@ -20,8 +19,8 @@ crons = ["* * * * *"]
 [vars]
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
-# Owner assertion of the exact emitted module; see deployment.json and trace doc.
-DEPLOYED_BUNDLE_SHA256 = "5ae53f6172822629e2fff70c44ac4d0accec4fb5c93c2d11349d025cafc67962"
+# SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
+DEPLOYED_BUNDLE_SHA256 = "e74a6eb42259d3744088e57cdb980708d327854bcf1553476f0433e8043bf051"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"
