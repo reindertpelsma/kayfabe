@@ -61,7 +61,9 @@ def client(route, method="GET", body=None):
     elif route == "/rent" or route.startswith("/status/"):
         data = dict(final, **overrides)
     elif route.startswith("/logs/"):
-        data = page("c" * 64 if case == "stop-not-after-invalid-final" else digest)
+        if case == "stop-after-unreadable-final":
+            return m.Reply(503, {"content-type": "application/json"}, b"{}")
+        data = page("c" * 64 if case == "stop-after-invalid-final" else digest)
     elif route.startswith("/stop/"):
         data = dict(final, state="NONE", cleanup_pending=False, ended_at=3000)
     else:
@@ -105,11 +107,14 @@ elif case == "stop-failure-is-ignored":
     result = run()
     assert result == {"state": "GRACE", "verdict": "PASS", "verified": 1}, result
     assert len(stops()) == 1, calls
-elif case == "stop-not-after-invalid-final":
-    # Item 4: a final fetch that fails the hash check sends no stop (grace timer is the fallback).
+elif case in {"stop-after-invalid-final", "stop-after-unreadable-final"}:
+    # Edits2 D (supersedes the item-4 reading of 2026-10-24): a result was announced but the
+    # final log fetch failed the hash check, or could not be read; the runner stops the run
+    # too. Only paths before any result may leave the box to the Worker's timers.
     result = run()
     assert result["verified"] == 0 and result["verdict"] == "UNAVAILABLE", result
-    assert stops() == [], calls
+    assert [(c[0], c[1]) for c in stops()] == [("/stop/123-1", "POST")], calls
+    assert calls[-1][0] == "/stop/123-1", calls
 elif case == "worker-not-needed-refused":
     # Review W2: the Worker never decides a skip; a Worker-sent NOT_NEEDED + PASS is refused.
     overrides = dict(state="NOT_NEEDED", id=None, log_cursor=0, log_sha256=m.ZERO, suites=[])

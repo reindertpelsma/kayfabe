@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { setup, nonce } from './helpers.js';
 // Owner ruling 2026-10-24 item 4: destroy the box as soon as the runner has the final result.
-// FALSIFIER: the runner sends no stop after a verified final fetch, sends one after a final
-// fetch that failed validation, lets a failed stop change the verdict, or the Worker keeps a
+// Edits2 D: a final fetch that fails validation (or cannot be read) stops the run as well.
+// FALSIFIER: the runner sends no stop after a verified final fetch or after an announced result
+// whose final fetch failed, lets a failed stop change the verdict, or the Worker keeps a
 // GRACE box (or drops its verdict or log) when the run's own stop arrives.
 for (const name of [
   'stop-after-verified-final',
   'stop-failure-is-ignored',
-  'stop-not-after-invalid-final',
+  'stop-after-invalid-final',
+  'stop-after-unreadable-final',
 ])
   test('item 4: runner ' + name, () => {
     const p = spawnSync(
