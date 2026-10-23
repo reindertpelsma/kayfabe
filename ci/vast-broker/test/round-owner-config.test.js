@@ -12,6 +12,25 @@ test('round committed wrangler.toml carries the public numeric owner id', async 
   assert.match(toml, /^OWNER_GITHUB_ID = "229738317"$/m);
   assert.doesNotMatch(toml, /REPLACE_ME/);
 });
+test('round committed wrangler.toml vars pass owner configuration', async () => {
+  const { configuration } = await import('../src/policy.js');
+  const toml = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  const vars = Object.fromEntries(
+    [...toml.split('[vars]')[1].matchAll(/^([A-Z_]+) = (?:"([^"]*)"|'([^']*)')$/gm)].map((m) => [
+      m[1],
+      m[2] ?? m[3],
+    ]),
+  );
+  const { RUN_TOKEN_SECRET, OWNER_STOP_TOKEN, VAST_API_KEY, WORKER_URL } = env;
+  const cfg = configuration({
+    ...vars,
+    RUN_TOKEN_SECRET,
+    OWNER_STOP_TOKEN,
+    VAST_API_KEY,
+    WORKER_URL,
+  });
+  assert.equal(cfg.owner, '229738317');
+});
 for (const value of bad) {
   test('round stop-all names the owner config error ' + JSON.stringify(value), async () => {
     const h = await setup({ OWNER_GITHUB_ID: value });

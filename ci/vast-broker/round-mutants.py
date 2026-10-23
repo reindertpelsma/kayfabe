@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import tomllib
 
 BASE = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
@@ -49,6 +50,10 @@ for case in cases:
         path.write_text(changed)
         if path.suffix == ".py":
             ast.parse(changed)
+        elif path.suffix == ".toml":
+            tomllib.loads(changed)
+        elif path.suffix in {".md", ".yml", ".json"}:
+            pass  # Documentation/data mutants: killers alone decide.
         else:
             check = subprocess.run(
                 [

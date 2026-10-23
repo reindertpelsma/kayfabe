@@ -24,7 +24,9 @@ export function configuration(env) {
     if (!Number.isFinite(n) || n <= 0 || n > max) refuse();
     return n;
   };
-  if (!numericId(env.OWNER_GITHUB_ID) || !/^[-\w.]+\/[-\w.]+$/.test(env.REPOSITORY || '')) refuse();
+  // Named (never echoed): without the owner id no rental starts and no cleanup can authorize.
+  if (!numericId(env.OWNER_GITHUB_ID)) refuse('CONFIG_VAR:OWNER_GITHUB_ID', 503); // MUTANT owner
+  if (!/^[-\w.]+\/[-\w.]+$/.test(env.REPOSITORY || '')) refuse();
   let u;
   try {
     u = new URL(env.WORKER_URL);

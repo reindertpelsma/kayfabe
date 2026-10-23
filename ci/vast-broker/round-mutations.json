@@ -981,6 +981,58 @@
       "tests": [
         "round-simplify.test.js"
       ]
+    },
+    {
+      "name": "V1-owner-named",
+      "file": "src/policy.js",
+      "patches": [
+        [
+          "refuse('CONFIG_VAR:OWNER_GITHUB_ID', 503); // MUTANT owner",
+          "refuse(); // MUTANT owner"
+        ]
+      ],
+      "tests": [
+        "round-owner-config.test.js"
+      ]
+    },
+    {
+      "name": "V1-cron-config-log",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "e instanceof BrokerError && /^CONFIG_[A-Z_]+:[A-Z_]+$/.test(e.state)",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-owner-config.test.js"
+      ]
+    },
+    {
+      "name": "V1-cron-value-log",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "{ event: 'cleanup_config_error', state: e.state }",
+          "{ event: 'cleanup_config_error', state: e.state, value: env.OWNER_GITHUB_ID }"
+        ]
+      ],
+      "tests": [
+        "round-owner-config.test.js"
+      ]
+    },
+    {
+      "name": "V1-toml-owner",
+      "file": "wrangler.toml",
+      "patches": [
+        [
+          "OWNER_GITHUB_ID = \"229738317\"",
+          "OWNER_GITHUB_ID = \"REPLACE_ME\""
+        ]
+      ],
+      "tests": [
+        "round-owner-config.test.js"
+      ]
     }
   ]
 }

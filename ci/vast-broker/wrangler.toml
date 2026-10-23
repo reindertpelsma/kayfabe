@@ -20,7 +20,8 @@ crons = ["* * * * *"]
 RENTING_ENABLED = "false"
 # Owner assertion of the exact emitted module; see deployment.json and trace doc.
 DEPLOYED_BUNDLE_SHA256 = "da460023ef114344e1172cc82d1641ed84b0fd8efd782acb35f8be973e5fa233"
-OWNER_GITHUB_ID = "REPLACE_ME"
+# Public GitHub account id of the owner (also in every commit author email); never a secret.
+OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"
 REPOSITORY_GITHUB_ID = "1311106387"
 OIDC_SUB = "repo:reindertpelsma/kayfabe:environment:gpu-vast"
