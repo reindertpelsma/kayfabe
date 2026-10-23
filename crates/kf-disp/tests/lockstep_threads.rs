@@ -182,6 +182,61 @@ struct BrokerEnd {
 const OUT_CAP: usize = 2048 * PKT_SIZE;
 
 impl BrokerEnd {
+    fn new(stream: UnixStream, never_read: bool) -> BrokerEnd {
+        BrokerEnd {
+            stream,
+            rx: Vec::new(),
+            out: VecDeque::new(),
+            never_read,
+            opted: false,
+            tick_seq: 0,
+            pkt_seq: 0,
+            open: std::collections::BTreeSet::new(),
+            last_label: None,
+            b_open: None,
+            unpresented: None,
+            last_tick_sent: Instant::now(),
+            released: Vec::new(),
+            reported_released: Vec::new(),
+        }
+    }
+
+    fn hello(&mut self, sh: &Shared) {
+        self.push(
+            sh,
+            Pkt {
+                ty: EV_HELLO,
+                w0: 2,
+                w1: CAP_DMABUF | CAP_FOCUS_EVENTS | CAP_RELEASE | CAP_TICK,
+                ..Pkt::default()
+            },
+        );
+    }
+
+    /// Read what the relay sent and judge every command (`on_cmd`). `false`: the connection is gone.
+    fn read_cmds(&mut self, sh: &Shared, ring: &FrameRing, now: Instant) -> bool {
+        let mut buf = [0u8; 4096];
+        loop {
+            match self.stream.read(&mut buf) {
+                Ok(0) => return false,
+                Ok(n) => self.rx.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => return false,
+            }
+        }
+        while self.rx.len() >= CMD_SIZE {
+            let rec: [u8; CMD_SIZE] = self.rx[..CMD_SIZE].try_into().unwrap();
+            self.rx.drain(..CMD_SIZE);
+            let Some(cmd) = Cmd::decode(&rec) else {
+                sh.bad("the relay sent a command with reserved1 != 0".into());
+                continue;
+            };
+            on_cmd(self, sh, ring, cmd, now);
+        }
+        true
+    }
+
     fn push(&mut self, sh: &Shared, mut p: Pkt) -> bool {
         self.pkt_seq = self.pkt_seq.wrapping_add(1);
         p.seq = self.pkt_seq;
@@ -237,31 +292,8 @@ fn broker_thread(
         };
         stream.set_nonblocking(true).unwrap();
         sh.connections.fetch_add(1, Ordering::Relaxed);
-        let mut b = BrokerEnd {
-            stream,
-            rx: Vec::new(),
-            out: VecDeque::new(),
-            never_read,
-            opted: false,
-            tick_seq: 0,
-            pkt_seq: 0,
-            open: std::collections::BTreeSet::new(),
-            last_label: None,
-            b_open: None,
-            unpresented: None,
-            last_tick_sent: Instant::now(),
-            released: Vec::new(),
-            reported_released: Vec::new(),
-        };
-        b.push(
-            &sh,
-            Pkt {
-                ty: EV_HELLO,
-                w0: 2,
-                w1: CAP_DMABUF | CAP_FOCUS_EVENTS | CAP_RELEASE | CAP_TICK,
-                ..Pkt::default()
-            },
-        );
+        let mut b = BrokerEnd::new(stream, never_read);
+        b.hello(&sh);
         let mut next_tick = Instant::now();
         'conn: while !sh.stop.load(Ordering::Relaxed) {
             sh.beat(T_BROKER, base);
@@ -320,26 +352,8 @@ fn broker_thread(
             }
             partial_until = None;
             // read what the relay sent
-            if !b.never_read {
-                let mut buf = [0u8; 4096];
-                loop {
-                    match b.stream.read(&mut buf) {
-                        Ok(0) => break 'conn,
-                        Ok(n) => b.rx.extend_from_slice(&buf[..n]),
-                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
-                        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                        Err(_) => break 'conn,
-                    }
-                }
-                while b.rx.len() >= CMD_SIZE {
-                    let rec: [u8; CMD_SIZE] = b.rx[..CMD_SIZE].try_into().unwrap();
-                    b.rx.drain(..CMD_SIZE);
-                    let Some(cmd) = Cmd::decode(&rec) else {
-                        sh.bad("the relay sent a command with reserved1 != 0".into());
-                        continue;
-                    };
-                    on_cmd(&mut b, &sh, &ring, cmd, now);
-                }
+            if !b.never_read && !b.read_cmds(&sh, &ring, now) {
+                break 'conn;
             }
             // compositor: presentation and releases (a broker that stopped READING still releases)
             if b.never_read {
@@ -619,6 +633,23 @@ enum ToWorker {
     Flip { id: u64, imm: bool },
 }
 
+/// The copy into `s` is done: the frame goes to the ring (`display.rs` step 6).
+fn publish_frame(ring: &FrameRing, s: usize, serial: u64) {
+    ring.describe(
+        s,
+        FrameGeom {
+            width: 64,
+            height: 64,
+            stride: 256,
+            fourcc: FOURCC_XR24,
+            serial,
+            cursor: false,
+        },
+    );
+    ring.publish(s);
+    let _ = ring.take_console();
+}
+
 #[allow(clippy::too_many_lines)]
 fn worker_thread(
     sh: Arc<Shared>,
@@ -745,19 +776,7 @@ fn worker_thread(
             finished = n;
             if let Some(s) = slot {
                 serial += 1;
-                ring.describe(
-                    s,
-                    FrameGeom {
-                        width: 64,
-                        height: 64,
-                        stride: 256,
-                        fourcc: FOURCC_XR24,
-                        serial,
-                        cursor: false,
-                    },
-                );
-                ring.publish(s);
-                let _ = ring.take_console();
+                publish_frame(&ring, s, serial);
                 sh.frames_published.fetch_add(1, Ordering::Relaxed);
                 frame_wake.store(true, Ordering::Release);
             }
@@ -859,6 +878,15 @@ struct Result {
     elapsed: Duration,
 }
 
+fn frame_ring() -> Arc<FrameRing> {
+    let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
+    for j in 0..ring.slots() {
+        let mem = SharedRam::create_named(c"kfb-threads-frame", 64 * 1024).unwrap();
+        ring.install(j, SlotFds::new(mem, None).unwrap()).unwrap();
+    }
+    ring
+}
+
 fn run(scn: Scn) -> Result {
     let base = Instant::now();
     let dir = std::env::temp_dir().join(format!(
@@ -871,11 +899,7 @@ fn run(scn: Scn) -> Result {
     let path = dir.join("display.sock");
     let listener = UnixListener::bind(&path).unwrap();
     let sh = Arc::new(Shared::default());
-    let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
-    for j in 0..ring.slots() {
-        let mem = SharedRam::create_named(c"kfb-threads-frame", 64 * 1024).unwrap();
-        ring.install(j, SlotFds::new(mem, None).unwrap()).unwrap();
-    }
+    let ring = frame_ring();
     let share = Arc::new(TickShare::new());
     share.set_cap_hz(60);
     let frame_wake = Arc::new(AtomicBool::new(false));
@@ -1139,4 +1163,242 @@ fn lockstep_threads_crash_and_reconnect() {
     check(&r, &scn);
     report(&r, &scn);
     assert!(r.sh.connections.load(Ordering::Relaxed) >= 3);
+}
+
+// ------------------------------------------------------------------------------------------------
+// ★ M3 (review of candidate 6d, 2026-10-23): the crossing at the resume, replayed on ONE thread
+
+/// One relay entry (what `relay_thread` calls).
+#[derive(Clone, Copy)]
+enum Entry {
+    Timer,
+    Frame,
+    Socket,
+}
+
+/// The REAL relay and the broker end above over a real socket, driven by ONE thread on an injected
+/// clock (the relay's milliseconds; the broker's `Instant`s are `base + ms`), judged by the same
+/// oracle as the threaded runs (`on_cmd`). An ordering the scheduler hits now and then in
+/// `lockstep_threads_silence_and_return` is written down here and happens every time.
+struct Bench {
+    sh: Arc<Shared>,
+    scn: Scn,
+    ring: Arc<FrameRing>,
+    relay: Relay<UnixLink>,
+    host: H,
+    b: BrokerEnd,
+    rng: Rng,
+    base: Instant,
+    serial: u64,
+    dir: std::path::PathBuf,
+}
+
+impl Drop for Bench {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+impl Bench {
+    /// Connected, HELLO answered, the relay opted in to ticks (t = 1 ms).
+    fn new(name: &'static str) -> Bench {
+        let base = Instant::now();
+        let dir = std::env::temp_dir().join(format!(
+            "kf-lockstep-bench-{}-{name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("display.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let sh = Arc::new(Shared::default());
+        let ring = frame_ring();
+        let share = Arc::new(TickShare::new());
+        share.set_cap_hz(60);
+        let cfg = RelayConfig {
+            path,
+            extra_uid: None,
+        };
+        let mut relay = Relay::new(cfg, ring.clone(), UnixLink).with_ticks(share);
+        let mut host = H { timer: None };
+        relay.start(0, &mut host);
+        relay.on_timer(0, &mut host);
+        let (stream, _) = listener
+            .accept()
+            .expect("the relay connects at its first attempt");
+        stream.set_nonblocking(true).unwrap();
+        let mut b = BrokerEnd::new(stream, false);
+        b.hello(&sh);
+        let mut x = Bench {
+            sh,
+            scn: Scn::new(name),
+            ring,
+            relay,
+            host,
+            b,
+            rng: Rng(0x1234_5678_9abc_def1),
+            base,
+            serial: 0,
+            dir,
+        };
+        x.b.flush();
+        x.relay(1, Entry::Socket);
+        x.broker(1);
+        assert!(x.b.opted, "the relay opted in to the broker's ticks");
+        x
+    }
+
+    fn at(&self, ms: u64) -> Instant {
+        self.base + Duration::from_millis(ms)
+    }
+
+    fn relay(&mut self, ms: u64, e: Entry) {
+        let mut out = Vec::new();
+        match e {
+            Entry::Timer => self.relay.on_timer(ms, &mut self.host),
+            Entry::Frame => self.relay.on_frame(ms, &mut self.host),
+            Entry::Socket => {
+                self.relay
+                    .on_socket(ms, true, true, &mut self.host, &mut out, READ_BATCH);
+            }
+        }
+    }
+
+    /// The broker's turn at `ms`: read and judge what the relay sent, present, flush.
+    fn broker(&mut self, ms: u64) {
+        let now = self.at(ms);
+        assert!(
+            self.b.read_cmds(&self.sh, &self.ring, now),
+            "the relay closed the connection"
+        );
+        if self.b.unpresented.is_some_and(|t| now >= t) {
+            self.b.unpresented = None;
+        }
+        self.b.flush();
+    }
+
+    fn tick(&mut self, ms: u64) {
+        let now = self.at(ms);
+        emit_tick(&mut self.b, &self.sh, &self.scn, now, &mut self.rng);
+    }
+
+    fn event(&mut self, ty: u16) {
+        self.b.push(
+            &self.sh,
+            Pkt {
+                ty,
+                ..Pkt::default()
+            },
+        );
+    }
+
+    /// The worker's copy is done: a frame is ready for the relay.
+    fn frame(&mut self) {
+        let s = self.ring.fill_target(None).expect("a free frame slot");
+        self.serial += 1;
+        publish_frame(&self.ring, s, self.serial);
+    }
+
+    fn count(&self, c: &AtomicU64) -> u64 {
+        c.load(Ordering::Relaxed)
+    }
+}
+
+/// Up to the crossing: live (a tick with WANT, read, answered by one frame), then 58 ms with no tick
+/// on the relay's clock: the clock's fallback, no request open.
+fn live_then_silent(name: &'static str) -> Bench {
+    let mut x = Bench::new(name);
+    x.tick(2);
+    x.b.flush();
+    x.relay(2, Entry::Socket);
+    x.frame();
+    x.relay(3, Entry::Frame);
+    x.broker(3);
+    assert_eq!(
+        x.count(&x.sh.answered),
+        1,
+        "{name}: one frame answered the request"
+    );
+    x.relay(60, Entry::Timer);
+    assert!(
+        !x.relay.tick_live(),
+        "{name}: 58 ms without a tick is the fallback"
+    );
+    x
+}
+
+/// How the resumed tick and a fallback frame cross.
+#[derive(Clone, Copy, Debug)]
+enum Crossing {
+    /// The tick is on the socket, unread, when the worker's frame is announced (`relay_thread`
+    /// takes the frame before the socket in a turn; QEMU's main loop may do either).
+    FrameBeforeRead,
+    /// A frame waits for the legacy credit; the credit (`EV_FRAME`) and the tick arrive in ONE
+    /// read: the credit sends the frame, then the tick is handled.
+    CreditInTheSameRead,
+}
+
+fn crossing(name: &'static str, how: Crossing) {
+    let mut x = live_then_silent(name);
+    match how {
+        Crossing::FrameBeforeRead => {
+            x.event(EV_FRAME);
+            x.b.flush();
+            x.relay(60, Entry::Socket);
+            x.broker(60);
+            x.tick(70);
+            x.b.flush();
+            x.frame();
+            x.relay(70, Entry::Frame);
+        }
+        Crossing::CreditInTheSameRead => {
+            x.frame();
+            x.relay(60, Entry::Frame);
+            x.broker(60);
+            x.event(EV_FRAME);
+            x.tick(70);
+            x.b.flush();
+            x.relay(70, Entry::Socket);
+        }
+    }
+    x.broker(70);
+    x.relay(70, Entry::Socket);
+    assert!(
+        x.relay.tick_live(),
+        "{name} ({how:?}): the relay read the resumed tick, after it sent the frame"
+    );
+    assert_eq!(
+        x.count(&x.sh.unsolicited),
+        1,
+        "{name} ({how:?}): the fallback frame reached the broker as COMMIT.seq 0 after its tick"
+    );
+    let v = x.sh.violations.lock().unwrap();
+    assert!(
+        v.is_empty(),
+        "{name} ({how:?}): {} violation(s): {:#?}",
+        v.len(),
+        *v
+    );
+}
+
+/// ★ EXPECTED RED until the oracle judges by what the relay had READ (M3, 2026-10-23): the resumed
+/// tick is unread when the relay sends a frame on the legacy credit, so the broker receives
+/// `COMMIT.seq 0` "0 ms after the last tick". The relay could not have known: no violation.
+#[test]
+fn lockstep_crossing_frame_before_the_tick_is_read() {
+    crossing(
+        "lockstep_crossing_frame_before_the_tick_is_read",
+        Crossing::FrameBeforeRead,
+    );
+}
+
+/// ★ EXPECTED RED until the oracle judges by what the relay had READ (M3, 2026-10-23): the credit
+/// and the resumed tick in one read; the credit sends the waiting frame before the tick is handled.
+#[test]
+fn lockstep_crossing_credit_and_tick_in_one_read() {
+    crossing(
+        "lockstep_crossing_credit_and_tick_in_one_read",
+        Crossing::CreditInTheSameRead,
+    );
 }
