@@ -29,7 +29,7 @@ Below, any mention of `npm run bundle`, `dist/worker.js`, `npm run mutants`, mut
 in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
 embeds that same file, and wrangler.toml has no numeric override. The owner-approved
 check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
-Renting remains disabled in the committed configuration. The local non-VM A/B/C/D acceptance is complete; see [live evidence](../../traces/vast_broker_v5_20261018/LIVE.md). Full KVM/payload and hosted OIDC acceptance remain separate gaps.
+Renting remains disabled in the committed configuration. The local non-VM A/B/C/D acceptance is complete; see [live evidence](../../traces/vast_broker_summary/README.md). Full KVM/payload and hosted OIDC acceptance remain separate gaps.
 
 [SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] MANUAL, the hold helper, the
 manual ceiling and owner timer removal are removed; states are NONE, CREATING, BOOTING, TESTING and
@@ -63,7 +63,7 @@ price and offer ID. The separate DENIED_COUNTRIES filter first rejects CU/IR/KP/
 Unknown metadata is allowed by default, configurable with ALLOW_UNKNOWN_COUNTRY=false. The provider's `geolocation` suffix is
 used, and missing/odd location ranks last. Structured status records `country`;
 the runner independently validates and labels it untrusted. See
-[region evidence](../../traces/vast_broker_v5_20261018/COUNTRIES.md).
+[region evidence](../../traces/vast_broker_summary/README.md).
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js] `check` is the PR profile:
 configured measured classes GA106 first, then AD104, GA102 and AD102, capped at
@@ -121,7 +121,7 @@ limit. Reservation uses the same compute/storage lifetime plus cron margin and
 full transfer allowance. Early settlement retains that unmeasured allowance;
 it does not release it merely because the box ran briefly.
 
-[MEASURED: run v5-readonly-20261022-availability-1, traces/vast_broker_v5_20261018/read_only.json]
+[MEASURED: run v5-readonly-20261022-availability-1, traces/vast_broker_summary/README.md; raw file kept in the evidence branch]
 The instance API exposes inet_down_billed/inet_up_billed, but their units and
 refresh reliability are unverified. Consequently cron does not assert a bandwidth
 usage cutoff: only the conservative allowance reservation is implemented. A
@@ -148,7 +148,7 @@ authority is report/kill/blob-url.
 [SUPERSEDED 2026-10-23 jose round: wrangler bundles src/; see the top section and DEPLOY.md]
 [CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx --yes wrangler@4.152.0 deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
-[CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
+[CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_summary/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
 [SUPERSEDED 2026-10-23 jose round: one runtime dependency, jose, pinned by package-lock.json]
 [CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=22. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
@@ -165,7 +165,7 @@ triggering_actor == owner + sha == run head, and the YAML decides when to run.
 [SUPERSEDED 2026-10-23 jose round: `npm ci --ignore-scripts` first; no linker or mutants]
 [MEASURED: 2026-10-22 local Node test/bundle commands] Run `npm test` (or `node --test ci/vast-broker/test` from the repo root), `npm run bundle`, and `npm run mutants` from this directory. No npm install is needed. The fixed-source linker writes ignored `dist/worker.js`, checks syntax and preserves the entrypoint exports. Tests use generated RSA keys, fake JWKS, mocked GitHub/Vast, an in-memory Durable Object adapter and a local HTTP server.
 
-[MEASURED: 2026-10-22 format bundle run, traces/vast_broker_v5_20261018/FORMAT.md]
+[MEASURED: 2026-10-22 format bundle run, traces/vast_broker_summary/README.md; raw file kept in the evidence branch]
 The formatted checkpoint bundle is 103026 bytes, SHA256
 `1a06b7c87dd069240c4404503353b458d32e4d3ae64a680f35a5ac8f33d83eb8`.
 Prettier 3.6.2 and Black 25.1.0 use width 100; CI enforces both pinned versions.
@@ -177,7 +177,7 @@ but the mandatory prefix and tiny bootstrap/env transition remain red. Further
 claim/nonce/redaction/rate-limit hardening, blob route and live acceptance are
 pending; this is not a replacement renting-ready verdict.
 
-[MEASURED: 2026-10-23 security transition run, traces/vast_broker_v5_20261018/SECURITY_PROGRESS.md]
+[MEASURED: 2026-10-23 security transition run, traces/vast_broker_summary/README.md; raw file kept in the evidence branch]
 The emitted security-work bundle is 110672 bytes, SHA256
 `2ab3856a7430129334fa430070419f83d1e2f920d55a3190aff7718f04aaf897`.
 The portable test entry now discovers every test, including unfinished owner
@@ -273,7 +273,7 @@ triggering_actor check.
 [CODE READ: runner.py, release-build.yml] `pull_request_target` selects the master-base workflow; fork heads refuse before any Worker request. The controller and deployment manifest are fetched at that trusted base SHA, with no PR checkout/cache/artifact input, and Python runs with `-I` in a scrubbed environment. Structured schemas reject extra/duplicate keys, invalid UTF-8, out-of-range values and incorrect bindings. Each log chunk is hashed before local filtering; all displayed text uses the runner's allow-list, caps, redactions and fresh stop-commands frame. Only local enums and verified=0/1 enter outputs; status writers are independent. Hosted target-event claims/run membership remain an unverified fail-closed contract until this base workflow is present on master and separately exercised.
 
 [SUPERSEDED 2026-10-23 jose round: these campaign scripts are deleted]
-[CODE READ: round3-mutants.py, mutants.js, v4-mutants.py] `python3 round3-mutants.py` runs the current hostile-runner/protocol/isolation/release campaign; `npm run mutants` runs legacy, V4 and Round 3 sequentially. Seven legacy inline-client/cache-grant probes and four V4 inline-shell probes were replaced explicitly; the migration map is in the [Round 3 evidence](../../traces/vast_broker_v4_round3_20261018/README.md). Old V4 excerpts and their renderer fixtures are historical and are not the production runner. Local smoke helpers have been migrated to the bound protocol; they were not rerun live for Round 3. Release workflow execution/build/attestation and artifact distribution remain unverified; no binary publication is configured.
+[CODE READ: round3-mutants.py, mutants.js, v4-mutants.py] `python3 round3-mutants.py` runs the current hostile-runner/protocol/isolation/release campaign; `npm run mutants` runs legacy, V4 and Round 3 sequentially. Seven legacy inline-client/cache-grant probes and four V4 inline-shell probes were replaced explicitly; the migration map is in the [Round 3 evidence](../../traces/vast_broker_summary/README.md). Old V4 excerpts and their renderer fixtures are historical and are not the production runner. Local smoke helpers have been migrated to the bound protocol; they were not rerun live for Round 3. Release workflow execution/build/attestation and artifact distribution remain unverified; no binary publication is configured.
 
 ## V5 protocol checkpoint and remaining live evidence
 
@@ -297,7 +297,7 @@ cron cannot let a post revive an expired boot, heartbeat, grace or manual ceilin
 MANUAL after a result remains terminal for CI and retains the box for the owner.
 
 [SUPERSEDED 2026-10-23 jose round: historical; the mutation tooling is deleted]
-[MEASURED: 2026-10-22 protocol_tests.txt and v5_mutants.json in traces/vast_broker_v5_20261018]
+[MEASURED: 2026-10-22 protocol_tests.txt and v5_mutants.json in traces/vast_broker_summary/README.md; raw files kept in the evidence branch]
 The local baseline passes 964 tests; 69 focused V5 mutation cases each have at
 least two named killers. Migrated V4 and runner campaigns pass 28 and 38 cases,
 respectively. The legacy campaign's 94 anchors pass preflight; its full rerun is

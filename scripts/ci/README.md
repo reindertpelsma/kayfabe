@@ -40,7 +40,7 @@ stripped (Worker and runner sanitise). The token goes only to `KF_BROKER_URL`, H
 non-zero unless HTTP 200.
 [CODE READ: ci/vast-broker/src/index.js, ci/vast-broker/src/results.js,
 ci/vast-broker/docs/BOX_PROTOCOL.md] endpoints, schema, caps, rate 20 per 10 s.
-[MEASURED: v5-pr104-20261022; traces/vast_broker_v5_20261018/pr104-alignment.json] Canonical
+[MEASURED: v5-pr104-20261022; traces/vast_broker_summary/README.md (raw pr104-alignment.json kept in the evidence branch)] Canonical
 Python suite: 72/72. Mutation evidence distinguishes the Worker campaign from PR #104
 's own campaign; no real box has run these scripts yet.
 [INFERRED: scripts/ci/vast_onstart.sh] apt, `/run`, profile.d, sshd on the real KVM image. The payload is code from the SHA under

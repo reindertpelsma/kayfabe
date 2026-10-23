@@ -14,7 +14,7 @@ before owned deletion. Sanitised logs neutralise embedded command delimiters. Pl
 no npm dependencies; the runner never connects to the rented box. Merge queues
 are deferred for the personal repository. The binding defaults disable renting.
 [MEASURED: 2026-10-22 Node tests] Tests-first evidence and mutation results are in
-[traces/vast_broker_20261018](../traces/vast_broker_20261018/README.md); deployment,
+[traces/vast_broker_summary](../traces/vast_broker_summary/README.md); deployment,
 Vast GPU runs and the live API/onstart/Free-plan contracts remain untested.
 Owner setup and billing limits: [design](design/V3_CI_VAST_GPU_20261021.md),
 [deployment instructions](../ci/vast-broker/README.md). No master merge is performed.
