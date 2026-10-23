@@ -1,0 +1,27 @@
+{
+  "classification": "MEASURED",
+  "evidence": "regression-green.json",
+  "runtime_source_commit": "7251cf0acafa8d7f30c04ea87478485f89f2c2fd",
+  "candidate_base": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "two_crate_regression": {
+    "passed": 1097,
+    "failed": 0,
+    "ignored": 4,
+    "summaries": 41,
+    "exit": 0,
+    "scope": "Includes2 duplicate histogram tests from the initial standalone module inclusion; not unique tests"
+  },
+  "test_import_correction": "Integration controls now import actual compiled crate APIs instead of duplicating modules; this removes24 dead-code diagnostics without an allow or debt edit. Runtime crate source unchanged.",
+  "focused_actual_crate_after_correction": {
+    "profiler": 15,
+    "observer": 4,
+    "failed": 0
+  },
+  "clippy": {
+    "sites": 263,
+    "added": 0,
+    "exit": 0,
+    "all_targets": true
+  },
+  "source_pin_ordering": "PASS after exactly-one-native-call and observer-after-admission assertions; disabled-twin predicate retained"
+}

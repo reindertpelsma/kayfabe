@@ -1,9 +1,5 @@
 //! GPU-free controls for direct USER-doorbell/native-submit measurements.
-#[path = "../src/prof.rs"]
-mod prof;
-#[path = "../src/submitprof.rs"]
-mod submitprof;
-
+use kf_qemu::{prof, submitprof};
 use submitprof::{Kind, SubmitProfile};
 
 fn submit(p: &SubmitProfile, idx: u32, kind: Kind, end: u64, ok: bool) {

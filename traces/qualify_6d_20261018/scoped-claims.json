@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "a88c5529ae0547565e074ecf90335196f7d02487",
+  "head": "7251cf0acafa8d7f30c04ea87478485f89f2c2fd",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "crates/kf-chan/src/host.rs",
@@ -19,14 +19,21 @@
     "crates/kf-qemu/src/submitprof.rs",
     "crates/kf-qemu/src/userpump.rs",
     "crates/kf-qemu/tests/submit_profile.rs",
+    "traces/perf_k3_20261018/baseline-telemetry.json",
+    "traces/perf_k3_20261018/controls/observer-actual-crate.txt",
     "traces/perf_k3_20261018/controls/observer-green.txt",
     "traces/perf_k3_20261018/controls/observer-red.txt",
+    "traces/perf_k3_20261018/controls/profile-actual-crate.txt",
     "traces/perf_k3_20261018/controls/profile-green.txt",
     "traces/perf_k3_20261018/controls/profile-red.txt",
     "traces/perf_k3_20261018/controls/regression-first.json",
+    "traces/perf_k3_20261018/controls/regression-green.json",
     "traces/perf_k3_20261018/controls/software-controls.json",
     "traces/perf_k3_20261018/controls/source-pin-correction.md",
+    "traces/perf_k3_20261018/kvm-4620-catia.json",
+    "traces/perf_k3_20261018/kvm-4620-creo.json",
     "traces/perf_k3_20261018/plan.json",
+    "traces/perf_k3_20261018/run-4620.json",
     "traces/perf_k3_20261018/run-4621-plan.json",
     "traces/qualify_6d_20261018/README.md",
     "traces/qualify_6d_20261018/aarch64-compile-excerpt.txt",
@@ -132,5 +139,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T04:12:08.791315+00:00"
+  "time": "2026-10-23T04:26:43.451007+00:00"
 }

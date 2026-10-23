@@ -1,0 +1,7 @@
+running 4 tests
+test disabled_error_calls_native_once_and_preserves_error ... ok
+test disabled_success_calls_native_once ... ok
+test native_error_is_returned_unchanged_and_never_marked_success ... ok
+test success_is_returned_unchanged_and_recorded_after_exactly_one_call ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

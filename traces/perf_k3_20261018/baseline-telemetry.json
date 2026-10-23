@@ -1,0 +1,294 @@
+{
+  "classification": "MEASURED",
+  "evidence": "baseline-telemetry.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4620,
+  "profile_only": true,
+  "time": "2026-10-23T04:18:17.169201+00:00",
+  "workloads": [
+    {
+      "workload": "catia-07",
+      "gpu_samples": 1094,
+      "active_seconds": 219.0,
+      "metrics": {
+        "gpu_busy_pct": {
+          "mean": 74.932,
+          "min": 1.0,
+          "max": 100.0
+        },
+        "memory_busy_pct": {
+          "mean": 20.848,
+          "min": 1.0,
+          "max": 100.0
+        },
+        "graphics_clock_MHz": {
+          "mean": 2842.418,
+          "min": 2490.0,
+          "max": 2880.0
+        },
+        "memory_clock_MHz": {
+          "mean": 10251.0,
+          "min": 10251.0,
+          "max": 10251.0
+        },
+        "power_W": {
+          "mean": 105.449,
+          "min": 38.37,
+          "max": 156.65
+        },
+        "memory_used_MiB": {
+          "mean": 10592.803,
+          "min": 10577.0,
+          "max": 10616.0
+        }
+      },
+      "top_threads": [
+        {
+          "workload": "catia-07",
+          "tid": 2370675,
+          "comm": "|__qemu-system-x86",
+          "n": 219,
+          "CPU_pct": 36.16,
+          "guest_pct": 21.872,
+          "system_pct": 11.009,
+          "usr_pct": 3.279
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370706,
+          "comm": "|__kf3-worker1",
+          "n": 219,
+          "CPU_pct": 21.534,
+          "guest_pct": 0.0,
+          "system_pct": 3.16,
+          "usr_pct": 18.374
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370705,
+          "comm": "|__kf3-worker0",
+          "n": 219,
+          "CPU_pct": 20.753,
+          "guest_pct": 0.0,
+          "system_pct": 2.932,
+          "usr_pct": 17.822
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370676,
+          "comm": "|__qemu-system-x86",
+          "n": 219,
+          "CPU_pct": 20.689,
+          "guest_pct": 15.667,
+          "system_pct": 4.548,
+          "usr_pct": 0.571
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370674,
+          "comm": "|__qemu-system-x86",
+          "n": 219,
+          "CPU_pct": 19.128,
+          "guest_pct": 15.941,
+          "system_pct": 2.909,
+          "usr_pct": 0.411
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370677,
+          "comm": "|__qemu-system-x86",
+          "n": 219,
+          "CPU_pct": 18.342,
+          "guest_pct": 15.142,
+          "system_pct": 2.845,
+          "usr_pct": 0.457
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370678,
+          "comm": "|__qemu-system-x86",
+          "n": 219,
+          "CPU_pct": 17.543,
+          "guest_pct": 14.621,
+          "system_pct": 2.571,
+          "usr_pct": 0.438
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370707,
+          "comm": "|__kf3-display",
+          "n": 219,
+          "CPU_pct": 14.178,
+          "guest_pct": 0.0,
+          "system_pct": 0.078,
+          "usr_pct": 14.1
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370679,
+          "comm": "|__qemu-system-x86",
+          "n": 219,
+          "CPU_pct": 10.539,
+          "guest_pct": 9.292,
+          "system_pct": 1.059,
+          "usr_pct": 0.306
+        },
+        {
+          "workload": "catia-07",
+          "tid": 2370709,
+          "comm": "|__kf3-vamgr",
+          "n": 219,
+          "CPU_pct": 8.74,
+          "guest_pct": 0.0,
+          "system_pct": 7.516,
+          "usr_pct": 1.224
+        }
+      ]
+    },
+    {
+      "workload": "creo-04",
+      "gpu_samples": 1868,
+      "active_seconds": 374.0,
+      "metrics": {
+        "gpu_busy_pct": {
+          "mean": 59.339,
+          "min": 1.0,
+          "max": 100.0
+        },
+        "memory_busy_pct": {
+          "mean": 15.888,
+          "min": 1.0,
+          "max": 56.0
+        },
+        "graphics_clock_MHz": {
+          "mean": 2819.101,
+          "min": 2490.0,
+          "max": 2880.0
+        },
+        "memory_clock_MHz": {
+          "mean": 10251.0,
+          "min": 10251.0,
+          "max": 10251.0
+        },
+        "power_W": {
+          "mean": 82.608,
+          "min": 37.82,
+          "max": 140.54
+        },
+        "memory_used_MiB": {
+          "mean": 10593.949,
+          "min": 10580.0,
+          "max": 10611.0
+        }
+      },
+      "top_threads": [
+        {
+          "workload": "creo-04",
+          "tid": 2370675,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 46.541,
+          "guest_pct": 29.996,
+          "system_pct": 13.096,
+          "usr_pct": 3.457
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370676,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 28.13,
+          "guest_pct": 23.114,
+          "system_pct": 4.508,
+          "usr_pct": 0.626
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370673,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 18.157,
+          "guest_pct": 16.19,
+          "system_pct": 1.77,
+          "usr_pct": 0.321
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370677,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 16.649,
+          "guest_pct": 13.101,
+          "system_pct": 3.227,
+          "usr_pct": 0.452
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370680,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 14.558,
+          "guest_pct": 12.01,
+          "system_pct": 2.278,
+          "usr_pct": 0.388
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370674,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 13.644,
+          "guest_pct": 11.882,
+          "system_pct": 1.54,
+          "usr_pct": 0.345
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370678,
+          "comm": "|__qemu-system-x86",
+          "n": 374,
+          "CPU_pct": 13.505,
+          "guest_pct": 11.235,
+          "system_pct": 2.013,
+          "usr_pct": 0.38
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370706,
+          "comm": "|__kf3-worker1",
+          "n": 374,
+          "CPU_pct": 13.013,
+          "guest_pct": 0.0,
+          "system_pct": 2.358,
+          "usr_pct": 10.655
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370705,
+          "comm": "|__kf3-worker0",
+          "n": 374,
+          "CPU_pct": 10.965,
+          "guest_pct": 0.0,
+          "system_pct": 2.152,
+          "usr_pct": 8.813
+        },
+        {
+          "workload": "creo-04",
+          "tid": 2370707,
+          "comm": "|__kf3-display",
+          "n": 374,
+          "CPU_pct": 10.246,
+          "guest_pct": 0.0,
+          "system_pct": 0.08,
+          "usr_pct": 10.166
+        }
+      ]
+    }
+  ],
+  "alignment": "Union of vendor subtest Started..Completed log intervals, interpreted as Windows UTC; host NVIDIA timestamps Europe/Amsterdam UTC+2. Excludes initial workload/data loading. Boundaries have1s vendor timestamp granularity.",
+  "sample_limits": "200ms polls of a driver utilization estimate; adjacent samples are correlated, not independent repeat runs. Boot n=1. CPU percentages are per logical core, 100%=one core.",
+  "telemetry_not_vendor_score": true,
+  "capacity_MiB": 9216,
+  "display_carrier": "synthetic60Hz test backend, GDM stopped",
+  "comparison_status": "VFIO4621 running; no H1 conclusion yet"
+}
