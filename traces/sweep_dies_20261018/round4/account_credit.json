@@ -1,0 +1,8 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-23T16:52:10.873573+00:00",
+  "credit_snapshot_usd": 28.11114742896075,
+  "reserve_usd": 5,
+  "shared_account": true,
+  "not_invoice_or_lane_spend": true
+}

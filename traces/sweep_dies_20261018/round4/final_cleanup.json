@@ -1,0 +1,33 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-23T16:50:44.614939+00:00",
+  "own_ids_api_absent": [
+    57193877,
+    57209908,
+    57262021,
+    57280778,
+    57296386,
+    57384343,
+    57385378,
+    57398382
+  ],
+  "owned_timers_live": 0,
+  "owned_helpers_live": [],
+  "large_assets_removed": [
+    {
+      "asset": "kfapps.iso",
+      "bytes": 6785255424
+    },
+    {
+      "asset": "cuda_nvrtc.zip",
+      "bytes": 314608748
+    }
+  ],
+  "own_dev_cargo_target": "absent",
+  "devbox_gpu_or_cargo_locks_acquired_this_round": 0,
+  "all_rentals_closed": true,
+  "conservative_lane_usd": 9.64552447982037,
+  "conservative_round3_usd": 4.267502749228703,
+  "conservative_round4_usd": 1.5744036111435187,
+  "estimate_not_invoice": true
+}
