@@ -30,7 +30,7 @@ class ConsolePin(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(C, "console publication readiness helper missing")
 
-    def wait(self, snapshots, elapsed=600, factor=4, costs=None):
+    def wait(self, snapshots, elapsed=600, factor=4, costs=None, stage_started=None):
         clock = [0.0]
         calls, sleeps, receipts = [], [], []
 
@@ -50,6 +50,7 @@ class ConsolePin(unittest.TestCase):
             fetch,
             elapsed_since_create=elapsed,
             factor=factor,
+            stage_started_elapsed=stage_started,
             clock=lambda: clock[0],
             sleep=sleep,
             record=receipts.append,
@@ -129,6 +130,14 @@ class ConsolePin(unittest.TestCase):
         self.assertEqual(receipts[0]["fingerprints"], [FP])
         self.assertEqual(len(receipts[0]["console_sha256"]), 64)
         self.assertNotIn("PRIVATE_BODY", str(receipts))
+
+    def test_existing_stage_is_not_restarted_after_a_console_attempt(self):
+        with self.assertRaises(C.PinExpired):
+            self.wait([FP], elapsed=839, stage_started=600, costs=[2])
+
+    def test_outer_retry_keeps_the_original_stage_deadline(self):
+        with self.assertRaises(C.PinExpired):
+            self.wait(["", FP], elapsed=839, stage_started=600)
 
 
 if __name__ == "__main__":
