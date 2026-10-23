@@ -2,15 +2,15 @@
 import {constantTimeEqual} from './tokens.js';
 // prettier-ignore
 import {refuse} from './policy.js';
-// This table is shared by the gateway's route recognition and Access policy.
+// This table is the gateway's route recognition.
 export function routeKind(path) {
   if (
     /^\/(?:rent|availability|stop-all)$/.test(path) ||
-    /^\/(?:status|stop|stop-timer|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path)
+    /^\/(?:status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path)
   )
     return 'runner';
   if (
-    /^\/(?:report|kill|hold)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path) ||
+    /^\/(?:report|kill)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path) ||
     new RegExp(
       '^/blob-url/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}/' +
         '[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,100}$',

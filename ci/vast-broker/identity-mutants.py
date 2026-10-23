@@ -10,10 +10,6 @@ cases = [
         "repository-owner-id",
         [
             ("    c.repository_owner_id !== cfg.owner ||\n", ""),
-            (
-                "    (c.repository_owner_id !== undefined && c.repository_owner_id !== cfg.owner) ||\n",
-                "",
-            ),
         ],
     ),
     ("environment-subject", [("    c.sub !== cfg.oidcSubject ||\n", "")]),
@@ -21,43 +17,18 @@ cases = [
         "job-workflow-ref",
         [
             (
-                "function checkedIdentity(c, cfg) {",
-                "function checkedIdentity(c, cfg) { c.job_workflow_ref = c.workflow_ref;",
+                "function verifiedIdentity(c, cfg) {",
+                "function verifiedIdentity(c, cfg) { c.job_workflow_ref = c.workflow_ref;",
             ),
         ],
     ),
     ("control-per-IP", [("count >= cfg.controlIp ||", "false ||")]),
     ("control-global", [("controlCount >= cfg.controlGlobal ||", "false ||")]),
-    # 18:20 replaces configurable trigger gates with the owner branch exception.
-    (
-        "configured-base",
-        [
-            (
-                "    if (!allowedWorkflowRef(c, cfg, r, cfg.profile ?? 'check'))",
-                "    if (c.ref !== 'refs/heads/master') refuse('UNAUTHORIZED', 401);\n"
-                "    if (!allowedWorkflowRef(c, cfg, r, cfg.profile ?? 'check'))",
-            )
-        ],
-    ),
-    (
-        "configured-workflow",
-        [
-            (
-                "  if (profile === 'sweep') return false;",
-                "  return false;",
-            )
-        ],
-    ),
 ]
 rows = []
 for name, patches in cases:
-    configured = name.startswith("configured-")
-    p = B / (
-        "src/workflow-authority.js"
-        if name == "configured-workflow"
-        else "src/github.js" if configured else "src/index.js"
-    )
-    test = "v5-configured-base.test.js" if configured else "v5-identity-limits.test.js"
+    p = B / "src/index.js"
+    test = "v5-identity-limits.test.js"
     source = p.read_text()
     changed = source
     for before, after in patches:

@@ -103,7 +103,7 @@ for (const skip of [true, false])
   test('loopback signed identity routes JWKS and GitHub ' + skip, async () => {
     const { r, h, localReads } = await localCall({ skip });
     assert.equal(r.status, 200);
-    assert.ok(localReads >= 5);
+    assert.ok(localReads >= 2); // JWKS and the one GitHub run read.
     assert.equal(h.cloud.creates, 1);
   });
 for (const flag of [undefined, 'false'])

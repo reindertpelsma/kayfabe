@@ -175,12 +175,12 @@
   ],
   "legacy:report count cap": [
     [
-      "      } catch {}\n      refuse('UNAUTHORIZED', 401);\n    }\n    if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes) {\n      try {\n        await close(r, vast, 'LIMIT');\n      } catch {}\n",
-      "      } catch {}\n      refuse('UNAUTHORIZED', 401);\n    }\n    if (false || r.reportBytes >= cfg.reportBytes) {\n      try {\n        await close(r, vast, 'LIMIT');\n      } catch {}\n"
+      "    if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes) {\n      try {\n        await close(r, vast, 'LIMIT');",
+      "    if (false || r.reportBytes >= cfg.reportBytes) {\n      try {\n        await close(r, vast, 'LIMIT');"
     ],
     [
-      "        if (r.phase !== 'MANUAL') r.phase = 'GRACE';\n        r.liveCheckedAt = null;\n      } // MUTANT structured-verdict\n      else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)\n        await close(r, vast, 'LIMIT');\n      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n",
-      "        if (r.phase !== 'MANUAL') r.phase = 'GRACE';\n        r.liveCheckedAt = null;\n      } // MUTANT structured-verdict\n      else if (false || r.reportBytes >= cfg.reportBytes) await close(r, vast, 'LIMIT');\n      return json({\n        state: 'ACCEPTED',\n        ...(payload.kind === 'result'\n"
+      "      else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)\n        await close(r, vast, 'LIMIT');",
+      "      else if (false || r.reportBytes >= cfg.reportBytes) await close(r, vast, 'LIMIT');"
     ]
   ],
   "legacy:cumulative report byte cap": [
@@ -237,14 +237,14 @@
   ],
   "legacy:free text cannot decide verdict": [
     [
-      "      }\n      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      r.firstReportAt ??= now();\n      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n",
-      "      }\n      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      if (payload.text?.includes('PASS')) r.verdict = 'PASS';\n      r.firstReportAt ??= now();\n      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n"
+      "      r.lastDigest = digest;\n      r.firstReportAt ??= now();",
+      "      r.lastDigest = digest;\n      if (payload.text?.includes('PASS')) r.verdict = 'PASS';\n      r.firstReportAt ??= now();"
     ]
   ],
   "legacy:structured result owned cleanup": [
     [
-      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n          ...payload.result,\n          die: r.die,\n",
-      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        await close(r, vast, 'RESULT', payload.result.verdict);\n        r.result = {\n          ...payload.result,\n          die: r.die,\n"
+      "      if (r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n",
+      "      if (r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        await close(r, vast, 'RESULT', payload.result.verdict);\n"
     ]
   ],
   "legacy:native owner secret comparison": [
@@ -255,8 +255,8 @@
   ],
   "legacy:owner-only stop-all": [
     [
-      "      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n      if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth\n      const records = await ledger.openRecords();\n      for (const r of records) {\n        r.closed = 'STOPPED';\n",
-      "      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n      const records = await ledger.openRecords();\n      for (const r of records) {\n        r.closed = 'STOPPED';\n"
+      "    if (path === '/stop-all') {\n      if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth\n",
+      "    if (path === '/stop-all') {\n"
     ]
   ],
   "legacy:OIDC run-scoped status and stop": [
@@ -337,18 +337,6 @@
       "    const url = new URL(request.url),\n      path = await routePath(request, env);\n    if (path === null) return notFound();\n    if (false)\n      return json(\n        {\n          state: 'RENTING_DISABLED',\n"
     ]
   ],
-  "legacy:owner numeric identity": [
-    [
-      "    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED' && latest.commit_id === p.head.sha;\n    const ownerPush = c.actor_id === cfg.owner && String(r.triggering_actor.id) === cfg.owner; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n      cfg.mode === 'actor_only'\n",
-      "    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED' && latest.commit_id === p.head.sha;\n    const ownerPush = true; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n      cfg.mode === 'actor_only'\n"
-    ]
-  ],
-  "legacy:review head SHA": [
-    [
-      "    );\n    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED' && latest.commit_id === p.head.sha;\n    const ownerPush = c.actor_id === cfg.owner && String(r.triggering_actor.id) === cfg.owner; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n",
-      "    );\n    const latest = decisive.at(-1);\n    const blocked = latest && ['DISMISSED', 'CHANGES_REQUESTED'].includes(latest.state);\n    const approved = latest?.state === 'APPROVED';\n    const ownerPush = c.actor_id === cfg.owner && String(r.triggering_actor.id) === cfg.owner; // MUTANT owner\n    const author = String(p.user?.id) === cfg.owner;\n    const permitted =\n"
-    ]
-  ],
   "legacy:draft refusal": [
     [
       "!github.event.pull_request.draft",
@@ -357,8 +345,8 @@
   ],
   "legacy:OIDC claims": [
     [
-      "    if (\n      !Number.isSafeInteger(c.iat) ||\n      c.iat > seconds + 60 ||\n      seconds - c.iat > this.maxAge ||\n      c.exp <= c.iat ||\n      c.exp - c.iat > this.maxLifetime ||\n      c.iss !== this.issuer ||\n      (c.aud !== audience && !allowedArray) ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      ((this.requireNbf || c.nbf !== undefined) &&\n        (typeof c.nbf !== 'number' || !Number.isFinite(c.nbf) || c.nbf > seconds))\n    )\n      refuse('UNAUTHORIZED', 401);\n",
-      "    if (false) refuse('UNAUTHORIZED',401);\n"
+      "      !Number.isSafeInteger(c.iat) ||\n      c.iat > seconds + 60 ||\n      seconds - c.iat > 600 ||\n      c.exp <= c.iat ||\n      c.exp - c.iat > 3600 ||\n      c.iss !== this.issuer ||\n      c.aud !== audience ||",
+      "      false ||"
     ]
   ],
   "legacy:credit reserve": [
@@ -387,14 +375,14 @@
   ],
   "legacy:one live instance": [
     [
-      "      return json(expose(prior, key, target.pr));\n    }\n    const active = await ledger.active();\n    if (active && active.ended === null) {\n      if (\n        ((active.pr !== null && active.pr === target.pr) ||\n          (active.pr === null && target.pr === null && active.branch === target.branch)) &&\n",
-      "      return json(expose(prior, key, target.pr));\n    }\n    const active = await ledger.active();\n    if (false) {\n      if (\n        ((active.pr !== null && active.pr === target.pr) ||\n          (active.pr === null && target.pr === null && active.branch === target.branch)) &&\n"
+      "    const active = await ledger.active();\n    if (active && active.ended === null) {",
+      "    const active = await ledger.active();\n    if (false) {"
     ]
   ],
   "legacy:superseding push": [
     [
-      "    }\n    const active = await ledger.active();\n    if (active && active.ended === null) {\n      if (\n        ((active.pr !== null && active.pr === target.pr) ||\n          (active.pr === null && target.pr === null && active.branch === target.branch)) &&\n        active.sha !== target.sha\n      ) {\n        await close(active, vast, 'SUPERSEDED');\n        refuse('BUSY', 409);\n      }\n",
-      "    }\n    const active = await ledger.active();\n    if (active && active.ended === null) {\n      if (false) {\n        await close(active, vast, 'SUPERSEDED');\n        refuse('BUSY', 409);\n      }\n"
+      "      if (active.branch === target.branch && active.sha !== target.sha) {",
+      "      if (false) {"
     ]
   ],
   "legacy:same SHA minimum gap": [
@@ -417,8 +405,8 @@
   ],
   "legacy:TTL destruction": [
     [
-      "      return;\n    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n",
-      "      return;\n    }\n    let reason;\n    if (false) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n"
+      "    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';",
+      "    if (false) reason = 'HARD_TIMEOUT';"
     ]
   ],
   "legacy:SHA/nonce shell validation": [
@@ -529,14 +517,18 @@
   ],
   "legacy:docs-only exclusion result": [
     [
-      "if (!(await github.allSkipped(pr))) return true;",
+      "if (!(await allSkipped(github, pr, patterns))) return true;",
       "if (true) return true;"
     ]
   ],
   "legacy:unknown file-list skip": [
     [
-      "  }\n  async allSkipped(p) {\n    const count = p.changed_files;\n    if (!Number.isSafeInteger(count) || count <= 0 || count >= 3000) return false;\n    const files = [];\n    for (let page = 1; page <= Math.ceil(count / 100); page++) {\n      const list = await this.get(`pulls/${p.number}/files?per_page=100&page=${page}`);\n      if (!Array.isArray(list) || list.length !== Math.min(100, count - files.length)) return false;\n      files.push(...list);\n    }\n    return skippedFiles(files, count, this.cfg.patterns);\n",
-      "  }\n  async allSkipped(p) {\n    const count = p.changed_files;\n    if (!Number.isSafeInteger(count) || count <= 0 || count >= 3000) return true;\n    const files = [];\n    for (let page = 1; page <= Math.ceil(count / 100); page++) {\n      const list = await this.get(`pulls/${p.number}/files?per_page=100&page=${page}`);\n      if (!Array.isArray(list) || list.length !== Math.min(100, count - files.length)) return true;\n      files.push(...list);\n    }\n    return skippedFiles(files, count, this.cfg.patterns);\n"
+      "  if (!Number.isSafeInteger(count) || count <= 0 || count >= 3000) return false;\n  const files = [];",
+      "  if (!Number.isSafeInteger(count) || count <= 0 || count >= 3000) return true;\n  const files = [];"
+    ],
+    [
+      "    if (!Array.isArray(list) || list.length !== Math.min(100, count - files.length)) return false;",
+      "    if (!Array.isArray(list) || list.length !== Math.min(100, count - files.length)) return true;"
     ]
   ],
   "legacy:canonical path validation": [
@@ -569,12 +561,6 @@
       "      refuse();\n    const publicFallback = async (url, init) => {\n      const response = await this.fetcher(url, init);\n      if (false) {\n        await response.body?.cancel();\n        const headers = { ...this.headers };\n        delete headers.Authorization;\n"
     ]
   ],
-  "legacy:owner branch without PR": [
-    [
-      "      if (!p)\n        return {",
-      "      if (!p) refuse();\n      if (!p)\n        return {"
-    ]
-  ],
   "legacy:immutable API cache": [
     [
       "    if ((immutable || lifecycle) && cached && this.now() - cached.at < ttl)",
@@ -601,8 +587,8 @@
   ],
   "v4:no-result-grace": [
     [
-      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n          ...payload.result,\n          die: r.die,\n",
-      "      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        await close(r, vast, 'RESULT', payload.result.verdict);\n        r.result = {\n          ...payload.result,\n          die: r.die,\n"
+      "      if (r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n",
+      "      if (r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        await close(r, vast, 'RESULT', payload.result.verdict);\n"
     ]
   ],
   "v4:kill-no-destroy": [
@@ -635,8 +621,8 @@
   ],
   "v4:no-provision-deadline": [
     [
-      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.firstReportAt === undefined &&\n      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n",
-      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (false) reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n"
+      "    else if (record.firstReportAt === undefined && now() >= record.bootDeadline)\n      reason = 'BOOT_TIMEOUT';",
+      "    else if (false) reason = 'BOOT_TIMEOUT';"
     ]
   ],
   "v4:no-cron-reserve": [
@@ -647,8 +633,8 @@
   ],
   "v4:no-hard-ttl": [
     [
-      "      return;\n    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n",
-      "      return;\n    }\n    let reason;\n    if (false) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n"
+      "    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';",
+      "    if (false) reason = 'HARD_TIMEOUT';"
     ]
   ],
   "v4:no-rate-limit": [
@@ -807,8 +793,8 @@
       "                if self.raw_size > MAX_LOG:\n                    raise Invalid()\n                self.raw.append(chunk)\n            if False:\n                raise Invalid()\n            self.cursor = data[\"next_cursor\"]\n            self.show(\"\".join(chunks))\n"
     ],
     [
-      "                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n                    terminal = True\n",
-      "                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if False:\n                        raise Invalid()\n                    self.metadata = data\n                    terminal = True\n"
+      "                    or data[\"state\"] in {\"GRACE\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()",
+      "                    or data[\"state\"] in {\"GRACE\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if False:\n                        raise Invalid()"
     ]
   ],
   "r3:runner-version": [
@@ -855,7 +841,7 @@
   ],
   "r3:rent-head-binding": [
     [
-      "    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);",
+      "    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);",
       "    if (false) refuse('BINDING_MISMATCH', 409);"
     ]
   ],
@@ -953,18 +939,6 @@
       "                (\"Runner dropped bytes\", str(dropped)),\n            ]:\n                self.summary.write(\"| \" + key + \" | \" + value + \" |\\n\")\n            if False:\n                d = self.metadata\n                gpu, _ = scrub(\n                    d[\"gpu_model\"],\n"
     ]
   ],
-  "r3:target-base-binding": [
-    [
-      "        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n",
-      ""
-    ]
-  ],
-  "r3:target-PR-membership": [
-    [
-      "      const member = r.pull_requests?.filter(\n        (x) => x.number === hint.pr_number && x.head?.sha === hint.tested_sha,\n      );\n      if (member?.length !== 1) refuse('UNAUTHORIZED', 401);\n      p = await this.pr(hint.pr_number);\n      if (p.head?.repo?.full_name !== cfg.repo) refuse('NOT_ELIGIBLE', 403);\n      if (p.head?.sha !== hint.tested_sha) refuse('UNAUTHORIZED', 401);\n",
-      "      const member = r.pull_requests?.filter(\n        (x) => x.number === hint.pr_number && x.head?.sha === hint.tested_sha,\n      );\n      if (false) refuse('UNAUTHORIZED', 401);\n      p = await this.pr(hint.pr_number);\n      if (p.head?.repo?.full_name !== cfg.repo) refuse('NOT_ELIGIBLE', 403);\n      if (p.head?.sha !== hint.tested_sha) refuse('UNAUTHORIZED', 401);\n"
-    ]
-  ],
   "r3:runner-local-redaction": [
     [
       "    original = len(raw)\n    text = raw.decode(\"utf-8\", errors=\"replace\")\n    for secret in sorted(set(redactions), key=len, reverse=True):\n        if secret:\n            text = text.replace(secret, \"[redacted]\")\n    text = re.sub(r\"(?:\\x1b\\]|\\x9d)[\\s\\S]*?(?:\\x07|\\x1b\\\\|\\x9c|$)\", \"\", text)\n    text = re.sub(r\"(?:\\x1b[P^_]|[\\x90\\x98\\x9e\\x9f])[\\s\\S]*?(?:\\x1b\\\\|\\x9c|$)\", \"\", text)\n",
@@ -997,8 +971,8 @@
   ],
   "r3:OIDC-workflow-ref": [
     [
-      "if (allowedWorkflowRef(c, cfg)) return c;",
-      "if (true) return c;"
+      "    !allowedWorkflowRef(c, cfg)\n  )\n    refuse('UNAUTHORIZED', 401);\n  return c;",
+      "    false\n  )\n    refuse('UNAUTHORIZED', 401);\n  return c;"
     ]
   ],
   "r3:release-same-SHA": [
@@ -1085,22 +1059,16 @@
       "  \"gapHours\": 24,\n  \"bootMinutes\": 40,\n  \"hardMinutes\": 180,\n  \"softMarginMinutes\": 1,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n"
     ]
   ],
-  "v5:default-manual-ceiling": [
-    [
-      "  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n  \"reportRate\": 20,\n",
-      "  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 60,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n  \"reportRate\": 20,\n"
-    ]
-  ],
   "v5:default-pass-grace": [
     [
-      "  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n",
-      "  \"softMarginMinutes\": 10,\n  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 10,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n"
+      "  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"reportCount\": 2000,",
+      "  \"passGraceMinutes\": 10,\n  \"failGraceMinutes\": 10,\n  \"reportCount\": 2000,"
     ]
   ],
   "v5:default-fail-grace": [
     [
-      "  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n",
-      "  \"heartbeatMinutes\": 10,\n  \"heartbeatTimeoutMinutes\": 15,\n  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 5,\n  \"manualCeilingMinutes\": 480,\n  \"reportCount\": 2000,\n  \"reportBytes\": 4194304,\n"
+      "  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 10,\n  \"reportCount\": 2000,",
+      "  \"passGraceMinutes\": 5,\n  \"failGraceMinutes\": 5,\n  \"reportCount\": 2000,"
     ]
   ],
   "v5:create-reservation-phase": [
@@ -1117,72 +1085,26 @@
   ],
   "v5:immutable-clock": [
     [
-      "  function clocks(r, cfg) {\n    r.phase = phase(r);\n    r.bootDeadline ??= r.started + (r.provision ?? cfg.boot);\n    if (r.hardDeadline === undefined) r.hardDeadline = r.started + (r.ttl ?? cfg.hard);\n    r.softDeadline ??= r.started + (r.ttl ?? cfg.hard) - cfg.softMargin;\n    r.manualDeadline ??= r.started + cfg.manualCeiling;\n    r.lastPostAt ??= r.firstReportAt ?? null;\n",
-      "  function clocks(r, cfg) {\n    r.phase = phase(r);\n    r.bootDeadline ??= r.started + (r.provision ?? cfg.boot);\n    r.hardDeadline = now() + (r.ttl ?? cfg.hard);\n    r.softDeadline ??= r.started + (r.ttl ?? cfg.hard) - cfg.softMargin;\n    r.manualDeadline ??= r.started + cfg.manualCeiling;\n    r.lastPostAt ??= r.firstReportAt ?? null;\n"
+      "    if (r.hardDeadline === undefined) r.hardDeadline = r.started + (r.ttl ?? cfg.hard);",
+      "    r.hardDeadline = now() + (r.ttl ?? cfg.hard);"
     ]
   ],
   "v5:boot-timeout": [
     [
-      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.firstReportAt === undefined &&\n      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n",
-      "      now() >= record.resultDeadline\n    )\n      reason = 'RESULT';\n    else if (false) reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n"
+      "    else if (record.firstReportAt === undefined && now() >= record.bootDeadline)\n      reason = 'BOOT_TIMEOUT';",
+      "    else if (false) reason = 'BOOT_TIMEOUT';"
     ]
   ],
   "v5:heartbeat-timeout": [
     [
-      "      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.lastPostAt !== null &&\n      now() - record.lastPostAt >= record.heartbeatTimeout\n    )\n      reason = 'HEARTBEAT_TIMEOUT';\n    if (reason) {\n      if (\n        reason === 'BOOT_TIMEOUT' &&\n",
-      "      now() >= record.bootDeadline\n    )\n      reason = 'BOOT_TIMEOUT';\n    else if (false) reason = 'HEARTBEAT_TIMEOUT';\n    if (reason) {\n      if (\n        reason === 'BOOT_TIMEOUT' &&\n"
+      "    else if (record.lastPostAt !== null && now() - record.lastPostAt >= record.heartbeatTimeout)\n      reason = 'HEARTBEAT_TIMEOUT';",
+      "    else if (false) reason = 'HEARTBEAT_TIMEOUT';"
     ]
   ],
   "v5:empty-heartbeat": [
     [
-      "      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      r.firstReportAt ??= now();\n      r.lastPostAt = now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n",
-      "      r.lastSeq = payload.seq;\n      r.lastDigest = digest;\n      r.firstReportAt ??= now();\n      r.lastPostAt ??= now();\n      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';\n      if (payload.kind === 'result') {\n        r.result = {\n"
-    ]
-  ],
-  "v5:hard-in-manual": [
-    [
-      "      return;\n    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n",
-      "      return;\n    }\n    let reason;\n    if (false) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n"
-    ]
-  ],
-  "v5:manual-ceiling": [
-    [
-      "    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.resultAt !== undefined &&\n",
-      "    }\n    let reason;\n    if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';\n    else if (false) reason = 'MANUAL_TIMEOUT';\n    else if (\n      record.phase !== 'MANUAL' &&\n      record.resultAt !== undefined &&\n"
-    ]
-  ],
-  "v5:hold-grace-and-heartbeat": [
-    [
-      "    r.phase = 'MANUAL';\n    r.manualAt ??= now();\n    r.resultDeadline = null;",
-      "    r.manualAt ??= now();"
-    ]
-  ],
-  "v5:hold-auth": [
-    [
-      "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (\n      !r ||\n      !(await tokens.verify(bearer, r)) ||\n      r.ended !== null ||\n      r.closed ||\n      now() >= r.reportExpiry * 1000\n    )\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n",
-      "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.ended !== null || r.closed || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n"
-    ],
-    [
-      "      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);",
-      "      if (!record || (box[1] !== 'hold' && !(await tokens.verify(bearer, record)))) refuse('UNAUTHORIZED', 401);"
-    ]
-  ],
-  "v5:owner-timer-auth": [
-    [
-      "    const owner =\n      validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));\n    if (match?.[1] === 'stop-timer') {\n      if (!owner) refuse('UNAUTHORIZED', 401);\n      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n",
-      "    const owner =\n      validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));\n    if (match?.[1] === 'stop-timer') {\n      return stopTimer(match[2], cfg, vast);\n    }\n    if (path === '/stop-all') {\n"
-    ]
-  ],
-  "v5:timer-extension-liability": [
-    [
-      "    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)\n      refuse('UNAVAILABLE_BUDGET', 409);\n    await ledger.budgets(cfg, now(), total, r.key);",
-      "    /* mutant omits credit */\n    /* mutant omits extended budget */"
-    ]
-  ],
-  "v5:manual-cron-status": [
-    [
-      "    if (record.phase === 'MANUAL')\n      await workerLine(\n        record,\n        'MANUAL hard_timer=' +\n          (record.hardDeadline === null ? 'removed' : 'active') +\n          ' ceiling_at=' +\n          record.manualDeadline,\n        cfg,\n      );",
-      "    /* mutant drops MANUAL cron line */"
+      "      r.firstReportAt ??= now();\n      r.lastPostAt = now();",
+      "      r.firstReportAt ??= now();\n      r.lastPostAt ??= now();"
     ]
   ],
   "v5:worker-tail-bounds": [
@@ -1195,18 +1117,6 @@
     [
       "KF_SOFT_DEADLINE: Math.floor(r.softDeadline / 1000)",
       "KF_SOFT_DEADLINE: Math.floor((now() + cfg.hard) / 1000)"
-    ]
-  ],
-  "v5:hold-helper-scope": [
-    [
-      "/hold/${KF_RUN_ID:?}",
-      "/hold/999-1"
-    ]
-  ],
-  "v5:ssh-login-hold": [
-    [
-      "if [ -n \"${SSH_CONNECTION:-}\" ]",
-      "if false"
     ]
   ],
   "v5:heartbeat-after-cap": [
@@ -1329,7 +1239,7 @@
   ],
   "v5:sweep-owner-only": [
     [
-      "    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.sweepWorkflow)\n    )\n      refuse('UNAUTHORIZED', 401);\n",
+      "    if (!allowedWorkflowRef(c, cfg, profile)) refuse('UNAUTHORIZED', 401);\n",
       "    /* mutant omits profile owner gate */\n"
     ],
     [
@@ -1421,7 +1331,7 @@
   ],
   "v5:runner-V5-terminals": [
     [
-      "                if (\n                    data[\"state\"] == \"NOT_NEEDED\"\n                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):",
+      "                if (\n                    data[\"state\"] == \"NOT_NEEDED\"\n                    or data[\"state\"] in {\"GRACE\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):",
       "                if data[\"state\"] == \"NOT_NEEDED\":"
     ]
   ],
@@ -1441,12 +1351,6 @@
     [
       "payload=scripts/ci/vast_payload.sh",
       "payload=scripts/ci/vast_box_main.sh"
-    ]
-  ],
-  "v5:owner-sweep-selected-commit": [
-    [
-      "      String(c.triggering_actor) !== String(r.triggering_actor.id)\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (cfg.profile === 'sweep') {\n      if (\n        c.event_name !== 'workflow_dispatch' ||\n        c.actor_id !== cfg.owner ||\n",
-      "      String(c.triggering_actor) !== String(r.triggering_actor.id)\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (false) {\n      if (\n        c.event_name !== 'workflow_dispatch' ||\n        c.actor_id !== cfg.owner ||\n"
     ]
   ],
   "v5:sweep-workflow-trigger-guard": [

@@ -14,7 +14,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -32,7 +32,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -50,7 +50,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -68,7 +68,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -86,7 +86,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -104,7 +104,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -122,7 +122,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -140,7 +140,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -158,7 +158,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -180,7 +180,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -202,7 +202,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -220,7 +220,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -238,7 +238,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -256,7 +256,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -274,7 +274,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -284,7 +284,7 @@
       "file": "src/oidc.js",
       "patches": [
         [
-          "      !Number.isSafeInteger(c.iat) ||\n      c.iat > seconds + 60 ||\n      seconds - c.iat > this.maxAge ||\n      c.exp <= c.iat ||\n      c.exp - c.iat > this.maxLifetime ||\n",
+          "      !Number.isSafeInteger(c.iat) ||\n      c.iat > seconds + 60 ||\n      seconds - c.iat > 600 ||\n      c.exp <= c.iat ||\n      c.exp - c.iat > 3600 ||\n",
           ""
         ]
       ],
@@ -292,7 +292,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -310,7 +310,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -328,7 +328,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -346,7 +346,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -364,7 +364,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -382,7 +382,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -400,7 +400,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -418,7 +418,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -436,7 +436,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -454,7 +454,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -472,7 +472,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -490,7 +490,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -508,7 +508,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -526,65 +526,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "Access-gateway-gate",
-      "file": "src/index.js",
-      "patches": [
-        [
-          "await access.authorize(request, env);",
-          "void env;"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "Access-role-allowlist",
-      "file": "src/access.js",
-      "patches": [
-        [
-          "    if (\n      !kind ||\n      claims.common_name !==",
-          "    if (false && (\n      !kind ||\n      claims.common_name !=="
-        ],
-        [
-          "    )\n      refuse('FORBIDDEN', 403);",
-          "    ))\n      refuse('FORBIDDEN', 403);"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "Access-partial-config",
-      "file": "src/access.js",
-      "patches": [
-        [
-          "accessVars.every((key) => !env[key])",
-          "accessVars.some((key) => !env[key])"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -602,61 +544,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "box-reporter-Access-headers",
-      "file": "../../scripts/ci/vast_report.py",
-      "patches": [
-        [
-          "{**self.access, \"Content-Type\": \"application/json\",",
-          "{\"Content-Type\": \"application/json\","
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "box-shell-Access-headers",
-      "file": "../../scripts/ci/kf-access-headers.sh",
-      "patches": [
-        [
-          "kf_access_headers() {",
-          "kf_access_headers() {\n    return 0"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "box-Access-injection",
-      "file": "src/index.js",
-      "patches": [
-        [
-          "        ...boxAccess,",
-          ""
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -674,7 +562,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -733,18 +621,18 @@
     },
     {
       "name": "front-pull-request-deny",
-      "file": "src/index.js",
+      "file": "src/workflow-authority.js",
       "patches": [
         [
-          "!['pull_request_target', 'workflow_dispatch', 'push'].includes(c.event_name)",
-          "!['pull_request_target', 'workflow_dispatch', 'push', 'pull_request'].includes(c.event_name)"
+          "['pull_request_target', 'push'].includes(c.event_name)",
+          "['pull_request_target', 'push', 'pull_request'].includes(c.event_name)"
         ]
       ],
       "tests": [
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -762,25 +650,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "Access-audience",
-      "file": "src/oidc.js",
-      "patches": [
-        [
-          "(c.aud !== audience && !allowedArray) ||",
-          "false ||"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -798,25 +668,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
-      "name": "Access-missing-assertion",
-      "file": "src/access.js",
-      "patches": [
-        [
-          "    const issuer = 'https://' + env.ACCESS_TEAM_DOMAIN;",
-          "    if (!request.headers.get('Cf-Access-Jwt-Assertion')) return;\n    const issuer = 'https://' + env.ACCESS_TEAM_DOMAIN;"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -834,7 +686,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -852,7 +704,7 @@
         "round-fixes.test.js",
         "round-lifecycle.test.js",
         "round-access.test.js",
-        "round-access-policy.test.js",
+        "round-config-diagnostic.test.js",
         "round-owner-token.test.js",
         "round-boundaries.test.js"
       ]
@@ -880,20 +732,7 @@
         ]
       ],
       "tests": [
-        "round-access-policy.test.js"
-      ]
-    },
-    {
-      "name": "Access-owner-config-route",
-      "file": "src/access.js",
-      "patches": [
-        [
-          "invalidPrefix && path.endsWith('/availability')",
-          "false"
-        ]
-      ],
-      "tests": [
-        "round-access-policy.test.js"
+        "round-config-diagnostic.test.js"
       ]
     },
     {
@@ -918,8 +757,8 @@
       "file": "src/github.js",
       "patches": [
         [
-          "    const target = {",
-          "    if (p.base.ref !== 'master') refuse();\n    const target = {"
+          "    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);",
+          "    if ((await this.get('pulls/7')).base.ref !== 'master') refuse();\n    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);"
         ]
       ],
       "tests": [
@@ -931,8 +770,8 @@
       "file": "src/github.js",
       "patches": [
         [
-          "    const target = {",
-          "    if (p.draft) refuse();\n    const target = {"
+          "    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);",
+          "    if ((await this.get('pulls/7')).draft) refuse();\n    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);"
         ]
       ],
       "tests": [
@@ -944,8 +783,8 @@
       "file": "src/github.js",
       "patches": [
         [
-          "    const target = {",
-          "    if (await this.allSkipped(p)) refuse();\n    const target = {"
+          "    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);",
+          "    const files = await this.get('pulls/7/files?per_page=100&page=1');\n    if (files.every((x) => /^(docs\\/|LICENSE)/.test(x.filename))) refuse();\n    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);"
         ]
       ],
       "tests": [
@@ -963,71 +802,6 @@
       ],
       "tests": [
         "round-trigger-policy.test.js"
-      ]
-    },
-    {
-      "name": "Access-audience-array",
-      "file": "src/access.js",
-      "patches": [
-        [
-          "        allowAudienceArray: true,",
-          "        allowAudienceArray: false,"
-        ]
-      ],
-      "tests": [
-        "round-access-audience.test.js"
-      ]
-    },
-    {
-      "name": "Access-audience-membership",
-      "file": "src/oidc.js",
-      "patches": [
-        [
-          "c.aud.includes(audience)",
-          "true"
-        ]
-      ],
-      "tests": [
-        "round-access-audience.test.js"
-      ]
-    },
-    {
-      "name": "Access-audience-type",
-      "file": "src/oidc.js",
-      "patches": [
-        [
-          "c.aud.every(\n        (value) => typeof value === 'string' && value.length > 0 && value.length <= 256,\n      )",
-          "true"
-        ]
-      ],
-      "tests": [
-        "round-access-audience.test.js"
-      ]
-    },
-    {
-      "name": "Access-audience-size",
-      "file": "src/oidc.js",
-      "patches": [
-        [
-          "c.aud.length <= 16",
-          "true"
-        ]
-      ],
-      "tests": [
-        "round-access-audience.test.js"
-      ]
-    },
-    {
-      "name": "GitHub-audience-scalar",
-      "file": "src/oidc.js",
-      "patches": [
-        [
-          "allowAudienceArray = false",
-          "allowAudienceArray = true"
-        ]
-      ],
-      "tests": [
-        "round-access-audience.test.js"
       ]
     },
     {
@@ -1054,6 +828,158 @@
       ],
       "tests": [
         "round-cwd.test.js"
+      ]
+    },
+    {
+      "name": "simplify-trigger-owner",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "String(r.triggering_actor?.id) !== cfg.owner || // MUTANT trigger-owner",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js",
+        "auth.test.js",
+        "round-push.test.js"
+      ]
+    },
+    {
+      "name": "simplify-run-head-binding",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "    if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);\n",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js",
+        "round3-binding.test.js",
+        "round3-isolation.test.js"
+      ]
+    },
+    {
+      "name": "simplify-head-repository",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "      r.head_repository?.full_name !== cfg.repo ||\n",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js",
+        "round3-isolation.test.js",
+        "round-push.test.js"
+      ]
+    },
+    {
+      "name": "simplify-target-base-claim",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "(c.event_name !== 'pull_request_target' && c.sha !== r.head_sha)",
+          "c.sha !== r.head_sha"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js",
+        "round3-isolation.test.js"
+      ]
+    },
+    {
+      "name": "simplify-pin-events",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "return profile !== 'sweep' && ['pull_request_target', 'push'].includes(c.event_name);",
+          "return profile !== 'sweep';"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js",
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "simplify-master-ref",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "    c.ref !== 'refs/heads/master' ||\n",
+          ""
+        ]
+      ],
+      "tests": [
+        "auth.test.js",
+        "round-simplify.test.js"
+      ]
+    },
+    {
+      "name": "simplify-retired-manual-routes",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "/^\\/(report|kill|status|stop|logs)\\/",
+          "/^\\/(report|kill|hold|stop-timer|status|stop|logs)\\/"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js"
+      ]
+    },
+    {
+      "name": "simplify-manual-deadline-field",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "    last_post_at: r.lastPostAt ?? null,\n",
+          "    manual_deadline_at: null,\n    last_post_at: r.lastPostAt ?? null,\n"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js"
+      ]
+    },
+    {
+      "name": "simplify-box-Access-injection",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "        KF_PROTOCOL: DEFAULTS.boxProtocol,\n",
+          "        ...(env.BOX_ACCESS_ID\n          ? { KF_ACCESS_ID: env.BOX_ACCESS_ID, KF_ACCESS_SECRET: env.BOX_ACCESS_SECRET }\n          : {}),\n        KF_PROTOCOL: DEFAULTS.boxProtocol,\n"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js"
+      ]
+    },
+    {
+      "name": "simplify-retired-variables",
+      "file": "src/policy.js",
+      "patches": [
+        [
+          "  if (!numericId(env.REPOSITORY_GITHUB_ID)) refuse();\n",
+          "  if (['APPROVAL_MODE', 'RENT_DRAFTS', 'ALLOWED_BASE_BRANCHES', 'PATH_SKIP_PATTERNS', 'MANUAL_CEILING_MINUTES'].some((k) => env[k] !== undefined)) refuse();\n  if (!numericId(env.REPOSITORY_GITHUB_ID)) refuse();\n"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js"
+      ]
+    },
+    {
+      "name": "simplify-lifecycle-PR-lookup",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "    if (record.resultAt !== undefined) return;\n    const run",
+          "    if (record.resultAt !== undefined) return;\n    if (record.pr !== null) await github.get('pulls/' + record.pr, false, true);\n    const run"
+        ]
+      ],
+      "tests": [
+        "round-simplify.test.js"
       ]
     }
   ]

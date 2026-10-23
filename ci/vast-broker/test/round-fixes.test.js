@@ -43,14 +43,14 @@ async function ingress(path, token, count = 1) {
   }
   return { response, entries };
 }
-for (const path of ['/report/123-1', '/kill/123-1', '/hold/123-1']) {
+for (const path of ['/report/123-1', '/kill/123-1', '/blob-url/123-1/release-v1/asset']) {
   test('round front rejects forged legacy bearer without DO ' + path, async () => {
     const result = await ingress(path, 'v1.123.1.1800009000.' + 'A'.repeat(43), 100);
     assert.equal(result.entries, 0);
     assert.equal(result.response.status, 401);
   });
 }
-for (const path of ['/report/123-1', '/hold/123-1']) {
+for (const path of ['/report/123-1', '/blob-url/123-1/release-v1/asset']) {
   test('round front verifies nonce MAC before DO ' + path, async () => {
     const result = await ingress(path, tokenV2().slice(0, -4) + 'AAAA');
     assert.equal(result.entries, 0);

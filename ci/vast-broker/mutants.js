@@ -255,22 +255,6 @@ const mutations = [
   ],
   ['kill switch', 'src/index.js', replace("path==='/rent'&&env.RENTING_ENABLED!=='true'", 'false')],
   [
-    'owner numeric identity',
-    'src/github.js',
-    replace(
-      'const ownerPush=c.actor_id===cfg.owner&&String(r.triggering_actor.id)===cfg.owner;',
-      'const ownerPush=true;',
-    ),
-  ],
-  [
-    'review head SHA',
-    'src/github.js',
-    replace(
-      "latest?.state==='APPROVED'&&latest.commit_id===p.head.sha",
-      "latest?.state==='APPROVED'",
-    ),
-  ],
-  [
     'draft refusal',
     '../../.github/workflows/gpu-vast.yml',
     replace('if(p.draft===true&&!cfg.drafts)', 'if(false)'),
@@ -394,11 +378,19 @@ const mutations = [
     'trigger-policy.mjs',
     replace('if(target.notNeeded)', 'if(false)'),
   ],
-  ['unknown file-list skip', 'src/github.js', (s) => s.replaceAll('return false;', 'return true;')],
-  ['canonical path validation', 'src/policy.js', dropLine("path.startsWith('ci/vast-broker/')")],
+  [
+    'unknown file-list skip',
+    'trigger-policy.mjs',
+    (s) => s.replaceAll('return false;', 'return true;'),
+  ],
+  [
+    'canonical path validation',
+    'trigger-policy.mjs',
+    dropLine("path.startsWith('ci/vast-broker/')"),
+  ],
   [
     'renamed previous path',
-    'src/policy.js',
+    'trigger-policy.mjs',
     replace('(x.previous_filename===undefined||skippedPath(x.previous_filename,patterns))', 'true'),
   ],
   [
@@ -415,11 +407,6 @@ const mutations = [
     'public GitHub fallback',
     'src/github.js',
     replace('if(this.headers.Authorization&&[401,403].includes(response.status))', 'if(false)'),
-  ],
-  [
-    'owner branch without PR',
-    'src/github.js',
-    replace('if(!p)return {', 'if(!p)refuse();if(!p)return {'),
   ],
   [
     'immutable API cache',

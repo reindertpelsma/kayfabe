@@ -3,9 +3,9 @@
 # exact SHA and execs this script. Everything per-run arrives as KF_* environment variables
 # (contract: scripts/ci/README.md). This script
 #   installs curl/python3/git when missing, validates the contract (structured failure post on
-#   violation), keeps the environment in a root-only file, installs kf-box-kill and the SSH
-#   hold hook, starts the reporter, runs the payload under the soft deadline with the run
-#   capability removed from its environment, and hands the result to the reporter.
+#   violation), keeps the environment in a root-only file, installs kf-box-kill, starts the
+#   reporter, runs the payload under the soft deadline with the run capability removed from its
+#   environment, and hands the result to the reporter.
 # KF_CI_* variables below are overrides for tests; the Worker never sets them.
 set -u
 umask 077
@@ -44,13 +44,10 @@ set -a
 set +a
 
 mkdir -p "$bin_dir" "$profile_dir"
-install -m 700 "$here/kf-access-headers.sh" "$bin_dir/kf-access-headers.sh"
 install -m 700 "$here/kf-box-kill" "$bin_dir/kf-box-kill"
-install -m 700 "$here/kf-box-hold" "$bin_dir/kf-box-hold"
 if [ -f "$here/kf-box-blob-url" ]; then
     install -m 700 "$here/kf-box-blob-url" "$bin_dir/kf-box-blob-url"
 fi
-install -m 644 "$here/kf-ci-hold.sh" "$profile_dir/kf-ci-hold.sh"
 
 rm -f "$result" "$run_dir/done" "$run_dir/done.tmp"
 : >"$log"
@@ -75,8 +72,7 @@ else
     (
         cd "$repo" || exit 125
         exec timeout --signal=TERM --kill-after=30s "${remaining}s" \
-            env -u KF_ACCESS_ID -u KF_ACCESS_SECRET \
-            -u KF_RUN_TOKEN -u KF_BROKER_URL -u KF_RUN_ID -u KF_RUNNER_NONCE \
+            env -u KF_RUN_TOKEN -u KF_BROKER_URL -u KF_RUN_ID -u KF_RUNNER_NONCE \
             "KF_SOFT_DEADLINE_MS=$((KF_SOFT_DEADLINE * 1000))" \
             bash "$payload" "$KF_SHA" "$KF_NONCE"
     ) >>"$log" 2>&1 </dev/null

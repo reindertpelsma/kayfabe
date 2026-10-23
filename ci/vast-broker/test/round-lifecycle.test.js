@@ -28,11 +28,11 @@ for (const profile of ['pr', 'branch']) {
     const h = await setup({ HARD_RUNTIME_MINUTES: '180' });
     const claims = {};
     if (profile === 'branch') {
-      h.cloud.run.event = 'workflow_dispatch';
+      h.cloud.run.event = 'push';
       h.cloud.run.head_branch = 'master';
       h.cloud.run.pull_requests = [];
       h.cloud.prs = [];
-      claims.event_name = 'workflow_dispatch';
+      claims.event_name = 'push';
       claims.ref = 'refs/heads/master';
     }
     assert.equal((await h.call('/rent', { claims })).status, 200);
@@ -74,25 +74,20 @@ for (const quota of ['run', 'day']) {
     assert.equal(h.cloud.inspected.length, before);
   });
 }
-for (const action of ['hold', 'stop-timer']) {
-  test('round full log cannot discard manual control state ' + action, async () => {
+for (const action of ['status', 'sweep']) {
+  test('round full log still accounts Worker-authored lines ' + action, async () => {
     const h = await setup();
     await h.call();
-    await h.report({ seq: 1, kind: 'result', result: { nonce, verdict: 'PASS' } });
     const r = await h.storage.get('record:123-1');
     r.fullBytes = 4194304;
-    if (action === 'stop-timer') {
-      r.phase = 'MANUAL';
-      r.manualAt = clock;
-    }
+    r.providerState = 'created';
     await h.storage.put('record:123-1', r);
-    const result = await h.call('/' + action + '/123-1', {
-      token: action === 'hold' ? callbackToken(r) : h.bindings.OWNER_STOP_TOKEN,
-    });
-    assert.equal(result.status, 200);
+    if (action === 'status') assert.equal((await h.call('/status/123-1')).status, 200);
+    else await h.service.sweep();
     const saved = await h.storage.get('record:123-1');
-    if (action === 'hold') assert.equal(saved.phase, 'MANUAL');
-    else assert.equal(saved.hardDeadline, null);
+    assert.equal(saved.providerState, 'running');
+    assert.ok(saved.fullBytesDropped > 0);
+    assert.equal(saved.fullBytes, 4194304);
   });
 }
 // FALSIFIER: lower observed contract prices erase already reserved/billed liability.

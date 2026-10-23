@@ -75,7 +75,7 @@ for (const kind of [
     assert.equal((await h.report({ seq: 1, kind: 'result', result })).status, 400);
     assert.equal((await h.storage.get('record:123-1')).resultAt, undefined);
   });
-for (const phase of ['GRACE', 'MANUAL', 'NONE'])
+for (const phase of ['GRACE', 'NONE'])
   test('V5 runner validates terminal suite metadata ' + phase, () => {
     const r = spawnSync(
       'python3',

@@ -28,7 +28,6 @@ def extra_status(verdict="PASS", pending=False, not_needed=False):
         boot_deadline_at=2401000,
         hard_deadline_at=10801000,
         soft_deadline_at=10201000,
-        manual_deadline_at=28801000,
         last_post_at=2000,
         result_deadline_at=None if pending else 302000,
     )

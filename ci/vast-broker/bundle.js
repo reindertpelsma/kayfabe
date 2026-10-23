@@ -11,7 +11,6 @@ const files = [
   'results',
   'reports',
   'oidc',
-  'access',
   'workflow-authority',
   'github',
   'blobs',

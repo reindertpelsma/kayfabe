@@ -51,9 +51,8 @@ data = {
     "boot_deadline_at": 2401000,
     "hard_deadline_at": 10801000,
     "soft_deadline_at": 10201000,
-    "manual_deadline_at": 28801000,
     "last_post_at": 2000,
-    "result_deadline_at": None if phase == "MANUAL" else 302000,
+    "result_deadline_at": 302000,
     **manifest,
 }
 assert m.validate_status(data, ctx, manifest, 200) == data

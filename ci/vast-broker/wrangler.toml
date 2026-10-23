@@ -26,21 +26,16 @@ REPOSITORY_GITHUB_ID = "1311106387"
 OIDC_SUB = "repo:reindertpelsma/kayfabe:environment:gpu-vast"
 CHECK_JOB_WORKFLOW_REFS = '["reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master"]'
 SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-sweep.yml@refs/heads/master"
-APPROVAL_MODE = "owner_push_or_review"
-# Trigger filters belong to gpu-vast.yml and trigger-policy.mjs.
 
 # Secret bindings: WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
 # Optional secret BROKER_PATH_PREFIX: one random base64url segment, 32-128 chars.
 # RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
 # Optional GITHUB_API_TOKEN: read-only GitHub checks and release metadata.
 # BLOB_GITHUB_TOKEN: deprecated asset-only fallback.
-# Optional BOX_ACCESS_ID/BOX_ACCESS_SECRET: complete box service-token B pair.
 # No Cloudflare or Vast secret belongs in GitHub Actions.
 
 # Optional PREFERRED_COUNTRIES JSON overrides defaults.json; eligibility always comes first.
 
-# Optional Access assertion gate: set all four public vars together (or leave all absent).
-# ACCESS_TEAM_DOMAIN = "olifon.cloudflareaccess.com"
-# ACCESS_AUD = "application-audience"
-# ACCESS_RUNNER_CLIENT_ID = "runner-token-client-id.access"
-# ACCESS_BOX_CLIENT_ID = "box-token-client-id.access"
+# Authorization: signed OIDC identity + pinned master workflow + run triggering_actor ==
+# OWNER_GITHUB_ID + tested sha == run head_sha. When to run is decided by the workflow YAML.
+# Cloudflare Access, if used, is a dashboard-only front door; the Worker reads no Access var.

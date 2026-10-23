@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, nonce, callbackToken } from './helpers.js';
-// FALSIFIER: a callback/hold wins a race with overdue cron and extends an
+// FALSIFIER: a box callback wins a race with overdue cron and extends an
 // already-expired boot, heartbeat or result-grace deadline.
 for (const restart of [false, true])
   for (const deadline of ['boot', 'heartbeat', 'grace'])
@@ -15,9 +15,9 @@ for (const restart of [false, true])
       if (restart) h.restart();
       const response =
         deadline === 'grace'
-          ? await h.call('/hold/123-1', {
+          ? await h.call('/blob-url/123-1/release-v1/asset', {
+              method: 'GET',
               token: callbackToken(await h.storage.get('record:123-1')),
-              ghToken: null,
             })
           : await h.report({ seq: deadline === 'heartbeat' ? 2 : 1, kind: 'log', text: '' });
       assert.equal(response.status, 401);

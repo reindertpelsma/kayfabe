@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """V5 behavioural mutations; run sequentially, never beside baseline tests."""
+
 import argparse, ast, json, re, subprocess
 from pathlib import Path
 from mutation_anchors import apply_mutation
@@ -41,12 +42,6 @@ CASES = [
         "default-soft-margin",
         "defaults.json",
         [(r'"softMarginMinutes": 10', r'"softMarginMinutes": 1')],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "default-manual-ceiling",
-        "defaults.json",
-        [(r'"manualCeilingMinutes": 480', r'"manualCeilingMinutes": 60')],
         ["v5-lifecycle.test.js"],
     ),
     (
@@ -113,69 +108,6 @@ CASES = [
         ["v5-lifecycle.test.js"],
     ),
     (
-        "hard-in-manual",
-        "src/index.js",
-        [("record.hardDeadline!==null&&now()>=record.hardDeadline", "false")],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "manual-ceiling",
-        "src/index.js",
-        [("record.phase==='MANUAL'&&now()>=record.manualDeadline", "false")],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "hold-grace-and-heartbeat",
-        "src/index.js",
-        [("r.phase='MANUAL';r.manualAt??=now();r.resultDeadline=null;", "r.manualAt??=now();")],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "hold-auth",
-        "src/index.js",
-        [
-            (
-                "if(!r||!await tokens.verify(bearer,r)||r.ended!==null||r.closed||now()>=r.reportExpiry*1000)",
-                "if(!r||r.ended!==null||r.closed||now()>=r.reportExpiry*1000)",
-            )
-        ],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "owner-timer-auth",
-        "src/index.js",
-        [
-            (
-                "if(match?.[1]==='stop-timer'){if(!owner)refuse('UNAUTHORIZED',401);",
-                "if(match?.[1]==='stop-timer'){",
-            )
-        ],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "timer-extension-liability",
-        "src/index.js",
-        [
-            (
-                "if(typeof credit!=='number'||!Number.isFinite(credit)||credit<cfg.reserve+remaining)refuse('UNAVAILABLE_BUDGET',409);",
-                "/* mutant omits credit */",
-            ),
-            ("await ledger.budgets(cfg,now(),total,r.key);", "/* mutant omits extended budget */"),
-        ],
-        ["v5-lifecycle.test.js"],
-    ),
-    (
-        "manual-cron-status",
-        "src/index.js",
-        [
-            (
-                "if(record.phase==='MANUAL')await workerLine(record,'MANUAL hard_timer='+(record.hardDeadline===null?'removed':'active')+' ceiling_at='+record.manualDeadline,cfg);",
-                "/* mutant drops MANUAL cron line */",
-            )
-        ],
-        ["v5-lifecycle.test.js", "v5-manual-errors.test.js"],
-    ),
-    (
         "worker-tail-bounds",
         "src/index.js",
         [
@@ -191,18 +123,6 @@ CASES = [
         "src/index.js",
         [("runnerNonce:r.runnerNonce,softDeadline:r.softDeadline", "runnerNonce:r.runnerNonce")],
         ["v5-lifecycle.test.js"],
-    ),
-    (
-        "hold-helper-scope",
-        "../../scripts/ci/kf-box-hold",
-        [("/hold/${callback.run}'", "/hold/999-1'")],
-        ["v5-onstart.test.js"],
-    ),
-    (
-        "ssh-login-hold",
-        "../../scripts/ci/kf-ci-hold.sh",
-        [(r'if [ -n "\${SSH_CONNECTION:-}" ]; then', r"if false; then")],
-        ["v5-onstart.test.js"],
     ),
     (
         "heartbeat-after-cap",
@@ -515,12 +435,6 @@ CASES = [
         ["v5-onstart.test.js"],
     ),
     (
-        "owner-sweep-selected-commit",
-        "src/github.js",
-        [("if(cfg.profile==='sweep'){", "if(false){")],
-        ["v5-sweep-commit.test.js"],
-    ),
-    (
         "sweep-workflow-trigger-guard",
         "workflow-guard.js",
         [
@@ -555,7 +469,7 @@ CASES = [
         "callback-expiry-before-cron",
         "src/index.js",
         [("if(now()>=nextDeadline(r)){", "if(false){")],
-        ["v5-late-callback.test.js", "v5-late-owner-timer.test.js"],
+        ["v5-late-callback.test.js"],
     ),
     (
         "repo-defined-worker-suites",

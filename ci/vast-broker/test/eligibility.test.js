@@ -1,18 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, sha, nonce, repo, clock } from './helpers.js';
-import { configuration } from '../src/policy.js';
+// The workflow's PATH_SKIP_PATTERNS; the Worker itself has no path policy.
+const patterns = [
+  '**/*.md',
+  'docs/**',
+  'traces/**',
+  'archive/**',
+  'LICENSE*',
+  '.github/ISSUE_TEMPLATE/**',
+];
 import { shouldRunTrigger } from '../trigger-policy.mjs';
-const workflowRun = (h) =>
+const workflowRun = (h, list = patterns) =>
   shouldRunTrigger({
     eventName: 'pull_request_target',
     repo,
     event: { number: 7, pull_request: { head: { sha } } },
-    patterns: configuration(h.bindings).patterns,
+    patterns: list,
     fetcher: h.cloud.fetch,
   });
 const json = async (response) => response.json();
-const dispatch = { event_name: 'workflow_dispatch', sha, ref: 'refs/heads/owner-pr' };
 for (const base of ['integration/candidate', 'another-pr'])
   test('Worker authorization is independent of current PR base ' + base, async () => {
     const h = await setup();
@@ -20,53 +27,11 @@ for (const base of ['integration/candidate', 'another-pr'])
     assert.equal((await h.call()).status, 200);
     assert.equal(h.cloud.creates, 1);
   });
-test('owner branch authority is independent of prior base-filter config', async () => {
-  const h = await setup({ ALLOWED_BASE_BRANCHES: '["stable"]' });
-  h.cloud.prs[0].base.ref = 'stable';
-  h.cloud.run.head_branch = 'stable';
-  assert.equal(
-    (
-      await h.call('/rent', {
-        claims: {
-          ref: 'refs/heads/stable',
-          workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/stable',
-        },
-      })
-    ).status,
-    200,
-  );
-  assert.equal(h.cloud.creates, 1);
-});
 test('missing API base is not a Worker trigger filter', async () => {
   const h = await setup();
   delete h.cloud.prs[0].base.ref;
   assert.equal((await h.call('/rent', { claims: { base_ref: 'master' } })).status, 200);
 });
-test('owner dispatch permits a non-master-base PR', async () => {
-  const h = await setup();
-  h.cloud.run.event = 'workflow_dispatch';
-  h.cloud.prs[0].base.ref = 'integration/test';
-  assert.equal((await h.call('/rent', { claims: dispatch })).status, 200);
-});
-for (const branch of ['owner-pr', 'integration/test'])
-  test('owner dispatch permits branch without a PR ' + branch, async () => {
-    const h = await setup();
-    h.cloud.run.event = 'workflow_dispatch';
-    h.cloud.prs = [];
-    h.cloud.run.head_branch = branch;
-    const r = await h.call('/rent', { claims: { ...dispatch, ref: 'refs/heads/' + branch } });
-    assert.equal(r.status, 200);
-    assert.equal((await r.json()).pr, null);
-    await h.report({ seq: 1, kind: 'result', result: { nonce, verdict: 'PASS' } });
-    assert.equal(
-      (
-        await json(
-          await h.call('/status/123-1', { claims: { ...dispatch, ref: 'refs/heads/' + branch } }),
-        )
-      ).verdict,
-      'PASS',
-    );
-  });
 for (const files of [
   ['README.md'],
   [
@@ -176,7 +141,7 @@ for (const code of [403, 500])
     assert.equal(await workflowRun(h), true);
     assert.equal(h.cloud.creates, 0);
   });
-test('head change while reading files cannot skip or rent', async () => {
+test('head change while reading files cannot skip', async () => {
   const h = await setup();
   h.cloud.files = [{ filename: 'docs/guide.md', status: 'modified' }];
   const original = h.cloud.fetch;
@@ -187,20 +152,11 @@ test('head change while reading files cannot skip or rent', async () => {
   };
   h.restart();
   assert.equal(await workflowRun(h), true);
-  assert.notEqual((await h.call()).status, 200);
-  assert.equal(h.cloud.creates, 0);
-});
-test('owner dispatch explicitly runs docs-only branch', async () => {
-  const h = await setup();
-  h.cloud.run.event = 'workflow_dispatch';
-  h.cloud.files = [{ filename: 'README.md', status: 'modified' }];
-  assert.equal((await h.call('/rent', { claims: dispatch })).status, 200);
-  assert.equal(h.cloud.creates, 1);
 });
 test('configured workflow exclusions cannot skip broker code', async () => {
-  const h = await setup({ PATH_SKIP_PATTERNS: '["**"]' });
+  const h = await setup();
   h.cloud.files = [{ filename: 'ci/vast-broker/src/index.js', status: 'modified' }];
-  assert.equal(await workflowRun(h), true);
+  assert.equal(await workflowRun(h, ['**']), true);
   assert.equal(h.cloud.creates, 0);
 });
 for (const path of ['/rent', '/status/123-1'])
@@ -281,7 +237,7 @@ test('GitHub bearer is never an identity', async () => {
   assert.equal(
     (await json(await h.call('/rent', { claims: { actor_id: '43' }, ghToken: 'owner-token-text' })))
       .state,
-    'NEEDS_APPROVAL',
+    'UNAUTHORIZED',
   );
   assert.equal(h.cloud.creates, 0);
 });
