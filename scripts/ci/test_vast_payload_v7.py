@@ -186,6 +186,94 @@ class V7Tests(unittest.TestCase):
             self.assertNotEqual(rc, 0)
             self.assertLess(time.monotonic() - started, 3)
 
+    def test_watch_failure_retains_merge_stage_attribution(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "watch"
+            log.write_text(watch(rc=1))
+
+            def grade(rc):
+                self.assertEqual(rc, 1)
+                raise self.m.EvidenceError("raw_suite", [self.m.row("kf_tests", 20)])
+
+            with self.assertRaises(self.m.EvidenceError) as caught:
+                self.m.stage_grade(None, None, log, grade, 1)
+            self.assertEqual(caught.exception.name, "raw_suite")
+            self.assertEqual(caught.exception.rows[0]["pass"], 20)
+
+    def test_watch_failure_retains_provision_attribution(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = Path(d) / "watch"
+            log.write_text(watch(rc=2))
+
+            def grade(rc):
+                self.assertEqual(rc, 2)
+                raise self.m.EvidenceError("provision")
+
+            with self.assertRaises(self.m.EvidenceError) as caught:
+                self.m.stage_grade(None, None, log, grade, 2)
+            self.assertEqual(caught.exception.name, "provision")
+
+    def test_timeout_does_not_erase_completed_tests(self):
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.merge_rows(MERGE.split("GATES_RC=")[0], 124, SHA)
+        self.assertEqual(caught.exception.rows, [self.m.row("kf_tests", 2000)])
+
+    def test_timeout_really_stops_grandchild_work(self):
+        import sys
+
+        with tempfile.TemporaryDirectory() as d:
+            marker = Path(d) / "late"
+            child = "import time,pathlib;time.sleep(1);pathlib.Path(" + repr(str(marker))
+            child += ").touch()"
+            code = 'import subprocess,sys,time;subprocess.Popen([sys.executable,"-c",'
+            code += repr(child) + "]);time.sleep(10)"
+            rc = self.m.run_bounded(
+                [sys.executable, "-c", code], int(time.time() * 1000) + 100, Path(d) / "log", []
+            )
+            self.assertEqual(rc, 124)
+            time.sleep(1.1)
+            self.assertFalse(marker.exists())
+
+    def test_result_is_accepted_by_pr104_reader(self):
+        spec = importlib.util.spec_from_file_location(
+            "report", Path(__file__).with_name("vast_report.py")
+        )
+        report = importlib.util.module_from_spec(spec)
+        import sys
+
+        sys.modules["report"] = report
+        spec.loader.exec_module(report)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "result.json"
+            result = {
+                "verdict": "FAIL",
+                "suites": [self.m.row("raw_suite", failed=1)],
+                "hardware": {
+                    "gpu_name": "RTX 3060",
+                    "compute_cap": 860,
+                    "driver_version": "580.159.04",
+                },
+            }
+            self.m.persist_result(path, result)
+            self.assertEqual(report.read_result_file(path), result)
+
+    def test_hardware_converts_smi_units(self):
+        with patch.object(
+            self.m.subprocess,
+            "check_output",
+            return_value="NVIDIA GeForce RTX 3060, 8.6, 580.159.04\n",
+        ):
+            self.assertEqual(self.m.hardware()["compute_cap"], 860)
+
+    def test_two_gpus_cannot_masquerade_as_one(self):
+        text = "RTX 3060, 8.6, 580.159.04\n" * 2
+        with patch.object(self.m.subprocess, "check_output", return_value=text):
+            self.assertEqual(self.m.hardware()["compute_cap"], 0)
+
+    def test_malformed_hardware_stays_unknown(self):
+        with patch.object(self.m.subprocess, "check_output", return_value="bad"):
+            self.assertEqual(self.m.hardware()["gpu_name"], "unknown")
+
 
 if __name__ == "__main__":
     unittest.main()

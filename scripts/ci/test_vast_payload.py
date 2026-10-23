@@ -9,9 +9,12 @@ PROVISION = (
     + "\nREADY driver=580.159.04\nEXIT 2026-10-22T20:00:00Z\n"
 )
 MERGE = (
-    "HEAD="
-    + SHA
-    + " CHECKOUT=/workspace/bench/verify-worktrees/fixture\nTESTS passed 2000 failed 0\nGATES_RC=0\nV3_GATES_SUMMARY pass=9 fail=0 gate10=PASS\nKF3_RC=0\nBARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30\nFG_RC=0\nSUITE_RC=0\nFAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30\nBIRTH_CENSUS_OK arms=30\nEXIT rc=0 2026-10-22T20:00:00Z\n"
+    "HEAD=" + SHA + " CHECKOUT=/workspace/bench/verify-worktrees/fixture\n"
+    "TESTS passed 2000 failed 0\nGATES_RC=0\n"
+    "V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS\nKF3_RC=0\n"
+    "BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30\nFG_RC=0\n"
+    "SUITE_RC=0\nFAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30\n"
+    "BIRTH_CENSUS_OK arms=30\nEXIT rc=0 2026-10-22T20:00:00Z\n"
 )
 
 
@@ -37,25 +40,27 @@ def ladder(mode="host"):
 
 
 def watch(delta="", before=0, after=0, rc=0):
-    return (
-        "[xid-watch] host_dmesg_lines=20  (readable)\n[xid-watch] xid_before="
-        + str(before)
-        + "\n[xid-watch] --- command output begins ---\nfixture\n[xid-watch] --- command output ends (rc="
-        + str(rc)
-        + ") ---\n[xid-watch] xid_after="
-        + str(after)
-        + "\n"
-        + (
-            "[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — the run is VOID whatever it printed:\n"
-            + "".join("    " + s + "\n" for s in delta.splitlines())
-            + "[xid-watch]   ⊘ An explanatory line\n"
-            if delta
-            else "[xid-watch] ★ HOST Xid CLEAN\n"
-        )
+    return "[xid-watch] host_dmesg_lines=20  (readable)\n[xid-watch] xid_before=" + str(
+        before
+    ) + "\n[xid-watch] --- command output begins ---\nfixture\n" "[xid-watch] --- command output ends (rc=" + str(
+        rc
+    ) + ") ---\n[xid-watch] xid_after=" + str(
+        after
+    ) + "\n" + (
+        "[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — "
+        "the run is VOID whatever it printed:\n"
+        + "".join("    " + s + "\n" for s in delta.splitlines())
+        + "[xid-watch]   ⊘ An explanatory line\n"
+        if delta
+        else "[xid-watch] ★ HOST Xid CLEAN\n"
     )
 
 
-XID = "[ 20.1] NVRM: Xid (PCI:0000:01:00): 31, pid=123, name=fixture, Ch 0000000c, MMU Fault: ENGINE GRAPHICS HUBCLIENT_CE0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+XID = (
+    "[ 20.1] NVRM: Xid (PCI:0000:01:00): 31, pid=123, name=fixture, Ch 0000000c, "
+    "MMU Fault: ENGINE GRAPHICS HUBCLIENT_CE0 faulted @ 0xa_11000000. "
+    "Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+)
 MARK = "FAULT_MARK=victim_release va=0x0000000a11000000\n"
 
 
