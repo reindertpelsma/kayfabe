@@ -142,11 +142,9 @@ if mode in ("preflight", "rent"):
     credit = float(api(["show", "user"])["credit"])
     skus = {
         "RTX_5070": "GB205",
-        "RTX_5080": "GB203",
         "RTX_5070_Ti": "GB203",
         "RTX_5060_Ti": "GB206",
         "RTX_5060": "GB206",
-        "RTX_5050": "GB207",
     }
     offers = []
     def search_candidate(item):
@@ -165,9 +163,14 @@ if mode in ("preflight", "rent"):
         for x in found:
             x["candidate_die"] = die
         return found
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        for found in pool.map(search_candidate, skus.items()):
-            offers.extend(found)
+    recheck_cache = D / "single_recheck_cache.json"
+    if recheck_cache.exists():
+        offers = json.loads(recheck_cache.read_text())["offers"]
+    else:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for found in pool.map(search_candidate, skus.items()):
+                offers.extend(found)
+        recheck_cache.write_text(json.dumps({"utc":now().isoformat(),"offers":offers})+"\n")
     safe = [
         {
             k: x.get(k)
@@ -195,7 +198,7 @@ if mode in ("preflight", "rent"):
                 "utc": now().isoformat(),
                 "credit_usd": credit,
                 "offers": safe,
-                "authority": "owner12:20 verified RTX50 observation; prefer GB205/GB203/GB206, GB207 last; no new GB202 poll",
+                "authority": "owner12:50 one recheck: different-machine verified GB205/GB206 precede exact57344521/machine150531 one-time exception; no new GB202 poll",
             },
             indent=2,
         )
@@ -215,8 +218,17 @@ if mode in ("preflight", "rent"):
     if not offers:
         print("NO_SUITABLE_REPLACEMENT_OFFERS", flush=True)
         sys.exit(75)
-    offers = P.exclude_bad(offers, D / "known_bad_machines.json")
-    assert offers, "no verified different-machine offers after known-bad exclusion"
+    exception = [x for x in offers
+                 if int(x["id"]) == 57344521 and int(x["machine_id"]) == 150531]
+    alternatives = [x for x in P.exclude_bad(offers, D / "known_bad_machines.json")
+                    if x["candidate_die"] in ("GB205", "GB206")
+                    and int(x["machine_id"]) != 150531]
+    offers = alternatives + exception
+    assert offers, "neither a permitted alternative nor the exact approved exception is available"
+    if (D / "one_time_150531_consumed.json").exists():
+        offers = alternatives
+        assert offers, "one-time machine150531 exception already consumed"
+
     runtime_spent = 5.148077591179074 + sum(
         r.get("runtime_cost_estimate_usd", 0) for r in rows
     )
@@ -232,7 +244,7 @@ if mode in ("preflight", "rent"):
     offer = min(
         eligible,
         key=lambda x: (
-            ["GB205", "GB203", "GB206", "GB202", "GB207"].index(x["candidate_die"]),
+            ["GB205", "GB206", "GB203"].index(x["candidate_die"]),
             float(x["dph_total"]),
         ),
     )
@@ -274,6 +286,13 @@ if mode in ("preflight", "rent"):
             rows[-1], P.load(D / "known_bad_machines.json", [])
         ), "last cell was not a retired provider failure; no replacement"
     retry_index = P.reserve_retry(D / "stretch.json")
+    one_time_exception = int(offer["id"]) == 57344521 and int(offer["machine_id"]) == 150531
+    if one_time_exception:
+        marker = D / "one_time_150531_consumed.json"
+        with marker.open("x") as out:
+            json.dump({"offer_id":57344521,"machine_id":150531,
+                       "consumed_before_create_utc":now().isoformat(),
+                       "authority":"controller12:50 one time; no third try"},out)
     result = api(
         [
             "create",
@@ -295,6 +314,8 @@ if mode in ("preflight", "rent"):
     row = {
         "id": iid,
         "retry_index": retry_index,
+        "one_time_provider_exception": one_time_exception,
+        "provider_failure_requires_stop": one_time_exception,
         "offer": offer["id"],
         "machine_id": offer["machine_id"],
         "gpu_offer": offer["gpu_name"],
@@ -317,7 +338,7 @@ if mode in ("preflight", "rent"):
         "product_head": source,
         "measured_candidate": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
         "destroyed": False,
-        "authority": "owner12:20 per-arm Windows ON Xid32 observation: one verified RTX50 lease; measured GB202/GB206 pages, explicit GB202-to-GB203/205/207 inheritance; B48b then optional measured-page+B1; max8 exact owned-pair records, other faults/errors/health fatal; phase8 stop7.5 reserve5; fixed150-minute timer",
+        "authority": "owner12:50 exact57344521/machine150531 one-time provider exception if no eligible different-machine GB205/GB206; second host failure preSSH destroys and stops, bad list retained; per-arm Windows ON Xid32 observation: one verified RTX50 lease; measured GB202/GB206 pages, explicit GB202-to-GB203/205/207 inheritance; B48b then optional measured-page+B1; max8 exact owned-pair records, other faults/errors/health fatal; phase8 stop7.5 reserve5; fixed150-minute timer",
     }
     rows.append(row)
     save(rows)

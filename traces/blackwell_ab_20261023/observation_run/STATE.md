@@ -1,3 +1,17 @@
+# Owner 12:50 attempt closed: SSH identity refusal before work
+
+MEASURED: `traces/blackwell_ab_20261023/observation_run/lease_57359730/closure.json` records the 2026-10-23 attempt. The single recheck found verified RTX5060Ti offer50694293/machine45428, advertised GB206, which took precedence over the one-time exactoffer57344521/machine150531 exception. That exception remains unused and its bad-list entry is retained. No additional GB202 query or market recheck occurred.
+
+MEASURED on 2026-10-23: lease57359730 was created10:40:25.278347UTC; auto timer1319268 was ready10:40:25.304323 and budget timer1319269 ready10:40:25.406253, both before readiness work. The fixed deadline was13:10:25UTC and was never extended. Readiness eventually received an SSH host key absent from the authenticated instance console; the unchanged identity check refused. This is a startup safety refusal, not a provider_host_error classification. No native/guest workload, media upload, Windows install, B or B1 ran. The actual die, driver and served page are unverified.
+
+MEASURED on 2026-10-23: `lease_57359730/destroy.json` records exact-id teardown and API absence at10:50:14.258738UTC, followed by cancellation of both timer processes. `lease_57359730/closure.json` confirms all17 known own ids absent and both timer PIDs gone. `COST_FINAL.json` estimates0.05246288645USD for this lease and phase5.200540477629074USD, below stop7.5/cap8/reserve5. Account credit is a separate lagging observation. No retry followed the safety refusal; no live authority file remains.
+
+CODE READ: source at commit 48b027267 has own GB206 page rows; that would have been the expected selection for this lease, rather than GB202 inheritance. `expected_page_policy.json` remains a source-level expectation. The future inherited-die 0x50/refusalCode0 falsifier is unchanged and untested; the Xid32 survival/TDR question is also untested. Default/native guards, the per-arm observer, SSH pinning and PR110's no-retry-after-safety-refusal rule are unchanged.
+
+MEASURED on 2026-10-23: `lease_57359730/helper_tests.txt` records228 passing GPU-free tests after the operator configuration edits. The earlier26 mutation checks apply to the unchanged observation/projection/protocol implementation. No publication gate stopped the rental; the actual SSH identity guard did. The presented host key and complete console bytes were not retained, so no root cause for the identity mismatch is asserted.
+
+--- Earlier checkpoints ---
+
 # Owner 12:20 RTX50 expansion: provider-policy refusal
 
 MEASURED: `traces/blackwell_ab_20261023/observation_run/rtx50_rental_refusal.json` records the 2026-10-23 attempt: one verified RTX 5070 Ti offer 57344521 / machine 150531 (advertised GB203), excluded by the unchanged known-bad machine list after own lease 57296911 failed with provider_host_error. No other queried verified candidate met the existing requirements. Six approved non-GB202 SKUs were queried once; GB202 was not queried. No creation request, timer, retry reservation or spend occurred. All sixteen historical own ids are API-absent. Phase runtime remains 5.148077591179074 USD.

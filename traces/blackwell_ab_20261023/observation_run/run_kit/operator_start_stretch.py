@@ -70,3 +70,6 @@ while True:
     (T / ("provider_failure_" + str(iid) + ".json")).write_text(json.dumps(proof, indent=2) + "\n")
     (T / "known_bad_machines.json").write_text((D / "known_bad_machines.json").read_text())
     print("OWN_PROVIDER_RETIRED_API_ABSENT", iid, "excluded_machine", row["machine_id"], flush=True)
+
+    if row.get("provider_failure_requires_stop"):
+        raise SystemExit("EXCEPTION_HOST_FAILURE_EXACT_ID_ABSENT_STOP_NO_THIRD_TRY")

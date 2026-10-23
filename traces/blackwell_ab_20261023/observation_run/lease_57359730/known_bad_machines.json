@@ -1,0 +1,9 @@
+[
+  {
+    "machine_id": 150531,
+    "instance_id": 57296911,
+    "reason": "provider_host_error",
+    "utc": "2026-10-23T00:46:20.609095+00:00",
+    "source": "own exact-id teardown/API absence already verified; owner03:15 retry grant"
+  }
+]

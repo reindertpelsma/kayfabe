@@ -10,7 +10,7 @@
   "max_records_per_arm": 8,
   "lease_minutes": 150,
   "goal": "10-minute post-Code0 survival or guestTDR/0x116; public channel/RPC/event/header evidence",
-  "owner_authority": "2026-10-23 12:20 CEST any verified RTX50 die",
+  "owner_authority": "12:50 different-machine GB206 precedence; earlier per-arm protocol unchanged",
   "die_preference": [
     "GB205",
     "GB203",
@@ -19,5 +19,14 @@
   ],
   "gb202_market_queries_this_authority": 0,
   "page_policy": "GB202/GB206 exact rows; GB203/GB205/GB207 explicit GB202 donor and reason at host595 branch",
-  "falsifier": "On inherited die: B 0x50 or refusal of Code0 is an inheritance finding, never a GB202 result"
+  "falsifier": "On inherited die: B 0x50 or refusal of Code0 is an inheritance finding, never a GB202 result",
+  "actual_lease": 57359730,
+  "expected_die": "GB206",
+  "expected_donor": "GB206",
+  "provider_exception_used": false,
+  "deadline_utc": "2026-10-23T13:10:25.278347+00:00",
+  "attempt_state": "closed_before_authenticated_SSH",
+  "actual_die_driver_page_verified": false,
+  "ssh_identity_guard_refusal": true,
+  "native_guest_work_started": false
 }

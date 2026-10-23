@@ -1,0 +1,13 @@
+{
+  "prior_phase_usd": 5.148077591179074,
+  "lease_id": 57359730,
+  "runtime_hours_until_api_absence": 0.16360567499999998,
+  "observed_dph_total": 0.32066666666666666,
+  "new_runtime_cost_estimate_usd": 0.05246288644999999,
+  "phase_runtime_estimate_usd": 5.200540477629074,
+  "stop_usd": 7.5,
+  "cap_usd": 8,
+  "reserve_usd": 5,
+  "credit_after_observed": 29.753769403360707,
+  "billing_limit": "runtime estimate; account credit updates can lag"
+}
