@@ -10,13 +10,13 @@ test compiles the actual ring source with only its atomic import substituted by
 safe wrappers. A one-shot pause after the tail load allows another producer and
 the real consumer to finish1 or17 writes. Master falsely returns Poisoned;
 head-before-tail instead retries the existing CAS and queues correctly. There
-are no production test hooks, conditional branches or new unsafe code.
+are no production test hooks, conditional branches or new unsafe code. (recorded in commit ff0778b99, 2026-10-22)
 
 MEASURED whole kf-trap release suite:114 passed /0 failed /0 ignored. Restoring
 the old load order kills both schedule regressions; restored fix3/3 passed.
 Clippy all targets112 ->112 source-bound warning fingerprints, added0.
 No tests, deny sets or lint baselines loosened. Source and tests are from public
-repository code and this lane's deterministic schedules.
+repository code and this lane's deterministic schedules. (recorded in commit ff0778b99, 2026-10-22)
 
 CODE READ: this changes only the two acquire-load positions before reservation;
 the existing cursor CAS, slot publication, full-ring poison and drainer commit
