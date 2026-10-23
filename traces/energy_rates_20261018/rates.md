@@ -1,12 +1,16 @@
 # Q3 Energy rate table
 
+> Release: SPECviewperf 15.x (patch level not recorded)
+> Configuration: Windows guest in a QEMU/KVM VM, fresh copy-on-write overlay of the owner image per trial; kayfabe kf3 virtual GPU, builds D/A/B/C as listed in builds.json; workload energy-04, Full HD, one iteration
+> (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
+
 MEASURED at rev 468a35c9 (run4301) and the per-run revisions in table.json: runs4301–4311, exact revisions and first-event/channel facts in table.json and per-run channels.json; 11/11 trials complete.
 
 | Build | Q3 pass/fail | Prior standalone pass/fail | Combined fail/n | Q3 exported guest scores |
 |---|---:|---:|---:|---|
-| D | 4/0 | 0/0 | 0/4 | 36.4, 39.87, 35.51, 45.74 |
-| A | 2/0 | 0/2 | 2/4 | 41.19, 39.29 |
-| B | 3/0 | 1/0 | 0/4 | 45.35, 38.9, 41.21 |
+| D | 4/0 | 0/0 | 0/4 | 36.4 (nc), 39.87 (nc), 35.51 (nc), 45.74 (nc) |
+| A | 2/0 | 0/2 | 2/4 | 41.19 (nc), 39.29 (nc) |
+| B | 3/0 | 1/0 | 0/4 | 45.35 (nc), 38.9 (nc), 41.21 (nc) |
 | C | 0/2 | 1/1 | 3/4 |  |
 
 CODE READ: D = descriptor-only468a35c9; A = descriptor+SA-02 40583bc2; B = descriptor+batched-walk a83394e6; C = candidate afe00b3c. Prior standalone runs are A4263/4266, B4264, C4262/4267. K1 mixed3454 and candidate mixed4260 are reference observations only.

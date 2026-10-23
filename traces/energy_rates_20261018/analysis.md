@@ -1,5 +1,9 @@
 # Q3 Energy rate verdict
 
+> Release: SPECviewperf 15.x (patch level not recorded)
+> Configuration: Windows guest in a QEMU/KVM VM, fresh copy-on-write overlay of the owner image per trial; kayfabe kf3 virtual GPU, builds D/A/B/C as listed in builds.json; workload energy-04, Full HD, one iteration
+> (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
+
 MEASURED on 2026-10-22, runs4301–4311, exact revisions in builds.json/table.json: all 11 authorized fresh-overlay Energy trials completed. FullHD, one iteration, unchanged K1 guest-suite hash and matching Q2 flags; validation.json checks 11/11. Host start range 2026-10-22T11:17:51.934717+02:00 through 2026-10-22T12:05:55.329907+02:00; no excluded or extra Q3 trial.
 
 MEASURED on 2026-10-22, at the revisions in table.json: Q3 SA-02-bearing A+candidate failed 2/4, versus D+B failed 0/7. Including the five earlier standalone trials, A+candidate failed 5/8, versus D+B failed 0/8. The pooled observations are separated from Q3 in rates.md; K1 mixed3454 and candidate mixed4260 remain outside these denominators.
@@ -25,9 +29,9 @@ MEASURED on 2026-10-22, per-run result.json and validation.json: all 11 restorat
 
 | Build | Q3 exported score n | Mean | Range |
 |---|---:|---:|---|
-| D | 4 | 39.38 | 35.51–45.74 |
-| A | 2 | 40.24 | 39.29–41.19 |
-| B | 3 | 41.82 | 38.90–45.35 |
+| D | 4 | 39.38 (nc) | 35.51 (nc)–45.74 (nc) |
+| A | 2 | 40.24 (nc) | 39.29 (nc)–41.19 (nc) |
+| B | 3 | 41.82 (nc) | 38.90 (nc)–45.35 (nc) |
 | C | 0 | unavailable | unavailable |
 
 CODE READ: scores are SPECviewperf’s exported guest composites for reference; these samples do not qualify broader application stability or performance.
