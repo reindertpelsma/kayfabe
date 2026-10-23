@@ -26,7 +26,14 @@ from pathlib import Path
 SCRIPTS = Path(os.environ.get("KF_CI_SCRIPTS_DIR") or Path(__file__).resolve().parent)
 FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill"]
 RUN = "4242-7"
-TOKEN = "v2.4242.7.1729000000." + "cd" * 16 + "." + "1234abcd" * 5 + "." + ("Zk9_-Qw" * 7)[:43]
+# A run token is a compact HS256 JWT (box protocol 7); the box never verifies it.
+TOKEN = ".".join(
+    [
+        "eyJhbGciOiJIUzI1NiJ9",
+        "eyJydW4iOiI0MjQyIiwiYXR0ZW1wdCI6IjcifQ",
+        ("Zk9_-Qw" * 7)[:43],
+    ]
+)
 NONCE = "ab" * 16
 SHA = "1234abcd" * 5
 RNONCE = "cd" * 32
@@ -272,7 +279,7 @@ class EnvValidation(Tmp):
             "KF_BROKER_URL": ["http://h.example/p", "https://h.example/p/", "https://h/p?x=1"]
             + ["https://u:p@h.example/p", "ftp://h/p", "https://h/p#f", "https://h/ p", "h/p"],
             "KF_RUN_ID": ["0-1", "12", "1-2-3", "a-b"],
-            "KF_RUN_TOKEN": [TOKEN[:-1], TOKEN + "x", "v1" + TOKEN[2:], "x"],
+            "KF_RUN_TOKEN": [TOKEN[:-1], TOKEN + "x", TOKEN + ".x", "a.b", "x", "a b.c.d"],
             "KF_NONCE": ["ab" * 15, "AB" * 16, "zz" * 16],
             "KF_SHA": ["a" * 39, "A" * 40, "g" * 40],
             "KF_REPO": ["owner", "o w/n", "a/b/c", "/b"],
