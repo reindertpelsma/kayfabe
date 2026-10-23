@@ -105,7 +105,11 @@ cat "/root/prov/arm_${run}_enable.txt"
 readiness_step query "arm_${run}_diag_min" 30 240 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag.txt" 2>&1
 cat "/root/prov/arm_${run}_diag.txt"
 export KF_GUEST_USER=kf
-if KF_GUEST_PW=$(cat "$VM/secrets/win_password") python3 scripts/bench/windows/signin.py "$VM/run/qmp.sock" "$VM/run/qga.sock" >"/root/prov/arm_${run}_signin.txt" 2>&1; then :; else
+if KF_GUEST_PW=$(cat "$VM/secrets/win_password") \
+ WINVM_READINESS_STAGE="$READINESS_STAGE" \
+ readiness_step once "arm_${run}_signin_once" 150 900 \
+ python3 scripts/bench/windows/signin.py "$VM/run/qmp.sock" "$VM/run/qga.sock" \
+ >"/root/prov/arm_${run}_signin.txt" 2>&1; then :; else
  timeout 90 bash "$W" ssh '[pscustomobject]@{utc=[DateTime]::UtcNow.ToString("o");user=(Get-CimInstance Win32_ComputerSystem).UserName;logon=@(Get-Process LogonUI -ErrorAction SilentlyContinue | Select-Object Id,SessionId,StartTime);explorer=@(Get-Process explorer -ErrorAction SilentlyContinue | Select-Object Id,SessionId,StartTime)} | ConvertTo-Json -Compress' </dev/null >"/root/prov/arm_${run}_signin_state.txt" 2>&1 || true
  exit 1
 fi

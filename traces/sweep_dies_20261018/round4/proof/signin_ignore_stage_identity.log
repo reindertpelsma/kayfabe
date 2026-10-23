@@ -1,0 +1,36 @@
+test_signin_action_uses_single_attempt_wrapper (scripts.bench.tests.test_signin_readiness.SigninArmWiringTests.test_signin_action_uses_single_attempt_wrapper) ... ok
+test_signin_observer_receives_persisted_arm_stage (scripts.bench.tests.test_signin_readiness.SigninArmWiringTests.test_signin_observer_receives_persisted_arm_stage) ... ok
+test_stage_from_another_calibration_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_calibration_refuses) ... FAIL
+test_stage_from_another_owned_box_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_owned_box_refuses) ... FAIL
+test_unconfigured_context_preserves_legacy_default (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_unconfigured_context_preserves_legacy_default) ... ok
+test_default_observer_keeps_twenty_second_behavior (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_default_observer_keeps_twenty_second_behavior) ... ok
+test_expired_stage_never_invokes_observer (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_expired_stage_never_invokes_observer) ... ok
+test_fourfold_profile_reaches_outer_query_deadline (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_fourfold_profile_reaches_outer_query_deadline) ... ok
+test_inner_qga_timeout_receives_remaining_stage (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_inner_qga_timeout_receives_remaining_stage) ... ok
+test_inner_qga_timeout_receives_scaled_budget (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_inner_qga_timeout_receives_scaled_budget) ... ok
+test_slow_profile_reaches_outer_query_deadline (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_slow_profile_reaches_outer_query_deadline) ... ok
+test_timeout_partial_user_is_discarded_then_fresh_query_used (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_timeout_partial_user_is_discarded_then_fresh_query_used) ... ok
+test_two_timeouts_refuse_without_third_observer (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_two_timeouts_refuse_without_third_observer) ... ok
+
+======================================================================
+FAIL: test_stage_from_another_calibration_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_calibration_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 96, in test_stage_from_another_calibration_refuses
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_stage_from_another_owned_box_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_owned_box_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 92, in test_stage_from_another_owned_box_refuses
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.037s
+
+FAILED (failures=2)

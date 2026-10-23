@@ -36,6 +36,46 @@ def keycodes(password):
     return result
 
 
+def session_probe(helper, qga_socket, user, *, profile=None, remaining=None,
+                  execute=None, record=lambda row: None):
+    """Read-only observer; adaptive retries never repeat QMP password input."""
+    if execute is None:
+        execute = subprocess.run
+
+    def query(limit):
+        argv = [sys.executable, str(helper), qga_socket, "qga-exec"]
+        if profile is not None:
+            argv.append(f"--timeout={limit}")
+        argv += ["powershell.exe", "-NoProfile", "-Command",
+                 "$u=(Get-CimInstance Win32_ComputerSystem).UserName; "
+                 "if ($u -and -not (Get-Process LogonUI -ErrorAction SilentlyContinue)) { $u }"]
+        return execute(argv, capture_output=True, text=True, timeout=limit, check=False)
+
+    if profile is None:
+        result = query(20)
+    else:
+        import readiness
+        result = readiness.run_query(query, profile=profile, nominal=20, ceiling=180,
+                                     remaining=remaining, record=record)
+    return result.returncode == 0 and result.stdout.strip().lower().endswith("\\" + user)
+
+
+def readiness_context():
+    profile_path = os.environ.get("WINVM_READINESS_PROFILE")
+    stage_path = os.environ.get("WINVM_READINESS_STAGE")
+    if not profile_path and not stage_path:
+        return None, None
+    if not profile_path or not stage_path:
+        raise ValueError("both sign-in profile and stage are required")
+    import readiness
+    profile = readiness.read_profile(profile_path)
+    stage = json.loads(Path(stage_path).read_text())
+    if (stage['profile_sha256'] != readiness.digest(profile)
+            or stage['box_id'] != profile['box_id']):
+        raise ValueError("sign-in stage belongs to another box/profile")
+    return profile, lambda: stage['end_monotonic'] - time.monotonic()
+
+
 def main():
     if len(sys.argv) != 3:
         raise ValueError("usage: signin.py QMP_SOCKET QGA_SOCKET")
@@ -46,14 +86,14 @@ def main():
     chords = keycodes(password)  # Validate everything before sending any input.
     helper = Path(__file__).with_name("qmp.py")
 
+    profile, remaining = readiness_context()
+
+    def record(row):
+        print("SIGNIN_QUERY " + json.dumps(row), flush=True)
+
     def session():
-        r = subprocess.run(
-            [sys.executable, str(helper), sys.argv[2], "qga-exec", "powershell.exe",
-             "-NoProfile", "-Command", "$u=(Get-CimInstance Win32_ComputerSystem).UserName; "
-             "if ($u -and -not (Get-Process LogonUI -ErrorAction SilentlyContinue)) { $u }"],
-            capture_output=True, text=True, timeout=20, check=False,
-        )
-        return r.returncode == 0 and r.stdout.strip().lower().endswith("\\" + user)
+        return session_probe(helper, sys.argv[2], user, profile=profile,
+                             remaining=remaining, record=record)
 
     if session():
         print("SIGNIN_VERIFIED already signed in")

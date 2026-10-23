@@ -1,0 +1,162 @@
+test_signin_action_uses_single_attempt_wrapper (scripts.bench.tests.test_signin_readiness.SigninArmWiringTests.test_signin_action_uses_single_attempt_wrapper) ... FAIL
+test_signin_observer_receives_persisted_arm_stage (scripts.bench.tests.test_signin_readiness.SigninArmWiringTests.test_signin_observer_receives_persisted_arm_stage) ... FAIL
+test_stage_from_another_calibration_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_calibration_refuses) ... ERROR
+test_stage_from_another_owned_box_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_owned_box_refuses) ... ERROR
+test_unconfigured_context_preserves_legacy_default (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_unconfigured_context_preserves_legacy_default) ... ERROR
+test_default_observer_keeps_twenty_second_behavior (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_default_observer_keeps_twenty_second_behavior) ... ERROR
+test_expired_stage_never_invokes_observer (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_expired_stage_never_invokes_observer) ... ERROR
+test_fourfold_profile_reaches_outer_query_deadline (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_fourfold_profile_reaches_outer_query_deadline) ... ERROR
+test_inner_qga_timeout_receives_remaining_stage (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_inner_qga_timeout_receives_remaining_stage) ... ERROR
+test_inner_qga_timeout_receives_scaled_budget (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_inner_qga_timeout_receives_scaled_budget) ... ERROR
+test_slow_profile_reaches_outer_query_deadline (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_slow_profile_reaches_outer_query_deadline) ... ERROR
+test_timeout_partial_user_is_discarded_then_fresh_query_used (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_timeout_partial_user_is_discarded_then_fresh_query_used) ... ERROR
+test_two_timeouts_refuse_without_third_observer (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_two_timeouts_refuse_without_third_observer) ... ERROR
+
+======================================================================
+ERROR: test_stage_from_another_calibration_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_calibration_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 93, in test_stage_from_another_calibration_refuses
+    self.context(wrong_digest=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 85, in context
+    return signin.readiness_context()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'readiness_context'
+
+======================================================================
+ERROR: test_stage_from_another_owned_box_refuses (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_stage_from_another_owned_box_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 89, in test_stage_from_another_owned_box_refuses
+    self.context(wrong_box=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 85, in context
+    return signin.readiness_context()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'readiness_context'
+
+======================================================================
+ERROR: test_unconfigured_context_preserves_legacy_default (scripts.bench.tests.test_signin_readiness.SigninContextTests.test_unconfigured_context_preserves_legacy_default)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 98, in test_unconfigured_context_preserves_legacy_default
+    self.assertEqual(signin.readiness_context(), (None, None))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'readiness_context'
+
+======================================================================
+ERROR: test_default_observer_keeps_twenty_second_behavior (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_default_observer_keeps_twenty_second_behavior)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 64, in test_default_observer_keeps_twenty_second_behavior
+    self.assertTrue(signin.session_probe(Path('qmp.py'), 'sock', 'kf', execute=execute))
+                    ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_expired_stage_never_invokes_observer (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_expired_stage_never_invokes_observer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 56, in test_expired_stage_never_invokes_observer
+    self.probe(remaining=0)
+    ~~~~~~~~~~^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_fourfold_profile_reaches_outer_query_deadline (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_fourfold_profile_reaches_outer_query_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 33, in test_fourfold_profile_reaches_outer_query_deadline
+    self.assertTrue(self.probe())
+                    ~~~~~~~~~~^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_inner_qga_timeout_receives_remaining_stage (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_inner_qga_timeout_receives_remaining_stage)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 41, in test_inner_qga_timeout_receives_remaining_stage
+    self.probe(scale=10, remaining=37)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_inner_qga_timeout_receives_scaled_budget (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_inner_qga_timeout_receives_scaled_budget)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 37, in test_inner_qga_timeout_receives_scaled_budget
+    self.probe(scale=8)
+    ~~~~~~~~~~^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_slow_profile_reaches_outer_query_deadline (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_slow_profile_reaches_outer_query_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 29, in test_slow_profile_reaches_outer_query_deadline
+    self.assertTrue(self.probe(scale=8))
+                    ~~~~~~~~~~^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_timeout_partial_user_is_discarded_then_fresh_query_used (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_timeout_partial_user_is_discarded_then_fresh_query_used)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 46, in test_timeout_partial_user_is_discarded_then_fresh_query_used
+    self.assertFalse(self.probe(replies=[(124, 'KFWIN\\kf\n'), (0, '')]))
+                     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+ERROR: test_two_timeouts_refuse_without_third_observer (scripts.bench.tests.test_signin_readiness.SigninReadinessTests.test_two_timeouts_refuse_without_third_observer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 51, in test_two_timeouts_refuse_without_third_observer
+    self.probe(replies=[(124, 'KFWIN\\kf\n'), (124, 'KFWIN\\kf\n')])
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 24, in probe
+    return signin.session_probe(Path('qmp.py'), 'owned-qga.sock', 'kf',
+           ^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 's4_signin_ready' has no attribute 'session_probe'
+
+======================================================================
+FAIL: test_signin_action_uses_single_attempt_wrapper (scripts.bench.tests.test_signin_readiness.SigninArmWiringTests.test_signin_action_uses_single_attempt_wrapper)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 125, in test_signin_action_uses_single_attempt_wrapper
+    self.assertIn('MODE=once', self.run_arm_call())
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'MODE=once' not found in 'SIGNIN_FAILED error_type=FileNotFoundError: check account, session, and keyboard configuration\n'
+
+======================================================================
+FAIL: test_signin_observer_receives_persisted_arm_stage (scripts.bench.tests.test_signin_readiness.SigninArmWiringTests.test_signin_observer_receives_persisted_arm_stage)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_signin_readiness.py", line 128, in test_signin_observer_receives_persisted_arm_stage
+    self.assertIn('STAGE=owned-stage.json', self.run_arm_call())
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'STAGE=owned-stage.json' not found in 'SIGNIN_FAILED error_type=FileNotFoundError: check account, session, and keyboard configuration\n'
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.308s
+
+FAILED (failures=2, errors=11)

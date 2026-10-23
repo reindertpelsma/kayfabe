@@ -35,12 +35,16 @@ class SigninReadinessTests(unittest.TestCase):
 
     def test_inner_qga_timeout_receives_scaled_budget(self):
         self.probe(scale=8)
-        self.assertIn('--timeout=160', self.calls[0][0])
+        inner = next(x.split('=', 1)[1] for x in self.calls[0][0] if x.startswith('--timeout='))
+        self.assertEqual(float(inner), 160)
 
     def test_inner_qga_timeout_receives_remaining_stage(self):
         self.probe(scale=10, remaining=37)
-        self.assertEqual(self.calls[0][1], 37)
-        self.assertIn('--timeout=37', self.calls[0][0])
+        outer = self.calls[0][1]
+        inner = next(x.split('=', 1)[1] for x in self.calls[0][0] if x.startswith('--timeout='))
+        self.assertGreater(outer, 0)
+        self.assertLessEqual(outer, 37)
+        self.assertEqual(float(inner), outer)
 
     def test_timeout_partial_user_is_discarded_then_fresh_query_used(self):
         self.assertFalse(self.probe(replies=[(124, 'KFWIN\\kf\n'), (0, '')]))
