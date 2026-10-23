@@ -23,3 +23,31 @@ PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
 PROBE_END admin_run=false
 AUDIT_TIER2_GROUPS_ALREADY_COVERED
 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-23T03:04:51+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                618f0431815d037d4226b642ae37e76967353e90 -> FETCH_HEAD
+Preparing worktree (detached HEAD 618f04318)
+Updating files:  95% (20857/21764)
+Updating files:  96% (20894/21764)
+Updating files:  97% (21112/21764)
+Updating files:  98% (21329/21764)
+Updating files:  99% (21547/21764)
+Updating files: 100% (21764/21764)
+Updating files: 100% (21764/21764), done.
+HEAD is now at 618f04318 fix(bench): register native completion listeners before GPU submission
+GR_TIER_VERDICT=PASS
+S4_KIT_PRESENT_AUDIT_SUBTRACTED
+PRECOMP_RUNTIME_BEGIN CAP_SYS_ADMIN=cleared_by_helper 2026-10-23T03:05:42+00:00
+PRECOMP_RUNTIME_EXIT rc=2 2026-10-23T03:05:42+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                a6456796e4af84d3b0c8bcb3558b63c2e85df42e -> FETCH_HEAD
+Preparing worktree (detached HEAD a6456796e)
+Updating files:  98% (21421/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at a6456796e chore(bench): use repository license for PRECOMP sweep tool
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G   33G  142G  19% /
+PRECOMP_TIER3_BEGIN 2026-10-23T03:05:49+00:00
+PRECOMP_TIER3_EXIT rc=0 2026-10-23T03:05:49+00:00
