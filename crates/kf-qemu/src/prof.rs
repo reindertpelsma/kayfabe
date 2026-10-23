@@ -103,6 +103,12 @@ impl Hist {
         self.max.fetch_max(ns, Ordering::Relaxed);
     }
 
+    /// Cumulative bucket counts for background interval subtraction. The snapshot may
+    /// overlap concurrent samples; it never resets counters or gates production work.
+    pub fn counts_snapshot(&self) -> [u64; 256] {
+        std::array::from_fn(|i| self.b[i].load(Ordering::Relaxed))
+    }
+
     /// Samples.
     pub fn count(&self) -> u64 {
         self.n.load(Ordering::Relaxed)

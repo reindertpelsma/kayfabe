@@ -10,7 +10,10 @@ struct Log(Mutex<Vec<&'static str>>);
 impl Observer for Log {
     fn before(&self) -> Stamp {
         self.0.lock().unwrap().push("begin");
-        Stamp { first_ns: 10, born_ns: 1 }
+        Stamp {
+            first_ns: 10,
+            born_ns: 1,
+        }
     }
     fn after(&self, stamp: Stamp, ok: bool) {
         assert_eq!(stamp.first_ns, 10);

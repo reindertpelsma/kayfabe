@@ -147,6 +147,7 @@ struct RingOwned {
 /// ★ A copy-engine host channel we own. Its completions reach the worker through the SESSION's one
 /// completion fd ([`crate::completions::Completions`]), never an fd of its own.
 pub struct HostRing {
+    submit_observer: Option<std::sync::Arc<dyn crate::submit_observer::Observer>>,
     /// `None` once [`HostRing::release`] has unmapped it. ★ §U: shared (never cloned out of this
     /// ring except into [`Gate`], which [`HostRing::release`] revokes BEFORE dropping this one, so
     /// the mapping still goes before its aperture is given back).
@@ -259,6 +260,14 @@ fn gp_get_release(
 }
 
 impl HostRing {
+    /// Install a measurement observer. No observer is required to boot or submit work.
+    pub fn set_submit_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::submit_observer::Observer>,
+    ) {
+        self.submit_observer = Some(observer);
+    }
+
     /// Build the ring in `space` on host COPY0 (RM places it; its VA must be below 2^40).
     ///
     /// # Errors
@@ -442,6 +451,7 @@ impl HostRing {
         let cpu = std::sync::Arc::new(cpu);
         let gate = Gate::over(cpu.clone(), layout.fence_off + GATE_OFF);
         let mut ring = HostRing {
+            submit_observer: None,
             cpu: Some(cpu),
             gate,
             _node: node,
@@ -834,8 +844,10 @@ impl HostRing {
             )
             .map_err(|e| format!("{e:?}"))?;
         kf_linux_raw::release_fence();
-        rm.doorbell(self.chan.token)
-            .map_err(|e| format!("doorbell: {e:?}"))?;
+        crate::submit_observer::observe(self.submit_observer.as_deref(), || {
+            rm.doorbell(self.chan.token)
+        })
+        .map_err(|e| format!("doorbell: {e:?}"))?;
         Ok(Ok(seq))
     }
 }
@@ -1307,8 +1319,15 @@ impl TranslatedChannel {
         self.unresolved == Some(WaitOn::Walk)
     }
 
-    /// ★ v3-initrace: record every fence's guest releases for the completion probe (diagnostic;
-    /// off by default — the device turns it on with `KF3_COMPLETION_PROBE`).
+    /// Optional caller-owned instrumentation around each real native doorbell.
+    pub fn set_submit_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::submit_observer::Observer>,
+    ) {
+        self.host.set_submit_observer(observer);
+    }
+
+    /// Record guest releases for the optional completion probe (`KF3_COMPLETION_PROBE`).
     pub fn set_probe(&mut self, on: bool) {
         self.probe = on.then(Probe::default);
     }

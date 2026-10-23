@@ -116,7 +116,9 @@ fn a_doorbell_during_a_native_call_belongs_to_the_next_call() {
     p.doorbell(0, 8_000);
     p.finish(first, 9_000, true);
     submit(&p, 0, Kind::Passthrough, 10_000, true);
-    assert_eq!(p.snapshot(Kind::Passthrough).paired, 2);
+    let s = p.snapshot(Kind::Passthrough);
+    assert_eq!(s.paired, 2);
+    assert!(s.latency.contains("avg_us=5.0"));
 }
 
 #[test]
@@ -129,4 +131,41 @@ fn invalid_indices_and_backwards_clocks_do_not_create_samples() {
     let s = p.snapshot(Kind::UserRelay);
     assert_eq!(s.paired, 0);
     assert_eq!(s.discarded, 2);
+}
+
+#[test]
+fn absent_or_disabled_parent_flag_never_arms_user_measurement() {
+    for base in [None, Some("0"), Some("true")] {
+        assert!(!submitprof::flags_enabled(base, Some("1")));
+    }
+}
+
+#[test]
+fn extra_flag_is_explicit_and_parent_on_spelling_is_preserved() {
+    for extra in [None, Some("0"), Some("true")] {
+        assert!(!submitprof::flags_enabled(Some("1"), extra));
+    }
+    assert!(submitprof::flags_enabled(Some("1"), Some("1")));
+    assert!(submitprof::flags_enabled(Some("on"), Some("1")));
+}
+
+#[test]
+fn histogram_export_counts_every_sample() {
+    let hist = prof::Hist::default();
+    for value in [100, 200, 2_000, 10_000] {
+        hist.add(value);
+    }
+    assert_eq!(hist.counts_snapshot().into_iter().sum::<u64>(), 4);
+}
+
+#[test]
+fn histogram_export_supports_workload_interval_subtraction() {
+    let hist = prof::Hist::default();
+    hist.add(1_000_000);
+    let before = hist.counts_snapshot();
+    hist.add(100);
+    hist.add(200);
+    let after = hist.counts_snapshot();
+    let samples: u64 = after.iter().zip(before).map(|(a, b)| a - b).sum();
+    assert_eq!(samples, 2);
 }

@@ -637,8 +637,11 @@ fn publish_guarded(
             }
         })
         .map_err(|e| access_error(e, "USER_RING_USERD_ADMISSION"))??;
-    me.rm
-        .doorbell(r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token)
+    let host_token = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token;
+    me.submit_prof
+        .measure(r.idx, crate::submitprof::Kind::UserRelay, || {
+            me.rm.doorbell(host_token)
+        })
         .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into())
 }
 

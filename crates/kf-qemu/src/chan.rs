@@ -1187,6 +1187,31 @@ impl kf_rm::defapi::FifoUpdateFilter for PtFifoUpdateFilter {
     }
 }
 
+/// Measurement-only observer for authored Translated native-ring doorbells.
+struct NativeSubmitProfile {
+    profile: Arc<crate::submitprof::SubmitProfile>,
+    idx: u32,
+}
+
+impl kf_chan::submit_observer::Observer for NativeSubmitProfile {
+    fn before(&self) -> kf_chan::submit_observer::Stamp {
+        let (first_ns, born_ns) = self
+            .profile
+            .begin(self.idx, crate::submitprof::Kind::Translated)
+            .stamp();
+        kf_chan::submit_observer::Stamp { first_ns, born_ns }
+    }
+
+    fn after(&self, stamp: kf_chan::submit_observer::Stamp, ok: bool) {
+        self.profile.finish_stamp(
+            self.idx,
+            (stamp.first_ns, stamp.born_ns),
+            crate::prof::now_ns(),
+            ok,
+        );
+    }
+}
+
 /// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
 struct RelayMem<'a> {
     guest: &'a UserdView,
@@ -2225,6 +2250,8 @@ fn heap_gate(
 
 /// ★★★ The channel plane.
 pub struct ChanPlane {
+    /// Optional direct USER doorbell/native-submit measurements; never a decision input.
+    pub submit_prof: Arc<crate::submitprof::SubmitProfile>,
     /// ★ GR tier (2026-10-07): GR-tier pumps that retired engine-written work since the worker
     /// last relayed it to the guest's GR0 vector ([`ChanPlane::take_gr_relay`]).
     gr_relay: AtomicU64,
@@ -2934,6 +2961,7 @@ impl ChanPlane {
             }
         }));
         Ok(ChanPlane {
+            submit_prof: Arc::new(crate::submitprof::SubmitProfile::from_env(tokens)),
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),
             rm,
@@ -6941,6 +6969,9 @@ impl ChanPlane {
                     // The schedule of its own host group, authored from the guest's own scheduled
                     // state. A refusal is the birth's refusal, by name.
                     let late = crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan);
+                    if me.submit_prof.enabled() {
+                        me.submit_prof.reset(idx, crate::prof::now_ns());
+                    }
                     let alloc = late
                         .clone()
                         .map(|_| ())
@@ -7225,6 +7256,13 @@ impl ChanPlane {
                     crate::tspace::INCA_STRICT,
                     matches!(me.family, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
                 );
+                if me.submit_prof.enabled() {
+                    me.submit_prof.reset(idx, crate::prof::now_ns());
+                    chan.set_submit_observer(Arc::new(NativeSubmitProfile {
+                        profile: me.submit_prof.clone(),
+                        idx,
+                    }));
+                }
                 let alloc = me
                     .caps
                     .lock()

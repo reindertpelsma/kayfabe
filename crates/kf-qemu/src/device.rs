@@ -1687,6 +1687,9 @@ impl Device {
         }
         let off32 = u32::try_from(off).unwrap_or(u32::MAX);
         let doorbell = matches!(class, Class::Doorbell);
+        if doorbell {
+            self.prof_user_doorbell(val as u32);
+        }
         let action = self.plane.trap_write(class, 0, off32, val, width);
         if doorbell {
             self.note_worker_doorbell(val as u32);
@@ -1696,7 +1699,15 @@ impl Device {
                 // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
                 // relaxed counters for the per-token ledger. Nothing else on the vCPU.
                 let tok = self.plane.token_index.of_doorbell(val as u32);
-                let reached = self.rm.doorbell(host_token).is_ok();
+                let reached = self
+                    .chans
+                    .submit_prof
+                    .measure(
+                        tok.unwrap_or(u32::MAX),
+                        crate::submitprof::Kind::Passthrough,
+                        || self.rm.doorbell(host_token),
+                    )
+                    .is_ok();
                 if let Some(tok) = tok {
                     self.chans.note_inline(tok, reached);
                 }
@@ -3264,6 +3275,18 @@ impl Device {
 
     /// ★ w827: print the `PROF` lines (drainer heartbeat, `KF3_PROF=1` only).
     fn prof_print(&self) {
+        if self.chans.submit_prof.enabled() {
+            let wall_ns = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos());
+            eprintln!(
+                "kf3: PROF user_submit_window unix_ns={wall_ns} elapsed_ns={}",
+                crate::prof::now_ns(),
+            );
+        }
+        for line in self.chans.submit_prof.lines() {
+            eprintln!("{line}");
+        }
         for l in self.prof.lines(&|o| self.reg_name(o)) {
             eprintln!("{l}");
         }
@@ -3962,13 +3985,20 @@ impl kf_chan::dbfast::Sink for Device {
         let off = u32::try_from(kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset())
             .unwrap_or(u32::MAX);
         let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
+        self.prof_user_doorbell(value);
         let action = self
             .plane
             .trap_write(Class::Doorbell, 0, off, u64::from(value), 4);
         self.note_worker_doorbell(value);
         match action {
             Action::RingHostInline { host_token } => Delivered::Rang {
-                reached: self.rm.doorbell(host_token).is_ok(),
+                reached: self
+                    .chans
+                    .submit_prof
+                    .measure(idx, crate::submitprof::Kind::Passthrough, || {
+                        self.rm.doorbell(host_token)
+                    })
+                    .is_ok(),
             },
             Action::WakeWorker => {
                 let _ = self.worker_efd.signal();
@@ -3982,6 +4012,26 @@ impl kf_chan::dbfast::Sink for Device {
 }
 
 impl Device {
+    /// Stamp before work publication. Route and liveness checks only filter measurements;
+    /// they never change the trap action, wake, source admission or native call.
+    fn prof_user_doorbell(&self, value: u32) {
+        let profile = &self.chans.submit_prof;
+        if !profile.enabled() {
+            return;
+        }
+        let Some(idx) = self.plane.token_index.of_doorbell(value) else {
+            return;
+        };
+        let Some(token) = self.plane.tokens.get(idx as usize).map(|word| word.load()) else {
+            return;
+        };
+        if token.state != kf_trap::State::Dead
+            && matches!(token.route, Route::Translated | Route::Passthrough)
+        {
+            profile.doorbell(idx, crate::prof::now_ns());
+        }
+    }
+
     /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: count a doorbell on a worker-served (Translated)
     /// token for the USER ring trace (`ChanPlane::note_queued`, `doorbell_census`). With the trace
     /// off this is one cached flag load on the doorbell path.

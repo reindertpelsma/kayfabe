@@ -35,6 +35,7 @@ pub mod readtrace;
 pub mod reset;
 pub mod rmfacts;
 pub mod scrub;
+pub mod submitprof;
 pub mod tspace;
 pub mod twin;
 pub(crate) mod userbirth;

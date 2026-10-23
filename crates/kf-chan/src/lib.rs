@@ -43,3 +43,6 @@ pub mod userd_relay;
 pub mod video_generated;
 pub mod vtables;
 pub mod worker;
+
+/// Optional native-submit measurement callbacks.
+pub mod submit_observer;
