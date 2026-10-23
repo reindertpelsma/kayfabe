@@ -1,0 +1,14 @@
+{
+  "run": "v7-all-vast-tests-20261023",
+  "date": "2026-10-23",
+  "tests": 194,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 52.525,
+  "suites": {
+    "canonical_box": 72,
+    "payload": 79,
+    "provider_environment": 17,
+    "diagnostic_logs": 26
+  }
+}
