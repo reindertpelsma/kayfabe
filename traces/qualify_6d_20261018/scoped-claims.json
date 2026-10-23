@@ -2,9 +2,10 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "74fc8439b053511ee3699a98c7fc5d462a205986",
+  "head": "bc705b51cbd689e54058b1cee0edb5f1079e7ac7",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
+    "traces/perf_k3_20261018/plan.json",
     "traces/qualify_6d_20261018/README.md",
     "traces/qualify_6d_20261018/aarch64-compile-excerpt.txt",
     "traces/qualify_6d_20261018/candidate-tests.json",
@@ -109,5 +110,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T03:16:04.987910+00:00"
+  "time": "2026-10-23T03:43:30.283497+00:00"
 }

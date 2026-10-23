@@ -1,0 +1,47 @@
+{
+  "classification": "CODE READ",
+  "evidence": "plan.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "start": "2026-10-23T03:40:08Z",
+  "deadline": "2026-10-23T07:40:08Z",
+  "restore_cutoff": "2026-10-23T07:25:00Z",
+  "source_policy": "Align own evidence branch with corrected candidate before measurement-only changes. Never push integration or master. Optional instrumentation off by default. No production optimisation in this investigation.",
+  "hypotheses_before_runs": {
+    "H1": {
+      "claim": "GPU starvation from CPU or relay accounts for the gap",
+      "falsifier": "Same-workload GPU busy% equal within5 percentage points for kayfabe and VFIO while performance still differs",
+      "limit": "No paired conclusion without a comparable GPU busy series; old scores alone are insufficient"
+    },
+    "H2": {
+      "claim": "Guest vCPU trap/exit path dominates",
+      "falsifier": "Low KVM exit rate and measured exit-service time during active workload windows",
+      "method": "Separate profiling arm; per-thread CPU, perf kvm tracepoints and GPU telemetry, never headline score timing"
+    },
+    "H3": {
+      "claim": "USER guest-doorbell to native submission queueing dominates",
+      "falsifier": "Direct paired-submit p99 below100us with no growth under load, adequate sample coverage and coalescing accounted for",
+      "method": "GPU-free tested atomic bounded aggregator; measure next native doorbell completion on same ring; report unmatched/fanout/failed calls separately; no GSP proxy relabelling"
+    },
+    "H4": {
+      "claim": "Display/present caps rather than rendering account for the gap",
+      "falsifier": "A verified no-present workload preserves the same performance ratio",
+      "limit": "Headless test broker still permits guest presents and is not a no-present workload"
+    }
+  },
+  "arms": [
+    {
+      "run": 4620,
+      "rev": "01a171e63",
+      "scope": "separate CATIA/Creo profiling, one iteration each, existing K2 carrier and9216MiB; GPU/CPU/KVM telemetry"
+    },
+    {
+      "scope": "measurement-build native gates then separate CATIA/Creo direct-submit profiling"
+    },
+    {
+      "scope": "VFIO only after inspecting VF1 restoration procedure and establishing safe recovery; otherwise recorded evidence and explicit unmatched limitation"
+    }
+  ],
+  "safety": "one VM, bounded fastguest lease, own quiet flag, baseline Xid delta fatal on any new Xid; stop at first host problem, restore NVIDIA/cuInit0/GDM/ubuntu/monitors; no rm -f or rm -rf",
+  "publication": "SPEC values exclusively stamped(nc) with release/configuration/disclaimer; Steel/Geekbench numbers private",
+  "result": "Perf investigation cannot change prior PARTIAL/HOLD correctness verdict"
+}
