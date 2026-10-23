@@ -1199,8 +1199,8 @@ pub struct GpuMirror {
     pub bv: std::sync::Arc<kf_mem::batch::BatchedVas<'static>>,
     /// ★ Host RM calls this space has cost, for the retire line (per CUDA process).
     pub calls: SpaceCalls,
-    /// ★★★ v3-roperm: this space is the guest KERNEL's (a Translated channel was born in it, or
-    /// its client is one of the guest RM's internal clients) — it mirrors privileged leaves. Until
+    /// ★★★ v3-roperm: this space is the guest KERNEL's (an RM-KERNEL-stamped Translated
+    /// channel was born in it) — it mirrors privileged leaves. Until
     /// then it is a USER twin and WITHHOLDS them (`MapTarget::withholds_privileged`). Shared with
     /// the channel plane's [`Mirror::kernel_vas`].
     pub kernel_vas: std::sync::Arc<crate::twin::TwinState>,
@@ -1714,15 +1714,13 @@ pub struct Mirror {
     pub ledger: Option<std::sync::Arc<kf_mem::batch::BatchedVas<'static>>>,
 }
 
-/// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
-/// internal clients (a handle range no guest process can hold, `kf_rm::chanlink::is_rm_internal_client`),
-/// USER (withholding privileged leaves) for everything else until a Translated channel is born in it.
+/// A mirror starts Unclassified and withholds privileged leaves. Its key contains
+/// guest-selected handles, which supply no authority. The channel statement path
+/// promotes it with `try_kernel` only for an RM-KERNEL-stamped Translated birth
+/// (`kf_rm::chanlink::kernel_channel`, the same privilege source as the T-space).
 #[must_use]
-pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
-    let client = u32::try_from(key.0 >> 32).unwrap_or(0);
-    std::sync::Arc::new(crate::twin::TwinState::for_kernel(
-        kf_rm::chanlink::is_rm_internal_client(client),
-    ))
+pub fn kernel_vas_for(_key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
+    std::sync::Arc::new(crate::twin::TwinState::default())
 }
 
 /// ★ P5c: a retired mirror's host space, its rows unmapped — ready to be the next guest VA space's

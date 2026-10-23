@@ -1,0 +1,17 @@
+Candidate-6 followups, preregistered before further inspection:
+F1 hypothesis: mirror creation trusts guest-selected client bits. FALSIFIER: mirror authority is derived solely from the decoded RM privilege stamp and forged userspace handles remain unclassified/user.
+F2 hypothesis: a root move during an ALL_PDB continuation fails the original invalidate indefinitely. FALSIFIER: the original trigger is retried and cleared only after all current roots are reconciled.
+F3 hypothesis: continuation submits captured roots after removal or move. FALSIFIER: every next submission excludes retired slots and uses current roots.
+F4 hypothesis: a failed continuation strands independently queued work. FALSIFIER: queued work submits in the same completion turn after the failure, without a new event.
+F5 hypothesis: the descriptor transcript test accepts action sequence changes. FALSIFIER: it asserts the complete literal expected transcript.
+F6 hypothesis: the over-64-spaces final assertion accepts unfinished work. FALSIFIER: it drives both batches and requires all 70 spaces covered plus trigger/completion acknowledgement.
+F7 hypothesis: the decision STATUS still says design only. FALSIFIER: STATUS says Phase 1 implemented and delegates hardware confirmation to K1.
+
+All mutants must fail by assertion in >=2 distinct tests; a compiler error or absent target is no kill. Restore exact originals after every mutant.
+M1 restore handle-range mirror classification. FALSIFIER: either hostile mirror regression still passes.
+M2 restore terminal failure for a moved-root invalidate. FALSIFIER: either multi-chunk root-move regression still passes.
+M3 skip continuation object revalidation. FALSIFIER: retired/reused-slot regressions still pass.
+M4 retain a moved continuation's captured root. FALSIFIER: either moved-before-next regression still passes.
+M5 omit pump after continuation submit. FALSIFIER: either queued-root or queued-invalidate regression still passes.
+M6 omit guest GET writes while updating the local written_get field. FALSIFIER: the pinned descriptor transcript still passes; require an additional independent test killer.
+M7 omit the final invalidate completion after reconciliation. FALSIFIER: the strengthened security audit's final-completion assertions still pass; require additional independent chunk-test killers.

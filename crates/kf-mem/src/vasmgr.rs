@@ -10,6 +10,7 @@
 //! 1. **[`VaManager::on_invalidate`]** — look the named PDB up in the [`VasTable`] (identity is the
 //!    VA-space OBJECT; the PDB is a mutable, possibly-absent attribute of it, §4.3), and submit ONE
 //!    walk of every object that needs it, each against its own **slot** of committed placements.
+//!    More than the ABI's 64 objects uses successive chunks; completion still covers all objects.
 //!    ⊘ **Never blocks**: [`Walker::submit`] only queues GPU work. A request that arrives while a
 //!    walk is in flight waits for the NEXT walk — the one in flight may have read the tables
 //!    before the guest's writes that preceded this invalidate.
@@ -696,7 +697,18 @@ struct Batch {
     wants: Vec<(Want, Vec<VasKey>, std::time::Instant)>,
     /// Every object walked, with the slot and root it was walked with.
     walked: BTreeMap<VasKey, (u32, u64)>,
-    /// When the walk was submitted.
+    /// Objects still owed by this batch after the current ABI-bounded chunk.
+    remaining: BTreeMap<VasKey, (u32, u64)>,
+    /// Earlier chunks, retained to retry a root move before the batch finishes.
+    finished: BTreeMap<VasKey, (u32, u64)>,
+    /// This walk is part of a multi-submission obligation (reset drops later work).
+    chunked: bool,
+    /// Verdicts retained until all chunks have landed; the clear still covers every object.
+    failed: BTreeSet<VasKey>,
+    absent_only: BTreeSet<VasKey>,
+    rewalk: BTreeSet<VasKey>,
+    partial: BTreeSet<VasKey>,
+    /// When the current chunk was submitted.
     submitted: std::time::Instant,
     /// ★ `KF3_MAPLOG`: this walk's number (the n-th submitted), so its runs can be traced to its
     /// wants.
@@ -1024,7 +1036,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// Returns what was dropped; split tickets (queued, or finished and not yet taken) are returned
     /// so the caller can answer each channel that waits on one.
     ///
-    /// ⊘ A walk IN FLIGHT is not touched: its report is the GPU's and lands in a slot the reset
+    /// A multi-chunk batch drops its original wants and unsubmitted chunks too: its submitted
+    /// chunk can land, but cannot complete an obligation that still covered other objects.
+    /// ⊘ The submitted GPU walk is not touched: its report lands in a slot the reset
     /// must still be able to empty. [`Abandoned::in_flight`] says so; the caller lets
     /// [`Self::on_walk_ready`] collect it (nothing queued is left to submit after it) and calls
     /// this again — it is bounded, and the VA thread polls, never blocks.
@@ -1033,6 +1047,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             in_flight: self.inflight.is_some(),
             ..Abandoned::default()
         };
+        if let Some(batch) = &mut self.inflight
+            && batch.chunked
+        {
+            // Only this submitted chunk may land after reset. The original wants
+            // still cover unsubmitted objects, so none can complete at this chunk.
+            batch.remaining.clear();
+            self.pending.extend(
+                core::mem::take(&mut batch.wants)
+                    .into_iter()
+                    .map(|(want, _, _)| want),
+            );
+        }
         for w in core::mem::take(&mut self.pending) {
             match w {
                 Want::Invalidate(..) => out.invalidates = out.invalidates.saturating_add(1),
@@ -1248,6 +1274,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let mut batch = Batch {
             wants: Vec::with_capacity(wants.len()),
             walked: BTreeMap::new(),
+            remaining: BTreeMap::new(),
+            finished: BTreeMap::new(),
+            chunked: false,
+            failed: BTreeSet::new(),
+            absent_only: BTreeSet::new(),
+            rewalk: BTreeSet::new(),
+            partial: BTreeSet::new(),
             submitted: std::time::Instant::now(),
             id: self.stats.walks_submitted.saturating_add(1),
         };
@@ -1320,16 +1353,21 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         if batch.wants.is_empty() {
             return;
         }
-        if batch.walked.len() > MAX_SPACES_PER_WALK {
-            self.refuse_batch(
-                &batch,
-                format!(
-                    "{} objects in one walk; the walk kernel carries {MAX_SPACES_PER_WALK}",
-                    batch.walked.len()
-                ),
-            );
-            return;
+        Self::split_chunk(&mut batch);
+        self.submit_batch(batch);
+    }
+
+    /// Keep at most the kernel ABI's entries in this submission. All wants stay on the
+    /// batch, so neither an invalidate nor a split can finish at an intermediate chunk.
+    fn split_chunk(batch: &mut Batch) {
+        if let Some(key) = batch.walked.keys().nth(MAX_SPACES_PER_WALK).copied() {
+            batch.remaining = batch.walked.split_off(&key);
+            batch.chunked = true;
         }
+    }
+
+    fn submit_batch(&mut self, mut batch: Batch) {
+        self.flush_released();
         let entries: Vec<WalkEntry> = batch
             .walked
             .values()
@@ -1434,7 +1472,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
         };
         out.collected = true;
-        let Some(batch) = self.inflight.take() else {
+        let Some(mut batch) = self.inflight.take() else {
             return out;
         };
         self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
@@ -1447,13 +1485,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         // ★ One verdict per report run; anything not applied below stays FAILED (0): the next
         // diff re-emits it.
         let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; done.nrun];
-        let mut failed: BTreeSet<VasKey> = BTreeSet::new();
+        let mut failed = core::mem::take(&mut batch.failed);
         // ★ v3-mapfix: of `failed`, the spaces whose only failure is ABSENCE (refused MAPs or
         // walk-refused leaves; every unmap and the invalidate landed) — see the split verdict.
-        let mut absent_only: BTreeSet<VasKey> = BTreeSet::new();
+        let mut absent_only = core::mem::take(&mut batch.absent_only);
         // ★ v3-mapfix: of `failed`, spaces whose root moved during the walk (re-walked at once).
-        let mut rewalk: BTreeSet<VasKey> = BTreeSet::new();
-        let mut partial: BTreeSet<VasKey> = BTreeSet::new();
+        let mut rewalk = core::mem::take(&mut batch.rewalk);
+        let mut partial = core::mem::take(&mut batch.partial);
         let cfg = ApplyCfg {
             store_bytes: self.store_bytes,
             grain: self.page_grain,
@@ -1696,6 +1734,63 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 done.generation
             ));
         }
+        batch
+            .finished
+            .extend(batch.walked.iter().map(|(&k, &v)| (k, v)));
+        // A continuation is a new GPU read. Revalidate its captured objects just
+        // before submission: never read a retired slot or a superseded directory.
+        batch.remaining.retain(|key, (slot, root)| {
+            let Some(space) = self.table.spaces.get(key) else {
+                return false;
+            };
+            if space.slot != Some(*slot) {
+                return false;
+            }
+            if let Some(current) = space.root {
+                *root = current;
+                true
+            } else {
+                // Withdrawal does not prove that the old target's rows are gone.
+                // Preserve the existing withheld-clear rule for this separate case.
+                failed.insert(*key);
+                self.stats
+                    .refuse(format!("{key:?}: root withdrawn before continuation"));
+                false
+            }
+        });
+        if !batch.remaining.is_empty() {
+            // Commit-on-ack is unchanged: this chunk's verdict is consumed by the next
+            // submission. Keep hard failures and asynchronous settlement obligations
+            // until every object of the original request has had its own turn.
+            batch.failed = failed;
+            batch.absent_only = absent_only;
+            batch.rewalk = rewalk;
+            batch.partial = partial;
+            batch.walked = core::mem::take(&mut batch.remaining);
+            Self::split_chunk(&mut batch);
+            batch.id = self.stats.walks_submitted.saturating_add(1);
+            self.submit_batch(batch);
+            // A refused continuation has no completion fd left to wake us. Pump
+            // independent pending work now, just as after a refused report.
+            self.pump(trigger);
+            return out;
+        }
+        for (&key, &(slot, root)) in &batch.finished {
+            if let Some(space) = self.table.spaces.get(&key)
+                && space.slot == Some(slot)
+                && space.root != Some(root)
+                && !rewalk.contains(&key)
+            {
+                // The batch still owes its earlier chunks until the final clear.
+                // The original invalidate must wait for a walk of the new root.
+                failed.insert(key);
+                rewalk.insert(key);
+                self.pending.push(Want::Root(key));
+                self.stats.refuse(format!(
+                    "{key:?}: root {root:#x} changed between chunks; re-walking"
+                ));
+            }
+        }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
         let mut settled: BTreeMap<VasKey, Settle> = BTreeMap::new();
@@ -1758,11 +1853,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 && keys.iter().all(|k| {
                     !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k))
                 });
-            if bad.is_some() && !absent_ok {
+            let retry_root = keys.iter().any(|k| rewalk.contains(k));
+            let retryable = keys.iter().all(|k| {
+                !failed.contains(k)
+                    || (rewalk.contains(k) && self.table.root(*k).is_some())
+                    || (self.clear_absent && absent_only.contains(k) && !rewalk.contains(k))
+            });
+            if !retryable {
                 self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                 out.unreconciled.push(r.seq);
-            } else if again {
-                // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
+            } else if again || retry_root {
+                // Capacity-withheld maps or a moved root still owe this invalidate
+                // a complete walk. Requeue the original request, preserving its age.
                 requeue.push((*w, *at));
             } else {
                 // ★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the
