@@ -125,6 +125,47 @@ class ProviderRetry(unittest.TestCase):
         self.retire()
         self.assertEqual(P.exclude_bad([{"machine_id": 15}, {"machine_id": 15}], self.bad), [])
 
+    def previous(self, **change):
+        return dict(self.row, destroyed=True, absence_verified_utc="actual", **change)
+
+    def recorded_bad(self, **change):
+        return [dict(machine_id=15, instance_id=71, reason="provider_host_error", **change)]
+
+    def test_restart_can_replace_only_a_recorded_retired_provider_failure(self):
+        self.assertTrue(P.can_replace(self.previous(), self.recorded_bad()))
+
+    def test_restart_cannot_replace_an_ssh_ready_cell_after_its_teardown(self):
+        self.assertFalse(P.can_replace(self.previous(ssh_ready_utc="actual"), self.recorded_bad()))
+
+    def test_restart_cannot_replace_a_native_cell_after_its_teardown(self):
+        self.assertFalse(P.can_replace(self.previous(work_started=True), self.recorded_bad()))
+
+    def test_restart_cannot_replace_before_exact_api_absence(self):
+        row = self.previous()
+        row.pop("absence_verified_utc")
+        self.assertFalse(P.can_replace(row, self.recorded_bad()))
+
+    def test_restart_needs_a_record_for_that_exact_instance(self):
+        self.assertFalse(
+            P.can_replace(
+                self.previous(), [dict(machine_id=15, instance_id=72, reason="provider_host_error")]
+            )
+        )
+
+    def test_restart_needs_that_exact_machine_record(self):
+        self.assertFalse(
+            P.can_replace(
+                self.previous(), [dict(machine_id=16, instance_id=71, reason="provider_host_error")]
+            )
+        )
+
+    def test_restart_cannot_relabel_a_native_fault_as_a_provider_failure(self):
+        self.assertFalse(
+            P.can_replace(
+                self.previous(), [dict(machine_id=15, instance_id=71, reason="native_xid32")]
+            )
+        )
+
     def test_first_and_second_retry_are_persistently_charged(self):
         self.assertEqual(P.reserve_retry(self.state), 1)
         self.assertEqual(P.reserve_retry(self.state), 2)
