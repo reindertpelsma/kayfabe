@@ -1,0 +1,31 @@
+{
+  "classification": "MEASURED",
+  "evidence": "k4-series.json",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "plan": "K4-plan.json",
+  "start": "2026-10-23T07:12:00.394702+00:00",
+  "status": "STOPPED_FOR_REVIEW",
+  "arms": [
+    {
+      "run": 4640,
+      "arm": "K4-KF1",
+      "exit": 2,
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "restored": false,
+      "new_host_xids": null,
+      "telemetry_exit": null,
+      "result": "energy-bisect/4640/result.json"
+    }
+  ],
+  "end": "2026-10-23T07:12:02.628133+00:00",
+  "phase": "NO_VM_STARTED",
+  "reason": "Missing staged eligibility receipt. Failure retained; controller finally history initialization corrected before next launch.",
+  "replacement_run": 4644,
+  "independent_host_health": {
+    "CUDA": 0,
+    "GDM": "active",
+    "NVIDIA_bound": true
+  },
+  "no_4640_VM_directory": true
+}

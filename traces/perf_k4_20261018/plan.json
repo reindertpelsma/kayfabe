@@ -1,0 +1,69 @@
+{
+  "classification": "INFERRED",
+  "evidence": "plan.json",
+  "round": "Q4 K4",
+  "start": "2026-10-23T07:00:58+00:00",
+  "hard_deadline": "2026-10-23T11:00:58+00:00",
+  "restore_cutoff": "2026-10-23T10:45:58+00:00",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "evidence_branch": "codex/qualify-6d-20261023",
+  "runs": [
+    {
+      "id": 4644,
+      "arm": "kayfabe",
+      "repeat": 1
+    },
+    {
+      "id": 4641,
+      "arm": "VFIO",
+      "repeat": 1
+    },
+    {
+      "id": 4642,
+      "arm": "kayfabe",
+      "repeat": 2
+    },
+    {
+      "id": 4643,
+      "arm": "VFIO",
+      "repeat": 2
+    }
+  ],
+  "workloads": [
+    "catia-07",
+    "creo-04"
+  ],
+  "discipline": "One fresh CoW boot per arm; same immutable parent, 12GiB RAM/8vCPU, FullHD, production flags minus profiler, synthetic60Hz test broker/host GDM off for kayfabe,9216MiB store; VFIO physical display/full12282MiB. No product or guest driver setting changes. Restore after every boot. PCIe link preflight in host and guest, active windows decide downtraining.",
+  "hypotheses": {
+    "G1": {
+      "hypothesis": "SM/memory clock, power-state or thermal/power capping differs and explains GPU cost",
+      "falsifier": "Both independent boots show SM clocks within5%, memory clocks within100MHz and equivalent active non-idle thermal/power throttle fractions within5 percentage points. No clock-setting changes permitted."
+    },
+    "G2": {
+      "hypothesis": "Kayfabe has more PCIe/sysmem placement traffic or GPU memory activity",
+      "falsifier": "Both workload windows show PCIe RX/TX means within10% (or within100MB/s if near zero) and memory-controller busy within5 points; unavailable counters remain unverified, never filled with zero. Higher traffic alone does not prove harmful placement."
+    },
+    "G3": {
+      "hypothesis": "Present/display path materially reduces throughput",
+      "falsifier": "True no-present same-viewset arm preserves the gap; if unavailable, a matched D3D11 render-target proxy with identical work present vs no-present preserves the arm ratio within10%, qualified only to that proxy. No hidden/minimized window is called no-present. Generic draws are not claimed to replay closed workload commands."
+    },
+    "G4": {
+      "hypothesis": "Reduced/segmented guest VRAM budget induces eviction/paging",
+      "falsifier": "Comparable guest budget/committed/local/nonlocal counters plus a supported eviction observer show no evictions and equivalent pressure in both arms. Memory-used alone cannot establish no eviction; an unsupported observer leaves the falsifier untested."
+    },
+    "G5": {
+      "hypothesis": "Engine scheduling or overlap differs",
+      "falsifier": "Physical engine-activity and guest3D/copy-engine distributions are equal across repeats under comparable load. Aggregate SM/mem/enc/dec data alone cannot prove equal TSG scheduling or preemption."
+    }
+  },
+  "telemetry": "200ms physical GPU NVML and query-gpu clocks/power/temp/throttle/link/memory; Linux dmon1s; Windows physical VFIO NVML/query-gpu equivalent because dmon support must be checked. Minimal guest PDH/DXGI memory/engine data and supported eviction evidence. Collector support/status retained.",
+  "safety": "Fastguest flock bounded120s, quiet flag around all VM/profile work; only own children; exact full Xid sequence snapshot and delta per arm, any new unmatched Xid stops lane; VF1 GPU+audio detach/restore; host final CUDA0/GDM/ubuntu/autologin/two monitors; owner VM remains stopped. Own HOST_YIELDED superseded only by explicit returned-host instruction.",
+  "publication": "SPEC composites/subtests/ratios only via pinned spec_stamp.py with(nc)/release/config/disclaimer. Raw scores stay private until stamped. No Steel/Geekbench outputs.",
+  "initial_caveat": "Equal global GPU busy does not isolate rendering from walker/display/copy work; K3 remains limited, not a proof that submission starvation is absent.",
+  "prelaunch_attempt": {
+    "run": 4640,
+    "phase": "NO_VM_STARTED",
+    "reason": "Missing copied eligibility/CI receipt; controller raised before prepare/launch. Original failure retained. Final health CUDA0/GDM/NVIDIA; no held quiet flag. History initialization corrected for finally path.",
+    "replacement_run": 4644
+  }
+}

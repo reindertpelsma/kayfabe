@@ -1,0 +1,44 @@
+{
+  "classification": "MEASURED",
+  "evidence": "analysis-controls.json",
+  "expected_red_commit": "24aa08d53",
+  "expected_red": "Missing attribution module import failure,zero behavioral assertions executed; new diagnostic API,not proof of a production runtime defect",
+  "green_tests_passed": 17,
+  "green_failed": 0,
+  "mutants": [
+    {
+      "mutant": "coerce-unavailable-to-zero",
+      "exit": 1,
+      "distinct_assertion_killers": [
+        "test_missing_link_status_is_not_x0",
+        "test_unsupported_power_is_not_zero_power"
+      ]
+    },
+    {
+      "mutant": "accept-counter-reset",
+      "exit": 1,
+      "distinct_assertion_killers": [
+        "test_eviction_counter_reset_refuses",
+        "test_promotion_counter_reset_refuses"
+      ]
+    },
+    {
+      "mutant": "discard-guest-timezone",
+      "exit": 1,
+      "distinct_assertion_killers": [
+        "test_another_guest_timezone_is_preserved",
+        "test_guest_local_time_is_not_host_utc"
+      ]
+    },
+    {
+      "mutant": "include-gap-and-boundaries",
+      "exit": 1,
+      "distinct_assertion_killers": [
+        "test_inter_subtest_gap_is_not_gpu_busy_evidence",
+        "test_subtest_interior_omits_load_and_boundary"
+      ]
+    }
+  ],
+  "source_sha256": "244326961314e9e133cef057b7d8ebf2328ea10f5664053193d702c4836eaf66",
+  "scope": "GPU-free evidence parsing guards; no product source change. Unsupported counters and clock/boundary errors may not fabricate a causal conclusion."
+}

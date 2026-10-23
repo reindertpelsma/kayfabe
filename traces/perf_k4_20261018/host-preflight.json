@@ -1,0 +1,50 @@
+{
+  "classification": "MEASURED",
+  "evidence": "host-preflight.json",
+  "time": "2026-10-23T09:10:33.244190+02:00",
+  "query": "name, driver_version, pstate, pcie.link.gen.current, pcie.link.gen.max, pcie.link.width.current, pcie.link.width.max, clocks.current.sm [MHz], clocks.current.memory [MHz], power.limit [W]\nNVIDIA GeForce RTX 4070, 595.91.07, P8, 1, 4, 16, 16, 210 MHz, 405 MHz, 200.00 W\n",
+  "pci_link": [
+    "LnkCap:\tPort #0, Speed 16GT/s, Width x16, ASPM L1, Exit Latency L1 <4us",
+    "LnkSta:\tSpeed 2.5GT/s (downgraded), Width x16"
+  ],
+  "health": {
+    "classification": "MEASURED",
+    "evidence": "final-health.json",
+    "time": "2026-10-23T09:10:33.244190+02:00",
+    "nvidia_smi_before": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 39, 401 MiB",
+      "stderr": ""
+    },
+    "cuda_before": 0,
+    "cuda_after": 0,
+    "nvidia_smi_after": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 39, 401 MiB",
+      "stderr": ""
+    },
+    "gdm": {
+      "exit": 0,
+      "stdout": "active",
+      "stderr": ""
+    },
+    "nvidia_bound": true,
+    "automatic_login": {
+      "configured": true,
+      "enabled": true,
+      "user_present": true
+    },
+    "display_before": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "gdm_restart_for_display": false,
+    "display_after": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "ubuntu_logged_in": true
+  },
+  "new_Xid_delta": 0,
+  "scope": "Read-only two-second NVML/query/dmon plus lspci before VM; idle link downshift not a performance conclusion"
+}

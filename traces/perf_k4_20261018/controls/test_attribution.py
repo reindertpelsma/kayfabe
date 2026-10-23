@@ -16,6 +16,7 @@ class AttributionControls(unittest.TestCase):
  def test_one_counter_sample_cannot_prove_zero_evictions(self):
   with self.assertRaises(ValueError):A.counter_delta([0])
  def test_guest_local_time_is_not_host_utc(self):self.assertEqual(A.log_epoch('2026-10-23','07:00:00','2026-10-23T07:01:00+02:00'),1792731600)
+ def test_another_guest_timezone_is_preserved(self):self.assertEqual(A.log_epoch('2026-10-23','12:30:00','2026-10-23T12:31:00+05:30'),1792738800)
  def test_guest_epoch_to_host_clock_is_explicit(self):
   lo,hi=A.clock_bounds(1792738800000000000,1792738802000000000,1792731600000);self.assertEqual((lo,hi),(7200,7202))
  def test_invalid_clock_brackets_refuse(self):

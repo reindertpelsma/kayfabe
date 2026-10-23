@@ -1,0 +1,23 @@
+{
+  "classification": "CODE READ",
+  "evidence": "collector-build.json",
+  "NVAPI_source": {
+    "commit": "70d337db9186e968eab622f7e786de7e437faf3d",
+    "repo": "https://github.com/NVIDIA/nvapi",
+    "files": [
+      "nvapi_lite_common.h",
+      "nvapi_interface.h"
+    ]
+  },
+  "files": {
+    "nvml-sample.c": "3dc3a07398fdcf98028fee22d2cbe5920370a02f14f4ee7a857af791f5560fbc",
+    "nvml-sample.exe": "945c4dae2ec0dee86f3f4e35a6928fe6df5303f9d1bbc06b0fdc3e0c49c280d1",
+    "nvml-sample": "7a7965ce67758ce6c0c00223e2c9c60c6d9b57dfd0b686b330e530e3020ebb68",
+    "memory-sample.cpp": "e0784a3a4ebf9a5c66c7cfb979646b7878e4fd0b59f77fd663e7b6298dd8b0b4",
+    "memory-sample.exe": "2b80d52467269df27d8aec994deb833b4282cfc25f3bff474a060ca20b534a99"
+  },
+  "build": "GCC with Wall/Wextra/Werror; MinGW x64 static Windows collectors; no product source touched",
+  "NVAPI_struct_size": 80,
+  "units": "NVML PCIe throughput uses API-documented KB/s; status0 required. Driver utilization uses rolling windows even when polled200ms.",
+  "budget_scope": "DXGI observer process only; PDH process counters identify actual workloads; NVAPI memory eviction/promotion counters are adapter aggregate. No zero inferred from unavailable API."
+}
