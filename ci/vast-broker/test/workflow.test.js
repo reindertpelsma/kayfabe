@@ -83,39 +83,6 @@ test('reusable GPU workflow cannot hide attestation', async () => {
     }).length,
   );
 });
-test('dashboard bundle parses and exports source handlers', async () => {
-  const r = spawnSync(process.execPath, ['bundle.js'], {
-    cwd: new URL('../', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(r.status, 0, r.stderr);
-  const source = await import('../src/index.js');
-  const bundle = await import('../dist/worker.js');
-  assert.deepEqual(Object.keys(bundle).sort(), Object.keys(source).sort());
-  assert.equal(typeof bundle.default.fetch, 'function');
-  assert.equal(typeof bundle.default.scheduled, 'function');
-});
-test('bundle exercises the same refusal behavior', async () => {
-  const r = spawnSync(process.execPath, ['bundle.js'], {
-    cwd: new URL('../', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(r.status, 0, r.stderr);
-  const source = await import('../src/index.js');
-  const bundle = await import('../dist/worker.js');
-  const { env, MemoryStorage, MockCloud } = await import('./helpers.js');
-  for (const m of [source, bundle]) {
-    const s = m.createService({
-      env: { ...env, RENTING_ENABLED: 'false' },
-      storage: new MemoryStorage(),
-      fetch: new MockCloud().fetch,
-    });
-    assert.equal(
-      (await s.fetch(new Request(env.WORKER_URL + '/rent', { method: 'POST' }))).status,
-      503,
-    );
-  }
-});
 test('box deliberate control exits failure on missing evidence', async () => {
   const path = new URL('scripts/ci/vast_box_main.sh', root);
   await readFile(path);

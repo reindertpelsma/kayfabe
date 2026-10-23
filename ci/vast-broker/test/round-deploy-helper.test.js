@@ -7,22 +7,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // FALSIFIER V4: a routine deploy silently drops or invents public vars, deploys an unreviewed
-// bundle, accepts retired Access or secret-named vars, or prints a configured value.
+// bundle (wrangler output differs from deployment.json/wrangler.toml), uploads other bytes than
+// it verified, accepts retired Access or secret-named vars, or prints a configured value.
 const broker = fileURLToPath(new URL('../', import.meta.url));
 const OWNER = '229738317';
 async function fixture({ bundle = 'export default {};\n', tomlOwner = OWNER, version } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'v4-deploy-'));
   const site = join(root, 'broker');
-  await mkdir(join(site, 'dist'), { recursive: true });
+  await mkdir(site, { recursive: true });
   await cp(broker + 'wrangler.toml', join(site, 'wrangler.toml'));
   const digest = createHash('sha256').update(bundle).digest('hex');
-  await writeFile(join(site, 'dist', 'worker.js'), bundle);
   await writeFile(join(site, 'deployment.json'), JSON.stringify({ bundle_sha256: digest }));
   const toml = (await readFile(join(site, 'wrangler.toml'), 'utf8'))
     .replace(/^DEPLOYED_BUNDLE_SHA256 = ".*"$/m, 'DEPLOYED_BUNDLE_SHA256 = "' + digest + '"')
     .replace(/^OWNER_GITHUB_ID = ".*"$/m, 'OWNER_GITHUB_ID = "' + tomlOwner + '"');
   await writeFile(join(site, 'wrangler.toml'), toml);
   const log = join(root, 'wrangler.log');
+  const emitted = join(root, 'emitted.js');
+  await writeFile(emitted, bundle);
+  // Fake wrangler: --version, the bundling dry run (copies emitted.js to <outdir>/index.js),
+  // and the upload; every call is logged with its environment's metrics switch.
   await writeFile(
     join(root, 'wrangler'),
     '#!/usr/bin/env node\n' +
@@ -32,12 +36,18 @@ async function fixture({ bundle = 'export default {};\n', tomlOwner = OWNER, ver
       "');process.exit(0);}\n" +
       'fs.appendFileSync(' +
       JSON.stringify(log) +
-      ',JSON.stringify({argv:a,cwd:process.cwd()})+"\\n");\n' +
+      ',JSON.stringify({argv:a,cwd:process.cwd(),metrics:process.env.WRANGLER_SEND_METRICS})' +
+      '+"\\n");\n' +
+      "const o=a.indexOf('--outdir');\n" +
+      'if(o>=0)fs.copyFileSync(' +
+      JSON.stringify(emitted) +
+      ",a[o+1]+'/index.js');\n" +
       "console.log('echo '+a.join(' '));console.error('err '+a.join(' '));\n",
     { mode: 0o700 },
   );
-  return { root, site, log };
+  return { root, site, log, emitted };
 }
+const uploads = (calls) => calls.filter((x) => !x.argv.includes('--outdir'));
 async function deploy(f, vars, extra = []) {
   const file = join(f.root, 'vars.env');
   await writeFile(file, vars);
@@ -53,7 +63,7 @@ async function deploy(f, vars, extra = []) {
   return { ...run, calls, text: run.stdout + run.stderr };
 }
 for (const dry of [false, true])
-  test('round deploy helper passes exactly the vars file ' + dry, async () => {
+  test('round deploy helper bundles, verifies and uploads that file ' + dry, async () => {
     const f = await fixture();
     try {
       const r = await deploy(
@@ -62,22 +72,37 @@ for (const dry of [false, true])
         dry ? ['--dry-run'] : [],
       );
       assert.equal(r.status, 0, r.text);
-      assert.deepEqual(
-        r.calls.map((x) => x.argv),
-        [
-          [
-            'deploy',
-            ...(dry ? ['--dry-run'] : []),
-            '--var',
-            'OWNER_GITHUB_ID:' + OWNER,
-            '--var',
-            'DENIED_COUNTRIES:["CU","IR"]',
-          ],
-        ],
-      );
-      assert.equal(r.calls[0].cwd, f.site);
+      const [build, upload] = r.calls;
+      assert.equal(r.calls.length, 2);
+      const outdir = build.argv.at(-1);
+      assert.deepEqual(build.argv, [
+        'deploy',
+        '--config',
+        'wrangler.toml',
+        '--dry-run',
+        '--outdir',
+        outdir,
+      ]);
+      assert.deepEqual(upload.argv, [
+        'deploy',
+        '--config',
+        'wrangler.toml',
+        ...(dry ? ['--dry-run'] : []),
+        '--no-bundle',
+        join(outdir, 'index.js'),
+        '--var',
+        'OWNER_GITHUB_ID:' + OWNER,
+        '--var',
+        'DENIED_COUNTRIES:["CU","IR"]',
+      ]);
+      for (const call of r.calls) {
+        assert.equal(call.cwd, f.site);
+        assert.equal(call.metrics, 'false');
+      }
+      await assert.rejects(readFile(join(outdir, 'index.js')));
       assert.ok(!r.text.includes(OWNER) && !r.text.includes('"CU"'), r.text);
       assert.match(r.text, /<OWNER_GITHUB_ID>/);
+      assert.match(r.text, /bundle [0-9a-f]{64} \(19 bytes\) verified/);
     } finally {
       await rm(f.root, { recursive: true });
     }
@@ -105,10 +130,10 @@ for (const [name, vars, options] of [
   ['wrangler-version', 'OWNER_GITHUB_ID=229738317\n', { version: '4.151.0' }],
   ['wrangler-patch', 'OWNER_GITHUB_ID=229738317\n', { version: 'wrangler 4.152.01' }],
 ])
-  test('round deploy helper refuses before wrangler deploy ' + name, async () => {
+  test('round deploy helper refuses before any upload ' + name, async () => {
     const f = await fixture(options);
     try {
-      if (options?.tamper) await writeFile(join(f.site, 'dist', 'worker.js'), 'tampered\n');
+      if (options?.tamper) await writeFile(f.emitted, 'tampered\n');
       if (options?.manifest)
         await writeFile(join(f.site, 'deployment.json'), JSON.stringify({ bundle_sha256: '0' }));
       if (options?.tomlHash) {
@@ -120,7 +145,7 @@ for (const [name, vars, options] of [
       }
       const r = await deploy(f, vars);
       assert.notEqual(r.status, 0);
-      assert.deepEqual(r.calls, []);
+      assert.deepEqual(uploads(r.calls), []);
       for (const secret of ['aud-value-123', 'box-value-123', 'secret-value-123'])
         assert.ok(!r.text.includes(secret), r.text);
     } finally {

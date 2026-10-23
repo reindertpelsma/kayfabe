@@ -40,37 +40,3 @@ test('R3 final binaries built on GitHub without artifact inputs', async () => {
   for (const ref of t.matchAll(/^\s*- uses: (\S+)/gm))
     assert.match(ref[1], /^actions\/[a-z-]+@[0-9a-f]{40}$/);
 });
-test('R3 bundle manifest pins exact emitted Worker bytes', async () => {
-  const p = spawnSync(process.execPath, ['bundle.js'], {
-    cwd: new URL('../', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(p.status, 0, p.stderr);
-  const { createHash } = await import('node:crypto');
-  const raw = await readFile(new URL('../dist/worker.js', import.meta.url));
-  const manifest = JSON.parse(
-    await readFile(new URL('../dist/deployment.json', import.meta.url), 'utf8'),
-  );
-  assert.deepEqual(manifest, {
-    protocol_version: 5,
-    worker_version: 'v5',
-    bundle_sha256: createHash('sha256').update(raw).digest('hex'),
-  });
-});
-
-test('R3 generated manifest can be independently checked with sha256sum', async () => {
-  const p = spawnSync(process.execPath, ['bundle.js'], {
-    cwd: new URL('../', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(p.status, 0, p.stderr);
-  const expected = spawnSync('sha256sum', ['dist/worker.js'], {
-    cwd: new URL('../', import.meta.url),
-    encoding: 'utf8',
-  });
-  assert.equal(expected.status, 0);
-  const manifest = JSON.parse(
-    await readFile(new URL('../dist/deployment.json', import.meta.url), 'utf8'),
-  );
-  assert.equal(manifest.bundle_sha256, expected.stdout.split(' ')[0]);
-});
