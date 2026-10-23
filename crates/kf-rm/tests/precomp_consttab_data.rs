@@ -102,6 +102,62 @@ fn gb206_every_word_retains_its_measured_source_and_evidence() {
     );
 }
 
+fn decoded_fields(name: &str, evidence: &str) {
+    let table = kf_disp::class::for_version("595.91.07").unwrap();
+    let caps = kf_chip::display::BLACKWELL_GB20X.classes.caps;
+    let mut count = 0;
+    for line in evidence.lines().filter(|line| line.contains("\tfield\t")) {
+        let fields: std::collections::BTreeMap<_, _> = line
+            .split('\t')
+            .skip(2)
+            .map(|part| part.split_once('=').unwrap())
+            .collect();
+        let field = fields["name"];
+        let register = field.split('_').take(5).collect::<Vec<_>>().join("_");
+        let window = fields["window"].parse().unwrap();
+        let offset = table.a(caps, &register, window).unwrap();
+        let layout = table.f(caps, field).unwrap();
+        assert_eq!(fields["bits"], format!("{}:{}", layout.0, layout.1));
+        let word = consttab::lookup(&key(offset), DieId::from_name(name).unwrap(), 595)
+            .unwrap()
+            .words[0];
+        assert_eq!(
+            kf_disp::class::get(word, layout),
+            fields["value"].parse::<u32>().unwrap(),
+            "{name} window {window} {field}"
+        );
+        count += 1;
+    }
+    assert_eq!(count, 328);
+}
+
+#[test]
+fn gb202_independent_public_field_decode_matches_all_measurements() {
+    decoded_fields("GB202", GB202);
+}
+
+#[test]
+fn gb206_independent_public_field_decode_matches_all_measurements() {
+    decoded_fields("GB206", GB206);
+}
+
+#[test]
+fn every_measured_die_has_exactly_48_published_rows_including_zeros() {
+    let rows = consttab::table().unwrap();
+    for name in ["GB202", "GB206"] {
+        let die = DieScope::Die(DieId::from_name(name).unwrap());
+        let own: Vec<_> = rows
+            .iter()
+            .filter(|row| row.key.starts_with("display.precomp.") && row.die == die)
+            .collect();
+        assert_eq!(own.len(), 48, "{name}");
+        assert!(
+            own.iter().any(|row| row.words == [0]),
+            "explicit measured zeros"
+        );
+    }
+}
+
 #[test]
 fn physical_rows_are_scoped_to_the_measured_host_branch() {
     for name in ["GB202", "GB206"] {
