@@ -21,7 +21,15 @@ OWN = 12345678
 
 class PrecreateWatchdog(unittest.TestCase):
     def run_case(
-        self, *, delay=0, rate=0.4, credit=28.8, absent=False, close=False, absence_after=1
+        self,
+        *,
+        delay=0,
+        rate=0.4,
+        credit=28.8,
+        absent=False,
+        close=False,
+        absence_after=1,
+        status_seconds=0,
     ):
         self.assertIsNotNone(W, "precreate watchdog not implemented")
         events = []
@@ -38,6 +46,8 @@ class PrecreateWatchdog(unittest.TestCase):
         def status(iid):
             events.append(("status", iid))
             destroyed = sum(e == ("destroy", iid) for e in events)
+            if not destroyed:
+                clock[0] += dt.timedelta(seconds=status_seconds)
             return {
                 "id": iid,
                 "absent": absent or destroyed >= absence_after,
@@ -79,6 +89,16 @@ class PrecreateWatchdog(unittest.TestCase):
     def test_long_readiness_still_uses_the_original_deadline(self):
         result, events, end = self.run_case(delay=1200)
         self.assertEqual(end, NOW + dt.timedelta(seconds=9000))
+
+    def test_provider_response_crossing_deadline_triggers_immediate_teardown(self):
+        result, events, end = self.run_case(delay=8950, status_seconds=60)
+        self.assertEqual(end, NOW + dt.timedelta(seconds=9020))
+        self.assertEqual(result["reason"], "fixed deadline")
+
+    def test_slow_query_at_last_poll_does_not_add_another_poll_interval(self):
+        result, events, end = self.run_case(delay=8980, status_seconds=70)
+        self.assertEqual(end, NOW + dt.timedelta(seconds=9050))
+        self.assertEqual(result["reason"], "fixed deadline")
 
     def test_destroy_is_by_the_one_exact_owned_id(self):
         result, events, end = self.run_case()
