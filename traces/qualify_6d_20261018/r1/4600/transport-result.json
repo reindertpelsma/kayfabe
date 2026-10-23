@@ -1,0 +1,20 @@
+{
+  "classification": "MEASURED",
+  "evidence": "4600/transport-result.json",
+  "run": 4600,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "desktop_hold": "PASS",
+  "app_matrix_rows_started": 0,
+  "smokes": "NOT_RUN",
+  "attempt_status": "HARNESS_RESULT_CORRELATION_FAILURE",
+  "cause": "matrix staging script reassigned guest agent job variable $j; output arrived as r/.txt instead of the requested job ID",
+  "new_host_xids": 0,
+  "clean_shutdown": true,
+  "restoration": {
+    "cuInit": 0,
+    "nvidia_bound": true,
+    "gdm": "active",
+    "module_reload": false
+  },
+  "retry_run": 4605
+}

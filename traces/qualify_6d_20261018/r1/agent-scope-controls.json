@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "evidence": "agent-scope-controls.json",
+  "old_run": 4600,
+  "new_run": 4605,
+  "exact_original_payload_characters": 44675,
+  "old_wrong_id_result": "Q4_MATRIX_STAGED",
+  "old_original_job_result_missing": true,
+  "replay_exit": 0,
+  "replay_output": "Q4_MATRIX_STAGED",
+  "variable_rebinding_control": "Q4_SCOPE_CONTROL_RETURNED_WITH_ORIGINAL_JOB_ID",
+  "diagnosis": "Unscoped Invoke-Expression overwrote guest agent $j job identity; submitting a child script scope preserves that identity. Original 44,675-character payload returns successfully with the scope fix, falsifying command length as this incident cause.",
+  "passed": true
+}
