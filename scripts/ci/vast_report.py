@@ -555,7 +555,45 @@ def run_daemon(args, env):
     return 0 if result["verdict"] == "PASS" and not reporter.fallback_used else 1
 
 
+def load_provider_env(env, path="/etc/environment"):
+    """Read missing contract fields from Vast VM data; never source shell code.
+
+    Process values win. Provider account/instance credentials and all unrelated
+    fields are ignored. The ordinary strict validator still decides acceptance.
+    """
+    result = dict(env)
+    missing = {name for name, _, _ in SPEC if not result.get(name)}
+    if not missing:
+        return result
+    try:
+        with open(path, "rb") as source:
+            raw = source.read(65537)
+    except FileNotFoundError:
+        return result
+    if len(raw) > 65536:
+        raise ValueError("provider environment too large")
+    seen = set()
+    for line in raw.decode("utf-8").splitlines():
+        name, separator, value = line.partition("=")
+        name = name.strip()
+        if not separator or name not in missing:
+            continue
+        if name in seen:
+            raise ValueError("duplicate provider contract field")
+        seen.add(name)
+        words = shlex.split(value, comments=False, posix=True)
+        if len(words) > 1:
+            raise ValueError("invalid provider contract field")
+        result[name] = words[0] if words else ""
+    return result
+
+
 def run_check_env(args, env):
+    try:
+        env = load_provider_env(env, getattr(args, "provider_env", "/etc/environment"))
+    except (OSError, ValueError, UnicodeError):
+        sys.stderr.write("onstart: provider environment is invalid\n")
+        return 2
     problems = validate_env(env)
     if not problems:
         if args.write:
@@ -585,6 +623,7 @@ def parser():
             p.add_argument("--" + option, type=int)
         if name == "check-env":
             p.add_argument("--write")
+            p.add_argument("--provider-env", default="/etc/environment")
         else:
             p.add_argument("--log", required=True)
             p.add_argument("--done", required=True)

@@ -85,6 +85,48 @@ class ProviderEnvTests(unittest.TestCase):
             )
             self.assertIn("export KF_PROTOCOL=5", out.read_text())
 
+    def test_large_unknown_field_is_bounded(self):
+        with self.assertRaises(ValueError):
+            self.load("UNKNOWN=" + "x" * 65536)
+
+    def test_check_env_loads_quoted_provider_file(self):
+        from test_vast_box import good_env
+
+        env = good_env("https://broker.example/prefix")
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "environment"
+            path.write_text("".join(k + '="' + v + '"\n' for k, v in env.items()))
+            out = Path(d) / "checked"
+            self.assertEqual(
+                report.main(
+                    ["check-env", "--provider-env", str(path), "--write", str(out)], env={}
+                ),
+                0,
+            )
+            self.assertIn("export KF_PROTOCOL=5", out.read_text())
+
+    def test_invalid_provider_file_returns_failure(self):
+        import contextlib, io
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "environment"
+            path.write_text('KF_PROTOCOL="sensitive-unclosed\n')
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error):
+                rc = report.main(["check-env", "--provider-env", str(path)], env={})
+            self.assertEqual(rc, 2)
+            self.assertNotIn("sensitive-unclosed", error.getvalue())
+
+    def test_duplicate_provider_file_returns_failure(self):
+        import contextlib, io
+
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "environment"
+            path.write_text("KF_REPO=a/b\nKF_REPO=c/d\n")
+            with contextlib.redirect_stderr(io.StringIO()):
+                rc = report.main(["check-env", "--provider-env", str(path)], env={})
+            self.assertEqual(rc, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

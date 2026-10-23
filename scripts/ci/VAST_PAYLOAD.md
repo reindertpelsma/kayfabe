@@ -26,3 +26,9 @@ the raw marker currently carries the VA, not its channel. No per-die allowance i
 `python3 -m unittest discover -s scripts/ci -p 'test_vast_payload*.py'`
 and `python3 scripts/ci/payload_mutants.py`. Black uses line length 100; shellcheck covers both
 shell entrypoints. [Evidence](../../traces/vast_payload_v7_20261018/README.md).
+
+[CODE READ: vast_report.py load_provider_env] The reporter's check-env step supports Vast VMs
+that persist contract values in /etc/environment instead of exporting them to a non-login
+startup process. Only missing protocol names are parsed as data; process values win and
+unrelated provider/account credentials are never imported. The daemon still uses the validated
+root-only env file. [Recovery evidence](../../traces/vast_payload_v7_20261018/PROVIDER_ENV.md).
