@@ -1,0 +1,3 @@
+kf-census: ogkm 575.64.05, 1 sources, 5848 cmd + 5884 status messages, 202 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages

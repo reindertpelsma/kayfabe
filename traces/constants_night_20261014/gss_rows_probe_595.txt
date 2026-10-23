@@ -1,0 +1,39 @@
+# kf-ctl-probe KF_PROBE_GSS_ROWS=1 on the home host (RTX 4070 = AD104, host driver 595.91.07), 2026-10-14, lane C.
+# Binary: kf-ctl-probe built from claude/constants-night-20261014 (this commit's tree), sha256 a526838e2d304e750d015a70cbb6f715d2b81454f48959398c0d220b97a34688.
+# Run as user ubuntu (uid 1000, CapEff 0): exactly the requests kayfabe authors at realize (kf_abi::gssreplay::ROWS; zero probe,
+# plus the 0xa5 background probe for non-exact rows). Only RM status and changed-byte counts are printed; no reply bytes.
+# dmesg 'NVRM: Xid' count 17 before and 17 after (unchanged). Lane A's Windows VM was running on the GPU (not touched).
+# Falsifier stated before the run (H3): every row answers NV_OK except 852e/853a/a618 (expected INVALID_ARGUMENT, as the
+# 2026-10-13 ctl-probe); a028 and a001 unknown. Result: H3 holds; a028 (zero probe OK, background INVALID_ARGUMENT -> kayfabe keeps
+# the zero-probe bytes, by design) and a001 answer NV_OK.
+PROBE_START pid=3974451 uid=Uid: 1000 1000 1000 1000 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 1), (8, 8)] probe=zero status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 1), (8, 8)] probe=bg status=0x0 OK changed_bytes=12
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 100000), (20c, 100000)] probe=zero status=0x0 OK changed_bytes=11
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 100000), (20c, 100000)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 1), (20c, 1)] probe=zero status=0x0 OK changed_bytes=11
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 1), (20c, 1)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a084 size=4 exact=false inputs=[(0, 0)] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a084 size=4 exact=false inputs=[(0, 0)] probe=bg status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a026 size=532 exact=false inputs=[(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] probe=zero status=0x0 OK changed_bytes=9
+GSSROW cmd=0x2080a026 size=532 exact=false inputs=[(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] probe=bg status=0x0 OK changed_bytes=12
+GSSROW cmd=0x20809009 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=zero status=0x0 OK changed_bytes=1
+GSSROW cmd=0x20809009 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=bg status=0x0 OK changed_bytes=1
+GSSROW cmd=0x20809001 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=zero status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809001 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=bg status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 2), (8, 1), (18, 4)] probe=zero status=0x0 OK changed_bytes=6
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 2), (8, 1), (18, 4)] probe=bg status=0x0 OK changed_bytes=24
+GSSROW cmd=0x2080a001 size=16 exact=false inputs=[(0, 0), (4, 0), (8, 0), (c, 0)] probe=zero status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080a001 size=16 exact=false inputs=[(0, 0), (4, 0), (8, 0), (c, 0)] probe=bg status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080852a size=1784 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=100
+GSSROW cmd=0x20808524 size=4 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a70a size=26 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=13
+GSSROW cmd=0x2080a088 size=12 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080852e size=528 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080853a size=1456 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a618 size=8620 exact=true inputs=[] probe=zero status=0x1f INVALID_ARGUMENT changed_bytes=0
+PROBE_SUMMARY INVALID_ARGUMENT=5
+PROBE_SUMMARY OK=20
+PROBE_END admin_run=false mode=gss_rows

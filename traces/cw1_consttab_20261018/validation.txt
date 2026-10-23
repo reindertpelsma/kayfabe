@@ -1,0 +1,27 @@
+MEASURED run CW1-consttab-20261022 (2026-10-22), base e9c6d39e5.
+Source snapshot: codex/sweep-dies-20261022 at bc3a967e0.
+EXPECTED RED d67212e0f: three data tests compiled; 0 passed / 3 failed (missing table).
+EXPECTED RED 3f8aec9cf: loader contracts compile-red on absent consttab/DieId exports.
+Library baseline: 187 passed (kf-chip 33; kf-rm 154).
+Final libraries: 200 passed (kf-chip 36; kf-rm 164).
+Full final kf-chip/kf-rm suites: 865 passed; 0 failed; 0 ignored, including 30 new integration contracts.
+Command: nice -n 19 cargo test -p kf-rm -p kf-chip -j2 --release (own target; documented global build lock).
+Default scripts/ci_gates.sh: 14/14 gates; 39 Python self-tests passed.
+cargo fmt --all --check: PASS; git diff --check: PASS.
+Clippy --all-targets --locked --release -j2, kf-rm/kf-chip: before=57 after=57 warning sites; added=0 removed=0; no errors.
+Claims: existing-debt=3758 new=0; no gate/debt baseline changed.
+Observation fields: 95/95 equal the measured subset at source; software-state 2209 rule omitted.
+Evidence: 29/29 copied files byte-identical to PR1 eafe67cc2; all 95 row citations exist.
+CODE READ: 26/26 die implementation names/values match pinned OGKM 595.84 ctrl2080mc.h definitions.
+Source/API changes: only new modules/exports; no existing runtime consumer changes. Unverified on Windows; GPU/Windows n=0.
+Secret/IP and whitespace scans: PASS (no credentials/restricted paths/public-IP candidates).
+Mutation table (each restored; tests return green on pristine source):
+  die_scope: KILLED, 5 failed tests
+  rm_branch_scope: KILLED, 2 failed tests
+  unknown_die: KILLED, 3 failed tests
+  calendar_date: KILLED, 3 failed tests
+  evidence_syntax: KILLED, 4 failed tests
+  evidence_exists: KILLED, 2 failed tests
+  request_match: KILLED, 4 failed tests
+  board_specific: KILLED, 2 failed tests
+  header_schema: KILLED, 2 failed tests
