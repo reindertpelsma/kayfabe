@@ -729,7 +729,7 @@ pub const LOG_MAX: u32 = 512;
 #[must_use]
 pub fn refused_line_ok() -> bool {
     REFUSED_LINES
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
             (n < LOG_MAX).then_some(n.saturating_add(1))
         })
         .is_ok()

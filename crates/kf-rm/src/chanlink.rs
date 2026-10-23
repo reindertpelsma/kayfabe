@@ -4430,7 +4430,8 @@ mod tests {
     fn a_channel_carries_the_facts_of_the_ctxshare_it_names() {
         use std::sync::{Arc, Mutex};
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-        let seen: Arc<Mutex<Vec<(u32, u32, Option<CtxShareFacts>)>>> = Arc::default();
+        type Seen = Vec<(u32, u32, Option<CtxShareFacts>)>;
+        let seen: Arc<Mutex<Seen>> = Arc::default();
         let out = seen.clone();
         let sink: ChanSink = Arc::new(move |st| {
             if let ChanStatement::Alloc(a) = st {

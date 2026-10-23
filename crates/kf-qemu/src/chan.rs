@@ -5356,7 +5356,9 @@ impl ChanPlane {
         chan_client: u32,
         object: u32,
     ) -> Option<Result<String, (u32, String)>> {
-        let hit: Vec<((u32, u32), kf_host::Channel, u32, Option<u32>)> = self
+        // (guest key, host channel, engine, guest TSG) of a twin the guest's evict/preempt names
+        type TwinHit = ((u32, u32), kf_host::Channel, u32, Option<u32>);
+        let hit: Vec<TwinHit> = self
             .pt
             .lock()
             .ok()?
