@@ -245,6 +245,10 @@ class HostHealth(unittest.TestCase):
             self.probe(cuda_text='{"cuInit":0,"cuDeviceGetCount":0,"devices":0}')
 
 
+class WatchFinished(BaseException):
+    pass
+
+
 class WatcherLifecycle(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(O, "per-arm observation implementation missing")
@@ -317,6 +321,75 @@ class WatcherLifecycle(unittest.TestCase):
 
     def test_new_fault_after_pid_reuse_is_fatal(self):
         self.exercise(new_fault_after_exit=True, owner_error="starttime changed")
+
+    def exercise_phase_gap(self, count):
+        class Clock(dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return NOW
+
+        initial = [
+            {"cursor": "a", "priority": 6, "line": "initial kernel one"},
+            {"cursor": "b", "priority": 6, "line": "initial kernel two"},
+        ]
+
+        def rows(number):
+            return initial + [
+                {"cursor": f"x{i}", "priority": 3, "line": line}
+                for i, line in enumerate(pair(number))
+            ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, value in [
+                ("native.json", {"approved_native_xid_lines": [], "pci": PHASE["pci"]}),
+                ("phase.json", PHASE),
+                ("permit.json", PERMIT),
+                ("authority.json", AUTHORITY),
+            ]:
+                (root / name).write_text(json.dumps(value))
+            slept = []
+
+            def sleep(_):
+                slept.append(True)
+                if len(slept) == 1:
+                    (root / "phase.json").write_text("{}")
+                elif len(slept) == 2:
+                    (root / "phase.json").write_text(json.dumps(PHASE))
+                else:
+                    raise WatchFinished
+
+            with (
+                patch.object(
+                    O, "kernel_rows", side_effect=[initial, rows(8), rows(8), rows(count)]
+                ),
+                patch.object(O, "check_host_health", return_value={"devices": 1}),
+                patch.object(O.G, "validate_phase_owner", return_value=True),
+                patch.object(O.G, "abort_owned_qemu", return_value=True) as abort,
+                patch.object(O.G.N, "terminate_owned_tree") as terminate,
+                patch.object(O.os, "getpgid", return_value=1234),
+                patch.object(O.os, "getpgrp", return_value=1234),
+                patch.object(O.dt, "datetime", Clock),
+                patch.object(O.time, "sleep", side_effect=sleep),
+            ):
+                with self.assertRaises(O.Refused):
+                    O.watch(
+                        str(root / "native.json"),
+                        1234,
+                        str(root / "phase.json"),
+                        str(root / "fatal.json"),
+                        str(root / "authority.json"),
+                        str(root / "permit.json"),
+                    )
+                self.assertIn("eight", json.loads((root / "fatal.json").read_text())["STOP"])
+                abort.assert_called_once()
+                terminate.assert_called_once_with(1234)
+
+    def test_phase_gap_does_not_reset_the_ninth_record_limit(self):
+        self.exercise_phase_gap(9)
+
+    def test_phase_gap_does_not_reset_the_tenth_record_limit(self):
+        self.exercise_phase_gap(10)
 
 
 if __name__ == "__main__":
