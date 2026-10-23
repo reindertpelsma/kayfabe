@@ -55,3 +55,14 @@ SWEEP2_BIND_READY 2026-10-23T03:17:10+00:00
 {"cell": "on_precision", "utc": "2026-10-23T03:17:10.601059+00:00", "latest_start_utc": "2026-10-23T03:59:02.956202+00:00", "budget_cutoff_minutes": 98, "may_start": true}
 VALIDATION_ARM_BEGIN on_precision 2026-10-23T03:17:10+00:00
 VALIDATION_ARM_RESULT run=on_precision rc=255 2026-10-23T03:18:45+00:00
+VALIDATION_ARM_END on_precision 2026-10-23T03:19:55+00:00
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+  File "/usr/lib/python3.10/pathlib.py", line 1134, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+  File "/usr/lib/python3.10/pathlib.py", line 1119, in open
+    return self._accessor.open(self, mode, buffering, encoding, errors,
+FileNotFoundError: [Errno 2] No such file or directory: '/root/prov/arms/on_precision/early_code0.txt'
+OPTIONAL_B1_UNRUN_NO_ACTUAL_CODE0
+VALIDATION_FINAL_DONE 2026-10-23T03:19:55+00:00
+SWEEP_PROVISION_EXIT rc=0 2026-10-23T03:19:55+00:00

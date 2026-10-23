@@ -22,7 +22,7 @@
     "budget_cutoff_minutes": 98,
     "guard_rate": 0.8465277777777778,
     "product_head": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
-    "destroyed": false,
+    "destroyed": true,
     "authority": "owner04:45 checkpoint harness-bug resume approved; fresh Windows stretch, at most2 preSSH allocations different machines; native then adaptiveWindows, tier3 new die; phase8 stop6 reserve5",
     "auto_destroy_requested_minutes": 170,
     "auto_destroy_pid": 936748,
@@ -34,6 +34,13 @@
     "budget_watch_pid_starttime": 238915069,
     "ssh_ready_utc": "2026-10-23T02:51:37.932283+00:00",
     "ssh_hostkey_fingerprint": "SHA256:WR7vgM6aHxyvspYbPFZ0npYgTa6cQ4onhI+/aEQpw/w",
-    "observed_dph_total": 0.8333333333333334
+    "observed_dph_total": 0.8333333333333334,
+    "absence_verified_utc": "2026-10-23T03:22:38.970768+00:00",
+    "elapsed_hours_until_absence": 0.6100040572222223,
+    "runtime_cost_estimate_usd": 0.5083367143518519,
+    "lane_runtime_total_usd": 2.0275535587957405,
+    "credit_after_observed": 33.177616159161516,
+    "auto_destroy_cancelled_after_absence": true,
+    "budget_watch_cancelled_after_absence": true
   }
 ]

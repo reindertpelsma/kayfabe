@@ -28,8 +28,8 @@
     "export_sha256": "3f004270b505653f7dc9de3cf6b7896e93ab8294aa6454dfdbd1b81f60761511"
   },
   "sweep_20261020_provision.log": {
-    "source_sha256": "1e71ae1dd15073aaaef22019772871a3b277dd078c4957cf7cc3ef206cf60e70",
-    "export_sha256": "db6734e16a244490807b912e3ac247094e87d11807bc9fe253cc4b7ec9fed1f2"
+    "source_sha256": "8146b5904ea411820ab7198788e1522724852e87ca35b4a5154898ad0b7db3a1",
+    "export_sha256": "c017245dd076dcfbb066ee7b8ed7fd6ab91f1226399055d445759b1099fdd934"
   },
   "sweep_host_die.log": {
     "source_sha256": "b0714e22d681be0d979839d81b7477328a00729964c5a7202e9c3310fe5aa59e",
@@ -169,11 +169,11 @@
   },
   "kernel_xids.json": {
     "source_sha256": "232729b07925278baeafaf3c83d3b10137727bc191684048d1bbe84710c47a78",
-    "export_sha256": "208414937db18a62d0919c9c8806d1f4d16fca6cdca3a8de8e4e37c1823e618b"
+    "export_sha256": "ac1d7cb5ef640428cde9e13c69027cdb64e3c0cf9c33cdc3c124c2445c186919"
   },
   "precomp_kernel_permission.json": {
     "source_sha256": "232729b07925278baeafaf3c83d3b10137727bc191684048d1bbe84710c47a78",
-    "export_sha256": "115ea3dfb53ed1c1df498a7489ea5de3cfec81569c8893ff8bb610da90a84a1e"
+    "export_sha256": "392ec52df89db1b1a08d8c29eae90dddda91154d90070c27d0ea74e91ca8447e"
   },
   "on_precision_run.log": {
     "source_sha256": "88d57a39e7fd312cf859daf25a40b9a7c8ac4f7cde59f677ac61d24373e37c80",
