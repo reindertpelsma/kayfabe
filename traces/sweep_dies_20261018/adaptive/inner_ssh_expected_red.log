@@ -1,0 +1,41 @@
+.......................................E....E........FF
+======================================================================
+ERROR: test_enable_timeout_is_never_retried (test_adaptive_readiness.SingleAttempt.test_enable_timeout_is_never_retried)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_adaptive_readiness.py", line 150, in test_enable_timeout_is_never_retried
+    self.r.run_once(operation, profile=self.profile(), nominal=20, ceiling=300, remaining=lambda: 500)
+    ^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'run_once'
+
+======================================================================
+ERROR: test_installer_outer_timeout_is_never_retried (test_adaptive_readiness.SingleAttempt.test_installer_outer_timeout_is_never_retried)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_adaptive_readiness.py", line 159, in test_installer_outer_timeout_is_never_retried
+    self.r.run_once(operation, profile=self.profile(), nominal=30, ceiling=300, remaining=lambda: 500)
+    ^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'run_once'
+
+======================================================================
+FAIL: test_fourfold_profile_reaches_inner_ssh (test_adaptive_readiness.SshWiring.test_fourfold_profile_reaches_inner_ssh)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_adaptive_readiness.py", line 182, in test_fourfold_profile_reaches_inner_ssh
+    self.assertIn('ConnectTimeout=80', self.connection_timeout(80))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'ConnectTimeout=80' not found in ['-p', '2224', '-i', '/tmp/tmpdh5q_aew/vm/kfwin/secrets/ssh_ed25519', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=/tmp/tmpdh5q_aew/vm/kfwin/run/known_hosts', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR', 'kf@127.0.0.1', 'echo KF_SSH_UP']
+
+======================================================================
+FAIL: test_slower_profile_reaches_inner_ssh (test_adaptive_readiness.SshWiring.test_slower_profile_reaches_inner_ssh)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_adaptive_readiness.py", line 185, in test_slower_profile_reaches_inner_ssh
+    self.assertIn('ConnectTimeout=160', self.connection_timeout(160))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'ConnectTimeout=160' not found in ['-p', '2224', '-i', '/tmp/tmpsn_3cqx2/vm/kfwin/secrets/ssh_ed25519', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=/tmp/tmpsn_3cqx2/vm/kfwin/run/known_hosts', '-o', 'ConnectTimeout=8', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR', 'kf@127.0.0.1', 'echo KF_SSH_UP']
+
+----------------------------------------------------------------------
+Ran 55 tests in 0.143s
+
+FAILED (failures=2, errors=2)

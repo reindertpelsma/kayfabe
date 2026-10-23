@@ -1,6 +1,7 @@
 """Owner-authorized bench deadlines: calibration, finite budgets and actual replies."""
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -137,6 +138,51 @@ class Queries(Scaling):
         left = iter([50, 40, 1, 0])
         with self.assertRaises(self.r.BudgetExpired):
             self.query([subprocess.TimeoutExpired('owned-query', 40), self.result()], remaining=lambda: next(left))
+
+
+class SingleAttempt(Scaling):
+    def test_enable_timeout_is_never_retried(self):
+        calls = []
+        def operation(limit):
+            calls.append(limit)
+            raise subprocess.TimeoutExpired('owned-enable', limit)
+        with self.assertRaises(self.r.ReadinessTimeout):
+            self.r.run_once(operation, profile=self.profile(), nominal=20, ceiling=300, remaining=lambda: 500)
+        self.assertEqual(calls, [80])
+
+    def test_installer_outer_timeout_is_never_retried(self):
+        calls = []
+        def operation(limit):
+            calls.append(limit)
+            return subprocess.CompletedProcess(['owned-install'], 124, 'PARTIAL', '')
+        with self.assertRaises(self.r.ReadinessTimeout):
+            self.r.run_once(operation, profile=self.profile(), nominal=30, ceiling=300, remaining=lambda: 500)
+        self.assertEqual(calls, [120])
+
+
+class SshWiring(unittest.TestCase):
+    def connection_timeout(self, seconds=None):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); fake = root / 'ssh'; observed = root / 'args'
+            fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$S4_CAPTURE_ARGS"\nprintf "KF_SSH_UP\\n"\n')
+            fake.chmod(0o755)
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                       S4_CAPTURE_ARGS=str(observed), WINVM_ROOT=str(root / 'vm'))
+            if seconds is not None:
+                env['WINVM_SSH_CONNECT_TIMEOUT'] = str(seconds)
+            p = subprocess.run(['bash', str(WINDOWS / 'win_vm.sh'), 'ssh', 'echo KF_SSH_UP'],
+                               env=env, capture_output=True, text=True, timeout=10)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            return observed.read_text().splitlines()
+
+    def test_default_ssh_policy_remains_eight(self):
+        self.assertIn('ConnectTimeout=8', self.connection_timeout())
+
+    def test_fourfold_profile_reaches_inner_ssh(self):
+        self.assertIn('ConnectTimeout=80', self.connection_timeout(80))
+
+    def test_slower_profile_reaches_inner_ssh(self):
+        self.assertIn('ConnectTimeout=160', self.connection_timeout(160))
 
 
 if __name__ == '__main__':
