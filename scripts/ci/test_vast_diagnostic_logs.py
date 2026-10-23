@@ -92,10 +92,10 @@ class DiagnosticLogs(unittest.TestCase):
 
     def test_oversized_log_is_refused(self):
         with self.assertRaises(diag.LogRefused):
-            self.fetch(opener=Opener(b"x" * (5 * 1024 * 1024 + 1)))
+            self.fetch(opener=Opener(b"x" * (5_000_001)))
 
     def test_exact_size_limit_is_accepted(self):
-        self.assertEqual(len(self.fetch(opener=Opener(b"x" * (5 * 1024 * 1024)))), 5242880)
+        self.assertEqual(len(self.fetch(opener=Opener(b"x" * (5_000_000)))), 5_000_000)
 
     def test_read_is_bounded(self):
         class Bounded(Response):
@@ -107,7 +107,7 @@ class DiagnosticLogs(unittest.TestCase):
         opener = Opener()
         opener.open = lambda *a, **kw: response
         self.fetch(opener=opener)
-        self.assertEqual(response.amount, 5242881)
+        self.assertEqual(response.amount, 5_000_001)
 
     def test_redirect_handler_refuses(self):
         handler = diag.NoRedirect()
