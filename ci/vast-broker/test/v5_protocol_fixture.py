@@ -9,7 +9,7 @@ sys.modules["runner"] = m
 spec.loader.exec_module(m)
 phase = sys.argv[1]
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "pr": 7, "profile": "check"}
-manifest = {"protocol_version": 4, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
 names = {
     "provision": 1,
     "kf_tests": 100,

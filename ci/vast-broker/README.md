@@ -248,7 +248,8 @@ triggering_actor check.
 
 ## V5 protocol checkpoint and remaining live evidence
 
-[CODE READ: 2026-10-22 src/results.js, src/onstart.js, runner.py] Protocol 4 / v5
+[CODE READ: 2026-10-22 src/results.js, src/onstart.js, runner.py] Protocol 4 / v5 (status
+protocol 5 since 2026-10-23: MANUAL left the shape; runner sends `X-KF-Protocol: 5`)
 requires a bounded payload result file with the exact approved SHA and run nonce,
 then adds the runner nonce in the fixed sender. Exit zero or log text alone is
 FAIL. PASS requires a nonempty table of uniquely named, bounded successful suites

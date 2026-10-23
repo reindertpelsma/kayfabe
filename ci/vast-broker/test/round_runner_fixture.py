@@ -15,7 +15,7 @@ exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 m.time.sleep = lambda _: None
 case = sys.argv[1]
 ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "pr": 7}
-manifest = {"protocol_version": 4, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
 base = {
     "state": "TESTING",
     "verdict": "UNAVAILABLE",
