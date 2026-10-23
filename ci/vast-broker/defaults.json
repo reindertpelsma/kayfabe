@@ -14,6 +14,7 @@
   "failGraceMinutes": 10,
   "reportCount": 2000,
   "reportBytes": 4194304,
+  "logRetentionHours": 6,
   "reportRate": 20,
   "cronPeriod": 60000,
   "maxMinutes": 1440,

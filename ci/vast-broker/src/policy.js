@@ -161,6 +161,11 @@ export function configuration(env) {
     refuse();
   // Internal duration aliases keep persisted cost rows readable; all scheduling
   // decisions use stored absolute deadlines, never elapsed poll counters.
+  // Owner ruling 2026-10-24: logs are relayed, not kept; whole hours, 1 to 48.
+  const retention = env.LOG_RETENTION_HOURS ?? String(DEFAULTS.logRetentionHours);
+  if (!/^[1-9][0-9]?$/.test(retention) || Number(retention) > 48)
+    refuse('CONFIG_VAR:LOG_RETENTION_HOURS', 503);
+  cfg.logRetention = Number(retention) * 3600000;
   cfg.ttl = cfg.hard;
   cfg.provision = cfg.boot;
   cfg.grace = cfg.passGrace;

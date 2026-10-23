@@ -121,6 +121,14 @@ ALLOW_UNKNOWN_COUNTRY defaults to true; set false to reject unknown metadata. PR
 ranks only remaining eligible offers. Contract price failure revokes the run and attempts
 deletion; failed deletion retains the liability for cleanup retry.
 
+[CODE READ: src/ledger.js expire, src/index.js sweep; owner ruling 2026-10-24 items 2 and 4] Logs
+are relayed (box `/report` -> Worker -> runner `/logs` -> the GitHub Actions log), not kept: the
+cron sweep deletes a run's log chunks, log-hash entries and record `LOG_RETENTION_HOURS` (whole
+hours, default 6, at most 48; any other value is `CONFIG_VAR:LOG_RETENTION_HOURS`) after its
+`ended_at`. Afterwards `/status`, `/logs` and `/stop` for that run answer 404 `NOT_FOUND`. The
+spend rows (30-day caps) and the sha-gap rows (kept max(gap, 30 days)) are not log data and stay.
+The 4 MiB per-run log cap is unchanged.
+
 [INFERRED: src/ledger.js transfer-allowance accounting] Per-GB limits reduce exposure but do not
 make reserved 15-GB-down/2-GB-up allowances a hard bill ceiling. A hostile box can exceed the
 allowance. Keep the owner's main Vast account balance small, monitor it and retain an independent

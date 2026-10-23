@@ -112,7 +112,37 @@ export class Ledger {
       ttl: record.billingTtl ?? record.ttl,
     });
     await this.storage.delete('open:' + record.key);
+    await this.put('ended:' + record.key, now);
     if ((await this.get('active')) === record.key) await this.put('active', null);
+  }
+  // Owner ruling 2026-10-24: the log relay is not persistent. LOG_RETENTION_HOURS after
+  // ended_at the cron deletes a run's log chunks, log-hash entries and record (at most four
+  // runs per tick). Spend rows stay for the caps (pruned after 30 days by budgets()); sha-gap
+  // rows stay for max(gap, 30 days); daily blob counters for two days.
+  async expire(now, cfg) {
+    let removed = 0;
+    for (const [index, at] of await this.storage.list({ prefix: 'ended:', limit: 1000 })) {
+      if (removed >= 4) break;
+      if (typeof at === 'number' && now < at + cfg.logRetention) continue;
+      const key = index.slice('ended:'.length),
+        record = await this.get('record:' + key);
+      for (let i = 0; i < (record?.logChunks ?? 0); i++) {
+        await this.storage.delete('log:' + key + ':' + i);
+        await this.storage.delete('log-hash:' + key + ':' + i);
+      }
+      if (record?.id && (await this.get('id:' + record.id)) === key)
+        await this.storage.delete('id:' + record.id);
+      for (const name of ['run:', 'run-pr:', 'record:']) await this.storage.delete(name + key);
+      await this.storage.delete(index);
+      removed++;
+    }
+    const horizon = now - Math.max(cfg.gap, 30 * 86400000);
+    for (const [key, value] of await this.storage.list({ prefix: 'sha:', limit: 1000 }))
+      if (Number.isFinite(value?.started) && value.started < horizon)
+        await this.storage.delete(key);
+    const today = Math.floor(now / 86400000);
+    for (const [key] of await this.storage.list({ prefix: 'blob-day:', limit: 1000 }))
+      if (Number(key.slice('blob-day:'.length)) < today - 1) await this.storage.delete(key);
   }
   async budgets(cfg, now, cost, excludeKey = null) {
     const entries = await this.storage.list({ prefix: 'cost:', limit: 1000 });

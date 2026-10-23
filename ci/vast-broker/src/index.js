@@ -981,6 +981,7 @@ export function createService({
               console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
             }
           }
+          await ledger.expire(now(), cfg);
         } catch (e) {
           // A configuration refusal names only the variable; operators must not read silence.
           console.log(
