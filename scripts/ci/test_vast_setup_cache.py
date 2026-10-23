@@ -271,6 +271,14 @@ class SetupCache(unittest.TestCase):
         self.assertIn("Dir::Etc::sourceparts=-", command)
         self.assertIn("Dir::State::lists=/another/lists", command)
 
+    def test_compiler_install_omits_optional_recommendations(self):
+        command = setup.apt_command(Path("/cache"), ["install", "build-essential"])
+        self.assertIn("APT::Install-Recommends=false", command)
+
+    def test_qemu_install_omits_optional_gui_recommendations(self):
+        command = setup.apt_command(Path("/cache"), ["install", "qemu-system-x86"])
+        self.assertIn("APT::Install-Recommends=false", command)
+
     def test_vendor_config_is_global_and_preserves_unrelated_values(self):
         with tempfile.TemporaryDirectory() as d:
             home = Path(d) / "cargo"
