@@ -5,13 +5,16 @@ Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, e
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
 `check-env [--write F]`, `daemon --log L --done D --result R`); `kf-box-kill`, `kf-box-blob-url`;
 `test_vast_box.py`, `vast_box_mutants.py`. There is no hold helper or login hook (owner ruling
-2026-10-23 19:10) and no box-side Cloudflare Access header.
+2026-10-23 19:10). The box sends the Worker-injected Cloudflare Access pair (`KF_ACCESS_ID`,
+`KF_ACCESS_SECRET`) as `CF-Access-Client-Id`/`-Secret` on every broker call when both are set
+(owner ruling 2026-10-23 21:45); the payload never sees it.
 
-Env (protocol 6, declared by `BOX_PROTOCOL` in `vast_report.py`). Required: `KF_PROTOCOL`,
+Env (protocol 7, declared by `BOX_PROTOCOL` in `vast_report.py`). Required: `KF_PROTOCOL`,
 `KF_BROKER_URL` (https origin + secret path, no
 trailing slash), `KF_RUN_ID`, `KF_RUN_TOKEN` (must match the run id), `KF_NONCE` (32 hex), `KF_SHA`
 (40), `KF_RUNNER_NONCE` (64), `KF_REPO`, `KF_SOFT_DEADLINE` (epoch s), `KF_HEARTBEAT_SECONDS`,
-`KF_GRACE_FAIL`. Checked if present: `KF_BOOT_DEADLINE`, `KF_HARD_DEADLINE`, `KF_GRACE_PASS`. A
+`KF_GRACE_FAIL`. Checked if present: `KF_BOOT_DEADLINE`, `KF_HARD_DEADLINE`, `KF_GRACE_PASS`,
+`KF_ACCESS_ID`, `KF_ACCESS_SECRET`. A
 violation posts a log naming variables (never values) and, if nonce/sha/runner nonce are valid, a
 FAIL result `env_contract`; the payload does not run.
 

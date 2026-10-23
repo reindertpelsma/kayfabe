@@ -187,7 +187,7 @@
   "jwksCacheMs": 3600000,
   "onstartPath": "scripts/ci/vast_onstart.sh",
   "reporterPath": "scripts/ci/vast_report.py",
-  "boxProtocol": 6,
+  "boxProtocol": 7,
   "controlIpPerMinute": 60,
   "controlGlobalPerMinute": 600,
   "controlMaxIps": 4096,

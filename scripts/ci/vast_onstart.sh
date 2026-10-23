@@ -73,6 +73,7 @@ else
         cd "$repo" || exit 125
         exec timeout --signal=TERM --kill-after=30s "${remaining}s" \
             env -u KF_RUN_TOKEN -u KF_BROKER_URL -u KF_RUN_ID -u KF_RUNNER_NONCE \
+            -u KF_ACCESS_ID -u KF_ACCESS_SECRET \
             "KF_SOFT_DEADLINE_MS=$((KF_SOFT_DEADLINE * 1000))" \
             bash "$payload" "$KF_SHA" "$KF_NONCE"
     ) >>"$log" 2>&1 </dev/null

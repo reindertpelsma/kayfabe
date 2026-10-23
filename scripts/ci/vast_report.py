@@ -33,7 +33,7 @@ import urllib.request
 
 # The Worker reads this exact line at the tested commit before renting (V6); bump it, and
 # DEFAULTS.boxProtocol, together whenever the box-facing contract changes.
-BOX_PROTOCOL = "6"
+BOX_PROTOCOL = "7"
 PROTOCOLS = {BOX_PROTOCOL}
 RESULT_PATH = "/workspace/kf-result.json"
 LINE_MARK = b"...[line truncated, %d bytes dropped]"
@@ -64,6 +64,8 @@ TOKEN = (r"v2\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\."
          r"[0-9a-f]{32}\.[0-9a-f]{40}\.[A-Za-z0-9_-]{43}")
 # (name, required, check). Optional entries are validated only when present.
 SPEC = [
+    ("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
+    ("KF_ACCESS_SECRET", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
     ("KF_PROTOCOL", True, lambda v: v in PROTOCOLS),
     ("KF_BROKER_URL", True, _broker_url),
     ("KF_RUN_ID", True, _match(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,19}")),
@@ -238,8 +240,15 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 class HttpsTransport:
     """HTTPS POST to one fixed URL; no proxies, no redirects; token only in that header."""
 
-    def __init__(self, token, timeout=10.0):
+    def __init__(self, token, timeout=10.0, access=None):
         self.token = token
+        ident, secret = (access or {}).get("KF_ACCESS_ID"), (access or {}).get("KF_ACCESS_SECRET")
+        # The Cloudflare Access pair the Worker injected, sent only when both halves are set.
+        self.access = (
+            {"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret}
+            if ident and secret
+            else {}
+        )
         self.timeout = timeout
         self.opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}),
@@ -250,6 +259,7 @@ class HttpsTransport:
     def post(self, url, body):
         """Return (status, parsed JSON or None); status None means no HTTP answer."""
         headers = {"Content-Type": "application/json", "Authorization": "Bearer " + self.token}
+        headers.update(self.access)
         request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
             with self.opener.open(request, timeout=self.timeout) as response:
@@ -513,7 +523,7 @@ def make_reporter(env, args):
     seconds = int(heartbeat) if heartbeat.isdigit() and int(heartbeat) > 0 else 600
     return Reporter(
         env["KF_BROKER_URL"], env["KF_RUN_ID"], env["KF_RUN_TOKEN"], seconds, make_limits(args),
-        transport=HttpsTransport(env["KF_RUN_TOKEN"]),
+        transport=HttpsTransport(env["KF_RUN_TOKEN"], access=env),
     )
 
 

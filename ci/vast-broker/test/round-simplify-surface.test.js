@@ -12,6 +12,7 @@ const exists = (path) =>
   );
 // FALSIFIER H-SURFACE (owner 19:10): a retired manual/hold, Access-switch or dispatch-SHA
 // surface remains reachable from the runner, the box helpers or the Worker source tree.
+// (The box Access pair pass-through returned on 21:45; see box-access.test.js.)
 for (const path of [
   'scripts/ci/kf-box-hold',
   'scripts/ci/kf-ci-hold.sh',
@@ -22,7 +23,7 @@ for (const path of [
   });
 for (const [path, pattern] of [
   ['ci/vast-broker/runner.py', /MANUAL|manual_deadline_at|"sha", ""\)/],
-  ['ci/vast-broker/src/index.js', /MANUAL|stopTimer|hold\(|BOX_ACCESS|AccessPolicy/],
+  ['ci/vast-broker/src/index.js', /MANUAL|stopTimer|hold\(|AccessPolicy/],
   ['ci/vast-broker/src/routes.js', /stop-timer|hold/],
   ['ci/vast-broker/src/policy.js', /APPROVAL_MODE|RENT_DRAFTS|ALLOWED_BASE|PATH_SKIP|MANUAL_/],
   ['ci/vast-broker/defaults.json', /manualCeiling|boxHold/],
