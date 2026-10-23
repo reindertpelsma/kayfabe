@@ -2521,7 +2521,18 @@ fn pin_publish_rings_the_native_doorbell_after_the_pt_lock_is_released() {
     let admit = p
         .find(".map_err(|e| access_error(e, \"USER_RING_USERD_ADMISSION\"))??;")
         .expect("pin: admit end");
-    let bell = p.find("me.rm\n        .doorbell(").expect("pin: doorbell");
+    let native_call = "me.rm.doorbell(host_token)";
+    let bell = p.find(native_call).expect("pin: real native doorbell");
+    assert_eq!(
+        p.matches(native_call).count(),
+        1,
+        "pin: one real native call"
+    );
+    let profile = p.find(".measure(r.idx,").expect("pin: optional observer");
+    assert!(
+        admit < profile && profile < bell,
+        "pin: observer outside pt guard"
+    );
     assert!(
         admit < bell,
         "pin: the doorbell is rung after the admission (pt guard) ended"

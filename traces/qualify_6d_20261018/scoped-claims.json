@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "93dab55d1fc9fc204ec13c6ccb9ba882a24bddcf",
+  "head": "a88c5529ae0547565e074ecf90335196f7d02487",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "crates/kf-chan/src/host.rs",
@@ -10,6 +10,7 @@
     "crates/kf-chan/src/submit_observer.rs",
     "crates/kf-chan/tests/gr_tier_harness_birth_config.rs",
     "crates/kf-chan/tests/native_submit_observer.rs",
+    "crates/kf-chan/tests/user_loop_model_v2.rs",
     "crates/kf-harness/src/bin/kf-gr-tier.rs",
     "crates/kf-qemu/src/chan.rs",
     "crates/kf-qemu/src/device.rs",
@@ -22,7 +23,9 @@
     "traces/perf_k3_20261018/controls/observer-red.txt",
     "traces/perf_k3_20261018/controls/profile-green.txt",
     "traces/perf_k3_20261018/controls/profile-red.txt",
+    "traces/perf_k3_20261018/controls/regression-first.json",
     "traces/perf_k3_20261018/controls/software-controls.json",
+    "traces/perf_k3_20261018/controls/source-pin-correction.md",
     "traces/perf_k3_20261018/plan.json",
     "traces/perf_k3_20261018/run-4621-plan.json",
     "traces/qualify_6d_20261018/README.md",
@@ -129,5 +132,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T04:04:40.205014+00:00"
+  "time": "2026-10-23T04:12:08.791315+00:00"
 }

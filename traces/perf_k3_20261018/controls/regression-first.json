@@ -1,0 +1,15 @@
+{
+  "classification": "MEASURED",
+  "evidence": "regression-first.json",
+  "candidate_base": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "instrument_commit": "93dab55d1",
+  "time": "2026-10-23T04:11:41.402497+00:00",
+  "summaries": 23,
+  "passed": 593,
+  "failed": 1,
+  "ignored": 4,
+  "exit": 101,
+  "first_failure": "user_loop_model_v2.rs::pin_publish_rings_the_native_doorbell_after_the_pt_lock_is_released",
+  "cause": "The source pin searched the old multiline native-call spelling. Actual call remains outside admission/pt guard. Source pin updated to actual call plus exactly-one-call and observer-after-admission assertions. Existing disabled predicate unchanged.",
+  "scope": "Completed prefix of the two-crate regression; not a full green suite. Full rerun pending."
+}
