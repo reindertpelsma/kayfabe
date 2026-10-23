@@ -24,6 +24,7 @@ class OperatorConsolePin(unittest.TestCase):
         self.assertIsNotNone(C, "console publication helper missing")
         clock = [float(elapsed)]
         calls = []
+        self.last_calls = calls
         born = dt.datetime(2026, 10, 23, tzinfo=dt.timezone.utc)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
