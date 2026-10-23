@@ -214,6 +214,15 @@ class Checker(unittest.TestCase):
                   fields=['workload', 'version', 'fps'])
         self.assertTrue(any('unlabelled' in p for p in s.check_text(text, 'md')))
 
+    def test_timestamps_are_not_scores(self):
+        stamp = '2026-10-22T09:36:16.5823597+02:00'
+        text = md(rows=[{'workload': 'a', 'started': stamp, 'at': '11:36:30.596', 'fps': 1.5}],
+                  fields=['workload', 'started', 'at', 'fps'])
+        self.assertEqual(s.check_text(text, 'md'), [])
+        text = md(rows=[{'workload': 'a', 'started': '16.58', 'fps': 1.5}],
+                  fields=['workload', 'started', 'fps'])
+        self.assertTrue(any('unlabelled' in p for p in s.check_text(text, 'md')))
+
     def test_names_and_dates_are_not_numbers(self):
         text = md(rows=[{'workload': 'creo-03', 'run': 'result_2026-10-22', 'fps': 1.5}],
                   fields=['workload', 'run', 'fps'])
