@@ -12,10 +12,12 @@ def verify(sha, status, get_run):
         if not re.fullmatch("[0-9a-f]{40}", sha) or status["sha"] != sha:
             return False
         latest = next(s for s in status["statuses"] if s["context"] == "gpu-vast")
+        # A GPU result, not the path policy's NOT_NEEDED: the report job writes the state.
         if (
             latest["state"] != "success"
             or latest["creator"]["login"] != "github-actions[bot]"
             or latest["creator"]["id"] != 41898282
+            or latest["description"] not in {"GPU broker GRACE", "GPU broker NONE"}
         ):
             return False
         match = re.fullmatch(
@@ -33,13 +35,10 @@ def verify(sha, status, get_run):
             return False
         if run["repository"]["full_name"] != REPO or run["head_repository"]["full_name"] != REPO:
             return False
-        # Releases build master. Require the manual BASE workflow to have tested
-        # that exact master SHA, rather than guessing PR/merge correspondence.
-        return (
-            run["event"] == "workflow_dispatch"
-            and run["head_branch"] == "master"
-            and run["head_sha"] == sha
-        )
+        # Releases build master. gpu-vast.yml runs on push to master (review W4: it has no
+        # dispatch trigger), so require that push run to have tested this exact master SHA,
+        # rather than guessing PR/merge correspondence.
+        return run["event"] == "push" and run["head_branch"] == "master" and run["head_sha"] == sha
     except (KeyError, TypeError, ValueError, StopIteration):
         return False
 

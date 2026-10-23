@@ -274,6 +274,17 @@ tick retries. A failed list still aborts the whole sweep. Logs carry fixed event
 account if request-quota independence is required. Provider outages and inaccurate
 start_date/labels can still prevent deletion. Keep the prepaid balance small.
 
+## Release gate
+
+[CODE READ: release_gate.py, release-build.yml; final review W4] `release-build.yml` (owner
+dispatch on master) runs `release_gate.py`, which accepts only when the latest `gpu-vast` commit
+status of that exact master sha is `success` from `github-actions[bot]` with description
+`GPU broker GRACE` or `GPU broker NONE` (a GPU result), and its run is a completed, successful
+`gpu-vast.yml` `push` run on `master` with that `head_sha`. Dispatch, `pull_request_target`,
+other branches and a path-policy `NOT_NEEDED` status refuse, so a docs-only master commit cannot
+be released on its own. TODO (owner): the planned tag-only release CI will replace this
+dispatch workflow; the gate then needs its trigger rule restated.
+
 ## Rollout
 
 [CODE READ: docs/BOX_PROTOCOL.md, src/github.js, scripts/ci/vast_report.py] Box protocol is 7.
