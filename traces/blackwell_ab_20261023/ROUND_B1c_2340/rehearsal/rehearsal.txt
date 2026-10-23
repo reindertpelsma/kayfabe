@@ -1,0 +1,17 @@
+test_derived_nonmatching_pin_control_refuses_without_ssh (test_console_pin_receipt_replay.FinalOperatorReceiptReplay.test_derived_nonmatching_pin_control_refuses_without_ssh) ... READINESS 2026-10-23T00:05:52.518532+00:00 running
+CONSOLE_PIN mismatch 1
+ok
+test_recorded_absence_log_then_attestation_control_accepts_after_wait (test_console_pin_receipt_replay.FinalOperatorReceiptReplay.test_recorded_absence_log_then_attestation_control_accepts_after_wait) ... READINESS 2026-10-23T00:10:10+00:00 running
+CONSOLE_PIN absent 1
+CONSOLE_PIN match 2
+READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
+ok
+test_recorded_false_refusal_pin_set_accepts_through_final_operator (test_console_pin_receipt_replay.FinalOperatorReceiptReplay.test_recorded_false_refusal_pin_set_accepts_through_final_operator) ... READINESS 2026-10-23T00:05:52.518532+00:00 running
+CONSOLE_PIN match 1
+READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
+ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.024s
+
+OK
