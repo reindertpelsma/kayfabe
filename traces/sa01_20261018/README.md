@@ -19,7 +19,7 @@ MEASURED tests first: aeb368486 compiles the actual kf3_class_init body using sm
 DeviceClass/PCI/reset interface stubs, cc C11/Wall/Wextra/Werror (unused callback
 parameters excluded), nice19. One registration control passes; two policy
 assertions fail with runtime exits10/20 on unchanged master. These are assertion
-reds, not missing fields, compiler errors or missing targets.
+reds, not missing fields, compiler errors or missing targets. (recorded in commit 56e7932e9, 2026-10-22)
 
 CODE READ fix: one assignment, dc->hotpluggable=false. Startup cold realization
 is preserved by the reviewed generic QEMU policy; hot-add and guest ACPI eject
@@ -31,7 +31,7 @@ restored3/3 pass. The eject test models the cited guard for a non-bridge/non-VF;
 it is not full QEMU or qtest. Rust Clippy all targets on kf-gsp/rm/qemu matches
 unchanged-master source fingerprints257 ->257, added0; it does not validate C.
 No assertions, deny sets or lint baselines were loosened. No Cargo build beyond
-the required scoped lint comparison was needed for the one-line C change.
+the required scoped lint comparison was needed for the one-line C change. (recorded in commit 56e7932e9, 2026-10-22)
 
 INFERRED later validation: cold boot and ACPI eject attempt on production pc,
 QMP behavior, q35/native PCIe power-off, failed-realize cleanup and ASan teardown.
