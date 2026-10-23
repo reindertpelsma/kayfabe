@@ -1,34 +1,37 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM; arms: kayfabe kf3 virtual GPU (baseline binary 89fc8a222, Phase 1 binary 468a35c9d) and a VFIO physical-GPU reference (GeForce RTX 4070, see the vfio-ref branch); host GPU of the kayfabe arms is not restated here
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,subtest,fps,frames,seconds,workload_status
-fix,result_2026-10-22-04-07-03,blender-01,1,11.93,297,24.91,Completed
-fix,result_2026-10-22-04-07-03,blender-01,2,27.08,594,21.93,Completed
-fix,result_2026-10-22-04-07-03,blender-01,3,52.1,797,15.3,Completed
-fix,result_2026-10-22-04-07-03,blender-01,4,59.96,1594,26.58,Completed
-fix,result_2026-10-22-04-07-03,blender-01,5,27.96,441,15.77,Completed
-fix,result_2026-10-22-04-07-03,blender-01,6,35.56,594,16.7,Completed
-fix,result_2026-10-22-04-07-03,blender-01,7,60.08,994,16.55,Completed
-fix,result_2026-10-22-04-07-03,catia-07,1,40.9,708,17.31,Completed
-fix,result_2026-10-22-04-07-03,catia-07,2,72.42,1170,16.16,Completed
-fix,result_2026-10-22-04-07-03,catia-07,3,46.63,717,15.38,Completed
-fix,result_2026-10-22-04-07-03,catia-07,4,89.24,1464,16.41,Completed
-fix,result_2026-10-22-04-07-03,catia-07,5,46.56,1020,21.91,Completed
-fix,result_2026-10-22-04-07-03,catia-07,6,30.05,516,17.17,Completed
-fix,result_2026-10-22-04-07-03,creo-04,1,11.97,198,16.55,Completed
-fix,result_2026-10-22-04-07-03,creo-04,2,27.71,420,15.16,Completed
-fix,result_2026-10-22-04-07-03,creo-04,3,25.32,440,17.38,Completed
-fix,result_2026-10-22-04-07-03,creo-04,4,135.06,2028,15.02,Completed
-fix,result_2026-10-22-04-07-03,creo-04,5,200.34,3168,15.81,Completed
-fix,result_2026-10-22-04-07-03,creo-04,6,180.17,2880,15.98,Completed
-fix,result_2026-10-22-04-07-03,creo-04,7,66.88,1092,16.33,Completed
-fix,result_2026-10-22-04-07-03,creo-04,8,83.6,1386,16.58,Completed
-fix,result_2026-10-22-04-07-03,creo-04,9,46.35,780,16.83,Completed
-fix,result_2026-10-22-04-07-03,creo-04,10,150.3,2325,15.47,Completed
-fix,result_2026-10-22-04-07-03,creo-04,11,91.62,1400,15.28,Completed
-fix,result_2026-10-22-04-07-03,creo-04,12,118.61,1896,15.98,Completed
-fix,result_2026-10-22-04-07-03,creo-04,13,116.98,1782,15.23,Completed
-fix,result_2026-10-22-04-07-03,energy-04,1,62.1,1080,17.39,Completed
-fix,result_2026-10-22-04-07-03,energy-04,2,58.18,900,15.47,Completed
-fix,result_2026-10-22-04-07-03,energy-04,3,18.98,360,18.97,Completed
-fix,result_2026-10-22-04-07-03,energy-04,4,82.12,1260,15.34,Completed
-fix,result_2026-10-22-04-07-03,energy-04,5,74.18,1260,16.99,Completed
-fix,result_2026-10-22-04-07-03,energy-04,6,24.08,450,18.69,Completed
-fix,result_2026-10-22-04-07-03,enscape-01,1,42.1,1080,25.66,Incomplete
+fix,result_2026-10-22-04-07-03,blender-01,1,11.93 (nc),297,24.91 (nc),Completed
+fix,result_2026-10-22-04-07-03,blender-01,2,27.08 (nc),594,21.93 (nc),Completed
+fix,result_2026-10-22-04-07-03,blender-01,3,52.1 (nc),797,15.3 (nc),Completed
+fix,result_2026-10-22-04-07-03,blender-01,4,59.96 (nc),1594,26.58 (nc),Completed
+fix,result_2026-10-22-04-07-03,blender-01,5,27.96 (nc),441,15.77 (nc),Completed
+fix,result_2026-10-22-04-07-03,blender-01,6,35.56 (nc),594,16.7 (nc),Completed
+fix,result_2026-10-22-04-07-03,blender-01,7,60.08 (nc),994,16.55 (nc),Completed
+fix,result_2026-10-22-04-07-03,catia-07,1,40.9 (nc),708,17.31 (nc),Completed
+fix,result_2026-10-22-04-07-03,catia-07,2,72.42 (nc),1170,16.16 (nc),Completed
+fix,result_2026-10-22-04-07-03,catia-07,3,46.63 (nc),717,15.38 (nc),Completed
+fix,result_2026-10-22-04-07-03,catia-07,4,89.24 (nc),1464,16.41 (nc),Completed
+fix,result_2026-10-22-04-07-03,catia-07,5,46.56 (nc),1020,21.91 (nc),Completed
+fix,result_2026-10-22-04-07-03,catia-07,6,30.05 (nc),516,17.17 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,1,11.97 (nc),198,16.55 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,2,27.71 (nc),420,15.16 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,3,25.32 (nc),440,17.38 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,4,135.06 (nc),2028,15.02 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,5,200.34 (nc),3168,15.81 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,6,180.17 (nc),2880,15.98 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,7,66.88 (nc),1092,16.33 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,8,83.6 (nc),1386,16.58 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,9,46.35 (nc),780,16.83 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,10,150.3 (nc),2325,15.47 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,11,91.62 (nc),1400,15.28 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,12,118.61 (nc),1896,15.98 (nc),Completed
+fix,result_2026-10-22-04-07-03,creo-04,13,116.98 (nc),1782,15.23 (nc),Completed
+fix,result_2026-10-22-04-07-03,energy-04,1,62.1 (nc),1080,17.39 (nc),Completed
+fix,result_2026-10-22-04-07-03,energy-04,2,58.18 (nc),900,15.47 (nc),Completed
+fix,result_2026-10-22-04-07-03,energy-04,3,18.98 (nc),360,18.97 (nc),Completed
+fix,result_2026-10-22-04-07-03,energy-04,4,82.12 (nc),1260,15.34 (nc),Completed
+fix,result_2026-10-22-04-07-03,energy-04,5,74.18 (nc),1260,16.99 (nc),Completed
+fix,result_2026-10-22-04-07-03,energy-04,6,24.08 (nc),450,18.69 (nc),Completed
+fix,result_2026-10-22-04-07-03,enscape-01,1,42.1 (nc),1080,25.66 (nc),Incomplete

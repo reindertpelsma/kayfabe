@@ -1,19 +1,22 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM; arms: kayfabe kf3 virtual GPU (baseline binary 89fc8a222, Phase 1 binary 468a35c9d) and a VFIO physical-GPU reference (GeForce RTX 4070, see the vfio-ref branch); host GPU of the kayfabe arms is not restated here
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,composite,reported_composite,workload_status,source,version
-vfio,result_2026-10-21-23-51-37,blender-01,61.61,61.61,Completed,result.json,1.0.1
-vfio,result_2026-10-21-23-51-37,catia-07,63.1,63.1,Completed,result.json,1.0.6
-vfio,result_2026-10-21-23-51-37,creo-04,104.94,104.94,Completed,result.json,1.0.1
-vfio,result_2026-10-21-23-51-37,energy-04,54.57,54.57,Completed,result.json,1.0.2
-vfio,result_2026-10-21-23-51-37,enscape-01,37.26,37.26,Completed,result.json,1.0.5
-vfio,result_2026-10-21-23-51-37,maya-07,162.14,162.14,Completed,result.json,1.0.2
-vfio,result_2026-10-21-23-51-37,medical-04,50.54,50.54,Completed,result.json,1.0.2
-vfio,result_2026-10-21-23-51-37,solidworks-08,29.51,29.51,Completed,result.json,1.0.1
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,63.58,63.58,Completed,result.json,1.0.4
-vfio,result_2026-10-22-01-15-28,blender-01,60.61,60.61,Completed,result.json,1.0.1
-vfio,result_2026-10-22-01-15-28,catia-07,63.13,63.13,Completed,result.json,1.0.6
-vfio,result_2026-10-22-01-15-28,creo-04,103.97,103.97,Completed,result.json,1.0.1
-vfio,result_2026-10-22-01-15-28,energy-04,54.67,54.67,Completed,result.json,1.0.2
-vfio,result_2026-10-22-01-15-28,enscape-01,37.39,37.39,Completed,result.json,1.0.5
-vfio,result_2026-10-22-01-15-28,maya-07,160.37,160.37,Completed,result.json,1.0.2
-vfio,result_2026-10-22-01-15-28,medical-04,50.58,50.58,Completed,result.json,1.0.2
-vfio,result_2026-10-22-01-15-28,solidworks-08,29.19,29.19,Completed,result.json,1.0.1
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,63.7,63.7,Completed,result.json,1.0.4
+vfio,result_2026-10-21-23-51-37,blender-01,61.61 (nc),61.61 (nc),Completed,result.json,1.0.1
+vfio,result_2026-10-21-23-51-37,catia-07,63.1 (nc),63.1 (nc),Completed,result.json,1.0.6
+vfio,result_2026-10-21-23-51-37,creo-04,104.94 (nc),104.94 (nc),Completed,result.json,1.0.1
+vfio,result_2026-10-21-23-51-37,energy-04,54.57 (nc),54.57 (nc),Completed,result.json,1.0.2
+vfio,result_2026-10-21-23-51-37,enscape-01,37.26 (nc),37.26 (nc),Completed,result.json,1.0.5
+vfio,result_2026-10-21-23-51-37,maya-07,162.14 (nc),162.14 (nc),Completed,result.json,1.0.2
+vfio,result_2026-10-21-23-51-37,medical-04,50.54 (nc),50.54 (nc),Completed,result.json,1.0.2
+vfio,result_2026-10-21-23-51-37,solidworks-08,29.51 (nc),29.51 (nc),Completed,result.json,1.0.1
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,63.58 (nc),63.58 (nc),Completed,result.json,1.0.4
+vfio,result_2026-10-22-01-15-28,blender-01,60.61 (nc),60.61 (nc),Completed,result.json,1.0.1
+vfio,result_2026-10-22-01-15-28,catia-07,63.13 (nc),63.13 (nc),Completed,result.json,1.0.6
+vfio,result_2026-10-22-01-15-28,creo-04,103.97 (nc),103.97 (nc),Completed,result.json,1.0.1
+vfio,result_2026-10-22-01-15-28,energy-04,54.67 (nc),54.67 (nc),Completed,result.json,1.0.2
+vfio,result_2026-10-22-01-15-28,enscape-01,37.39 (nc),37.39 (nc),Completed,result.json,1.0.5
+vfio,result_2026-10-22-01-15-28,maya-07,160.37 (nc),160.37 (nc),Completed,result.json,1.0.2
+vfio,result_2026-10-22-01-15-28,medical-04,50.58 (nc),50.58 (nc),Completed,result.json,1.0.2
+vfio,result_2026-10-22-01-15-28,solidworks-08,29.19 (nc),29.19 (nc),Completed,result.json,1.0.1
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,63.7 (nc),63.7 (nc),Completed,result.json,1.0.4

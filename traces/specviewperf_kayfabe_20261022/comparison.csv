@@ -1,10 +1,13 @@
-workload,vfio_1,vfio_2,vfio_mean,vfio_range_percent,baseline_composite,fix_composite,baseline_over_vfio_mean,fix_over_vfio_mean,fix_over_baseline,baseline_status,fix_status
-blender-01,61.61,60.61,61.11,1.636,35.85,35.95,0.586647,0.588283,1.002789,Completed,Completed
-catia-07,63.1,63.13,63.115,0.048,,50.83,,0.805355,,Failed,Completed
-creo-04,104.94,103.97,104.455,0.929,,70.42,,0.674166,,Incomplete,Completed
-energy-04,54.57,54.67,54.620000000000005,0.183,,46.46,,0.850604,,NotRun,Completed
-enscape-01,37.26,37.39,37.325,0.348,,,,,,NotRun,Incomplete
-maya-07,162.14,160.37,161.255,1.098,,,,,,NotRun,NotRun
-medical-04,50.54,50.58,50.56,0.079,,,,,,NotRun,NotRun
-solidworks-08,29.51,29.19,29.35,1.09,,,,,,NotRun,NotRun
-unreal_engine-01,63.58,63.7,63.64,0.189,,,,,,NotRun,NotRun
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM; arms: kayfabe kf3 virtual GPU (baseline binary 89fc8a222, Phase 1 binary 468a35c9d) and a VFIO physical-GPU reference (GeForce RTX 4070, see the vfio-ref branch); host GPU of the kayfabe arms is not restated here
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
+workload,vfio_1,vfio_2,vfio_mean,vfio_range_percent,baseline_composite,fix_composite,"baseline_over_vfio_mean -- (nc) research comparison, not a SPEC-ranked result","fix_over_vfio_mean -- (nc) research comparison, not a SPEC-ranked result","fix_over_baseline -- (nc) research comparison, not a SPEC-ranked result",baseline_status,fix_status
+blender-01,61.61 (nc),60.61 (nc),61.11 (nc),1.636 (nc),35.85 (nc),35.95 (nc),0.586647 (nc),0.588283 (nc),1.002789 (nc),Completed,Completed
+catia-07,63.1 (nc),63.13 (nc),63.115 (nc),0.048 (nc),,50.83 (nc),,0.805355 (nc),,Failed,Completed
+creo-04,104.94 (nc),103.97 (nc),104.455 (nc),0.929 (nc),,70.42 (nc),,0.674166 (nc),,Incomplete,Completed
+energy-04,54.57 (nc),54.67 (nc),54.620000000000005 (nc),0.183 (nc),,46.46 (nc),,0.850604 (nc),,NotRun,Completed
+enscape-01,37.26 (nc),37.39 (nc),37.325 (nc),0.348 (nc),,,,,,NotRun,Incomplete
+maya-07,162.14 (nc),160.37 (nc),161.255 (nc),1.098 (nc),,,,,,NotRun,NotRun
+medical-04,50.54 (nc),50.58 (nc),50.56 (nc),0.079 (nc),,,,,,NotRun,NotRun
+solidworks-08,29.51 (nc),29.19 (nc),29.35 (nc),1.09 (nc),,,,,,NotRun,NotRun
+unreal_engine-01,63.58 (nc),63.7 (nc),63.64 (nc),0.189 (nc),,,,,,NotRun,NotRun

@@ -1,5 +1,8 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM; arms: kayfabe kf3 virtual GPU (baseline binary 89fc8a222, Phase 1 binary 468a35c9d) and a VFIO physical-GPU reference (GeForce RTX 4070, see the vfio-ref branch); host GPU of the kayfabe arms is not restated here
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,composite,reported_composite,workload_status,source,version
-fix,result_2026-10-22-04-07-03,blender-01,35.95,35.95,Completed,result.json,1.0.1
-fix,result_2026-10-22-04-07-03,catia-07,50.83,50.83,Completed,result.json,1.0.6
-fix,result_2026-10-22-04-07-03,creo-04,70.42,70.42,Completed,result.json,1.0.1
-fix,result_2026-10-22-04-07-03,energy-04,46.46,46.46,Completed,result.json,1.0.2
+fix,result_2026-10-22-04-07-03,blender-01,35.95 (nc),35.95 (nc),Completed,result.json,1.0.1
+fix,result_2026-10-22-04-07-03,catia-07,50.83 (nc),50.83 (nc),Completed,result.json,1.0.6
+fix,result_2026-10-22-04-07-03,creo-04,70.42 (nc),70.42 (nc),Completed,result.json,1.0.1
+fix,result_2026-10-22-04-07-03,energy-04,46.46 (nc),46.46 (nc),Completed,result.json,1.0.2

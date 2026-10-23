@@ -1,12 +1,15 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM; arms: kayfabe kf3 virtual GPU (baseline binary 89fc8a222, Phase 1 binary 468a35c9d) and a VFIO physical-GPU reference (GeForce RTX 4070, see the vfio-ref branch); host GPU of the kayfabe arms is not restated here
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,subtest,fps,frames,seconds,workload_status
-baseline,result_2026-10-22-03-47-06,blender-01,1,11.21,297,26.5,Completed
-baseline,result_2026-10-22-03-47-06,blender-01,2,27.82,594,21.36,Completed
-baseline,result_2026-10-22-03-47-06,blender-01,3,51.85,797,15.37,Completed
-baseline,result_2026-10-22-03-47-06,blender-01,4,59.89,1594,26.61,Completed
-baseline,result_2026-10-22-03-47-06,blender-01,5,27.87,441,15.82,Completed
-baseline,result_2026-10-22-03-47-06,blender-01,6,35.93,594,16.53,Completed
-baseline,result_2026-10-22-03-47-06,blender-01,7,60.08,994,16.54,Completed
-baseline,result_2026-10-22-03-47-06,catia-07,1,40.93,708,17.3,Failed
-baseline,result_2026-10-22-03-47-06,catia-07,2,72.28,1170,16.19,Failed
-baseline,result_2026-10-22-03-47-06,catia-07,4,90.0,1464,16.27,Failed
-baseline,result_2026-10-22-03-47-06,catia-07,5,45.71,1020,22.31,Failed
+baseline,result_2026-10-22-03-47-06,blender-01,1,11.21 (nc),297,26.5 (nc),Completed
+baseline,result_2026-10-22-03-47-06,blender-01,2,27.82 (nc),594,21.36 (nc),Completed
+baseline,result_2026-10-22-03-47-06,blender-01,3,51.85 (nc),797,15.37 (nc),Completed
+baseline,result_2026-10-22-03-47-06,blender-01,4,59.89 (nc),1594,26.61 (nc),Completed
+baseline,result_2026-10-22-03-47-06,blender-01,5,27.87 (nc),441,15.82 (nc),Completed
+baseline,result_2026-10-22-03-47-06,blender-01,6,35.93 (nc),594,16.53 (nc),Completed
+baseline,result_2026-10-22-03-47-06,blender-01,7,60.08 (nc),994,16.54 (nc),Completed
+baseline,result_2026-10-22-03-47-06,catia-07,1,40.93 (nc),708,17.3 (nc),Failed
+baseline,result_2026-10-22-03-47-06,catia-07,2,72.28 (nc),1170,16.19 (nc),Failed
+baseline,result_2026-10-22-03-47-06,catia-07,4,90.0 (nc),1464,16.27 (nc),Failed
+baseline,result_2026-10-22-03-47-06,catia-07,5,45.71 (nc),1020,22.31 (nc),Failed
