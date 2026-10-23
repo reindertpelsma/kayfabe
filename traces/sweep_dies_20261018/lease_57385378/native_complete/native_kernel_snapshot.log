@@ -1,0 +1,1014 @@
+2026-10-23T14:58:44.269752+0000 ubuntu kernel: Linux version 6.8.0-59-generic (buildd@lcy02-amd64-117) (x86_64-linux-gnu-gcc-12 (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #61~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 15 17:03:15 UTC 2 (Ubuntu 6.8.0-59.61~22.04.1-generic 6.8.12)
+2026-10-23T14:58:44.269804+0000 ubuntu kernel: Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+2026-10-23T14:58:44.269838+0000 ubuntu kernel: KERNEL supported cpus:
+2026-10-23T14:58:44.269861+0000 ubuntu kernel:   Intel GenuineIntel
+2026-10-23T14:58:44.269896+0000 ubuntu kernel:   AMD AuthenticAMD
+2026-10-23T14:58:44.269918+0000 ubuntu kernel:   Hygon HygonGenuine
+2026-10-23T14:58:44.269943+0000 ubuntu kernel:   Centaur CentaurHauls
+2026-10-23T14:58:44.269966+0000 ubuntu kernel:   zhaoxin   Shanghai
+2026-10-23T14:58:44.269988+0000 ubuntu kernel: BIOS-provided physical RAM map:
+2026-10-23T14:58:44.270046+0000 ubuntu kernel: BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-10-23T14:58:44.270071+0000 ubuntu kernel: BIOS-e820: [mem 0x0000000000100000-0x00000000bed3efff] usable
+2026-10-23T14:58:44.270100+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bed3f000-0x00000000bedfffff] reserved
+2026-10-23T14:58:44.270123+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bee00000-0x00000000bf8ecfff] usable
+2026-10-23T14:58:44.270145+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bf8ed000-0x00000000bfb6cfff] reserved
+2026-10-23T14:58:44.270172+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bfb6d000-0x00000000bfb7efff] ACPI data
+2026-10-23T14:58:44.270195+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bfb7f000-0x00000000bfbfefff] ACPI NVS
+2026-10-23T14:58:44.270230+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bfbff000-0x00000000bff7bfff] usable
+2026-10-23T14:58:44.270258+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000bff7c000-0x00000000bfffffff] reserved
+2026-10-23T14:58:44.270287+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000feffc000-0x00000000feffffff] reserved
+2026-10-23T14:58:44.270310+0000 ubuntu kernel: BIOS-e820: [mem 0x00000000ffc00000-0x00000000ffffffff] reserved
+2026-10-23T14:58:44.270334+0000 ubuntu kernel: BIOS-e820: [mem 0x0000000100000000-0x00000004be1fffff] usable
+2026-10-23T14:58:44.270357+0000 ubuntu kernel: BIOS-e820: [mem 0x000000fd00000000-0x000000ffffffffff] reserved
+2026-10-23T14:58:44.270380+0000 ubuntu kernel: NX (Execute Disable) protection: active
+2026-10-23T14:58:44.270403+0000 ubuntu kernel: APIC: Static calls initialized
+2026-10-23T14:58:44.270427+0000 ubuntu kernel: e820: update [mem 0xbe2d0018-0xbe302057] usable ==> usable
+2026-10-23T14:58:44.270451+0000 ubuntu kernel: e820: update [mem 0xbe2d0018-0xbe302057] usable ==> usable
+2026-10-23T14:58:44.270474+0000 ubuntu kernel: e820: update [mem 0xbe2a9018-0xbe2cf457] usable ==> usable
+2026-10-23T14:58:44.270497+0000 ubuntu kernel: e820: update [mem 0xbe2a9018-0xbe2cf457] usable ==> usable
+2026-10-23T14:58:44.270519+0000 ubuntu kernel: extended physical RAM map:
+2026-10-23T14:58:44.270548+0000 ubuntu kernel: reserve setup_data: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-10-23T14:58:44.270571+0000 ubuntu kernel: reserve setup_data: [mem 0x0000000000100000-0x00000000be2a9017] usable
+2026-10-23T14:58:44.270594+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be2a9018-0x00000000be2cf457] usable
+2026-10-23T14:58:44.270618+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be2cf458-0x00000000be2d0017] usable
+2026-10-23T14:58:44.270641+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be2d0018-0x00000000be302057] usable
+2026-10-23T14:58:44.270690+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000be302058-0x00000000bed3efff] usable
+2026-10-23T14:58:44.270714+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bed3f000-0x00000000bedfffff] reserved
+2026-10-23T14:58:44.270739+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bee00000-0x00000000bf8ecfff] usable
+2026-10-23T14:58:44.270762+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bf8ed000-0x00000000bfb6cfff] reserved
+2026-10-23T14:58:44.270786+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bfb6d000-0x00000000bfb7efff] ACPI data
+2026-10-23T14:58:44.270813+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bfb7f000-0x00000000bfbfefff] ACPI NVS
+2026-10-23T14:58:44.270849+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bfbff000-0x00000000bff7bfff] usable
+2026-10-23T14:58:44.270873+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000bff7c000-0x00000000bfffffff] reserved
+2026-10-23T14:58:44.270897+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000feffc000-0x00000000feffffff] reserved
+2026-10-23T14:58:44.270922+0000 ubuntu kernel: reserve setup_data: [mem 0x00000000ffc00000-0x00000000ffffffff] reserved
+2026-10-23T14:58:44.270958+0000 ubuntu kernel: reserve setup_data: [mem 0x0000000100000000-0x00000004be1fffff] usable
+2026-10-23T14:58:44.270984+0000 ubuntu kernel: reserve setup_data: [mem 0x000000fd00000000-0x000000ffffffffff] reserved
+2026-10-23T14:58:44.271040+0000 ubuntu kernel: efi: EFI v2.7 by Ubuntu distribution of EDK II
+2026-10-23T14:58:44.271074+0000 ubuntu kernel: efi: SMBIOS=0xbf988000 SMBIOS 3.0=0xbf986000 ACPI=0xbfb7e000 ACPI 2.0=0xbfb7e014 MEMATTR=0xbe33f018 MOKvar=0xbf981000
+2026-10-23T14:58:44.271099+0000 ubuntu kernel: efi: Remove mem146: MMIO range=[0xffc00000-0xffffffff] (4MB) from e820 map
+2026-10-23T14:58:44.271124+0000 ubuntu kernel: e820: remove [mem 0xffc00000-0xffffffff] reserved
+2026-10-23T14:58:44.271158+0000 ubuntu kernel: secureboot: Secure boot disabled
+2026-10-23T14:58:44.271183+0000 ubuntu kernel: SMBIOS 3.0.0 present.
+2026-10-23T14:58:44.271207+0000 ubuntu kernel: DMI: QEMU Ubuntu 24.04 PC v2 (i440FX + PIIX, arch_caps fix, 1996), BIOS 2024.02-2ubuntu0.10 09/23/2026
+2026-10-23T14:58:44.271232+0000 ubuntu kernel: Hypervisor detected: KVM
+2026-10-23T14:58:44.271256+0000 ubuntu kernel: kvm-clock: Using msrs 4b564d01 and 4b564d00
+2026-10-23T14:58:44.271280+0000 ubuntu kernel: kvm-clock: using sched offset of 5444429865 cycles
+2026-10-23T14:58:44.271306+0000 ubuntu kernel: clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+2026-10-23T14:58:44.271331+0000 ubuntu kernel: tsc: Detected 2195.874 MHz processor
+2026-10-23T14:58:44.271362+0000 ubuntu kernel: e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+2026-10-23T14:58:44.271388+0000 ubuntu kernel: e820: remove [mem 0x000a0000-0x000fffff] usable
+2026-10-23T14:58:44.271418+0000 ubuntu kernel: last_pfn = 0x4be200 max_arch_pfn = 0x400000000
+2026-10-23T14:58:44.271443+0000 ubuntu kernel: MTRR map: 4 entries (2 fixed + 2 variable; max 18), built from 8 variable MTRRs
+2026-10-23T14:58:44.271468+0000 ubuntu kernel: x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT
+2026-10-23T14:58:44.271493+0000 ubuntu kernel: last_pfn = 0xbff7c max_arch_pfn = 0x400000000
+2026-10-23T14:58:44.271518+0000 ubuntu kernel: Using GB pages for direct mapping
+2026-10-23T14:58:44.271544+0000 ubuntu kernel: secureboot: Secure boot disabled
+2026-10-23T14:58:44.271568+0000 ubuntu kernel: ACPI: Early table checksum verification disabled
+2026-10-23T14:58:44.271593+0000 ubuntu kernel: ACPI: RSDP 0x00000000BFB7E014 000024 (v02 BOCHS )
+2026-10-23T14:58:44.271623+0000 ubuntu kernel: ACPI: XSDT 0x00000000BFB7D0E8 00003C (v01 BOCHS  BXPC     00000001      01000013)
+2026-10-23T14:58:44.271649+0000 ubuntu kernel: ACPI: FACP 0x00000000BFB7A000 000074 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-23T14:58:44.271697+0000 ubuntu kernel: ACPI: DSDT 0x00000000BFB7B000 001CDF (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-23T14:58:44.271723+0000 ubuntu kernel: ACPI: FACS 0x00000000BFBDD000 000040
+2026-10-23T14:58:44.271748+0000 ubuntu kernel: ACPI: APIC 0x00000000BFB79000 0000B0 (v03 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-23T14:58:44.271773+0000 ubuntu kernel: ACPI: WAET 0x00000000BFB78000 000028 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-23T14:58:44.271798+0000 ubuntu kernel: ACPI: Reserving FACP table memory at [mem 0xbfb7a000-0xbfb7a073]
+2026-10-23T14:58:44.271823+0000 ubuntu kernel: ACPI: Reserving DSDT table memory at [mem 0xbfb7b000-0xbfb7ccde]
+2026-10-23T14:58:44.271848+0000 ubuntu kernel: ACPI: Reserving FACS table memory at [mem 0xbfbdd000-0xbfbdd03f]
+2026-10-23T14:58:44.271878+0000 ubuntu kernel: ACPI: Reserving APIC table memory at [mem 0xbfb79000-0xbfb790af]
+2026-10-23T14:58:44.271903+0000 ubuntu kernel: ACPI: Reserving WAET table memory at [mem 0xbfb78000-0xbfb78027]
+2026-10-23T14:58:44.271928+0000 ubuntu kernel: No NUMA configuration found
+2026-10-23T14:58:44.271953+0000 ubuntu kernel: Faking a node at [mem 0x0000000000000000-0x00000004be1fffff]
+2026-10-23T14:58:44.271984+0000 ubuntu kernel: NODE_DATA(0) allocated [mem 0x4be1d5000-0x4be1fffff]
+2026-10-23T14:58:44.272039+0000 ubuntu kernel: Zone ranges:
+2026-10-23T14:58:44.272066+0000 ubuntu kernel:   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+2026-10-23T14:58:44.272091+0000 ubuntu kernel:   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+2026-10-23T14:58:44.272116+0000 ubuntu kernel:   Normal   [mem 0x0000000100000000-0x00000004be1fffff]
+2026-10-23T14:58:44.272147+0000 ubuntu kernel:   Device   empty
+2026-10-23T14:58:44.272171+0000 ubuntu kernel: Movable zone start for each node
+2026-10-23T14:58:44.272196+0000 ubuntu kernel: Early memory node ranges
+2026-10-23T14:58:44.272221+0000 ubuntu kernel:   node   0: [mem 0x0000000000001000-0x000000000009ffff]
+2026-10-23T14:58:44.272245+0000 ubuntu kernel:   node   0: [mem 0x0000000000100000-0x00000000bed3efff]
+2026-10-23T14:58:44.272270+0000 ubuntu kernel:   node   0: [mem 0x00000000bee00000-0x00000000bf8ecfff]
+2026-10-23T14:58:44.272295+0000 ubuntu kernel:   node   0: [mem 0x00000000bfbff000-0x00000000bff7bfff]
+2026-10-23T14:58:44.272320+0000 ubuntu kernel:   node   0: [mem 0x0000000100000000-0x00000004be1fffff]
+2026-10-23T14:58:44.272344+0000 ubuntu kernel: Initmem setup node 0 [mem 0x0000000000001000-0x00000004be1fffff]
+2026-10-23T14:58:44.272369+0000 ubuntu kernel: On node 0, zone DMA: 1 pages in unavailable ranges
+2026-10-23T14:58:44.272398+0000 ubuntu kernel: On node 0, zone DMA: 96 pages in unavailable ranges
+2026-10-23T14:58:44.272435+0000 ubuntu kernel: On node 0, zone DMA32: 193 pages in unavailable ranges
+2026-10-23T14:58:44.272460+0000 ubuntu kernel: On node 0, zone DMA32: 786 pages in unavailable ranges
+2026-10-23T14:58:44.272484+0000 ubuntu kernel: On node 0, zone Normal: 132 pages in unavailable ranges
+2026-10-23T14:58:44.272509+0000 ubuntu kernel: On node 0, zone Normal: 7680 pages in unavailable ranges
+2026-10-23T14:58:44.272534+0000 ubuntu kernel: ACPI: PM-Timer IO Port: 0xb008
+2026-10-23T14:58:44.272571+0000 ubuntu kernel: ACPI: LAPIC_NMI (acpi_id[0xff] dfl dfl lint[0x1])
+2026-10-23T14:58:44.272597+0000 ubuntu kernel: IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23
+2026-10-23T14:58:44.272621+0000 ubuntu kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 0 global_irq 2 dfl dfl)
+2026-10-23T14:58:44.272656+0000 ubuntu kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 5 global_irq 5 high level)
+2026-10-23T14:58:44.272715+0000 ubuntu kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+2026-10-23T14:58:44.272741+0000 ubuntu kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 10 global_irq 10 high level)
+2026-10-23T14:58:44.272765+0000 ubuntu kernel: ACPI: INT_SRC_OVR (bus 0 bus_irq 11 global_irq 11 high level)
+2026-10-23T14:58:44.272790+0000 ubuntu kernel: ACPI: Using ACPI (MADT) for SMP configuration information
+2026-10-23T14:58:44.272814+0000 ubuntu kernel: TSC deadline timer available
+2026-10-23T14:58:44.272839+0000 ubuntu kernel: smpboot: Allowing 8 CPUs, 0 hotplug CPUs
+2026-10-23T14:58:44.272865+0000 ubuntu kernel: kvm-guest: APIC: eoi() replaced with kvm_guest_apic_eoi_write()
+2026-10-23T14:58:44.272890+0000 ubuntu kernel: kvm-guest: KVM setup pv remote TLB flush
+2026-10-23T14:58:44.272914+0000 ubuntu kernel: kvm-guest: setup PV sched yield
+2026-10-23T14:58:44.272947+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+2026-10-23T14:58:44.272972+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+2026-10-23T14:58:44.272997+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbe2a9000-0xbe2a9fff]
+2026-10-23T14:58:44.273072+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbe2cf000-0xbe2cffff]
+2026-10-23T14:58:44.273099+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbe2d0000-0xbe2d0fff]
+2026-10-23T14:58:44.273125+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbe302000-0xbe302fff]
+2026-10-23T14:58:44.273150+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbed3f000-0xbedfffff]
+2026-10-23T14:58:44.273180+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbf8ed000-0xbfb6cfff]
+2026-10-23T14:58:44.273210+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbfb6d000-0xbfb7efff]
+2026-10-23T14:58:44.273236+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbfb7f000-0xbfbfefff]
+2026-10-23T14:58:44.273262+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xbff7c000-0xbfffffff]
+2026-10-23T14:58:44.273288+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xc0000000-0xfeffbfff]
+2026-10-23T14:58:44.273319+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xfeffc000-0xfeffffff]
+2026-10-23T14:58:44.273345+0000 ubuntu kernel: PM: hibernation: Registered nosave memory: [mem 0xff000000-0xffffffff]
+2026-10-23T14:58:44.273370+0000 ubuntu kernel: [mem 0xc0000000-0xfeffbfff] available for PCI devices
+2026-10-23T14:58:44.273395+0000 ubuntu kernel: Booting paravirtualized kernel on KVM
+2026-10-23T14:58:44.273421+0000 ubuntu kernel: clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+2026-10-23T14:58:44.273447+0000 ubuntu kernel: setup_percpu: NR_CPUS:8192 nr_cpumask_bits:8 nr_cpu_ids:8 nr_node_ids:1
+2026-10-23T14:58:44.273473+0000 ubuntu kernel: percpu: Embedded 86 pages/cpu s229376 r8192 d114688 u524288
+2026-10-23T14:58:44.273499+0000 ubuntu kernel: pcpu-alloc: s229376 r8192 d114688 u524288 alloc=1*2097152
+2026-10-23T14:58:44.273524+0000 ubuntu kernel: pcpu-alloc: [0] 0 1 2 3 [0] 4 5 6 7
+2026-10-23T14:58:44.273554+0000 ubuntu kernel: kvm-guest: PV spinlocks enabled
+2026-10-23T14:58:44.273580+0000 ubuntu kernel: PV qspinlock hash table entries: 256 (order: 0, 4096 bytes, linear)
+2026-10-23T14:58:44.273606+0000 ubuntu kernel: Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+2026-10-23T14:58:44.273633+0000 ubuntu kernel: Unknown kernel command line parameters "BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic", will be passed to user space.
+2026-10-23T14:58:44.273681+0000 ubuntu kernel: random: crng init done
+2026-10-23T14:58:44.273709+0000 ubuntu kernel: Dentry cache hash table entries: 4194304 (order: 13, 33554432 bytes, linear)
+2026-10-23T14:58:44.273735+0000 ubuntu kernel: Inode-cache hash table entries: 2097152 (order: 12, 16777216 bytes, linear)
+2026-10-23T14:58:44.273761+0000 ubuntu kernel: Fallback order for Node 0: 0
+2026-10-23T14:58:44.273808+0000 ubuntu kernel: Built 1 zonelists, mobility grouping on.  Total pages: 4633936
+2026-10-23T14:58:44.273835+0000 ubuntu kernel: Policy zone: Normal
+2026-10-23T14:58:44.273860+0000 ubuntu kernel: mem auto-init: stack:all(zero), heap alloc:on, heap free:off
+2026-10-23T14:58:44.273886+0000 ubuntu kernel: software IO TLB: area num 8.
+2026-10-23T14:58:44.273913+0000 ubuntu kernel: Memory: 18332772K/18838816K available (22528K kernel code, 4435K rwdata, 13948K rodata, 4984K init, 4732K bss, 505784K reserved, 0K cma-reserved)
+2026-10-23T14:58:44.273939+0000 ubuntu kernel: SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=8, Nodes=1
+2026-10-23T14:58:44.273965+0000 ubuntu kernel: ftrace: allocating 58152 entries in 228 pages
+2026-10-23T14:58:44.273991+0000 ubuntu kernel: ftrace: allocated 228 pages with 4 groups
+2026-10-23T14:58:44.274068+0000 ubuntu kernel: Dynamic Preempt: voluntary
+2026-10-23T14:58:44.274095+0000 ubuntu kernel: rcu: Preemptible hierarchical RCU implementation.
+2026-10-23T14:58:44.274130+0000 ubuntu kernel: rcu:         RCU restricting CPUs from NR_CPUS=8192 to nr_cpu_ids=8.
+2026-10-23T14:58:44.274172+0000 ubuntu kernel:         Trampoline variant of Tasks RCU enabled.
+2026-10-23T14:58:44.274199+0000 ubuntu kernel:         Rude variant of Tasks RCU enabled.
+2026-10-23T14:58:44.274226+0000 ubuntu kernel:         Tracing variant of Tasks RCU enabled.
+2026-10-23T14:58:44.274252+0000 ubuntu kernel: rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+2026-10-23T14:58:44.274279+0000 ubuntu kernel: rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=8
+2026-10-23T14:58:44.274305+0000 ubuntu kernel: NR_IRQS: 524544, nr_irqs: 488, preallocated irqs: 16
+2026-10-23T14:58:44.274331+0000 ubuntu kernel: rcu: srcu_init: Setting srcu_struct sizes based on contention.
+2026-10-23T14:58:44.274358+0000 ubuntu kernel: Console: colour dummy device 80x25
+2026-10-23T14:58:44.274390+0000 ubuntu kernel: printk: legacy console [tty1] enabled
+2026-10-23T14:58:44.274416+0000 ubuntu kernel: printk: legacy console [ttyS0] enabled
+2026-10-23T14:58:44.274443+0000 ubuntu kernel: ACPI: Core revision 20230628
+2026-10-23T14:58:44.274469+0000 ubuntu kernel: APIC: Switch to symmetric I/O mode setup
+2026-10-23T14:58:44.274495+0000 ubuntu kernel: x2apic enabled
+2026-10-23T14:58:44.274521+0000 ubuntu kernel: APIC: Switched APIC routing to: physical x2apic
+2026-10-23T14:58:44.274548+0000 ubuntu kernel: kvm-guest: APIC: send_IPI_mask() replaced with kvm_send_ipi_mask()
+2026-10-23T14:58:44.274575+0000 ubuntu kernel: kvm-guest: APIC: send_IPI_mask_allbutself() replaced with kvm_send_ipi_mask_allbutself()
+2026-10-23T14:58:44.274601+0000 ubuntu kernel: kvm-guest: setup PV IPIs
+2026-10-23T14:58:44.274628+0000 ubuntu kernel: tsc: Marking TSC unstable due to TSCs unsynchronized
+2026-10-23T14:58:44.274680+0000 ubuntu kernel: Calibrating delay loop (skipped) preset value.. 4391.74 BogoMIPS (lpj=2195874)
+2026-10-23T14:58:44.274708+0000 ubuntu kernel: AMD Zen1 DIV0 bug detected. Disable SMT for full protection.
+2026-10-23T14:58:44.274735+0000 ubuntu kernel: Last level iTLB entries: 4KB 512, 2MB 255, 4MB 127
+2026-10-23T14:58:44.274762+0000 ubuntu kernel: Last level dTLB entries: 4KB 512, 2MB 255, 4MB 127, 1GB 0
+2026-10-23T14:58:44.274788+0000 ubuntu kernel: Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+2026-10-23T14:58:44.274814+0000 ubuntu kernel: Spectre V2 : Mitigation: Retpolines
+2026-10-23T14:58:44.274839+0000 ubuntu kernel: Spectre V2 : Spectre v2 / SpectreRSB mitigation: Filling RSB on context switch
+2026-10-23T14:58:44.274866+0000 ubuntu kernel: Spectre V2 : Spectre v2 / SpectreRSB : Filling RSB on VMEXIT
+2026-10-23T14:58:44.274892+0000 ubuntu kernel: Spectre V2 : Enabling Speculation Barrier for firmware calls
+2026-10-23T14:58:44.274918+0000 ubuntu kernel: RETBleed: Mitigation: untrained return thunk
+2026-10-23T14:58:44.274949+0000 ubuntu kernel: Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+2026-10-23T14:58:44.274975+0000 ubuntu kernel: Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+2026-10-23T14:58:44.275001+0000 ubuntu kernel: x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+2026-10-23T14:58:44.275060+0000 ubuntu kernel: x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+2026-10-23T14:58:44.275086+0000 ubuntu kernel: x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+2026-10-23T14:58:44.275117+0000 ubuntu kernel: x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+2026-10-23T14:58:44.275148+0000 ubuntu kernel: x86/fpu: Enabled xstate features 0x7, context size is 832 bytes, using 'compacted' format.
+2026-10-23T14:58:44.275192+0000 ubuntu kernel: Freeing SMP alternatives memory: 48K
+2026-10-23T14:58:44.275223+0000 ubuntu kernel: pid_max: default: 32768 minimum: 301
+2026-10-23T14:58:44.275253+0000 ubuntu kernel: LSM: initializing lsm=lockdown,capability,landlock,yama,apparmor,integrity
+2026-10-23T14:58:44.275287+0000 ubuntu kernel: landlock: Up and running.
+2026-10-23T14:58:44.275320+0000 ubuntu kernel: Yama: becoming mindful.
+2026-10-23T14:58:44.275366+0000 ubuntu kernel: AppArmor: AppArmor initialized
+2026-10-23T14:58:44.275398+0000 ubuntu kernel: Mount-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+2026-10-23T14:58:44.275429+0000 ubuntu kernel: Mountpoint-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+2026-10-23T14:58:44.275456+0000 ubuntu kernel: smpboot: CPU0: AMD EPYC 7601 32-Core Processor (family: 0x17, model: 0x1, stepping: 0x2)
+2026-10-23T14:58:44.275482+0000 ubuntu kernel: RCU Tasks: Setting shift to 3 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=8.
+2026-10-23T14:58:44.275509+0000 ubuntu kernel: RCU Tasks Rude: Setting shift to 3 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=8.
+2026-10-23T14:58:44.275536+0000 ubuntu kernel: RCU Tasks Trace: Setting shift to 3 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=8.
+2026-10-23T14:58:44.275564+0000 ubuntu kernel: Performance Events: Fam17h+ core perfctr, AMD PMU driver.
+2026-10-23T14:58:44.275590+0000 ubuntu kernel: ... version:                0
+2026-10-23T14:58:44.275617+0000 ubuntu kernel: ... bit width:              48
+2026-10-23T14:58:44.275650+0000 ubuntu kernel: ... generic registers:      6
+2026-10-23T14:58:44.275708+0000 ubuntu kernel: ... value mask:             0000ffffffffffff
+2026-10-23T14:58:44.275741+0000 ubuntu kernel: ... max period:             00007fffffffffff
+2026-10-23T14:58:44.275772+0000 ubuntu kernel: ... fixed-purpose events:   0
+2026-10-23T14:58:44.275813+0000 ubuntu kernel: ... event mask:             000000000000003f
+2026-10-23T14:58:44.275849+0000 ubuntu kernel: signal: max sigframe size: 1776
+2026-10-23T14:58:44.275881+0000 ubuntu kernel: rcu: Hierarchical SRCU implementation.
+2026-10-23T14:58:44.275914+0000 ubuntu kernel: rcu:         Max phase no-delay instances is 400.
+2026-10-23T14:58:44.275943+0000 ubuntu kernel: smp: Bringing up secondary CPUs ...
+2026-10-23T14:58:44.275970+0000 ubuntu kernel: smpboot: x86: Booting SMP configuration:
+2026-10-23T14:58:44.276005+0000 ubuntu kernel: .... node  #0, CPUs:      #1 #2 #3 #4 #5 #6 #7
+2026-10-23T14:58:44.276090+0000 ubuntu kernel: smp: Brought up 1 node, 8 CPUs
+2026-10-23T14:58:44.276117+0000 ubuntu kernel: smpboot: Max logical packages: 8
+2026-10-23T14:58:44.276144+0000 ubuntu kernel: smpboot: Total of 8 processors activated (35133.98 BogoMIPS)
+2026-10-23T14:58:44.276171+0000 ubuntu kernel: devtmpfs: initialized
+2026-10-23T14:58:44.276197+0000 ubuntu kernel: x86/mm: Memory block size: 128MB
+2026-10-23T14:58:44.276224+0000 ubuntu kernel: ACPI: PM: Registering ACPI NVS region [mem 0xbfb7f000-0xbfbfefff] (524288 bytes)
+2026-10-23T14:58:44.276253+0000 ubuntu kernel: clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+2026-10-23T14:58:44.276285+0000 ubuntu kernel: futex hash table entries: 2048 (order: 5, 131072 bytes, linear)
+2026-10-23T14:58:44.276325+0000 ubuntu kernel: pinctrl core: initialized pinctrl subsystem
+2026-10-23T14:58:44.276359+0000 ubuntu kernel: PM: RTC time: 14:58:40, date: 2026-10-23
+2026-10-23T14:58:44.276396+0000 ubuntu kernel: NET: Registered PF_NETLINK/PF_ROUTE protocol family
+2026-10-23T14:58:44.276432+0000 ubuntu kernel: DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations
+2026-10-23T14:58:44.276465+0000 ubuntu kernel: DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+2026-10-23T14:58:44.276498+0000 ubuntu kernel: DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+2026-10-23T14:58:44.276531+0000 ubuntu kernel: audit: initializing netlink subsys (disabled)
+2026-10-23T14:58:44.276558+0000 ubuntu kernel: audit: type=2000 audit(1792767521.551:1): state=initialized audit_enabled=0 res=1
+2026-10-23T14:58:44.276585+0000 ubuntu kernel: thermal_sys: Registered thermal governor 'fair_share'
+2026-10-23T14:58:44.276620+0000 ubuntu kernel: thermal_sys: Registered thermal governor 'bang_bang'
+2026-10-23T14:58:44.276646+0000 ubuntu kernel: thermal_sys: Registered thermal governor 'step_wise'
+2026-10-23T14:58:44.276702+0000 ubuntu kernel: thermal_sys: Registered thermal governor 'user_space'
+2026-10-23T14:58:44.276731+0000 ubuntu kernel: thermal_sys: Registered thermal governor 'power_allocator'
+2026-10-23T14:58:44.276771+0000 ubuntu kernel: EISA bus registered
+2026-10-23T14:58:44.276798+0000 ubuntu kernel: cpuidle: using governor ladder
+2026-10-23T14:58:44.276830+0000 ubuntu kernel: cpuidle: using governor menu
+2026-10-23T14:58:44.276861+0000 ubuntu kernel: acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+2026-10-23T14:58:44.276892+0000 ubuntu kernel: PCI: Using configuration type 1 for base access
+2026-10-23T14:58:44.276932+0000 ubuntu kernel: PCI: Using configuration type 1 for extended access
+2026-10-23T14:58:44.276968+0000 ubuntu kernel: kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+2026-10-23T14:58:44.277046+0000 ubuntu kernel: HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+2026-10-23T14:58:44.277089+0000 ubuntu kernel: HugeTLB: 16380 KiB vmemmap can be freed for a 1.00 GiB page
+2026-10-23T14:58:44.277119+0000 ubuntu kernel: HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+2026-10-23T14:58:44.277148+0000 ubuntu kernel: HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+2026-10-23T14:58:44.277179+0000 ubuntu kernel: fbcon: Taking over console
+2026-10-23T14:58:44.277209+0000 ubuntu kernel: ACPI: Added _OSI(Module Device)
+2026-10-23T14:58:44.277241+0000 ubuntu kernel: ACPI: Added _OSI(Processor Device)
+2026-10-23T14:58:44.277283+0000 ubuntu kernel: ACPI: Added _OSI(3.0 _SCP Extensions)
+2026-10-23T14:58:44.277331+0000 ubuntu kernel: ACPI: Added _OSI(Processor Aggregator Device)
+2026-10-23T14:58:44.277363+0000 ubuntu kernel: ACPI: 1 ACPI AML tables successfully acquired and loaded
+2026-10-23T14:58:44.277392+0000 ubuntu kernel: ACPI: _OSC evaluation for CPUs failed, trying _PDC
+2026-10-23T14:58:44.277419+0000 ubuntu kernel: ACPI: Interpreter enabled
+2026-10-23T14:58:44.277445+0000 ubuntu kernel: ACPI: PM: (supports S0 S5)
+2026-10-23T14:58:44.277473+0000 ubuntu kernel: ACPI: Using IOAPIC for interrupt routing
+2026-10-23T14:58:44.277503+0000 ubuntu kernel: PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+2026-10-23T14:58:44.277534+0000 ubuntu kernel: PCI: Ignoring E820 reservations for host bridge windows
+2026-10-23T14:58:44.277567+0000 ubuntu kernel: ACPI: Enabled 2 GPEs in block 00 to 0F
+2026-10-23T14:58:44.277612+0000 ubuntu kernel: ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+2026-10-23T14:58:44.278193+0000 ubuntu kernel: acpi PNP0A03:00: _OSC: OS supports [ExtendedConfig ASPM ClockPM Segments MSI EDR HPX-Type3]
+2026-10-23T14:58:44.278254+0000 ubuntu kernel: acpiphp: Slot [2] registered
+2026-10-23T14:58:44.278285+0000 ubuntu kernel: acpiphp: Slot [3] registered
+2026-10-23T14:58:44.278312+0000 ubuntu kernel: acpiphp: Slot [4] registered
+2026-10-23T14:58:44.278339+0000 ubuntu kernel: acpiphp: Slot [5] registered
+2026-10-23T14:58:44.278365+0000 ubuntu kernel: acpiphp: Slot [6] registered
+2026-10-23T14:58:44.278391+0000 ubuntu kernel: acpiphp: Slot [7] registered
+2026-10-23T14:58:44.278418+0000 ubuntu kernel: acpiphp: Slot [8] registered
+2026-10-23T14:58:44.278461+0000 ubuntu kernel: acpiphp: Slot [9] registered
+2026-10-23T14:58:44.278493+0000 ubuntu kernel: acpiphp: Slot [10] registered
+2026-10-23T14:58:44.278528+0000 ubuntu kernel: acpiphp: Slot [11] registered
+2026-10-23T14:58:44.278564+0000 ubuntu kernel: acpiphp: Slot [12] registered
+2026-10-23T14:58:44.278598+0000 ubuntu kernel: acpiphp: Slot [13] registered
+2026-10-23T14:58:44.278630+0000 ubuntu kernel: acpiphp: Slot [14] registered
+2026-10-23T14:58:44.278690+0000 ubuntu kernel: acpiphp: Slot [15] registered
+2026-10-23T14:58:44.278720+0000 ubuntu kernel: acpiphp: Slot [16] registered
+2026-10-23T14:58:44.278747+0000 ubuntu kernel: acpiphp: Slot [17] registered
+2026-10-23T14:58:44.278785+0000 ubuntu kernel: acpiphp: Slot [18] registered
+2026-10-23T14:58:44.278817+0000 ubuntu kernel: acpiphp: Slot [19] registered
+2026-10-23T14:58:44.278849+0000 ubuntu kernel: acpiphp: Slot [20] registered
+2026-10-23T14:58:44.278885+0000 ubuntu kernel: acpiphp: Slot [21] registered
+2026-10-23T14:58:44.278935+0000 ubuntu kernel: acpiphp: Slot [22] registered
+2026-10-23T14:58:44.278971+0000 ubuntu kernel: acpiphp: Slot [23] registered
+2026-10-23T14:58:44.279061+0000 ubuntu kernel: acpiphp: Slot [24] registered
+2026-10-23T14:58:44.279101+0000 ubuntu kernel: acpiphp: Slot [25] registered
+2026-10-23T14:58:44.279133+0000 ubuntu kernel: acpiphp: Slot [26] registered
+2026-10-23T14:58:44.279158+0000 ubuntu kernel: acpiphp: Slot [27] registered
+2026-10-23T14:58:44.279185+0000 ubuntu kernel: acpiphp: Slot [28] registered
+2026-10-23T14:58:44.279205+0000 ubuntu kernel: acpiphp: Slot [29] registered
+2026-10-23T14:58:44.279224+0000 ubuntu kernel: acpiphp: Slot [30] registered
+2026-10-23T14:58:44.279244+0000 ubuntu kernel: acpiphp: Slot [31] registered
+2026-10-23T14:58:44.279264+0000 ubuntu kernel: PCI host bridge to bus 0000:00
+2026-10-23T14:58:44.279524+0000 ubuntu kernel: pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+2026-10-23T14:58:44.279735+0000 ubuntu kernel: pci_bus 0000:00: root bus resource [io  0x0d00-0xffff window]
+2026-10-23T14:58:44.279910+0000 ubuntu kernel: pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+2026-10-23T14:58:44.280124+0000 ubuntu kernel: pci_bus 0000:00: root bus resource [mem 0xc0000000-0xfebfffff window]
+2026-10-23T14:58:44.280257+0000 ubuntu kernel: pci_bus 0000:00: root bus resource [mem 0x380000000000-0x38007fffffff window]
+2026-10-23T14:58:44.280370+0000 ubuntu kernel: pci_bus 0000:00: root bus resource [bus 00-ff]
+2026-10-23T14:58:44.280516+0000 ubuntu kernel: pci 0000:00:00.0: [8086:1237] type 00 class 0x060000 conventional PCI endpoint
+2026-10-23T14:58:44.280653+0000 ubuntu kernel: pci 0000:00:01.0: [8086:7000] type 00 class 0x060100 conventional PCI endpoint
+2026-10-23T14:58:44.280810+0000 ubuntu kernel: pci 0000:00:01.1: [8086:7010] type 00 class 0x010180 conventional PCI endpoint
+2026-10-23T14:58:44.280945+0000 ubuntu kernel: pci 0000:00:01.1: BAR 4 [io  0xc240-0xc24f]
+2026-10-23T14:58:44.281112+0000 ubuntu kernel: pci 0000:00:01.1: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+2026-10-23T14:58:44.281244+0000 ubuntu kernel: pci 0000:00:01.1: BAR 1 [io  0x03f6]: legacy IDE quirk
+2026-10-23T14:58:44.281375+0000 ubuntu kernel: pci 0000:00:01.1: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+2026-10-23T14:58:44.281503+0000 ubuntu kernel: pci 0000:00:01.1: BAR 3 [io  0x0376]: legacy IDE quirk
+2026-10-23T14:58:44.281639+0000 ubuntu kernel: pci 0000:00:01.2: [8086:7020] type 00 class 0x0c0300 conventional PCI endpoint
+2026-10-23T14:58:44.281786+0000 ubuntu kernel: pci 0000:00:01.2: BAR 4 [io  0xc220-0xc23f]
+2026-10-23T14:58:44.281922+0000 ubuntu kernel: pci 0000:00:01.3: [8086:7113] type 00 class 0x068000 conventional PCI endpoint
+2026-10-23T14:58:44.282082+0000 ubuntu kernel: pci 0000:00:01.3: quirk: [io  0xb000-0xb03f] claimed by PIIX4 ACPI
+2026-10-23T14:58:44.282212+0000 ubuntu kernel: pci 0000:00:01.3: quirk: [io  0xb100-0xb10f] claimed by PIIX4 SMB
+2026-10-23T14:58:44.282348+0000 ubuntu kernel: pci 0000:00:02.0: [1af4:1000] type 00 class 0x020000 conventional PCI endpoint
+2026-10-23T14:58:44.282478+0000 ubuntu kernel: pci 0000:00:02.0: BAR 0 [io  0xc200-0xc21f]
+2026-10-23T14:58:44.282609+0000 ubuntu kernel: pci 0000:00:02.0: BAR 1 [mem 0xc1087000-0xc1087fff]
+2026-10-23T14:58:44.282762+0000 ubuntu kernel: pci 0000:00:02.0: BAR 4 [mem 0x380012000000-0x380012003fff 64bit pref]
+2026-10-23T14:58:44.282910+0000 ubuntu kernel: pci 0000:00:02.0: ROM [mem 0xfff80000-0xffffffff pref]
+2026-10-23T14:58:44.283070+0000 ubuntu kernel: pci 0000:00:03.0: [1af4:1003] type 00 class 0x078000 conventional PCI endpoint
+2026-10-23T14:58:44.283201+0000 ubuntu kernel: pci 0000:00:03.0: BAR 0 [io  0xc1c0-0xc1ff]
+2026-10-23T14:58:44.283328+0000 ubuntu kernel: pci 0000:00:03.0: BAR 1 [mem 0xc1086000-0xc1086fff]
+2026-10-23T14:58:44.283454+0000 ubuntu kernel: pci 0000:00:03.0: BAR 4 [mem 0x380012004000-0x380012007fff 64bit pref]
+2026-10-23T14:58:44.283587+0000 ubuntu kernel: pci 0000:00:04.0: [1af4:1001] type 00 class 0x010000 conventional PCI endpoint
+2026-10-23T14:58:44.283737+0000 ubuntu kernel: pci 0000:00:04.0: BAR 0 [io  0xc100-0xc17f]
+2026-10-23T14:58:44.283877+0000 ubuntu kernel: pci 0000:00:04.0: BAR 1 [mem 0xc1085000-0xc1085fff]
+2026-10-23T14:58:44.284026+0000 ubuntu kernel: pci 0000:00:04.0: BAR 4 [mem 0x380012008000-0x38001200bfff 64bit pref]
+2026-10-23T14:58:44.284169+0000 ubuntu kernel: pci 0000:00:05.0: [1af4:1001] type 00 class 0x010000 conventional PCI endpoint
+2026-10-23T14:58:44.284297+0000 ubuntu kernel: pci 0000:00:05.0: BAR 0 [io  0xc080-0xc0ff]
+2026-10-23T14:58:44.284424+0000 ubuntu kernel: pci 0000:00:05.0: BAR 1 [mem 0xc1084000-0xc1084fff]
+2026-10-23T14:58:44.284551+0000 ubuntu kernel: pci 0000:00:05.0: BAR 4 [mem 0x38001200c000-0x38001200ffff 64bit pref]
+2026-10-23T14:58:44.284701+0000 ubuntu kernel: pci 0000:00:06.0: [1af4:1002] type 00 class 0x00ff00 conventional PCI endpoint
+2026-10-23T14:58:44.284839+0000 ubuntu kernel: pci 0000:00:06.0: BAR 0 [io  0xc180-0xc1bf]
+2026-10-23T14:58:44.284967+0000 ubuntu kernel: pci 0000:00:06.0: BAR 4 [mem 0x380012010000-0x380012013fff 64bit pref]
+2026-10-23T14:58:44.285139+0000 ubuntu kernel: pci 0000:00:07.0: [10de:2204] type 00 class 0x030000 PCIe Legacy Endpoint
+2026-10-23T14:58:44.285272+0000 ubuntu kernel: pci 0000:00:07.0: BAR 0 [mem 0xc0000000-0xc0ffffff]
+2026-10-23T14:58:44.285399+0000 ubuntu kernel: pci 0000:00:07.0: BAR 1 [mem 0x380000000000-0x38000fffffff 64bit pref]
+2026-10-23T14:58:44.285524+0000 ubuntu kernel: pci 0000:00:07.0: BAR 3 [mem 0x380010000000-0x380011ffffff 64bit pref]
+2026-10-23T14:58:44.285653+0000 ubuntu kernel: pci 0000:00:07.0: BAR 5 [io  0xc000-0xc07f]
+2026-10-23T14:58:44.285798+0000 ubuntu kernel: pci 0000:00:07.0: ROM [mem 0xfff80000-0xffffffff pref]
+2026-10-23T14:58:44.285933+0000 ubuntu kernel: pci 0000:00:07.0: Enabling HDA controller
+2026-10-23T14:58:44.286084+0000 ubuntu kernel: pci 0000:00:07.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+2026-10-23T14:58:44.286213+0000 ubuntu kernel: pci 0000:00:07.0: 126.016 Gb/s available PCIe bandwidth, limited by 8.0 GT/s PCIe x16 link at 0000:00:07.0 (capable of 252.048 Gb/s with 16.0 GT/s PCIe x16 link)
+2026-10-23T14:58:44.286346+0000 ubuntu kernel: pci 0000:00:08.0: [10de:1aef] type 00 class 0x040300 PCIe Endpoint
+2026-10-23T14:58:44.286476+0000 ubuntu kernel: pci 0000:00:08.0: BAR 0 [mem 0xc1080000-0xc1083fff]
+2026-10-23T14:58:44.286603+0000 ubuntu kernel: pci 0000:00:08.0: 126.016 Gb/s available PCIe bandwidth, limited by 8.0 GT/s PCIe x16 link at 0000:00:08.0 (capable of 252.048 Gb/s with 16.0 GT/s PCIe x16 link)
+2026-10-23T14:58:44.286626+0000 ubuntu kernel: ACPI: PCI: Interrupt link LNKA configured for IRQ 10
+2026-10-23T14:58:44.286640+0000 ubuntu kernel: ACPI: PCI: Interrupt link LNKB configured for IRQ 10
+2026-10-23T14:58:44.286654+0000 ubuntu kernel: ACPI: PCI: Interrupt link LNKC configured for IRQ 11
+2026-10-23T14:58:44.286684+0000 ubuntu kernel: ACPI: PCI: Interrupt link LNKD configured for IRQ 11
+2026-10-23T14:58:44.286698+0000 ubuntu kernel: ACPI: PCI: Interrupt link LNKS configured for IRQ 9
+2026-10-23T14:58:44.286711+0000 ubuntu kernel: iommu: Default domain type: Translated
+2026-10-23T14:58:44.286725+0000 ubuntu kernel: iommu: DMA domain TLB invalidation policy: lazy mode
+2026-10-23T14:58:44.286753+0000 ubuntu kernel: SCSI subsystem initialized
+2026-10-23T14:58:44.286769+0000 ubuntu kernel: libata version 3.00 loaded.
+2026-10-23T14:58:44.286783+0000 ubuntu kernel: ACPI: bus type USB registered
+2026-10-23T14:58:44.286797+0000 ubuntu kernel: usbcore: registered new interface driver usbfs
+2026-10-23T14:58:44.286811+0000 ubuntu kernel: usbcore: registered new interface driver hub
+2026-10-23T14:58:44.286827+0000 ubuntu kernel: usbcore: registered new device driver usb
+2026-10-23T14:58:44.286841+0000 ubuntu kernel: pps_core: LinuxPPS API ver. 1 registered
+2026-10-23T14:58:44.286855+0000 ubuntu kernel: pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+2026-10-23T14:58:44.286869+0000 ubuntu kernel: PTP clock support registered
+2026-10-23T14:58:44.286882+0000 ubuntu kernel: EDAC MC: Ver: 3.0.0
+2026-10-23T14:58:44.286896+0000 ubuntu kernel: efivars: Registered efivars operations
+2026-10-23T14:58:44.286912+0000 ubuntu kernel: NetLabel: Initializing
+2026-10-23T14:58:44.286926+0000 ubuntu kernel: NetLabel:  domain hash size = 128
+2026-10-23T14:58:44.286940+0000 ubuntu kernel: NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+2026-10-23T14:58:44.286953+0000 ubuntu kernel: NetLabel:  unlabeled traffic allowed by default
+2026-10-23T14:58:44.286970+0000 ubuntu kernel: mctp: management component transport protocol core
+2026-10-23T14:58:44.286984+0000 ubuntu kernel: NET: Registered PF_MCTP protocol family
+2026-10-23T14:58:44.286998+0000 ubuntu kernel: PCI: Using ACPI for IRQ routing
+2026-10-23T14:58:44.287038+0000 ubuntu kernel: PCI: pci_cache_line_size set to 64 bytes
+2026-10-23T14:58:44.287053+0000 ubuntu kernel: e820: reserve RAM buffer [mem 0xbe2a9018-0xbfffffff]
+2026-10-23T14:58:44.287067+0000 ubuntu kernel: e820: reserve RAM buffer [mem 0xbe2d0018-0xbfffffff]
+2026-10-23T14:58:44.287084+0000 ubuntu kernel: e820: reserve RAM buffer [mem 0xbed3f000-0xbfffffff]
+2026-10-23T14:58:44.287098+0000 ubuntu kernel: e820: reserve RAM buffer [mem 0xbf8ed000-0xbfffffff]
+2026-10-23T14:58:44.287111+0000 ubuntu kernel: e820: reserve RAM buffer [mem 0xbff7c000-0xbfffffff]
+2026-10-23T14:58:44.287125+0000 ubuntu kernel: e820: reserve RAM buffer [mem 0x4be200000-0x4bfffffff]
+2026-10-23T14:58:44.287258+0000 ubuntu kernel: pci 0000:00:07.0: vgaarb: setting as boot VGA device
+2026-10-23T14:58:44.287386+0000 ubuntu kernel: pci 0000:00:07.0: vgaarb: bridge control possible
+2026-10-23T14:58:44.287513+0000 ubuntu kernel: pci 0000:00:07.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+2026-10-23T14:58:44.287531+0000 ubuntu kernel: vgaarb: loaded
+2026-10-23T14:58:44.287553+0000 ubuntu kernel: clocksource: Switched to clocksource kvm-clock
+2026-10-23T14:58:44.287567+0000 ubuntu kernel: VFS: Disk quotas dquot_6.6.0
+2026-10-23T14:58:44.287581+0000 ubuntu kernel: VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+2026-10-23T14:58:44.287595+0000 ubuntu kernel: AppArmor: AppArmor Filesystem Enabled
+2026-10-23T14:58:44.287609+0000 ubuntu kernel: pnp: PnP ACPI init
+2026-10-23T14:58:44.287786+0000 ubuntu kernel: pnp 00:03: [dma 2]
+2026-10-23T14:58:44.287807+0000 ubuntu kernel: pnp: PnP ACPI: found 5 devices
+2026-10-23T14:58:44.287821+0000 ubuntu kernel: clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+2026-10-23T14:58:44.287835+0000 ubuntu kernel: NET: Registered PF_INET protocol family
+2026-10-23T14:58:44.287853+0000 ubuntu kernel: IP idents hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+2026-10-23T14:58:44.287867+0000 ubuntu kernel: tcp_listen_portaddr_hash hash table entries: 16384 (order: 6, 262144 bytes, linear)
+2026-10-23T14:58:44.287881+0000 ubuntu kernel: Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+2026-10-23T14:58:44.287895+0000 ubuntu kernel: TCP established hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+2026-10-23T14:58:44.287912+0000 ubuntu kernel: TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+2026-10-23T14:58:44.287926+0000 ubuntu kernel: TCP: Hash tables configured (established 262144 bind 65536)
+2026-10-23T14:58:44.287940+0000 ubuntu kernel: MPTCP token hash table entries: 32768 (order: 7, 786432 bytes, linear)
+2026-10-23T14:58:44.287954+0000 ubuntu kernel: UDP hash table entries: 16384 (order: 7, 524288 bytes, linear)
+2026-10-23T14:58:44.287968+0000 ubuntu kernel: UDP-Lite hash table entries: 16384 (order: 7, 524288 bytes, linear)
+2026-10-23T14:58:44.287985+0000 ubuntu kernel: NET: Registered PF_UNIX/PF_LOCAL protocol family
+2026-10-23T14:58:44.287998+0000 ubuntu kernel: NET: Registered PF_XDP protocol family
+2026-10-23T14:58:44.288225+0000 ubuntu kernel: pci 0000:00:02.0: ROM [mem 0xfff80000-0xffffffff pref]: can't claim; no compatible bridge window
+2026-10-23T14:58:44.288357+0000 ubuntu kernel: pci 0000:00:02.0: ROM [mem 0xc1000000-0xc107ffff pref]: assigned
+2026-10-23T14:58:44.288478+0000 ubuntu kernel: pci_bus 0000:00: resource 4 [io  0x0000-0x0cf7 window]
+2026-10-23T14:58:44.288592+0000 ubuntu kernel: pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]
+2026-10-23T14:58:44.288723+0000 ubuntu kernel: pci_bus 0000:00: resource 6 [mem 0x000a0000-0x000bffff window]
+2026-10-23T14:58:44.288836+0000 ubuntu kernel: pci_bus 0000:00: resource 7 [mem 0xc0000000-0xfebfffff window]
+2026-10-23T14:58:44.288956+0000 ubuntu kernel: pci_bus 0000:00: resource 8 [mem 0x380000000000-0x38007fffffff window]
+2026-10-23T14:58:44.289143+0000 ubuntu kernel: pci 0000:00:01.0: PIIX3: Enabling Passive Release
+2026-10-23T14:58:44.289279+0000 ubuntu kernel: pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+2026-10-23T14:58:44.289298+0000 ubuntu kernel: ACPI: \_SB_.LNKD: Enabled at IRQ 11
+2026-10-23T14:58:44.289424+0000 ubuntu kernel: pci 0000:00:01.2: quirk_usb_early_handoff+0x0/0x190 took 69190 usecs
+2026-10-23T14:58:44.289553+0000 ubuntu kernel: pci 0000:00:08.0: extending delay after power-on from D3hot to 20 msec
+2026-10-23T14:58:44.289571+0000 ubuntu kernel: PCI: CLS 64 bytes, default 64
+2026-10-23T14:58:44.289586+0000 ubuntu kernel: PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+2026-10-23T14:58:44.289605+0000 ubuntu kernel: software IO TLB: mapped [mem 0x00000000b7f7f000-0x00000000bbf7f000] (64MB)
+2026-10-23T14:58:44.289619+0000 ubuntu kernel: Initialise system trusted keyrings
+2026-10-23T14:58:44.289633+0000 ubuntu kernel: Key type blacklist registered
+2026-10-23T14:58:44.289647+0000 ubuntu kernel: workingset: timestamp_bits=36 max_order=23 bucket_order=0
+2026-10-23T14:58:44.289677+0000 ubuntu kernel: zbud: loaded
+2026-10-23T14:58:44.289692+0000 ubuntu kernel: squashfs: version 4.0 (2009/01/31) Phillip Lougher
+2026-10-23T14:58:44.289706+0000 ubuntu kernel: fuse: init (API version 7.39)
+2026-10-23T14:58:44.289720+0000 ubuntu kernel: integrity: Platform Keyring initialized
+2026-10-23T14:58:44.289735+0000 ubuntu kernel: integrity: Machine keyring initialized
+2026-10-23T14:58:44.289748+0000 ubuntu kernel: Key type asymmetric registered
+2026-10-23T14:58:44.289765+0000 ubuntu kernel: Asymmetric key parser 'x509' registered
+2026-10-23T14:58:44.289780+0000 ubuntu kernel: Block layer SCSI generic (bsg) driver version 0.4 loaded (major 243)
+2026-10-23T14:58:44.289794+0000 ubuntu kernel: io scheduler mq-deadline registered
+2026-10-23T14:58:44.289808+0000 ubuntu kernel: shpchp: Standard Hot Plug PCI Controller Driver version: 0.4
+2026-10-23T14:58:44.289822+0000 ubuntu kernel: input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input0
+2026-10-23T14:58:44.289836+0000 ubuntu kernel: ACPI: button: Power Button [PWRF]
+2026-10-23T14:58:44.289850+0000 ubuntu kernel: ACPI: \_SB_.LNKB: Enabled at IRQ 10
+2026-10-23T14:58:44.289865+0000 ubuntu kernel: ACPI: \_SB_.LNKC: Enabled at IRQ 11
+2026-10-23T14:58:44.289879+0000 ubuntu kernel: ACPI: \_SB_.LNKA: Enabled at IRQ 10
+2026-10-23T14:58:44.289895+0000 ubuntu kernel: Serial: 8250/16550 driver, 32 ports, IRQ sharing enabled
+2026-10-23T14:58:44.289909+0000 ubuntu kernel: 00:00: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+2026-10-23T14:58:44.289923+0000 ubuntu kernel: Linux agpgart interface v0.103
+2026-10-23T14:58:44.289938+0000 ubuntu kernel: loop: module loaded
+2026-10-23T14:58:44.290114+0000 ubuntu kernel: virtio_blk virtio2: 8/0/0 default/read/poll queues
+2026-10-23T14:58:44.290245+0000 ubuntu kernel: virtio_blk virtio2: [vda] 377487360 512-byte logical blocks (193 GB/180 GiB)
+2026-10-23T14:58:44.290264+0000 ubuntu kernel: GPT:Primary header thinks Alt. header is not at the end of the disk.
+2026-10-23T14:58:44.290279+0000 ubuntu kernel: GPT:46555135 != 377487359
+2026-10-23T14:58:44.290297+0000 ubuntu kernel: GPT:Alternate GPT header not at the end of the disk.
+2026-10-23T14:58:44.290312+0000 ubuntu kernel: GPT:46555135 != 377487359
+2026-10-23T14:58:44.290325+0000 ubuntu kernel: GPT: Use GNU Parted to correct GPT errors.
+2026-10-23T14:58:44.290339+0000 ubuntu kernel:  vda: vda1 vda14 vda15
+2026-10-23T14:58:44.290471+0000 ubuntu kernel: virtio_blk virtio3: 8/0/0 default/read/poll queues
+2026-10-23T14:58:44.290596+0000 ubuntu kernel: virtio_blk virtio3: [vdb] 736 512-byte logical blocks (377 kB/368 KiB)
+2026-10-23T14:58:44.290749+0000 ubuntu kernel: ata_piix 0000:00:01.1: version 2.13
+2026-10-23T14:58:44.290898+0000 ubuntu kernel: scsi host0: ata_piix
+2026-10-23T14:58:44.291085+0000 ubuntu kernel: scsi host1: ata_piix
+2026-10-23T14:58:44.291107+0000 ubuntu kernel: ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xc240 irq 14 lpm-pol 0
+2026-10-23T14:58:44.291122+0000 ubuntu kernel: ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xc248 irq 15 lpm-pol 0
+2026-10-23T14:58:44.291136+0000 ubuntu kernel: ACPI: bus type drm_connector registered
+2026-10-23T14:58:44.291150+0000 ubuntu kernel: tun: Universal TUN/TAP device driver, 1.6
+2026-10-23T14:58:44.291164+0000 ubuntu kernel: PPP generic driver version 2.4.2
+2026-10-23T14:58:44.291293+0000 ubuntu kernel: uhci_hcd 0000:00:01.2: UHCI Host Controller
+2026-10-23T14:58:44.291420+0000 ubuntu kernel: uhci_hcd 0000:00:01.2: new USB bus registered, assigned bus number 1
+2026-10-23T14:58:44.291554+0000 ubuntu kernel: uhci_hcd 0000:00:01.2: detected 2 ports
+2026-10-23T14:58:44.291697+0000 ubuntu kernel: uhci_hcd 0000:00:01.2: irq 11, io port 0x0000c220
+2026-10-23T14:58:44.291851+0000 ubuntu kernel: usb usb1: New USB device found, idVendor=1d6b, idProduct=0001, bcdDevice= 6.08
+2026-10-23T14:58:44.291984+0000 ubuntu kernel: usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+2026-10-23T14:58:44.292169+0000 ubuntu kernel: usb usb1: Product: UHCI Host Controller
+2026-10-23T14:58:44.292300+0000 ubuntu kernel: usb usb1: Manufacturer: Linux 6.8.0-59-generic uhci_hcd
+2026-10-23T14:58:44.292430+0000 ubuntu kernel: usb usb1: SerialNumber: 0000:00:01.2
+2026-10-23T14:58:44.292601+0000 ubuntu kernel: hub 1-0:1.0: USB hub found
+2026-10-23T14:58:44.292765+0000 ubuntu kernel: hub 1-0:1.0: 2 ports detected
+2026-10-23T14:58:44.292785+0000 ubuntu kernel: i8042: PNP: PS/2 Controller [PNP0303:KBD,PNP0f13:MOU] at 0x60,0x64 irq 1,12
+2026-10-23T14:58:44.292799+0000 ubuntu kernel: serio: i8042 KBD port at 0x60,0x64 irq 1
+2026-10-23T14:58:44.292815+0000 ubuntu kernel: serio: i8042 AUX port at 0x60,0x64 irq 12
+2026-10-23T14:58:44.292841+0000 ubuntu kernel: mousedev: PS/2 mouse device common for all mice
+2026-10-23T14:58:44.293053+0000 ubuntu kernel: rtc_cmos 00:04: RTC can wake from S4
+2026-10-23T14:58:44.293083+0000 ubuntu kernel: input: AT Translated Set 2 keyboard as /devices/platform/i8042/serio0/input/input1
+2026-10-23T14:58:44.293211+0000 ubuntu kernel: rtc_cmos 00:04: registered as rtc0
+2026-10-23T14:58:44.293328+0000 ubuntu kernel: rtc_cmos 00:04: setting system clock to 2026-10-23T14:58:42 UTC (1792767522)
+2026-10-23T14:58:44.293444+0000 ubuntu kernel: rtc_cmos 00:04: alarms up to one day, y3k, 242 bytes nvram
+2026-10-23T14:58:44.293462+0000 ubuntu kernel: i2c_dev: i2c /dev entries driver
+2026-10-23T14:58:44.293476+0000 ubuntu kernel: device-mapper: core: CONFIG_IMA_DISABLE_HTABLE is disabled. Duplicate IMA measurements will not be recorded in the IMA log.
+2026-10-23T14:58:44.293491+0000 ubuntu kernel: device-mapper: uevent: version 1.0.3
+2026-10-23T14:58:44.293505+0000 ubuntu kernel: device-mapper: ioctl: 4.48.0-ioctl (2023-03-01) initialised: dm-devel@redhat.com
+2026-10-23T14:58:44.293638+0000 ubuntu kernel: platform eisa.0: Probing EISA bus 0
+2026-10-23T14:58:44.293784+0000 ubuntu kernel: platform eisa.0: EISA: Cannot allocate resource for mainboard
+2026-10-23T14:58:44.293906+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 1
+2026-10-23T14:58:44.294113+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 2
+2026-10-23T14:58:44.294239+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 3
+2026-10-23T14:58:44.294355+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 4
+2026-10-23T14:58:44.294470+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 5
+2026-10-23T14:58:44.294586+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 6
+2026-10-23T14:58:44.294726+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 7
+2026-10-23T14:58:44.294845+0000 ubuntu kernel: platform eisa.0: Cannot allocate resource for EISA slot 8
+2026-10-23T14:58:44.294961+0000 ubuntu kernel: platform eisa.0: EISA: Detected 0 cards
+2026-10-23T14:58:44.294979+0000 ubuntu kernel: amd_pstate: the _CPC object is not present in SBIOS or ACPI disabled
+2026-10-23T14:58:44.294993+0000 ubuntu kernel: ledtrig-cpu: registered to indicate activity on CPUs
+2026-10-23T14:58:44.295029+0000 ubuntu kernel: drop_monitor: Initializing network drop monitor service
+2026-10-23T14:58:44.295049+0000 ubuntu kernel: NET: Registered PF_INET6 protocol family
+2026-10-23T14:58:44.295068+0000 ubuntu kernel: Segment Routing with IPv6
+2026-10-23T14:58:44.295090+0000 ubuntu kernel: In-situ OAM (IOAM) with IPv6
+2026-10-23T14:58:44.295105+0000 ubuntu kernel: NET: Registered PF_PACKET protocol family
+2026-10-23T14:58:44.295118+0000 ubuntu kernel: Key type dns_resolver registered
+2026-10-23T14:58:44.295132+0000 ubuntu kernel: IPI shorthand broadcast: enabled
+2026-10-23T14:58:44.295146+0000 ubuntu kernel: sched_clock: Marking stable (1803006818, 552201258)->(2633554411, -278346335)
+2026-10-23T14:58:44.295160+0000 ubuntu kernel: registered taskstats version 1
+2026-10-23T14:58:44.295174+0000 ubuntu kernel: Loading compiled-in X.509 certificates
+2026-10-23T14:58:44.295188+0000 ubuntu kernel: Loaded X.509 cert 'Build time autogenerated kernel key: 3fa2747ce20c90997bcade15a1cad09daa978788'
+2026-10-23T14:58:44.295203+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Live Patch Signing: 14df34d1a87cf37625abec039ef2bf521249b969'
+2026-10-23T14:58:44.295220+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Kernel Module Signing: 88f752e560a1e0737e31163a466ad7b70a850c19'
+2026-10-23T14:58:44.295234+0000 ubuntu kernel: blacklist: Loading compiled-in revocation X.509 certificates
+2026-10-23T14:58:44.295248+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing: 61482aa2830d0ab2ad5af10b7250da9033ddcef0'
+2026-10-23T14:58:44.295262+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2017): 242ade75ac4a15e50d50c84b0d45ff3eae707a03'
+2026-10-23T14:58:44.295277+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (ESM 2018): 365188c1d374d6b07c3c8f240f8ef722433d6a8b'
+2026-10-23T14:58:44.295291+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2019): c0746fd6c5da3ae827864651ad66ae47fe24b3e8'
+2026-10-23T14:58:44.295305+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v1): a8d54bbb3825cfb94fa13c9f8a594a195c107b8d'
+2026-10-23T14:58:44.295319+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v2): 4cf046892d6fd3c9a5b03f98d845f90851dc6a8c'
+2026-10-23T14:58:44.295333+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v3): 100437bb6de6e469b581e61cd66bce3ef4ed53af'
+2026-10-23T14:58:44.295350+0000 ubuntu kernel: Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (Ubuntu Core 2019): c1d57b8f6b743f23ee41f4f7ee292f06eecadfb9'
+2026-10-23T14:58:44.295364+0000 ubuntu kernel: Key type .fscrypt registered
+2026-10-23T14:58:44.295378+0000 ubuntu kernel: Key type fscrypt-provisioning registered
+2026-10-23T14:58:44.295392+0000 ubuntu kernel: Key type encrypted registered
+2026-10-23T14:58:44.295406+0000 ubuntu kernel: AppArmor: AppArmor sha256 policy hashing enabled
+2026-10-23T14:58:44.295419+0000 ubuntu kernel: ima: No TPM chip found, activating TPM-bypass!
+2026-10-23T14:58:44.295433+0000 ubuntu kernel: Loading compiled-in module X.509 certificates
+2026-10-23T14:58:44.295447+0000 ubuntu kernel: Loaded X.509 cert 'Build time autogenerated kernel key: 3fa2747ce20c90997bcade15a1cad09daa978788'
+2026-10-23T14:58:44.295461+0000 ubuntu kernel: ima: Allocated hash algorithm: sha256
+2026-10-23T14:58:44.295478+0000 ubuntu kernel: ima: No architecture policies found
+2026-10-23T14:58:44.295492+0000 ubuntu kernel: evm: Initialising EVM extended attributes:
+2026-10-23T14:58:44.295505+0000 ubuntu kernel: evm: security.selinux
+2026-10-23T14:58:44.295519+0000 ubuntu kernel: evm: security.SMACK64
+2026-10-23T14:58:44.295533+0000 ubuntu kernel: evm: security.SMACK64EXEC
+2026-10-23T14:58:44.295547+0000 ubuntu kernel: evm: security.SMACK64TRANSMUTE
+2026-10-23T14:58:44.295561+0000 ubuntu kernel: evm: security.SMACK64MMAP
+2026-10-23T14:58:44.295574+0000 ubuntu kernel: evm: security.apparmor
+2026-10-23T14:58:44.295589+0000 ubuntu kernel: evm: security.ima
+2026-10-23T14:58:44.295605+0000 ubuntu kernel: evm: security.capability
+2026-10-23T14:58:44.295621+0000 ubuntu kernel: evm: HMAC attrs: 0x1
+2026-10-23T14:58:44.295635+0000 ubuntu kernel: PM:   Magic number: 14:680:991
+2026-10-23T14:58:44.295801+0000 ubuntu kernel: machinecheck machinecheck4: hash matches
+2026-10-23T14:58:44.296051+0000 ubuntu kernel: memory memory34: hash matches
+2026-10-23T14:58:44.296077+0000 ubuntu kernel: RAS: Correctable Errors collector initialized.
+2026-10-23T14:58:44.296092+0000 ubuntu kernel: clk: Disabling unused clocks
+2026-10-23T14:58:44.296106+0000 ubuntu kernel: md: Waiting for all devices to be available before autodetect
+2026-10-23T14:58:44.296120+0000 ubuntu kernel: md: If you don't use raid, use raid=noautodetect
+2026-10-23T14:58:44.296139+0000 ubuntu kernel: md: Autodetecting RAID arrays.
+2026-10-23T14:58:44.296153+0000 ubuntu kernel: md: autorun ...
+2026-10-23T14:58:44.296167+0000 ubuntu kernel: md: ... autorun DONE.
+2026-10-23T14:58:44.296182+0000 ubuntu kernel: EXT4-fs (vda1): mounted filesystem f589feb5-05f2-40b4-903a-c8a1ec61b750 ro with ordered data mode. Quota mode: none.
+2026-10-23T14:58:44.296196+0000 ubuntu kernel: VFS: Mounted root (ext4 filesystem) readonly on device 253:1.
+2026-10-23T14:58:44.296209+0000 ubuntu kernel: devtmpfs: mounted
+2026-10-23T14:58:44.296223+0000 ubuntu kernel: Freeing unused decrypted memory: 2028K
+2026-10-23T14:58:44.296237+0000 ubuntu kernel: Freeing unused kernel image (initmem) memory: 4984K
+2026-10-23T14:58:44.296252+0000 ubuntu kernel: Write protecting the kernel read-only data: 36864k
+2026-10-23T14:58:44.296266+0000 ubuntu kernel: Freeing unused kernel image (rodata/data gap) memory: 388K
+2026-10-23T14:58:44.296282+0000 ubuntu kernel: x86/mm: Checked W+X mappings: passed, no W+X pages found.
+2026-10-23T14:58:44.296296+0000 ubuntu kernel: Run /sbin/init as init process
+2026-10-23T14:58:44.296312+0000 ubuntu kernel:   with arguments:
+2026-10-23T14:58:44.296329+0000 ubuntu kernel:     /sbin/init
+2026-10-23T14:58:44.296345+0000 ubuntu kernel:   with environment:
+2026-10-23T14:58:44.296362+0000 ubuntu kernel:     HOME=/
+2026-10-23T14:58:44.296379+0000 ubuntu kernel:     TERM=linux
+2026-10-23T14:58:44.296397+0000 ubuntu kernel:     BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic
+2026-10-23T14:58:44.296415+0000 ubuntu systemd[1]: Inserted module 'autofs4'
+2026-10-23T14:58:44.296440+0000 ubuntu systemd[1]: systemd 249.11-0ubuntu3.15 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+2026-10-23T14:58:44.296456+0000 ubuntu systemd[1]: Detected virtualization kvm.
+2026-10-23T14:58:44.296472+0000 ubuntu systemd[1]: Detected architecture x86-64.
+2026-10-23T14:58:44.296488+0000 ubuntu systemd[1]: Hostname set to <ubuntu>.
+2026-10-23T14:58:44.296654+0000 ubuntu kernel: block vda: the capability attribute has been deprecated.
+2026-10-23T14:58:44.296699+0000 ubuntu systemd[1]: Configuration file /run/systemd/system/netplan-ovs-cleanup.service is marked world-inaccessible. This has no effect as configuration data is accessible via APIs without restrictions. Proceeding anyway.
+2026-10-23T14:58:44.296725+0000 ubuntu systemd[1]: /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
+2026-10-23T14:58:44.296744+0000 ubuntu systemd[1]: Queued start job for default target Graphical Interface.
+2026-10-23T14:58:44.296764+0000 ubuntu systemd[1]: Created slice Slice /system/modprobe.
+2026-10-23T14:58:44.296784+0000 ubuntu systemd[1]: Created slice Slice /system/serial-getty.
+2026-10-23T14:58:44.296802+0000 ubuntu systemd[1]: Created slice Slice /system/systemd-fsck.
+2026-10-23T14:58:44.296819+0000 ubuntu systemd[1]: Created slice User and Session Slice.
+2026-10-23T14:58:44.296835+0000 ubuntu systemd[1]: Started Forward Password Requests to Wall Directory Watch.
+2026-10-23T14:58:44.296852+0000 ubuntu systemd[1]: Set up automount Arbitrary Executable File Formats File System Automount Point.
+2026-10-23T14:58:44.296875+0000 ubuntu systemd[1]: Reached target Slice Units.
+2026-10-23T14:58:44.296893+0000 ubuntu systemd[1]: Reached target Mounting snaps.
+2026-10-23T14:58:44.296913+0000 ubuntu systemd[1]: Reached target Swaps.
+2026-10-23T14:58:44.296933+0000 ubuntu systemd[1]: Reached target Local Verity Protected Volumes.
+2026-10-23T14:58:44.296950+0000 ubuntu systemd[1]: Listening on Device-mapper event daemon FIFOs.
+2026-10-23T14:58:44.296966+0000 ubuntu systemd[1]: Listening on LVM2 poll daemon socket.
+2026-10-23T14:58:44.296981+0000 ubuntu systemd[1]: Listening on multipathd control socket.
+2026-10-23T14:58:44.296996+0000 ubuntu systemd[1]: Listening on Syslog Socket.
+2026-10-23T14:58:44.297032+0000 ubuntu systemd[1]: Listening on fsck to fsckd communication Socket.
+2026-10-23T14:58:44.297056+0000 ubuntu systemd[1]: Listening on initctl Compatibility Named Pipe.
+2026-10-23T14:58:44.297073+0000 ubuntu systemd[1]: Listening on Journal Audit Socket.
+2026-10-23T14:58:44.297089+0000 ubuntu systemd[1]: Listening on Journal Socket (/dev/log).
+2026-10-23T14:58:44.297107+0000 ubuntu systemd[1]: Listening on Journal Socket.
+2026-10-23T14:58:44.297127+0000 ubuntu systemd[1]: Listening on Network Service Netlink Socket.
+2026-10-23T14:58:44.297146+0000 ubuntu systemd[1]: Listening on udev Control Socket.
+2026-10-23T14:58:44.297163+0000 ubuntu systemd[1]: Listening on udev Kernel Socket.
+2026-10-23T14:58:44.297179+0000 ubuntu systemd[1]: Mounting Huge Pages File System...
+2026-10-23T14:58:44.297197+0000 ubuntu systemd[1]: Mounting POSIX Message Queue File System...
+2026-10-23T14:58:44.297218+0000 ubuntu systemd[1]: Mounting Kernel Debug File System...
+2026-10-23T14:58:44.297236+0000 ubuntu systemd[1]: Mounting Kernel Trace File System...
+2026-10-23T14:58:44.297257+0000 ubuntu systemd[1]: Starting Journal Service...
+2026-10-23T14:58:44.297277+0000 ubuntu systemd[1]: Starting Set the console keyboard layout...
+2026-10-23T14:58:44.297294+0000 ubuntu systemd[1]: Starting Create List of Static Device Nodes...
+2026-10-23T14:58:44.297311+0000 ubuntu systemd[1]: Starting Monitoring of LVM2 mirrors, snapshots etc. using dmeventd or progress polling...
+2026-10-23T14:58:44.297326+0000 ubuntu systemd[1]: Condition check resulted in LXD - agent being skipped.
+2026-10-23T14:58:44.297341+0000 ubuntu systemd[1]: Starting Load Kernel Module configfs...
+2026-10-23T14:58:44.297361+0000 ubuntu systemd[1]: Starting Load Kernel Module drm...
+2026-10-23T14:58:44.297376+0000 ubuntu systemd[1]: Starting Load Kernel Module efi_pstore...
+2026-10-23T14:58:44.297391+0000 ubuntu systemd[1]: Starting Load Kernel Module fuse...
+2026-10-23T14:58:44.306041+0000 ubuntu systemd[1]: Condition check resulted in OpenVSwitch configuration for cleanup being skipped.
+2026-10-23T14:58:44.306087+0000 ubuntu kernel: pstore: Using crash dump compression: deflate
+2026-10-23T14:58:44.309064+0000 ubuntu systemd[1]: Starting File System Check on Root Device...
+2026-10-23T14:58:44.312051+0000 ubuntu kernel: pstore: Registered efi_pstore as persistent store backend
+2026-10-23T14:58:44.322054+0000 ubuntu systemd[1]: Starting Load Kernel Modules...
+2026-10-23T14:58:44.327082+0000 ubuntu systemd[1]: Starting Coldplug All udev Devices...
+2026-10-23T14:58:44.332352+0000 ubuntu systemd[1]: Started Journal Service.
+2026-10-23T14:58:44.460106+0000 ubuntu kernel: EXT4-fs (vda1): re-mounted f589feb5-05f2-40b4-903a-c8a1ec61b750 r/w. Quota mode: none.
+2026-10-23T14:58:44.505089+0000 ubuntu kernel: alua: device handler registered
+2026-10-23T14:58:44.997324+0000 ubuntu kernel: emc: device handler registered
+2026-10-23T14:58:44.997462+0000 ubuntu kernel: rdac: device handler registered
+2026-10-23T14:58:45.305058+0000 ubuntu kernel: piix4_smbus 0000:00:01.3: SMBus Host Controller at 0xb100, revision 0
+2026-10-23T14:58:45.359048+0000 ubuntu kernel: virtio_net virtio0 ens3: renamed from eth0
+2026-10-23T14:58:45.361060+0000 ubuntu kernel: FDC 0 is a S82078B
+2026-10-23T14:58:45.401061+0000 ubuntu kernel: cryptd: max_cpu_qlen set to 1000
+2026-10-23T14:58:45.425039+0000 ubuntu kernel: AVX2 version of gcm_enc/dec engaged.
+2026-10-23T14:58:45.425154+0000 ubuntu kernel: AES CTR mode by8 optimization enabled
+2026-10-23T14:58:45.616069+0000 ubuntu kernel: snd_hda_intel 0000:00:08.0: Disabling MSI
+2026-10-23T14:58:45.770071+0000 ubuntu kernel: kvm_amd: TSC scaling supported
+2026-10-23T14:58:45.770281+0000 ubuntu kernel: kvm_amd: Nested Virtualization enabled
+2026-10-23T14:58:45.770382+0000 ubuntu kernel: kvm_amd: Nested Paging enabled
+2026-10-23T14:58:45.770475+0000 ubuntu kernel: kvm_amd: LBR virtualization supported
+2026-10-23T14:58:45.770526+0000 ubuntu kernel: kvm_amd: Virtual VMLOAD VMSAVE supported
+2026-10-23T14:58:45.770649+0000 ubuntu kernel: kvm_amd: Virtual GIF supported
+2026-10-23T14:58:45.773065+0000 ubuntu kernel: input: HDA NVidia HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:08.0/sound/card0/input4
+2026-10-23T14:58:46.305087+0000 ubuntu kernel: input: HDA NVidia HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:08.0/sound/card0/input5
+2026-10-23T14:58:46.305222+0000 ubuntu kernel: input: HDA NVidia HDMI/DP,pcm=8 as /devices/pci0000:00/0000:00:08.0/sound/card0/input6
+2026-10-23T14:58:46.313091+0000 ubuntu kernel: input: HDA NVidia HDMI/DP,pcm=9 as /devices/pci0000:00/0000:00:08.0/sound/card0/input7
+2026-10-23T14:58:46.372074+0000 ubuntu kernel: loop0: detected capacity change from 0 to 130600
+2026-10-23T14:58:46.382289+0000 ubuntu kernel: nvidia: loading out-of-tree module taints kernel.
+2026-10-23T14:58:46.382363+0000 ubuntu kernel: nvidia: module license 'NVIDIA' taints kernel.
+2026-10-23T14:58:46.382413+0000 ubuntu kernel: Disabling lock debugging due to kernel taint
+2026-10-23T14:58:46.382464+0000 ubuntu kernel: nvidia: module verification failed: signature and/or required key missing - tainting kernel
+2026-10-23T14:58:46.382527+0000 ubuntu kernel: nvidia: module license taints kernel.
+2026-10-23T14:58:46.382597+0000 ubuntu kernel: loop1: detected capacity change from 0 to 183096
+2026-10-23T14:58:46.395561+0000 ubuntu kernel: loop2: detected capacity change from 0 to 104240
+2026-10-23T14:58:46.711097+0000 ubuntu kernel: nvidia-nvlink: Nvlink Core is being initialized, major device number 238
+2026-10-23T14:58:46.743088+0000 ubuntu kernel:
+2026-10-23T14:58:46.749090+0000 ubuntu kernel: input: ImExPS/2 Generic Explorer Mouse as /devices/platform/i8042/serio1/input/input3
+2026-10-23T14:58:46.758092+0000 ubuntu kernel: nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=none:owns=io+mem
+2026-10-23T14:58:46.806496+0000 ubuntu kernel: NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+2026-10-23T14:58:46.845047+0000 ubuntu kernel: nvidia-modeset: Loading NVIDIA Kernel Mode Setting Driver for UNIX platforms  575.51.03  Wed Apr 16 13:46:27 UTC 2025
+2026-10-23T14:58:46.863754+0000 ubuntu kernel: [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+2026-10-23T14:58:46.996048+0000 ubuntu kernel: audit: type=1400 audit(1792767526.994:2): apparmor="STATUS" operation="profile_load" profile="unconfined" name="lsb_release" pid=360 comm="apparmor_parser"
+2026-10-23T14:58:47.016042+0000 ubuntu kernel: audit: type=1400 audit(1792767527.013:3): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe" pid=361 comm="apparmor_parser"
+2026-10-23T14:58:47.016107+0000 ubuntu kernel: audit: type=1400 audit(1792767527.014:4): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe//kmod" pid=361 comm="apparmor_parser"
+2026-10-23T14:58:47.034764+0000 ubuntu kernel: ACPI Warning: \_SB.PCI0.S38._DSM: Argument #4 type mismatch - Found [Buffer], ACPI requires [Package] (20230628/nsarguments-61)
+2026-10-23T14:58:47.106033+0000 ubuntu kernel: audit: type=1400 audit(1792767527.105:5): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/bin/man" pid=365 comm="apparmor_parser"
+2026-10-23T14:58:47.107033+0000 ubuntu kernel: audit: type=1400 audit(1792767527.106:6): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_filter" pid=365 comm="apparmor_parser"
+2026-10-23T14:58:47.108039+0000 ubuntu kernel: audit: type=1400 audit(1792767527.107:7): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_groff" pid=365 comm="apparmor_parser"
+2026-10-23T14:58:47.225047+0000 ubuntu kernel: audit: type=1400 audit(1792767527.224:8): apparmor="STATUS" operation="profile_load" profile="unconfined" name="ubuntu_pro_apt_news" pid=363 comm="apparmor_parser"
+2026-10-23T14:58:47.242053+0000 ubuntu kernel: audit: type=1400 audit(1792767527.241:9): apparmor="STATUS" operation="profile_load" profile="unconfined" name="tcpdump" pid=366 comm="apparmor_parser"
+2026-10-23T14:58:47.266046+0000 ubuntu kernel: audit: type=1400 audit(1792767527.265:10): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/lib/snapd/snap-confine" pid=367 comm="apparmor_parser"
+2026-10-23T14:58:47.267046+0000 ubuntu kernel: audit: type=1400 audit(1792767527.266:11): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/lib/NetworkManager/nm-dhcp-client.action" pid=362 comm="apparmor_parser"
+2026-10-23T14:58:48.544090+0000 ubuntu kernel: [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+2026-10-23T14:58:48.544262+0000 ubuntu kernel: nvidia 0000:00:07.0: vgaarb: deactivate vga console
+2026-10-23T14:58:48.544675+0000 ubuntu kernel: nvidia 0000:00:07.0: [drm] Cannot find any crtc or sizes
+2026-10-23T14:58:50.185373+0000 ubuntu kernel: ISO 9660 Extensions: Microsoft Joliet Level 3
+2026-10-23T14:58:50.186441+0000 ubuntu kernel: ISO 9660 Extensions: RRIP_1991A
+2026-10-23T14:58:53.811111+0000 ubuntu kernel: EXT4-fs (vda1): resizing filesystem from 5790971 to 47157499 blocks
+2026-10-23T14:58:54.289099+0000 ubuntu kernel: EXT4-fs (vda1): resized filesystem to 47157499
+2026-10-23T14:58:55.825245+0000 ubuntu kernel: kauditd_printk_skb: 29 callbacks suppressed
+2026-10-23T14:58:55.825311+0000 ubuntu kernel: audit: type=1400 audit(1792767535.824:41): apparmor="STATUS" operation="profile_load" profile="unconfined" name="docker-default" pid=728 comm="apparmor_parser"
+2026-10-23T14:58:55.898101+0000 ubuntu kernel: evm: overlay not supported
+2026-10-23T14:58:55.940217+0000 ubuntu kernel: Initializing XFRM netlink socket
+2026-10-23T14:58:56.378136+0000 ubuntu kernel: bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+2026-10-23T14:58:58.175110+0000 ubuntu kernel: loop3: detected capacity change from 0 to 8
+2026-10-23T14:58:58.386093+0000 ubuntu kernel: audit: type=1400 audit(1792767538.384:42): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="/snap/snapd/24671/usr/lib/snapd/snap-confine" pid=1059 comm="apparmor_parser"
+2026-10-23T14:58:58.391107+0000 ubuntu kernel: audit: type=1400 audit(1792767538.390:43): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="/snap/snapd/24671/usr/lib/snapd/snap-confine//mount-namespace-capture-helper" pid=1059 comm="apparmor_parser"
+2026-10-23T14:58:58.428095+0000 ubuntu kernel: audit: type=1400 audit(1792767538.426:44): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap-update-ns.lxd" pid=1062 comm="apparmor_parser"
+2026-10-23T14:58:58.437199+0000 ubuntu kernel: audit: type=1400 audit(1792767538.436:45): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.buginfo" pid=1065 comm="apparmor_parser"
+2026-10-23T14:58:58.439436+0000 ubuntu kernel: audit: type=1400 audit(1792767538.437:46): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.activate" pid=1063 comm="apparmor_parser"
+2026-10-23T14:58:58.439561+0000 ubuntu kernel: audit: type=1400 audit(1792767538.438:47): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.benchmark" pid=1064 comm="apparmor_parser"
+2026-10-23T14:58:58.439623+0000 ubuntu kernel: audit: type=1400 audit(1792767538.439:48): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.check-kernel" pid=1066 comm="apparmor_parser"
+2026-10-23T14:58:58.442120+0000 ubuntu kernel: audit: type=1400 audit(1792767538.440:49): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.daemon" pid=1067 comm="apparmor_parser"
+2026-10-23T14:58:58.444096+0000 ubuntu kernel: audit: type=1400 audit(1792767538.443:50): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.configure" pid=1068 comm="apparmor_parser"
+2026-10-23T14:59:06.157124+0000 ubuntu kernel: nvidia_uvm: module uses symbols nvUvmInterfaceDisableAccessCntr from proprietary module nvidia, inheriting taint.
+2026-10-23T15:03:29.955043+0000 ubuntu systemd[1]: systemd 249.11-0ubuntu3.15 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+2026-10-23T15:03:29.955320+0000 ubuntu systemd[1]: Detected virtualization kvm.
+2026-10-23T15:03:29.955405+0000 ubuntu systemd[1]: Detected architecture x86-64.
+2026-10-23T15:03:30.057002+0000 ubuntu systemd[1]: Configuration file /run/systemd/system/netplan-ovs-cleanup.service is marked world-inaccessible. This has no effect as configuration data is accessible via APIs without restrictions. Proceeding anyway.
+2026-10-23T15:03:30.076997+0000 ubuntu systemd[1]: /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
+2026-10-23T15:09:41.985015+0000 ubuntu kernel: [drm] [nvidia-drm] [GPU ID 0x00000007] Unloading driver
+2026-10-23T15:09:42.488996+0000 ubuntu kernel: nvidia-modeset: Unloading
+2026-10-23T15:09:42.577992+0000 ubuntu kernel: nvidia-nvlink: Unregistered Nvlink Core, major device number 238
+2026-10-23T15:14:31.887206+0000 ubuntu kernel: VFIO - User Level meta-driver version: 0.3
+2026-10-23T15:14:32.296022+0000 ubuntu kernel: nvidia-nvlink: Nvlink Core is being initialized, major device number 236
+2026-10-23T15:14:32.341048+0000 ubuntu kernel:
+2026-10-23T15:14:32.341331+0000 ubuntu kernel: nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+2026-10-23T15:14:32.388206+0000 ubuntu kernel: NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+2026-10-23T15:14:32.549982+0000 ubuntu kernel: nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+2026-10-23T15:14:32.555996+0000 ubuntu kernel: [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+2026-10-23T15:14:32.556210+0000 ubuntu kernel: [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+2026-10-23T15:14:32.567998+0000 ubuntu kernel: [drm] [nvidia-drm] [GPU ID 0x00000007] Unloading driver
+2026-10-23T15:14:32.600994+0000 ubuntu kernel: nvidia-modeset: Unloading
+2026-10-23T15:14:32.720993+0000 ubuntu kernel: nvidia-nvlink: Unregistered Nvlink Core, major device number 236
+2026-10-23T15:15:42.437024+0000 ubuntu kernel: nvidia-nvlink: Nvlink Core is being initialized, major device number 238
+2026-10-23T15:15:42.504031+0000 ubuntu kernel:
+2026-10-23T15:15:42.504271+0000 ubuntu kernel: nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+2026-10-23T15:15:42.548666+0000 ubuntu kernel: NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+2026-10-23T15:15:42.586043+0000 ubuntu kernel: nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+2026-10-23T15:15:42.604047+0000 ubuntu kernel: [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+2026-10-23T15:15:43.125003+0000 ubuntu kernel: NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1336
+2026-10-23T15:15:44.508697+0000 ubuntu kernel: [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+2026-10-23T15:15:44.508876+0000 ubuntu kernel: nvidia 0000:00:07.0: vgaarb: deactivate vga console
+2026-10-23T15:15:44.509500+0000 ubuntu kernel: nvidia 0000:00:07.0: [drm] Cannot find any crtc or sizes
+2026-10-23T15:16:04.287998+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:09.675073+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:10.397034+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:12.983120+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:13.437102+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:13.942086+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:14.609053+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:14.977087+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:15.337076+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:34.476005+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T15:16:34.479966+0000 ubuntu kernel: NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x1f Size: 0x100000000 RangeLo: 0x0, RangeHi: 0xffffffff, pageSzLockMask: 0x211000
+2026-10-23T15:16:34.480115+0000 ubuntu kernel: NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1efc00000 RangeLo: 0x120000000, RangeHi: 0x30fbfffff, pageSzLockMask: 0x211000
+2026-10-23T15:16:34.486995+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:16:34.487115+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:18:34.083183+0000 ubuntu kernel: kvm: SMP vm created on host with unstable TSC; guest TSC will not be reliable
+2026-10-23T15:26:54.737081+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.740044+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.742990+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:54.744057+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:54.744157+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:54.752002+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.755035+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.757999+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:54.758989+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:54.759069+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:54.767028+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.769993+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.772027+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:54.774000+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:54.774078+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:54.927177+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.929021+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.931092+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:54.932039+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:54.932130+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:54.939081+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.941019+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.943063+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:54.944047+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:54.944138+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:54.951051+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.953021+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:54.955044+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:54.956044+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:54.956145+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:54.986115+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.986257+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.986332+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.991047+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.991158+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.991213+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.998079+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.998180+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:54.998233+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.002025+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.002130+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.002202+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.009091+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.009196+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.009243+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.013038+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.013132+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.013185+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.019097+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.019196+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.019248+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.024036+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.024149+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.024227+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.029108+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.029222+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.029275+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.034028+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.034141+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.034209+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.039078+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.039177+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.039227+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.043025+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.043140+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.043194+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.049114+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.049211+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.049257+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.049336+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:55.051017+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:55.053055+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:55.053186+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:55.053242+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:55.058991+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.059092+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.059144+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.059193+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:55.061025+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:55.063015+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:55.064082+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:55.064157+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:26:55.070053+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.070180+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.070236+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-23T15:26:55.070284+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:55.072065+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-23T15:26:55.073031+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, GPU_GET_KERNEL_FIFO(pGpu), ENGINE_INFO_TYPE_ENG_DESC, engineDesc, ENGINE_INFO_TYPE_RUNLIST, &pKernelChannelGroupApi->pKernelChannelGroup->runlistId) @ kernel_channel_group_api.c:1252
+2026-10-23T15:26:55.074062+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from status @ kernel_channel.c:2828
+2026-10-23T15:26:55.074154+0000 ubuntu kernel: NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchannelBindToRunlist(pChanNode->pKernelChannel, localEngineType, engineDesc) @ kernel_channel_group_api.c:1264
+2026-10-23T15:27:03.048094+0000 ubuntu kernel: NVRM: GPU at PCI:0000:00:07: GPU-85292829-194a-941f-5943-d8c9e0615acc
+2026-10-23T15:27:03.048425+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-23T15:27:06.106001+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-23T15:27:09.116047+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-23T15:27:12.180000+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-23T15:27:15.776018+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:27:16.286022+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90788, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+2026-10-23T15:27:19.603035+0000 ubuntu kernel: NVRM: GPU0 kchannelIsSchedulable_IMPL: Cannot schedule externally-owned channel 0x0000000a with unbound allocations!
+2026-10-23T15:27:19.745064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:27:19.785045+0000 ubuntu kernel: NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+2026-10-23T15:27:19.858015+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:27:19.898030+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:25.989042+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:25.991980+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:25.992983+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:25.997975+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.000004+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.001982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.005998+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.028995+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.029116+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.031438+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.033009+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.034020+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.034986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.037874+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.037976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.039983+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.044977+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.046978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.047990+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.048995+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.049075+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.050001+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.051981+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.052986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.053996+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.054986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.061975+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.063008+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.064973+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.071976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.095181+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.096052+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.096154+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.099066+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.100043+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.100161+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.100217+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.102024+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.104997+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.105996+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.108019+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.108107+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.111015+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.111118+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.112974+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.113060+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.115981+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.117987+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.118082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.122976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.126974+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.127065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.137978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.181995+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.182201+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.182254+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.184099+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.184212+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.184243+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.186007+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.186094+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.188131+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.189998+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.190109+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.191985+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.194969+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.195028+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.195056+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.195963+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.196014+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.196982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.197041+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.198942+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.199003+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.199043+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.201954+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.202021+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.202050+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.202954+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.203010+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.203982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.205171+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.208895+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.209010+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.209054+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.210015+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.210986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.211051+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.211100+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.212012+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.212085+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.214974+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.215056+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.215967+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.216047+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.216972+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.218976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.219059+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.220017+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.220216+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.223017+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.223985+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.228014+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.229981+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.232000+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.234006+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.239977+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.240981+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.241991+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.242100+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.243000+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.244069+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.245939+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.247950+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.249965+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.261466+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.267011+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.268992+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.274999+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.281984+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.315015+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.315182+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.318985+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.319988+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.321977+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.322081+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.322127+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.324978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.325065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.325984+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.327985+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.328087+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.328160+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.328217+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.328991+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.330986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.331082+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.331991+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.332101+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.333978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.334985+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.335065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.335992+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.336986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.338978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.340978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.341063+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.343982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.344054+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.344987+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.345982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.347982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.348073+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.348123+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.348995+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.349077+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.349127+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.350979+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.351062+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.351106+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.352979+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.353064+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.353124+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.354975+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.355989+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.357981+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.358076+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.358987+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.360978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.364978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.367978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.369976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.370042+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.372977+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.373065+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.373988+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.374984+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.376002+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.382976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.383061+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.386982+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.390976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.391985+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.394975+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.397976+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.402978+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:26.408986+0000 ubuntu kernel: NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-23T15:28:31.443040+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0

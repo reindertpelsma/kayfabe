@@ -4,8 +4,8 @@
 4. MEASURED (2026-10-23, lease57385378, `native_gates/sweep_host_preflight.log`): host595.91.07 OPEN, healthSOUND.
 5. MEASURED (2026-10-23, lease57385378, `native_gates/sweep_gates.log`): gates9/9+gate10PASS;12/12USER births,0refused at15:16:34Z.
 6. MEASURED (2026-10-23, lease57385378, `appdisk_receipt.json`): full appISO6.8GB pin403.625s/eight streams; NVRTC receiver pinPASS.
-7. CODE READ (same lease): current stage native/build preparation; raw30/CUDA4/GR pending.
-8. CODE READ (same lease): Windows baseline/calibration/bind/ON/desktop/hold/apps all pending; no driver stability claim.
+7. CODE READ (same lease): native raw30/30,Cuda4/4 andGRtierPASS completed15:28:31Z, n1/spreadN/A; evidence native_complete/.
+8. CODE READ (same lease): Windows standard-VGA installboot92430 started15:30:06Z; calibration/bind/ON/desktop/hold/apps pending; no driver stability claim.
 9. CODE READ (2026-10-23, lease57385378, `harness_recipe/arm.sh`): one actual ON attempt, optional600s hold-first; event/RPC collector preserved.
 10. CODE READ (same lease): exact native controls+CE-family guard unchanged; every extra/unmatched Xid stops.
 11. MEASURED (2026-10-23, `../round4/proof/`): lease22/22, desktop77/77, endpoint16/16PASS; mutations each>=2 distinct tests.

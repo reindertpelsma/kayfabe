@@ -1,0 +1,59 @@
+WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-23T15:28:33+00:00
+[2026-10-23T15:29:01Z] WINVM_INSTALL_START name=kfwin repo=98b599bb qemu=/workspace/bench/kf3-bins/98b599bb/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-23T15:29:01Z] START prereqs
+[2026-10-23T15:29:01Z] EXIT prereqs rc=0
+[2026-10-23T15:29:01Z] START fetch
+[2026-10-23T15:29:45Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-23T15:29:52Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-23T15:29:52Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-23T15:29:59Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-23T15:29:59Z] EXIT fetch rc=0
+[2026-10-23T15:29:59Z] START apparmor
+[2026-10-23T15:29:59Z] AppArmor: swtpm may use /workspace/sweep-win-57385378
+[2026-10-23T15:29:59Z] EXIT apparmor rc=0
+[2026-10-23T15:29:59Z] START secrets
+[2026-10-23T15:29:59Z] generated the Windows password (secrets/win_password, 0600)
+[2026-10-23T15:29:59Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-10-23T15:29:59Z] EXIT secrets rc=0
+[2026-10-23T15:29:59Z] START secureboot-key
+[2026-10-23T15:30:00Z] generated this host's kayfabe Secure Boot db key (/workspace/sweep-win-57385378/secureboot/db.key, never leaves the host)
+[2026-10-23T15:30:00Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-23) sha256 Fingerprint=2D:03:B2:44:AF:31:F3:14:90:0D:FB:99:C7:1A:9B:1B:D9:B0:7B:5E:6F:01:BE:FA:EB:59:5C:FF:66:DF:E6:61
+[2026-10-23T15:30:00Z] EXIT secureboot-key rc=0
+[2026-10-23T15:30:00Z] START ovmf-vars
+INFO: reading raw edk2 varstore from /usr/share/OVMF/OVMF_VARS_4M.fd
+INFO: var store range: 0x64 -> 0x40000
+INFO: create variable PK
+INFO: clear PK sigdb
+INFO: add PK cert /tmp/tmp9bf9wduf
+INFO: create variable KEK
+INFO: clear KEK sigdb
+INFO: add KEK cert /tmp/tmp9bf9wduf
+INFO: add KEK cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationKEKCA2011.pem
+INFO: add dummy dbx entry
+INFO: create variable dbx
+INFO: create variable db
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftWindowsProductionPCA2011.pem
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationUEFICA2011.pem
+INFO: add db cert /workspace/sweep-win-57385378/secureboot/db.crt
+INFO: create variable SecureBootEnable
+INFO: set variable SecureBootEnable: True
+INFO: create variable CustomMode
+INFO: set variable CustomMode: False
+INFO: writing raw edk2 varstore to /workspace/sweep-win-57385378/kfwin/firmware/OVMF_VARS.fd.tmp
+[2026-10-23T15:30:03Z] VARS_CREATED /workspace/sweep-win-57385378/kfwin/firmware/OVMF_VARS.fd
+[2026-10-23T15:30:04Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-23);
+[2026-10-23T15:30:04Z] EXIT ovmf-vars rc=0
+[2026-10-23T15:30:04Z] START tpm-manufacture
+TPM is listening on Unix socket.
+[2026-10-23T15:30:05Z] TPM_MANUFACTURED /workspace/sweep-win-57385378/kfwin/tpm (5993 bytes of state)
+[2026-10-23T15:30:05Z] EXIT tpm-manufacture rc=0
+[2026-10-23T15:30:06Z] START disk
+[2026-10-23T15:30:06Z] DISK_CREATED base.qcow2 80G
+[2026-10-23T15:30:06Z] EXIT disk rc=0
+[2026-10-23T15:30:06Z] START unattend
+xorriso 1.5.4 : RockRidge filesystem manipulator, libburnia project.
+
+[2026-10-23T15:30:06Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-23T15:30:06Z] EXIT unattend rc=0
+[2026-10-23T15:30:06Z] START install-boot
+[2026-10-23T15:30:06Z] QEMU_START tag=install boot=1 pid=92430 log=logs/install_b1_qemu.log

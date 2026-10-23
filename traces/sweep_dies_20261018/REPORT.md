@@ -1,3 +1,5 @@
+MEASURED (2026-10-23, lease57385378, `lease_57385378/native_complete/`): raw30/30,CUDA4/4,GRtier and9+10gatesPASS; frozen exact5 source controls, no extra Xid. Windows stdVGA install began15:30:06Z. MEASURED (same run, `lease_57385378/NATIVE_BINARY_IDENTITY.json`): QEMU/raw/guard hashes equal the prior production artifacts; no product change.
+
 ROUND4 GA102 — LIVE,2026-10-23
 
 1. MEASURED (2026-10-23, lease57385378, `START.json`): one GA102 provider replacement, source98b599bbf, actual0.29USD/h, prearmed expiry17:42:19Z.
