@@ -15,7 +15,7 @@ class SavedObservationHold(unittest.TestCase):
     def should_hold(self, enable, diagnostic=""):
         source = ARM.read_text()
         start = source.index("if grep -q '\"code\":0'")
-        condition = source[start:source.index(" start_seconds=$SECONDS", start)]
+        condition = source[start : source.index(" start_seconds=$SECONDS", start)]
         with tempfile.TemporaryDirectory() as root:
             base = Path(root)
             (base / "diag.txt").write_text(diagnostic)
@@ -29,7 +29,9 @@ class SavedObservationHold(unittest.TestCase):
                 condition = condition.replace("/root/prov/" + suffix, str(base / target))
             result = subprocess.run(
                 ["bash", "-c", condition + " echo HOLD; else echo SKIP; fi"],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             )
         return result.stdout.strip() == "HOLD"
 
@@ -38,7 +40,7 @@ class SavedObservationHold(unittest.TestCase):
         self.assertTrue(self.should_hold(enable, "Connection closed by remote host"))
 
     def test_actual_enable_code0_starts_hold_after_diagnostic_timeout(self):
-        enable = 'ENABLE580_PNPUTIL_RC=0\n'
+        enable = "ENABLE580_PNPUTIL_RC=0\n"
         enable += '{"DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}\n'
         self.assertTrue(self.should_hold(enable))
 

@@ -1,0 +1,93 @@
+{
+  "mutants": [
+    {
+      "mutant": "ninth_record_admitted",
+      "test_killers": 2,
+      "killers": [
+        "test_ninth_record_refuses (saved_tests.SavedPairObservation.test_ninth_record_refuses)",
+        "test_ninth_repeat_of_one_exact_channel_also_refuses (saved_tests.SavedPairObservation.test_ninth_repeat_of_one_exact_channel_also_refuses)"
+      ]
+    },
+    {
+      "mutant": "other_channel_admitted",
+      "test_killers": 4,
+      "killers": [
+        "test_refuses_channel_1000000c (saved_tests.SavedPairObservation.test_refuses_channel_1000000c)",
+        "test_refuses_channel_13 (saved_tests.SavedPairObservation.test_refuses_channel_13)",
+        "test_refuses_channel_15 (saved_tests.SavedPairObservation.test_refuses_channel_15)",
+        "test_refuses_channel_e00000b (saved_tests.SavedPairObservation.test_refuses_channel_e00000b)"
+      ]
+    },
+    {
+      "mutant": "other_xid_number_admitted",
+      "test_killers": 5,
+      "killers": [
+        "test_refuses_code_31 (saved_tests.SavedPairObservation.test_refuses_code_31)",
+        "test_refuses_code_45 (saved_tests.SavedPairObservation.test_refuses_code_45)",
+        "test_refuses_code_61 (saved_tests.SavedPairObservation.test_refuses_code_61)",
+        "test_refuses_code_62 (saved_tests.SavedPairObservation.test_refuses_code_62)",
+        "test_refuses_code_79 (saved_tests.SavedPairObservation.test_refuses_code_79)"
+      ]
+    },
+    {
+      "mutant": "foreign_pid_admitted",
+      "test_killers": 2,
+      "killers": [
+        "test_refuses_pid_1 (saved_tests.SavedPairObservation.test_refuses_pid_1)",
+        "test_refuses_pid_111033 (saved_tests.SavedPairObservation.test_refuses_pid_111033)"
+      ]
+    },
+    {
+      "mutant": "different_intr_admitted",
+      "test_killers": 2,
+      "killers": [
+        "test_refuses_intr_00000000 (saved_tests.SavedPairObservation.test_refuses_intr_00000000)",
+        "test_refuses_intr_00800000 (saved_tests.SavedPairObservation.test_refuses_intr_00800000)"
+      ]
+    },
+    {
+      "mutant": "observation_flag_ignored",
+      "test_killers": 2,
+      "killers": [
+        "test_refuses_not_observation_only (saved_tests.SavedPairObservation.test_refuses_not_observation_only)",
+        "test_refuses_numeric_observation_only (saved_tests.SavedPairObservation.test_refuses_numeric_observation_only)"
+      ]
+    },
+    {
+      "mutant": "attestation_permission_ignored",
+      "test_killers": 2,
+      "killers": [
+        "test_refuses_attestation_authority (saved_tests.SavedPairObservation.test_refuses_attestation_authority)",
+        "test_refuses_missing_attestation_prohibition (saved_tests.SavedPairObservation.test_refuses_missing_attestation_prohibition)"
+      ]
+    },
+    {
+      "mutant": "raw_line_truncated",
+      "test_killers": 2,
+      "killers": [
+        "test_full_raw_line_over_240_characters_is_retained (saved_tests.SavedPairObservation.test_full_raw_line_over_240_characters_is_retained)",
+        "test_long_high_channel_raw_record_is_retained_without_truncation (saved_tests.SavedPairObservation.test_long_high_channel_raw_record_is_retained_without_truncation)"
+      ]
+    },
+    {
+      "mutant": "records_marked_pass",
+      "test_killers": 2,
+      "killers": [
+        "test_eight_saved_pair_records_are_counted_and_never_silenced (saved_tests.SavedPairObservation.test_eight_saved_pair_records_are_counted_and_never_silenced)",
+        "test_saved_pair_is_recorded_without_becoming_pass_or_attestation (saved_tests.SavedPairObservation.test_saved_pair_is_recorded_without_becoming_pass_or_attestation)"
+      ]
+    },
+    {
+      "mutant": "records_attest",
+      "test_killers": 3,
+      "killers": [
+        "test_context_preserves_raw_xid_and_surrounding_kernel_rows (saved_tests.SavedPairObservation.test_context_preserves_raw_xid_and_surrounding_kernel_rows)",
+        "test_eight_saved_pair_records_are_counted_and_never_silenced (saved_tests.SavedPairObservation.test_eight_saved_pair_records_are_counted_and_never_silenced)",
+        "test_saved_pair_is_recorded_without_becoming_pass_or_attestation (saved_tests.SavedPairObservation.test_saved_pair_is_recorded_without_becoming_pass_or_attestation)"
+      ]
+    }
+  ],
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

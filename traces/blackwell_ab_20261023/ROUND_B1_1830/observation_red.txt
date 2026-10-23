@@ -1,0 +1,321 @@
+UNVERIFIED-HOST OBSERVATION; not PASS or attestation
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+======================================================================
+FAIL: test_context_preserves_raw_xid_and_surrounding_kernel_rows (test_saved_xid32_observation.SavedPairObservation.test_context_preserves_raw_xid_and_surrounding_kernel_rows)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_eight_saved_pair_records_are_counted_and_never_silenced (test_saved_xid32_observation.SavedPairObservation.test_eight_saved_pair_records_are_counted_and_never_silenced)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_full_raw_line_over_240_characters_is_retained (test_saved_xid32_observation.SavedPairObservation.test_full_raw_line_over_240_characters_is_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_ninth_record_refuses (test_saved_xid32_observation.SavedPairObservation.test_ninth_record_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_original_observer_still_accepts_only_its_original_pair (test_saved_xid32_observation.SavedPairObservation.test_original_observer_still_accepts_only_its_original_pair)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_original_observer_still_refuses_the_new_high_channel (test_saved_xid32_observation.SavedPairObservation.test_original_observer_still_refuses_the_new_high_channel)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_another_arm (test_saved_xid32_observation.SavedPairObservation.test_refuses_another_arm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_another_lease (test_saved_xid32_observation.SavedPairObservation.test_refuses_another_lease)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_another_pid_life (test_saved_xid32_observation.SavedPairObservation.test_refuses_another_pid_life)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_attestation_authority (test_saved_xid32_observation.SavedPairObservation.test_refuses_attestation_authority)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_authority_mode (test_saved_xid32_observation.SavedPairObservation.test_refuses_authority_mode)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_before_enable (test_saved_xid32_observation.SavedPairObservation.test_refuses_before_enable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_channel_1000000c (test_saved_xid32_observation.SavedPairObservation.test_refuses_channel_1000000c)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_channel_13 (test_saved_xid32_observation.SavedPairObservation.test_refuses_channel_13)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_channel_15 (test_saved_xid32_observation.SavedPairObservation.test_refuses_channel_15)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_channel_e00000b (test_saved_xid32_observation.SavedPairObservation.test_refuses_channel_e00000b)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_code_31 (test_saved_xid32_observation.SavedPairObservation.test_refuses_code_31)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_code_45 (test_saved_xid32_observation.SavedPairObservation.test_refuses_code_45)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_code_61 (test_saved_xid32_observation.SavedPairObservation.test_refuses_code_61)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_code_62 (test_saved_xid32_observation.SavedPairObservation.test_refuses_code_62)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_code_79 (test_saved_xid32_observation.SavedPairObservation.test_refuses_code_79)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_expired (test_saved_xid32_observation.SavedPairObservation.test_refuses_expired)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_intr_00000000 (test_saved_xid32_observation.SavedPairObservation.test_refuses_intr_00000000)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_intr_00800000 (test_saved_xid32_observation.SavedPairObservation.test_refuses_intr_00800000)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_nonqemu (test_saved_xid32_observation.SavedPairObservation.test_refuses_nonqemu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_not_observation_only (test_saved_xid32_observation.SavedPairObservation.test_refuses_not_observation_only)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_other_channel_authority (test_saved_xid32_observation.SavedPairObservation.test_refuses_other_channel_authority)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_othergpu (test_saved_xid32_observation.SavedPairObservation.test_refuses_othergpu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_permit_mode (test_saved_xid32_observation.SavedPairObservation.test_refuses_permit_mode)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_pid_1 (test_saved_xid32_observation.SavedPairObservation.test_refuses_pid_1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_pid_111033 (test_saved_xid32_observation.SavedPairObservation.test_refuses_pid_111033)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_refuses_second_enable (test_saved_xid32_observation.SavedPairObservation.test_refuses_second_enable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_repeated_dmesg_signature_keeps_all_context_candidates (test_saved_xid32_observation.SavedPairObservation.test_repeated_dmesg_signature_keeps_all_context_candidates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_saved_pair_is_recorded_without_becoming_pass_or_attestation (test_saved_xid32_observation.SavedPairObservation.test_saved_pair_is_recorded_without_becoming_pass_or_attestation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+======================================================================
+FAIL: test_tenth_record_refuses (test_saved_xid32_observation.SavedPairObservation.test_tenth_record_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 36, in setUp
+    self.assertIsNotNone(O, "saved-pair observation mode missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : saved-pair observation mode missing
+
+----------------------------------------------------------------------
+Ran 35 tests in 0.005s
+
+FAILED (failures=35)

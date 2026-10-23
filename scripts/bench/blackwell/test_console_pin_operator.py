@@ -17,6 +17,7 @@ from unittest.mock import patch
 from test_console_pin import C, FP, KEY, OTHER
 
 KIT = Path(__file__).resolve().parents[3] / "traces/blackwell_ab_20261023/observation_run/run_kit"
+PRIOR_USD = 5.2
 
 
 class OperatorConsolePin(unittest.TestCase):
@@ -35,7 +36,7 @@ class OperatorConsolePin(unittest.TestCase):
                 "auto_destroy_verified": True,
                 "auto_destroy_pid": os.getpid(),
                 "created_utc": born.isoformat(),
-                "prior_lane_runtime_usd": 5.2,
+                "prior_lane_runtime_usd": PRIOR_USD,
                 "budget_cutoff_minutes": 150,
             }
             ledger.write_text(json.dumps([row]))

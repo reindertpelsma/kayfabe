@@ -1,4 +1,4 @@
-UNVERIFIED-HOST
+UNVERIFIED-HOST OBSERVATION; not PASS or attestation
 .................................................................READINESS 2026-10-23T00:10:10+00:00 running
 CONSOLE_PIN absent 1
 CONSOLE_PIN match 2
@@ -28,8 +28,8 @@ READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
 .PHASE_XID_STOP: new fault without current arm/init proof
 ...............PHASE_XID_STOP: Command 'journalctl' returned non-zero exit status 1.
 .PHASE_XID_STOP: Command 'journalctl' timed out after 10 seconds
-.....................................................................................................................................................................
+................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 292 tests in 0.381s
+Ran 335 tests in 0.318s
 
 OK
