@@ -1035,6 +1035,16 @@ impl Lifecycle {
         match self.mode {
             Mode::Scan => {
                 self.counts.entries_scan += 1;
+                // one compare on the hot path; a notice only when a threshold is hit exactly (counts step by one)
+                if let Some(t) = SCAN_LONG_THRESHOLDS.get(self.scan_long_done)
+                    && self.counts.entries_scan >= *t
+                {
+                    self.scan_long_done += 1;
+                    self.notices.push(Notice::ScanLong {
+                        threshold: *t,
+                        scan_entries: self.counts.entries_scan,
+                    });
+                }
                 // `AlwaysScan` never opens a Window, so the entries after a source switch are counted here
                 if self.post_switch > 0 {
                     self.post_switch -= 1;

@@ -22,11 +22,23 @@ Every line is one line of `key=value` words after a fixed prefix, printed with `
 | `kf3: BUILD rev=<hex sha\|unknown> dirty=<0\|1\|unknown> pkg=<version>` | device realize, first line | once per run |
 | `kf3: WORKLOAD label=<label>` | device realize, only if `KF3_WORKLOAD_LABEL` is set and non-empty | once per run |
 | `kf3: USER_RING_BOUND <key> to=<Pointer\|Window> scan_entries=<n> pid=.. classes=.. engine=..` | the scan saw the software object bound and the relay left Scan | at most once per relay |
+| `kf3: USER_RING_SCAN_LONG <key> threshold=<n> scan_entries=<n> pid=.. classes=.. engine=..` | a relay still in Scan reached 100,000, 1,000,000 or 10,000,000 Scan entries | at most three per relay, once per threshold |
 | `kf3: USER_RING_LIFECYCLE <key> mode=<Mode> Counts {..} pid=.. classes=.. engine=.. bound=<yes\|never> scan_entries=<n> at=<retire\|exit>` | the relay's final line: its release, or device stop if it is still alive | at most once per relay |
 | `kf3: USER_RING_LIFECYCLE SUMMARY <old keys> relays_born=.. relays_bound=.. ...` | device stop, and the pre-existing "all relays gone" prints | once at stop (the interim prints keep their old bound) |
 
 `<key>` is the pre-existing `{:x?}` of `(client, handle)`, for example `(c1d000bf, 5)`, the same text in the BOUND and
 LIFECYCLE lines (and in the other per-relay lines of the pump), so the lines of one relay join on that string.
+
+### 2.0 The in-run line (`USER_RING_SCAN_LONG`)
+
+Added 2026-10-24 on the coordinator's request, because a QEMU that is killed prints no `at=exit` line and no SUMMARY (section 6).
+`Lifecycle::forwarded` compares the Scan entry count with the next of `SCAN_LONG_THRESHOLDS` (`[100000, 1000000, 10000000]`)
+and queues one `Notice::ScanLong` per threshold; the pump prints it from `report_lifecycle_notices`, the thread that prints the
+other notices. A relay that binds before a threshold never says it for that threshold or later (it left Scan); one that binds
+at 150,000 entries has already said `threshold=100000`. The lines carry the same `pid classes engine` fields as BOUND. They are
+bounded by 3 x the number of relays, independent of the entry counts (test
+`the_scan_long_flood_prints_an_exact_bounded_number_of_lines`: 2,000 relays at 20 and at 20,000 entries print none; 100 relays
+at 1,000,000 print exactly 200; 50 at 1,000,001 print exactly 100). The hot-path cost is one compare per Scan entry.
 
 ### 2.1 Identity fields
 
@@ -101,9 +113,16 @@ changes no behaviour: the value is only echoed in `kf3: WORKLOAD label=<name>`.
 
 ## 6. What the lines cannot do
 
-- A QEMU killed with SIGKILL runs no exit code: it prints no `at=exit` line and no SUMMARY. The `at=exit` pass runs in `Device::stop`, which
-  QEMU reaches through `kf3_unrealize`; whether a given harness's way of ending QEMU reaches it is for the harness to check. A harness that must see long-lived scanners in a killed
-  run needs a periodic line (not part of this change; see the design note in the report of this branch).
+- **The `at=exit` lines and the stop-time SUMMARY need `Device::stop` to run, and today it runs only when the PCI device is
+  unrealized.** QEMU 10.2.4's `qemu_cleanup()` (`system/runstate.c`) ends with "TODO: unref root container, check all devices are
+  ok": it does not unrealize devices, so `kf3_dev_exit` and `kf3_unrealize` are not reached by a QMP `quit`, by SIGTERM or by a guest
+  poweroff (read from that source file; a log check is `grep -c bar12_reads= qemu.log`, which counts the line `kf3_dev_exit`
+  prints). Only an exit notifier (`qemu_add_exit_notifier`, run through `atexit`) runs at process exit, and kf3 registers one only
+  for the trace mode. Until such a notifier calls the stop path (a proposed six-line change to `kf3.c`, not applied, see the report
+  of this branch), the `at=exit` lines and the stop SUMMARY appear only on a device hot-unplug. The interim `(all relays gone, #n)`
+  SUMMARY and the `at=retire` lines are unaffected. SIGKILL runs no code at all, with or without the notifier.
+- **`USER_RING_SCAN_LONG` is the line that survives every way QEMU can end**: it is printed during the run, so a killed QEMU, or
+  one that never unrealizes, still names a relay that sat in Scan for 100,000 / 1,000,000 / 10,000,000 entries.
 - A relay that forwarded no entry prints no final line, as before; it is in `relays_born` and `relays_never_bound`.
 - `classes` lists engine objects only. The 5080 software object is visible through `bound=`, not through `classes`.
 

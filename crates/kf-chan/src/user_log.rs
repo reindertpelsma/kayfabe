@@ -142,7 +142,9 @@ pub fn bound_line(key: (u32, u32), b: &Bound, ident: &RelayIdent) -> String {
     )
 }
 
-/// The bounded in-run `USER_RING_SCAN_LONG` line (from [`crate::user_lifecycle::Notice::ScanLong`]).
+/// The bounded in-run `USER_RING_SCAN_LONG` line (from [`crate::user_lifecycle::Notice::ScanLong`]): the relay is
+/// still in Scan and its Scan entries reached `threshold`. At most three per relay, so a run that ends without an exit
+/// pass (a killed QEMU) still names its long-lived scanners.
 #[must_use]
 pub fn scan_long_line(
     key: (u32, u32),
@@ -150,6 +152,8 @@ pub fn scan_long_line(
     scan_entries: u64,
     ident: &RelayIdent,
 ) -> String {
-    let _ = (key, threshold, scan_entries, ident);
-    String::new()
+    format!(
+        "kf3: USER_RING_SCAN_LONG {key:x?} threshold={threshold} scan_entries={scan_entries} {}",
+        ident.fields()
+    )
 }

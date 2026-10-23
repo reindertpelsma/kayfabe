@@ -1961,8 +1961,14 @@ impl Pump {
                     "kf3: USER_RING_POINTER_MARKERS_LATCHED_OFF {:#x}:{:#x} mode={mode:?} relayed={relayed} put_abs={put_abs} — first packet open at a GP_PUT boundary in this VM: Pointer-mode markers are switched OFF for every channel (performance fallback: bounded spin and the counted backstop; no entry is lost or duplicated). Anchored windows stay.",
                     key.0, key.1
                 ),
-                // stub of the in-run line: printed once the pump wiring lands
-                Notice::ScanLong { .. } => {}
+                // at most three per relay (the machine queues one per threshold); same thread as the other notices
+                Notice::ScanLong {
+                    threshold,
+                    scan_entries,
+                } => eprintln!(
+                    "{}",
+                    kf_chan::user_log::scan_long_line(key, threshold, scan_entries, &self.ident)
+                ),
                 Notice::Bound { to, scan_entries } => {
                     // once per relay (the machine queues it once); counted VM-wide by the turn
                     eprintln!(
