@@ -198,3 +198,5 @@ ADAPTIVE GA102 — LIVE 2026-10-23
 13. CODE READ (2026-10-23): Windows580.88 bind/ON/desktop/apps/Unigine/600s hold pending; no driver verdict is implied by earlier fixed-bound failure.
 14. INFERRED (2026-10-23, `START.json`): conservative prior$6.722848 plus full new allowance$1.632778=$8.355626<12; Round3 exposure$4.552008<8; reserve$5 untouched.
 15. CODE READ (2026-10-23): only own lease57296386 active; preserve bounded evidence before exact-id teardown/API absence, then Turing if a compliant offer is available.
+
+MEASURED (2026-10-23, lease57296386, `lease_57296386/native_complete/`): fresh GA102 native raw30/30,CUDA4/4,GRtier and9+10 gatesPASS; exactly fourCE/clientCE0 source controls plus oneGR/ESC control frozen. Generic Windows installation began01:00:33Z; adaptive box calibration and bind/ON/apps/hold remain pending.

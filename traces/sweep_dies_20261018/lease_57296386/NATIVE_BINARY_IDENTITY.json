@@ -1,0 +1,14 @@
+{
+  "class": "MEASURED",
+  "lease_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "binaries": {
+    "qemu": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744",
+    "raw": "d971aab3ee9fd810325b5db8f6c99170a2f9d2d4dd816c89fd693fe4559474f6",
+    "guard": "2e7a0c25dd07442bfe0b20519c1493ecc760fb4a0dfdb39d07d72c4711fcd490"
+  },
+  "trees": {
+    "crates": "feda030ab2b0dd7a9aad43bcd163d9ea7afe0842",
+    "qemu": "fa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190"
+  }
+}

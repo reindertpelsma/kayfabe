@@ -8,7 +8,7 @@ ADAPTIVE GA102 — LIVE 2026-10-23
 6. MEASURED (2026-10-23, `deployment_receipt.json`): controller1837 running, source frozenac21aef93,35-file archive/extracted allocation exporter hash verified.
 7. MEASURED (2026-10-23, `parallel_transfer.log`, `appdisk_receipt.json`): pinned6.8GB app image complete140.121s/eight streams/fullSHA; NVRTC remote pin also verified.
 8. MEASURED (2026-10-23, `native_gates/sweep_windows_media.log`): all four original Windows media pins pass; media helper exited0 at00:48:47Z.
-9. CODE READ (2026-10-23, `harness_recipe/`): native raw/CUDA/GR baseline next, then generic Windows baseline and once-per-box calibration before bind.
+9. CODE READ (2026-10-23, `harness_recipe/`): raw30/30,CUDA4/4,GRtierPASS at01:00:09Z, n1/spreadN/A; exact five-source-fault baseline frozen (`native_complete/`). Generic Windows installation started01:00:33Z; calibration still pending.
 10. CODE READ (2026-10-23, commitac21aef93): common Windows adapter reuses SW2 policy4ede56ac7; measured4–10x factor, ceilings, persisted stage and export reserve; side effects single attempt.
 11. MEASURED (2026-10-23, `../adaptive/green.log`, `../adaptive/sw2_shared_green.log`): adaptive57/57 and shared21/21 pass; prior desktop70/70 pass.
 12. MEASURED (2026-10-23, `../adaptive/mutants.json`): ten mutants killed15/6/10/6/9/2/2/3/3/2; source restored; no Rust change/added lint site, fresh clippy not run.
