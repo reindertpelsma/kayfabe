@@ -1,0 +1,13 @@
+{
+  "classification": "MEASURED",
+  "evidence": "xid-adapter-controls.json",
+  "time": "2026-10-23T01:40:39.780073+00:00",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "controls": {
+    "zero_delta": "PASS",
+    "new_xid_rejected": "NEW_HOST_XID",
+    "history_change_rejected": "XID_HISTORY_CHANGED_OR_LOST"
+  },
+  "attempt2_new_xid_delta": 0,
+  "cause": "Tuple passed to the proven epoch API which expects newline-separated journal text; same adapter as Windows is now used."
+}

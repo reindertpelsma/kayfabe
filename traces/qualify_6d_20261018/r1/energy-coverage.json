@@ -1,0 +1,269 @@
+{
+  "classification": "MEASURED",
+  "evidence": "energy-coverage.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "n": 4,
+  "trials": [
+    {
+      "run": 4601,
+      "qemu_bytes": 3131991,
+      "qemu_sha256": "9f279d2e19a5b219be049c17de24a708f0267319ce64553ff8de777ad747781a",
+      "counter_maxima": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 59352,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "budget_diagnostic_count": 0,
+      "progress_strand_count": 0,
+      "ring_refused_segments": 0,
+      "no_ce_object_mentions": 0,
+      "vendor_scores": [
+        {
+          "run": "result_2026-10-23-00-47-13",
+          "version": "1.0.2",
+          "source": "result.json",
+          "composite": 41.53,
+          "renderer": "GeForce RTX 4070",
+          "workload": "energy-04"
+        }
+      ],
+      "verdict": "PASS",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T02:51:01.503923+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2339342
+      },
+      "process_exit_census": {
+        "viewperf_exe_exits_observed": 6,
+        "viewperf_exit_code_histogram": {
+          "0": 6
+        },
+        "viewperf_nonzero_exits": [],
+        "viewperf_live_at_final_guest_snapshot": 0,
+        "forced_kill_count": null,
+        "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+      },
+      "load_before": {
+        "classification": "MEASURED",
+        "evidence": "load-before-spec.json",
+        "stage": "SPEC-4601-round-6d-E1",
+        "time": "2026-10-23T00:46:58.984327+00:00",
+        "uptime": "02:46:58 up 13 days,  7:08,  5 users,  load average: 4.66, 2.18, 2.11",
+        "load_average": [
+          4.6630859375,
+          2.17822265625,
+          2.10791015625
+        ],
+        "logical_cpus": 24,
+        "host_quiet": true
+      },
+      "historical_copy2_births": [
+        "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(314) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335fe0800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      ],
+      "historical_copy2_retirement": [
+        "kf3: chan token 0x806 (host 0x10030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      ]
+    },
+    {
+      "run": 4602,
+      "qemu_bytes": 3032193,
+      "qemu_sha256": "75b8c4d35cbdaa16ddf47305a5368a77e90a3a26026c1036c9cdb050a35e7b93",
+      "counter_maxima": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 101480,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "budget_diagnostic_count": 0,
+      "progress_strand_count": 0,
+      "ring_refused_segments": 0,
+      "no_ce_object_mentions": 0,
+      "vendor_scores": [
+        {
+          "run": "result_2026-10-23-00-52-13",
+          "version": "1.0.2",
+          "source": "result.json",
+          "composite": 44.6,
+          "renderer": "GeForce RTX 4070",
+          "workload": "energy-04"
+        }
+      ],
+      "verdict": "PASS",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T02:55:59.105369+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2340172
+      },
+      "process_exit_census": {
+        "viewperf_exe_exits_observed": 6,
+        "viewperf_exit_code_histogram": {
+          "0": 6
+        },
+        "viewperf_nonzero_exits": [],
+        "viewperf_live_at_final_guest_snapshot": 0,
+        "forced_kill_count": null,
+        "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+      },
+      "load_before": {
+        "classification": "MEASURED",
+        "evidence": "load-before-spec.json",
+        "stage": "SPEC-4602-round-6d-E2",
+        "time": "2026-10-23T00:51:57.302806+00:00",
+        "uptime": "02:51:57 up 13 days,  7:13,  5 users,  load average: 4.33, 3.49, 2.71",
+        "load_average": [
+          4.33154296875,
+          3.49267578125,
+          2.7138671875
+        ],
+        "logical_cpus": 24,
+        "host_quiet": true
+      },
+      "historical_copy2_births": [
+        "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(314) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335fe2800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      ],
+      "historical_copy2_retirement": [
+        "kf3: chan token 0x806 (host 0x10030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      ]
+    },
+    {
+      "run": 4603,
+      "qemu_bytes": 3095062,
+      "qemu_sha256": "82a268160f54f1b875a02d24d1d43573739dcb834a1247c146f95064ae24918d",
+      "counter_maxima": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 101480,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "budget_diagnostic_count": 0,
+      "progress_strand_count": 0,
+      "ring_refused_segments": 0,
+      "no_ce_object_mentions": 0,
+      "vendor_scores": [
+        {
+          "run": "result_2026-10-23-00-57-09",
+          "version": "1.0.2",
+          "source": "result.json",
+          "composite": 41.38,
+          "renderer": "GeForce RTX 4070",
+          "workload": "energy-04"
+        }
+      ],
+      "verdict": "PASS",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T03:00:53.993643+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2340826
+      },
+      "process_exit_census": {
+        "viewperf_exe_exits_observed": 6,
+        "viewperf_exit_code_histogram": {
+          "0": 6
+        },
+        "viewperf_nonzero_exits": [],
+        "viewperf_live_at_final_guest_snapshot": 0,
+        "forced_kill_count": null,
+        "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+      },
+      "load_before": {
+        "classification": "MEASURED",
+        "evidence": "load-before-spec.json",
+        "stage": "SPEC-4603-round-6d-E3",
+        "time": "2026-10-23T00:56:53.889173+00:00",
+        "uptime": "02:56:53 up 13 days,  7:18,  5 users,  load average: 4.09, 3.68, 3.02",
+        "load_average": [
+          4.09375,
+          3.681640625,
+          3.01904296875
+        ],
+        "logical_cpus": 24,
+        "host_quiet": true
+      },
+      "historical_copy2_births": [
+        "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(314) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 3361e0800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      ],
+      "historical_copy2_retirement": [
+        "kf3: chan token 0x806 (host 0x10030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      ]
+    },
+    {
+      "run": 4604,
+      "qemu_bytes": 3160198,
+      "qemu_sha256": "8a7b40daf3f06122f6215ac3deb3578910b9fdb4a8c7dcc960cab4dec4d5ab79",
+      "counter_maxima": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 101416,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "budget_diagnostic_count": 0,
+      "progress_strand_count": 0,
+      "ring_refused_segments": 0,
+      "no_ce_object_mentions": 0,
+      "vendor_scores": [
+        {
+          "run": "result_2026-10-23-01-02-10",
+          "version": "1.0.2",
+          "source": "result.json",
+          "composite": 41.16,
+          "renderer": "GeForce RTX 4070",
+          "workload": "energy-04"
+        }
+      ],
+      "verdict": "PASS",
+      "restored": true,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T03:05:56.894757+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2342674
+      },
+      "process_exit_census": {
+        "viewperf_exe_exits_observed": 6,
+        "viewperf_exit_code_histogram": {
+          "0": 6
+        },
+        "viewperf_nonzero_exits": [],
+        "viewperf_live_at_final_guest_snapshot": 0,
+        "forced_kill_count": null,
+        "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+      },
+      "load_before": {
+        "classification": "MEASURED",
+        "evidence": "load-before-spec.json",
+        "stage": "SPEC-4604-round-6d-E4",
+        "time": "2026-10-23T01:01:54.804149+00:00",
+        "uptime": "03:01:54 up 13 days,  7:23,  5 users,  load average: 4.70, 4.14, 3.39",
+        "load_average": [
+          4.7001953125,
+          4.14111328125,
+          3.39013671875
+        ],
+        "logical_cpus": 24,
+        "host_quiet": true
+      },
+      "historical_copy2_births": [
+        "kf-rm: chanlink: CHAN-FACTS 0xc1d00019:0xff040004 parent=0xff0e0000 class=0xc56f engine=Some(b) flags=0x200620 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=Some(ff0e0000) device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(314) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0x120512000 gpFifoEntries=2048 hUserdMemory0=Some(ff00a004) userd=Some(Sysmem { base: 335fe2800, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+      ],
+      "historical_copy2_retirement": [
+        "kf3: chan token 0x806 (host 0x10030) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)"
+      ]
+    }
+  ],
+  "coverage_limitation": "MEASURED in runs 4601-4604: the historical COPY2 channel token 0x806 retired with forwarded=0 and submissions=0 in every trial; the historical failing segment was not exercised. The observed 0/4 workload failure rate does not establish that mechanism is fixed."
+}

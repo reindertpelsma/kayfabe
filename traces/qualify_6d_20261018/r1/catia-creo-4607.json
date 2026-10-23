@@ -1,0 +1,249 @@
+{
+  "classification": "MEASURED",
+  "evidence": "catia-creo-4607.json",
+  "run": 4607,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "captured": "2026-10-23T01:46:44.799473+00:00",
+  "complete": true,
+  "result": {
+    "classification": "MEASURED",
+    "arm": "round-6d-catia-creo-x2",
+    "run": 4607,
+    "rev": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+    "workloads": [
+      "catia-07",
+      "creo-04"
+    ],
+    "iterations": 2,
+    "resolution": "FullHD",
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T03:35:24.403945+02:00",
+      "arm": "round-6d-catia-creo-x2",
+      "run": 4607,
+      "sample": 72,
+      "completed": true,
+      "completed_workloads": [
+        "catia-07",
+        "creo-04",
+        "catia-07",
+        "creo-04"
+      ],
+      "failed": false,
+      "subtest": [
+        "creo-04",
+        "13_ScorpionNoHidden"
+      ],
+      "guest153": 0,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 9112,
+        "pointer_entry_max_bytes": 1043244,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "task": 3,
+      "qemu_before": 10530891,
+      "qemu_after": 10538576,
+      "viewperf_nonzero_exits": []
+    },
+    "events": [],
+    "ended": "2026-10-23T03:35:36.534461+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T03:35:37.929802+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 0,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2343543
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T03:35:51.221956+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "qemu_bytes": 10769455,
+  "qemu_sha256": "a6bb9393e26c3eac35d39a0456831fac8ea8fb5af9c24f01b1214dfa08947c32",
+  "retirement_lines": 149,
+  "counter_maxima": {
+    "pointer_large_entries": 9112,
+    "pointer_entry_max_bytes": 1043244,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "observed_retirement_counter_sums": {
+    "pointer_large_entries": 85563,
+    "pointer_entry_max_bytes": 33280244,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "budget_diagnostics_first30": [],
+  "progress_strands_first100": [],
+  "user_ring_refusal_lines": 0,
+  "ring_refused_segments": 0,
+  "no_ce_object_refusal_events": 0,
+  "no_ce_object_mentions": 0,
+  "no_ce_object_refusals_first10": [],
+  "budget_diagnostic_count": 0,
+  "progress_strand_count": 0,
+  "progress_strand_end_count": 0,
+  "broker": {
+    "stats_windows": 1623,
+    "duration_seconds_approx": 1624.3,
+    "feedbacks": 97262,
+    "new_content_presents": 45360,
+    "repeat_presents": 51902,
+    "discarded": 0,
+    "errors": [
+      {
+        "line": 82,
+        "diagnostic": "nvkvm-broker: ERROR: this display ADVERTISED XR24 modifier 0x0000000000000000 and then refused to import it (1920x1080, stride 7680).  Frames in that layout will be rejected rather than retried; the VMM is being told so it can send something else (shared memory), and the connection stays up."
+      },
+      {
+        "line": 95,
+        "diagnostic": "nvkvm-broker: frames now arrive as plain shared memory (F_SHM): the VMM chose this carrier; this display has refused 1 dma-buf layout(s) on this connection, and the compositor uploads every frame while it lasts (the VMM was on dma-buf before)"
+      },
+      {
+        "line": 1716,
+        "diagnostic": "nvkvm-broker: client detached: closed the connection (45392 attach, 45392 commit, 0 rejected; 0 cursor, 0 cursor refused)"
+      }
+    ],
+    "new_content_fps_approx": 27.92587576186665,
+    "repeat_per_second_approx": 31.95345687373022,
+    "max_new_content_gap_us": 13550850,
+    "gaps_per_minute_approx": {
+      "cg33": 241.61792772271133,
+      "cg50": 165.486671181432,
+      "cg100": 54.59582589423136
+    },
+    "one_percent_low": null,
+    "point_one_percent_low": null,
+    "quantile_limitation": "Stock master broker stats provide threshold counts and window maxima, not a raw new-content gap series. No percentile values inferred.",
+    "scope": "whole VM session; no-present intervals are not rendering performance scores"
+  },
+  "flags": {
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5",
+    "KF3_DIAG_PROGRESS": "1000"
+  },
+  "process_controls": {
+    "classification": "MEASURED",
+    "passed": true,
+    "controls": [
+      {
+        "expected": 0,
+        "pid": 4396,
+        "actual": 0
+      },
+      {
+        "expected": 7,
+        "pid": 14360,
+        "actual": 7
+      },
+      {
+        "expected": 9,
+        "pid": 5948,
+        "actual": 9
+      }
+    ],
+    "observed": [
+      {
+        "time": "2026-10-22T23:09:20.4552462Z",
+        "pid": 4396,
+        "name": "cmd.exe",
+        "exit": 0
+      },
+      {
+        "time": "2026-10-22T23:09:20.4552463Z",
+        "pid": 14360,
+        "name": "cmd.exe",
+        "exit": 7
+      },
+      {
+        "time": "2026-10-22T23:09:21.4669826Z",
+        "pid": 5948,
+        "name": "cmd.exe",
+        "exit": 9
+      }
+    ]
+  },
+  "vendor_scores": [
+    {
+      "run": "result_2026-10-23-01-09-40",
+      "version": "1.0.6",
+      "source": "result.json",
+      "composite": 49.39,
+      "renderer": "GeForce RTX 4070",
+      "workload": "catia-07"
+    },
+    {
+      "run": "result_2026-10-23-01-09-40",
+      "version": "1.0.1",
+      "source": "result.json",
+      "composite": 69.31,
+      "renderer": "GeForce RTX 4070",
+      "workload": "creo-04"
+    },
+    {
+      "run": "result_2026-10-23-01-22-32",
+      "version": "1.0.6",
+      "source": "result.json",
+      "composite": 49.46,
+      "renderer": "GeForce RTX 4070",
+      "workload": "catia-07"
+    },
+    {
+      "run": "result_2026-10-23-01-22-32",
+      "version": "1.0.1",
+      "source": "result.json",
+      "composite": 69.99,
+      "renderer": "GeForce RTX 4070",
+      "workload": "creo-04"
+    }
+  ],
+  "export_errors": [],
+  "process_exit_census": {
+    "viewperf_exe_exits_observed": 38,
+    "viewperf_exit_code_histogram": {
+      "0": 38
+    },
+    "viewperf_nonzero_exits": [],
+    "viewperf_live_at_final_guest_snapshot": 0,
+    "forced_kill_count": null,
+    "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+  }
+}
