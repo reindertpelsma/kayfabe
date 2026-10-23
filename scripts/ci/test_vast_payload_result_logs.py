@@ -77,6 +77,13 @@ class ResultLogs(unittest.TestCase):
         self.assertTrue(item["text"].endswith("TAIL"))
         self.assertLessEqual(len(item["text"].encode()), 2048)
 
+    def test_guest_source_hash_covers_text_beyond_its_preview(self):
+        text = "QEMU_HEAD\n" + "\N{SNOWMAN}" * 10000 + "\nSERIAL_TAIL"
+        item = self.persisted(text, admitted=False, mode="guest")["diagnostics"][0]
+        self.assertEqual(item["sha256"], hashlib.sha256(text.encode()).hexdigest())
+        self.assertTrue(item["text"].startswith("QEMU_HEAD"))
+        self.assertTrue(item["text"].endswith("SERIAL_TAIL"))
+
     def test_failure_keeps_both_the_log_and_named_suite_row(self):
         payload.arm_diagnostic("--defer-liveness", "EXACT_FAULT_RECORD", 6, False)
 
@@ -149,6 +156,49 @@ class ReporterResultLogs(unittest.TestCase):
         self.assertEqual(
             set(result), {"nonce", "sha", "runner_nonce", "verdict", "suites", "hardware"}
         )
+
+    def test_guest_diagnostics_also_stay_out_of_the_wire_schema(self):
+        self.path.write_text(json.dumps(self.doc([dict(record(), mode="guest")])))
+        result = report.final_result(good_env("https://h/p"), 0, False, None, self.path)
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertNotIn("diagnostics", result)
+
+    def test_bad_native_rc_is_refused_before_wire_serialization(self):
+        self.path.write_text(json.dumps(self.doc([dict(record(), rc=True)])))
+        result = report.final_result(good_env("https://h/p"), 0, False, None, self.path)
+        self.assertEqual(result["verdict"], "FAIL")
+
+    def test_unknown_guest_field_is_refused_before_wire_serialization(self):
+        self.path.write_text(json.dumps(self.doc([dict(record(), mode="guest", extra=1)])))
+        result = report.final_result(good_env("https://h/p"), 0, False, None, self.path)
+        self.assertEqual(result["verdict"], "FAIL")
+
+    def test_validator_caps_an_ascii_manifest_below_the_outer_file_cap(self):
+        with self.assertRaises(ValueError):
+            report.validate_diagnostics([record("x" * 1000)] * 50)
+
+    def test_validator_counts_json_escapes_in_its_budget(self):
+        with self.assertRaises(ValueError):
+            report.validate_diagnostics([record("\x01" * 700)] * 13)
+
+    def first_refused(self):
+        records = [
+            report.diagnostic_record(
+                "--defer-liveness",
+                "native",
+                6,
+                False,
+                "FIRST_HEAD\n" + "\x01" * 4000 + "\nFIRST_TAIL",
+            )
+        ]
+        records += [report.diagnostic_record("--timer", "guest", 6, False, "\x01" * 4000)] * 127
+        return report.compact_diagnostics(records)[0]
+
+    def test_compaction_preserves_the_first_refusal_head(self):
+        self.assertIn("FIRST_HEAD", self.first_refused()["text"])
+
+    def test_compaction_preserves_the_first_refusal_tail(self):
+        self.assertIn("FIRST_TAIL", self.first_refused()["text"])
 
     def test_diagnostic_text_never_changes_a_fail_verdict(self):
         doc = self.doc([record("PASS PASS PASS")])

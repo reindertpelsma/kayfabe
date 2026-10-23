@@ -7,6 +7,9 @@ No provider/CI credentials or network clone machinery belongs here.
 import collections, json, os, re, select, shutil, signal, subprocess, sys, time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import vast_report as local_result_contract
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
 import native_xid_guard as xid_guard
 
@@ -303,7 +306,14 @@ def hardware():
 def persist_result(destination, result):
     destination = Path(destination)
     temporary = destination.with_suffix(".tmp")
-    temporary.write_text(json.dumps(result, separators=(",", ":")) + "\n")
+    snapshot = dict(result)
+    state_path = os.environ.get("KF_PAYLOAD_DIAGNOSTIC_STATE")
+    if state_path and Path(state_path).is_file():
+        events = json.loads(bounded_text(state_path, 65536))["events"]
+        local_result_contract.validate_diagnostics(events)
+        if events:
+            snapshot["diagnostics"] = events
+    temporary.write_text(json.dumps(snapshot, separators=(",", ":")) + "\n")
     temporary.replace(destination)
 
 
@@ -382,7 +392,8 @@ def arm_diagnostic(arm, text, rc, admitted, mode="native"):
     with os.fdopen(descriptor, "ab") as output:
         output.write(frame)
     state["bytes"] += len(frame)
-    state["events"].append({"arm": arm, "rc": rc, "admitted": bool(admitted), "mode": mode})
+    item = local_result_contract.diagnostic_record(arm, mode, rc, bool(admitted), text)
+    state["events"] = local_result_contract.compact_diagnostics([*state["events"], item])
     temporary = path.with_suffix(".next")
     temporary.write_text(json.dumps(state) + "\n")
     temporary.replace(path)

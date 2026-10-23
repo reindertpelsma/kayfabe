@@ -126,7 +126,16 @@ class ArmDiagnostics(unittest.TestCase):
             root = Path(directory)
             state = root / "diagnostics.json"
             state.write_text(
-                json.dumps({"bytes": 0, "events": [{"arm": arm, "rc": 6, "admitted": False}]})
+                json.dumps(
+                    {
+                        "bytes": 0,
+                        "events": [
+                            payload.local_result_contract.diagnostic_record(
+                                arm, "native", 6, False, "fixture"
+                            )
+                        ],
+                    }
+                )
             )
             result = {"verdict": "FAIL", "suites": []}
 

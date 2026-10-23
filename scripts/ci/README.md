@@ -1,8 +1,9 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: code as of 2026-10-23. MEASURED: run `v8-cloudinit-proof-kvm-20261023`, source
-`d196c055a`: cache20.346s; provision340.059s to READY; host CUDA4/4; tests3749/0; gates9/9+10.
-Raw defer-liveness returned wrapper rc6 after six passing arms; thin/fat were not reached.
-[Latest evidence and gaps](../../traces/vast_cloud_init_20261018/LIVE_RUN.md).
+STATUS: code as of 2026-10-23. MEASURED: run `v9-xid-kvm-20261023`, source
+`2c908a0e8`: bound PASS, host/fat CUDA4/4 each, tests3749/0, gates9/9+10,
+raw30/30, thin30/30 and census. [Latest evidence and gaps](../../traces/vast_xid_v9_20261018/LIVE_RUN.md).
+The earlier V8 run stopped at raw defer-liveness wrapper rc6; that finding is superseded by
+S4 exact-source admission and the complete V9 result. Its journal was not retained for replay.
 The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/ci/vast_onstart.sh`.
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
@@ -19,12 +20,22 @@ FAIL result `env_contract`; the payload does not run.
 Payload: `bash scripts/ci/vast_payload.sh <sha> <nonce>`, cwd = checkout, stdin closed, output to
 `/workspace/kf-ci-output.log` (offline backup). It gets `KF_SOFT_DEADLINE_MS` and loses the token,
 broker URL, run id and runner nonce. It writes `/workspace/kf-result.json`:
-`{verdict, suites:[{name,pass,fail,skip}], hardware?}`, hardware = `{gpu_name, compute_cap (int,
+`{verdict, suites:[{name,pass,fail,skip}], hardware?, diagnostics?}`, hardware = `{gpu_name, compute_cap (int,
 8.6 -> 860), driver_version}`. Nonce/sha/runner nonce come from the environment; a conflicting
 value in the file makes it invalid. PASS is withheld (FAIL + failing row) on non-zero exit, skips,
 zero passes, unknown hardware or compute_cap < 750. Soft deadline: TERM, KILL after 30 s; result is
 FAIL with the suites already written plus `timeout`. Absent payload: FAIL `payload_missing`; absent
 or invalid result file: FAIL `result_missing`/`result_invalid`. Exit text never makes a PASS.
+
+CODE READ: optional local `diagnostics` records contain `arm, mode, rc, admitted, text,
+sha256, source_bytes, dropped_bytes`. Previews retain head/tail:256 UTF-8 bytes for a clean
+arm,2048 for a refused arm; the first refusal is preserved when compacting. Limits:128
+records,49152 bytes of JSON including escapes, within the existing65536-byte result-file cap.
+Hashes identify the original UTF-8 input text before preview truncation; they confer no trust.
+The reporter validates this local field and emits the same existing wire result keys; the
+full bounded per-arm context continues through the authenticated log stream. No Worker
+schema, bundle, admission rule or verdict comes from diagnostic text. This local-file change
+was rehearsed without a new rental; the V9 live proof predates it.
 
 Reporter: `POST <KF_BROKER_URL>/report/<run>`, Bearer token, JSON `{seq,kind,text?,result?}`. A
 message keeps its sequence number and bytes until acknowledged (idempotent, no gaps); 401/403/404

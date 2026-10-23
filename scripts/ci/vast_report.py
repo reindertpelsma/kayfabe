@@ -20,6 +20,7 @@ capped. The token is sent only to KF_BROKER_URL, over HTTPS, and redirects are n
 
 import argparse
 import codecs
+import hashlib
 import json
 import math
 import os
@@ -132,15 +133,87 @@ def _count(value):
     return type(value) is int and 0 <= value <= 10_000_000
 
 
+def validate_diagnostics(records, *, budget=True):
+    """Local result metadata only; never an input to a verdict or a wire extension."""
+    if type(records) is not list or len(records) > 128:
+        raise ValueError("diagnostic records")
+    fields = {"arm", "mode", "rc", "admitted", "text", "sha256", "source_bytes", "dropped_bytes"}
+    for item in records:
+        if type(item) is not dict or set(item) != fields:
+            raise ValueError("diagnostic shape")
+        if (
+            not isinstance(item["arm"], str)
+            or re.fullmatch(r"--[a-z0-9-]{1,40}|guest", item["arm"]) is None
+            or item["mode"] not in ("native", "guest")
+            or type(item["rc"]) is not int
+            or not 0 <= item["rc"] <= 255
+            or type(item["admitted"]) is not bool
+            or not isinstance(item["text"], str)
+            or len(item["text"].encode("utf-8")) > 2048
+            or not isinstance(item["sha256"], str)
+            or re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) is None
+            or type(item["source_bytes"]) is not int
+            or not 0 <= item["source_bytes"] <= 8 * 1024 * 1024
+            or type(item["dropped_bytes"]) is not int
+            or not 0 <= item["dropped_bytes"] <= item["source_bytes"]
+        ):
+            raise ValueError("diagnostic field")
+    if budget and len(json.dumps(records, separators=(",", ":")).encode()) > 49152:
+        raise ValueError("diagnostic budget")
+
+
+def diagnostic_record(arm, mode, rc, admitted, text):
+    """Keep a small head/tail plus identity of the complete original arm log."""
+    raw = text.encode("utf-8")
+    limit = 256 if admitted else 2048
+    if len(raw) <= limit:
+        preview, dropped = text, 0
+    else:
+        marker = "\n[diagnostic preview: head and tail]\n"
+        half = (limit - len(marker)) // 2
+        head = raw[:half].decode("utf-8", errors="ignore")
+        tail = raw[-half:].decode("utf-8", errors="ignore")
+        preview = head + marker + tail
+        dropped = len(raw) - len((head + tail).encode())
+    item = dict(
+        arm=arm,
+        mode=mode,
+        rc=rc,
+        admitted=admitted,
+        text=preview,
+        sha256=hashlib.sha256(raw).hexdigest(),
+        source_bytes=len(raw),
+        dropped_bytes=dropped,
+    )
+    validate_diagnostics([item])
+    return item
+
+
+def compact_diagnostics(records):
+    """Bound the local manifest, keeping the first refused arm's preview."""
+    validate_diagnostics(records, budget=False)
+    result = [dict(item) for item in records]
+    first_fault = next((i for i, item in enumerate(result) if not item["admitted"]), None)
+    order = [i for i, item in enumerate(result) if item["admitted"]]
+    order += [i for i, item in enumerate(result) if not item["admitted"] and i != first_fault]
+    for i in order:
+        if len(json.dumps(result, separators=(",", ":")).encode()) <= 49152:
+            break
+        result[i]["text"] = ""
+        result[i]["dropped_bytes"] = result[i]["source_bytes"]
+    validate_diagnostics(result)
+    return result
+
+
 def read_result_file(path):
-    """Strictly parse the payload's result file: {verdict, suites[, hardware]}."""
+    """Strictly parse local results, including optional bounded arm diagnostics."""
     with open(path, "rb") as source:
         raw = source.read(65537)
     try:
         if len(raw) > 65536:
             raise ValueError("size")
         doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique)
-        allowed = {"verdict", "suites", "hardware", "nonce", "sha", "runner_nonce"}
+        allowed = {"verdict", "suites", "hardware", "nonce", "sha", "runner_nonce", "diagnostics"}
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE"):
@@ -157,6 +230,8 @@ def read_result_file(path):
                 raise ValueError("count")
         if len({row["name"] for row in rows}) != len(rows):
             raise ValueError("duplicate suite")
+        if "diagnostics" in doc:
+            validate_diagnostics(doc["diagnostics"])
         hardware = doc.get("hardware")
         if hardware is not None:
             ok = type(hardware) is dict and set(hardware) == set(UNKNOWN_HW)

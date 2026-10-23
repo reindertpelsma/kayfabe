@@ -13,6 +13,12 @@ HERE = Path(__file__).resolve().parent
 SOURCE = (HERE / "vast_payload.py").read_text()
 HOOK = (HERE / "vast_payload_hooks.sh").read_text()
 GUARD = (HERE.parent / "bench/native_xid_guard.py").read_text()
+REPORT = (HERE / "vast_report.py").read_text()
+
+
+def report_replace(old, new):
+    assert REPORT.count(old) == 1, old
+    return REPORT.replace(old, new)
 
 
 def guard_replace(old, new):
@@ -285,6 +291,74 @@ CASES += [
     ),
 ]
 
+CASES += [
+    ("structured-arm-logs-omitted", replace('snapshot["diagnostics"] = events', "pass")),
+    (
+        "local-reader-rejects-arm-logs",
+        report_replace(', "runner_nonce", "diagnostics"}', ', "runner_nonce"}'),
+        "vast_report.py",
+    ),
+    (
+        "local-reader-skips-log-validation",
+        report_replace('            validate_diagnostics(doc["diagnostics"])', "            pass"),
+        "vast_report.py",
+    ),
+    (
+        "local-log-preview-loses-head",
+        report_replace('head = raw[:half].decode("utf-8", errors="ignore")', 'head = ""'),
+        "vast_report.py",
+    ),
+    (
+        "local-log-preview-loses-tail",
+        report_replace('tail = raw[-half:].decode("utf-8", errors="ignore")', 'tail = ""'),
+        "vast_report.py",
+    ),
+    (
+        "local-log-hash-covers-preview-only",
+        report_replace(
+            "sha256=hashlib.sha256(raw).hexdigest()",
+            "sha256=hashlib.sha256(preview.encode()).hexdigest()",
+        ),
+        "vast_report.py",
+    ),
+    (
+        "local-log-manifest-budget-disabled",
+        report_replace(
+            'if budget and len(json.dumps(records, separators=(",", ":")).encode()) > 49152:',
+            "if False:",
+        ),
+        "vast_report.py",
+    ),
+    (
+        "local-log-first-refusal-can-be-evicted",
+        report_replace(
+            'first_fault = next((i for i, item in enumerate(result) if not item["admitted"]), None)',
+            "first_fault = None",
+        ),
+        "vast_report.py",
+    ),
+    (
+        "local-logs-leak-into-worker-wire-schema",
+        report_replace(
+            '        "hardware": hardware,\n    }',
+            '        "hardware": hardware,\n        "diagnostics": [],\n    }',
+        ),
+        "vast_report.py",
+    ),
+    (
+        "local-log-boolean-rc-admitted",
+        report_replace('type(item["rc"]) is not int', 'not isinstance(item["rc"], int)'),
+        "vast_report.py",
+    ),
+    (
+        "local-log-invalid-source-hash-admitted",
+        report_replace(
+            're.fullmatch(r"[0-9a-f]{64}", item["sha256"])', 're.fullmatch(r".*", item["sha256"])'
+        ),
+        "vast_report.py",
+    ),
+]
+
 COLLECT = """import io,json,unittest,importlib.util
 from pathlib import Path
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -327,6 +401,8 @@ def main():
             "test_vast_payload_admission.py",
             "test_vast_payload_diagnostics.py",
             "test_vast_payload_guest_guard.py",
+            "test_vast_payload_result_logs.py",
+            "test_vast_box.py",
             "vast_report.py",
         ]:
             shutil.copyfile(HERE / name, ci / name)
@@ -350,14 +426,20 @@ def main():
             name, source = case[:2]
             shared = len(case) == 3 and case[2] == "native_xid_guard.py"
             shell = len(case) == 3 and case[2] == "vast_payload_hooks.sh"
-            assert source != (GUARD if shared else HOOK if shell else SOURCE), name
+            reporter = len(case) == 3 and case[2] == "vast_report.py"
+            assert source != (
+                GUARD if shared else HOOK if shell else REPORT if reporter else SOURCE
+            ), name
             if not shell:
                 ast.parse(source)
             (ci / "vast_payload.py").write_text(SOURCE)
             (ci / "vast_payload_hooks.sh").write_text(HOOK)
             (bench / "native_xid_guard.py").write_text(GUARD)
+            (ci / "vast_report.py").write_text(REPORT)
             target = (
-                bench / case[2] if shared else ci / case[2] if shell else ci / "vast_payload.py"
+                bench / case[2]
+                if shared
+                else ci / case[2] if shell or reporter else ci / "vast_payload.py"
             )
             target.write_text(source)
             result = run(root)
@@ -367,6 +449,7 @@ def main():
             print(name + ": " + str(len(killers)) + " killers", file=sys.stderr, flush=True)
         (ci / "vast_payload.py").write_text(SOURCE)
         (bench / "native_xid_guard.py").write_text(GUARD)
+        (ci / "vast_report.py").write_text(REPORT)
         (ci / "vast_payload_hooks.sh").write_text(
             '#!/bin/bash\ntimeout() { command timeout "$@"; }\n'
         )
