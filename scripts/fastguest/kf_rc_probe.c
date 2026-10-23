@@ -43,12 +43,18 @@ static UvmGpuPointer pb_va;
 static void *pb_cpu;
 static NvU32 engine;
 
+static void destroy_channel(struct probe_channel *p)
+{
+    if (p->channel) nvUvmInterfaceChannelDestroy(p->channel);
+    p->channel = NULL;
+    if (p->tsg) nvUvmInterfaceTsgDestroy(p->tsg);
+    p->tsg = NULL;
+}
+
 static void cleanup(void)
 {
-    if (victim.channel) nvUvmInterfaceChannelDestroy(victim.channel);
-    if (victim.tsg) nvUvmInterfaceTsgDestroy(victim.tsg);
-    if (bystander.channel) nvUvmInterfaceChannelDestroy(bystander.channel);
-    if (bystander.tsg) nvUvmInterfaceTsgDestroy(bystander.tsg);
+    destroy_channel(&victim);
+    destroy_channel(&bystander);
     if (pb_cpu) nvUvmInterfaceMemoryCpuUnMap(space, pb_cpu);
     if (pb_va) nvUvmInterfaceMemoryFree(space, pb_va);
     if (space) nvUvmInterfaceAddressSpaceDestroy(space);
@@ -188,6 +194,11 @@ static int __init probe_init(void)
     error = progress(2);
     if (error) goto bad;
     pr_info("KF_RC_BYSTANDER run=%s phase=after value=2\n", run);
+    /* The other TSG must still run after the victim's channel and TSG are gone. */
+    destroy_channel(&victim);
+    error = progress(3);
+    if (error) goto bad;
+    pr_info("KF_RC_BYSTANDER run=%s phase=after_teardown value=3\n", run);
     pr_info("KF_RC_PROBE_END run=%s result=PASS\n", run);
     if (fault) {
         /* Report the channel error to the owning userspace loader syscall. */

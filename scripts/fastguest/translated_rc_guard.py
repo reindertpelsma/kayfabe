@@ -129,7 +129,9 @@ def check(manifest, qemu, guest, journal):
     after = one([r for r in by if r.get("phase")=="after"], "bystander after")
     require(before, run=run, value=1)
     require(after, run=run, value=2)
-    if len(by) != 2:
+    teardown = one([r for r in by if r.get("phase")=="after_teardown"], "bystander after victim teardown")
+    require(teardown, run=run, value=3)
+    if len(by) != 3:
         raise Refused("unexpected bystander record")
     markers = records(qemu, "FAULT_MARK=translated_rc_invalid_pb ")
     events = records(guest, "KF_RC_EVENT ")
