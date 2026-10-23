@@ -88,6 +88,7 @@ for (const relation of ['head', 'ancestor'])
     h.cloud.prs = [];
     const base = h.cloud.fetch;
     h.cloud.fetch = async (url, init) => {
+      if (String(url).endsWith('/commits/' + selected)) return Response.json({ sha: selected });
       if (String(url).includes('/branches?'))
         return Response.json([
           { name: 'feature/selected', commit: { sha: relation === 'head' ? selected : head } },
@@ -109,4 +110,42 @@ for (const relation of ['head', 'ancestor'])
     });
     assert.equal(response.status, 200);
     assert.equal((await response.json()).sha, selected);
+  });
+for (const branch of ['master', 'owner-workflow'])
+  test('round selected dispatch lifecycle keeps workflow context ' + branch, async () => {
+    const h = await setup(),
+      selected = 'e'.repeat(40);
+    Object.assign(h.cloud.run, {
+      event: 'workflow_dispatch',
+      head_branch: branch,
+      head_repository: { full_name: repo },
+      pull_requests: [],
+    });
+    h.cloud.prs = [];
+    const base = h.cloud.fetch;
+    h.cloud.fetch = async (url, init) => {
+      if (String(url).endsWith('/commits/' + selected)) return Response.json({ sha: selected });
+      if (String(url).includes('/branches?'))
+        return Response.json([{ name: 'selected', commit: { sha: selected } }]);
+      return base(url, init);
+    };
+    h.restart();
+    const claims = {
+      event_name: 'workflow_dispatch',
+      ref: 'refs/heads/' + branch,
+      workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/' + branch,
+    };
+    assert.equal(
+      (
+        await h.call('/rent', {
+          claims,
+          body: { runner_nonce: 'f'.repeat(64), tested_sha: selected, pr_number: null },
+        })
+      ).status,
+      200,
+    );
+    const status = await h.call('/status/123-1', { claims });
+    assert.equal(status.status, 200);
+    assert.equal((await status.json()).state, 'BOOTING');
+    assert.equal(h.cloud.deletes.length, 0);
   });
