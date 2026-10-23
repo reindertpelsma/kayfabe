@@ -154,7 +154,7 @@ class MissingSamples(unittest.TestCase):
         self.assertFalse(self.run_samples([row(22), late]))
         self.assertFalse(any(isinstance(event, tuple) for event in self.events))
 
-    def invoke_main(self, responses):
+    def invoke_main(self, responses, adaptive=False):
         ready = Path(self.temp.name) / "ready.json"
         diag = Path(self.temp.name) / "diag.txt"
         args = [
@@ -166,6 +166,13 @@ class MissingSamples(unittest.TestCase):
             "--",
             "fixture-cim",
         ]
+        if adaptive:
+            import readiness as R
+
+            config = Path(self.temp.name) / "calibration.json"
+            R.calibration(config, 42, lambda: 3)
+            Path(str(config) + ".arm.json").write_text(json.dumps({"readiness_end": 900}))
+            args[1:1] = ["--calibration", str(config)]
         with mock.patch.object(sys, "argv", args), mock.patch.object(
             O.subprocess, "run", side_effect=responses
         ) as command, mock.patch.object(O.time, "sleep"), mock.patch.object(
@@ -221,6 +228,24 @@ class MissingSamples(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(diag.read_text(), row())
         self.assertEqual(record.call_count, 1)
+
+    def test_adaptive_first_query_and_retry_both_get_the_scaled_bound(self):
+        code, ready, _, command, record = self.invoke_main(
+            [missing(), self.response(text=row(22)), self.response()], adaptive=True
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(ready.exists())
+        self.assertEqual([c.kwargs["timeout"] for c in command.call_args_list], [60, 60, 15])
+        self.assertEqual(record.call_count, 1)
+
+    def test_adaptive_two_missing_queries_stop_before_enabling(self):
+        code, ready, _, command, record = self.invoke_main(
+            [missing(), missing(), self.response(text=row(22))], adaptive=True
+        )
+        self.assertEqual(code, 2)
+        self.assertFalse(ready.exists())
+        self.assertEqual(command.call_count, 2)
+        self.assertEqual(record.call_count, 0)
 
     def test_unknown_command_failure_before_handshake_remains_fatal(self):
         with self.assertRaisesRegex(ValueError, "diagnostic command failed: 13"):
