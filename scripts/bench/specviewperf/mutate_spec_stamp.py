@@ -35,6 +35,8 @@ MUTANTS = [
      "(floaty or SCORE_HEADER_RE.search(head)) and not labelled", "floaty and not labelled"),
     ('checker accepts any text after a number as the label',
      "LABEL_TAIL_RE = re.compile(r'[%x]? ' + re.escape(NC))", "LABEL_TAIL_RE = re.compile(r'')"),
+    ('checker flags dotted versions as scores',
+     "if VERSION_RE.fullmatch(cell):", "if False:"),
     ('checker ignores an unresearched ratio column',
      "if RATIO_HEADER_RE.search(column) and RESEARCH not in column:", "if False:"),
 ]
