@@ -1,0 +1,26 @@
+{
+  "classification": "MEASURED",
+  "evidence": "kick-accounting.json",
+  "run": 4622,
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "rows": [
+    {
+      "workload": "catia-07",
+      "paired_all_paths": 169949,
+      "coalesced_global": 46309,
+      "accepted_kicks_accounted_approx": 216258,
+      "bar0_doorbells": 216256,
+      "accounted_minus_bar0": 2
+    },
+    {
+      "workload": "creo-04",
+      "paired_all_paths": 370628,
+      "coalesced_global": 99888,
+      "accepted_kicks_accounted_approx": 470516,
+      "bar0_doorbells": 470521,
+      "accounted_minus_bar0": -5
+    }
+  ],
+  "method": "Identical interior snapshots: compare paired first-kick consumptions plus global coalesced kicks with all BAR0 USERMODE doorbell writes. Snapshot reads race ongoing activity; no exact conservation asserted across non-atomic endpoints.",
+  "interpretation": "INFERRED: almost all guest kicks are accounted for in these windows;2% paired native calls reflects native fanout/continuations, not98% missing guest kicks. This improves kick coverage confidence, but cannot separate dispatch from guest/gate/processing wait or provide one-to-one pushbuffer causality."
+}

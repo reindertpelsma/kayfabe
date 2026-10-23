@@ -1,0 +1,48 @@
+{
+  "classification": "MEASURED",
+  "evidence": "host-xcursor-control.json",
+  "time": "2026-10-23T05:23:07.069755+00:00",
+  "falsifier_before_run": "If host Xcursor round trip matches reference within2 and shape matches, the extra alpha loss is not explained by this host round trip. Wrong shape is an invalid control, never alpha evidence.",
+  "scope": "Host-only Xcursor control, no kayfabe/broker/VM; one own override-redirect window covers existing virtual desktop, all owner preferences unchanged",
+  "geometry": [
+    8960,
+    2880
+  ],
+  "rows": [
+    {
+      "pattern": "hover",
+      "reference_visible": 254,
+      "readback_visible": 254,
+      "max_rgba_difference": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "extra_alpha_RGB_max_difference": 48,
+      "shape_valid": true,
+      "physical_cursor_xy": [
+        8526,
+        2644
+      ]
+    },
+    {
+      "pattern": "cross",
+      "reference_visible": 281,
+      "readback_visible": 281,
+      "max_rgba_difference": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "extra_alpha_RGB_max_difference": 52,
+      "shape_valid": true,
+      "physical_cursor_xy": [
+        8526,
+        2644
+      ]
+    }
+  ],
+  "new_host_xids": 0
+}

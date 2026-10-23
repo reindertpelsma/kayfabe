@@ -1,0 +1,38 @@
+{
+  "classification": "MEASURED",
+  "evidence": "master9.json",
+  "candidate": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "tag": "q4-master-cursor9",
+  "verdict": "OBSERVATIONS_PENDING_REVIEW",
+  "base_before": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "load": {
+    "classification": "MEASURED",
+    "evidence": "load-before-vm.json",
+    "stage": "linux-broker",
+    "time": "2026-10-23T05:14:06.467284+00:00",
+    "uptime": "07:14:06 up 13 days, 11:35,  4 users,  load average: 0.08, 0.39, 1.10",
+    "load_average": [
+      0.08203125,
+      0.39111328125,
+      1.10107421875
+    ],
+    "logical_cpus": 24,
+    "host_quiet": true
+  },
+  "start": "2026-10-23T05:14:06.490035+00:00",
+  "exit": 0,
+  "new_host_xids": [],
+  "base_after": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "base_unchanged": true,
+  "health_exit": 0,
+  "end": "2026-10-23T05:15:11.814310+00:00",
+  "review_verdict": "NOT_EXERCISED_HOOK_EXEC_MODE_ERROR",
+  "hook_exit": 126,
+  "correction": "Set executable mode on the newly copied wrapper; original failure retained. No oracle ran in this attempt."
+}

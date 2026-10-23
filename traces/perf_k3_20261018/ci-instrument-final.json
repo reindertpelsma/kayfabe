@@ -1,0 +1,36 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ci-instrument-final.json",
+  "head": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "run": 39900357701,
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39900357701/job/120240284771"
+    },
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39900357701/job/120240284958"
+    },
+    {
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39900357701/job/120240285024"
+    },
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39900357701/job/120240285062"
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "conclusion": "skipped",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39900357701/job/120240286033"
+    }
+  ],
+  "scope": "Exact instrument source head70f7fb591; later evidence-only heads carry skip ci. Candidate01a CI was independently green in round6d evidence."
+}

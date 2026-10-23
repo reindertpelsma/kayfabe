@@ -13,7 +13,7 @@ ubuntu logged in and two monitors. These are separate diagnostic profiling arms.
 | --- | --- | --- |
 | H1: GPU starvation; falsifier busy within5 points despite a performance gap | MEASURED 2026-10-23, telemetry-4620.json / telemetry-4621.json: CATIA74.93% vs85.78%; Creo59.34% vs58.57%. The stamped score comparison is linked below. | INFERRED: supports starvation in CATIA; stated falsifier met in Creo. Global busy includes walker/display GPU work, so this does not isolate rendering-engine busy. |
 | H2: vCPU trap/exit dominates; falsifier low active exit rate/time | MEASURED 2026-10-23, kvm-4620-catia.json / kvm-4620-creo.json: non-HLT51.7k/s /42.3k/s,0.290/0.198 core-equivalents. VFIO in kvm-4621-catia.json / kvm-4621-creo.json:26.7k/s /36.8k/s,0.047/0.070. Clean5s instrument captures give0.310/0.192. | INFERRED: exit cost survives as a contributor; dominance of frame critical path is unproved. HLT idle waits excluded; summed vCPU elapsed overlaps. |
-| H3: USER dispatch queueing dominates; falsifier paired p99 under100us and no load growth, adequate coverage | MEASURED 2026-10-23, submit-4622.json: USER paired p50 upper3.071/10.239us; p99 upper1572.863/1835.007us for CATIA/Creo. Paired133250/316364; native calls5985789/14762800; pairing2.23%/2.14%. | INFERRED: falsifier not met, but dispatch dominance is unresolved. Empty kicks, guest production and gates can intervene; continuation/fanout calls are unpaired. Long first-kick tails are not proof of scheduler queueing. No inline stage2 justified. |
+| H3: USER dispatch queueing dominates; falsifier paired p99 under100us and no load growth, adequate coverage | MEASURED 2026-10-23, submit-4622.json: USER paired p50 upper3.071/10.239us; p99 upper1572.863/1835.007us for CATIA/Creo. Paired133250/316364; native calls5985789/14762800; pairing2.23%/2.14%. | INFERRED: falsifier not met, but dispatch dominance is unresolved. Empty kicks, guest production and gates can intervene; continuation/fanout calls are unpaired. Long first-kick tails are not proof of scheduler queueing. No inline stage2 justified; see kick-accounting.json for nearly complete kick coverage despite native fanout. |
 | H4: display/present caps; falsifier verified no-present workload retains gap | CODE READ at commit70f7fb591: the synthetic60Hz test broker still carries presents. The official SPECviewperf15 guide's documented CLI options supply no verified no-present mode. | NOT EXERCISED. A headless broker is not a no-present arm. |
 | H5: relay is a userspace CPU concentration; falsifier samples elsewhere/idle | MEASURED 2026-10-23, cpu-4622.json:947 userspace samples in one30s Creo window; workers52.8%, display29.87%; mapped load_u32 self13.83%. No worker was consistently saturated in telemetry-4622.json. | INFERRED: relay processing is substantial, but not a proven single saturated CPU or the whole gap. Userspace samples exclude kernel and guest execution. |
 
@@ -36,6 +36,13 @@ high; CATIA mean2842/2812MHz and power105.45/123.81W, Creo2819/2566MHz and
 82.61/94.49W. Candidate clocks were not lower. Driver sampling, display carriers
 and9216/12282MiB capacities differ. GPU polls200ms and repeated subtests within
 one boot are correlated samples, not independent replications.
+
+MEASURED 2026-10-23, [kick-accounting.json](kick-accounting.json): paired first-kick
+consumptions plus coalesced kicks differ from BAR0 doorbell counts by only+2/-5
+in the two interior windows. Snapshot reads race ongoing calls. INFERRED: native
+fanout explains the small paired-native-call fraction; it does not mean most
+guest kicks were missed. This does not isolate worker dispatch from gate/guest
+waits inside a valid kick-to-native interval.
 
 ## One concrete next optimization candidate
 
@@ -86,3 +93,6 @@ CODE READ scope: no closed binary was reverse engineered. CPU samples use public
 symbols and our own source; unknown closed-driver addresses are uninterpreted.
 No genuine no-present comparison, per-engine rendering utilization or direct
 worker-pickup timestamp was obtained. Those limits prevent a single-cause claim.
+
+MEASURED 2026-10-23, ci-instrument-final.json: exact instrument commit70f7fb591
+passed hosted stable, aarch64, broker and firmware; slow was skipped by policy.

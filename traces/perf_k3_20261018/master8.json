@@ -1,0 +1,49 @@
+{
+  "classification": "MEASURED",
+  "evidence": "master8.json",
+  "candidate": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "tag": "q4-master-cursor8",
+  "verdict": "OBSERVATIONS_PENDING_REVIEW",
+  "base_before": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "load": {
+    "classification": "MEASURED",
+    "evidence": "load-before-vm.json",
+    "stage": "linux-broker",
+    "time": "2026-10-23T05:05:21.629540+00:00",
+    "uptime": "07:05:21 up 13 days, 11:26,  4 users,  load average: 0.10, 1.10, 1.70",
+    "load_average": [
+      0.09716796875,
+      1.09814453125,
+      1.7041015625
+    ],
+    "logical_cpus": 24,
+    "host_quiet": true
+  },
+  "start": "2026-10-23T05:05:21.652374+00:00",
+  "exit": 0,
+  "new_host_xids": [],
+  "base_after": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "base_unchanged": true,
+  "health_exit": 0,
+  "end": "2026-10-23T05:09:11.973730+00:00",
+  "review_verdict": "NOT_COMPARABLE_HOST_DEFAULT_CURSOR_SHAPE",
+  "oracle": {
+    "hover": {
+      "guest_visible": 254,
+      "host_visible": 1170,
+      "max_channel_difference": 255
+    },
+    "cross": {
+      "guest_visible": 281,
+      "host_visible": 1170,
+      "max_channel_difference": 255
+    },
+    "meaning": "Wrong host cursor shape; cannot compare RGB with candidate48/52 or clear a regression"
+  }
+}

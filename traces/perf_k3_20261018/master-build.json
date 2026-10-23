@@ -1,0 +1,20 @@
+{
+  "classification": "MEASURED",
+  "evidence": "master-build.json",
+  "master_revision": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "time": "2026-10-23T05:03:11.019982+00:00",
+  "archive_sha256": "8fb4eb1dda1827434b8e18ef1a701d0bc29ce995982ae6468d45aebe0ea15c4a",
+  "uptime": "07:03:11 up 13 days, 11:24,  5 users,  load average: 0.31, 1.66, 1.96",
+  "quiet_flag_absent_during_build": true,
+  "method": "Exact master release archive built on dev under global Cargo flock, nice19/jobs2; source-pinned owned host QEMU relink with quiet flag absent.",
+  "qemu_sha256": "8a4c58a34826ed8d016c99de90087e5c6aa97ce8f06721903bd35a27445dee25",
+  "qemu_bytes": 95562768,
+  "overlay_source_hashes": {
+    "kf3.h": "80059b5a1c61161eded395104827b6b8824e6f8c36c0720d7c61326b50b0b955",
+    "kf3_guest_ram.h": "6a4f6cecffcabe979837bf8d630647891adeca3cd9e2c044027438b8881da248",
+    "kf3_gop.h": "d499ed57ddecf161bb6137fa4650ac500a7bad26c1df5e5a19b3d5e148556238",
+    "kf3.c": "ee95a9144cd559fb2773e99b1fe74e1b4424c73ccaff5b4860f6b6808acb13b2",
+    "meson.build": "a809bb613562b0852aa4ff73a21ab50844903771664861a9038b0bd493307573"
+  },
+  "tracked_source_clean": true
+}

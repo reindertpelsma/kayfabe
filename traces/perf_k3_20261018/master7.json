@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "evidence": "master7.json",
+  "candidate": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "tag": "q4-master-cursor7",
+  "verdict": "STOPPED",
+  "base_before": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "reason": "XWAYLAND_PRECONDITION_MISSING",
+  "exception": "AssertionError",
+  "base_after": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "base_unchanged": true,
+  "health_exit": 0,
+  "end": "2026-10-23T05:03:45.692941+00:00",
+  "review_verdict": "NOT_RUN_XWAYLAND_PRECONDITION"
+}
