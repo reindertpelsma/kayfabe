@@ -1,3 +1,5 @@
+MEASURED (2026-10-23, lease57385378, `lease_57385378/baseline_calibration/box_readiness.json`): verification boot173.0s, OS CIM query31.814633s, factor10, query_attempts1; no NVIDIA ON/hold/app outcome yet.
+
 MEASURED (2026-10-23, lease57385378, `lease_57385378/native_complete/`): raw30/30,CUDA4/4,GRtier and9+10gatesPASS; frozen exact5 source controls, no extra Xid. Windows stdVGA install began15:30:06Z. MEASURED (same run, `lease_57385378/NATIVE_BINARY_IDENTITY.json`): QEMU/raw/guard hashes equal the prior production artifacts; no product change.
 
 ROUND4 GA102 — LIVE,2026-10-23

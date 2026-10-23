@@ -1,0 +1,96 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "utc": "2026-10-23T16:14:45.511695+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 2297,
+      "sha256": "12b73e3f0b464773921af79a9ac0bf3c21a6490151056418ee8f36df22f578fa"
+    },
+    "box_readiness.json": {
+      "bytes": 251,
+      "sha256": "2a887cd7337e596943a998b02604c625fdd8f834460472cd56f55f0e9ec4812b"
+    },
+    "sweep_windows_install.log": {
+      "bytes": 6397,
+      "sha256": "0175fbe2c5f003f87ffd3cf82fa285c7528a1453e4e9334ad19d26cbdffcbc74"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown.",
+  "omitted_source_hashes": {
+    "sweep_host_die.log": {
+      "bytes": 209,
+      "sha256": "a6ec9e83a9e72366b8fca59aa9cc0b1065a6e85f46baf5ca5c74e719719eb5b8"
+    },
+    "sweep_windows_media_controller.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bwr_bind_readiness_stage.json": {
+      "bytes": 312,
+      "sha256": "08988667c0002040607f4b12848babe125affe43e7ede971958da6b60c07a673"
+    },
+    "sweep_native_grtier.log": {
+      "bytes": 3056,
+      "sha256": "018f9402f37408b10bb9ec702cfd5bbe71846d4d7117c2ab4c28ac3d77c77f32"
+    },
+    "bwr_bind.log": {
+      "bytes": 720,
+      "sha256": "7576e0f496f5d3a3bae8616ee36d7d4939b4b1358eeb091ab6ae2e953c4536b0"
+    },
+    "sweep_host_preflight.log": {
+      "bytes": 410,
+      "sha256": "48f7563d8fbf0d996611eddea973daaef6d98129089f5ea0d1c0968f06e07e4d"
+    },
+    "sweep_grtier_build.log": {
+      "bytes": 31462,
+      "sha256": "c8aa6389dd5cdde4f6cc0ee715c46761b99daa1c516e567ec1f2aa4c2392e4ad"
+    },
+    "sweep_native_baseline.log": {
+      "bytes": 352,
+      "sha256": "93c7ff96183226a02e1037703794ab6ed96db33d4bccc1e8968d7007455ba499"
+    },
+    "native_xid_baseline.json": {
+      "bytes": 1433,
+      "sha256": "40b8246745ace020e321a021eb08404a34b1a693c0d2766bf899523e2e6cbb30"
+    },
+    "sweep_raw_build.log": {
+      "bytes": 29936,
+      "sha256": "01a7cfe9d391f2c5030f4cfe51e3def3a90f7947a601017c0d434615700ad1a3"
+    },
+    "sweep_cuda_host.log": {
+      "bytes": 2362,
+      "sha256": "6966107b4474012c923f6f07c7688d25b1c85af2683290989dd4af7ec158e42f"
+    },
+    "sweep_gates.log": {
+      "bytes": 25221,
+      "sha256": "078eb77d08db23814b7c1b205bb2f40d4b1b1b2cfbaa340be70334fd8ddf5e59"
+    },
+    "sweep_windows_media.log": {
+      "bytes": 37374,
+      "sha256": "d65b0ca3fbec47910b2a0b0a0b96801f0fe778732c048fd56cee6942770e6732"
+    },
+    "sweep_bare595.log": {
+      "bytes": 5842,
+      "sha256": "64a8a426d4bdbb23129da44c91439881e37e98ed6709a3932d222b6a9a00844d"
+    },
+    "native_kernel_snapshot.log": {
+      "bytes": 130351,
+      "sha256": "14ce945f2db11485d0cdeef2873dff4b4cf16a4627c1dfbdebfb5275680a8aa8"
+    },
+    "native_xid_watch.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sweep_probe_build.log": {
+      "bytes": 32267,
+      "sha256": "75098a5b952a181ae786412fc49e8535de8331ef9e362c1abd42cf271c479a29"
+    },
+    "sweep_windows_prereq_install.log": {
+      "bytes": 8142,
+      "sha256": "4f5b9c7ce9c06863052a4735b4feed8ca020fec703a296f4d397aec587990d45"
+    }
+  },
+  "selection": "Calibration profile and current Windows/controller logs only; native evidence retained in ../native_complete."
+}
