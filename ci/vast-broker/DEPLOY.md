@@ -99,7 +99,9 @@ symlink is followed); a line is not `KEY=VALUE`; a key repeats; a key is not a l
 (secret names, `ALLOW_TEST_ISSUER`, `TEST_ISSUER`); a key is a retired `ACCESS_*` var or a
 `BOX_ACCESS_*` secret (so an old Access vars file is refused); `OWNER_GITHUB_ID` is missing,
 non-numeric or differs from `wrangler.toml`; `deployment.json` and `DEPLOYED_BUNDLE_SHA256`
-differ; the wrangler at the pinned path is not 4.152.0; or the module wrangler emits for
+differ; a check-only `WORKER_URL` entry is not the bare https origin (review f; the entry is
+never uploaded, WORKER_URL stays a Worker secret); the wrangler at the pinned path is not 4.152.0;
+or the module wrangler emits for
 `--dry-run --outdir <temp>` does not hash to `deployment.json`. It then uploads exactly that
 hash-checked file (`wrangler deploy --no-bundle <temp>/index.js`, so wrangler does not bundle twice)
 with one `--var KEY:VALUE` per entry, runs wrangler with `WRANGLER_SEND_METRICS=false`, and
@@ -155,9 +157,14 @@ cleanup backstop.
 ## Worker and GitHub secrets
 
 [CODE READ: src/tokens.js, src/routes.js] Set Worker secrets with the pinned CLI (`wrangler secret
-put <NAME>`): WORKER_URL (exact HTTPS origin), VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN
+put <NAME>`): WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN
 and BROKER_PATH_PREFIX (required when renting is enabled). Generate independent values without
-printing them into logs:
+printing them into logs. WORKER_URL is the bare https origin, exactly
+`https://<name>.<account>.workers.dev`: no trailing slash, path, query, port or user part (the
+runner accepts no port either). It is the OIDC audience (the runner sends its origin without a slash) and the
+base of the box `KF_BROKER_URL`; any other form makes every route and the cron answer
+`CONFIG_VAR:WORKER_URL`. Put the same value as `WORKER_URL=...` in the vars file so the deploy
+helper checks it before upload (it is not uploaded as a var):
 
 ```sh
 head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'
@@ -246,7 +253,12 @@ inconsistent, keep the admitted offer price and log a fixed event.
 
 [CODE READ: ../vast-reaper/worker.js, ../vast-reaper/wrangler.toml] Deploy the separate
 ci/vast-reaper Worker with its OWN cron and secret REAPER_VAST_API_KEY, never the main broker key.
-Grant only list/delete routes api.instances and api.instance. It has no public controls, rental
+Its key needs list and delete only: `instance_read: ["api.instances"]` (the list
+`GET /api/v1/instances/`) and `instance_write: ["api.instance"]` (`DELETE
+/api/v0/instances/<id>/`); no `api.ask`, `api.bundles` or user permission (INFERRED from the
+console permission names; a leaked reaper key can delete instances but cannot rent). Keep the
+reaper's `REAPER_HARD_MINUTES` (180) at or above the main Worker's `HARD_RUNTIME_MINUTES`; raise
+the reaper first, or it deletes live CI boxes. It has no public controls, rental
 path, broker imports or LEDGER binding, and takes no main-Worker var. Deploy first, then put the
 secret (a `secret put` before the first deploy would prompt to create the Worker):
 
@@ -284,6 +296,36 @@ status of that exact master sha is `success` from `github-actions[bot]` with des
 other branches and a path-policy `NOT_NEEDED` status refuse, so a docs-only master commit cannot
 be released on its own. TODO (owner): the planned tag-only release CI will replace this
 dispatch workflow; the gate then needs its trigger rule restated.
+
+## First watched rental (checklist)
+
+[CODE READ: final review 2026-10-23 section 8 (c); owner rulings 2026-10-24] Before the first
+rental with `RENTING_ENABLED=true`, in this order:
+
+1. This branch is merged to master and deployed with renting off; the deploy helper printed the
+   bundle hash in `deployment.json`.
+2. GitHub environment `gpu-vast`: set the deployment-branch policy to `master` only (review W1:
+   today any branch workflow can bind it) and, if wanted, a required reviewer. Check with a
+   read-only `gh api repos/<repo>/environments/gpu-vast`.
+3. Worker secrets: WORKER_URL in the bare-origin form above, VAST_API_KEY with the scoped
+   permission JSON below, BOX_ACCESS_ID / BOX_ACCESS_SECRET (token B; without them the
+   hostname-wide Access policy blocks every box callback and the box bills until BOOT_TIMEOUT).
+4. The reaper is deployed with its own list+delete key (see *Independent reaper*) and its deploy
+   output lists `*/5 * * * *`.
+5. Only one trigger may rent during the watch: put `DAILY_RENTALS=1` (and optionally a lower
+   `MAX_PRICE_USD_HOUR`) in the vars file and redeploy, and pause agent pushes, PR updates and
+   merges that use the owner's credentials (every owner-credential `pull_request_target` or
+   master push is owner-triggered and rents). Resume them, and restore `DAILY_RENTALS`, after
+   the watch.
+6. Keep `stop-all` ready: the owner stop token plus an Access service token (Access covers the
+   whole hostname).
+7. Set `RENTING_ENABLED=true` in the vars file and redeploy; trigger exactly one run.
+8. During the rental, read its instance row once, read-only, and check the V2 price fields
+   (`dph_base`, `dph_total`, `storage_cost`, `inet_up_cost`, `inet_down_cost` present and
+   consistent; see *V2 acceptance check*). If not, `stop-all` and decide.
+9. Expect `FAIL(payload_missing)` while `scripts/ci/vast_payload.sh` is absent (F14). After the
+   result the runner stops the box at once; confirm the instance is gone and the cost row
+   settled, then set `RENTING_ENABLED=false` again until the payload lands.
 
 ## Rollout
 
