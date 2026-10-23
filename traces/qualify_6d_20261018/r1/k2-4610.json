@@ -1,0 +1,223 @@
+{
+  "classification": "MEASURED",
+  "evidence": "k2-4610.json",
+  "run": 4610,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "captured": "2026-10-23T03:05:43.299521+00:00",
+  "complete": true,
+  "result": {
+    "classification": "MEASURED",
+    "arm": "round-6d-K2-larger-vram-x2",
+    "run": 4610,
+    "rev": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+    "workloads": [
+      "blender-01",
+      "catia-07",
+      "creo-04",
+      "energy-04"
+    ],
+    "iterations": 2,
+    "resolution": "FullHD",
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_GUARDS_PASS_EXACT_FINAL_RESPONSE_RECOVERED",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T04:58:49.792975+02:00",
+      "arm": "round-6d-K2-larger-vram-x2",
+      "run": 4610,
+      "sample": 140,
+      "completed": true,
+      "completed_workloads": [
+        "blender-01",
+        "catia-07",
+        "creo-04",
+        "energy-04",
+        "blender-01",
+        "catia-07",
+        "creo-04",
+        "energy-04"
+      ],
+      "failed": false,
+      "subtest": [
+        "energy-04",
+        "06_OpunakeAnimated"
+      ],
+      "guest153": 0,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 9112,
+        "pointer_entry_max_bytes": 1043244,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "task": 3,
+      "qemu_before": 18617828,
+      "qemu_after": 18625552,
+      "viewperf_nonzero_exits": []
+    },
+    "events": [],
+    "exception": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+    "ended": "2026-10-23T04:58:57.889039+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T04:58:58.139966+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 0,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2354368
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T04:59:10.630763+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true,
+    "original_harness_verdict": "FAIL",
+    "original_harness_reason": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+    "collection_status": "RECOVERED_EXACT_STORED_JOB_RESPONSE",
+    "recovery_evidence": "agent-atomic-recovery-4610.json"
+  },
+  "qemu_bytes": 18836087,
+  "qemu_sha256": "dd24f0515e1ed8c547f4d7120c63cb2f55220d13c8b0f3ef1484d06819fa64c6",
+  "retirement_lines": 201,
+  "counter_maxima": {
+    "pointer_large_entries": 9112,
+    "pointer_entry_max_bytes": 1043244,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "observed_retirement_counter_sums": {
+    "pointer_large_entries": 86910,
+    "pointer_entry_max_bytes": 39724296,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "budget_diagnostics_first30": [],
+  "progress_strands_first100": [],
+  "user_ring_refusal_lines": 0,
+  "ring_refused_segments": 0,
+  "no_ce_object_refusal_events": 0,
+  "no_ce_object_mentions": 0,
+  "no_ce_object_refusals_first10": [],
+  "budget_diagnostic_count": 0,
+  "progress_strand_count": 0,
+  "progress_strand_end_count": 0,
+  "broker": {
+    "stats_windows": 3100,
+    "duration_seconds_approx": 3113.059,
+    "feedbacks": 186000,
+    "new_content_presents": 0,
+    "repeat_presents": 0,
+    "discarded": 0,
+    "errors": [
+      {
+        "line": 89335,
+        "diagnostic": "nvkvm-broker: client detached: closed the connection (43106 attach, 43106 commit, 0 rejected; 0 cursor, 0 cursor refused)"
+      }
+    ],
+    "new_content_fps_approx": 0.0,
+    "repeat_per_second_approx": 0.0,
+    "max_new_content_gap_us": 0,
+    "gaps_per_minute_approx": {
+      "cg33": 0.0,
+      "cg50": 0.0,
+      "cg100": 0.0
+    },
+    "one_percent_low": null,
+    "point_one_percent_low": null,
+    "quantile_limitation": "Stock master broker stats provide threshold counts and window maxima, not a raw new-content gap series. No percentile values inferred.",
+    "scope": "whole VM session; no-present intervals are not rendering performance scores"
+  },
+  "flags": {
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5",
+    "KF3_DIAG_PROGRESS": "1000"
+  },
+  "process_controls": {
+    "classification": "MEASURED",
+    "passed": true,
+    "controls": [
+      {
+        "expected": 0,
+        "pid": 14184,
+        "actual": 0
+      },
+      {
+        "expected": 7,
+        "pid": 14172,
+        "actual": 7
+      },
+      {
+        "expected": 9,
+        "pid": 14212,
+        "actual": 9
+      }
+    ],
+    "observed": [
+      {
+        "time": "2026-10-23T00:07:54.7325664Z",
+        "pid": 14184,
+        "name": "cmd.exe",
+        "exit": 0
+      },
+      {
+        "time": "2026-10-23T00:07:54.7325665Z",
+        "pid": 14172,
+        "name": "cmd.exe",
+        "exit": 7
+      },
+      {
+        "time": "2026-10-23T00:07:54.7325666Z",
+        "pid": 14212,
+        "name": "cmd.exe",
+        "exit": 9
+      }
+    ]
+  },
+  "export_errors": [],
+  "process_exit_census": {
+    "viewperf_exe_exits_observed": 64,
+    "viewperf_exit_code_histogram": {
+      "0": 64
+    },
+    "viewperf_nonzero_exits": [],
+    "viewperf_live_at_final_guest_snapshot": 0,
+    "forced_kill_count": null,
+    "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+  },
+  "specviewperf_release": "SPECviewperf 15.x (patch level not recorded)",
+  "specviewperf_configuration": "RTX 4070; KVM/kayfabe 01a171e63 versus KVM/VFIO; Windows 11 NVIDIA 580.88; 1920x1080; 12 GiB guest RAM, 8 vCPU. Production store 8192 MiB with Wayland; K2 store 9216 MiB with GDM stopped and synthetic 60 Hz test backend; VFIO guest reports 12282 MiB. Capacities and carriers are not matched.",
+  "specviewperf_disclaimer": "(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org",
+  "score_evidence": "spec-results-nc.csv",
+  "profile_arm": false
+}

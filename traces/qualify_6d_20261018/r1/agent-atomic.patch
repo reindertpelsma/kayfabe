@@ -1,0 +1,13 @@
+--- a/lab-agent.py
++++ b/lab-agent.py
+@@ -5 +5 @@
+-import http.server, json, os, sys, time, uuid, glob
++import http.server, json, os, sys, time, uuid, glob, tempfile
+@@ -24 +24,6 @@
+-        open(R + "/" + i + ".txt", "wb").write(self.rfile.read(n))
++        body = self.rfile.read(n)
++        with tempfile.NamedTemporaryFile(dir=R, prefix=i + ".", suffix=".pending",
++                                         mode="wb", delete=False) as temporary:
++            temporary.write(body)
++            pending = temporary.name
++        os.replace(pending, R + "/" + i + ".txt")

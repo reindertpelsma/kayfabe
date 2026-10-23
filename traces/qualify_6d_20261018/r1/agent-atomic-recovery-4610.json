@@ -1,0 +1,33 @@
+{
+  "classification": "MEASURED",
+  "evidence": "agent-atomic-recovery-4610.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4610,
+  "job_id": "1792724334883-71894b",
+  "request_sha256": "447efc73ccbd8c8c69002b06dad89510c7ef20b2727dc5b8cf7f076dc4c4bd0a",
+  "response_sha256": "0fffcd2c6ea99bf3a25285041d2fbf787ca8b2d6a5516c8ed81fd0788b0a207b",
+  "stored_response_bytes": 112821,
+  "original_capture_bytes": 0,
+  "exact_job_id_matched": true,
+  "later_than_last_sample": true,
+  "completed_workloads": [
+    "blender-01",
+    "catia-07",
+    "creo-04",
+    "energy-04",
+    "blender-01",
+    "catia-07",
+    "creo-04",
+    "energy-04"
+  ],
+  "guest153_4101": 0,
+  "boot_unchanged": true,
+  "viewperf_exits_observed": 64,
+  "viewperf_nonzero_exits": 0,
+  "live_viewperf": 0,
+  "original_result_preserved": "result.json",
+  "original_final_capture_preserved": "status-final.json",
+  "derived_workload_verdict": "PASS",
+  "collection_status": "RECOVERED_EXACT_STORED_JOB_RESPONSE",
+  "scope": "Recovering completed response bytes after a proven helper file-publication race; no oracle relaxed and no workload rerun."
+}

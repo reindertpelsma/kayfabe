@@ -1,0 +1,33 @@
+{
+  "classification": "MEASURED",
+  "evidence": "agent-atomic-controls.json",
+  "candidate_product": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4610,
+  "time": "2026-10-23T03:09:16.685604+00:00",
+  "scope": "Lab agent result publication only; candidate product unchanged",
+  "expected_red_commit": "b2294703388ac99d8569574d94e06da32a333192",
+  "before": {
+    "passed": 1,
+    "failed": 2
+  },
+  "after": {
+    "passed": 3,
+    "failed": 0
+  },
+  "mutant": {
+    "passed": 1,
+    "failed": 2
+  },
+  "mutant_kills": [
+    "test_new_result_is_invisible_until_body_is_complete",
+    "test_previous_complete_result_survives_until_replacement_is_complete"
+  ],
+  "restored": {
+    "passed": 3,
+    "failed": 0
+  },
+  "green_source_sha256": "5edfc24b09e26353978ba8f2fcbd3366303adc7c67d9d93ca317eec6ac6d1593",
+  "original_source_sha256": "0cf24ac60e014e03a10831d3dee17b108ad97f404d1a89a337f5815c06549bba",
+  "fix": "Read the response body, write a unique temporary file in the result directory, close it, and atomically replace the published result path. No polling or timeout change.",
+  "mutant_description": "Restore the original early open/truncate/write method"
+}

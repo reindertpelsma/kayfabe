@@ -1,0 +1,31 @@
+lab-agent-under-test.py:24: ResourceWarning: unclosed file <_io.BufferedWriter name='/tmp/tmp6j8j3709/r/control.txt'>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+.Flab-agent-under-test.py:24: ResourceWarning: unclosed file <_io.BufferedWriter name='/tmp/tmpefhfn3cy/r/control.txt'>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+Flab-agent-under-test.py:24: ResourceWarning: unclosed file <_io.BufferedWriter name='/tmp/tmpnamyih8x/r/control.txt'>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+
+======================================================================
+FAIL: test_new_result_is_invisible_until_body_is_complete (__main__.AtomicPublication.test_new_result_is_invisible_until_body_is_complete)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "traces/qualify_6d_20261018/r1/test_agent_atomic.py", line 68, in test_new_result_is_invisible_until_body_is_complete
+    self.assertFalse(self.destination.exists(), 'EARLY_EMPTY_RESULT_PUBLICATION')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : EARLY_EMPTY_RESULT_PUBLICATION
+
+======================================================================
+FAIL: test_previous_complete_result_survives_until_replacement_is_complete (__main__.AtomicPublication.test_previous_complete_result_survives_until_replacement_is_complete)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "traces/qualify_6d_20261018/r1/test_agent_atomic.py", line 74, in test_previous_complete_result_survives_until_replacement_is_complete
+    self.assertEqual(self.destination.read_bytes(), previous,
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     'PREVIOUS_COMPLETE_RESULT_TRUNCATED_EARLY')
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: b'' != b'{"complete":"previous"}' : PREVIOUS_COMPLETE_RESULT_TRUNCATED_EARLY
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.025s
+
+FAILED (failures=2)

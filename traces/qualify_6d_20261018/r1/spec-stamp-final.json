@@ -1,0 +1,31 @@
+{
+  "classification": "MEASURED",
+  "evidence": "spec-stamp-final.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4610,
+  "time": "2026-10-23T03:08:40.796314+00:00",
+  "tool_commit": "9eec6ba6b0a4e420e0c750443a2d0e65f346c252",
+  "score_rows": 24,
+  "K2_completed_scores": 8,
+  "counts": {
+    "6d-production": {
+      "catia-07": 2,
+      "creo-04": 2,
+      "energy-04": 4
+    },
+    "VFIO-reference": {
+      "blender-01": 2,
+      "catia-07": 2,
+      "creo-04": 2,
+      "energy-04": 2
+    },
+    "6d-K2-9216MiB": {
+      "blender-01": 2,
+      "catia-07": 2,
+      "creo-04": 2,
+      "energy-04": 2
+    }
+  },
+  "validation": "PASS: every score and ratio generated and checked by spec_stamp.py",
+  "limitation": "Different VRAM capacities and display carriers; no causal single-change conclusion and no SPEC ranking."
+}
