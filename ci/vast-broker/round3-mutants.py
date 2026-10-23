@@ -100,7 +100,7 @@ CASES = [
     ),
     (
         "rent-head-binding",
-        "src/index.js",
+        "src/github.js",
         [
             (
                 "if(rentRequest.tested_sha!==target.sha||rentRequest.pr_number!==target.pr)",

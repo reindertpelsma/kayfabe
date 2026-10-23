@@ -334,24 +334,6 @@
       ]
     },
     {
-      "name": "full-log-state-save",
-      "file": "src/index.js",
-      "patches": [
-        [
-          "      await ledger.save(r);\n      return;\n    }\n    await ledger.appendLog",
-          "      return;\n    }\n    await ledger.appendLog"
-        ]
-      ],
-      "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-config-diagnostic.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
-      ]
-    },
-    {
       "name": "runner-status-retry",
       "file": "runner.py",
       "patches": [
@@ -638,7 +620,7 @@
       ]
     },
     {
-      "name": "Access-signature",
+      "name": "OIDC-signature",
       "file": "src/oidc.js",
       "patches": [
         [
@@ -647,16 +629,12 @@
         ]
       ],
       "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-config-diagnostic.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
+        "auth.test.js",
+        "round-simplify.test.js"
       ]
     },
     {
-      "name": "Access-expiry",
+      "name": "OIDC-expiry",
       "file": "src/oidc.js",
       "patches": [
         [
@@ -665,12 +643,8 @@
         ]
       ],
       "tests": [
-        "round-fixes.test.js",
-        "round-lifecycle.test.js",
-        "round-access.test.js",
-        "round-config-diagnostic.test.js",
-        "round-owner-token.test.js",
-        "round-boundaries.test.js"
+        "auth.test.js",
+        "round-simplify.test.js"
       ]
     },
     {
@@ -723,7 +697,7 @@
       ]
     },
     {
-      "name": "Access-key-by-kid",
+      "name": "OIDC-key-by-kid",
       "file": "src/oidc.js",
       "patches": [
         [
@@ -732,7 +706,8 @@
         ]
       ],
       "tests": [
-        "round-config-diagnostic.test.js"
+        "auth.test.js",
+        "round-simplify.test.js"
       ]
     },
     {

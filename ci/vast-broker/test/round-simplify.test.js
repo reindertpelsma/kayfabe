@@ -195,3 +195,44 @@ for (const aud of [[env.WORKER_URL], ['other', env.WORKER_URL]])
     );
     await assert.rejects(verifier.verify(await jwt({ aud }), env.WORKER_URL));
   });
+// GitHub OIDC expiry is checked on its own (not only through exp > iat).
+for (const delta of [0, 1])
+  test('simplify GitHub OIDC refuses an expired token ' + delta, async () => {
+    const h = await setup();
+    const now = Math.floor(h.time.value / 1000);
+    const response = await h.call('/rent', {
+      claims: { iat: now - 400, nbf: now - 400, exp: now - delta },
+    });
+    assert.equal(response.status, 401);
+    assert.equal(h.cloud.creates, 0);
+  });
+// GitHub publishes several keys; the verifier selects by kid, never by position.
+const extraKeys = await Promise.all(
+  ['rotated-a', 'rotated-b'].map(async (kid) => {
+    const { webcrypto } = await import('node:crypto');
+    const pair = await webcrypto.subtle.generateKey(
+      {
+        name: 'RSASSA-PKCS1-v1_5',
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: 'SHA-256',
+      },
+      true,
+      ['sign', 'verify'],
+    );
+    return {
+      ...(await webcrypto.subtle.exportKey('jwk', pair.publicKey)),
+      kid,
+      alg: 'RS256',
+      use: 'sig',
+    };
+  }),
+);
+for (const count of [1, 2])
+  test('simplify GitHub OIDC selects the signing key by kid ' + count, async () => {
+    const verifier = new OidcVerifier(
+      async () => Response.json({ keys: [...extraKeys.slice(0, count), jwk] }),
+      () => clock,
+    );
+    assert.equal((await verifier.verify(await jwt(), env.WORKER_URL)).actor_id, '42');
+  });

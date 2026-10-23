@@ -32,8 +32,8 @@ CASES = [
         "env-contract",
         "accept-old-protocol",
         R,
-        '{"4", "5"}',
-        '{"3", "4", "5"}',
+        "PROTOCOLS = {BOX_PROTOCOL}",
+        'PROTOCOLS = {BOX_PROTOCOL, "5"}',
         [E + "test_malformed_values_are_rejected"],
     ),
     (
