@@ -1,0 +1,4 @@
+# measured 2026-10-14 on vast 55938180 (RTX 2060 SUPER, TU106, 10de:1f06), kf3 3d31acc6, default Windows profile (display=on,gop=on);
+# the QEMU process exits before the guest runs. kf3's stderr (the two last lines of qemu.log):
+kf3: display plane ON — virtual NVDisplay for TU102 TU104 TU106 TU116 TU117 (IP 0x04000000, display class 0xc570, 4 heads)
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: kf3: realize refused: display=on: method vocabulary: NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE is not derived
