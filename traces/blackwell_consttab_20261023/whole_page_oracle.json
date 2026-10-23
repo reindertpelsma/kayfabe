@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-23",
+  "classification": "GPU-free computed comparison / historical oracle, not hardware validation",
+  "code": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "driver_vocabulary": "580.65.06",
+  "host_table_branch": 595,
+  "die": "GB202",
+  "page_bytes": 4096,
+  "current_T1_differing_words": 48,
+  "outside_published_PRECOMP_differences": [],
+  "new_T3_words_equal_historical_oracle": true,
+  "post_T3_whole_page_equal": true,
+  "old_page_B_sha256": "0a3a9116c07b5bae5123c44c4c808eb4c50c0abcd7e8aa20c6a73a3207ab89c2",
+  "rule": "caps_oracle compares all 1024 aligned words; all reported differences lie in the 48-word plan, whose independent new measurements equal the oracle"
+}

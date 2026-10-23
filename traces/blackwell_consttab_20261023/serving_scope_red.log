@@ -1,0 +1,2 @@
+error[E0432]: unresolved import `kf_rm::precomp`
+error: could not compile `kf-rm` (test "precomp_serving") due to 1 previous error

@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-23",
+  "classification": "CODE READ of committed metadata; historical revisions differ, not the new same-die A/B",
+  "historical_arm": "blackwell_resume_cont_20261022/on_c3 captured CAPC diagnostic only",
+  "derived_arm": "blackwell_windows_resume_20261023/on_precision at6e3fd3fd6",
+  "historical_rows": 4519,
+  "derived_rows": 278,
+  "first_differing_normalized_record": null,
+  "common_normalized_prefix": 278,
+  "historical_record_at_difference": null,
+  "derived_record_at_difference": null,
+  "historical_next_after_derived_eof": [
+    {
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0xc3700201",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0x0000",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0x0080",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0x2080",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0x007e",
+      "trace_result": "0x0"
+    },
+    {
+      "function": 103,
+      "kind": "RmAlloc",
+      "selector": "0x0000",
+      "trace_result": "0x0"
+    }
+  ],
+  "excluded_axes": [
+    "timing",
+    "object handles",
+    "payload bodies",
+    "BAR0 read sequence"
+  ],
+  "future_same_revision_candidate_comparison": "UNRUN until authorized A/B lease"
+}

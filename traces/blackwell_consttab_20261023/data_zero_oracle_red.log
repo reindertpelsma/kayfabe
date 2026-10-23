@@ -1,0 +1,35 @@
+running 9 tests
+test every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count ... FAILED
+test gb202_independent_public_field_decode_matches_all_measurements ... FAILED
+test gb206_every_word_retains_its_measured_source_and_evidence ... FAILED
+test gb206_every_word_matches_its_measurement ... FAILED
+test gb206_independent_public_field_decode_matches_all_measurements ... FAILED
+test the_generic_table_never_silently_borrows_a_measured_die ... ok
+test physical_rows_are_scoped_to_the_measured_host_branch ... ok
+test gb202_every_word_retains_its_measured_source_and_evidence ... FAILED
+test gb202_every_word_matches_its_measurement ... FAILED
+failures:
+---- every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count stdout ----
+assertion `left == right` failed: GB202
+---- gb202_independent_public_field_decode_matches_all_measurements stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb206_every_word_retains_its_measured_source_and_evidence stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb206_every_word_matches_its_measurement stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb206_independent_public_field_decode_matches_all_measurements stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb202_every_word_retains_its_measured_source_and_evidence stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb202_every_word_matches_its_measurement stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+failures:
+    every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count
+    gb202_every_word_matches_its_measurement
+    gb202_every_word_retains_its_measured_source_and_evidence
+    gb202_independent_public_field_decode_matches_all_measurements
+    gb206_every_word_matches_its_measurement
+    gb206_every_word_retains_its_measured_source_and_evidence
+    gb206_independent_public_field_decode_matches_all_measurements
+test result: FAILED. 2 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+error: test failed, to rerun pass `-p kf-rm --test precomp_consttab_data`
