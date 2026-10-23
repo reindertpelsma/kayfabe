@@ -29,7 +29,7 @@ CASES = [
     ("authorization-header-leak", changed("headers={}", 'headers={"Authorization": "secret"}')),
     ("cookie-header-leak", changed("headers={}", 'headers={"Cookie": "secret"}')),
     ("wrong-timeout", changed("TIMEOUT_SECONDS = 30", "TIMEOUT_SECONDS = 60")),
-    ("larger-size-cap", changed("MAX_BYTES = 5 * 1024 * 1024", "MAX_BYTES = 6 * 1024 * 1024")),
+    ("larger-size-cap", changed("MAX_BYTES = 5_000_000", "MAX_BYTES = 6_000_000")),
     ("redirect-followed", changed("        return None", "        return newurl")),
     ("redirect-handler-omitted", changed("build_opener(NoRedirect())", "build_opener()")),
     (

@@ -10,7 +10,7 @@ import re
 import urllib.parse
 import urllib.request
 
-MAX_BYTES = 5 * 1024 * 1024
+MAX_BYTES = 5_000_000
 TIMEOUT_SECONDS = 30
 
 
