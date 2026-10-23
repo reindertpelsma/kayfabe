@@ -252,3 +252,44 @@ fn every_family_selects_and_binds_each_host_advertised_ce_class() {
         }
     }
 }
+
+fn advertised_classes_do_not_create_an_extra_object(family: kf_chip::Family) {
+    use kf_arch::HostClasses;
+    let set = kf_chip::classes::classes_for(family);
+    assert_eq!(set.dma_copy.len(), 2);
+    let advertised: Vec<_> = set
+        .channel_gpfifo
+        .iter()
+        .chain(set.usermode)
+        .chain(set.dma_copy)
+        .copied()
+        .collect();
+    let chosen = kf_chip::host_classes::DerivedHostClasses::choose(family, &advertised).unwrap();
+    let allocated = chosen.ce_object().ce_object_id().0;
+    let older = *set.dma_copy.iter().min().unwrap();
+    assert_ne!(allocated, older);
+    let cfg = kf_qemu::chan::translated_decoder_config(
+        0xb,
+        &HostFacts {
+            ce: allocated,
+            video: 0,
+        },
+        false,
+    );
+    let mut st = kf_chan::tmode::TState::default();
+    st.gr = cfg;
+    st.tier = kf_chan::ttables::Tier::of_ce_class(allocated);
+    let words = [kf_abi::submit::method_header_inc(4, 0, 1).unwrap(), older];
+    assert!(matches!(
+        kf_chan::tmode::decode(&words, kf_chip::is_any_dma_copy_class, &mut st, None),
+        Err(kf_chan::translated::Refusal::ForeignClass { class, .. }) if class == older
+    ));
+}
+#[test]
+fn ampere_advertises_classes_but_the_ring_owns_one_selected_object() {
+    advertised_classes_do_not_create_an_extra_object(kf_chip::Family::Ampere);
+}
+#[test]
+fn blackwell_advertises_classes_but_the_ring_owns_one_selected_object() {
+    advertised_classes_do_not_create_an_extra_object(kf_chip::Family::Blackwell);
+}

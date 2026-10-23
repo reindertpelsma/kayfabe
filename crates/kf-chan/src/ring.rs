@@ -231,6 +231,14 @@ impl TranslatedRing {
         }
     }
 
+    /// Successful launches decoded using the birth seed, before an explicit CE bind.
+    #[must_use]
+    pub fn seeded_launches(&self) -> u64 {
+        self.tmode
+            .as_deref()
+            .map_or(0, |(st, _)| st.seeded_launches)
+    }
+
     /// `(GR-tier methods re-authored, inert software-subchannel binds)` so far (T-mode only).
     #[must_use]
     pub fn gr_counts(&self) -> (u64, u64) {

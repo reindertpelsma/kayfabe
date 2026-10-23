@@ -314,6 +314,10 @@ pub struct SwCall {
 pub struct TState {
     /// The bound CE class's tier.
     pub tier: Option<Tier>,
+    /// Successful CE launches decoded from the birth seed before any explicit CE bind.
+    /// A decoded launch is not proof of submission or GPU completion.
+    pub seeded_launches: u64,
+    ce_explicit_bind: bool,
     /// Subchannels bound to `GP100_UVM_SW`.
     pub sw_subch: u8,
     off_in: u64,
@@ -651,7 +655,11 @@ fn one(
         }
         CeMethod::Launch => {
             let l = decode_launch(tier, v)?;
-            out.push(Ir::Launch(Box::new(ce_launch(st, tier, sub, l)?)));
+            let launch = ce_launch(st, tier, sub, l)?;
+            if !st.ce_explicit_bind && Tier::of_ce_class(st.gr.ce) == Some(tier) {
+                st.seeded_launches = st.seeded_launches.saturating_add(1);
+            }
+            out.push(Ir::Launch(Box::new(launch)));
         }
     }
     Ok(())
@@ -894,6 +902,7 @@ fn host(
                 let tier =
                     Tier::of_ce_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
                 st.tier = Some(tier);
+                st.ce_explicit_bind = true;
                 // ★ Authored: the class alone, `ENGINE` zero.
                 words_ir(out, &[(sub, 0, class)]);
             } else if class == GP100_UVM_SW {

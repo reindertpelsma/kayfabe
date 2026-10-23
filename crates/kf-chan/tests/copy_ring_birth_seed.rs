@@ -59,6 +59,9 @@ impl Window for NoLegacyWindow {
 }
 
 fn replay(config: GrConfig, words: &[u32], gp: u32) -> Result<Next, RingRefusal> {
+    replay_observed(config, words, gp).map(|(next, _)| next)
+}
+fn replay_observed(config: GrConfig, words: &[u32], gp: u32) -> Result<(Next, u64), RingRefusal> {
     let mut ring = TranslatedRing::new_tmode(GPFIFO, 64, 0);
     ring.set_gr(config);
     let mut mem = Memory::default();
@@ -82,7 +85,7 @@ fn replay(config: GrConfig, words: &[u32], gp: u32) -> Result<Next, RingRefusal>
     }
     let next = ring.next(gp + 1, &mut mem, is_ce, &NoLegacyWindow);
     assert_eq!(ring.entries_fetched(), u64::from(gp + 1));
-    next
+    next.map(|next| (next, ring.seeded_launches()))
 }
 fn is_ce(class: u32) -> bool {
     kf_chip::is_any_dma_copy_class(class)
@@ -287,8 +290,9 @@ fn another_physical_destination_still_translates() {
     physical_copy(0x8000);
 }
 
-// Observe the existing public Debug surface until the typed counter is introduced.
+// Check both the typed counter and its existing public diagnostic rendering.
 fn seed_count(st: &kf_chan::tmode::TState, expected: u64) {
+    assert_eq!(st.seeded_launches, expected);
     let shown = format!("{st:?}");
     assert!(
         shown.contains(&format!("seeded_launches: {expected},")),
@@ -339,6 +343,27 @@ fn a_refused_launch_does_not_count_as_seeded_work() {
     assert!(matches!(
         kf_chan::tmode::decode(&words, is_ce, &mut st, None),
         Err(Refusal::LaunchField { word: 3, .. })
+    ));
+    seed_count(&st, 0);
+}
+
+#[test]
+fn ring_reports_the_seeded_launch_at_the_historical_multi_entry_position() {
+    let (_, count) = replay_observed(copy_config(), &semaphore(), 34).unwrap();
+    assert_eq!(count, 1);
+}
+#[test]
+fn ring_reports_a_seeded_launch_on_another_host_tier() {
+    let (_, count) = replay_observed(birth_config(0xb, 0, 0xc8b5, false), &semaphore(), 0).unwrap();
+    assert_eq!(count, 1);
+}
+#[test]
+fn another_refused_launch_does_not_count_as_seeded_work() {
+    let mut st = state();
+    let words = packet(0x300, &[3 << 5]);
+    assert!(matches!(
+        kf_chan::tmode::decode(&words, is_ce, &mut st, None),
+        Err(Refusal::LaunchField { word: 0x60, .. })
     ));
     seed_count(&st, 0);
 }
