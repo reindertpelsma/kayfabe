@@ -1,3 +1,5 @@
+MEASURED LIVE Round4 (lease57385378, `lease_57385378/START.json`): GA102 replacement candidate, source98b599bbf, quote0.29USD/h; prearmed guard1498466, fixed expiry2026-10-23T17:42:19.188825+00:00. Native/Windows/hold/apps pending; no driver outcome. INFERRED (same receipt): prior0.281506USD plus full new reservation1.421146USD =1.702652USD<stop2.50/cap3, reserve5 intact.
+
 STATUS: PARTIAL,2026-10-23; provider failure before authenticated SSH.
 
 MEASURED (lease57384343, `provider_failure.json`): advertised RTX3090/GA102 candidate, provider state running, relay endpoint present, no host key on two scans inside original480s budget. Actual die/KVM/native/Windows all unverified;0 authenticated SSH,0 uploads,0 driver RPC. This is not a driver failure or a consumed Windows ON attempt.
