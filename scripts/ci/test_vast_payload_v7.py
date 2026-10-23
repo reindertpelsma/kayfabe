@@ -274,7 +274,7 @@ class V7Tests(unittest.TestCase):
         with patch.object(self.m.subprocess, "check_output", return_value="bad"):
             self.assertEqual(self.m.hardware()["gpu_name"], "unknown")
 
-    def _main_fixture(self, failure=None, free=100_000_000_000, kvm=True):
+    def _main_fixture(self, failure=None, free=100_000_000_000, kvm=True, legacy_client=None):
         from types import SimpleNamespace
 
         native_path = Path
@@ -312,6 +312,18 @@ class V7Tests(unittest.TestCase):
                 (bench / ("xid_" + tag + ".log")).write_text(watch())
                 if name == "provision":
                     (root / "root/prov/prov.log").write_text(PROVISION)
+                    if legacy_client:
+                        relative = (
+                            "x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
+                            if legacy_client == "musl"
+                            else "release/kayfabe-rm-ladder"
+                        )
+                        built = mapped(os.environ["CARGO_TARGET_DIR"]) / relative
+                        built.parent.mkdir(parents=True, exist_ok=True)
+                        built.touch()
+                        # Existing bench/fastguest consumers resolve this exact checkout path.
+                        if not (repo / "target" / relative).is_file():
+                            return 7
                 elif name == "merge_bar":
                     value = MERGE
                     if failure == "merge_bar":
@@ -358,6 +370,18 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(len(result["suites"]), 9)
         self.assertEqual(set(result), {"verdict", "suites", "hardware"})
+
+    def test_provisioned_musl_binary_is_found_by_existing_guest_helper(self):
+        rc, result, calls = self._main_fixture(legacy_client="musl")
+        self.assertEqual(rc, 0)
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertEqual(calls[-1], "cuda_guest")
+
+    def test_host_binary_is_found_by_existing_fast_guest_consumer(self):
+        rc, result, calls = self._main_fixture(legacy_client="host")
+        self.assertEqual(rc, 0)
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertIn("merge_bar", calls)
 
     def test_whole_adapter_timeout_keeps_merge_prefix(self):
         rc, result, calls = self._main_fixture(failure="merge_bar")
