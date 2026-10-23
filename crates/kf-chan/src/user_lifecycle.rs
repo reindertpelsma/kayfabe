@@ -843,10 +843,7 @@ impl Lifecycle {
         // notice cap because it is one-shot by construction (`bound` is set) and the pump drains every turn.
         if self.mode == Mode::Scan
             && self.bound.is_none()
-            && matches!(
-                cause,
-                Cause::SoftwareBound | Cause::SoftwareBoundRegistered
-            )
+            && matches!(cause, Cause::SoftwareBound | Cause::SoftwareBoundRegistered)
         {
             let scan_entries = self.counts.entries_scan;
             self.bound = Some(Bound { to, scan_entries });

@@ -12,8 +12,17 @@ pub fn build_line() -> String {
 }
 
 pub(crate) fn build_line_from(rev: Option<&str>, dirty: Option<&str>) -> String {
-    let _ = (rev, dirty);
-    String::new()
+    // Only a hex revision and a 0 or 1 are echoed: whatever else the environment of the build held is `unknown`.
+    let rev = rev
+        .filter(|r| !r.is_empty() && r.len() <= 40 && r.bytes().all(|b| b.is_ascii_hexdigit()))
+        .unwrap_or("unknown");
+    let dirty = dirty
+        .filter(|d| matches!(*d, "0" | "1"))
+        .unwrap_or("unknown");
+    format!(
+        "kf3: BUILD rev={rev} dirty={dirty} pkg={}",
+        env!("CARGO_PKG_VERSION")
+    )
 }
 
 /// The environment variable of the optional workload label.
@@ -25,9 +34,26 @@ pub fn workload_line() -> Option<String> {
     workload_line_from(std::env::var(WORKLOAD_ENV).ok().as_deref())
 }
 
+/// The longest label echoed, in characters.
+const LABEL_MAX: usize = 64;
+
 pub(crate) fn workload_line_from(value: Option<&str>) -> Option<String> {
-    let _ = value;
-    None
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let label: String = value
+        .chars()
+        .take(LABEL_MAX)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "._:/+=@-".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    Some(format!("kf3: WORKLOAD label={label}"))
 }
 
 #[cfg(test)]
@@ -38,7 +64,10 @@ mod tests {
     fn the_build_line_names_the_revision_and_dirtiness() {
         assert_eq!(
             build_line_from(Some("c25eb0c8"), Some("0")),
-            format!("kf3: BUILD rev=c25eb0c8 dirty=0 pkg={}", env!("CARGO_PKG_VERSION"))
+            format!(
+                "kf3: BUILD rev=c25eb0c8 dirty=0 pkg={}",
+                env!("CARGO_PKG_VERSION")
+            )
         );
         assert!(build_line_from(Some("c25eb0c8"), Some("1")).contains(" dirty=1 "));
     }
@@ -46,10 +75,16 @@ mod tests {
     #[test]
     fn a_build_without_a_revision_says_unknown() {
         let l = build_line_from(None, None);
-        assert!(l.starts_with("kf3: BUILD rev=unknown dirty=unknown pkg="), "{l}");
+        assert!(
+            l.starts_with("kf3: BUILD rev=unknown dirty=unknown pkg="),
+            "{l}"
+        );
         // anything that is not a hex revision / a 0 or 1 is not echoed
         let l = build_line_from(Some("v1; rm -rf /\nkf3: FORGED"), Some("maybe"));
-        assert!(l.starts_with("kf3: BUILD rev=unknown dirty=unknown pkg="), "{l}");
+        assert!(
+            l.starts_with("kf3: BUILD rev=unknown dirty=unknown pkg="),
+            "{l}"
+        );
         assert!(!l.contains('\n'));
         assert!(build_line_from(Some(""), Some("")).contains("rev=unknown dirty=unknown"));
     }
@@ -71,10 +106,20 @@ mod tests {
             Some("kf3: WORKLOAD label=steelnomad_run5001")
         );
         let hostile = workload_line_from(Some("a b\nkf3: FORGED\t=x")).unwrap();
-        assert!(!hostile.contains('\n') && !hostile.contains('\t'), "{hostile:?}");
+        assert!(
+            !hostile.contains('\n') && !hostile.contains('\t'),
+            "{hostile:?}"
+        );
         let label = hostile.strip_prefix("kf3: WORKLOAD label=").unwrap();
-        assert!(!label.contains(' '), "the label is one key=value word: {hostile:?}");
+        assert!(
+            !label.contains(' '),
+            "the label is one key=value word: {hostile:?}"
+        );
         let long = workload_line_from(Some(&"x".repeat(100_000))).unwrap();
-        assert!(long.len() <= "kf3: WORKLOAD label=".len() + 64, "{}", long.len());
+        assert!(
+            long.len() <= "kf3: WORKLOAD label=".len() + 64,
+            "{}",
+            long.len()
+        );
     }
 }

@@ -258,6 +258,7 @@ what wakes it; model `d3_*`).
 * `USER_RING_WINDOW_FRESH <key> cursor anchor anchor_forwarded seeded stale_anchor first_segment`: one per Pointer -> Window flip; `first_segment` is `Closed`, `EndsOpen`, `Refused` or `None` (the Window ended first).
 * `USER_RING_POINTER_MARKERS_LATCHED_OFF <key> ...`: once per VM.
 * `USER_RING_LIFECYCLE_MODE <name>`: once per process.
+* ★ 2026-10-24: the per-channel `USER_RING_LIFECYCLE` line gained `pid= classes= engine= bound= scan_entries= at=` after its `Counts {..}`; new one-shot `USER_RING_BOUND`; a final `at=exit` line for relays alive at device stop; relay totals appended to `USER_RING_LIFECYCLE SUMMARY`; `BUILD` and `WORKLOAD` lines at realize. Logging only. Format and rules: [`V3_RELAY_LIFECYCLE_LOG.md`](V3_RELAY_LIFECYCLE_LOG.md).
 
 ### Precondition P1 over a whole run (owner request, additive)
 

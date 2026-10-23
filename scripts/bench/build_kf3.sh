@@ -21,7 +21,11 @@ BUILD="${2:-$(dirname "$QEMU")/qemu-build-kf3}"
 [ -f "$QEMU/VERSION" ] || { echo "⊘ $QEMU is not a QEMU source tree"; exit 1; }
 command -v cargo >/dev/null || { echo "⊘ cargo not on PATH (export PATH=\$HOME/.cargo/bin:\$PATH)"; exit 127; }
 echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD)"
-( cd "$REPO" && cargo build --release -p kf-qemu )
+# ★ 2026-10-24: the revision goes into the binary (`kf3: BUILD rev=.. dirty=..`, crates/kf-qemu/src/buildinfo.rs, read with
+# `option_env!`; no build script) so a qemu.log names the build that wrote it.
+BUILD_REV=$(git -C "$REPO" rev-parse --short=8 HEAD)
+if [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]; then BUILD_DIRTY=0; else BUILD_DIRTY=1; fi
+( cd "$REPO" && KF3_BUILD_REV="$BUILD_REV" KF3_BUILD_DIRTY="$BUILD_DIRTY" cargo build --release -p kf-qemu )
 TARGET=${CARGO_TARGET_DIR:-$REPO/target}
 [[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"
 ARCHIVE="$TARGET/release/libkf_qemu.a"

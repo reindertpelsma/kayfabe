@@ -445,6 +445,9 @@ struct PtChan {
     device: u32,
     /// The host engine (= the guest's `engineType`).
     engine: u32,
+    /// A Windows USER-ring relay's identity for the observability lines (`kf_chan::user_log`); `None` for any other
+    /// channel. Kinds are noted on it, wait-free, when an engine object is kept.
+    user_ident: Option<Arc<kf_chan::user_log::RelayIdent>>,
     /// Engine objects owned by this allocation, with the exact allocated class.
     objects: HashMap<u32, EngineObject>,
     /// Weak pending identities cannot keep failed/canceled acts alive.
@@ -2561,6 +2564,9 @@ fn keep_engine_object(
         || index.contains_key(&(key.0, handle))
     {
         return false;
+    }
+    if let Some(ident) = &v.user_ident {
+        ident.note_class(object.kind);
     }
     v.objects.insert(handle, object);
     v.pending_objects.remove(&handle);
@@ -6979,6 +6985,7 @@ impl ChanPlane {
                             parent: a.parent,
                             device: a.device,
                             engine,
+                            user_ident: None,
                             objects: HashMap::new(),
                             pending_objects: HashMap::new(),
                             disp_sw: HashMap::new(),
@@ -8571,6 +8578,7 @@ mod dispsw_tests {
             parent: 0,
             device: 0,
             engine: 0,
+            user_ident: None,
             objects: HashMap::new(),
             pending_objects: HashMap::new(),
             disp_sw: disp_sw.iter().copied().collect(),
@@ -8667,6 +8675,71 @@ mod dispsw_tests {
                 .is_empty()
         );
         assert!(index.lock().unwrap().is_empty());
+    }
+
+    /// The relay observability lines name the engine-object kinds of a relay (`kf_chan::user_log`): a kept object notes
+    /// its kind on the channel's identity, a refused one does not, and a non-relay channel has no identity to note on.
+    #[test]
+    fn a_kept_engine_object_notes_its_kind_on_the_relay_identity_and_a_refused_one_does_not() {
+        let ident = Arc::new(kf_chan::user_log::RelayIdent::new(Some(0x3b8), Some(1)));
+        let mut v = twin(1, &[]);
+        v.user_ident = Some(ident.clone());
+        let allocation = v.allocation.clone();
+        let chan = v.chan;
+        let pt = pt_lock(HashMap::from([((A, CH1), v)]));
+        let index = Mutex::new(HashMap::new());
+        let admit = |handle| {
+            admit_engine_object(
+                pt.lock().unwrap().get_mut(&(A, CH1)).unwrap(),
+                &index.lock().unwrap(),
+                (A, CH1),
+                handle,
+            )
+            .unwrap()
+        };
+        let object = |allocation, kind, class| EngineObject {
+            allocation,
+            host: 0xa1,
+            kind,
+            class,
+        };
+        assert_eq!(ident.fields(), "pid=0x3b8 classes=none engine=0x1");
+        // refused: the allocation behind the handle is not the pending one
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x10,
+            object(Arc::new(()), Kind::ThreeD, 0xc997)
+        ));
+        assert_eq!(ident.fields(), "pid=0x3b8 classes=none engine=0x1");
+        let a = admit(0x10);
+        assert!(keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x10,
+            object(a, Kind::ThreeD, 0xc997)
+        ));
+        assert_eq!(ident.fields(), "pid=0x3b8 classes=ThreeD engine=0x1");
+        let a = admit(0x11);
+        assert!(keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x11,
+            object(a, Kind::Compute, 0xc5c0)
+        ));
+        assert_eq!(
+            ident.fields(),
+            "pid=0x3b8 classes=Compute+ThreeD engine=0x1"
+        );
     }
 
     #[test]

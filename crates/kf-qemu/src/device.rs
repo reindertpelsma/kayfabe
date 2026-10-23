@@ -365,6 +365,12 @@ impl Device {
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        // ★ relay observability (`docs/design/V3_RELAY_LIFECYCLE_LOG.md`): a qemu.log names the build that wrote it
+        // (and, when the harness says so, the workload), once per run, before anything can refuse.
+        eprintln!("{}", crate::buildinfo::build_line());
+        if let Some(line) = crate::buildinfo::workload_line() {
+            eprintln!("{line}");
+        }
         cfg.check()?;
         // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
         let gss_native = kf_rm::gssnative::enabled()
@@ -3538,7 +3544,10 @@ impl Device {
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
         let rs = &self.chans.relay_stats;
-        if rs.life.any() {
+        // ★ relay observability: the final line of every relay still alive, then the totals (the SUMMARY is also
+        // printed when relays were born but none forwarded an entry)
+        self.chans.report_user_ring_exit();
+        if rs.life.any() || rs.life.relays_seen() {
             eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY {}", rs.life.summary());
         }
         if rs.lazy.any() {

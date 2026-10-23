@@ -504,6 +504,11 @@ pub(super) struct Pump {
     sw: Option<Software>,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
+    /// What this relay is for the observability lines (`kf_chan::user_log`): process id, engine, object kinds.
+    /// Shared with the channel's twin record, which notes a kind when an engine object is kept.
+    ident: Arc<kf_chan::user_log::RelayIdent>,
+    /// This relay's final lifecycle line (`at=retire` or `at=exit`) has been handed out: it is printed once.
+    final_reported: bool,
 }
 
 /// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
@@ -524,6 +529,8 @@ struct Aux {
     sync_carried: u64,
     /// Measurement only: when the last Pointer-mode backstop wake was counted (ms since the first).
     pointer_backstop_ms: Option<u64>,
+    /// The bind of this relay was reported in the turn just ended; the turn counts it VM-wide.
+    bind_reported: bool,
 }
 
 struct Segment {
@@ -1000,7 +1007,7 @@ impl Pump {
             // The native birth authors this same admitted channel identity.
             Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?
         };
-        Ok(Self {
+        let pump = Self {
             cache: crate::userstore::Cache::new(
                 me.rm,
                 me.store,
@@ -1026,23 +1033,49 @@ impl Pump {
             aux: Aux::default(),
             sw: None,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
-        })
+            // the birth hands in the channel's identity right after ([`Pump::with_ident`])
+            ident: Arc::new(kf_chan::user_log::RelayIdent::new(None, None)),
+            final_reported: false,
+        };
+        // counted once the pump exists (a failed construction above is not a relay)
+        me.relay_stats.life.relay_born();
+        Ok(pump)
+    }
+    /// The channel's identity for the observability lines, shared with its twin record (the birth, once).
+    #[must_use]
+    pub(super) fn with_ident(self, ident: Arc<kf_chan::user_log::RelayIdent>) -> Self {
+        Self { ident, ..self }
+    }
+    /// The relay's final lifecycle line, ONCE per relay (`at=retire` at its release, `at=exit` at device stop,
+    /// whichever comes first; nothing for a relay that forwarded no entry, which an exit pass leaves free to print at
+    /// its retire). Printed by the thread that releases or stops, never per entry; see
+    /// `docs/design/V3_RELAY_LIFECYCLE_LOG.md`. Returns whether a line was printed.
+    fn report_final(
+        &mut self,
+        at: kf_chan::user_log::At,
+        stats: &kf_chan::user_loop::Stats,
+    ) -> bool {
+        if self.final_reported {
+            return false;
+        }
+        let line = kf_chan::user_log::lifecycle_line(self.key, at, &self.core.life, &self.ident);
+        if line.is_some() || at == kf_chan::user_log::At::Retire {
+            self.final_reported = true;
+        }
+        let Some(line) = line else { return false };
+        eprintln!("{line}");
+        stats.life.relay_final(&self.core.life);
+        true
+    }
+    /// Device stop: the final line of a relay that is still alive (a long-lived scanner never retires). The caller
+    /// holds the record with `try_lock`; nothing here waits.
+    pub(super) fn report_exit(&mut self, stats: &kf_chan::user_loop::Stats) {
+        if self.report_final(kf_chan::user_log::At::Exit, stats) {
+            stats.life.exit_reported();
+        }
     }
     pub(super) fn release(&mut self, stats: &kf_chan::user_loop::Stats) -> Result<(), String> {
-        {
-            let c = self.core.life.counts();
-            if c.entries_scan
-                .saturating_add(c.entries_pointer)
-                .saturating_add(c.entries_window)
-                != 0
-            {
-                eprintln!(
-                    "kf3: USER_RING_LIFECYCLE {:x?} mode={:?} {c:?}",
-                    self.key,
-                    self.core.life.mode()
-                );
-            }
-        }
+        self.report_final(kf_chan::user_log::At::Retire, stats);
         self.core.retire();
         // ★ lazy observe: the remaining counters join the VM-wide ones; ONE line per relay, at retire
         let lazy = self.core.lazy.take_delta();
@@ -1868,6 +1901,13 @@ impl Pump {
         self.core.again = false;
         let out = self.turn_body(me, r);
         self.report_lifecycle_notices();
+        // VM-wide relay tallies (`USER_RING_LIFECYCLE SUMMARY`): each relay once, on plain flags, no lock
+        if std::mem::take(&mut self.aux.bind_reported) {
+            me.relay_stats.life.relay_bound();
+        }
+        if self.core.life.take_first_switch() {
+            me.relay_stats.life.relay_switching();
+        }
         self.core.sync_tally();
         {
             let d = self.core.life.take_delta();
@@ -1921,8 +1961,18 @@ impl Pump {
                     "kf3: USER_RING_POINTER_MARKERS_LATCHED_OFF {:#x}:{:#x} mode={mode:?} relayed={relayed} put_abs={put_abs} — first packet open at a GP_PUT boundary in this VM: Pointer-mode markers are switched OFF for every channel (performance fallback: bounded spin and the counted backstop; no entry is lost or duplicated). Anchored windows stay.",
                     key.0, key.1
                 ),
-                // stub of the observability change: the bind line comes with the pump wiring
-                Notice::Bound { .. } => {}
+                Notice::Bound { to, scan_entries } => {
+                    // once per relay (the machine queues it once); counted VM-wide by the turn
+                    eprintln!(
+                        "{}",
+                        kf_chan::user_log::bound_line(
+                            key,
+                            &kf_chan::user_lifecycle::Bound { to, scan_entries },
+                            &self.ident
+                        )
+                    );
+                    self.aux.bind_reported = true;
+                }
                 Notice::WindowFresh {
                     cursor,
                     anchor,
@@ -3884,11 +3934,23 @@ mod tests {
             !pump.contains("USER_RING_LIFECYCLE {:x?} mode="),
             "the per-relay line is formatted by kf_chan::user_log only"
         );
-        assert_eq!(pump.matches("self.report_final(").count(), 2, "retire and exit");
-        assert!(pump.contains("std::mem::replace(&mut self.final_reported, true)"));
+        assert_eq!(
+            pump.matches("self.report_final(").count(),
+            2,
+            "retire and exit"
+        );
+        assert_eq!(
+            pump.matches("self.final_reported = true").count(),
+            1,
+            "the final line is guarded by one per-relay flag"
+        );
         assert_eq!(pump.matches("life.relay_born()").count(), 1, "in Pump::new");
         assert_eq!(pump.matches("life.relay_bound()").count(), 1, "in turn()");
-        assert_eq!(pump.matches("life.relay_switching()").count(), 1, "in turn()");
+        assert_eq!(
+            pump.matches("life.relay_switching()").count(),
+            1,
+            "in turn()"
+        );
         let turn = pump
             .split("fn turn(&mut self, me: &ChanPlane")
             .nth(1)

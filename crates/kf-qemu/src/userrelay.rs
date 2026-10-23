@@ -499,8 +499,15 @@ impl Birth {
                 return Err(fail(format!("{why}; storage cleanup {cleanup:?}")));
             }
         };
+        // What the observability lines say about this relay: the declared ProcessID and engine of CHAN-FACTS
+        // (already parsed at the channel alloc; nothing is captured anew), and the engine-object kinds the twin
+        // record notes as they are kept (`keep_engine_object`).
+        let ident = Arc::new(kf_chan::user_log::RelayIdent::new(
+            a.process_id,
+            a.engine_type,
+        ));
         let pump = match super::userpump::Pump::new(me, native_id, (a.client, a.handle)) {
-            Ok(pump) => pump,
+            Ok(pump) => pump.with_ident(ident.clone()),
             Err(why) => {
                 let cleanup = me.inbox.user_va.release_after_channel_free(lease);
                 let _ = me.inbox.wake.signal();
@@ -699,6 +706,7 @@ impl Birth {
                     parent: a.parent,
                     device: a.device,
                     engine: a.engine_type.unwrap_or(0),
+                    user_ident: Some(ident.clone()),
                     objects: HashMap::new(),
                     pending_objects: HashMap::new(),
                     disp_sw: HashMap::new(),
@@ -837,6 +845,53 @@ impl ChanPlane {
 }
 
 impl ChanPlane {
+    /// Device stop (`Device::stop`, QEMU's main thread, never a vCPU): the final lifecycle line (`at=exit`) of every
+    /// relay still alive, so a long-lived scanner that never retires is visible
+    /// (`docs/design/V3_RELAY_LIFECYCLE_LOG.md`). Nothing here blocks: the relay table and each record are taken with
+    /// `try_lock`, retried for at most 100 ms in total; a record that stays busy is counted
+    /// (`relays_exit_busy` of the SUMMARY line), not waited for. Runs once per device.
+    pub(crate) fn report_user_ring_exit(&self) {
+        use std::sync::TryLockError;
+        const BUDGET: std::time::Duration = std::time::Duration::from_millis(100);
+        let life = &self.relay_stats.life;
+        if !life.begin_exit() {
+            return;
+        }
+        let start = std::time::Instant::now();
+        let mut cells: Vec<(u32, Arc<Cell>)> = loop {
+            match self.user_rings.try_lock() {
+                Ok(rings) => break rings.iter().map(|(t, c)| (*t, c.clone())).collect(),
+                Err(TryLockError::WouldBlock) if start.elapsed() < BUDGET => {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                Err(_) => {
+                    life.exit_busy();
+                    return;
+                }
+            }
+        };
+        cells.sort_by_key(|(token, _)| *token);
+        for (_, cell) in cells {
+            loop {
+                match cell.try_lock() {
+                    Ok(mut r) => {
+                        if let Some(pump) = r.pump.as_mut() {
+                            pump.report_exit(&self.relay_stats);
+                        }
+                        break;
+                    }
+                    Err(TryLockError::WouldBlock) if start.elapsed() < BUDGET => {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                    Err(_) => {
+                        life.exit_busy();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn finish_user_ring_free(
         &self,
         token: u32,
