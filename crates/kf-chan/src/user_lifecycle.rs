@@ -302,6 +302,8 @@ macro_rules! lifecycle_stats {
             pub relays_exit_reported: std::sync::atomic::AtomicU64,
             /// Relays still alive at device stop whose record was busy (no line: nothing blocks at exit).
             pub relays_exit_busy: std::sync::atomic::AtomicU64,
+            /// The exit pass over the live relays started (it runs once per device).
+            pub exit_started: std::sync::atomic::AtomicBool,
         }
         impl LifecycleStats {
             /// Merge one channel's delta ([`Lifecycle::take_delta`]).
@@ -320,27 +322,40 @@ macro_rules! lifecycle_stats {
             }
             /// A relay (pump) was created.
             pub fn relay_born(&self) {
-                let _ = &self.relays_born;
+                self.relays_born.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             /// A relay left Scan (call once per relay, when its `Notice::Bound` is drained).
             pub fn relay_bound(&self) {
-                let _ = &self.relays_bound;
+                self.relays_bound.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             /// A relay switched Pointer/Window for the first time (call when [`Lifecycle::take_first_switch`] is true).
             pub fn relay_switching(&self) {
-                let _ = &self.relays_switching;
+                self.relays_switching.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             /// A relay's final line (retire or exit) was printed: fold its never-bound tally in.
             pub fn relay_final(&self, life: &Lifecycle) {
-                let _ = (&self.relays_never_bound_active, &self.entries_scan_never_bound, life);
+                use std::sync::atomic::Ordering::Relaxed;
+                if life.bound().is_none() {
+                    self.relays_never_bound_active.fetch_add(1, Relaxed);
+                    self.entries_scan_never_bound.fetch_add(life.counts().entries_scan, Relaxed);
+                }
+            }
+            /// `true` for the first caller only: the exit pass over the live relays runs once per device.
+            pub fn begin_exit(&self) -> bool {
+                !self.exit_started.swap(true, std::sync::atomic::Ordering::AcqRel)
             }
             /// A live relay's exit line was printed.
             pub fn exit_reported(&self) {
-                let _ = &self.relays_exit_reported;
+                self.relays_exit_reported.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
             /// A live relay's record was busy at exit.
             pub fn exit_busy(&self) {
-                let _ = &self.relays_exit_busy;
+                self.relays_exit_busy.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            /// Whether any relay was ever created (the device-stop summary is printed then, even if none forwarded).
+            #[must_use]
+            pub fn relays_seen(&self) -> bool {
+                self.relays_born.load(std::sync::atomic::Ordering::Relaxed) > 0
             }
             /// Whether any channel ever left Scan or scanned anything.
             #[must_use]
@@ -359,6 +374,19 @@ macro_rules! lifecycle_stats {
                     self.set_object_5080_max_per_channel.load(Relaxed)
                 ));
                 s.push_str(&format!("window_entries_max={}", self.window_entries_max.load(Relaxed)));
+                // Relay observability (`docs/design/V3_RELAY_LIFECYCLE_LOG.md`), appended after the pre-existing keys.
+                let (born, bound) = (self.relays_born.load(Relaxed), self.relays_bound.load(Relaxed));
+                s.push_str(&format!(
+                    " relays_born={born} relays_bound={bound} relays_never_bound={} relays_switching={} \
+                     relays_never_bound_with_entries={} entries_scan_never_bound={} \
+                     relays_exit_reported={} relays_exit_busy={}",
+                    born.saturating_sub(bound),
+                    self.relays_switching.load(Relaxed),
+                    self.relays_never_bound_active.load(Relaxed),
+                    self.entries_scan_never_bound.load(Relaxed),
+                    self.relays_exit_reported.load(Relaxed),
+                    self.relays_exit_busy.load(Relaxed),
+                ));
                 s
             }
         }
@@ -800,8 +828,10 @@ impl Lifecycle {
     /// `true` exactly once, after the channel's first Pointer/Window switch (`to_window_fresh` or
     /// `to_pointer_from_window` became nonzero): the VM-wide "relays switching" tally counts each channel once.
     pub fn take_first_switch(&mut self) -> bool {
-        let _ = &mut self.switch_noted;
-        false
+        let switched = self.counts.to_window_fresh + self.counts.to_pointer_from_window > 0;
+        let first = switched && !self.switch_noted;
+        self.switch_noted |= switched;
+        first
     }
     /// The transition the last call made, if any (taken).
     pub fn take_transition(&mut self) -> Option<Transition> {
@@ -809,6 +839,19 @@ impl Lifecycle {
     }
 
     fn go(&mut self, to: Mode, cause: Cause) {
+        // The bind (Scan -> Pointer/Window by the software object): once per channel, noted once. It bypasses the
+        // notice cap because it is one-shot by construction (`bound` is set) and the pump drains every turn.
+        if self.mode == Mode::Scan
+            && self.bound.is_none()
+            && matches!(
+                cause,
+                Cause::SoftwareBound | Cause::SoftwareBoundRegistered
+            )
+        {
+            let scan_entries = self.counts.entries_scan;
+            self.bound = Some(Bound { to, scan_entries });
+            self.notices.push(Notice::Bound { to, scan_entries });
+        }
         self.last = Some(Transition {
             from: self.mode,
             cause,
@@ -2367,7 +2410,11 @@ mod tests {
                 assert_eq!(l.mode(), Mode::Pointer);
             }
         }
+        // the bind itself is noticed too (`Notice::Bound`, tests/user_relay_log.rs); this helper is about the Window
         l.take_notices()
+            .into_iter()
+            .filter(|n| !matches!(n, Notice::Bound { .. }))
+            .collect()
     }
 
     #[test]
@@ -2404,7 +2451,8 @@ mod tests {
         l.segment_scanned(false);
         l.segment_scanned(true);
         l.scan_refused();
-        assert_eq!(l.take_notices().len(), 1);
+        // the bind and the one Window flip; the three later segment results add nothing
+        assert_eq!(l.take_notices().len(), 2);
     }
 
     /// G4 / I6: nothing in the machine knows about time (OWNER_RULINGS section AE: no heuristics, no timers).

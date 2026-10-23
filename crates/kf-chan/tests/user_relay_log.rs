@@ -287,3 +287,11 @@ fn a_flood_of_relays_and_entries_prints_a_bounded_number_of_lines() {
     assert_eq!(large.0, 1_000 + 2_000);
     assert!(large.1 < 2_048, "every line is bounded: {} bytes", large.1);
 }
+
+#[test]
+fn the_exit_pass_runs_once_per_device() {
+    let st = LifecycleStats::default();
+    assert!(st.begin_exit());
+    assert!(!st.begin_exit());
+    assert!(!st.begin_exit());
+}
