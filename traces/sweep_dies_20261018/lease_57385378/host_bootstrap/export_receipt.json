@@ -1,0 +1,13 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "utc": "2026-10-23T15:08:58.836711+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 83,
+      "sha256": "b75c9e922633d40103eb4ff20ecb9c5ab5abe56630180150185d6329dd1a3486"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}

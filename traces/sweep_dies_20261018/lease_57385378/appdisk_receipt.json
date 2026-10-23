@@ -1,0 +1,21 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "utc": "2026-10-23T15:13:08.794237+00:00",
+  "app_image": {
+    "kind": "MEASURED",
+    "bytes": 6785255424,
+    "sha256": "183c13aa6b2c3c20475f7e1c5eed9979ca973056886d2b519c013386ba4da652",
+    "workers": 8,
+    "elapsed_s": 403.625,
+    "receipt": "WHOLE_FILE_PIN_OK"
+  },
+  "nvrtc": {
+    "bytes": 314608748,
+    "sha256": "1aa0644fa53c8ca34cdc73db17bcc73530557bdd3f582c7bfdbd7916c8b48f65",
+    "receiver_verified": true
+  },
+  "transfers_active": false,
+  "dev_caches_retained_for_following_dies": true
+}
