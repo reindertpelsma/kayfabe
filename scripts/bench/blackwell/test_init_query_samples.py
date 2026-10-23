@@ -1,4 +1,5 @@
 """A bounded missing CIM sample is never evidence of disabled or enabled state."""
+
 import contextlib
 import io
 import json
@@ -15,9 +16,18 @@ import phase_xid_guard as G
 
 
 def row(code=0, tag="actual"):
-    return "BW580_RESULT " + json.dumps({
-        "code": code, "driver": "32.0.15.8088", "tdr4101": 0, "sample": tag,
-    }) + "\n"
+    return (
+        "BW580_RESULT "
+        + json.dumps(
+            {
+                "code": code,
+                "driver": "32.0.15.8088",
+                "tdr4101": 0,
+                "sample": tag,
+            }
+        )
+        + "\n"
+    )
 
 
 def missing(text=None):
@@ -30,8 +40,11 @@ class MissingSamples(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.phase = Path(self.temp.name) / "phase.json"
         self.owner = {
-            "arm": "on_precision", "pid": os.getpid(), "starttime": 123,
-            "exe": "/own/qemu", "pci": "0000:00:07",
+            "arm": "on_precision",
+            "pid": os.getpid(),
+            "starttime": 123,
+            "exe": "/own/qemu",
+            "pci": "0000:00:07",
         }
         self.phase.write_text(json.dumps(self.owner))
         self.events = []
@@ -58,8 +71,14 @@ class MissingSamples(unittest.TestCase):
             self.events.append(("record", json.loads(text.split(" ", 1)[1])))
 
         return O.observe(
-            self.phase, "on_precision", fetch, ready, record, lambda _: True,
-            lambda: self.clock < 120, attempts=attempts or len(samples),
+            self.phase,
+            "on_precision",
+            fetch,
+            ready,
+            record,
+            lambda _: True,
+            lambda: self.clock < 120,
+            attempts=attempts or len(samples),
             pause=pause or (lambda: None),
         )
 
@@ -138,15 +157,26 @@ class MissingSamples(unittest.TestCase):
     def invoke_main(self, responses):
         ready = Path(self.temp.name) / "ready.json"
         diag = Path(self.temp.name) / "diag.txt"
-        args = ["observer", str(self.phase), "on_precision", str(ready), str(diag),
-                "--", "fixture-cim"]
-        with mock.patch.object(sys, "argv", args), \
-                mock.patch.object(O.subprocess, "run", side_effect=responses) as command, \
-                mock.patch.object(O.time, "sleep"), \
-                mock.patch.object(O.time, "monotonic", return_value=0), \
-                mock.patch.object(G, "validate_phase_owner"), \
-                mock.patch.object(G, "record_windows_init") as record, \
-                contextlib.redirect_stdout(io.StringIO()):
+        args = [
+            "observer",
+            str(self.phase),
+            "on_precision",
+            str(ready),
+            str(diag),
+            "--",
+            "fixture-cim",
+        ]
+        with mock.patch.object(sys, "argv", args), mock.patch.object(
+            O.subprocess, "run", side_effect=responses
+        ) as command, mock.patch.object(O.time, "sleep"), mock.patch.object(
+            O.time, "monotonic", return_value=0
+        ), mock.patch.object(
+            G, "validate_phase_owner"
+        ), mock.patch.object(
+            G, "record_windows_init"
+        ) as record, contextlib.redirect_stdout(
+            io.StringIO()
+        ):
             code = O.main()
         return code, ready, diag, command, record
 
@@ -155,9 +185,13 @@ class MissingSamples(unittest.TestCase):
         return subprocess.CompletedProcess(["fixture-cim"], code, text or row(), "")
 
     def test_cli_outer_timeout_then_actual_handshake_and_code0(self):
-        code, ready, diag, command, record = self.invoke_main([
-            missing(), self.response(text=row(22)), self.response(),
-        ])
+        code, ready, diag, command, record = self.invoke_main(
+            [
+                missing(),
+                self.response(text=row(22)),
+                self.response(),
+            ]
+        )
         self.assertEqual(code, 0)
         self.assertTrue(ready.exists())
         self.assertEqual(diag.read_text(), row())
@@ -165,19 +199,25 @@ class MissingSamples(unittest.TestCase):
         self.assertTrue(all(call.kwargs["timeout"] == 10 for call in command.call_args_list))
 
     def test_cli_inner_timeout_is_missing_initial_sample_not_state(self):
-        code, ready, _, _, record = self.invoke_main([
-            self.response(124, row(22, "partial")),
-            self.response(text=row(22)), self.response(),
-        ])
+        code, ready, _, _, record = self.invoke_main(
+            [
+                self.response(124, row(22, "partial")),
+                self.response(text=row(22)),
+                self.response(),
+            ]
+        )
         self.assertEqual(code, 0)
         self.assertTrue(ready.exists())
         self.assertEqual(record.call_count, 1)
 
     def test_cli_inner_timeout_after_handshake_cannot_publish_its_output(self):
-        code, _, diag, _, record = self.invoke_main([
-            self.response(text=row(22)), self.response(124, row(0, "partial")),
-            self.response(),
-        ])
+        code, _, diag, _, record = self.invoke_main(
+            [
+                self.response(text=row(22)),
+                self.response(124, row(0, "partial")),
+                self.response(),
+            ]
+        )
         self.assertEqual(code, 0)
         self.assertEqual(diag.read_text(), row())
         self.assertEqual(record.call_count, 1)
