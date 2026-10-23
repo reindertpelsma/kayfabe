@@ -1,0 +1,26 @@
+{
+  "classification": "MEASURED",
+  "evidence": "sa02-probe/encoder-red.json",
+  "candidate_product": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "scope": "GPU-free negative control for a separate public-ABI guest-input encoder; this is not a candidate product regression",
+  "fixture": "root allocation parameter bytes zeroed at the hClient/processID fields",
+  "passed": 1,
+  "failed": 2,
+  "ignored": 0,
+  "tests": [
+    [
+      "q4_probe_tests::q4_probe_full_ioctl_layout_keeps_os_pointer_clear",
+      "ok"
+    ],
+    [
+      "q4_probe_tests::q4_probe_chosen_client_is_carried_in_root_params",
+      "FAILED"
+    ],
+    [
+      "q4_probe_tests::q4_probe_userspace_pid_is_carried_independently",
+      "FAILED"
+    ]
+  ],
+  "fixture_source_sha256": "d47f2e80522ef70718904900e473fb2ed9f9b27c565586c1c6945c676e27124c",
+  "falsifier_before_hardware": "Helper must carry selected handle and actual userspace PID, use full declared root-allocation layout, and reject a non-QEMU host; missing chosen handle or either USER/ADMIN stamp is NOT_EXERCISED. Any observed kernel=true authorization from a chosen-client USER/ADMIN birth is a failed SA-02 arm; new Xid is fatal. No channel will be scheduled and no GPU commands submitted."
+}
