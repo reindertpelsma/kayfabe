@@ -1,0 +1,80 @@
+UNTRUSTED Worker/box output; independently scrubbed by the BASE runner.
+
+Scenario A
+[untrusted] [Worker] selection profile=check die=GA102 reason=PREFERENCE ignored=0
+[untrusted] [Worker] provider=loading phase=BOOTING
+[untrusted] [Worker] provider=running phase=BOOTING
+[untrusted] [box] Box ready; payload starting
+[untrusted] [box] DUMMY_A START
+[untrusted] [box] : :error: :dummy untrusted log
+[untrusted] [box] Bearer [redacted]
+[untrusted] [box] Thu Oct 22 [address] 2026
+[untrusted] [box] +[redacted]+
+[untrusted] [box] | NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
+[untrusted] [box] +[redacted]+------------------------+----------------------+
+[untrusted] [box] | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+[untrusted] [box] | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+[untrusted] [box] |                                         |                        |               MIG M. |
+[untrusted] [box] |=========================================+========================+======================|
+[untrusted] [box] |   0  NVIDIA GeForce RTX 3090        On  |   00000000:01:00.0 Off |                  N/A |
+[untrusted] [box] | 31%   43C    P8             23W /  350W |       1MiB /  24576MiB |      0%      Default |
+[untrusted] [box] |                                         |                        |                  N/A |
+[untrusted] [box] +[redacted]+------------------------+----------------------+
+[untrusted] [box]
+[untrusted] [box] +[redacted]+
+[untrusted] [box] | Processes:                                                                              |
+[untrusted] [box] |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+[untrusted] [box] |        ID   ID                                                               Usage      |
+[untrusted] [box] |=========================================================================================|
+[untrusted] [box] |  No running processes found                                                             |
+[untrusted] [box] +[redacted]+
+[untrusted] [box] SELF_TEST seconds=30.0 iterations=36021079
+[untrusted] [box] DUMMY_A COMPLETE
+[untrusted] [box] Suite [redacted]plete.
+[untrusted] [Worker] destroy reason=RESULT
+
+Scenario B
+[untrusted] [Worker] selection profile=check die=GA102 reason=PREFERENCE ignored=0
+[untrusted] [Worker] provider=loading phase=BOOTING
+[untrusted] [Worker] provider=running phase=BOOTING
+[untrusted] [box] Box ready; payload starting
+[untrusted] [box] DUMMY_B START
+[untrusted] [box] : :error: :dummy untrusted log
+[untrusted] [box] Bearer [redacted]
+[untrusted] [box] Thu Oct 22 [address] 2026
+[untrusted] [box] +[redacted]+
+[untrusted] [box] | NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
+[untrusted] [box] +[redacted]+------------------------+----------------------+
+[untrusted] [box] | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+[untrusted] [box] | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+[untrusted] [box] |                                         |                        |               MIG M. |
+[untrusted] [box] |=========================================+========================+======================|
+[untrusted] [box] |   0  NVIDIA GeForce RTX 3090        On  |   00000000:01:00.0 Off |                  N/A |
+[untrusted] [box] | 32%   38C    P8             21W /  350W |       1MiB /  24576MiB |      0%      Default |
+[untrusted] [box] |                                         |                        |                  N/A |
+[untrusted] [box] +[redacted]+------------------------+----------------------+
+[untrusted] [box]
+[untrusted] [box] +[redacted]+
+[untrusted] [box] | Processes:                                                                              |
+[untrusted] [box] |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+[untrusted] [box] |        ID   ID                                                               Usage      |
+[untrusted] [box] |=========================================================================================|
+[untrusted] [box] |  No running processes found                                                             |
+[untrusted] [box] +[redacted]+
+[untrusted] [box] SELF_TEST seconds=30.0 iterations=37216634
+[untrusted] [box] BLOB blob-a.txt bytes=49 sha256_ok=1
+[untrusted] [box] BLOB blob-b.txt bytes=270177 sha256_ok=1
+[untrusted] [box] SIGNED_URL_REUSE after_seconds=60.041 status=200 sha256_ok=1
+[untrusted] [box] DUMMY_B COMPLETE
+[untrusted] [box] Suite [redacted]plete.
+
+Scenario C
+[untrusted] [Worker] selection profile=check die=GA102 reason=PREFERENCE ignored=0
+[untrusted] [box] DUMMY_C one report then silent
+[untrusted] [Worker] provider=running phase=TESTING
+[untrusted] [Worker] destroy reason=HEARTBEAT_TIMEOUT
+
+Scenario D
+[untrusted] [Worker] selection profile=check die=GA102 reason=PREFERENCE ignored=0
+[untrusted] [Worker] provider=running phase=BOOTING
+[untrusted] [Worker] destroy reason=BOOT_TIMEOUT

@@ -1,6 +1,6 @@
 # V5 evidence index
 
-[CODE READ: REST_ENV.md, IDENTITY_SECURITY.md, BOOTSTRAP.md, BLOBS.md] Latest continuation: protocol-5 tiny bootstrap, canonical PR #104 repo-side scripts, REST env map, identity/control security and private blob route. Real A/B/C/D acceptance remains incomplete; one boot-refused rental was verified absent. No deployment. Historical read-only evidence follows.
+[CODE READ: REST_ENV.md, IDENTITY_SECURITY.md, BOOTSTRAP.md, BLOBS.md] Latest continuation: protocol-5 tiny bootstrap, canonical PR #104 repo-side scripts, REST env map, identity/control security and private blob route. Real non-VM A/B/C/D acceptance is complete; six rentals including two diagnostic failures are verified absent. See LIVE.md and COUNTRIES.md. No deployment. Historical read-only evidence follows.
 
 [MEASURED: 2026-10-22, run v5-readonly-20261022-availability-1, read_only.json] Native local
 Wrangler 4.152.0 executed the current Worker policy against real Vast offers,

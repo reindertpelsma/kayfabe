@@ -1,21 +1,20 @@
 # Vast broker (stage 1)
 
 
-## V5 lifecycle and shipped policy (2026-10-22; acceptance pending)
+## V5 lifecycle and shipped policy (2026-10-23)
 
 [CODE READ: defaults.json, src/defaults.js, src/policy.js] Numeric defaults live
 in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
 embeds that same file, and wrangler.toml has no numeric override. The owner-approved
 check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
-Renting remains disabled in the committed configuration. Profiles and effective storage/network admission are implemented below. The V5 runner protocol is implemented; payload integration and live acceptance
-are still pending.
+Renting remains disabled in the committed configuration. The local non-VM A/B/C/D acceptance is complete; see [live evidence](../../traces/vast_broker_v5_20261018/LIVE.md). Full KVM/payload and hosted OIDC acceptance remain separate gaps.
 
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
 TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
 (3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.
 Empty logs count as heartbeats: the sender emits one within 10 minutes; 15 minutes
 without an authenticated post destroys the box. PASS retains 5 minutes of grace;
-FAIL retains 10. SSH login calls the per-run hold helper to enter MANUAL, suspending
+FAIL retains 10. After a recorded result, SSH login calls the per-run hold helper to enter MANUAL, suspending
 grace and heartbeat requirements while retaining the hard limit. Only the owner
 can remove that hard timer; admission checks the extended billing reservation.
 MANUAL still ends at the absolute ceiling, and cron writes a Worker-authored line.
@@ -31,6 +30,15 @@ provider billing bound during an outage.
 
 
 ## V5 profiles, forced admission and availability
+
+[CODE READ: defaults.json, src/offers.js, runner.py] `PREFERRED_COUNTRIES` is an
+ordered JSON list, default `["US","CA"]`. All forced eligibility checks and die
+preferences run first. Within the chosen class, country rank precedes effective
+price and offer ID. It never filters countries or relaxes a requirement; a
+qualifying non-US offer remains usable. The provider's `geolocation` suffix is
+used, and missing/odd location ranks last. Structured status records `country`;
+the runner independently validates and labels it untrusted. See
+[region evidence](../../traces/vast_broker_v5_20261018/COUNTRIES.md).
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js] `check` is the PR profile:
 configured measured classes GA106 first, then AD104, GA102 and AD102, capped at

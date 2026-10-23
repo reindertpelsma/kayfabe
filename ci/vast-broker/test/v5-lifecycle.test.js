@@ -190,7 +190,7 @@ for (const restart of [false, true])
     await h.service.sweep();
     assert.equal((await record(h)).closed, 'MANUAL_TIMEOUT');
   });
-for (const auth of ['box', 'oidc'])
+for (const auth of ['box', 'oidc', 'other-oidc'])
   test('V5 only owner may remove hard limit ' + auth, async () => {
     const h = await v5();
     await rent(h);
@@ -198,13 +198,23 @@ for (const auth of ['box', 'oidc'])
     await hold(h);
     const token =
       auth === 'box' ? callbackToken(await record(h), h.bindings.RUN_TOKEN_SECRET) : undefined;
-    assert.equal((await h.call('/stop-timer/123-1', { token })).status, 401);
+    assert.equal(
+      (
+        await h.call('/stop-timer/123-1', {
+          token,
+          claims: auth === 'other-oidc' ? { actor_id: '43' } : {},
+        })
+      ).status,
+      401,
+    );
     assert.equal((await record(h)).hardDeadline, clock + 180 * minute);
   });
 for (const token of ['bad', env.OWNER_STOP_TOKEN])
   test('V5 hold refuses non-box capability ' + token.slice(0, 3), async () => {
     const h = await v5();
     await rent(h);
+    await progress(h);
+    await finish(h, 'PASS');
     assert.equal((await hold(h, token)).status, 401);
     assert.notEqual((await record(h)).phase, 'MANUAL');
   });

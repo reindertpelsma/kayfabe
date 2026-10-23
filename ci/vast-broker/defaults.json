@@ -253,5 +253,9 @@
   "sweepWorkflowPath": ".github/workflows/gpu-vast-sweep.yml",
   "oidcEnvironment": "gpu-vast",
   "blobRunMints": 8,
-  "blobDailyMints": 64
+  "blobDailyMints": 64,
+  "preferredCountries": [
+    "US",
+    "CA"
+  ]
 }

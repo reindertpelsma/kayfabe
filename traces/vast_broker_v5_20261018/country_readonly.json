@@ -1,0 +1,197 @@
+{
+  "run": "v5-country-readonly-20261023",
+  "provider_searches": 1,
+  "provider_writes": 0,
+  "field": "geolocation",
+  "shape": "region, uppercase country suffix",
+  "country_counts": {
+    "CA": 8,
+    "GB": 1,
+    "FI": 2,
+    "DK": 1,
+    "JP": 2,
+    "HU": 1,
+    "CH": 2,
+    "AU": 3,
+    "KR": 2,
+    "SE": 1,
+    "CZ": 3,
+    "CN": 2,
+    "IS": 1,
+    "IN": 4,
+    "US": 2,
+    "TW": 1,
+    "FR": 1,
+    "RO": 1,
+    "IT": 2,
+    "PL": 1,
+    "BG": 1
+  },
+  "preferred": [
+    "US",
+    "CA"
+  ],
+  "profiles": [
+    {
+      "profile": "check",
+      "selected": {
+        "die": "GA106",
+        "country": "CA",
+        "effective_hourly": 0.14657986111111113
+      },
+      "allowed": 4,
+      "verified_counts": [
+        {
+          "die": "AD102",
+          "total": 9,
+          "verified": 6
+        },
+        {
+          "die": "AD103",
+          "total": 1,
+          "verified": 0
+        },
+        {
+          "die": "AD106",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "CC_120",
+          "total": 5,
+          "verified": 5
+        },
+        {
+          "die": "CC_86",
+          "total": 1,
+          "verified": 0
+        },
+        {
+          "die": "CC_89",
+          "total": 2,
+          "verified": 2
+        },
+        {
+          "die": "GA102",
+          "total": 6,
+          "verified": 2
+        },
+        {
+          "die": "GA106",
+          "total": 3,
+          "verified": 1
+        },
+        {
+          "die": "GB202",
+          "total": 8,
+          "verified": 6
+        },
+        {
+          "die": "GB203",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "GB205",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "GB206",
+          "total": 2,
+          "verified": 2
+        }
+      ],
+      "rejected": {
+        "VERIFICATION": 15,
+        "DRIVER": 18,
+        "CPU_RAM": 11,
+        "NETWORK": 3,
+        "DIE": 24,
+        "PERFORMANCE": 5,
+        "RELIABILITY": 14,
+        "PRICE": 13
+      }
+    },
+    {
+      "profile": "sweep",
+      "selected": {
+        "die": "GA106",
+        "country": "CA",
+        "effective_hourly": 0.14657986111111113
+      },
+      "allowed": 10,
+      "verified_counts": [
+        {
+          "die": "AD102",
+          "total": 9,
+          "verified": 6
+        },
+        {
+          "die": "AD103",
+          "total": 1,
+          "verified": 0
+        },
+        {
+          "die": "AD106",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "CC_120",
+          "total": 5,
+          "verified": 5
+        },
+        {
+          "die": "CC_86",
+          "total": 1,
+          "verified": 0
+        },
+        {
+          "die": "CC_89",
+          "total": 2,
+          "verified": 2
+        },
+        {
+          "die": "GA102",
+          "total": 6,
+          "verified": 2
+        },
+        {
+          "die": "GA106",
+          "total": 3,
+          "verified": 1
+        },
+        {
+          "die": "GB202",
+          "total": 8,
+          "verified": 6
+        },
+        {
+          "die": "GB203",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "GB205",
+          "total": 1,
+          "verified": 1
+        },
+        {
+          "die": "GB206",
+          "total": 2,
+          "verified": 2
+        }
+      ],
+      "rejected": {
+        "VERIFICATION": 15,
+        "DRIVER": 18,
+        "CPU_RAM": 11,
+        "NETWORK": 3,
+        "PERFORMANCE": 5,
+        "RELIABILITY": 14,
+        "DIE": 2
+      }
+    }
+  ]
+}

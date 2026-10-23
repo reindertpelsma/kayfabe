@@ -340,12 +340,13 @@ STATUS_KEYS = {
     "last_post_at",
     "result_deadline_at",
 }
+OPTIONAL_STATUS_KEYS = {"country"}
 ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
 
 def validate_status(data, ctx, manifest, http_status):
     if (
-        not set(data) <= STATUS_KEYS
+        not set(data) <= STATUS_KEYS | OPTIONAL_STATUS_KEYS
         or data.get("state") not in STATES
         or data.get("verdict") not in VERDICTS
     ):
@@ -373,7 +374,7 @@ def validate_status(data, ctx, manifest, http_status):
         if "selection" in data:
             validate_selection(data["selection"])
         return data
-    if set(data) != STATUS_KEYS:
+    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:
         raise Invalid()
     if (
         data["run"] != ctx["run"]
@@ -414,6 +415,11 @@ def validate_status(data, ctx, manifest, http_status):
         data["profile"] != ctx.get("profile", "check")
         or data["selection_reason"] not in SELECTION_REASONS
         or not integer(data["preferences_ignored"], 0, 16)
+    ):
+        raise Invalid()
+    if "country" in data and (
+        not isinstance(data["country"], str)
+        or not re.fullmatch(r"UNKNOWN|[A-Z]{2}", data["country"])
     ):
         raise Invalid()
     if data["die"] != "unknown" and not class_token(data["die"]):
@@ -692,6 +698,7 @@ class Runner:
                 for key, value in [
                     ("Profile", d["profile"]),
                     ("Die class", d["die"]),
+                    ("Provider country (untrusted)", d.get("country", "UNKNOWN")),
                     ("Driver (untrusted)", d["driver_version"]),
                     ("Selection reason", d["selection_reason"]),
                     ("Preferences ignored", str(d["preferences_ignored"])),
