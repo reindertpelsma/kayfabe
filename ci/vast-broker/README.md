@@ -9,6 +9,9 @@ embeds that same file, and wrangler.toml has no numeric override. The owner-appr
 check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
 Renting remains disabled in the committed configuration. The local non-VM A/B/C/D acceptance is complete; see [live evidence](../../traces/vast_broker_v5_20261018/LIVE.md). Full KVM/payload and hosted OIDC acceptance remain separate gaps.
 
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] MANUAL, the hold helper, the
+manual ceiling and owner timer removal are removed; states are NONE, CREATING, BOOTING, TESTING and
+GRACE.
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
 TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
 (3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.
@@ -114,9 +117,11 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 | Worker → Vast box/operator | These are community/consumer hosts with observable guest root. The box never receives the Vast account key, App key, owner stop token or Worker signing secret; it gets only its limited run capability. |
 | Worker → CI content/secrets | The billed Vast key must **never be a GitHub secret**: LLM agents and future contributors may reach repository secrets. CI presents only OIDC identity; the Worker independently checks identity, approved content and spending policy. |
 | CI → Vast | Box output can inject logs/commands; a community box cannot supply an attested result. CI sees Vast only through the Worker, with no direct box connection and no executable/artifact input from Vast. |
-| Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/hold/blob-URL access for that run. Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
+| Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/hold/blob-URL access for that run (SUPERSEDED 2026-10-23: hold removed). Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
 
-[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold/blob-url; private release locator scope and limits are specified in [the box interface](docs/BOX_PROTOCOL.md). The Worker never proxies asset bytes. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] The hold route is removed; per-run
+authority is report/kill/blob-url.
+[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold/blob-url (SUPERSEDED 2026-10-23: hold removed); private release locator scope and limits are specified in [the box interface](docs/BOX_PROTOCOL.md). The Worker never proxies asset bytes. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
 
 [CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx --yes wrangler@4.152.0 deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
@@ -128,6 +133,9 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 
 [CODE READ: 2026-10-22 src/index.js] A provider row whose actual_status is initially null or absent gets only the existing provisioning window, like created/loading/starting. It cannot report a result until actual_status is running. Neither cur_state nor intended_status grants liveness. This corrects premature destruction observed in the round 2 startup evidence.
 
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] Review/approval modes, draft, base
+and path policy are removed from the Worker; it authorizes signed identity + pinned workflow +
+triggering_actor == owner + sha == run head, and the YAML decides when to run.
 [CODE READ] Automatic PR events use default `owner_push_or_review`: numeric GitHub event actor/triggering-actor identity is the owner, or an owner review approves exactly that PR head SHA. Commit author text has no authority. An owner push also vouches for earlier commits on that branch. Drafts refuse by default. Push storms do not queue rentals: superseded work is destroyed and the newer request returns BUSY. `review_or_author`, `review_only`, `owner_push` and `actor_only` are explicit alternatives. Automatic PRs require an API-checked master base (ALLOWED_BASE_BRANCHES) and a non-draft head. The Worker excludes only a complete all-skipped PR file list using PATH_SKIP_PATTERNS; unknown/truncated lists run, and API errors fail. ci/vast-broker always runs. NOT_NEEDED is an explicit successful job/status. The BASE workflow permits owner dispatch on master only. A repeat request within the same runner nonce is idempotent; a fresh run cannot inherit another run's cached PASS. Rerun the owner's dispatch after the minimum gap to request another rental.
 
 [MEASURED: 2026-10-22 local Node test/bundle commands] Run `npm test` (or `node --test ci/vast-broker/test` from the repo root), `npm run bundle`, and `npm run mutants` from this directory. No npm install is needed. The fixed-source linker writes ignored `dist/worker.js`, checks syntax and preserves the entrypoint exports. Tests use generated RSA keys, fake JWKS, mocked GitHub/Vast, an in-memory Durable Object adapter and a local HTTP server.
@@ -186,6 +194,8 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 
 [CODE READ: sanitizer and stop implementation] Sanitisation removes command delimiters anywhere in the text because the legacy GitHub command parser scans inside lines. The visible prefix and the runner’s fresh stop-commands frame are additional boundaries. Missing ledger records produce a fixed diagnostic and never imply ownership; they do not block cleanup of other recorded instances. A failed delete keeps the token revoked and the billing reservation open.
 
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] "Approval gates" now means the run
+triggering_actor check.
 [CODE READ: owner endpoint-secrecy request] With BROKER_PATH_PREFIX set, all public routes become /<prefix>/rent, /<prefix>/status/<run>, /<prefix>/report/<run>, /<prefix>/stop/<run> and /<prefix>/stop-all. Missing/wrong prefixes and unknown routes return a generic 404; prefix comparison uses native constant-time HMAC verification. Cron stays private and does not require the public prefix. The create environment includes the callback prefix; the Vast operator can read it. URL secrecy reduces scanning/DoS noise and is not authentication: OIDC plus approval gates protect admission and the run HMAC protects reports. Do not put real origins or prefixes in committed configuration.
 
 [CODE READ: workflow/guard] Endpoint secrets are step-scoped. The broker disables shell tracing, masks canonical origin, host/derived labels, prefix and encoded audience before requests, and suppresses raw transport/parser errors. Known endpoint components are also redacted from stored box text. No endpoint goes into outputs, summaries, artifacts, names or status descriptions. workflow-guard.js rejects secret/alias access elsewhere, unsupported secret-object access/inheritance and scalar forwarding (including aliases/quoted keys), endpoint aliases in metadata, endpoint outputs/printing and unsupported broker run syntax. This static guard supports a bounded workflow subset; workflow protection/review remains necessary against deliberate arbitrary shell obfuscation. The box already knows the endpoint and can disclose it elsewhere, so locator secrecy is never relied on for authorisation.
@@ -249,6 +259,8 @@ prints its numeric thresholds/rejections, and uses only its own preference list.
 Its check job/step horizons now cover the explicit default three-hour lifecycle;
 the separate sweep workflow is dispatch-only/OIDC-only and writes no merge status.
 
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] Hold and owner timer removal are
+removed.
 [CODE READ: 2026-10-22 src/index.js] Callback, hold and owner timer-removal paths
 compare stored absolute deadlines before accepting a late request, so overdue
 cron cannot let a post revive an expired boot, heartbeat, grace or manual ceiling.
@@ -267,9 +279,15 @@ CI supplies OIDC and optional runner Access A headers. Optional Worker GITHUB_AP
 Hosted OIDC and Cloudflare billed CPU remain unverified. The owner has replaced the
 next acceptance with short non-VM dummy FAIL/PASS runs; the real KVM/full-suite
 payload and SSH MANUAL polish are deferred. No deployment is performed here.
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] SSH MANUAL is removed, not
+deferred.
 
 ## Security fixes round (2026-10-23)
 
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] The Worker Access switch and box
+Access tokens are removed; Access is dashboard-only.
 [CODE READ: src/tokens.js, src/access.js, ../vast-reaper/worker.js] v2 callback capabilities bind run, attempt, nonce, tested SHA and short hard-limit expiry, with MAC/expiry checked before the ledger. Closed/ended rentals refuse before queue entry; ended kill receipts bypass it. Bounded queues and runner infrastructure retries preserve cleanup availability. The independent reaper and per-GB/contract guards reduce paid-run exposure; they do not prove a hard bill ceiling. The optional hostname-wide Access application uses distinct A/B service tokens and a Worker-side signed-assertion route allow-list. Secret URL/prefix knowledge remains a noise defense, not authentication. See [deployment and rotation](DEPLOY.md) and [the round design](../../docs/design/V3_CI_VAST_FIXES_20261023.md). No live deployment or rental was performed in this round.
 
+[SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] Owner branch-copy authority,
+dispatch SHA selection and owner dispatch for checks are removed.
 [CODE READ: src/workflow-authority.js, src/github.js, trigger-policy.mjs, gpu-vast.yml] The 18:20 owner ruling separates workflow trigger choices from Worker authorization. The YAML defaults to master pushes and non-draft master PRs, with complete file-list exclusions decided by trusted BASE code and explicit successful status. Uncertainty requests a run. The Worker accepts signed target-PR, owner push and owner dispatch identities; a pure rule permits an owner-authorized own-repository branch copy of gpu-vast.yml only with API actor/triggering-actor/head/run checks. Manual dispatch can select a reachable branch commit while keeping the trusted controller at BASE. workflow_run and pull_request remain unsupported. Workflow edits are a separate owner-review commit.

@@ -1,62 +1,167 @@
 # Owner deployment and independent cleanup
 
-[CODE READ: wrangler.toml, deployment.json, src/index.js] The owner/controller deploys; this round performs no deployment or provider calls. Keep `RENTING_ENABLED=false` until acceptance. `main=dist/worker.js` and `no_bundle=true` upload the reviewed single-file module. No Cloudflare token belongs in GitHub.
+[CODE READ: wrangler.toml, deployment.json, src/index.js] The owner/controller deploys; no round
+performs a deployment or a provider call. Keep `RENTING_ENABLED=false` until acceptance.
+`main=dist/worker.js` and `no_bundle=true` upload the reviewed single-file module. No Cloudflare
+token belongs in GitHub.
 
-[CODE READ: package.json; README.md deployment tooling] Install Node 22+ and the pinned CLI outside the checkout: `npm install --prefix /tmp/kf-vast-wrangler wrangler@4.152.0`. This pins the CLI version, not the transitive dependency integrity; retain the owner's verified installation/lockfile for reproducible deployment tooling.
-In `ci/vast-broker`, run `node --test test` and `node bundle.js`. Check `sha256sum dist/worker.js` against deployment.json, dist/deployment.json and wrangler.toml. This is a candidate bundle, not proof of what is deployed. Preserve the SQLite LEDGER namespace and migration when updating.
-Every main deployment MUST override the template's OWNER_GITHUB_ID=REPLACE_ME, including dry runs:
+## Authorization policy
+
+[CODE READ: src/index.js, src/github.js, src/workflow-authority.js; owner rulings 2026-10-23
+19:10 and 19:25] The whole rule is:
+
+> Worker authorizes: signed identity + pinned workflow + triggering_actor == owner +
+> sha == run head. YAML decides when to run.
+
+- **Signed identity.** GitHub OIDC RS256 signature, issuer, audience (exact string), integer
+  `iat` at most 600 s old, `exp - iat` at most 3600 s, `nbf`, repository, repository id, owner
+  id, environment subject, `ref == refs/heads/master`, numeric run id and attempt.
+- **Pinned workflow.** `job_workflow_ref == workflow_ref` and it is exactly this repository's
+  `gpu-vast.yml@refs/heads/master` (events `pull_request_target` and `push`) or
+  `gpu-vast-sweep.yml@refs/heads/master` (event `workflow_dispatch`, sweep profile only).
+- **One run read.** `GET actions/runs/<id>` must match id, attempt, event and `in_progress`, name
+  this repository as both `repository` and `head_repository` (fork heads refuse: the safer
+  choice), and have `triggering_actor.id == OWNER_GITHUB_ID`. That also covers an owner re-run
+  of someone else's run.
+- **Tested commit.** The requested `tested_sha` must equal the run's `head_sha`. For `push` the
+  OIDC `sha` must equal it too. MEASURED 2026-10-23 (read-only `gh api` on public
+  `github/docs` `pull_request_target` runs, PR #46406): the
+  run's `head_sha` is the PR head, while the OIDC `sha`/`workflow_sha` name the base commit, so
+  those claims are not compared for that event.
+- `pr_number` in the rent body is an informational echo for the runner; it authorizes nothing.
+- When to run (branches, drafts, docs-only paths) lives only in `gpu-vast.yml` and the trusted
+  BASE helper `trigger-policy.mjs`.
+
+**Warning.** Owner-triggered events on someone else's PR (Reopen, Ready for review or Update
+branch, or an owner re-run) make the owner the `triggering_actor`, so they authorize that PR's
+current head commit, reviewed or not. If that is not wanted, add a YAML filter before enabling
+renting: run `pull_request_target` only for owner-authored PRs, or only when an owner-applied
+label is present. This round adds no such filter (owner decision).
+
+[CODE READ: owner rulings 19:10/19:25] Removed from the shipping code (each retired item is
+ignored if still configured):
+- retired: review/approval lookups and `APPROVAL_MODE`, `RENT_DRAFTS`, `ALLOWED_BASE_BRANCHES`;
+- retired: Worker `PATH_SKIP_PATTERNS` (path policy is YAML-only), PR lookups and PR authority;
+- retired: the dispatch `sha` input, sweep `tested_sha` and owner branch-copy workflow authority;
+- retired: MANUAL state, `/hold` box route, owner `/stop-timer` route and `MANUAL_CEILING_MINUTES`;
+- retired: the Worker Access JWT switch, `ACCESS_*` vars and `BOX_ACCESS_*` box injection.
+
+Owner `stop`, `stop-all` and the box `kf-box-kill` switch remain.
+
+## Build and test
+
+In `ci/vast-broker`, run `npm test`; from the repository root, run `node --test ci/vast-broker/test`
+(the CI form). Both run the same suite. Build with `npm run bundle` (or `node bundle.js`) and
+compare `sha256sum dist/worker.js` with `deployment.json`, `dist/deployment.json` and
+`DEPLOYED_BUNDLE_SHA256` in `wrangler.toml`. This is a candidate bundle, not proof of what is
+deployed. Preserve the SQLite LEDGER namespace and migration when updating.
+
+## Deploy the main Worker
+
+[CODE READ: package.json; deploy.mjs] Install Node 22+ and the pinned CLI outside the checkout:
+`npm install --prefix /tmp/kf-vast-wrangler wrangler@4.152.0`. This pins the CLI version, not the
+transitive dependency integrity; keep the owner's reviewed installation for reproducible tooling.
+
+Keep public vars in a local file outside the checkout (it is never committed). Example with
+placeholders:
 
 ```sh
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy --dry-run \
-  --var OWNER_GITHUB_ID:229738317
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy \
-  --var OWNER_GITHUB_ID:229738317
+# /path/outside/checkout/broker.vars - KEY=VALUE, public values only
+OWNER_GITHUB_ID=<numeric owner id, must equal wrangler.toml>
 ```
 
-[CODE READ: wrangler.toml, defaults.json, src/policy.js] Retain REPOSITORY_GITHUB_ID=1311106387, REPOSITORY=reindertpelsma/kayfabe, APPROVAL_MODE=owner_push_or_review. Retain the exact OIDC_SUB, CHECK_JOB_WORKFLOW_REFS and SWEEP_JOB_WORKFLOW_REF templates. Supported events are pull_request_target, owner workflow_dispatch and owner push; pull_request, workflow_run and merge_group refuse. The exact master workflow pin remains available to ordinary callers. An additional own-repository gpu-vast.yml refs/heads/* workflow is permitted only when the signed actor and API actor/triggering_actor are all the owner, with matching own-repository run/head/ref/attempt. This exception does not extend to tags, PR refs, another workflow or forks. OIDC requires integer iat, maximum token age 600 seconds, exp-iat at most 3600 seconds, valid issuer/audience/signature and bound repository/job/run identity. Hosted claim issuance remains an acceptance gap.
+```sh
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars --dry-run
+node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars
+```
 
-[CODE READ: README.md; gpu-vast.yml, trigger-policy.mjs, src/github.js] Trigger policy lives in the workflow. Automatic pushes target master; target PRs target master and drafts do not rent. The trusted BASE policy job skips only complete, unchanged-head, all-excluded paths; unknown, malformed, renamed-out-of-scope, truncated or failed metadata runs. Manual dispatch always runs and accepts an optional 40-hex sha reachable from a branch of this repository. Reachability checks at most five branch pages and sixteen distinct head comparisons, refusing if not proved within those bounds. The isolated controller still loads at the workflow BASE SHA. Worker admission has no branch, draft or path trigger filters; authorization and spending checks remain independent. The final status explicitly succeeds for a verified workflow exclusion and fails unexplained skipped/failed jobs. Review the YAML commit separately before adoption.
+The helper refuses before running wrangler when: the file is inside the checkout (realpath, so a
+symlink is followed); a line is not `KEY=VALUE`; a key repeats; a key is not a listed public var
+(secret names, `ALLOW_TEST_ISSUER`, `TEST_ISSUER`); a key is a retired `ACCESS_*` or
+`BOX_ACCESS_*` var (so an old Access vars file is refused); `OWNER_GITHUB_ID` is missing,
+non-numeric or differs from `wrangler.toml`; `dist/worker.js` does not match `deployment.json`
+and `DEPLOYED_BUNDLE_SHA256`; or the wrangler at the pinned path is not 4.152.0. It then passes
+one `--var KEY:VALUE` per entry and redacts every value from wrangler's output; refusals name a
+key or line number, never a value. `WRANGLER=<path>` selects another binary of the same version.
 
-[CODE READ: defaults.json, src/policy.js, src/offers.js, src/index.js] Check policy remains $1/hour, $6 daily, $30 rolling, $8 reserve, 40-minute boot and 180-minute hard limit. MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY before country preference. ALLOW_UNKNOWN_COUNTRY defaults to true; set false to reject unknown metadata. PREFERRED_COUNTRIES ranks only remaining eligible offers. Contract price failure revokes the run and attempts deletion; failed deletion retains the liability for cleanup retry.
+[INFERRED: wrangler 4.152.0 `deploy --help`] Without `--keep-vars`, a deploy replaces dashboard
+vars with the toml plus `--var` values, so every public var must be in `wrangler.toml` or the vars
+file. `OWNER_GITHUB_ID=229738317` is committed in `wrangler.toml` (a public account id, V1); a
+deploy without it refuses rentals with `CONFIG_VAR:OWNER_GITHUB_ID` and the cron logs
+`cleanup_config_error` instead of silently cleaning nothing.
 
-[INFERRED: src/ledger.js transfer-allowance accounting] Per-GB limits reduce exposure but do not make reserved 15-GB-down/2-GB-up allowances a hard bill ceiling. A hostile box can exceed the allowance. Keep the owner's main Vast account balance small, monitor it and retain an independent cleanup backstop; price/credit/spend reservations cannot prevent provider overbilling or an outage.
+Main Worker cron schedule: `* * * * *`
+
+`preview_urls = false` (supported by the wrangler 4.152.0 schema) keeps version preview hostnames
+off; `workers_dev = true` remains the public hostname.
+
+[CODE READ: defaults.json, src/policy.js, src/offers.js, src/index.js] Check policy remains
+$1/hour, $6 daily, $30 rolling, $8 reserve, 40-minute boot and 180-minute hard limit.
+MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
+recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY before country preference.
+ALLOW_UNKNOWN_COUNTRY defaults to true; set false to reject unknown metadata. PREFERRED_COUNTRIES
+ranks only remaining eligible offers. Contract price failure revokes the run and attempts
+deletion; failed deletion retains the liability for cleanup retry.
+
+[INFERRED: src/ledger.js transfer-allowance accounting] Per-GB limits reduce exposure but do not
+make reserved 15-GB-down/2-GB-up allowances a hard bill ceiling. A hostile box can exceed the
+allowance. Keep the owner's main Vast account balance small, monitor it and retain an independent
+cleanup backstop.
 
 ## Worker and GitHub secrets
 
-[CODE READ: src/tokens.js, src/routes.js] Set Worker secrets with the owner's pinned CLI: WORKER_URL (exact HTTPS origin), VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN and BROKER_PATH_PREFIX. Prefix is required when renting is enabled. Generate independent values without printing them into logs:
+[CODE READ: src/tokens.js, src/routes.js] Set Worker secrets with the pinned CLI (`wrangler secret
+put <NAME>`): WORKER_URL (exact HTTPS origin), VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN
+and BROKER_PATH_PREFIX (required when renting is enabled). Generate independent values without
+printing them into logs:
 
 ```sh
 head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'
 ```
 
-[CODE READ: src/tokens.js, src/routes.js, src/index.js] The alphabet is `[A-Za-z0-9_-]`; signing/owner secrets accept 32–256 characters and prefix accepts 32–128. Raw padded base64 containing `+`, `/` or `=` refuses. An owner-authenticated availability request reports CONFIG_SECRET_FORMAT:<name> without the value; other callers receive generic refusal. Keep signing and owner-stop values independent. URL/prefix secrecy reduces scanning and DoS noise; OIDC, approval policy, live-ledger checks and per-run HMAC are authentication. A Vast operator can read its KF_* env and callback URL; the box holds only its own limited capability.
+[CODE READ: src/tokens.js, src/routes.js, src/index.js] The alphabet is `[A-Za-z0-9_-]`;
+signing/owner secrets accept 32-256 characters and the prefix 32-128. Raw padded base64 with `+`,
+`/` or `=` refuses. An owner-authenticated availability request reports
+CONFIG_SECRET_FORMAT:<name> without the value; other callers receive a generic refusal. URL and
+prefix secrecy reduce scanning noise; OIDC, the run read, live-ledger checks and the per-run HMAC
+are the authentication. A Vast operator can read its KF_* env and callback URL; the box holds only
+its own limited capability.
 
-[CODE READ: src/github.js, src/blobs.js, src/index.js] Optional Worker secret GITHUB_API_TOKEN is the default for GitHub checks and private release metadata. Use one fine-grained read-only token selected only for reindertpelsma/kayfabe and the private store repository/repositories: Contents read, Pull requests read, Actions read and Metadata read. No write/admin permission is needed. Authenticated read failures 401/403 retry public metadata without the token. Lifecycle run/PR checks cache for 60 seconds; admission approval/head checks stay fresh. Workflow file-policy reads are fresh and use the separate job-local read token. Client X-GH-Token is unsupported and ignored. BLOB_GITHUB_TOKEN is an asset-only deprecated fallback when GITHUB_API_TOKEN is unset; the primary wins when both exist. Neither token enters box env, storage or public responses/logs. Do not put a Worker GitHub token in GitHub Actions.
+[CODE READ: src/github.js, src/blobs.js, src/index.js] Optional Worker secret GITHUB_API_TOKEN is
+the default for GitHub reads (the run read, the box protocol marker and release metadata). Use one
+fine-grained read-only token selected only for reindertpelsma/kayfabe and the private store
+repositories: Contents, Pull requests, Actions and Metadata read. Authenticated 401/403 reads retry
+public metadata without the token. Lifecycle run reads cache for 60 seconds; admission reads stay
+fresh. BLOB_GITHUB_TOKEN is an asset-only deprecated fallback. Neither token enters box env,
+storage or public responses/logs. Do not put a Worker GitHub token in GitHub Actions.
 
-[CODE READ: src/blobs.js] For blob access, set BLOB_REPO=owner/store and a NONEMPTY BLOB_ALLOWED_TAG_PREFIXES JSON array such as ["ci-image-"]. Missing/empty prefixes deny all mints. The Worker reads metadata and returns only an approved short-lived release-asset redirect URL, size and asset name; it never downloads asset bytes or returns a GitHub Authorization header. Credential-bearing redirect locators refuse. Run/day quotas are checked before provider inspection. Store repositories and allowed tag namespaces should contain only bytes a rented box is permitted to read.
+[CODE READ: src/blobs.js] For blob access, set BLOB_REPO=owner/store and a NONEMPTY
+BLOB_ALLOWED_TAG_PREFIXES JSON array such as ["ci-image-"]. Missing/empty prefixes deny all mints.
+The Worker returns only an approved short-lived release-asset redirect URL, size and asset name.
 
-[CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast contains VAST_BROKER_URL and VAST_BROKER_PATH secrets. Optional runner Access token A uses VAST_BROKER_ACCESS_ID and VAST_BROKER_ACCESS_SECRET, bound only in the sole trusted BASE broker step. The isolated controller receives them as CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET. Token A reaches only broker HTTPS calls, never the OIDC issuer or box. No credential or endpoint is printed outside GitHub masking commands; fixed enum outputs/status descriptions cannot carry them.
+[CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast holds
+VAST_BROKER_URL and VAST_BROKER_PATH, plus optional runner token A (VAST_BROKER_ACCESS_ID and
+VAST_BROKER_ACCESS_SECRET), bound only in the sole trusted BASE broker step and passed to the
+controller as CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET. Keep the environment's deployment-branch
+policy master-only with a required reviewer (review V8); the Worker no longer honours branch
+copies, so widening it buys nothing and exposes the environment secrets to branch workflows.
 
-## Optional Cloudflare Access
+## Cloudflare Access is dashboard-only
 
-[CODE READ: src/access.js, src/routes.js, src/oidc.js] Configure ONE hostname-wide workers.dev Access application and ONE service-auth policy allowing BOTH service tokens A (runner) and B (box). The old path-split proposal is superseded. Set these four public Worker vars together: ACCESS_TEAM_DOMAIN (the owner-provided public team olifon.cloudflareaccess.com), ACCESS_AUD (application audience), ACCESS_RUNNER_CLIENT_ID and ACCESS_BOX_CLIENT_ID. Values must identify distinct A/B clients and retain the full `.access` suffix in common_name. Real client IDs are supplied only at deployment. All absent disables this optional layer; partial/malformed configuration refuses by variable name. Configure Access to include the signed Cf-Access-Jwt-Assertion for service-token requests and confirm common_name equals the expected client ID during controller acceptance. The Worker verifies RS256, issuer, application audience, exp and integer iat before ledger work; it never reads the Client-Secret half to assign a role. Access assertions accept a matching scalar audience or a nonempty array of at most 16 bounded strings containing the application audience; GitHub OIDC stays scalar-only. Access assertions have at most a 24-hour issuance-to-expiry window. JWKS caches are separate from GitHub, with single-flight refresh and 60-second unknown-key cooldown.
+[CODE READ: src/index.js; owner ruling 19:10] Access, if used, is a dashboard-only front door:
+one hostname-wide policy with two service tokens. The Worker reads no Access header or var.
 
-| Access identity | Worker routes (all beneath the configured prefix) |
-| --- | --- |
-| Runner A | POST rent, GET availability, GET status/<run>, GET logs/<run>, POST stop/<run>, POST stop-all, POST stop-timer/<run> |
-| Box B | POST report/<run>, POST hold/<run>, POST kill/<run>, GET blob-url/<run>/<tag>/<name> |
-
-[CODE READ: src/routes.js, src/index.js] Heartbeats use report with a heartbeat kind; there is no separate heartbeat route. Access permits a route only; existing OIDC/run/owner authentication still applies. In particular A cannot use stop-all or stop-timer without the separate owner bearer, and B cannot read logs. Missing, forged, expired, wrong-audience and unknown-role assertions return 403 before the ledger. Only the fixed team certs fetch can occur first.
-
-[CODE READ: src/index.js, scripts/ci/vast_report.py, scripts/ci/kf-access-headers.sh] Set Worker BOX_ACCESS_ID/BOX_ACCESS_SECRET as the complete B pair; the Worker injects KF_ACCESS_ID/KF_ACCESS_SECRET into its own create env. The reporter and kill/hold/blob helpers send CF-Access-Client-Id/CF-Access-Client-Secret only when configured, over fixed broker HTTPS requests without redirects. Curl receives headers over stdin rather than argv. Partial/malformed pairs refuse before rental. Secrets are excluded from the payload's inherited env, but guest root can read the root-only env file and process environment: this is not a boundary against a hostile host.
-
-[INFERRED: Access operational policy and src/access.js single-role IDs] Choose service-token expiry to cover all active rentals plus cleanup margin. Prepare replacements with an overlap in the Access policy; the Worker deliberately accepts one ID per role, so rotate the matching public role ID and client headers together while the ledger is empty. The Access policy overlap alone does not make both IDs valid in Worker routing. Keep the old policy/token available for rollback until validation, then revoke. Emergency rotation during a rental can deny old callbacks and lead to cleanup. Do not claim seamless rotation of already-running boxes.
-
-[INFERRED: Worker routing and deployment configuration] Protect every reachable hostname, including workers.dev and preview URLs. If using only a custom domain, disable workers.dev/previews and verify there is no unprotected alternate route. The Worker's assertion check also runs on alternate hosts when configured, but an Access app covering only one hostname is not a substitute for auditing those routes. Access reduces request noise; account-wide request quotas and provider outages remain operational risks.
+**Warning (open owner decision).** Boxes no longer receive an Access credential (the
+`BOX_ACCESS_*` injection and the box-side header helper were removed). A hostname-wide policy that
+demands a service token on box routes therefore blocks every `report`, `kill` and `blob-url`
+callback: each rental would bill until `BOOT_TIMEOUT` (40 minutes) and FAIL. Before renting with
+Access on, either exempt the box routes in the dashboard (they carry their own per-run HMAC) or
+restore a box credential path. The runner still sends token A when configured.
 
 ## Vast key scope
 
-[CODE READ: controller-provided scoped permission JSON, src/vast.js] The reviewed console-front-end permission names are:
+[CODE READ: controller-provided scoped permission JSON, src/vast.js] The reviewed console
+permission names are:
 
 ```json
 {
@@ -67,25 +172,66 @@ head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'
 }
 ```
 
-[CODE READ: src/vast.js API routes and controller permission-name evidence] This is the permission-name projection, not a credential file or a claim about the console envelope's serialization. Use the controller's scoped key JSON in the Vast console. The console uses api.instance; the documentation spelling api.instance.show is invalid there. The main key may read offers/credit/instances and create/delete contracts. No subaccount is assumed; the Worker is the capability boundary. Reconciliation needs an exact label plus fixed onstart hash/image. Create-returned IDs stay owned even when their label changes; a fixed OWNERSHIP_MISMATCH event is logged, and deletion still requires a confirming absence before settlement.
+[CODE READ: src/vast.js] This is the permission-name projection, not a credential file. The
+console uses api.instance; the documentation spelling api.instance.show is invalid there. No
+subaccount is assumed; the Worker is the capability boundary. Create-returned IDs stay owned even
+when their label changes (fixed OWNERSHIP_MISMATCH event).
+
+## V2 acceptance check (contract recheck)
+
+[CODE READ: src/index.js checkContract, src/policy.js offerPrice; review V2] Behaviour is
+unchanged in this round. At create and on every update the Worker re-applies the offer price rule
+to the instance row and destroys the box when a field is missing or `dph_total` differs from
+`dph_base + storage_cost*120/720` by more than 1e-6 relative. That is money-safe but would make CI
+dead if real instance rows differ from offers. INFERRED: no recorded real instance row carries all
+five fields. Acceptance check at the first watched rental: read that instance once, read-only, and
+confirm `dph_base`, `dph_total`, `storage_cost`, `inet_up_cost` and `inet_down_cost` are present
+and consistent. If not, stop with `stop-all` and decide on this proposal (not implemented):
+destroy only on a positively higher parsed price; when instance fields are missing or
+inconsistent, keep the admitted offer price and log a fixed event.
 
 ## Independent reaper
 
-[CODE READ: ../vast-reaper/worker.js, ../vast-reaper/wrangler.toml] Deploy the separate ci/vast-reaper Worker with its OWN cron and secret REAPER_VAST_API_KEY, never the main broker key. Grant only list/delete-capable routes api.instances and api.instance, without api.ask, api.bundles or user reads. Provider route-level permissions may include more methods than DELETE; confirm the available console granularity. The implementation itself only lists and deletes. It has no public controls, rental path, broker imports or LEDGER binding. Its own single-file source is the deploy artifact.
+[CODE READ: ../vast-reaper/worker.js, ../vast-reaper/wrangler.toml] Deploy the separate
+ci/vast-reaper Worker with its OWN cron and secret REAPER_VAST_API_KEY, never the main broker key.
+Grant only list/delete routes api.instances and api.instance. It has no public controls, rental
+path, broker imports or LEDGER binding, and takes no main-Worker var. Deploy first, then put the
+secret (a `secret put` before the first deploy would prompt to create the Worker):
 
 ```sh
-cd ../vast-reaper
+cd ci/vast-reaper
+/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy --dry-run
+/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy
 /tmp/kf-vast-wrangler/node_modules/.bin/wrangler secret put REAPER_VAST_API_KEY
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy --dry-run \
-  --var OWNER_GITHUB_ID:229738317
-/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy \
-  --var OWNER_GITHUB_ID:229738317
 ```
 
-[CODE READ: ../vast-reaper/worker.js] Default reaper hard=180 minutes, margin=15, cron every 5 minutes. It deletes only strictly older exact kf-ci-<run>-<attempt> labels with valid numeric provider start_date, after matching ID/label/start_date in two list snapshots. Unknown/future age, renamed rows, foreign labels, ambiguous IDs and incomplete/oversize lists fail closed. Each sweep deletes at most 20 and confirms absence; an acknowledged-but-present instance stays unconfirmed for the next sweep. Logs contain fixed event/count fields only. This deliberately reserves that exact namespace for broker rentals; do not apply it to unrelated boxes. The reaper cannot recover label-changed rentals from the broker's ledger: main cleanup handles those IDs.
+Reaper cron schedule: `*/5 * * * *`
 
-[INFERRED: independent scheduler and account quotas] Put the reaper in a separate Cloudflare account/quota domain if request-quota independence is required. A separate Worker in the same exhausted free account is not an independent backstop. Provider outages, throttling and inaccurate start_date/labels can still prevent deletion. Keep prepaid balance small. The default reaper ends a rental past 195 minutes even if an owner stop-timer extended the main ledger; an extension does not extend the v2 callback token either. Agree any changed manual/reaper horizon before enabling rentals; do not silently increase the billing ceiling.
+[INFERRED: workers_dev=false and no routes] Confirm the deploy output lists that schedule; the
+reaper has no other trigger. Until the secret is set each tick logs `reaper_unavailable` and
+deletes nothing.
 
-[CODE READ: docs/BOX_PROTOCOL.md; INFERRED: unexercised infrastructure] Deploy disabled first, configure the independent reaper and Access if chosen, verify owner stop and bundle metadata, then let the controller perform separate hosted/provider acceptance. Hosted OIDC/Access issuance, actual Vast contract fields/prices, provider scopes and bill accounting, scheduler CPU/quota usage and full GPU payload are not verified by mocks. No full-suite or hardware claim follows from dummy/mock success.
+[CODE READ: ../vast-reaper/worker.js] Default hard=180 minutes, margin=15. It deletes only
+strictly older exact kf-ci-<run>-<attempt> labels with a valid numeric provider start_date, after
+matching ID/label/start_date in two list snapshots; anything uncertain fails closed. Each sweep
+deletes at most 20 and confirms absence. A failed DELETE no longer aborts the sweep (V9): the
+remaining boxes are still deleted, the report counts `{deleted, unconfirmed, failed}` and the next
+tick retries. A failed list still aborts the whole sweep. Logs carry fixed event/count fields only.
 
-[CODE READ: src/tokens.js, src/onstart.js, scripts/ci/vast_report.py] This rollout intentionally rejects v1 run capabilities. Disable admission and drain/stop existing rentals before upgrading. Keep the existing ledger namespace for cleanup; do not erase reservations. The tested repository SHA must contain this round's v2-aware reporter and Access helper installation before rentals are enabled; an old reporter is not compatible with the new token. The candidate is not a live-deployment claim.
+[INFERRED: independent scheduler and account quotas] Put the reaper in a separate Cloudflare
+account if request-quota independence is required. Provider outages and inaccurate
+start_date/labels can still prevent deletion. Keep the prepaid balance small.
+
+## Rollout
+
+[CODE READ: docs/BOX_PROTOCOL.md, src/github.js, scripts/ci/vast_report.py] Box protocol is 6.
+Before any Vast call the Worker reads `scripts/ci/vast_report.py` at the exact tested sha and
+refuses `NOT_ELIGIBLE` unless it contains the line `BOX_PROTOCOL = "6"` (V6), so commits from
+before this round cannot burn a boot window. v1 run capabilities are rejected; disable admission
+and drain existing rentals before upgrading, and keep the ledger namespace.
+
+[INFERRED: unexercised infrastructure] Deploy with renting off first, deploy the reaper and confirm
+its schedule, verify owner stop and bundle metadata, then do hosted acceptance: OIDC claims, the
+V2 instance-row check, the Access/box-route decision above and one watched rental. The payload
+script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental today posts
+`payload_missing` and FAILs. Mocks prove no hosted, provider or hardware behaviour.
