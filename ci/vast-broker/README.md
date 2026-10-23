@@ -1,6 +1,22 @@
 # Vast broker (stage 1)
 
-## Jose round (2026-10-23, current; supersedes the statements tagged below)
+## Owner edits round (2026-10-24, current; supersedes the statements tagged below)
+
+[CODE READ: src/, runner.py, release_gate.py, gpu-vast.yml; owner rulings 2026-10-23/24 and the
+final review of 2026-10-23] On top of the jose round:
+- `POST /rent` takes exactly `runner_nonce`, `tested_sha`, `profile` and optional `preferences`;
+  `pr_number` is refused and the status object has no `pr` (status protocol stays 5).
+- Logs are relayed, not kept: the cron deletes a run's log chunks, log-hash entries and record
+  `LOG_RETENTION_HOURS` (default 6, at most 48) after `ended_at`. Spend and sha-gap rows stay.
+- Right after its verified final log fetch the runner sends `POST /stop/<run>`; the Worker
+  destroys at once. The PASS/FAIL grace timer is only the fallback.
+- Denied countries: CU, IR, KP, SY, CN, HK, MO, matched on ISO alpha-2/alpha-3 codes and long
+  names (V13). `BAD_HOST_IDS` rejects every machine of a listed hoster (`BAD_HOST`).
+- A Worker-sent NOT_NEEDED (and MANUAL / NEEDS_APPROVAL) is refused; only the workflow's two
+  agreeing path decisions post NOT_NEEDED success (W2). The release gate wants the gpu-vast
+  push run on master with a GPU result (W4). WORKER_URL must be the bare https origin (f).
+
+## Jose round (2026-10-23; superseded in part by the owner edits round above)
 
 [CODE READ: src/oidc.js, src/tokens.js, package-lock.json, deploy.mjs; branch
 claude/vast-broker-jose-20261023] Owner decisions 19:35/19:45 and the 21:45 addendum:
