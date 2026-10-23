@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "box_id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "boot_seconds": 173.0,
+  "query_seconds": 31.814633060000233,
+  "scale": 10,
+  "created_utc": "2026-10-23T16:12:09.031735+00:00",
+  "query_attempts": 1
+}

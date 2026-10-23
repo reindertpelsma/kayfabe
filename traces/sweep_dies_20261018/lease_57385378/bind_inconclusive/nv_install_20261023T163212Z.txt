@@ -1,0 +1,11 @@
+[2026-10-23T16:32:12Z] START gsp-on
+GSP_ON device PCI\VEN_10DE&DEV_2204&SUBSYS_38811462&REV_A1\3&11583659&0&30 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+GSP_ON disable: Microsoft PnP Utility
+GSP_ON disable: 
+GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2204&SUBSYS_38811462&REV_A1\3&11583659&0&30
+GSP_ON disable: Device disabled successfully.
+GSP_ON disable: 
+GSP_ON add-driver: Microsoft PnP Utility
+GSP_ON add-driver: 
+GSP_ON add-driver: Adding driver package:  nv_dispi.inf

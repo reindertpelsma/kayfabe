@@ -1,15 +1,15 @@
-1. MEASURED (2026-10-23, lease57385378, `START.json`): one GA102 provider replacement, source98b599bbf, actual0.29USD/h, prearmed expiry17:42:19Z.
-2. MEASURED (2026-10-23, lease57385378, `SSH_READY.json`): strict pinned SSH/KVM/167GB free/8CPUs/17949MiB RAM, no pin replaced or timer extended.
-3. MEASURED (2026-10-23, lease57385378, `native_gates/sweep_host_die.log`): actual GA102, arch0x170/impl2, unprivileged probe.
-4. MEASURED (2026-10-23, lease57385378, `native_gates/sweep_host_preflight.log`): host595.91.07 OPEN, healthSOUND.
-5. MEASURED (2026-10-23, lease57385378, `native_gates/sweep_gates.log`): gates9/9+gate10PASS;12/12USER births,0refused at15:16:34Z.
-6. MEASURED (2026-10-23, lease57385378, `appdisk_receipt.json`): full appISO6.8GB pin403.625s/eight streams; NVRTC receiver pinPASS.
-7. MEASURED (2026-10-23, lease57385378, `native_complete/sweep_native_baseline.log`): native raw30/30,Cuda4/4 andGRtierPASS completed15:28:31Z, n1/spreadN/A; evidence native_complete/.
-8. MEASURED (2026-10-23, lease57385378, `baseline_calibration/box_readiness.json`, `bind_progress/bwr_bind.log`): standard-VGA checks/seal PASS16:13:52Z; boot173s/query31.815s/scale10; disabled bind began16:13:54Z, install still running16:34Z; ON/hold/apps pending.
-9. CODE READ (2026-10-23, lease57385378, `harness_recipe/arm.sh`): one actual ON attempt, optional600s hold-first; event/RPC collector preserved.
-10. CODE READ (same lease): exact native controls+CE-family guard unchanged; every extra/unmatched Xid stops.
-11. MEASURED (2026-10-23, `../round4/proof/`): lease22/22, desktop77/77, endpoint16/16PASS; mutations each>=2 distinct tests.
-12. CODE READ (same source): no Rust/product/audit-fix merge; new Rust lint sites0, fresh clippy not run.
-13. MEASURED (2026-10-23, `../lease_57384343/TEARDOWN.json`): initial provider ID closed/APIabsent14:51:09Z;0GPU/Windows work, failed machine78466 excluded.
-14. INFERRED (2026-10-23, lease57385378, `START.json`): Round4 prior0.281506+full reservation1.421146=1.702652<stop2.50/cap3, reserve5 intact; invoice unverified.
-15. CODE READ (2026-10-23, `../round4/GA104_NATIVE_PLAN.md`): after exact-ID closeout, GA104native binding first then other Ampere/Turing when offers/budget permit; no parallel rental.
+1. MEASURED (2026-10-23, lease57385378, `START.json`): GA102 provider replacement, frozen source98b599bbf, actual0.29USD/h, prearmed fixed expiry17:42:19Z.
+2. MEASURED (2026-10-23, lease57385378, `SSH_READY.json`): strict pinned SSH/KVM/167GB free/8CPUs/17949MiB RAM; no pin or deadline changed.
+3. MEASURED (2026-10-23, lease57385378, `native_gates/sweep_host_die.log`): unprivileged arch0x170/impl2 confirms GA102 on595.91.07 OPEN.
+4. MEASURED (2026-10-23, lease57385378, `native_gates/`): hostSOUND; gates9/9+gate10PASS,12/12USER births,0refused.
+5. MEASURED (2026-10-23, lease57385378, `native_complete/`): native raw30/30,CUDA4/4,GRtierPASS completed15:28:31Z; n1/spreadN/A.
+6. MEASURED (2026-10-23, lease57385378, `NATIVE_BINARY_IDENTITY.json`): QEMU52db5101/raw d971aab3/guard2e7a0c25 match the earlier source product binaries.
+7. MEASURED (2026-10-23, lease57385378, `baseline_calibration/`): generic standard-VGA install/checks PASS/sealed16:13:52Z; actualboot173s/query31.815s/scale10.
+8. MEASURED (2026-10-23, lease57385378, `bind_inconclusive/bwr_install_readiness.json`): first failure16:40:09.742797Z, bwr_install one attempt1200s rc124, controllerrc75 READINESS_INCONCLUSIVE.
+9. MEASURED (2026-10-23, lease57385378, `bind_inconclusive/nv_install_20261023T163212Z.txt`, `bwr_setupapi_progress.txt`): signed package/device-disable seen; copy completed16:38:53 and catalog validation16:38:57, no completed bind verification.
+10. MEASURED (2026-10-23, lease57385378, `bind_inconclusive/arms/bw580_bind/summary.json`): driverRPCs0; first failing RPC/ordinal none; no actual ON, Code22/Code0 verdict, desktop, apps, Unigine or600s hold.
+11. MEASURED (2026-10-23, lease57385378, `bind_inconclusive/bwr_final_windows_events.txt`): query returned only Kernel-Boot153/VBS-disabled records16:15:55Z and guest-clock22:52:35Z; not nvlddmkm153 or a TDR; timestamp anomaly retained.
+12. CODE READ (2026-10-23, lease57385378, `signin_overlay_receipt.json`): sign-in observer-only overlay37c5abdc4 applied before ON marker; no Rust/product/audit branch change, fresh clippy not run.
+13. MEASURED (2026-10-23, `../round4/proof/`): lease22/22, desktop77/77, provider endpoint16/16, sign-in19/19PASS; mutation killers all>=2 distinct methods.
+14. CODE READ (2026-10-23, lease57385378): exact native controls guard unchanged; cleanup/export/API-absence receipts follow before any next rental; no installer replay or new GA102 retry.
+15. CODE READ (2026-10-23, `../round4/offers.json`): latest39-offer snapshot has no GA104 class; GA106/TU106 candidates remain; native/runtime query plans subtract existing constant tables and require budget-fit before create.

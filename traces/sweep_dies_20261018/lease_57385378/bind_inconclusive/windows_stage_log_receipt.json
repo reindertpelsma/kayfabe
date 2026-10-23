@@ -1,0 +1,19 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "utc": "2026-10-23T16:43:44.684184+00:00",
+  "files": {
+    "nv_install.log": {
+      "bytes": 301,
+      "sha256": "84a1993ce9ed621c6c33703f15d8b6eb5182b2ace8422775983b969fe7553008"
+    },
+    "nv_install_20261023T163212Z.txt": {
+      "bytes": 739,
+      "sha256": "dc8574889cdf26da1cd96fecbf2ab58ea4043ea684bd8c5236a6cfcb0ad064d0"
+    },
+    "stop.log": {
+      "bytes": 51,
+      "sha256": "29baa9468e4cd729ec85aa9ac58d1b10134f30975139c5d9e9f1aeecf1f446b4"
+    }
+  }
+}

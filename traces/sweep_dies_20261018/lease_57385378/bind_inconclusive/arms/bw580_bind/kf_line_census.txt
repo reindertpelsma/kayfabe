@@ -1,0 +1,56 @@
+158	kfN: display fps[cap=N(unset) copies=N.N skipped=N checks=N.N same=N ondemand=N over=N]
+24	kfN: PT-NSI host FIFO_EVENT_MTHD edge #N: NotArmed (guest armed=false, vector None)
+17	kfN: PT-NSI host CEN notifier wake #N: NotArmed (vector Some(N), live twins N)
+10	kfN: host facts: GSS N [] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+9	kf-host: HOST-ABI REFUSED control N: host control N has no public header (zero request measured NV_OK on ADN N.N.N and G
+3	kfN: mem t=N.Ns [N/N] prewarm: spare host space N ready before the guest runs — windows=none (vaspace N us, ram_obj N us
+2	kfN: host facts: GSS N [(N, N), (N, N), (c, N), (Nc, N)]: the background probe was refused or changed the answer — zero-
+2	kfN: BARN scratch: tile N x N over N (host RAM bound N)
+1	kf-host: host tier: stock
+1	kf-host: HOST-ABI REFUSED control N: host control N has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N
+1	kfN: host facts: GSS N [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+1	kf-host: HOST-ABI REFUSED control N: : body is N bytes, its layout is N
+1	kfN: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(N, N, N), (N, N, N), (a, N, N), (b, N, eN), (c,
+1	kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforce
+1	kfN: ⚠ gpu-uuid=auto: this VM has no identity (no vm-id= and no QEMU -uuid), so there is nothing stable to derive from;
+1	kfN: guest GPU UUID GPU-NfNaNaN-NdN-NcNc-NfN-NceNfcbbN (gpu-uuid=auto, basis RandomNoVmId, devfn N)
+1	kfN: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_D
+1	kf-cuda: cuda thread posture thread=kfN-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this th
+1	kf-cuda: cuda thread posture thread=kfN-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this t
+1	kfN: host GPU minor=N bdf=N:N:N.N gpuId=N rm_device_instance=N cuda_device="NVIDIA GeForce RTX N" store=N MiB
+1	kfN: guest driver N.N.N (guest-driver=); measured ABI: static-info PreN, element PreN, init-args FourField, rm-control p
+1	kfN: native timer BARN=N, read-only N-byte mapping, host/guest layout TimerLayout { register_bytes: N, time_low: N, time
+1	kfN: PN+PN T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/VN_PNPN_TSPACE.md); mirrors carry no
+1	kfN: channel plane: Translated rings on host COPYN (engine N); completions on FIFO_EVENT_MTHD + CEN
+1	kfN: interrupt plane: host non-stall events -> guest vectors [GRN->Some(N) CEN->Some(N) CEN->Some(N) CEN->Some(N) CEN->S
+1	kfN: non-stall relay (owner ruling N-N-N): every host edge -> the guest vector of every event this guest ARMED, never dr
+1	kfN: display plane ON — virtual NVDisplay for GAN GAN GAN GAN GAN (IP N, display class N, N heads)
+1	kfN: display: EXPERIMENT KFN_DISPLAY_LUT_MIRROR=N — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reac
+1	kfN: display: EXPERIMENT KFN_DISPLAY_ILUT_OFFSET_N=N — SET_OFFSET_ILUT read in N-byte units (as OLUT/TMO)
+1	kfN: display: caps page derived — N words: N TN rule, N TN measured (N unmeasured)
+1	kfN: display: monitor NxN at N mHz, range max N Hz, EDID fnvNaN=cNdcbbNcNbNcN (display-max-fps N)
+1	kf-cuda: cuda thread posture thread=kfN-cuda-disp cap_sys_admin=cleared-for-thread-life (libcuda's channels from this th
+1	kfN: display plane built — derived registers, caps page, engine vocabulary, GPU context on N:N:N.N
+1	kf-rm: EXPERIMENT software-runlist allocation metadata only; native backing and scheduling are NOT implemented
+1	kf-rm: KFN_SW_RUNLIST_HOST_OWNED=N: software-runlist submits answered NV_OK and ignored; kernel channels scheduled at bi
+1	kf-rm: PROBE KFN_PREEMPT_BIND_PROBE=N: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bin
+1	kf-rm: PROBE KFN_ZCULL_BIND_PROBE=N: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe
+1	kf-rm: PROBE KFN_DISPLAY_CTRL_PROBE=N: six NVN controls answered NV_OK with the request echoed (H-modeset probe, not a s
+1	kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling
+1	kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented
+1	kf-rm: display: PROBE KFN_DISPLAY_IMP_ENABLE=N — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS
+1	kfN: PRAMIN scratch: tile N x N over N (host RAM bound N)
+1	kfN: scratch host-RAM bound N for this device (PRAMIN N + BARN N + BARN N); whole-window scratch would have allowed N
+1	kfN: boot display ON — option ROM N bytes (Nde:N, KFGP BARN +N, NxN pitch N, G = N); BARN [N, G) seeded with store [N, G
+1	kfN: PN memory plane: store N MiB (imported into the walker), walker pools N MiB of host GPU memory (walk pool N runs, s
+1	kf-cuda: cuda thread posture thread=kfN-display cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thre
+1	kf-cuda: cuda thread posture thread=kfN-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread
+1	kfN: display: compose kernel self-test PASSED
+1	kfN: display worker up — engine N heads / N windows, caps page published
+1	kfN: display: display-max-fps unset — every head's vblank tick is capped at N Hz; copies without a flip are made at the
+1	kfN: display: boot layer — store [N, N) as NxN pitch N, shown until the guest arms a head
+1	kfN: display: +N ms the console shows the BOOT layer (store N, NxN) (core channel FREE)
+1	kfN: device reset #N COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: N
+1	kfN: device reset #N complete before the vCPUs resume (the main loop waited N us)
+1	kfN: guest-RAM object N over N bytes of the guest memfd
+1	kfN: mem t=N.Ns tspace space=N fb=N+N ram=N+N (obj N) rings=N+N build_us=N fb_pages=NM:N+NK:N
