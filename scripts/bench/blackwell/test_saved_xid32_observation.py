@@ -52,6 +52,7 @@ class SavedPairObservation(unittest.TestCase):
         self.assertEqual(len(records), 8)
         self.assertEqual([r["line"] for r in records], pair(8))
         self.assertTrue(all(r["mode"] == MODE and not r["attestation"] for r in records))
+        self.assertTrue(all(r["verdict"] == "OBSERVATION" and not r["pass"] for r in records))
 
     def test_ninth_record_refuses(self):
         with self.assertRaises(ValueError):
@@ -61,21 +62,35 @@ class SavedPairObservation(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.judge(pair(10))
 
+    def test_ninth_repeat_of_one_exact_channel_also_refuses(self):
+        with self.assertRaises(ValueError):
+            self.judge([old.xid(second=n + 1) for n in range(9)])
+
     def test_full_raw_line_over_240_characters_is_retained(self):
         line = old.xid().replace(" ubuntu ", " " + "h" * 240 + " ")
+        self.assertEqual(self.judge([line])[0]["line"], line)
+
+    def test_long_high_channel_raw_record_is_retained_without_truncation(self):
+        line = old.xid(0x1000000B).replace(" ubuntu ", " " + "h" * 180 + " ")
         self.assertEqual(self.judge([line])[0]["line"], line)
 
     def test_original_observer_still_refuses_the_new_high_channel(self):
         with self.assertRaises(ValueError):
             old.O.judge_observation(
-                pair(), phase=old.PHASE, permit=old.PERMIT,
-                authority=old.AUTHORITY, now=old.NOW,
+                pair(),
+                phase=old.PHASE,
+                permit=old.PERMIT,
+                authority=old.AUTHORITY,
+                now=old.NOW,
             )
 
     def test_original_observer_still_accepts_only_its_original_pair(self):
         records = old.O.judge_observation(
-            old.pair(), phase=old.PHASE, permit=old.PERMIT,
-            authority=old.AUTHORITY, now=old.NOW,
+            old.pair(),
+            phase=old.PHASE,
+            permit=old.PERMIT,
+            authority=old.AUTHORITY,
+            now=old.NOW,
         )
         self.assertEqual(records[1]["channel"], "0xe00000b")
 
@@ -130,7 +145,9 @@ negative("othergpu", line=old.xid().replace("PCI:0000:00:07", "PCI:0000:00:08"))
 negative("permit_mode", permit={"mode": old.O.MODE})
 negative("authority_mode", authority={"mode": old.O.MODE})
 negative("not_observation_only", authority={"observation_only": False})
+negative("numeric_observation_only", authority={"observation_only": 1})
 negative("attestation_authority", authority={"attestation_allowed": True})
+negative("missing_attestation_prohibition", authority={"attestation_allowed": None})
 negative("other_channel_authority", authority={"exact_channels": ["0x14", "0xe00000b"]})
 negative("another_lease", authority={"lease_id": 12345679})
 negative("another_pid_life", permit={"starttime": 191784})
