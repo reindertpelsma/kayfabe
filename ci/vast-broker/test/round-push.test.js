@@ -149,3 +149,30 @@ for (const branch of ['master', 'owner-workflow'])
     assert.equal((await status.json()).state, 'BOOTING');
     assert.equal(h.cloud.deletes.length, 0);
   });
+for (const mode of ['owner_push_or_review', 'review_only'])
+  test('round manual selection has no PR caller context ' + mode, async () => {
+    const h = await setup({ APPROVAL_MODE: mode }),
+      selected = 'e'.repeat(40);
+    Object.assign(h.cloud.run, {
+      event: 'workflow_dispatch',
+      head_branch: 'master',
+      head_repository: { full_name: repo },
+      pull_requests: [],
+    });
+    h.cloud.prs[0].head.sha = selected;
+    h.cloud.reviews = [{ id: 1, user: { id: 42 }, state: 'APPROVED', commit_id: selected }];
+    const base = h.cloud.fetch;
+    h.cloud.fetch = async (url, init) => {
+      if (String(url).endsWith('/commits/' + selected)) return Response.json({ sha: selected });
+      if (String(url).includes('/branches?'))
+        return Response.json([{ name: 'owner-pr', commit: { sha: selected } }]);
+      return base(url, init);
+    };
+    h.restart();
+    const r = await h.call('/rent', {
+      claims: { event_name: 'workflow_dispatch', ref: 'refs/heads/master' },
+      body: { runner_nonce: 'f'.repeat(64), tested_sha: selected, pr_number: null },
+    });
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).pr, null);
+  });
