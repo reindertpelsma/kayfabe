@@ -183,6 +183,12 @@ export class MockCloud {
     reliability: 0.999,
     disk_space: 200,
   };
+  // Concurrency harness: further offers, the contract ids handed out in order (default 900)
+  // and per-run-id GitHub run rows (default `run`).
+  extraOffers = [];
+  contracts = null;
+  created = [];
+  runs = new Map();
   instances = new Map([
     ['777', { id: 777, label: 'owner-dev' }],
     ['888', { id: 888, label: 'kf-ci-unrecorded' }],
@@ -207,7 +213,8 @@ export class MockCloud {
           content: content.replace(/(.{60})/g, '$1\n'),
         });
       }
-      if (/\/actions\/runs\/\d+$/.test(u.pathname)) return Response.json(this.run);
+      if (/\/actions\/runs\/\d+$/.test(u.pathname))
+        return Response.json(this.runs.get(u.pathname.split('/').at(-1)) ?? this.run);
       if (/\/commits\/[a-f0-9]+$/.test(u.pathname))
         return Response.json({ sha: this.run.head_sha });
       if (/\/pulls\/\d+\/files$/.test(u.pathname)) {
@@ -237,37 +244,44 @@ export class MockCloud {
       return Response.json({ credit: this.credit, balance: 0 });
     if (u.pathname === '/api/v0/bundles') {
       if (body.type !== 'ondemand') return new Response('invalid type', { status: 400 });
+      const row = (offer, price) => ({
+        dph_base: typeof price === 'number' ? price - (offer.storage_cost * 120) / 720 : price,
+        ...offer,
+        dph_total: price,
+      });
       return Response.json({
         offers: [
-          {
-            dph_base:
-              typeof this.price === 'number'
-                ? this.price - (this.offer.storage_cost * 120) / 720
-                : this.price,
-            ...this.offer,
-            dph_total: this.price,
-          },
+          row(this.offer, this.price),
+          // Optional further market rows (concurrency and identity tests); each may carry
+          // its own `price` (USD per hour, storage included).
+          ...this.extraOffers.map(({ price, ...offer }) => row(offer, price ?? this.price)),
         ],
       });
     }
     if (/^\/api\/v0\/asks\/[1-9][0-9]*$/.test(u.pathname)) {
       this.creates++;
-      this.instances.set('900', {
-        id: 900,
+      const ask = Number(u.pathname.split('/').at(-1)),
+        extra = this.extraOffers.find((x) => x.id === ask),
+        offer = extra ?? this.offer,
+        price = extra?.price ?? this.price,
+        contract = this.contracts?.length ? this.contracts.shift() : 900;
+      this.created.push({ ask, contract, label: body.label });
+      this.instances.set(String(contract), {
+        id: contract,
         label: body.label,
         onstart: body.onstart,
         image_uuid: body.image,
         actual_status: 'running',
-        dph_base: this.price - (this.offer.storage_cost * 120) / 720,
-        dph_total: this.price,
-        storage_cost: this.offer.storage_cost,
-        inet_down_cost: this.offer.inet_down_cost,
-        inet_up_cost: this.offer.inet_up_cost,
+        dph_base: price - (offer.storage_cost * 120) / 720,
+        dph_total: price,
+        storage_cost: offer.storage_cost,
+        inet_down_cost: offer.inet_down_cost,
+        inet_up_cost: offer.inet_up_cost,
       });
       if (this.ambiguous) throw Error('PRIVATE-UPSTREAM');
       return Response.json({
         success: true,
-        new_contract: 900,
+        new_contract: contract,
         instance_api_key: 'PRIVATE-UPSTREAM',
       });
     }
