@@ -142,18 +142,22 @@ fn gb206_independent_public_field_decode_matches_all_measurements() {
 }
 
 #[test]
-fn every_measured_die_has_exactly_48_published_rows_including_zeros() {
+fn every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count() {
     let rows = consttab::table().unwrap();
-    for name in ["GB202", "GB206"] {
+    for (name, evidence) in [("GB202", GB202), ("GB206", GB206)] {
         let die = DieScope::Die(DieId::from_name(name).unwrap());
         let own: Vec<_> = rows
             .iter()
             .filter(|row| row.key.starts_with("display.precomp.") && row.die == die)
             .collect();
         assert_eq!(own.len(), 48, "{name}");
-        assert!(
-            own.iter().any(|row| row.words == [0]),
-            "explicit measured zeros"
+        assert_eq!(
+            own.iter().filter(|row| row.words == [0]).count(),
+            samples(evidence)
+                .iter()
+                .filter(|(_, value)| *value == 0)
+                .count(),
+            "every measured zero must remain explicit"
         );
     }
 }
