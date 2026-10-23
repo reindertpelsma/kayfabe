@@ -127,6 +127,36 @@ class DiagnosticLogs(unittest.TestCase):
         self.assertNotIn("signature", str(caught.exception))
         self.assertIsNone(caught.exception.__cause__)
 
+    def test_provider_response_cannot_override_empty_request_headers(self):
+        opener = Opener()
+        self.fetch(opener=opener)
+        self.assertEqual(opener.calls[0][0].headers, {})
+
+    def test_regional_download_also_has_fixed_timeout(self):
+        opener = Opener()
+        self.fetch("https://s3.eu-west-1.amazonaws.com/key", opener)
+        self.assertEqual(opener.calls[0][1], 30)
+
+    def test_foreign_redirect_is_also_refused(self):
+        self.assertIsNone(
+            diag.NoRedirect().redirect_request(None, None, 307, "x", {}, "https://evil.example/")
+        )
+
+    def test_default_opener_installs_an_instance_not_a_class(self):
+        with patch.object(diag.urllib.request, "build_opener", return_value=Opener()) as build:
+            diag.fetch_instance_log(9, 9, {"result_url": self.url})
+        self.assertIsInstance(build.call_args.args[0], diag.NoRedirect)
+
+    def test_error_text_contains_no_remote_body_or_credentials(self):
+        opener = Opener()
+        opener.open = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("REMOTE_SECRET"))
+        with self.assertRaises(diag.LogRefused) as caught:
+            self.fetch(opener=opener)
+        self.assertEqual(str(caught.exception), "diagnostic download refused")
+
+    def test_regional_s3_does_not_expand_normal_api(self):
+        self.assertFalse(diag.is_vast_api_url("https://s3.eu-west-1.amazonaws.com/key"))
+
     def test_normal_api_allowlist_stays_vast_only(self):
         self.assertTrue(diag.is_vast_api_url("https://console.vast.ai/api/v0/instances/7/"))
         self.assertFalse(diag.is_vast_api_url(self.url))
