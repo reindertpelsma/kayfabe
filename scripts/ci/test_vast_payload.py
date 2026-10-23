@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """GPU-free falsifiers for the thin Vast payload wrapper and evidence parsers."""
+
 import importlib.util, subprocess, tempfile, unittest, time, sys
 from pathlib import Path
 

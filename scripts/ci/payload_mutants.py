@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Isolated, GPU-free mutation checks for the thin payload adapter."""
+
 import ast
 import json
 from pathlib import Path
