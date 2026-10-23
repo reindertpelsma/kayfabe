@@ -1,0 +1,47 @@
+[
+  {
+    "mutant": "admin_gate_removed",
+    "killers": 2,
+    "cases": [
+      "full_page_without_admin_never_issues_a_control",
+      "measurement_without_admin_never_issues_a_control"
+    ]
+  },
+  {
+    "mutant": "write_operation",
+    "killers": 7,
+    "cases": [
+      "changed_count_is_refused",
+      "changed_read_operation_is_refused",
+      "changed_register_address_is_refused",
+      "first_denied_word_abandons_measurement",
+      "last_denied_word_abandons_measurement",
+      "measured_first_word_is_real_read_only_reply",
+      "measured_last_word_uses_bounded_read_only_batches"
+    ]
+  },
+  {
+    "mutant": "ignore_register_status",
+    "killers": 2,
+    "cases": [
+      "first_denied_word_abandons_measurement",
+      "last_denied_word_abandons_measurement"
+    ]
+  },
+  {
+    "mutant": "ignore_register_metadata",
+    "killers": 2,
+    "cases": [
+      "changed_read_operation_is_refused",
+      "changed_register_address_is_refused"
+    ]
+  },
+  {
+    "mutant": "ignore_plan_bound",
+    "killers": 2,
+    "cases": [
+      "empty_measurement_plan_is_refused",
+      "oversized_measurement_plan_is_refused"
+    ]
+  }
+]

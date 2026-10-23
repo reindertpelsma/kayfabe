@@ -24,11 +24,36 @@ pub fn read_with(
     version: &str,
     unprivileged: bool,
     addresses: &[u32],
-    mut control: impl FnMut(u32, &mut [u8], &mut [u8]) -> Result<(), String>,
+    control: impl FnMut(u32, &mut [u8], &mut [u8]) -> Result<(), String>,
 ) -> Result<Vec<u32>, String> {
     if !unprivileged {
         return Err("PRECOMP host query requires CAP_SYS_ADMIN clear".into());
     }
+    read_checked(version, addresses, control)
+}
+
+/// CODE READ 2026-10-23: privileged read-only sweep, separate from runtime tier2.
+/// No product caller uses this entry point and a refusal is never retried with writes.
+///
+/// # Errors
+/// Missing effective CAP_SYS_ADMIN, unknown ABI, invalid plan or any host refusal.
+pub fn measure_with(
+    version: &str,
+    privileged: bool,
+    addresses: &[u32],
+    control: impl FnMut(u32, &mut [u8], &mut [u8]) -> Result<(), String>,
+) -> Result<Vec<u32>, String> {
+    if !privileged {
+        return Err("PRECOMP measurement requires effective CAP_SYS_ADMIN".into());
+    }
+    read_checked(version, addresses, control)
+}
+
+fn read_checked(
+    version: &str,
+    addresses: &[u32],
+    mut control: impl FnMut(u32, &mut [u8], &mut [u8]) -> Result<(), String>,
+) -> Result<Vec<u32>, String> {
     let l = layout::for_version(version)
         .ok_or_else(|| format!("PRECOMP host query has no compiled ABI for {version}"))?;
     if addresses.is_empty()
@@ -86,6 +111,25 @@ pub fn read_with(
 }
 
 impl crate::HostRm {
+    /// Read the own die's public capability plan for a privileged sweep only.
+    /// CODE READ 2026-10-23: measurement evidence, no runtime or guest-control caller.
+    ///
+    /// # Errors
+    /// Missing admin capability, unsupported ABI, invalid plan or host refusal.
+    pub fn measure_precomp_capabilities(&self, addresses: &[u32]) -> Result<Vec<u32>, String> {
+        let caps = kf_linux_raw::capability::current_thread_caps()
+            .map_err(|e| format!("PRECOMP measurement capget refused: {e}"))?;
+        measure_with(
+            self.driver_version(),
+            caps.holds_effective(kf_linux_raw::capability::CAP_SYS_ADMIN),
+            addresses,
+            |cmd, params, _ops| {
+                self.raw_control_exact(self.subdevice(), cmd, params)
+                    .map_err(|e| format!("PRECOMP measured own-subdevice control: {e:?}"))
+            },
+        )
+    }
+
     /// Ask only at realize, using a plan authored from public display headers on
     /// this session's own die. No guest-provided offset, flags or channel handle.
     ///
