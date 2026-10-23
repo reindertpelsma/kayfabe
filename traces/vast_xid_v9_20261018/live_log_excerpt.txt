@@ -1,0 +1,165 @@
+KF_SETUP_CACHE_START utc=1792756746
+KF_SETUP_CACHE_END {"seconds":36.455,"package_policy_sha256":"[redacted]","asset_bytes":167141234}
+KF_PAYLOAD_STAGE_START name=provision
+READY driver=580.159.04
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=1280652
+KF_PAYLOAD_STAGE_START name=cuda_host
+CUDA_LADDER_STARTED=2026-10-23T12:21:07+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=2c908a0e
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2185 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2185 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2116 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2116 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2190 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2190 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CUDA_LADDER_STARTED=2026-10-23T12:21:07+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=2c908a0e
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=2185 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=2116 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=2190 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2484 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CUDA_LADDER_DONE=2026-10-23T12:21:17+00:00
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=2484 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CUDA_LADDER_DONE=2026-10-23T12:21:17+00:00
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=13493
+KF_PAYLOAD_STAGE_START name=merge_bar
+TESTS passed 3749 failed 0
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+KF_ARM_DIAG_BEGIN arm=--timer wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=timer verdict=PASS secs=6 ms=5846 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--engines wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=engines verdict=PASS secs=6 ms=5904 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--doorbell-census wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=6 ms=5942 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--gpu-info-sweep wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=4 ms=3724 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--bus-info-sweep wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=9 ms=9057 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--concurrency wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=9 ms=9665 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--defer-liveness wrapper_rc=6 admitted=1
+BARE_CELL_ARM arm=defer-liveness verdict=PASS secs=18 ms=17974 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--blockage-coverage wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=blockage-coverage verdict=PASS secs=7 ms=6256 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--alias-two-vas wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=alias-two-vas verdict=PASS secs=6 ms=5846 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--alias-unmap-observe wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=5 ms=5809 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--map-propagation wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=map-propagation verdict=PASS secs=6 ms=5821 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--late-map-race wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=late-map-race verdict=PASS secs=6 ms=6244 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--missing-page-fault wrapper_rc=6 admitted=1
+BARE_CELL_ARM arm=missing-page-fault verdict=PASS secs=9 ms=8833 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--uvm-invalidate wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=uvm-invalidate verdict=PASS secs=3 ms=3113 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--uvm-mean wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=uvm-mean verdict=PASS secs=6 ms=5948 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--executor-vas wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=executor-vas verdict=PASS secs=6 ms=5855 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--guest-ring-channel wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=guest-ring-channel verdict=PASS secs=6 ms=5800 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--dictated-ring wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=dictated-ring verdict=PASS secs=6 ms=5824 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--dictated-ring-negative wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=6 ms=5842 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--ce-client wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=ce-client verdict=PASS secs=6 ms=5814 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--ce-client-guest-ram wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=10 ms=10527 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--guest-ram-pin wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=guest-ram-pin verdict=PASS secs=6 ms=5864 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--bar1-crossing wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=bar1-crossing verdict=PASS secs=6 ms=5844 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--atomics-probe wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=atomics-probe verdict=PASS secs=6 ms=5843 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--pce-mask-probe wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=pce-mask-probe verdict=PASS secs=5 ms=5810 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--gpga-reserve-probe wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=25 ms=24650 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--map-stress wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=map-stress verdict=PASS secs=6 ms=5887 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--concurrent-fuzz wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=6 ms=6104 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--cross-client-leak wrapper_rc=0 admitted=1
+BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=6 ms=5842 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+KF_ARM_DIAG_BEGIN arm=--rpc-mixed-allocs wrapper_rc=0 admitted=1
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=7 ms=6659 rc=0 pci_dev=0x220410DE drv=580.159.04 kmod=open cc=8.6 rev=2c908a0e8
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+KF_ARM_DIAG_BEGIN arm=--timer wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=timer verdict=PASS secs=17 client_ms=959
+KF_ARM_DIAG_BEGIN arm=--engines wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=engines verdict=PASS secs=16 client_ms=1379
+KF_ARM_DIAG_BEGIN arm=--doorbell-census wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=18 client_ms=2320
+KF_ARM_DIAG_BEGIN arm=--gpu-info-sweep wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=17 client_ms=940
+KF_ARM_DIAG_BEGIN arm=--bus-info-sweep wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=19 client_ms=4180
+KF_ARM_DIAG_BEGIN arm=--concurrency wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=23 client_ms=7880
+KF_ARM_DIAG_BEGIN arm=--defer-liveness wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=30 client_ms=13200
+KF_ARM_DIAG_BEGIN arm=--blockage-coverage wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=blockage-coverage verdict=PASS secs=17 client_ms=1349
+KF_ARM_DIAG_BEGIN arm=--alias-two-vas wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=alias-two-vas verdict=PASS secs=16 client_ms=950
+KF_ARM_DIAG_BEGIN arm=--alias-unmap-observe wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=16 client_ms=970
+KF_ARM_DIAG_BEGIN arm=--map-propagation wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=map-propagation verdict=PASS secs=17 client_ms=1000
+KF_ARM_DIAG_BEGIN arm=--late-map-race wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=late-map-race verdict=PASS secs=17 client_ms=1449
+KF_ARM_DIAG_BEGIN arm=--missing-page-fault wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=19 client_ms=4000
+KF_ARM_DIAG_BEGIN arm=--uvm-invalidate wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=uvm-invalidate verdict=PASS secs=18 client_ms=1670
+KF_ARM_DIAG_BEGIN arm=--uvm-mean wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=uvm-mean verdict=PASS secs=18 client_ms=1860
+KF_ARM_DIAG_BEGIN arm=--executor-vas wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=executor-vas verdict=PASS secs=16 client_ms=969
+KF_ARM_DIAG_BEGIN arm=--guest-ring-channel wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=guest-ring-channel verdict=PASS secs=16 client_ms=949
+KF_ARM_DIAG_BEGIN arm=--dictated-ring wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=dictated-ring verdict=PASS secs=17 client_ms=939
+KF_ARM_DIAG_BEGIN arm=--dictated-ring-negative wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=16 client_ms=950
+KF_ARM_DIAG_BEGIN arm=--ce-client wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=ce-client verdict=PASS secs=16 client_ms=959
+KF_ARM_DIAG_BEGIN arm=--ce-client-guest-ram wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=68 client_ms=51780
+KF_ARM_DIAG_BEGIN arm=--guest-ram-pin wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=guest-ram-pin verdict=PASS secs=17 client_ms=919
+KF_ARM_DIAG_BEGIN arm=--bar1-crossing wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=bar1-crossing verdict=PASS secs=17 client_ms=969
+KF_ARM_DIAG_BEGIN arm=--atomics-probe wrapper_rc=0 admitted=1
+FAST_CELL_ARM arm=atomics-probe verdict=PASS secs=16 client_ms=910
+FAST_CELL_ARM arm=pce-mask-probe verdict=PASS secs=16 client_ms=949
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=36 client_ms=20010
+FAST_CELL_ARM arm=map-stress verdict=PASS secs=17 client_ms=1519
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=19 client_ms=3769
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=17 client_ms=1000
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=17 client_ms=1869
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=12 user=12 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=12 all PRIVILEGED_CHANNEL=0 privilege=USER
+KF_PAYLOAD_STAGE_END name=merge_bar rc=6 duration_ms=2033184
+KF_PAYLOAD_STAGE_START name=cuda_guest
+CUDA_LADDER_STARTED=2026-10-23T12:55:14+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=2c908a0e
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10929 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f197 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f111 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10929 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f197 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f111 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=11012 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f117 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=11012 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f117 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=3 trapped=11121 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f116 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=3 trapped=11121 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f116 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CUDA_LADDER_STARTED=2026-10-23T12:55:14+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=2c908a0e
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10929 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f197 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f111 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=11012 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f117 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=3 trapped=11121 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f201 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f116 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=4 trapped=11742 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f203 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f218 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f52]
+CUDA_LADDER_DONE=2026-10-23T13:02:07+00:00
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=4 trapped=11742 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f203 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f218 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f52]
+CUDA_LADDER_DONE=2026-10-23T13:02:07+00:00
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=416590

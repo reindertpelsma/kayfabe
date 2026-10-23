@@ -1,0 +1,49 @@
+{
+  "run": "v9-callback-replay-20261023",
+  "lease_id": 57367447,
+  "sha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+  "native_controls": {
+    "--defer-liveness": {
+      "faults": 4,
+      "admitted": true
+    },
+    "--missing-page-fault": {
+      "faults": 1,
+      "admitted": true
+    }
+  },
+  "combined_faults": 5,
+  "combined_admitted": true,
+  "source_projection": "Only literal [untrusted] / [box] display prefixes removed. Watcher indentation stripped from journal records. No fault fields or client/source markers rewritten.",
+  "negative_variants": [
+    {
+      "case": "wrong_channel",
+      "refused": true
+    },
+    {
+      "case": "wrong_va",
+      "refused": true
+    },
+    {
+      "case": "wrong_type",
+      "refused": true
+    },
+    {
+      "case": "non_ce_client",
+      "refused": true
+    },
+    {
+      "case": "extra_record",
+      "refused": true
+    }
+  ],
+  "fixture_sha256": {
+    "--defer-liveness": "4d6cfbcac87fe8a42657e1976ed0e024e9ea986bef5145df274fc923e452c37e",
+    "--missing-page-fault": "86f154df6841c41f07a60ecd3985353132d4038853ce25441400d9fd57e7df41"
+  },
+  "pre_whitespace_normalization_fixture_sha256": {
+    "--defer-liveness": "090df3b0af23f2936677c7bfb82e3f55987b9cf5a55ca3f605adebfd95529d75",
+    "--missing-page-fault": "b747dd65b0efa7de04036cc42c24b00e641cc87189547e99c80efe2ce115f6ac"
+  },
+  "public_fixture_normalization": "Trailing ASCII whitespace and extra EOF blank lines removed to satisfy diff hygiene. Kernel fault fields/client/source marker values unchanged. Both original callback projection and normalized public projection pass the same matcher."
+}

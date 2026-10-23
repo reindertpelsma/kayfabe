@@ -1,6 +1,6 @@
 # Shared exact-source Xid admission and callback diagnostics
 
-STATUS: LIVE, 2026-10-23. No V9 rental at this pre-rent checkpoint.
+STATUS: LIVE PASS, 2026-10-23. The single authorised V9 lease is complete; see [live evidence](LIVE_RUN.md).
 
 CODE READ: the sole production implementation is `scripts/bench/native_xid_guard.py`,
 imported verbatim with four original test files from S4 branch codex/sweep-dies-20261022
@@ -48,7 +48,7 @@ actual common directory; missing metadata caused five setup errors before that h
 CODE READ: no Worker/reporter schema, bundle/default, product crate, source revision selection,
 box secret boundary or deadline changed. [Pre-recorded hypothesis/falsifier](experiment_plan.json).
 CODE READ: the 2026-10-23 experiment plan specifies cap4/stop3 USD, fixed-die/verified policy, independent reaper
-before create and exact-ID teardown. No additional lease or retry is authorised automatically.
+before create and exact-ID teardown. The one lease is now complete; no additional lease or retry is authorised automatically.
 
 MEASURED on 2026-10-23, run `v9-gpu-free-20261023`:461 target-OS tests pass in67.317s,
 including all100 imported S4 tests. The50 payload/shared-guard,43 cache/helper and6 policy
@@ -59,3 +59,9 @@ MEASURED on 2026-10-23, run `v9-cloud-init-replay-20261023`: fresh network-disab
 fixtures pass complete orchestration in74.132s and post-swap failure in52.815s, with current
 failure hardware. GPU/kernel/VM/compiler/deep-suite leaf operations are explicit fixtures;
 these are environment/orchestration checks, not GPU evidence. [Replay](cloud_init_replay.json).
+
+MEASURED on 2026-10-23, run `v9-xid-kvm-20261023`: the bound verdict is PASS; host/fat CUDA4/4 each,
+kf tests3749/0, gates9/9+10, raw30/30, thin30/30 and census pass on source2c908a0e8.
+The exact instance is absent; inferred cost upper0.515590547 USD. All three hosted CI runs
+passed on the same source. [Live result, bounds and every remaining gap](LIVE_RUN.md),
+[structured receipt](live_run.json), [hosted checks](hosted.json).
