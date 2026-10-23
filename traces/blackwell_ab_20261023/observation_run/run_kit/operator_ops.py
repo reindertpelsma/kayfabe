@@ -206,6 +206,16 @@ if mode in ("preflight", "rent"):
         )
         + "\n"
     )
+    # The controller named this exact fallback, independently of search visibility.
+    # --cancel-unavail makes the create endpoint decide whether it remains rentable.
+    if not any(int(x["id"]) == 57344521 for x in offers):
+        prior = json.loads((D / "single_recheck_cache.json").read_text())
+        fallback = next(x for x in prior["offers"]
+                        if int(x["id"]) == 57344521 and int(x["machine_id"]) == 150531)
+        assert fallback["verification"] == "verified"
+        fallback = dict(fallback, controller_named_fallback=True,
+                        verification_last_seen_utc=prior["utc"])
+        offers.append(fallback)
     if not offers:
         print("NO_ELIGIBLE_OFFERS (no creation attempted)", flush=True)
         sys.exit(75)
@@ -320,7 +330,17 @@ if mode in ("preflight", "rent"):
             "codex-bw3-observe-20261023",
         ]
     )
-    assert result.get("success")
+    if not result.get("success"):
+        message = str(result.get("msg", result.get("error", ""))).lower()
+        categories = [word for word in ("not found", "not available", "unavailable",
+                      "already rented", "no such", "verification", "credit", "price")
+                      if word in message]
+        (D / "create_refusal_1305.json").write_text(json.dumps({
+            "utc":now().isoformat(),"offer_id":int(offer["id"]),
+            "machine_id":int(offer["machine_id"]),"success":False,
+            "reason_categories":categories,"new_contract_returned":bool(result.get("new_contract")),
+            "cancel_unavail":True,"single_recheck_reused":True})+"\n")
+        raise RuntimeError("exact approved fallback create refused; see sanitized receipt")
     iid = int(result["new_contract"])
     row = {
         "id": iid,
@@ -334,6 +354,8 @@ if mode in ("preflight", "rent"):
         "measurement_date": now().date().isoformat(),
         "quote_dph": rate,
         "verification": offer.get("verification"),
+        "verification_last_seen_utc": offer.get("verification_last_seen_utc"),
+        "controller_named_fallback": offer.get("controller_named_fallback", False),
         "reliability": offer.get("reliability"),
         "created_utc": now().isoformat(),
         "credit_before": credit,

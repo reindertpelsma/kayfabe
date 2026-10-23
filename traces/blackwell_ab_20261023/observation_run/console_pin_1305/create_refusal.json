@@ -1,0 +1,12 @@
+{
+  "command": [
+    "create",
+    "instance",
+    "57344521"
+  ],
+  "returncode": 0,
+  "status_code": 400,
+  "cause": "not available",
+  "stdout_bytes": 0,
+  "stderr_bytes": 122
+}

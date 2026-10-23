@@ -1,3 +1,17 @@
+# Owner 13:05: pin readiness fixed; exact fallback unavailable
+
+MEASURED on 2026-10-23: tests-only EXPECTED RED commits5e5a16ce6 and58683b816 precede fix at commit a36511ec3. `console_pin_1305/all_tests.txt` records250 passing helpers, including22 new pin/operator tests. `console_pin_1305/console_pin_mutations.json` records11 mutants, each killed by at least2 tests. The previous operator fails4 tests when replayed with the corrected test harness.
+
+CODE READ: `scripts/bench/blackwell/console_pin.py` distinguishes missing console publication from a different published ed25519 identity. Missing pins trigger console re-reads every20s, within60s times factor4–10 anchored to the first scanned candidate, capped at1200s since lease creation. Neither repeated reads nor SSH retries restart those bounds; late successful pins cannot shorten the total ceiling to600s. A different published pin still refuses immediately. The operator records public fingerprints and console hashes, without raw console content. StrictHostKeyChecking, native/Xid guards and the per-arm observation protocol are unchanged.
+
+MEASURED: `console_pin_1305/single_recheck.json` at 2026-10-23 11:07:30 UTC contains no verified GB206/GB205 alternative; the only returned candidate is de-verified. Offer57344521 is absent from the search. Under the explicit exact-offer exception, one create request for57344521/machine150531 was sent with --cancel-unavail, using its earlier verified snapshot as the approved fallback provenance. `console_pin_1305/create_refusal.json` records provider400/not available. No additional market poll or create attempt followed.
+
+MEASURED on 2026-10-23: `console_pin_1305/closure.json` confirms no new lease, timers or runtime spending, all17 historical ownids API-absent, no live own-label instance and both previous timers gone. Phase estimate remains5.200540477629074USD, stop7.5/cap8/reserve5. The exception was attempted once but allocated no lease; the bad list remains intact. B/B1 and runtime page/hold/TDR evidence are unrun. No claims gate stopped live work.
+
+FALSIFIERS BEFORE ANY LATER LIVE RUN: absent-then-present attestation inside the frozen bounds must pass; a different published pin must refuse before SSH; missing pin after either bound must expire as readiness. For inherited-die B, 0x50/refusalCode0 is an actual-die inheritance finding, notGB202. After an admitted Xid32, guest0x116/TDR/exit falsifies survival; no admitted Xid leaves fault survival untested. None of these hardware hypotheses was evaluated by the refused create request.
+
+--- Earlier checkpoints ---
+
 # Owner 12:50 attempt closed: SSH identity refusal before work
 
 MEASURED: `traces/blackwell_ab_20261023/observation_run/lease_57359730/closure.json` records the 2026-10-23 attempt. The single recheck found verified RTX5060Ti offer50694293/machine45428, advertised GB206, which took precedence over the one-time exactoffer57344521/machine150531 exception. That exception remains unused and its bad-list entry is retained. No additional GB202 query or market recheck occurred.

@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/workspace/bw3-observe-run/ops.py", line 317, in <module>
+    result = api(
+        [
+    ...<12 lines>...
+        ]
+    )
+  File "/workspace/bw3-observe-run/ops.py", line 50, in api
+    raise RuntimeError(safe) from None
+RuntimeError: {'command': ['create', 'instance', '57344521'], 'returncode': 0, 'status_code': 400, 'cause': 'not available', 'stdout_bytes': 0, 'stderr_bytes': 122}
