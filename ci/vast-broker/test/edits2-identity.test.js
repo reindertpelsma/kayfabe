@@ -103,6 +103,8 @@ const CODES = {
   PRICE_FIELDS: (h) => (h.cloud.offer.storage_cost = -1),
   COUNTRY: (h) => (h.cloud.offer.geolocation = 'Beijing, CN'),
   PRICE: (h) => (h.cloud.price = 0.9), // MAX_PRICE_USD_HOUR is 0.5 in the harness
+  // Item 8: the machine of an active run is held (reserved while CREATING and active).
+  IN_USE: async (h) => assert.equal((await h.call()).status, 200),
 };
 for (const [code, mutate] of Object.entries(CODES))
   test('item 9: rejection code table ' + code, async () => {
