@@ -45,3 +45,19 @@ CODE READ: deployment of this payload uses the already-shipped blob route. Set W
 CODE READ (owner-approved follow-up, 2026-10-23): the box blob helper keeps bounded GET retries for the provider's created-to-running lag: curl exponential backoff, at most 8 retries, 20 seconds per request, and a 299-second hard process deadline for the whole operation. The Worker serves `/blob-url` only after its own Vast inspection reports running; this requirement is unchanged. The ACK pipe remains the primary readiness event. Reporter 401/403/404 handling remains terminal; only the blob GET helper has this bounded retry policy.
 
 CODE READ: cache restoration prepares the file repository and Cargo vendor source; APT update/install remains in the existing provision scripts, after their unattended-upgrade masking and dpkg lock guard. The local-cache shim forces their host APT calls to the reviewed file repository. The separate offline-install check above exercises that repository without bypassing the real provisioner's guard.
+
+## Fresh acceptance after V8
+
+MEASURED on 2026-10-23, run `v8-fresh-kvm-20261023`, source commit 7e0fc2fcb8d8b362cb4c872ab8e03f0c682222c9: [fresh evidence](../../traces/vast_setup_v8_fresh_20261018/LIVE_RUN.md) records the following result (one lease, no spread).
+
+| Phase | Fresh result | Interpretation |
+|---|---:|---|
+| Rent-start → first report | 296.097 s | Unattended; provider boot differs from V8 |
+| .deb fetch/verify/extract | 6.756 s | 158,145,005 compressed bytes |
+| Vendor fetch/verify/extract | 2.720 s | 7,888,026 compressed bytes |
+| Entire cache restoration | 20.684 s | Includes bounded bulk probes and ACK wait |
+| Fresh package install | NOT TIMED | Existing guarded provisioners retain APT work |
+| Bench READY | NOT REACHED | Shell HOME was unset at provision_box line232 |
+| CUDA/merge/thin/fat suites | NOT RUN | First provision red stopped later stages |
+
+CODE READ: repo-side onstart now restores a missing/empty standard HOME from the current OS account, retaining explicit values. This post-lease fix has tests only; it was not applied to the immutable rented checkout. No kayfabe crate behavior, Worker rule or deadline changed.

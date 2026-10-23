@@ -12,6 +12,27 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 CASES = [
     (
+        "home-bootstrap-disabled",
+        "vast_onstart.sh",
+        'if [ -z "${HOME:-}" ]; then',
+        "if false; then",
+        "base_env",
+    ),
+    (
+        "home-bootstrap-wrong-account",
+        "vast_onstart.sh",
+        "print(pwd.getpwuid(os.geteuid()).pw_dir)",
+        'print("/nonexistent-kf-home")',
+        "base_env",
+    ),
+    (
+        "home-overwrites-explicit-process-value",
+        "vast_onstart.sh",
+        'if [ -z "${HOME:-}" ]; then',
+        "if true; then",
+        "base_env",
+    ),
+    (
         "cache-starts-apt-before-guard",
         "vast_setup.py",
         '    configure_vendor(cache / "vendor", Path.home() / ".cargo")',

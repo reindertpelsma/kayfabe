@@ -37,6 +37,13 @@ if [ -n "$(missing_tools)" ]; then
 fi
 
 install -d -m 700 "$workspace" || exit 2
+# Cloud-init may omit login variables; restore the current account's standard home.
+# Keep explicit process values, and never choose a different account or arbitrary path.
+if [ -z "${HOME:-}" ]; then
+    kf_account_home=$(python3 -c 'import os,pwd; print(pwd.getpwuid(os.geteuid()).pw_dir)') || exit 2
+    [ -d "$kf_account_home" ] || exit 2
+    export HOME="$kf_account_home"
+fi
 report check-env --write "$run_dir/env" || exit 2
 set -a
 # shellcheck disable=SC1091

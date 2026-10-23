@@ -1,7 +1,7 @@
 {
   "run": "v8-fresh-kvm-20261023",
   "source_sha": "7e0fc2fcb8d8b362cb4c872ab8e03f0c682222c9",
-  "state": "RUNNING",
+  "state": "COMPLETE_FAIL_PROVISION",
   "one_authorised_lease": true,
   "reaper_armed_first": true,
   "vm": true,
@@ -13,5 +13,100 @@
   "full_bandwidth_reserve_usd": 0.08854166666666667,
   "cap_usd": 4,
   "stop_usd": 3,
-  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "verdict": "FAIL",
+  "suites": [
+    {
+      "name": "provision",
+      "pass": 0,
+      "fail": 1,
+      "skip": 0
+    }
+  ],
+  "country": "US",
+  "first_report_s": 296.0965578556061,
+  "first_independent_running_poll_s": 288.993688583374,
+  "cache_restore_seconds": 20.684,
+  "cache_asset_bytes": 166033031,
+  "cache_apt_installation_timed": false,
+  "mirror_metrics": {
+    "fallback_mirror": "mirrors.edge.kernel.org",
+    "probes": [
+      {
+        "host": "archive.ubuntu.com",
+        "status": 206,
+        "bytes": 8388608,
+        "seconds": 2.055192,
+        "curl_rc": 0
+      },
+      {
+        "host": "azure.archive.ubuntu.com",
+        "status": 0,
+        "bytes": 0,
+        "seconds": 10.001809,
+        "curl_rc": 28
+      },
+      {
+        "host": "mirrors.edge.kernel.org",
+        "status": 206,
+        "bytes": 8388608,
+        "seconds": 0.972111,
+        "curl_rc": 0
+      }
+    ],
+    "actual_apt_source": "local-cache"
+  },
+  "reported_hardware": {
+    "gpu_model": "NVIDIA GeForce RTX 3090",
+    "compute_cap": 860,
+    "driver_version": "575.51.03"
+  },
+  "observed_hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 3090",
+    "compute_cap": 860,
+    "driver_version": "575.51.03"
+  },
+  "cache_blob_after_first_ack": true,
+  "blob_responses": [
+    {
+      "at": 1792741748065,
+      "status": 200
+    },
+    {
+      "at": 1792741754217,
+      "status": 200
+    }
+  ],
+  "exact_checkout_verified": true,
+  "estimated_upper_usd": 0.12487168995671802,
+  "exact_id_and_label_absent": true,
+  "created_at": 1792741450.628442,
+  "absent_at": 1792741783.1405196,
+  "cause": "HOME unset: provision_box.sh line232 fails before cargo setup",
+  "full_suites": "NOT RUN",
+  "ready_target": "NOT REACHED",
+  "post_swap_failure_hardware": "NOT EXERCISED",
+  "asset_markers_preserved": [
+    {
+      "kind": "debs",
+      "seconds": 6.756,
+      "bytes": 158145005
+    },
+    {
+      "kind": "vendor",
+      "seconds": 2.72,
+      "bytes": 7888026
+    }
+  ],
+  "cleanup": {
+    "run": "v8-fresh-cleanup-20261023",
+    "at": 1792742879.9823358,
+    "exact_id_absent": true,
+    "exact_label_absent": true,
+    "native_api_reverified": true,
+    "local_ports_released": true,
+    "children_stopped": true,
+    "independent_reaper_stopped_after_absence": true,
+    "no_firewall_rule_added": true
+  }
 }

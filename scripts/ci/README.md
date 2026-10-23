@@ -55,3 +55,6 @@ under a 299 s hard deadline. The Worker's running-state requirement is unchanged
 
 CODE READ: host APT runs in the existing guarded provisioners; cache restore prepares files only.
 The test runtime is Ubuntu 22.04 with GNU coreutils (`setup-test.Dockerfile`), matching the box.
+
+CODE READ: if cloud-init omits standard HOME or leaves it empty, repo-side onstart restores the
+current OS account's home directory. An explicit process HOME is preserved; no Worker var is added.

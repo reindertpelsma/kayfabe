@@ -1,4 +1,5 @@
 """Fresh Vast onstart has KF_* data but can omit ordinary login environment values."""
+
 import os
 from pathlib import Path
 import pwd
