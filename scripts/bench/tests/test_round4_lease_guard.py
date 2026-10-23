@@ -121,3 +121,80 @@ class PrearmTests(unittest.TestCase):
                      {'intent': 'fixture', 'id': 0}, {'intent': 'fixture', 'id': '123'}):
             with self.subTest(plan=plan), self.assertRaises(ValueError):
                 policy().owned_id(plan, 'fixture')
+
+
+class WatchTests(unittest.TestCase):
+    def run_watch(self, failures=0):
+        import json
+        import os
+        import subprocess
+        import sys
+        import tempfile
+        import time
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            client = root / 'vastai'
+            client.write_text('#!' + sys.executable + '\n' + '''
+import json, os, pathlib, sys
+root = pathlib.Path(os.environ['LEASE_FIXTURE'])
+with (root / 'calls').open('a') as out:
+    out.write(json.dumps(sys.argv[1:]) + '\\n')
+if sys.argv[1] == 'show':
+    count = root / 'count'
+    n = int(count.read_text()) if count.exists() else 0
+    count.write_text(str(n + 1))
+    if n < int(os.environ['FAILURES']):
+        raise SystemExit(7)
+    print(json.dumps([{'id': 999}]))
+''')
+            client.chmod(0o755)
+            intent = root / 'intent.json'
+            intent.write_text(json.dumps({'intent': 'fixture',
+                                          'deadline_epoch': time.time() + .5}))
+            env = dict(os.environ, PATH=td + os.pathsep + os.environ['PATH'],
+                       LEASE_FIXTURE=td, FAILURES=str(failures))
+            child = subprocess.Popen([sys.executable, str(PATH), 'watch', str(intent)],
+                                     env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                ready = root / 'intent.ready.json'
+                for _ in range(100):
+                    if ready.exists() or child.poll() is not None:
+                        break
+                    time.sleep(.01)
+                self.assertTrue(ready.exists())
+                self.assertFalse((root / 'calls').exists())
+                plan = json.loads(intent.read_text())
+                plan['id'] = 123
+                temp = root / 'new.json'
+                temp.write_text(json.dumps(plan))
+                temp.replace(intent)
+                stdout, stderr = child.communicate(timeout=12)
+                calls = [json.loads(line) for line in (root / 'calls').read_text().splitlines()]
+                receipt = root / 'intent.absent.json'
+                result = json.loads(receipt.read_text()) if receipt.exists() else None
+                return child.returncode, calls, result, stderr.decode()
+            finally:
+                if child.poll() is None:
+                    child.terminate()
+                child.communicate(timeout=5)
+
+    def test_real_guard_signals_ready_before_any_api_action(self):
+        rc, calls, receipt, err = self.run_watch()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(calls[0], ['destroy', 'instance', '123', '-y'])
+
+    def test_real_guard_never_destroys_other_account_ids(self):
+        rc, calls, receipt, err = self.run_watch()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(receipt['id'], 123)
+        self.assertTrue(all('999' not in row for row in calls))
+
+    def test_transient_api_error_retries_until_absence(self):
+        rc, calls, receipt, err = self.run_watch(failures=1)
+        self.assertEqual(rc, 0, err)
+        self.assertIsNotNone(receipt)
+
+    def test_transient_api_error_keeps_only_owned_destroy_target(self):
+        rc, calls, receipt, err = self.run_watch(failures=1)
+        self.assertGreaterEqual(sum(row[0] == 'show' for row in calls), 2)
+        self.assertEqual([row[2] for row in calls if row[0] == 'destroy'], ['123', '123'])
