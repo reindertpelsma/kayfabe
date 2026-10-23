@@ -1,0 +1,17 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "gpu_source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "harness_source": "37c5abdc4889fa655d025e13ae7b3fc0aa99a286",
+  "utc": "2026-10-23T15:57:27.747104+00:00",
+  "archive_sha256": "4c3f2682254f9996fe30782beefdeb1471d8bf50b0b0b14db72f4410e4188c08",
+  "file_sha256": {
+    "arm.sh": "014db7ee958397d89e7315edf4333ff929b5780f33d09fdf810e17b2c65b32c9",
+    "signin.py": "ba8c9d195ddce5f4f4081e1bb6660aa70f0e73e0933dbf3c5500dbdcc90618c1"
+  },
+  "applied_before_on": true,
+  "production_trees_unchanged": true,
+  "profile_and_stage_reused": true,
+  "keyboard_input_retry": false,
+  "result": "SIGNIN_OVERLAY_BEFORE_ON_OK"
+}
