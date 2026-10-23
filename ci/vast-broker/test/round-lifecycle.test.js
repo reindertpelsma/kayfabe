@@ -92,3 +92,20 @@ for (const action of ['hold', 'stop-timer']) {
     else assert.equal(saved.hardDeadline, null);
   });
 }
+// FALSIFIER: lower observed contract prices erase already reserved/billed liability.
+for (const kind of ['compute', 'network'])
+  test('round contract decrease never releases historical liability ' + kind, async () => {
+    const h = await setup();
+    h.cloud.offer.inet_up_cost = 0.001;
+    h.cloud.offer.inet_down_cost = 0.001;
+    await h.call();
+    const before = await h.storage.get('cost:123-1');
+    h.time.value += 5 * 60000;
+    const instance = h.cloud.instances.get('900');
+    if (kind === 'compute') Object.assign(instance, { dph_base: 0.1, dph_total: 0.12 });
+    else Object.assign(instance, { inet_up_cost: 0.00001, inet_down_cost: 0.00001 });
+    assert.equal((await h.call('/status/123-1')).status, 200);
+    const after = await h.storage.get('cost:123-1');
+    assert.ok(after.price >= before.price);
+    assert.ok(after.bandwidthCost >= before.bandwidthCost);
+  });
