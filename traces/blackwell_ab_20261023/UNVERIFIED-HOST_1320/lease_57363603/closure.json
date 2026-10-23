@@ -50,5 +50,7 @@
   "pin_mutants": 12,
   "previous_observation_mutants": 26,
   "mutation_min_killers": 2,
-  "claims_not_used_to_stop_live_work": true
+  "claims_not_used_to_stop_live_work": true,
+  "corrected_matching_rule_commit": "a3284002089cd7b2f95e6f4949d0cadfeb4f5848",
+  "expected_red_commit": "71d938771"
 }

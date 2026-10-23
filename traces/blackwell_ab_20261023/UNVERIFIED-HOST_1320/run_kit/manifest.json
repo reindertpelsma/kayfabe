@@ -22,12 +22,15 @@
   "falsifier": "On inherited die: B 0x50 or refusal of Code0 is an inheritance finding, never a GB202 result",
   "actual_lease": null,
   "expected_die": null,
-  "expected_donor": null,
+  "expected_donor": "GB206",
   "provider_exception_used": false,
   "deadline_utc": "2026-10-23T13:10:25.278347+00:00",
-  "attempt_state": "not_created",
+  "attempt_state": "closed_after_tooling_false_pin_refusal",
   "actual_die_driver_page_verified": false,
   "ssh_identity_guard_refusal": true,
   "native_guest_work_started": false,
-  "host_verification": "UNVERIFIED-HOST"
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57363603,
+  "advertised_die": "GB206",
+  "corrected_matching_rule_commit": "a3284002089cd7b2f95e6f4949d0cadfeb4f5848"
 }
