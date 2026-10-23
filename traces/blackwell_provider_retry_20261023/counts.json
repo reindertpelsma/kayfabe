@@ -3,9 +3,11 @@
   "expected_red": "6d1924fa0",
   "source": "9ff51a6e9",
   "base_tests": 195,
-  "after_tests": 217,
+  "after_tests": 226,
   "native_guard_tests": 18,
   "old_tests_removed": 0,
   "rust_changed_files": 0,
-  "clippy_added": 0
+  "clippy_added": 0,
+  "restart_expected_red": "a2da968f3",
+  "current_provider_source": "6eaee96bf"
 }

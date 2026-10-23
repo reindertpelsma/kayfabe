@@ -50,6 +50,38 @@
     ]
   },
   {
+    "mutant": "ignore_persisted_completion",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_a_native_cell_after_its_teardown",
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_an_ssh_ready_cell_after_its_teardown"
+    ]
+  },
+  {
+    "mutant": "ignore_retirement_proof",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_an_instance_not_destroyed",
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_before_exact_api_absence"
+    ]
+  },
+  {
+    "mutant": "ignore_record_identity",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_needs_a_record_for_that_exact_instance",
+      "test_provider_retry.ProviderRetry.test_restart_needs_that_exact_machine_record"
+    ]
+  },
+  {
+    "mutant": "ignore_record_reason",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_cannot_relabel_a_guest_tdr_as_infrastructure",
+      "test_provider_retry.ProviderRetry.test_restart_cannot_relabel_a_native_fault_as_a_provider_failure"
+    ]
+  },
+  {
     "mutant": "retry_started_work",
     "killers": 2,
     "cases": [

@@ -1,3 +1,5 @@
+STATUS UPDATE: LIVE, 2026-10-23. Restart eligibility audit adds EXPECTED REDa2da968f3 then fixe046ca01c and tests6eaee96bf; total226/226. Eleven mutants3/2/2/3/2/2/2/2/2/2/2 killers. The current operator refuses replacement after a retired SSH/native/guest cell, and requires the exact persisted machine+instance provider-failure record plus API absence. This closes a manual-controller-restart path that a retry counter alone did not block. The active57302449 hardware harness remains frozen9ff51a6e9; this GPU-free operator change does not alter its product/native/guest run. Earlier217 counts below are historical.
+
 STATUS: LIVE, 2026-10-23. GPU-free provider retry; no new lease started yet.
 
 2026-10-23 EXPECTED RED6d1924fa0 precedes fix9ff51a6e9. Python195->217 pass, old tests retained; nativeguard18/18. Seven mutations have3/2/2/3/2/2/2 distinct killers (the implementation commit abbreviated the API-absence count as2; JSON records the actual3). Black100 and diff checks pass. No Rust files changed; clippy added0 is a scope delta, no Cargo run claimed.
