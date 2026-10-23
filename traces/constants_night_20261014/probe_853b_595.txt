@@ -1,0 +1,12 @@
+# kf-ctl-probe KF_PROBE_EXTRA_ONLY=1 with the request shape the Windows 580.88 driver sent on the AD103 (0x2080853b, 1832 B,
+# word 1 = 1; read host-side from capture C with a one-off scrub allow-list, bodies not kept). Home host AD104, 595.91.07,
+# user ubuntu (CapEff 0), 2026-10-14, lane C. Binary sha256 bb5eba20f830680a0a2111bf0bedab5cb6c14ca11411de71336d175c652dd9fe
+# (this branch). Falsifier stated before the run: "the host answers NV_OK" is falsified by any other status.
+# Result: falsified (INVALID_ARGUMENT). dmesg Xid count equal before and after this run (22/22; it rose from 17 between runs
+# because of the Windows VM on the same GPU, not because of this probe).
+PROBE_START pid=3991930 uid=Uid: 1000 1000 1000 1000 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE kind=subdevice cmd=0x2080853b size=1832 status=0x1f INVALID_ARGUMENT
+PROBE_SUMMARY INVALID_ARGUMENT=1
+PROBE_END admin_run=false
