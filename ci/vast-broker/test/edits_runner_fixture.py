@@ -61,7 +61,7 @@ def client(route, method="GET", body=None):
     elif route == "/rent" or route.startswith("/status/"):
         data = dict(final, **overrides)
     elif route.startswith("/logs/"):
-        data = page()
+        data = page("c" * 64 if case == "stop-not-after-invalid-final" else digest)
     elif route.startswith("/stop/"):
         data = dict(final, state="NONE", cleanup_pending=False, ended_at=3000)
     else:
@@ -86,6 +86,30 @@ if case == "rent-body":
             pass
         else:
             raise AssertionError("status with pr accepted: " + json.dumps(extra))
+elif case == "stop-after-verified-final":
+    # Item 4: a verified final fetch is followed by exactly one best-effort stop.
+    result = run()
+    assert result["verified"] == 1 and result["verdict"] == "PASS", result
+    assert [(c[0], c[1]) for c in stops()] == [("/stop/123-1", "POST")], calls
+    assert calls[-1][0] == "/stop/123-1", calls
+elif case == "stop-failure-is-ignored":
+    # Item 4: the stop is best effort; its failure never changes the verified result.
+    original = client
+
+    def client(route, method="GET", body=None):  # noqa: F811 - the case replaces the client.
+        if route.startswith("/stop/"):
+            calls.append((route, method, body))
+            raise OSError("worker unreachable")
+        return original(route, method, body)
+
+    result = run()
+    assert result == {"state": "GRACE", "verdict": "PASS", "verified": 1}, result
+    assert len(stops()) == 1, calls
+elif case == "stop-not-after-invalid-final":
+    # Item 4: a final fetch that fails the hash check sends no stop (grace timer is the fallback).
+    result = run()
+    assert result["verified"] == 0 and result["verdict"] == "UNAVAILABLE", result
+    assert stops() == [], calls
 else:
     raise AssertionError("unknown case " + case)
 print("ok " + case)
