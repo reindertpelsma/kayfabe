@@ -16,7 +16,7 @@ traces/scan_service_20261018/ on that branch. No fix, mutant success or final
 Clippy delta is claimed for item4; the baseline completed with four style
 warnings in imported audit tests still to remove. CODE READ: VA-1 and VA-4 stay
 deferred per owner; items5–7 and SA-01 remain pending. Earlier SA-02 and VA-batch
-drafts are unchanged. Nothing was merged; hardware validation is later.
+drafts are unchanged. Nothing was merged; hardware validation is later. (recorded in commit 08cf1f7ec, 2026-10-22)
 
 
 ## UPDATE 2026-10-18 — hitch measurement gates

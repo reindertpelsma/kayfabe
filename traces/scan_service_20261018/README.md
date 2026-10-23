@@ -16,7 +16,7 @@ on master (2.43s); it depends on producer scheduling. Two added tests synchronou
 refill eventfds during delivery and reliably fail the unbounded implementation.
 Both require pending readiness to survive into the next turn. The final two
 prefix-conservation cases also failed by assertion before implementation.
-No missing-target or lock-timeout result is counted as a red test.
+No missing-target or lock-timeout result is counted as a red test. (recorded in commit b0e75feaf, 2026-10-22)
 
 CODE READ: advance after the last token, splitting the sparse cyclic scan at that
 bit. A word-only cursor still starves118/127 behind attacker0..9 plus64..117.
@@ -33,7 +33,7 @@ CODE READ: dbfast still synchronizes registry commands first, delivers one
 nonblocking readiness snapshot, then returns. Its level-triggered eventfds remain
 ready on the same drainer poller for later turns. No readiness-array-size change.
 
-MEASURED hand mutants (individual restored-source runs; failed assertions):
+MEASURED hand mutants (individual restored-source runs; failed assertions) (recorded in commit b0e75feaf, 2026-10-22):
 
 | Mutant | Killing tests |
 |---|---:|
@@ -51,7 +51,7 @@ GPU-free release suites for kf-trap/core/chan/qemu/harness:1217 passed /0 failed
 passes asserted nothing about KVM. Existing ignored models were not loosened.
 Clippy all targets, same crates:305 ->301 source-bound fingerprints, added0.
 The baseline includes4 style warnings in imported audit tests; those were removed
-without changing assertions. No deny set or lint baseline was relaxed.
+without changing assertions. No deny set or lint baseline was relaxed. (recorded in commit b0e75feaf, 2026-10-22)
 
 MEASURED execution used the owner's global Cargo lock, one-hour contention waits,
 nice19, two build jobs and the lane's target directory. The earlier600s lock wait
