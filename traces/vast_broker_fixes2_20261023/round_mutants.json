@@ -1,0 +1,866 @@
+[
+  {
+    "mutant": "front-MAC",
+    "count": 4,
+    "killers": [
+      "round front verifies nonce MAC before DO /report/123-1",
+      "round front rejects expired capability /report/123-1",
+      "round front verifies nonce MAC before DO /blob-url/123-1/release-v1/asset",
+      "round front rejects expired capability /blob-url/123-1/release-v1/asset"
+    ]
+  },
+  {
+    "mutant": "front-expiry",
+    "count": 2,
+    "killers": [
+      "round front rejects expired capability /report/123-1",
+      "round front rejects expired capability /blob-url/123-1/release-v1/asset"
+    ]
+  },
+  {
+    "mutant": "nonce-MAC",
+    "count": 8,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true",
+      "round front accepts valid stateless capability /report/123-1",
+      "round front accepts valid stateless capability /blob-url/123-1/release-v1/asset",
+      "round exhausted blob scope performs no provider inspection run",
+      "round exhausted blob scope performs no provider inspection day",
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "short-token-life",
+    "count": 31,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true",
+      "round callback lifetime follows hard limit 5",
+      "round callback lifetime follows hard limit 10",
+      "round token includes immutable rental field nonce",
+      "round token includes immutable rental field sha",
+      "round stale authenticated flood never queues stopped",
+      "round stale authenticated flood never queues closed",
+      "round stale authenticated flood never queues unknown",
+      "round create-owned ID survives label change stop",
+      "round create-owned ID survives label change cron",
+      "round changed contract price destroys new owned box dph_total",
+      "round changed contract price destroys new owned box inet_down_cost",
+      "round lifecycle reads share bounded GitHub cache pr",
+      "round lifecycle reads share bounded GitHub cache branch",
+      "round exhausted blob scope performs no provider inspection run",
+      "round exhausted blob scope performs no provider inspection day",
+      "round full log still accounts Worker-authored lines status",
+      "round full log still accounts Worker-authored lines sweep",
+      "round contract decrease never releases historical liability compute",
+      "round contract decrease never releases historical liability network",
+      "round Worker GitHub credential wins over caller /rent",
+      "round caller GitHub credential is not forwarded /rent",
+      "round recovered create repricing is checked before rent response dph_total",
+      "round recovered create repricing is checked before rent response inet_up_cost",
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0",
+      "round changed create label emits a fixed ownership event /status/123-1",
+      "round changed create label emits a fixed ownership event /stop/123-1",
+      "round Worker GitHub token retains public fallback 401",
+      "round Worker GitHub token retains public fallback 403"
+    ]
+  },
+  {
+    "mutant": "closed-preauth",
+    "count": 4,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true",
+      "round stale authenticated flood never queues stopped",
+      "round stale authenticated flood never queues closed"
+    ]
+  },
+  {
+    "mutant": "ended-kill-receipt",
+    "count": 2,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true"
+    ]
+  },
+  {
+    "mutant": "bounded-record-queue",
+    "count": 2,
+    "killers": [
+      "round own record queue is bounded /status/123-1",
+      "round own record queue is bounded /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "create-label-ownership",
+    "count": 4,
+    "killers": [
+      "round create-owned ID survives label change stop",
+      "round create-owned ID survives label change cron",
+      "round changed create label emits a fixed ownership event /status/123-1",
+      "round changed create label emits a fixed ownership event /stop/123-1"
+    ]
+  },
+  {
+    "mutant": "fixed-label-event",
+    "count": 2,
+    "killers": [
+      "round changed create label emits a fixed ownership event /status/123-1",
+      "round changed create label emits a fixed ownership event /stop/123-1"
+    ]
+  },
+  {
+    "mutant": "per-GB-admission",
+    "count": 2,
+    "killers": [
+      "round transfer price capped per GB inet_up_cost",
+      "round transfer price capped per GB inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "per-GB-provider-query",
+    "count": 2,
+    "killers": [
+      "round provider query carries per GB ceiling inet_up_cost",
+      "round provider query carries per GB ceiling inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "contract-create-check",
+    "count": 2,
+    "killers": [
+      "round changed contract price destroys new owned box dph_total",
+      "round changed contract price destroys new owned box inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "contract-recovery-check",
+    "count": 2,
+    "killers": [
+      "round recovered create repricing is checked before rent response dph_total",
+      "round recovered create repricing is checked before rent response inet_up_cost"
+    ]
+  },
+  {
+    "mutant": "export-deny",
+    "count": 4,
+    "killers": [
+      "round denied country cannot rent CU",
+      "round denied country cannot rent IR",
+      "round denied country cannot rent KP",
+      "round denied country cannot rent SY"
+    ]
+  },
+  {
+    "mutant": "unknown-country",
+    "count": 2,
+    "killers": [
+      "round unknown country obeys owner config undefined",
+      "round unknown country obeys owner config malformed"
+    ]
+  },
+  {
+    "mutant": "OIDC-issuance-bounds",
+    "count": 5,
+    "killers": [
+      "round OIDC rejects stale or unbounded issue time {}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1800000061}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1799996399}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1800000000,\"exp\":1800003601}"
+    ]
+  },
+  {
+    "mutant": "blob-prefix-default-deny",
+    "count": 2,
+    "killers": [
+      "round blob tag scope defaults denied undefined",
+      "round blob tag scope defaults denied []"
+    ]
+  },
+  {
+    "mutant": "blob-quota-before-inspect",
+    "count": 2,
+    "killers": [
+      "round exhausted blob scope performs no provider inspection run",
+      "round exhausted blob scope performs no provider inspection day"
+    ]
+  },
+  {
+    "mutant": "runner-status-retry",
+    "count": 7,
+    "killers": [
+      "round runner retries status without destructive cleanup BUSY",
+      "round runner retries status without destructive cleanup RATE_LIMITED",
+      "round runner retries status without destructive cleanup UNAVAILABLE",
+      "round runner retries status without destructive cleanup exhausted",
+      "round runner retries status without destructive cleanup exhausted-rate",
+      "round runner retries status without destructive cleanup malformed-503",
+      "round runner retries status without destructive cleanup malformed-403"
+    ]
+  },
+  {
+    "mutant": "runner-infra-no-stop",
+    "count": 2,
+    "killers": [
+      "round runner retries status without destructive cleanup exhausted",
+      "round runner retries status without destructive cleanup exhausted-rate"
+    ]
+  },
+  {
+    "mutant": "GitHub-lifecycle-cache",
+    "count": 2,
+    "killers": [
+      "round lifecycle reads share bounded GitHub cache pr",
+      "round lifecycle reads share bounded GitHub cache branch"
+    ]
+  },
+  {
+    "mutant": "Worker-GitHub-authority",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round Worker GitHub token retains public fallback 401",
+      "round Worker GitHub token retains public fallback 403"
+    ]
+  },
+  {
+    "mutant": "caller-token-ignored",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round caller GitHub credential is not forwarded /rent",
+      "round caller GitHub credential is not forwarded /availability?profile=check"
+    ]
+  },
+  {
+    "mutant": "merged-asset-token",
+    "count": 2,
+    "killers": [
+      "round primary GitHub token authorizes asset metadata undefined",
+      "round primary GitHub token authorizes asset metadata deprecated-asset-token"
+    ]
+  },
+  {
+    "mutant": "Worker-token-redaction",
+    "count": 2,
+    "killers": [
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "asset-redirect-credential-leak",
+    "count": 2,
+    "killers": [
+      "round blob redirect cannot embed Worker credential false",
+      "round blob redirect cannot embed Worker credential true"
+    ]
+  },
+  {
+    "mutant": "owner-config-name",
+    "count": 2,
+    "killers": [
+      "round owner secret format diagnostic RUN_TOKEN_SECRET",
+      "round owner secret format diagnostic OWNER_STOP_TOKEN"
+    ]
+  },
+  {
+    "mutant": "owner-config-value-log",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round owner secret format diagnostic RUN_TOKEN_SECRET",
+      "round owner secret format diagnostic OWNER_STOP_TOKEN",
+      "round owner secret format diagnostic BROKER_PATH_PREFIX"
+    ]
+  },
+  {
+    "mutant": "runner-Access-headers",
+    "count": 2,
+    "killers": [
+      "round actual controller Access A headers and masking false",
+      "round actual controller Access A headers and masking true"
+    ]
+  },
+  {
+    "mutant": "Access-A-secret-isolation",
+    "count": 2,
+    "killers": [
+      "round Access A secret cannot cross the broker job pending",
+      "round Access A secret cannot cross the broker job report"
+    ]
+  },
+  {
+    "mutant": "reaper-age",
+    "count": 2,
+    "killers": [
+      "round reaper deletes only strictly overdue owned namespace 194",
+      "round reaper deletes only strictly overdue owned namespace 195"
+    ]
+  },
+  {
+    "mutant": "reaper-namespace",
+    "count": 3,
+    "killers": [
+      "round reaper deletes only strictly overdue owned namespace 194",
+      "round reaper deletes only strictly overdue owned namespace 195",
+      "round reaper deletes only strictly overdue owned namespace 196"
+    ]
+  },
+  {
+    "mutant": "reaper-snapshot",
+    "count": 2,
+    "killers": [
+      "round reaper revalidates snapshot before deletion label",
+      "round reaper revalidates snapshot before deletion start_date"
+    ]
+  },
+  {
+    "mutant": "reaper-public-control",
+    "count": 2,
+    "killers": [
+      "round reaper exposes no public control path /stop-all",
+      "round reaper exposes no public control path /rent"
+    ]
+  },
+  {
+    "mutant": "front-pull-request-deny",
+    "count": 2,
+    "killers": [
+      "round pull_request fails at front before ledger /rent",
+      "round pull_request fails at front before ledger /status/123-1"
+    ]
+  },
+  {
+    "mutant": "OIDC-signature",
+    "count": 3,
+    "killers": [
+      "rejects forged RS256 signature",
+      "unknown kid rotation refreshes after cooldown",
+      "same-kid rotation waits for scheduled key refresh"
+    ]
+  },
+  {
+    "mutant": "OIDC-expiry",
+    "count": 2,
+    "killers": [
+      "simplify GitHub OIDC refuses an expired token 0",
+      "simplify GitHub OIDC refuses an expired token 1"
+    ]
+  },
+  {
+    "mutant": "Worker-token-value-log",
+    "count": 2,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check"
+    ]
+  },
+  {
+    "mutant": "Worker-token-response-leak",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "reaper-delete-only",
+    "count": 3,
+    "killers": [
+      "round reaper deletes only strictly overdue owned namespace 196",
+      "round reaper has no broker or ledger dependency absent",
+      "round reaper has no broker or ledger dependency unavailable"
+    ]
+  },
+  {
+    "mutant": "OIDC-key-by-kid",
+    "count": 2,
+    "killers": [
+      "simplify GitHub OIDC selects the signing key by kid 1",
+      "simplify GitHub OIDC selects the signing key by kid 2"
+    ]
+  },
+  {
+    "mutant": "contract-liability-retention",
+    "count": 2,
+    "killers": [
+      "round contract decrease never releases historical liability compute",
+      "round contract decrease never releases historical liability network"
+    ]
+  },
+  {
+    "mutant": "YAML-authority-base",
+    "count": 2,
+    "killers": [
+      "round Worker authority ignores YAML trigger attribute base0",
+      "round Worker authority ignores YAML trigger attribute base1"
+    ]
+  },
+  {
+    "mutant": "YAML-authority-draft",
+    "count": 2,
+    "killers": [
+      "round Worker authority ignores YAML trigger attribute draft0",
+      "round Worker authority ignores YAML trigger attribute draft1"
+    ]
+  },
+  {
+    "mutant": "YAML-authority-path",
+    "count": 2,
+    "killers": [
+      "round Worker authority ignores YAML trigger attribute paths0",
+      "round Worker authority ignores YAML trigger attribute paths1"
+    ]
+  },
+  {
+    "mutant": "workflow-path-race",
+    "count": 2,
+    "killers": [
+      "round workflow PR path policy race",
+      "round workflow PR path policy closed-race"
+    ]
+  },
+  {
+    "mutant": "V11-lifecycle-cwd",
+    "count": 2,
+    "killers": [
+      "round suite file passes from the broker directory round-lifecycle.test.js",
+      "round suite file passes from the foreign directory round-lifecycle.test.js"
+    ]
+  },
+  {
+    "mutant": "V11-yaml-path",
+    "count": 2,
+    "killers": [
+      "round suite file passes from the broker directory broker.test.js",
+      "round suite file passes from the foreign directory broker.test.js"
+    ]
+  },
+  {
+    "mutant": "simplify-trigger-owner",
+    "count": 10,
+    "killers": [
+      "run API must bind triggering_actor",
+      "nonowner push cannot spoof approval with owner name",
+      "nonowner push cannot spoof approval with owner email",
+      "nonowner rerun cannot inherit owner push approval",
+      "review cannot authorize a nonowner push at a newer head",
+      "round run API authority refuses triggering push",
+      "round run API authority refuses triggering pull_request_target",
+      "simplify non-owner trigger refuses reviews=0",
+      "simplify non-owner trigger refuses reviews=1",
+      "simplify push to master rents only for owner trigger 99"
+    ]
+  },
+  {
+    "mutant": "simplify-run-head-binding",
+    "count": 6,
+    "killers": [
+      "simplify requested sha must equal run head e",
+      "simplify requested sha must equal run head d",
+      "R3 rent crosschecks caller tested_sha d",
+      "R3 rent crosschecks caller tested_sha e",
+      "R3 target-event refuses mismatched run-head",
+      "R3 target-event refuses mismatched tested-sha"
+    ]
+  },
+  {
+    "mutant": "simplify-head-repository",
+    "count": 5,
+    "killers": [
+      "round run API authority refuses fork push",
+      "round run API authority refuses fork pull_request_target",
+      "simplify foreign head repository refuses fork/kayfabe",
+      "simplify foreign head repository refuses null",
+      "R3 target-event admission crosschecks run head and repository true"
+    ]
+  },
+  {
+    "mutant": "simplify-target-base-claim",
+    "count": 5,
+    "killers": [
+      "simplify PR target base-commit OIDC sha rents the run head",
+      "simplify PR target base-commit OIDC workflow_sha rents the run head",
+      "R3 target-event admission crosschecks run head and repository false",
+      "R3 target-event refuses mismatched run-head",
+      "R3 target-event refuses mismatched tested-sha"
+    ]
+  },
+  {
+    "mutant": "simplify-pin-events",
+    "count": 3,
+    "killers": [
+      "round pure workflow authority rejects check-dispatch",
+      "round pure workflow authority rejects check-workflow_run",
+      "simplify check profile refuses workflow_dispatch on master"
+    ]
+  },
+  {
+    "mutant": "simplify-master-ref",
+    "count": 2,
+    "killers": [
+      "unauthorized token cannot rent {\"ref\":\"refs/tags/owner-pr\"}",
+      "unauthorized token cannot rent {\"ref\":\"refs/heads/feature\"}"
+    ]
+  },
+  {
+    "mutant": "simplify-retired-manual-routes",
+    "count": 2,
+    "killers": [
+      "simplify retired manual route is not found hold",
+      "simplify retired manual route is not found stop-timer"
+    ]
+  },
+  {
+    "mutant": "simplify-manual-deadline-field",
+    "count": 2,
+    "killers": [
+      "simplify status has no manual deadline /rent",
+      "simplify status has no manual deadline /status/123-1"
+    ]
+  },
+  {
+    "mutant": "simplify-box-Access-injection",
+    "count": 2,
+    "killers": [
+      "simplify Worker never injects box Access credentials KF_ACCESS_ID",
+      "simplify Worker never injects box Access credentials KF_ACCESS_SECRET"
+    ]
+  },
+  {
+    "mutant": "simplify-retired-variables",
+    "count": 21,
+    "killers": [
+      "simplify owner-triggered collaborator PR rents without PR lookups",
+      "simplify PR target base-commit OIDC sha rents the run head",
+      "simplify PR target base-commit OIDC workflow_sha rents the run head",
+      "simplify retired variable is ignored APPROVAL_MODE",
+      "simplify retired variable is ignored RENT_DRAFTS",
+      "simplify retired variable is ignored ALLOWED_BASE_BRANCHES",
+      "simplify retired variable is ignored PATH_SKIP_PATTERNS",
+      "simplify retired variable is ignored MANUAL_CEILING_MINUTES",
+      "simplify push to master rents only for owner trigger 42",
+      "simplify retired manual route is not found hold",
+      "simplify retired manual route is not found stop-timer",
+      "simplify status has no manual deadline /rent",
+      "simplify status has no manual deadline /status/123-1",
+      "simplify Worker never injects box Access credentials KF_ACCESS_ID",
+      "simplify Worker never injects box Access credentials KF_ACCESS_SECRET",
+      "simplify gateway ignores Access variables 1",
+      "simplify gateway ignores Access variables 4",
+      "simplify lifecycle performs no PR lookups closed",
+      "simplify lifecycle performs no PR lookups moved",
+      "simplify GitHub OIDC refuses an expired token 0",
+      "simplify GitHub OIDC refuses an expired token 1"
+    ]
+  },
+  {
+    "mutant": "simplify-lifecycle-PR-lookup",
+    "count": 2,
+    "killers": [
+      "simplify lifecycle performs no PR lookups closed",
+      "simplify lifecycle performs no PR lookups moved"
+    ]
+  },
+  {
+    "mutant": "V1-owner-named",
+    "count": 14,
+    "killers": [
+      "round stop-all names the owner config error \"REPLACE_ME\"",
+      "round rent refuses with the owner config error \"REPLACE_ME\"",
+      "round cron reports the owner config error \"REPLACE_ME\"",
+      "round stop-all names the owner config error \"\"",
+      "round rent refuses with the owner config error \"\"",
+      "round cron reports the owner config error \"\"",
+      "round stop-all names the owner config error \"owner-42\"",
+      "round rent refuses with the owner config error \"owner-42\"",
+      "round cron reports the owner config error \"owner-42\"",
+      "round stop-all names the owner config error \"0042\"",
+      "round rent refuses with the owner config error \"0042\"",
+      "round cron reports the owner config error \"0042\"",
+      "round gateway names the owner config error /stop-all",
+      "round gateway names the owner config error /rent"
+    ]
+  },
+  {
+    "mutant": "V1-cron-config-log",
+    "count": 4,
+    "killers": [
+      "round cron reports the owner config error \"REPLACE_ME\"",
+      "round cron reports the owner config error \"\"",
+      "round cron reports the owner config error \"owner-42\"",
+      "round cron reports the owner config error \"0042\""
+    ]
+  },
+  {
+    "mutant": "V1-cron-value-log",
+    "count": 4,
+    "killers": [
+      "round cron reports the owner config error \"REPLACE_ME\"",
+      "round cron reports the owner config error \"\"",
+      "round cron reports the owner config error \"owner-42\"",
+      "round cron reports the owner config error \"0042\""
+    ]
+  },
+  {
+    "mutant": "V1-toml-owner",
+    "count": 2,
+    "killers": [
+      "round committed wrangler.toml carries the public numeric owner id",
+      "round committed wrangler.toml vars pass owner configuration"
+    ]
+  },
+  {
+    "mutant": "V6-skip-check",
+    "count": 9,
+    "killers": [
+      "round box protocol marker refuses before any Vast call missing",
+      "round box protocol marker refuses before any Vast call older",
+      "round box protocol marker refuses before any Vast call newer",
+      "round box protocol marker refuses before any Vast call indented",
+      "round box protocol marker refuses before any Vast call commented",
+      "round box protocol marker refuses before any Vast call absent-file",
+      "round box protocol marker refuses before any Vast call not-base64",
+      "round box protocol is read at the exact tested sha false",
+      "round box protocol is read at the exact tested sha true"
+    ]
+  },
+  {
+    "mutant": "V6-any-protocol",
+    "count": 2,
+    "killers": [
+      "round box protocol marker refuses before any Vast call older",
+      "round box protocol marker refuses before any Vast call newer"
+    ]
+  },
+  {
+    "mutant": "V6-default-branch",
+    "count": 2,
+    "killers": [
+      "round box protocol is read at the exact tested sha false",
+      "round box protocol is read at the exact tested sha true"
+    ]
+  },
+  {
+    "mutant": "V6-unanchored-marker",
+    "count": 2,
+    "killers": [
+      "round box protocol marker refuses before any Vast call indented",
+      "round box protocol marker refuses before any Vast call commented"
+    ]
+  },
+  {
+    "mutant": "V6-reporter-line",
+    "count": 5,
+    "killers": [
+      "round repository reporter declares the Worker box protocol",
+      "round box protocol is read at the exact tested sha false",
+      "round box protocol is read at the exact tested sha true",
+      "round Worker box protocol matches the marker KF_PROTOCOL",
+      "round Worker box protocol matches the marker marker"
+    ]
+  },
+  {
+    "mutant": "V9-abort-on-failure",
+    "count": 12,
+    "killers": [
+      "round reaper continues past failed delete ack 1",
+      "round reaper continues past failed delete ack 2",
+      "round reaper continues past failed delete ack 3",
+      "round reaper continues past failed delete ack 1,3",
+      "round reaper continues past failed delete http 1",
+      "round reaper continues past failed delete http 2",
+      "round reaper continues past failed delete http 3",
+      "round reaper continues past failed delete http 1,3",
+      "round reaper continues past failed delete throw 1",
+      "round reaper continues past failed delete throw 2",
+      "round reaper continues past failed delete throw 3",
+      "round reaper continues past failed delete throw 1,3"
+    ]
+  },
+  {
+    "mutant": "V9-uncounted-failure",
+    "count": 12,
+    "killers": [
+      "round reaper continues past failed delete ack 1",
+      "round reaper continues past failed delete ack 2",
+      "round reaper continues past failed delete ack 3",
+      "round reaper continues past failed delete ack 1,3",
+      "round reaper continues past failed delete http 1",
+      "round reaper continues past failed delete http 2",
+      "round reaper continues past failed delete http 3",
+      "round reaper continues past failed delete http 1,3",
+      "round reaper continues past failed delete throw 1",
+      "round reaper continues past failed delete throw 2",
+      "round reaper continues past failed delete throw 3",
+      "round reaper continues past failed delete throw 1,3"
+    ]
+  },
+  {
+    "mutant": "V9-skip-later-rows",
+    "count": 9,
+    "killers": [
+      "round reaper continues past failed delete ack 1",
+      "round reaper continues past failed delete ack 2",
+      "round reaper continues past failed delete ack 1,3",
+      "round reaper continues past failed delete http 1",
+      "round reaper continues past failed delete http 2",
+      "round reaper continues past failed delete http 1,3",
+      "round reaper continues past failed delete throw 1",
+      "round reaper continues past failed delete throw 2",
+      "round reaper continues past failed delete throw 1,3"
+    ]
+  },
+  {
+    "mutant": "V7-unpinned-action",
+    "count": 2,
+    "killers": [
+      "round V7 every action is pinned by full commit SHA gpu-vast.yml",
+      "round V7 setup-node is the reviewed v4 commit"
+    ]
+  },
+  {
+    "mutant": "V7-lone-policy-green",
+    "count": 4,
+    "killers": [
+      "round V7 policy job alone cannot post NOT_NEEDED success disagrees",
+      "round V7 policy job alone cannot post NOT_NEEDED success failed",
+      "round V7 policy job alone cannot post NOT_NEEDED success skipped",
+      "round V7 policy job alone cannot post NOT_NEEDED success missing"
+    ]
+  },
+  {
+    "mutant": "V7-policy-check-action",
+    "count": 2,
+    "killers": [
+      "round V7 every action is pinned by full commit SHA gpu-vast.yml",
+      "round V7 independent policy check runs no third-party code"
+    ]
+  },
+  {
+    "mutant": "V7-dispatch-trigger",
+    "count": 2,
+    "killers": [
+      "round reviewed YAML policy no-sha-input",
+      "round V7 GPU workflow has no dispatch trigger or SHA input"
+    ]
+  },
+  {
+    "mutant": "V7-sweep-sha-input",
+    "count": 2,
+    "killers": [
+      "round V7 sweep workflow has no tested SHA input",
+      "round V7 sweep inputs are exactly the die preferences"
+    ]
+  },
+  {
+    "mutant": "V4-any-key",
+    "count": 5,
+    "killers": [
+      "round deploy helper refuses before wrangler deploy partial-access",
+      "round deploy helper refuses before wrangler deploy complete-access",
+      "round deploy helper refuses before wrangler deploy box-access",
+      "round deploy helper refuses before wrangler deploy secret-name",
+      "round deploy helper refuses before wrangler deploy test-issuer"
+    ]
+  },
+  {
+    "mutant": "V4-allow-list",
+    "count": 2,
+    "killers": [
+      "round deploy helper refuses before wrangler deploy secret-name",
+      "round deploy helper refuses before wrangler deploy test-issuer"
+    ]
+  },
+  {
+    "mutant": "V4-skip-hash-checks",
+    "count": 3,
+    "killers": [
+      "round deploy helper refuses before wrangler deploy bundle-mismatch",
+      "round deploy helper refuses before wrangler deploy manifest-mismatch",
+      "round deploy helper refuses before wrangler deploy toml-hash-mismatch"
+    ]
+  },
+  {
+    "mutant": "V4-echo-values",
+    "count": 2,
+    "killers": [
+      "round deploy helper passes exactly the vars file false",
+      "round deploy helper passes exactly the vars file true"
+    ]
+  },
+  {
+    "mutant": "V4-owner-differs",
+    "count": 2,
+    "killers": [
+      "round deploy helper refuses before wrangler deploy other-owner",
+      "round deploy helper refuses before wrangler deploy other-long-owner"
+    ]
+  },
+  {
+    "mutant": "V4-wrangler-version",
+    "count": 2,
+    "killers": [
+      "round deploy helper refuses before wrangler deploy wrangler-version",
+      "round deploy helper refuses before wrangler deploy wrangler-patch"
+    ]
+  },
+  {
+    "mutant": "V4-inside-checkout",
+    "count": 2,
+    "killers": [
+      "round deploy helper refuses a vars file inside the checkout path",
+      "round deploy helper refuses a vars file inside the checkout symlink"
+    ]
+  },
+  {
+    "mutant": "V12-preview-urls",
+    "count": 2,
+    "killers": [
+      "round main Worker disables preview URLs",
+      "round main Worker keeps workers.dev but no preview hostnames"
+    ]
+  },
+  {
+    "mutant": "V12-reaper-cron",
+    "count": 2,
+    "killers": [
+      "round DEPLOY states the toml cron schedule reaper",
+      "round reaper ticks every five minutes for the 195-minute horizon"
+    ]
+  },
+  {
+    "mutant": "V12-old-reaper-recipe",
+    "count": 3,
+    "killers": [
+      "round DEPLOY reaper recipe passes no main-Worker var",
+      "round DEPLOY reaper secret is put only after the first deploy",
+      "round docs keep no live instruction for retired features ../DEPLOY.md"
+    ]
+  },
+  {
+    "mutant": "V12-policy-sentence",
+    "count": 2,
+    "killers": [
+      "round DEPLOY states the owner authorization sentence",
+      "round DEPLOY policy section opens with the sentence and the trigger warning"
+    ]
+  },
+  {
+    "mutant": "V2-acceptance-doc",
+    "count": 2,
+    "killers": [
+      "round DEPLOY documents the helper and the first-rental acceptance checks",
+      "round DEPLOY V2 acceptance check names every instance price field"
+    ]
+  }
+]

@@ -1,0 +1,776 @@
+[
+  {
+    "name": "SSH onstart launch",
+    "count": 2,
+    "examples": [
+      "provider launch uses SSH with fixed image and onstart, inheriting account keys",
+      "admitted rent uses SSH onstart without Worker-managed SSH credentials"
+    ]
+  },
+  {
+    "name": "pending provider status",
+    "count": 4,
+    "examples": [
+      "new provider missing actual_status survives status and cron only to provision bound",
+      "new provider missing actual_status refuses report without killing or accepting cur_state",
+      "new provider null actual_status survives status and cron only to provision bound"
+    ]
+  },
+  {
+    "name": "resolved launch preflight",
+    "count": 2,
+    "examples": [
+      "local preflight reports eligible offer after SSH ruling {\"verified\":true}",
+      "local preflight reports eligible offer after SSH ruling {\"verification\":\"verified\"}"
+    ]
+  },
+  {
+    "name": "live tunnel readiness",
+    "count": 2,
+    "examples": [
+      "live tunnel parser refuses API timeout",
+      "live tunnel parser refuses unregistered URL"
+    ]
+  },
+  {
+    "name": "live ingress duplicate probes",
+    "count": 2,
+    "examples": [
+      "live report ingress reuses timestamped provider sample without API probe",
+      "live kill ingress reuses timestamped provider sample without API probe"
+    ]
+  },
+  {
+    "name": "inherited endpoint secrets",
+    "count": 3,
+    "examples": [
+      "unapproved reusable job cannot inherit endpoint secrets run",
+      "unapproved reusable job cannot inherit endpoint secrets utility",
+      "unsupported scalar forwarding is rejected \"secrets: &all inherit\""
+    ]
+  },
+  {
+    "name": "endpoint aliases in step metadata",
+    "count": 2,
+    "examples": [
+      "broker step name cannot reference endpoint alias WORKER_URL",
+      "broker step name cannot reference endpoint alias WORKER_PATH"
+    ]
+  },
+  {
+    "name": "optional prefix admission",
+    "count": 3,
+    "examples": [
+      "wrong or encoded prefix fails before auth wrong-xx",
+      "wrong or encoded prefix fails before auth short",
+      "wrong or encoded prefix fails before auth unit-pat"
+    ]
+  },
+  {
+    "name": "native constant-time prefix comparison",
+    "count": 2,
+    "examples": [
+      "prefix compares through native crypto 0",
+      "prefix compares through native crypto 42"
+    ]
+  },
+  {
+    "name": "public prefix gate",
+    "count": 14,
+    "examples": [
+      "unprefixed endpoint has generic 404 /rent",
+      "unprefixed endpoint has generic 404 /status/123-1",
+      "unprefixed endpoint has generic 404 /report/123-1"
+    ]
+  },
+  {
+    "name": "ledger service prefix gate",
+    "count": 3,
+    "examples": [
+      "unprefixed endpoint has generic 404 /rent",
+      "unprefixed endpoint has generic 404 /status/123-1",
+      "unprefixed endpoint has generic 404 /report/123-1"
+    ]
+  },
+  {
+    "name": "prefix charset and bounds",
+    "count": 3,
+    "examples": [
+      "invalid prefix config fails closed 5",
+      "invalid prefix config fails closed 129",
+      "onstart rejects prefix interpolation 7"
+    ]
+  },
+  {
+    "name": "fixed callback prefix",
+    "count": 2,
+    "examples": [
+      "actual fixed Python sender backs up hostile output and reports exit status 0",
+      "actual fixed Python sender backs up hostile output and reports exit status 7"
+    ]
+  },
+  {
+    "name": "endpoint text redaction",
+    "count": 2,
+    "examples": [
+      "box log cannot reflect known endpoint component broker.e",
+      "box log cannot reflect known endpoint component broker"
+    ]
+  },
+  {
+    "name": "Actions secret instead of variable",
+    "count": 3,
+    "examples": [
+      "actual broker uses Actions secrets only inside its execution step",
+      "canonical broker step secret bindings pass the guard",
+      "explicit unrelated reusable secret mapping remains allowed"
+    ]
+  },
+  {
+    "name": "shell tracing disabled",
+    "count": 2,
+    "examples": [
+      "R3 actual bootstrap isolates BASE controller 0",
+      "R3 actual bootstrap isolates BASE controller 47"
+    ]
+  },
+  {
+    "name": "transport diagnostic suppression",
+    "count": 8,
+    "examples": [
+      "canonical broker step secret bindings pass the guard",
+      "explicit unrelated reusable secret mapping remains allowed",
+      "commented explicit block secret mapping remains allowed"
+    ]
+  },
+  {
+    "name": "secret context placement guard",
+    "count": 3,
+    "examples": [
+      "another job cannot receive URL secret pending",
+      "another job cannot receive URL secret report",
+      "another job cannot receive URL secret run"
+    ]
+  },
+  {
+    "name": "secret object access guard",
+    "count": 2,
+    "examples": [
+      "opaque secret object access fails toJSON(secrets)",
+      "opaque secret object access fails secrets[inputs.name]"
+    ]
+  },
+  {
+    "name": "secret alias logging guard",
+    "count": 2,
+    "examples": [
+      "broker cannot echo endpoint alias WORKER_URL",
+      "broker cannot echo endpoint alias WORKER_PATH"
+    ]
+  },
+  {
+    "name": "secret job output guard",
+    "count": 2,
+    "examples": [
+      "broker job output cannot carry endpoint url",
+      "broker job output cannot carry endpoint path"
+    ]
+  },
+  {
+    "name": "secret alias job isolation",
+    "count": 2,
+    "examples": [
+      "endpoint alias cannot enter another job WORKER_URL",
+      "endpoint alias cannot enter another job WORKER_PATH"
+    ]
+  },
+  {
+    "name": "literal run and renderer enclosure",
+    "count": 3,
+    "examples": [
+      "unsupported broker run style fails closed inline WORKER_URL",
+      "unsupported broker run style fails closed inline WORKER_PATH",
+      "unsupported broker run style fails closed folded WORKER_URL"
+    ]
+  },
+  {
+    "name": "HMAC tag and commit binding",
+    "count": 3,
+    "examples": [
+      "HMAC binds immutable ledger field label",
+      "round front verifies nonce MAC before DO /report/123-1",
+      "round front verifies nonce MAC before DO /blob-url/123-1/release-v1/asset"
+    ]
+  },
+  {
+    "name": "closed ledger rejects reports",
+    "count": 2,
+    "examples": [
+      "stop revokes even while Vast delete fails but GET stays live oidc",
+      "stop revokes even while Vast delete fails but GET stays live owner"
+    ]
+  },
+  {
+    "name": "actual Vast liveness",
+    "count": 3,
+    "examples": [
+      "report closes and rejects non-live rental stopped",
+      "report closes and rejects non-live rental gone",
+      "report closes and rejects non-live rental exited"
+    ]
+  },
+  {
+    "name": "liveness cache expiration",
+    "count": 2,
+    "examples": [
+      "positive liveness cache expires in seconds and fails closed exited",
+      "positive liveness cache expires in seconds and fails closed api-error"
+    ]
+  },
+  {
+    "name": "report count cap",
+    "count": 2,
+    "examples": [
+      "report count cap survives retries and restart false",
+      "report count cap survives retries and restart true"
+    ]
+  },
+  {
+    "name": "cumulative report byte cap",
+    "count": 2,
+    "examples": [
+      "per-run input byte cap is persistent false",
+      "per-run input byte cap is persistent true"
+    ]
+  },
+  {
+    "name": "streamed request byte cap",
+    "count": 2,
+    "examples": [
+      "streaming body limit rejects bytes before parse 65537",
+      "streaming body limit rejects bytes before parse 131072"
+    ]
+  },
+  {
+    "name": "report rate cap",
+    "count": 3,
+    "examples": [
+      "per-run rate cap counts authenticated retries false",
+      "per-run rate cap counts authenticated retries true",
+      "V4 kill shares report rate limiter and cannot extend grace"
+    ]
+  },
+  {
+    "name": "preparse JSON depth gate",
+    "count": 2,
+    "examples": [
+      "depth rejected before native JSON parser array",
+      "depth rejected before native JSON parser object"
+    ]
+  },
+  {
+    "name": "strict report schema",
+    "count": 3,
+    "examples": [
+      "strict report schema rejects {\"seq\":\"1\",\"kind\":\"log\",\"text\":\"x\"}",
+      "strict report schema rejects {\"seq\":1.5,\"kind\":\"log\",\"text\":\"x\"}",
+      "strict report schema rejects {\"seq\":0,\"kind\":\"log\",\"text\":\"x\"}"
+    ]
+  },
+  {
+    "name": "strict result schema",
+    "count": 2,
+    "examples": [
+      "strict report schema rejects {\"seq\":1,\"kind\":\"result\",\"result\":{\"nonce\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"verdict\":\"SUCCESS\"}}",
+      "strict report schema rejects {\"seq\":1,\"kind\":\"result\",\"result\":{\"nonce\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"verdict\":\"PASS\",\"extra\":true}}"
+    ]
+  },
+  {
+    "name": "report sequence immutability",
+    "count": 3,
+    "examples": [
+      "same seq identical payload is idempotent and gaps are allowed",
+      "changed duplicate or older seq cannot overwrite 1",
+      "changed duplicate or older seq cannot overwrite 2"
+    ]
+  },
+  {
+    "name": "structured result nonce",
+    "count": 2,
+    "examples": [
+      "structured result rejects a different valid nonce c",
+      "structured result rejects a different valid nonce d"
+    ]
+  },
+  {
+    "name": "free text cannot decide verdict",
+    "count": 3,
+    "examples": [
+      "free text cannot set verdict KF_RESULT bbbbbbbbbb",
+      "free text cannot set verdict {\"seq\":2,\"kind\":\"res",
+      "free text cannot set verdict ::set-output name=ve"
+    ]
+  },
+  {
+    "name": "structured result owned cleanup",
+    "count": 17,
+    "examples": [
+      "local HTTP integration: owner rent to authenticated reports to automatic destroy",
+      "prefixed authenticated result retains its own instance until grace",
+      "only structured nonce-bound result decides PASS"
+    ]
+  },
+  {
+    "name": "native owner secret comparison",
+    "count": 3,
+    "examples": [
+      "foreign run cannot destroy ledger instance",
+      "native empty POST bad bearer is unauthorized /stop-all",
+      "native empty POST bad bearer is unauthorized /stop/123-1"
+    ]
+  },
+  {
+    "name": "owner-only stop-all",
+    "count": 3,
+    "examples": [
+      "OIDC cannot call owner stop-all",
+      "OIDC identity never grants owner stop-all 42",
+      "OIDC identity never grants owner stop-all 43"
+    ]
+  },
+  {
+    "name": "OIDC run-scoped status and stop",
+    "count": 3,
+    "examples": [
+      "foreign run cannot read ledger instance",
+      "foreign run cannot destroy ledger instance",
+      "wrong stop auth cannot touch a run {\"claims\":{\"run_id\":\"124\"}}"
+    ]
+  },
+  {
+    "name": "ledger-only owner stop",
+    "count": 3,
+    "examples": [
+      "never inspect/delete unrecorded id 777",
+      "never inspect/delete unrecorded id 888",
+      "owner stop never adopts unrecorded labelled instance 888-1"
+    ]
+  },
+  {
+    "name": "stop-all cannot adopt account entries",
+    "count": 3,
+    "examples": [
+      "correct prefix reaches protected stop-all",
+      "owner stop-all destroys ledger instances only and remains idempotent",
+      "stop-all handles every open ledger record and no foreign account entries"
+    ]
+  },
+  {
+    "name": "revocation precedes failed delete",
+    "count": 3,
+    "examples": [
+      "report closes and rejects non-live rental expired",
+      "report closes and rejects non-live rental stopped",
+      "report closes and rejects non-live rental gone"
+    ]
+  },
+  {
+    "name": "all log lines prefixed",
+    "count": 3,
+    "examples": [
+      "local HTTP integration: owner rent to authenticated reports to automatic destroy",
+      "sanitizer prefixes every command-like line ::error::hostile",
+      "sanitizer prefixes every command-like line ::set-output name=x::bad"
+    ]
+  },
+  {
+    "name": "embedded command delimiters",
+    "count": 3,
+    "examples": [
+      "local HTTP integration: owner rent to authenticated reports to automatic destroy",
+      "sanitizer prefixes every command-like line ::error::hostile",
+      "sanitizer prefixes every command-like line ::set-output name=x::bad"
+    ]
+  },
+  {
+    "name": "per-line UTF8 byte cap",
+    "count": 3,
+    "examples": [
+      "tail line/count/bytes are capped with dropped-byte accounting",
+      "multibyte display line is capped by UTF8 bytes 233",
+      "multibyte display line is capped by UTF8 bytes 128512"
+    ]
+  },
+  {
+    "name": "log line count cap",
+    "count": 3,
+    "examples": [
+      "sanitizer bounds huge lines or line counts 5000",
+      "report tail keeps at most 200 short lines 501",
+      "report tail keeps at most 200 short lines 1000"
+    ]
+  },
+  {
+    "name": "log tail byte cap",
+    "count": 3,
+    "examples": [
+      "tail line/count/bytes are capped with dropped-byte accounting",
+      "V4 bounded log cap counts dropped rendered bytes",
+      "V4 smaller full log cap bounds prefix expansion"
+    ]
+  },
+  {
+    "name": "orphan index cannot block cleanup",
+    "count": 2,
+    "examples": [
+      "incomplete open index cannot block known owned cleanup cron",
+      "incomplete open index cannot block known owned cleanup stop-all"
+    ]
+  },
+  {
+    "name": "kill switch",
+    "count": 2,
+    "examples": [
+      "kill switch refuses rental false",
+      "kill switch refuses rental FALSE"
+    ]
+  },
+  {
+    "name": "draft refusal",
+    "count": 4,
+    "examples": [
+      "YAML controls draft owner push",
+      "YAML controls reviewed draft",
+      "round suite file passes from the broker directory broker.test.js"
+    ]
+  },
+  {
+    "name": "OIDC claims",
+    "count": 2,
+    "examples": [
+      "unauthorized token cannot rent {\"aud\":\"wrong\"}",
+      "unauthorized token cannot rent {\"iss\":\"wrong\"}"
+    ]
+  },
+  {
+    "name": "credit reserve",
+    "count": 3,
+    "examples": [
+      "credit guard reserves headroom 0",
+      "credit guard reserves headroom 7.99",
+      "credit guard reserves headroom 8.01"
+    ]
+  },
+  {
+    "name": "daily rental count",
+    "count": 2,
+    "examples": [
+      "budget prevents admission rentals",
+      "daily count remains across restart"
+    ]
+  },
+  {
+    "name": "daily spend",
+    "count": 2,
+    "examples": [
+      "budget prevents admission daily",
+      "budget survives restart daily"
+    ]
+  },
+  {
+    "name": "rolling 30-day spend",
+    "count": 3,
+    "examples": [
+      "budget prevents admission rolling",
+      "budget survives restart rolling",
+      "rolling cap counts a previous UTC day"
+    ]
+  },
+  {
+    "name": "one live instance",
+    "count": 6,
+    "examples": [
+      "superseding push destroys old instance and returns BUSY false",
+      "superseding push destroys old instance and returns BUSY true",
+      "another PR cannot create a second live rental false"
+    ]
+  },
+  {
+    "name": "superseding push",
+    "count": 2,
+    "examples": [
+      "superseding push destroys old instance and returns BUSY false",
+      "superseding push destroys old instance and returns BUSY true"
+    ]
+  },
+  {
+    "name": "same SHA minimum gap",
+    "count": 2,
+    "examples": [
+      "force rerun still requires minimum SHA gap",
+      "force gap survives restart"
+    ]
+  },
+  {
+    "name": "live label ownership",
+    "count": 3,
+    "examples": [
+      "reconciled changed label prevents deletion",
+      "reconciled changed label prevents status log access",
+      "absence does not accept malformed or foreign {\"id\":900,\"label\":\"foreign\"}"
+    ]
+  },
+  {
+    "name": "ambiguous-create binding",
+    "count": 2,
+    "examples": [
+      "reconciliation never adopts labelled foreign instance with wrong script",
+      "reconciliation cannot adopt a changed image"
+    ]
+  },
+  {
+    "name": "TTL destruction",
+    "count": 2,
+    "examples": [
+      "round cron hard deadline ends a box with fresh heartbeats false",
+      "round cron hard deadline ends a box with fresh heartbeats true"
+    ]
+  },
+  {
+    "name": "SHA/nonce shell validation",
+    "count": 3,
+    "examples": [
+      "onstart rejects SHA injection \"$(id)\"",
+      "onstart rejects SHA injection \"`id`\"",
+      "onstart rejects SHA injection \"'\""
+    ]
+  },
+  {
+    "name": "callback shell validation",
+    "count": 2,
+    "examples": [
+      "onstart rejects callback interpolation run",
+      "onstart rejects callback interpolation token"
+    ]
+  },
+  {
+    "name": "fixed offer admission",
+    "count": 94,
+    "examples": [
+      "invalid/expensive offer 0.51",
+      "offer recheck {\"verified\":false}",
+      "offer recheck {\"vms_enabled\":false}"
+    ]
+  },
+  {
+    "name": "documented verification representation",
+    "count": 2,
+    "examples": [
+      "documented Vast verification string is accepted without boolean alias",
+      "complete documented display offer remains within fixed capability"
+    ]
+  },
+  {
+    "name": "documented model representation",
+    "count": 2,
+    "examples": [
+      "documented display GPU names map to the fixed model allowlist",
+      "complete documented display offer remains within fixed capability"
+    ]
+  },
+  {
+    "name": "outbound requested storage",
+    "count": 3,
+    "examples": [
+      "offer request uses documented ondemand enum and selected disk",
+      "outbound API leaves GPU policy to forced local filtering RTX 4070",
+      "outbound API leaves GPU policy to forced local filtering RTX 4090"
+    ]
+  },
+  {
+    "name": "documented offer pricing type",
+    "count": 2,
+    "examples": [
+      "simplify owner-triggered collaborator PR rents without PR lookups",
+      "simplify push to master rents only for owner trigger 42"
+    ]
+  },
+  {
+    "name": "poll permissions guard",
+    "count": 3,
+    "examples": [
+      "extra workflow permission fails actions: write",
+      "extra workflow permission fails contents: write",
+      "extra workflow permission fails packages: write"
+    ]
+  },
+  {
+    "name": "attestation dependency guard",
+    "count": 2,
+    "examples": [
+      "direct attestation dependency is rejected",
+      "transitive release dependency is rejected"
+    ]
+  },
+  {
+    "name": "cold-box disk guard",
+    "count": 2,
+    "examples": [
+      "cold-box disk preflight 22000000000",
+      "cold-box disk preflight 59999999999"
+    ]
+  },
+  {
+    "name": "must-fail control",
+    "count": 2,
+    "examples": [
+      "box deliberate control exits failure on missing evidence",
+      "box harness accepts only a deliberately failed control"
+    ]
+  },
+  {
+    "name": "scheduled cleanup wiring",
+    "count": 3,
+    "examples": [
+      "scheduled binding reaches Durable Object cleanup",
+      "bundled scheduled binding reaches Durable Object cleanup",
+      "scheduled cleanup works with a prefix and no public cron route"
+    ]
+  },
+  {
+    "name": "Unicode format sanitizer",
+    "count": 2,
+    "examples": [
+      "Unicode format control is removed before command prefix 8203",
+      "Unicode format control is removed before command prefix 8238"
+    ]
+  },
+  {
+    "name": "unsupported job syntax",
+    "count": 2,
+    "examples": [
+      "flow-style release dependency cannot be silently ignored",
+      "quoted release job cannot bypass structural parsing"
+    ]
+  },
+  {
+    "name": "distinct client refusal",
+    "count": 5,
+    "examples": [
+      "workflow exposes failing refusal UNAVAILABLE_BUDGET",
+      "workflow exposes failing refusal NEEDS_APPROVAL",
+      "NOT_NEEDED is explicit successful status bound to nonce"
+    ]
+  },
+  {
+    "name": "public cron isolation",
+    "count": 2,
+    "examples": [
+      "public request cannot invoke the internal cron route",
+      "public routing rejects without forwarding /rent"
+    ]
+  },
+  {
+    "name": "automatic base allowlist",
+    "count": 4,
+    "examples": [
+      "round suite file passes from the broker directory round-workflow-policy.test.js",
+      "round suite file passes from the foreign directory round-workflow-policy.test.js",
+      "round reviewed YAML policy push"
+    ]
+  },
+  {
+    "name": "docs-only exclusion result",
+    "count": 3,
+    "examples": [
+      "complete exclusion list is NOT_NEEDED README.md",
+      "complete exclusion list is NOT_NEEDED docs/design.md,traces/evidence.txt,archive/old.rs,LICENSE-MIT,.github/ISSUE_TEMPLATE/bug.yml",
+      "complete exclusion list is NOT_NEEDED docs/guide.md,nested/notes.md"
+    ]
+  },
+  {
+    "name": "unknown file-list skip",
+    "count": 3,
+    "examples": [
+      "incomplete or unknown file metadata runs empty",
+      "incomplete or unknown file metadata runs missing-count",
+      "incomplete or unknown file metadata runs truncated"
+    ]
+  },
+  {
+    "name": "canonical path validation",
+    "count": 3,
+    "examples": [
+      "unlisted path runs despite adjacent docs ci/vast-broker/README.md",
+      "unlisted path runs despite adjacent docs ci/vast-broker/test/example.md",
+      "rename checks both paths docs/new.md from docs/../src/code.md"
+    ]
+  },
+  {
+    "name": "renamed previous path",
+    "count": 2,
+    "examples": [
+      "rename checks both paths docs/new.md from src/code.rs",
+      "rename checks both paths docs/new.md from docs/../src/code.md"
+    ]
+  },
+  {
+    "name": "request bearer transport",
+    "count": 3,
+    "examples": [
+      "Worker GitHub bearer used only for read-only GitHub calls /rent",
+      "Worker GitHub bearer used only for read-only GitHub calls /status/123-1",
+      "caller cannot replace Worker bearer and cron uses it"
+    ]
+  },
+  {
+    "name": "request bearer retention",
+    "count": 4,
+    "examples": [
+      "caller cannot replace Worker bearer and cron uses it",
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub secret redacted from box reflection /status/123-1"
+    ]
+  },
+  {
+    "name": "public GitHub fallback",
+    "count": 4,
+    "examples": [
+      "GitHub public fallback native fetch has no receiver 401",
+      "GitHub public fallback native fetch has no receiver 403",
+      "round Worker GitHub token retains public fallback 401"
+    ]
+  },
+  {
+    "name": "immutable API cache",
+    "count": 2,
+    "examples": [
+      "static GitHub facts have a short token-free cache",
+      "static response cache works across request clients without retaining bearers"
+    ]
+  },
+  {
+    "name": "mandatory status writer jobs",
+    "count": 2,
+    "examples": [
+      "missing status writer job fails the guard pending",
+      "missing status writer job fails the guard report"
+    ]
+  },
+  {
+    "name": "token-shaped log redaction",
+    "count": 2,
+    "examples": [
+      "short legacy token family redaction ghp_",
+      "short legacy token family redaction github_pat_"
+    ]
+  },
+  {
+    "name": "isolated writer permissions",
+    "count": 2,
+    "examples": [
+      "status writer cannot gain content permission pending",
+      "status writer cannot gain content permission report"
+    ]
+  }
+]

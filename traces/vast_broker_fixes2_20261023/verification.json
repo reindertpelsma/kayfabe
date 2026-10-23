@@ -1,0 +1,20 @@
+{
+  "run_date": "2026-10-23",
+  "base": "ad7ca535a784ece692a759b7f66598f6ce07a227",
+  "tests": 1369,
+  "passed": 1369,
+  "failed": 0,
+  "skipped": 0,
+  "scripts_ci_unittests": 104,
+  "mutants": 358,
+  "box_mutants": 52,
+  "minimum_named_killers": 2,
+  "workflow_commit": "cb2359c8e",
+  "candidate_bundle_sha256": "5ae53f6172822629e2fff70c44ac4d0accec4fb5c93c2d11349d025cafc67962",
+  "candidate_bundle_bytes": 110401,
+  "deployed": false,
+  "provider_calls": 0,
+  "github_write_calls": 0,
+  "hardware_runs": 0,
+  "claims_new_debt": 0
+}

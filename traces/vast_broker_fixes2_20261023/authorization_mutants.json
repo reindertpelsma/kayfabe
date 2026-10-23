@@ -1,0 +1,102 @@
+[
+  {
+    "mutant": "repository",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects repository",
+      "round pure workflow authority rejects repository-sweep"
+    ]
+  },
+  {
+    "mutant": "run-repository",
+    "count": 3,
+    "killers": [
+      "run API must bind repository",
+      "round run API authority refuses run-repo push",
+      "round run API authority refuses run-repo pull_request_target"
+    ]
+  },
+  {
+    "mutant": "run-attempt",
+    "count": 3,
+    "killers": [
+      "run API must bind run_attempt",
+      "round run API authority refuses attempt push",
+      "round run API authority refuses attempt pull_request_target"
+    ]
+  },
+  {
+    "mutant": "job-ref",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects job-ref",
+      "round pure workflow authority rejects job-ref-evil"
+    ]
+  },
+  {
+    "mutant": "profile-pin",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority keeps master check pin push",
+      "round pure workflow authority keeps master check pin pull_request_target"
+    ]
+  },
+  {
+    "mutant": "push-support",
+    "count": 2,
+    "killers": [
+      "round owner push rents exact API-bound head only on master master",
+      "simplify push to master rents only for owner trigger 42"
+    ]
+  },
+  {
+    "mutant": "live-run",
+    "count": 2,
+    "killers": [
+      "round run API authority refuses completed push",
+      "round run API authority refuses completed pull_request_target"
+    ]
+  },
+  {
+    "mutant": "runner-push",
+    "count": 2,
+    "killers": [
+      "round BASE controller supports push event false",
+      "round BASE controller supports push event true"
+    ]
+  },
+  {
+    "mutant": "YAML-push-branches",
+    "count": 2,
+    "killers": [
+      "round reviewed YAML policy push",
+      "round YAML excludes unintended automatic push branches"
+    ]
+  },
+  {
+    "mutant": "workflow-explicit-exclusion-success",
+    "count": 2,
+    "killers": [
+      "trusted path policy explicitly succeeds without a GPU job PASS",
+      "trusted path policy explicitly succeeds without a GPU job UNAVAILABLE"
+    ]
+  },
+  {
+    "mutant": "workflow-policy-dependency",
+    "count": 2,
+    "killers": [
+      "failed path policy never permits a skipped GPU job failure",
+      "failed path policy never permits a skipped GPU job skipped"
+    ]
+  },
+  {
+    "mutant": "workflow-policy-BASE-source",
+    "count": 4,
+    "killers": [
+      "round actual policy bootstrap runs only BASE modules policy workflow_dispatch",
+      "round actual policy bootstrap runs only BASE modules policy unknown",
+      "round actual policy bootstrap runs only BASE modules policy-check workflow_dispatch",
+      "round actual policy bootstrap runs only BASE modules policy-check unknown"
+    ]
+  }
+]

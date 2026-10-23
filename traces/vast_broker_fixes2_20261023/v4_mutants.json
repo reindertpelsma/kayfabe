@@ -1,0 +1,248 @@
+[
+  {
+    "mutant": "no-result-grace",
+    "killers": 9,
+    "tests": [
+      "only structured nonce-bound result decides PASS",
+      "only structured nonce-bound result decides FAIL",
+      "result revokes during grace even while Vast delete fails PASS",
+      "result revokes during grace even while Vast delete fails FAIL",
+      "V4 PASS result retains owned box until grace cron",
+      "V4 FAIL result retains owned box until grace cron",
+      "V4 UNAVAILABLE result retains owned box until grace cron",
+      "V4 own box kill bypasses PASS grace and verifies absence",
+      "V4 own box kill bypasses FAIL grace and verifies absence"
+    ]
+  },
+  {
+    "mutant": "kill-no-destroy",
+    "killers": 5,
+    "tests": [
+      "V4 own box kill bypasses PASS grace and verifies absence",
+      "V4 own box kill bypasses FAIL grace and verifies absence",
+      "V4 box kill before-result never invents PASS",
+      "V4 box kill restart never invents PASS",
+      "V4 kill retains liability until DELETE absence confirmed"
+    ]
+  },
+  {
+    "mutant": "kill-no-capability",
+    "killers": 4,
+    "tests": [
+      "V4 capability cannot kill foreign run 124-1",
+      "V4 capability cannot kill foreign run 999-1",
+      "V4 kill rejects non-box authority bad",
+      "V4 kill rejects non-box authority moc"
+    ]
+  },
+  {
+    "mutant": "kill-wrong-route",
+    "killers": 3,
+    "tests": [
+      "V4 onstart ships plain curl own-run kill CLI and test-only timeout",
+      "V4 generated kill CLI sends limited capability done",
+      "V4 generated kill CLI sends limited capability a reason with spaces"
+    ]
+  },
+  {
+    "mutant": "no-absence-verification",
+    "killers": 4,
+    "tests": [
+      "V4 own box kill bypasses PASS grace and verifies absence",
+      "V4 own box kill bypasses FAIL grace and verifies absence",
+      "V4 stop retains liability until DELETE absence confirmed",
+      "V4 kill retains liability until DELETE absence confirmed"
+    ]
+  },
+  {
+    "mutant": "no-provision-deadline",
+    "killers": 2,
+    "tests": [
+      "V4 pending provision bound 600000",
+      "V4 no callback while provider running also expires provisioning"
+    ]
+  },
+  {
+    "mutant": "no-cron-reserve",
+    "killers": 2,
+    "tests": [
+      "V4 prepaid reserve includes hard TTL plus cron period",
+      "V4 low-priced reservation still includes cron period"
+    ]
+  },
+  {
+    "mutant": "no-hard-ttl",
+    "killers": 2,
+    "tests": [
+      "round cron hard deadline ends a box with fresh heartbeats false",
+      "round cron hard deadline ends a box with fresh heartbeats true"
+    ]
+  },
+  {
+    "mutant": "no-rate-limit",
+    "killers": 3,
+    "tests": [
+      "per-run rate cap counts authenticated retries false",
+      "per-run rate cap counts authenticated retries true",
+      "V4 kill shares report rate limiter and cannot extend grace"
+    ]
+  },
+  {
+    "mutant": "address-scrub",
+    "killers": 4,
+    "tests": [
+      "V4 public log redacts planted IPv4",
+      "V4 public log redacts planted second IPv4",
+      "V4 public log redacts planted IPv6",
+      "V4 public log redacts planted IPv6 compressed"
+    ]
+  },
+  {
+    "mutant": "opaque-token-scrub",
+    "killers": 2,
+    "tests": [
+      "V4 public log redacts planted JWT",
+      "V4 public log redacts planted opaque"
+    ]
+  },
+  {
+    "mutant": "instance-scrub",
+    "killers": 2,
+    "tests": [
+      "V4 public log redacts planted instance ID",
+      "V4 public log redacts planted instance label"
+    ]
+  },
+  {
+    "mutant": "full-log-retention",
+    "killers": 3,
+    "tests": [
+      "V4 full log retains earlier lines beyond tail and cursor emits once",
+      "V4 incremental log cursor survives new output false",
+      "V4 incremental log cursor survives new output true"
+    ]
+  },
+  {
+    "mutant": "rendered-cap",
+    "killers": 2,
+    "tests": [
+      "V4 bounded log cap counts dropped rendered bytes",
+      "V4 smaller full log cap bounds prefix expansion"
+    ]
+  },
+  {
+    "mutant": "summary-verdict",
+    "killers": 2,
+    "tests": [
+      "V4 summary uses structured verdict, metadata and fence longer than box text",
+      "V4 summary rejects log-implied PASS and fence escape"
+    ]
+  },
+  {
+    "mutant": "summary-fence",
+    "killers": 2,
+    "tests": [
+      "V4 summary uses structured verdict, metadata and fence longer than box text",
+      "V4 summary rejects log-implied PASS and fence escape"
+    ]
+  },
+  {
+    "mutant": "renderer-commands",
+    "killers": 2,
+    "tests": [
+      "V4 rendered group cannot be closed by hostile box commands",
+      "V4 summary rejects log-implied PASS and fence escape"
+    ]
+  },
+  {
+    "mutant": "sender-discards-prefix",
+    "killers": 2,
+    "tests": [
+      "V4 sender preserves fast full bounded output once 0",
+      "V4 sender preserves fast full bounded output once 7"
+    ]
+  },
+  {
+    "mutant": "sender-repeats-tail",
+    "killers": 2,
+    "tests": [
+      "V4 sender preserves fast full bounded output once 0",
+      "V4 sender preserves fast full bounded output once 7"
+    ]
+  },
+  {
+    "mutant": "unreleased-upload",
+    "killers": 2,
+    "tests": [
+      "V4 rejected report relinquishes unread upload before returning",
+      "V4 rejected kill relinquishes unread upload before returning"
+    ]
+  },
+  {
+    "mutant": "direct-network-body",
+    "killers": 4,
+    "tests": [
+      "V4 report upload waits outside ledger so cron stays available",
+      "V4 kill upload waits outside ledger so cron stays available",
+      "V4 report forwarded body is detached and bounded",
+      "V4 kill forwarded body is detached and bounded"
+    ]
+  },
+  {
+    "mutant": "unbounded-forward-body",
+    "killers": 2,
+    "tests": [
+      "V4 report forwarded body is detached and bounded",
+      "V4 kill forwarded body is detached and bounded"
+    ]
+  },
+  {
+    "mutant": "remaining-grace-ttl-cap",
+    "killers": 2,
+    "tests": [
+      "V4 result acknowledges actual remaining grace 1080000",
+      "V4 result acknowledges actual remaining grace 1140000"
+    ]
+  },
+  {
+    "mutant": "remaining-grace-ack",
+    "killers": 3,
+    "tests": [
+      "V4 result acknowledges actual remaining grace 0",
+      "V4 result acknowledges actual remaining grace 1080000",
+      "V4 result acknowledges actual remaining grace 1140000"
+    ]
+  },
+  {
+    "mutant": "sender-ignores-grace-ack",
+    "killers": 2,
+    "tests": [
+      "V4 sender preserves fast full bounded output once 0",
+      "V4 sender preserves fast full bounded output once 7"
+    ]
+  },
+  {
+    "mutant": "lose-result-after-box-kill",
+    "killers": 2,
+    "tests": [
+      "V4 polling after box kill preserves COMPLETE PASS",
+      "V4 polling after box kill preserves COMPLETE FAIL"
+    ]
+  },
+  {
+    "mutant": "overlapping-worker-delimiters",
+    "killers": 2,
+    "tests": [
+      "overlapping command delimiters are neutralized by Worker 13",
+      "overlapping command delimiters are neutralized by Worker 19"
+    ]
+  },
+  {
+    "mutant": "overlapping-renderer-delimiters",
+    "killers": 2,
+    "tests": [
+      "overlapping command delimiters are neutralized by renderer 13",
+      "overlapping command delimiters are neutralized by renderer 19"
+    ]
+  }
+]

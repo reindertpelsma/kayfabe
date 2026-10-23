@@ -1,5 +1,9 @@
 # V1 security-fixes verification — 2026-10-23
 
+[SUPERSEDED IN PART 2026-10-23 by ../vast_broker_fixes2_20261023/README.md] The candidate bundle
+below (da460023...) is replaced by 5ae53f61...; the Access, MANUAL/hold/stop-timer, review-mode,
+dispatch-SHA and branch-copy items verified here were removed by the owner rulings of 19:10/19:25.
+
 [CODE READ: ../../docs/design/V3_CI_VAST_FIXES_20261023.md] This round starts at
 ffd1d1d518e8550e9b44e070f070ca78e5d37fad on the new branch
 codex/vast-broker-fixes-20261023. The controller owns deployment and hosted acceptance.
