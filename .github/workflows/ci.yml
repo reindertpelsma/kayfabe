@@ -1034,6 +1034,12 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
+      # A GPU UUID identifies one physical board. A ratchet like the claim ledger: the hits that
+      # were already in traces/ and docs/ are fingerprinted in scripts/ci/gpu-uuids-baseline.json
+      # (never the UUIDs themselves); a new one fails, and so does a baseline entry that is gone
+      # (run `scripts/ci/no_gpu_uuids.py --shrink`), so the count only goes down.
+      - name: "GPU-UUID ratchet (no new board identifier in traces/ or docs/)"
+        run: python3 scripts/ci/no_gpu_uuids.py
       # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
       # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
       - name: "Section-number gate (no two design-doc sections share a number)"
@@ -2326,6 +2332,26 @@ jobs:
           KERNEL_CONFIG: ${{ runner.temp }}/kconfig
         run: bash scripts/display/gop_standin.sh
 
+  broker:
+    name: broker — build and its GPU-free test suite (broker/)
+    # The host display broker (window, input grab, cursor plane) needs no GPU: `make check` drives it with
+    # a test backend, a test client, a FUSE stall and a Python harness (selftest.sh, the cursor/XOR/tick unit
+    # tests, the lifecycle and clipboard tests). NB_REQUIRE_FUSE=1 makes the FUSE case a failure instead of a
+    # skip, as the Makefile documents. Added 2026-10-21 (owner: "the broker is something CI can test well").
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the broker's build dependencies and FUSE
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential pkg-config python3 fuse3 \
+            libwayland-dev wayland-protocols libxcb1-dev libxcb-dri3-dev libxcb-present-dev \
+            libxcb-render0-dev libxcb-xinput-dev
+      - name: Build and test (make -C broker check)
+        env:
+          NB_REQUIRE_FUSE: "1"
+        run: make -C broker check
+
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)
     # Nightly cron + manual dispatch only — never the push path (the push gate's
@@ -2347,3 +2373,26 @@ jobs:
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove
+
+  # The required status check of the master ruleset ("Master_Protect") is the context `CI`.
+  # GitHub names a status check after the JOB name, not the workflow name, so without a job
+  # called CI the rule can never be satisfied. This gate job is that check: it is green only
+  # when every required job finished without failing or being cancelled. `slow` is left out
+  # on purpose (it runs nightly or on demand) and a job skipped by its own `if:` is accepted.
+  gate:
+    name: CI
+    if: always()
+    needs: [stable, aarch64, firmware, broker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every needed job to have passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "not green: $r"; exit 1 ;;
+            esac
+          done

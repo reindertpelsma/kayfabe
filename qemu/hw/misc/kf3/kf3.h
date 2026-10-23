@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later */
 /* The kf3_* surface of libkf_qemu.a (crates/kf-qemu/src/ffi_unsafe.rs). Keep in lockstep: the
  * device refuses an archive whose kf3_abi_version() differs from KF3_ABI, and
  * crates/kf-qemu/tests/wire_mirror.rs compiles every Rust layout, entry point and callback type

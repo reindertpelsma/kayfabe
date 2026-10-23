@@ -719,3 +719,70 @@ uint32_t nb_cursor_hash(const struct nb_cursor *c)
     }
     return h;
 }
+
+bool nb_cursor_crop(const struct nb_cursor *src, struct nb_cursor *dst)
+{
+    uint32_t x0, y0, x1, y1, x, y, w, h;
+    bool any = false;
+
+    if (!src || !dst || !src->defined || src->w == 0 || src->h == 0 ||
+        src->w > NVKVM_BROKER_CURSOR_MAX_DIM || src->h > NVKVM_BROKER_CURSOR_MAX_DIM ||
+        src->hot_x >= src->w || src->hot_y >= src->h) {
+        return false;
+    }
+    /* the box starts as the hot spot, so the crop always contains it */
+    x0 = x1 = src->hot_x;
+    y0 = y1 = src->hot_y;
+    for (y = 0; y < src->h; y++) {
+        for (x = 0; x < src->w; x++) {
+            if (src->px[(size_t)y * src->w + x] != 0) {
+                any = true;
+                if (x < x0) {
+                    x0 = x;
+                }
+                if (x > x1) {
+                    x1 = x;
+                }
+                if (y < y0) {
+                    y0 = y;
+                }
+                if (y > y1) {
+                    y1 = y;
+                }
+            }
+        }
+    }
+    if (!any) {
+        return false;       /* nothing drawn: nothing to crop to */
+    }
+    /* one clear pixel of margin, inside the image */
+    x0 = x0 > 0 ? x0 - 1 : 0;
+    y0 = y0 > 0 ? y0 - 1 : 0;
+    x1 = x1 + 1 < src->w ? x1 + 1 : src->w - 1;
+    y1 = y1 + 1 < src->h ? y1 + 1 : src->h - 1;
+    w = x1 - x0 + 1;
+    h = y1 - y0 + 1;
+    if (w == src->w && h == src->h) {
+        return false;       /* already tight */
+    }
+    dst->gen = src->gen;
+    dst->defined = true;
+    dst->visible = src->visible;
+    dst->w = w;
+    dst->h = h;
+    dst->hot_x = src->hot_x - x0;
+    dst->hot_y = src->hot_y - y0;
+    dst->x = src->x + (int32_t)x0;
+    dst->y = src->y + (int32_t)y0;
+    dst->placed = src->placed;
+    dst->abs_x = src->abs_x;
+    dst->abs_y = src->abs_y;
+    dst->abs_valid = src->abs_valid;
+    dst->xor = false;       /* the host pointer shows the approximation: no mask */
+    dst->bx = dst->by = dst->bw = dst->bh = 0;
+    for (y = 0; y < h; y++) {
+        memcpy(&dst->px[(size_t)y * w], &src->px[(size_t)(y0 + y) * src->w + x0],
+               (size_t)w * sizeof dst->px[0]);
+    }
+    return true;
+}
