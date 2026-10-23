@@ -86,4 +86,5 @@ def client(route, method="GET", body=None):
 
 r = m.Runner(ctx, manifest, client, emit=lambda _: None).execute()
 assert r["verified"] == 1 and r["verdict"] == "PASS"
-assert not any(route.startswith("/stop/") for route in calls)
+# Owner ruling 2026-10-24 item 4: a verified final result is followed by one stop.
+assert [route for route in calls if route.startswith("/stop/")] == ["/stop/123-1"], calls

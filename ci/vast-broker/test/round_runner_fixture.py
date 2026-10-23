@@ -85,6 +85,8 @@ def client(route, method="GET", body=None):
 
 
 result = m.Runner(ctx, manifest, client, emit=lambda _: None, summary=io.StringIO()).execute()
-assert not any(x.startswith("/stop/") for x in calls), calls
+stops = [x for x in calls if x.startswith("/stop/")]
+# Owner ruling 2026-10-24 item 4: a verified final result is followed by one stop.
+assert stops == ([] if case.startswith("exhausted") else ["/stop/123-1"]), calls
 assert reads >= 3, reads
 assert result["verdict"] == ("UNAVAILABLE" if case.startswith("exhausted") else "PASS"), result

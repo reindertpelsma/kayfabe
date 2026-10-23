@@ -32,6 +32,7 @@ for (const slash of ['', '/'])
           origin + '/' + prefix + '/rent',
           origin + '/' + prefix + '/status/123-1',
           origin + '/' + prefix + '/logs/123-1?cursor=0',
+          origin + '/' + prefix + '/stop/123-1',
         ],
       );
       for (const x of r.calls.filter((x) => x.url.startsWith('https://oidc.example/')))

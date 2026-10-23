@@ -143,17 +143,19 @@ for (const dependency of ['skipped', 'cancelled'])
     assert.equal(r.status, 1);
     assert.notEqual(r.statuses.at(-1).state, 'success');
   });
+// Owner ruling 2026-10-24 item 4 supersedes the inspection grace: a verified final result is
+// followed by one stop, whatever the verdict; the Worker grace timer is only the fallback.
 for (const verdict of ['FAIL', 'UNAVAILABLE'])
-  test('terminal ' + verdict + ' preserves inspection grace', async () => {
+  test('terminal ' + verdict + ' stops the box at once', async () => {
     const r = await client('GRACE', verdict);
     assert.equal(r.status, 1);
-    assert.equal(r.stops, 0);
+    assert.equal(r.stops, 1);
   });
 for (const verdict of ['PASS', 'FAIL'])
   test('cursor log appears once live and once in final bounded group ' + verdict, async () => {
     const r = await client('GRACE', verdict, 200, true);
     assert.equal((r.stdout.match(/\[box\] : error: hostile/g) || []).length, 2);
-    assert.equal(r.stops, 0);
+    assert.equal(r.stops, 1);
   });
 for (const verified of ['0', 'true'])
   test('final status rejects unverified PASS ' + verified, async () => {

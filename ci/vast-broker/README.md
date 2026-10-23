@@ -34,6 +34,9 @@ Renting remains disabled in the committed configuration. The local non-VM A/B/C/
 [SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] MANUAL, the hold helper, the
 manual ceiling and owner timer removal are removed; states are NONE, CREATING, BOOTING, TESTING and
 GRACE.
+[SUPERSEDED in part 2026-10-24, owner ruling item 4] Right after its verified final log fetch the
+runner sends `POST /stop/<run>` and the Worker destroys the box at once; the PASS 5 / FAIL 10
+minute grace below is only the fallback when that best-effort stop fails.
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
 TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
 (3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.

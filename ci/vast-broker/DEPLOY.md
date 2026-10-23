@@ -52,7 +52,11 @@ ignored if still configured):
 - retired: the Worker Access JWT switch and `ACCESS_*` vars (the box Access pair pass-through
   returned on 2026-10-23 21:45; see *Cloudflare Access* below).
 
-Owner `stop`, `stop-all` and the box `kf-box-kill` switch remain.
+Owner `stop`, `stop-all` and the box `kf-box-kill` switch remain. [CODE READ: runner.py; owner
+ruling 2026-10-24 item 4] Right after the final log pages pass the cursor/hash check the runner
+sends a best-effort `POST /stop/<run>`; the Worker destroys at once and keeps the verdict. The
+PASS/FAIL grace timer (5/10 minutes) stays as the fallback, and is the only path when the final
+fetch fails validation.
 
 ## Build and test
 

@@ -603,7 +603,7 @@ class Runner:
 
     def execute(self):
         result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
-        terminal = False
+        terminal = final = False
         try:
             profile = self.ctx.get("profile", "check")
             code, availability = self.retry_read("/availability?profile=" + profile)
@@ -668,6 +668,7 @@ class Runner:
                     result["state"] = data["state"]
                     break
                 admitted = True
+                final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
                 if (
                     data["state"] == "NOT_NEEDED"
@@ -688,7 +689,10 @@ class Runner:
         except (Invalid, ValueError, KeyError, TypeError, UnicodeError, OSError, TimeoutError):
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:
-            if not terminal and not self.infrastructure_failure:
+            # Owner ruling 2026-10-24 item 4: with the verified final result in hand, stop the box
+            # now (best effort; the Worker's grace timer is the fallback). A result whose final
+            # fetch failed validation is left to that timer; other failures stop as before.
+            if terminal or not final and not self.infrastructure_failure:
                 try:
                     self.read("/stop/" + self.ctx["run"], "POST")
                 except Exception:

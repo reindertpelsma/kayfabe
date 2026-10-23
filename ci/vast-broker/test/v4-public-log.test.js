@@ -169,7 +169,7 @@ test('V4 workflow now fetches the exact BASE controller bootstrap', async () => 
   const controller = await readFile(new URL('../runner.py', import.meta.url), 'utf8');
   assert.match(controller, /Final bounded log/);
   assert.match(controller, /self.pages/);
-  assert.match(controller, /if not terminal and not self.infrastructure_failure:/);
+  assert.match(controller, /if terminal or not final and not self.infrastructure_failure:/);
 });
 for (const restart of [false, true])
   test('V4 incremental log cursor survives new output ' + restart, async () => {
