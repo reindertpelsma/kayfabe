@@ -24,7 +24,14 @@ import unittest
 from pathlib import Path
 
 SCRIPTS = Path(os.environ.get("KF_CI_SCRIPTS_DIR") or Path(__file__).resolve().parent)
-FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill", "kf-box-hold", "kf-ci-hold.sh"]
+FILES = [
+    "vast_onstart.sh",
+    "vast_report.py",
+    "kf-box-kill",
+    "kf-box-hold",
+    "kf-box-blob-url",
+    "kf-ci-hold.sh",
+]
 RUN = "4242-7"
 TOKEN = "v1.4242.7.1729000000." + ("Zk9_-Qw" * 7)[:43]
 NONCE = "ab" * 16

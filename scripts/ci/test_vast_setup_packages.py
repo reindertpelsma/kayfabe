@@ -68,9 +68,18 @@ class PackagePolicy(unittest.TestCase):
             <= set(self.plan("bench"))
         )
 
+    def test_full_profile_adds_only_the_optional_stack(self):
+        self.assertEqual(
+            set(self.plan("full")) - set(self.plan("ci")), {"clang", "lld", "libssl-dev"}
+        )
+
+    def test_bench_has_no_unused_optional_development_stack(self):
+        self.assertFalse({"clang", "lld", "libssl-dev"} & set(self.plan("bench")))
+
     def test_each_plan_is_unique_and_plain_package_names(self):
         for profile in ["ci", "full", "bench"]:
             names = self.plan(profile)
+            self.assertGreater(len(names), 5)
             self.assertEqual(len(names), len(set(names)))
             for name in names:
                 self.assertRegex(name, r"^[a-z0-9][a-z0-9+.-]*$")

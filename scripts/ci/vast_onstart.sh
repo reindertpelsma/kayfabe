@@ -46,6 +46,7 @@ set +a
 mkdir -p "$bin_dir" "$profile_dir"
 install -m 700 "$here/kf-box-kill" "$bin_dir/kf-box-kill"
 install -m 700 "$here/kf-box-hold" "$bin_dir/kf-box-hold"
+install -m 700 "$here/kf-box-blob-url" "$bin_dir/kf-box-blob-url"
 install -m 644 "$here/kf-ci-hold.sh" "$profile_dir/kf-ci-hold.sh"
 
 rm -f "$result" "$run_dir/done" "$run_dir/done.tmp"

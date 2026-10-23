@@ -43,6 +43,19 @@ def scoped(name, old, new):
 
 CASES = [
     (
+        "minimal-profile-not-forced",
+        replace(
+            '            KF_PROVISION_PROFILE="ci",', '            KF_PROVISION_PROFILE="full",'
+        ),
+    ),
+    (
+        "inherited-expensive-profile-admitted",
+        replace(
+            '            KF_PROVISION_PROFILE="ci",',
+            '            KF_PROVISION_PROFILE=os.environ.get("KF_PROVISION_PROFILE", "full"),',
+        ),
+    ),
+    (
         "failed-provision-hardware-stale",
         replace('            result["hardware"] = hardware()', "            pass"),
     ),

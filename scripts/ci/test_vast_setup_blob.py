@@ -105,7 +105,7 @@ class SetupBlob(unittest.TestCase):
             self.assertEqual(p.returncode, 0, p.stderr)
             data = json.loads(p.stdout)
             self.assertIn("/blob-url/4242-7/setup-cache-test/debs.tar.gz", data["argv"][-1])
-            self.assertIn(box.TOKEN, data["input"])
+            self.assertIn("Authorization: Bearer " + box.TOKEN, data["input"])
 
         self.installed(check)
 

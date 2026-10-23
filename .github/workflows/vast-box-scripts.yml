@@ -39,5 +39,9 @@ jobs:
         run: python3 scripts/ci/provider_env_mutants.py
       - name: Diagnostic mutations require two named killers each
         run: python3 scripts/ci/diagnostic_logs_mutants.py
+      - name: Setup policy mutations require two named killers each
+        run: python3 scripts/ci/setup_policy_mutants.py
+      - name: Setup cache mutations require two named killers each
+        run: python3 scripts/ci/setup_cache_mutants.py
       - name: Canonical box-script mutations
         run: python3 scripts/ci/vast_box_mutants.py

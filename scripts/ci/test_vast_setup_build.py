@@ -131,6 +131,13 @@ class SetupBuild(unittest.TestCase):
         with self.assertRaises(CacheRefused):
             self.fetch(b"xxxxxxxx")
 
+    def test_deb_bytes_must_match_the_index_hash(self):
+        row = self.plan()[0]
+        row["sha256"] = "0" * 64
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(CacheRefused):
+                build.fetch_deb(row, Path(d), build.MIRRORS[0], opener=Opener(b"contents"))
+
     def test_short_deb_refuses(self):
         with self.assertRaises(CacheRefused):
             self.fetch(b"x")

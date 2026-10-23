@@ -21,7 +21,14 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill", "kf-box-hold", "kf-ci-hold.sh"]
+FILES = [
+    "vast_onstart.sh",
+    "vast_report.py",
+    "kf-box-kill",
+    "kf-box-hold",
+    "kf-box-blob-url",
+    "kf-ci-hold.sh",
+]
 R, E, K, D = "vast_report.py", "EnvValidation.", "KillAndHold.", "Daemon."
 RP, FR, ON = "Reporter.", "FinalResult.", "Onstart."
 V = "vast_onstart.sh"

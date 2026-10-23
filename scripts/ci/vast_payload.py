@@ -433,6 +433,7 @@ def main():
             link.symlink_to(root, target_is_directory=True)
         shutil.copyfile(root / "scripts/bench/provision_box.sh", "/root/provision_box.sh")
         os.environ.update(
+            KF_PROVISION_PROFILE="ci",
             KAYFABE_BRANCH=branch,
             KAYFABE_REPO=str(root),
             BENCH_DIR=str(bench),

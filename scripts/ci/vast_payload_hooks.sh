@@ -2,6 +2,14 @@
 # Narrow instrumentation around existing raw-client / guest timeout calls.
 # Loaded only by the payload's child shells; no suite/build implementation lives here.
 if [ -n "${KF_PAYLOAD_ROOT:-}" ]; then
+    apt-get() {
+        if [ -n "${KF_APT_CACHE_ROOT:-}" ]; then
+            command python3 -I "$KF_PAYLOAD_ROOT/scripts/ci/vast_setup.py" apt "$@"
+        else
+            command apt-get -o Acquire::Queue-Mode=host \
+                -o Acquire::http::Pipeline-Depth=10 -o Acquire::https::Pipeline-Depth=10 "$@"
+        fi
+    }
     timeout() {
         local arg arm='' kind=other tag log rc timer
         for arg in "$@"; do

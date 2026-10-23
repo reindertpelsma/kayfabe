@@ -1,5 +1,6 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: LIVE as code, 2026-10-23; not yet run on a real Vast box (only the GPU-free tests).
+STATUS: code as of 2026-10-23. MEASURED: production KVM run `v7-kvm-20261023` reached
+a bound FAIL/provision; see [V7 evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md).
 The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/ci/vast_onstart.sh`.
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
@@ -38,3 +39,8 @@ CODE READ (Worker, `origin/codex/vast-broker-smoke-20261022`: `src/index.js`, `s
 MEASURED: `python3 -m unittest scripts/ci/test_vast_box.py`, `scripts/ci/vast_box_mutants.py`.
 INFERRED: apt, `/run`, profile.d, sshd on the real KVM image. The payload is code from the SHA under
 test, runs as root and can read the env file.
+
+CODE READ: `kf-box-blob-url <tag> <name>` resolves a private release asset using only the run's
+scoped token; the token stays on curl stdin. The payload first restores the dependency cache
+from the [reviewed lock](setup-cache.lock.json), then delegates to the existing box provision
+and merge bar. [Cache design and timing table](../../docs/design/VAST_SETUP_CACHE_20261023.md).
