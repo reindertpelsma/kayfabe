@@ -1,0 +1,46 @@
+BRK_HOOK_START 2026-10-23T04:02:41+02:00
+BRK_GUEST_KMS rc=0  nodes=[by-path card0 renderD128 ]
+BRK_RELAY_CONNECTED 1 GPU_COPY_PROBE=[kf3: broker: GPU-copy rung possible — render node renderD128 (226:128), nvidia-drm gpu_id 0x100, modifier 0x0300000000606014, slot attributes s1-nvkms-offscreen]
+BRK_EV_DEVICE broker=[nvkvm-broker: the X server renders on DRM device 226:128 (render node)] relay=[kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used] host_nodes=[/dev/dri/card0=e2:0 /dev/dri/card1=e2:1 /dev/dri/renderD128=e2:80 /dev/dri/renderD129=e2:81 ]
+BRK_GUEST_DESKTOP=no session=cinnamon busid=PCI:0:2:0 (rc=0 )
+BRK_RUNGS       1 frames go as a GPU copy in host VRAM        1 frames go as a LINEAR dma-buf
+BRK_RUNG_LINE kf3: broker: the compositor renders on this GPU: the GPU-copy rung may be used
+BRK_RUNG_LINE kf3: broker: the display CAN show XR24 modifier 0x0300000000606014
+BRK_RUNG_LINE kf3: broker: the display CAN show XR24 modifier 0x0000000000000000
+BRK_RUNG_LINE kf3: broker: the display CANNOT show XR24 modifier 0x0000000000000000
+BRK_RUNG_LINE kf3: broker: the display CANNOT show AR24 modifier 0x0000000000000000 (unasked: the broker dropped an ATTACH in this pair, or refused its alpha twin)
+BRK_RUNG_LINE kf3: broker: the display imported a GPU-copy frame (its RELEASE came back)
+BRK_WINDOW id=[10485760]
+BRK_WINDOW active=[10485760] (must be the window above)
+BRK_WINDOW geometry=1920x1080+5556+1094 root=[ dimensions: 8960x2880 pixels (2371x762 millimeters)]
+BRK_MODE_LINES guest cursor: the HOST pointer shows it (hover)|
+BRK_HOST_HOVER CURSOR w=18 h=25 hot=2,1 serial=19 name=[] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x977b1b1340901adb
+BRK_GUEST_POINTER 47 43
+BRK_GUEST_CURSOR CURSOR w=24 h=24 hot=3,1 serial=7 name=[left_ptr] visible_px=254 bbox_rel_hot=-1,-1,14,22 fnv_rel_hot=0x1da6c2469055d3aa
+BRK_HOVER_CURSOR_COMPARE visible_a=254 visible_b=254 max_channel_diff=48
+BRK_HOST_VS_GUEST hover differing_per_10000=0 of 1920x1080 (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)
+BRK_MAP frame=1920x1080 window=1920x1080+5556+1094 guest_pointer=47,43 -> broker_image 47,43
+BRK_HOST_CROSS CURSOR w=24 h=25 hot=11,11 serial=20 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_GUEST_CROSS CURSOR w=24 h=24 hot=11,11 serial=8 name=[crosshair] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0x548443b1d42e7d42
+BRK_CROSS_CURSOR_COMPARE visible_a=281 visible_b=281 max_channel_diff=52
+BRK_CROSS_SETS guest cursor image 256x256 hot 0,0 sent (1 so far)|guest cursor image 256x256 hot 3,1 sent (2 so far)|guest cursor image 256x256 hot 11,11 sent (3 so far)| xsetroot=[rc=0 ]
+BRK_CURSOR_COMPOSITION guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha (consistent with premultiplied pixels) — change 1 (the first 8 are logged, then every 256th)|
+BRK_HOST_XTERM CURSOR w=10 h=17 hot=4,8 serial=21 name=[] visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_GUEST_XTERM CURSOR w=9 h=16 hot=4,8 serial=9 name=[] visible_px=86 bbox_rel_hot=-4,-8,4,7 fnv_rel_hot=0x2d58db0c16d1185b
+BRK_XTERM_CURSOR_COMPARE visible_a=86 visible_b=86 max_channel_diff=0
+BRK_XTERM_RELAY xsetroot=[rc=0 ] broker: guest cursor image 256x256 hot 4,8 sent (4 so far)|
+BRK_CROSS_MAP guest_pointer=79,65 -> broker_image 79,65
+BRK_HOST_HIDDEN CURSOR w=1 h=1 hot=0,0 serial=17 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_HOST_AFTER_HIDE CURSOR w=24 h=25 hot=11,11 serial=22 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_HIDE_GUEST CURSOR_HIDDEN for 10 s CURSOR_SHOWN
+BRK_HIDE_RELAY 0 relay lines, host_cursor_refusals=0
+BRK_GRAB_ON grab ON|guest cursor: grabbed|
+BRK_HOST_GRAB CURSOR w=1 h=1 hot=0,0 serial=17 name=[] visible_px=0 bbox_rel_hot=none fnv_rel_hot=none
+BRK_GRAB_FRAME_DIFF host_hover_vs_host_grab_px=76 console_hover_vs_grab_px=76 (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)
+BRK_GRAB_MOVE guest_pointer=79 65 -> 119 92 host_moved_cursor_px=76 console_moved_cursor_px=76
+BRK_GRAB_OFF grab off|guest cursor: the HOST pointer shows it (hover)|
+BRK_HOST_AFTER_GRAB CURSOR w=24 h=25 hot=11,11 serial=22 name=[] visible_px=281 bbox_rel_hot=-11,-11,11,12 fnv_rel_hot=0xf6108d49685ef58f
+BRK_AFTER_GRAB host_hover_vs_host_after_grab_px=0 (hover again: no cursor in the frame)
+BRK_E5_FDS  317 /dev/nvidiaN; 65 anon_inode:[eventfd]; 10 /dmabuf:; 10 (deleted); 8 pipe:[N]; 7 anon_inode:[eventpoll]; 6 anon_inode:kvm-vcpu:N; 6 anon_inode:kvm-vcpu-stats:N; 5 /dev/nvidiactl; 3 socket:[N]; 2 /dev/nvidia-uvm; 2 /dev;
+BRK_E5_VRAM 2121713, 39 MiB;2352553, 8834 MiB;
+BRK_HOOK_DONE 2026-10-23T04:05:52+02:00

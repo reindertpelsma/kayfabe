@@ -1,0 +1,27 @@
+{
+  "classification": "MEASURED",
+  "evidence": "cursor-colour-analysis.json",
+  "run": "q4-6d-r1-broker5",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "falsifier_before_analysis": "native-input-plan.md recorded before this calculation: any aligned RGB differs from round(reference RGB * alpha / 255) beyond 2, or alpha/visible shape differs.",
+  "patterns": [
+    {
+      "pattern": "hover",
+      "visible_guest": 254,
+      "visible_host": 254,
+      "alpha_max_difference": 0,
+      "original_max_difference": 48,
+      "additional_alpha_formula_max_difference": 1
+    },
+    {
+      "pattern": "cross",
+      "visible_guest": 281,
+      "visible_host": 281,
+      "alpha_max_difference": 0,
+      "original_max_difference": 52,
+      "additional_alpha_formula_max_difference": 1
+    }
+  ],
+  "original_oracle": "FAIL",
+  "interpretation": "INFERRED from this numerical fit: an extra alpha multiplication explains the difference; the responsible component is not localized. This does not replace the original oracle or establish a new candidate regression versus a matched baseline."
+}

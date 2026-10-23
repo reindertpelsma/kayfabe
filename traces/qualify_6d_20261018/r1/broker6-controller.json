@@ -1,0 +1,35 @@
+{
+  "classification": "MEASURED",
+  "evidence": "linux-broker-attempt6/result.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "tag": "q4-6d-r1-broker6",
+  "verdict": "OBSERVATIONS_PENDING_REVIEW",
+  "base_before": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "load": {
+    "classification": "MEASURED",
+    "evidence": "load-before-vm.json",
+    "stage": "linux-broker",
+    "time": "2026-10-23T02:02:19.860374+00:00",
+    "uptime": "04:02:19 up 13 days,  8:23,  7 users,  load average: 0.00, 0.20, 0.70",
+    "load_average": [
+      0.00048828125,
+      0.201171875,
+      0.7001953125
+    ],
+    "logical_cpus": 24,
+    "host_quiet": true
+  },
+  "start": "2026-10-23T02:02:19.883124+00:00",
+  "exit": 0,
+  "new_host_xids": [],
+  "base_after": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "base_unchanged": true,
+  "health_exit": 0,
+  "end": "2026-10-23T02:06:11.840455+00:00"
+}

@@ -1,0 +1,91 @@
+{
+  "classification": "MEASURED",
+  "evidence": "sa02-hardware.json",
+  "candidate_product": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "helper_sha256": "907072b8f674290e034997461c1a5128805edf63e418680072d8f9c07d042d8f",
+  "falsifier_before_execution": "Chosen internal-range client USER or ADMIN birth must not be authorized kernel/T-space; root readback and both privilege levels must be observed. Calibration mismatch means NOT_EXERCISED. Any new Xid is fatal. The helper never schedules or submits a channel.",
+  "cases": [
+    {
+      "case": "auto-user",
+      "exit": 0,
+      "requested_client": "auto",
+      "expected_privilege_level": 0,
+      "root_readback": [
+        "0x00000000",
+        "0xc1d0001c",
+        "5962"
+      ],
+      "probe_channel": "0xcafe000a",
+      "facts": [
+        {
+          "privilege_level": 0,
+          "kernel": false,
+          "diagnostic": "kf-rm: chanlink: CHAN-FACTS 0xc1d0001c:0xcafe000a parent=0xcafe0009 class=0xc56f engine=Some(9) flags=0x200580 hVASpace=0x0 ctxShare=0x0 vas=0xc1d0001c:Some(cafe0004) tsg=Some(cafe0009) device=0xcafe0001 kernel=false privilege=Some(ChannelPrivilege { level: 0, uvm_owned: false }) internalFlags=Some(14) ProcessID=Some(174a) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0xf000000000 gpFifoEntries=32 hUserdMemory0=Some(cafe0008) userd=Some(Framebuffer { base: 1884000, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+        }
+      ],
+      "route_lines": [
+        "kf3: act birth passthrough: chan 0xc1d0001c:0xcafe000a BORN Passthrough: token 0x5 -> host 0x35 in VasKey(13965662568140636164) gpfifo=0xf000000000x32 userd=Store { store: 3405643782, off: 25706496 } engine=0x9 declared_kernel_pid=false privilege=0 rc=none late_joiner_schedule=Some(GuestNotScheduled) fast=off (1855 us, off the GSP lock)"
+      ],
+      "input_complete": true,
+      "verdict": "PASS"
+    },
+    {
+      "case": "auto-admin",
+      "exit": 0,
+      "requested_client": "auto",
+      "expected_privilege_level": 1,
+      "root_readback": [
+        "0x00000000",
+        "0xc1d0001d",
+        "6016"
+      ],
+      "probe_channel": "0xcafe000a",
+      "facts": [
+        {
+          "privilege_level": 1,
+          "kernel": false,
+          "diagnostic": "kf-rm: chanlink: CHAN-FACTS 0xc1d0001d:0xcafe000a parent=0xcafe0009 class=0xc56f engine=Some(9) flags=0x2005a0 hVASpace=0x0 ctxShare=0x0 vas=0xc1d0001d:Some(cafe0004) tsg=Some(cafe0009) device=0xcafe0001 kernel=false privilege=Some(ChannelPrivilege { level: 1, uvm_owned: false }) internalFlags=Some(15) ProcessID=Some(1780) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Some(0) gpFifoOffset=0xf000000000 gpFifoEntries=32 hUserdMemory0=Some(cafe0008) userd=Some(Framebuffer { base: 1884000, size: 200 }) hPhysChannelGroup=Some(0) subDeviceId=Some(0)"
+        }
+      ],
+      "route_lines": [
+        "kf3: act birth passthrough: chan 0xc1d0001d:0xcafe000a BORN Passthrough: token 0x5 -> host 0x35 in VasKey(13965662572435603460) gpfifo=0xf000000000x32 userd=Store { store: 3405643782, off: 25706496 } engine=0x9 declared_kernel_pid=false privilege=1 rc=none late_joiner_schedule=Some(GuestNotScheduled) fast=off (1514 us, off the GSP lock)"
+      ],
+      "input_complete": true,
+      "verdict": "PASS"
+    },
+    {
+      "case": "chosen-user",
+      "exit": 2,
+      "requested_client": "c1e00100",
+      "expected_privilege_level": 0,
+      "root_readback": [
+        "0xc1e00100",
+        "0xc1d0001e",
+        "6070"
+      ],
+      "probe_channel": null,
+      "facts": [],
+      "route_lines": [],
+      "input_complete": false,
+      "verdict": "NOT_EXERCISED"
+    },
+    {
+      "case": "chosen-admin",
+      "exit": 2,
+      "requested_client": "c1e00100",
+      "expected_privilege_level": 1,
+      "root_readback": [
+        "0xc1e00100",
+        "0xc1d0001f",
+        "6124"
+      ],
+      "probe_channel": null,
+      "facts": [],
+      "route_lines": [],
+      "input_complete": false,
+      "verdict": "NOT_EXERCISED"
+    }
+  ],
+  "verdict": "PARTIAL",
+  "reason": "EXACT_ROOT_AND_STAMP_REQUIRED_FOR_EACH_CASE"
+}
