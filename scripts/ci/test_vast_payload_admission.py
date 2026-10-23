@@ -1,8 +1,14 @@
 """Authentic S4 native journals test the payload's admission replacement point."""
 
 from pathlib import Path
+import io
+import json
+import os
 import re
+import tempfile
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
 import vast_payload as payload
 from test_vast_payload import watch
@@ -103,3 +109,63 @@ class NativeArmAdmission(unittest.TestCase):
     def test_negative_control_cannot_pass_without_kernel_records(self):
         _, defer, _ = replay("AD102")
         self.assertFalse(payload.xid_ok(watch(), 0, "--defer-liveness", defer))
+
+
+class NativeReceipt(unittest.TestCase):
+    def invoke(self, die, corrupt=lambda s: s):
+        journal, defer, missing = replay(die)
+        lines = [s for s in journal.splitlines() if "NVRM: Xid" in s]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = {
+                "KF_PAYLOAD_LOG": str(root / "output"),
+                "KF_PAYLOAD_CONTROL_DIR": str(root / "controls"),
+                "KF_PAYLOAD_NATIVE_RECEIPT": str(root / "receipt"),
+                "KF_PAYLOAD_DIAGNOSTIC_STATE": str(root / "diagnostics"),
+                "KF_PAYLOAD_XID_ALLOWED": str(root / "allowed"),
+                "KF_PAYLOAD_XID_FAILED": str(root / "failed"),
+            }
+            with patch.dict(os.environ, env), patch.object(
+                payload.xid_guard, "kernel_snapshot", return_value=corrupt(journal)
+            ), redirect_stdout(io.StringIO()):
+                result = None
+                for arm, source, records in (
+                    ("--defer-liveness", defer, [s for s in lines if "ENGINE CE0" in s]),
+                    ("--missing-page-fault", missing, [s for s in lines if "ENGINE CE0" not in s]),
+                ):
+                    text = watch("\n".join(records), 0, len(records)).replace(
+                        "\nfixture\n", "\n" + source + "\n"
+                    )
+                    log = root / "watch"
+                    log.write_text(text)
+                    result = payload.guard_command(arm, log, 6)
+            receipt = (
+                json.loads((root / "receipt").read_text()) if (root / "receipt").exists() else None
+            )
+            return result, receipt, (root / "failed").exists(), lines
+
+    def test_ad102_exact_five_are_frozen_for_guest_supervision(self):
+        rc, receipt, failed, lines = self.invoke("AD102")
+        self.assertEqual(rc, 0)
+        self.assertFalse(failed)
+        self.assertEqual(receipt["approved_native_xid_lines"], lines)
+
+    def test_ga102_exact_five_are_frozen_for_guest_supervision(self):
+        rc, receipt, failed, lines = self.invoke("GA102")
+        self.assertEqual(rc, 0)
+        self.assertFalse(failed)
+        self.assertEqual(receipt["approved_native_xid_lines"], lines)
+
+    def test_extra_ad102_kernel_record_stops_without_a_receipt(self):
+        rc, receipt, failed, _ = self.invoke(
+            "AD102", lambda s: s + "\n" + next(x for x in s.splitlines() if "NVRM: Xid" in x)
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(failed)
+        self.assertIsNone(receipt)
+
+    def test_changed_ga102_kernel_record_stops_without_a_receipt(self):
+        rc, receipt, failed, _ = self.invoke("GA102", lambda s: s.replace(": 31,", ": 32,", 1))
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(failed)
+        self.assertIsNone(receipt)
