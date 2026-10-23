@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <sys/prctl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -1375,6 +1376,13 @@ static void test_cursor_record(void)
 
 int main(void)
 {
+    /* Several checks crash a child on purpose (a store through a read-only mapping, a read past a guard page).
+     * With a piped core_pattern (apport, systemd-coredump) the kernel would dump each of them through the
+     * handler, which stalls the dying child for minutes on a runner: no core files from this test. */
+    struct rlimit nocore = { 0, 0 };
+
+    setrlimit(RLIMIT_CORE, &nocore);
+    prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);   /* a piped core_pattern ignores the limit above; a non-dumpable process is never dumped */
     setvbuf(stdout, NULL, _IOLBF, 0);
     test_state_table();
     test_place();
