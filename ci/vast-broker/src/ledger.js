@@ -155,9 +155,9 @@ export class Ledger {
       if (v.started >= day && (v.profile ?? 'check') === (cfg.profile ?? 'check')) count++;
       if (v.ended !== null && end < rolling) await this.storage.delete(key);
     }
-    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily-count
+    if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409);
     if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))
-      refuse('UNAVAILABLE_BUDGET', 409); // MUTANT daily
-    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT rolling
+      refuse('UNAVAILABLE_BUDGET', 409);
+    if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409);
   }
 }

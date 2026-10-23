@@ -2,8 +2,7 @@
 """GPU-free, network-free falsifiers for the repo-side Vast box scripts.
 
 A fake broker (TLS on 127.0.0.1, self-signed) records every request. The scripts under test
-are vast_onstart.sh, vast_report.py and kf-box-kill. The scripts
-directory can be redirected with KF_CI_SCRIPTS_DIR (used by vast_box_mutants.py).
+are vast_onstart.sh, vast_report.py, kf-box-kill and kf-box-blob-url.
 """
 
 import hashlib
@@ -23,7 +22,7 @@ import time
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(os.environ.get("KF_CI_SCRIPTS_DIR") or Path(__file__).resolve().parent)
+SCRIPTS = Path(__file__).resolve().parent
 FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill"]
 RUN = "4242-7"
 # A run token is a compact HS256 JWT (box protocol 7); the box never verifies it.

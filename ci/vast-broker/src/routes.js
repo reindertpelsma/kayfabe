@@ -43,7 +43,7 @@ export async function routePath(request, env) {
   }
   if (!validPathPrefix(prefix)) return null;
   const parts = path.split('/');
-  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match
+  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null;
   return '/' + parts.slice(2).join('/');
 }
 export function endpointSecrets(env) {

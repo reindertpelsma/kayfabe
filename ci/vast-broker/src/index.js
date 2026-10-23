@@ -382,7 +382,7 @@ export function createService({
       r.rateWindow = window;
       r.rateCount = 0;
     }
-    if (r.rateCount >= cfg.reportRate) refuse('RATE_LIMITED', 429); // MUTANT report-rate
+    if (r.rateCount >= cfg.reportRate) refuse('RATE_LIMITED', 429);
     r.rateCount++;
     await ledger.save(r);
   }
@@ -412,7 +412,7 @@ export function createService({
       r.closed ||
       r.resultAt !== undefined
     )
-      refuse('UNAUTHORIZED', 401); // MUTANT report-ledger
+      refuse('UNAUTHORIZED', 401);
     clocks(r, cfg);
     await rejectExpiredCallback(r, cfg, vast);
     if (now() >= r.reportExpiry * 1000 || (r.hardDeadline !== null && now() >= r.hardDeadline)) {
@@ -426,7 +426,7 @@ export function createService({
         await close(r, vast, 'LIMIT');
       } catch {}
       refuse('UNAUTHORIZED', 401);
-    } // MUTANT report-caps
+    }
     await rate(r, cfg);
     r.reportCount++;
     try {
@@ -440,7 +440,7 @@ export function createService({
           const instance = await vast.inspect(r);
           if (instance && r.firstReportAt === undefined && pendingInstance(instance))
             refuse('NOT_READY', 409);
-          if (instance === null || instance.actual_status !== 'running') throw Error('NOT_LIVE'); // MUTANT report-live
+          if (instance === null || instance.actual_status !== 'running') throw Error('NOT_LIVE');
           r.liveCheckedAt = now();
         } catch (error) {
           if (error instanceof BrokerError && error.state === 'NOT_READY') throw error;
@@ -500,8 +500,7 @@ export function createService({
         r.resultDeadline = r.resultAt + r.grace;
         r.phase = 'GRACE';
         r.liveCheckedAt = null;
-      } // MUTANT structured-verdict
-      else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)
+      } else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)
         await close(r, vast, 'LIMIT');
       return json({
         state: 'ACCEPTED',
@@ -591,7 +590,7 @@ export function createService({
     const owner =
       validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));
     if (path === '/stop-all') {
-      if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth
+      if (!owner) refuse('UNAUTHORIZED', 401);
       const records = await ledger.openRecords();
       for (const r of records) {
         r.closed = 'STOPPED';
@@ -662,7 +661,7 @@ export function createService({
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
     if (match) {
-      if (match[2] !== key) refuse('UNAUTHORIZED', 401); // MUTANT stop-run
+      if (match[2] !== key) refuse('UNAUTHORIZED', 401);
       const r = await ledger.granted(key);
       if (!r) refuse('NOT_FOUND', 404);
       if (match[1] === 'logs') {
@@ -722,7 +721,7 @@ export function createService({
     const cached = await ledger.get('sha:' + target.sha),
       force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
     if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.
-    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap
+    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409);
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
     const chosen = await offers.select(
@@ -737,7 +736,7 @@ export function createService({
       credit = await vast.credit();
     try {
       if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + cost)
-        refuse('UNAVAILABLE_BUDGET', 409); // MUTANT credit
+        refuse('UNAVAILABLE_BUDGET', 409);
       await ledger.budgets(cfg, now(), cost);
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')

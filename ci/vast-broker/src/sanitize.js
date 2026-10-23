@@ -22,11 +22,11 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
     .replace(/\x1b[ -/]*[@-~]/g, '')
     .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '')
-    .replace(/\p{Cf}/gu, '') // MUTANT unicode-format
+    .replace(/\p{Cf}/gu, '')
     .replace(
       /\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255}|v1\.[0-9]+\.[0-9]+\.[0-9]+\.[A-Za-z0-9_-]{43})\b/g,
       '[redacted]',
-    ); // MUTANT token-shape
+    );
   text = text
     .replace(/\bBearer\s+[^\s]+/gi, 'Bearer [redacted]')
     .replace(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, '[address]')
@@ -35,9 +35,9 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
       '[address]',
     )
     .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));
-  text = text.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]'); // MUTANT signed-url
+  text = text.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]');
   for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');
-  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters
+  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #[');
   const lines = text.split('\n');
   if (lines.at(-1) === '') lines.pop();
   let retained = [],
@@ -45,7 +45,7 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
     shown = 0;
   for (const line of tail ? lines.slice(-200) : lines) {
     const safe = utf8Prefix(line, 1018);
-    const rendered = '[box] ' + safe + '\n'; // MUTANT all-prefix
+    const rendered = '[box] ' + safe + '\n';
     const length = encoder.encode(rendered).length;
     retained.push({ rendered, length, shown: encoder.encode(safe).length + 1 });
     size += length;

@@ -25,7 +25,7 @@ export async function readReportBody(request, record, cfg) {
     await reader.cancel().catch(() => {});
   }
   record.reportBytes = Math.min(cfg.reportBytes, record.reportBytes + length);
-  if (oversized) refuse('REPORT_TOO_LARGE', 413); // MUTANT body-cap
+  if (oversized) refuse('REPORT_TOO_LARGE', 413);
   const bytes = new Uint8Array(length);
   let offset = 0;
   for (const chunk of chunks) {

@@ -24,8 +24,7 @@ function jobsIn(text) {
     } else if (/^  [^\s#].*:/.test(line)) {
       current = { id: 'unsupported-' + jobs.length, lines: [], unsupported: true };
       jobs.push(current);
-    } // MUTANT job-shape
-    else if (current) current.lines.push(line);
+    } else if (current) current.lines.push(line);
   }
   return jobs.map((job) => {
     const body = job.lines.join('\n');
@@ -94,7 +93,7 @@ function endpointBoundary(filename, text, jobs) {
   const errors = [],
     fail = (reason) => errors.push('Broker endpoint ' + reason);
   if (/^[ \t]*['"]?secrets['"]?[ \t]*:[ \t]*[^#\s]/m.test(text))
-    fail('secret forwarding requires explicit block mappings'); // MUTANT secret-inherit
+    fail('secret forwarding requires explicit block mappings');
   const primary = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename)
     ? jobs.find((x) => x.id === 'gpu')
     : null;
@@ -104,7 +103,7 @@ function endpointBoundary(filename, text, jobs) {
     const parts = primary.body.split(/(?=^      - )/m),
       steps = parts.slice(1);
     if (steps.length !== 1 || !/^        id: broker\s*$/m.test(steps[0]))
-      fail('secrets require the sole broker step'); // MUTANT secret-step
+      fail('secrets require the sole broker step');
     const header = parts[0];
     if (/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(header))
       fail('secrets cannot enter job env or outputs');
@@ -114,10 +113,10 @@ function endpointBoundary(filename, text, jobs) {
       output.trim() !==
         'state: ${{ steps.broker.outputs.state }}\n      verdict: ${{ steps.broker.outputs.verdict }}\n      verified: ${{ steps.broker.outputs.verified }}'
     )
-      fail('job outputs must be fixed state and verdict'); // MUTANT secret-output
+      fail('job outputs must be fixed state and verdict');
     let sanitised = header;
     for (const step of steps) {
-      if (!/^        run: \|[ \t]*$/m.test(step)) fail('requires literal broker run syntax'); // MUTANT secret-run-style
+      if (!/^        run: \|[ \t]*$/m.test(step)) fail('requires literal broker run syntax');
       let environment = false;
       const found = new Set(),
         kept = [];
@@ -138,13 +137,13 @@ function endpointBoundary(filename, text, jobs) {
         kept.push(line);
       }
       if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))
-        fail('requires two step-env secret bindings'); // MUTANT secret-binding
+        fail('requires two step-env secret bindings');
       if (
         /\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(
           kept.join('\n').split(/^        run:/m)[0],
         )
       )
-        fail('aliases cannot enter step metadata'); // MUTANT secret-metadata
+        fail('aliases cannot enter step metadata');
       const run = step.split(/^        run: \|\s*$/m)[1] || '';
       const approvedRenderer =
         run
@@ -170,7 +169,7 @@ function endpointBoundary(filename, text, jobs) {
             line,
           )
         )
-          fail('cannot be printed'); // MUTANT secret-print
+          fail('cannot be printed');
       }
       sanitised += kept.join('\n');
     }
@@ -178,11 +177,11 @@ function endpointBoundary(filename, text, jobs) {
     outside = text.replace(primary.body, '');
   }
   if (/VAST_BROKER_(?:URL|PATH|ACCESS_ID|ACCESS_SECRET)/.test(remaining))
-    fail('secret reference outside approved step env'); // MUTANT secret-reference
+    fail('secret reference outside approved step env');
   if (/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(outside))
-    fail('aliases outside broker step'); // MUTANT secret-alias
+    fail('aliases outside broker step');
   for (const expression of text.match(/\$\{\{[\s\S]*?\}\}/g) || [])
-    if (/\bsecrets\b(?!\s*\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object
+    if (/\bsecrets\b(?!\s*\.)/.test(expression)) fail('opaque secret context is unsupported');
   return errors;
 }
 export function checkWorkflows(workflows) {
@@ -201,7 +200,7 @@ export function checkWorkflows(workflows) {
     errors.push('GPU runner cannot consume source/artifact/cache actions');
 
   if (!gpu.some((x) => x.id === 'pending') || !gpu.some((x) => x.id === 'report'))
-    errors.push('GPU status writers missing'); // MUTANT writers
+    errors.push('GPU status writers missing');
   const report = gpu.find((x) => x.id === 'report');
   if (
     report &&
