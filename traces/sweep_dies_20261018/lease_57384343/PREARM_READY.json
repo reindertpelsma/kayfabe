@@ -1,0 +1,9 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57384343,
+  "intent": "codex-S4-round4-r4_ga102",
+  "pid": 1483306,
+  "deadline_epoch": 1792776690.3045135,
+  "armed_utc": "2026-10-23T14:41:30.822885+00:00",
+  "state": "ARMED_BEFORE_CREATE"
+}

@@ -1,3 +1,5 @@
+MEASURED LIVE Round4 (lease57384343, `lease_57384343/START.json`): GA102 candidate RTX3090, sourceb66adb6e7, quote0.196667USD/h, prearmed guard1483306, fixed expiry17:31:30Z. Native/Windows/hold/apps pending; no driver outcome yet. INFERRED (same receipt): reserved1.090556USD against stop2.50/cap3, credit before28.804882USD, reserve5 untouched.
+
 S4 — PARTIAL, 2026-10-23
 
 CODE READ: lane S4, branch `codex/sweep-dies-20261022`, worktree S4; requested adaptive shared Windows readiness, fresh GA102 Windows acceptance, then Turing. This report supersedes all earlier LIVE summaries. Git publication is the containing commit, verified against the lane branch on origin after push; the external report records the exact head.
