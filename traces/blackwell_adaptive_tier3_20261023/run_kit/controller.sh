@@ -22,8 +22,8 @@ git checkout --detach 6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b
 [ "$(git rev-parse HEAD)" = 6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b ]
 [ -z "$(git status --porcelain --untracked-files=no)" ]
 git rev-parse HEAD >/root/prov/sweep_product_source
-git fetch --depth 1 origin 1e0ab16bb7d17875f0a41bcb4aacec2aa73b4d37
-git worktree add --detach /workspace/bw-readiness 1e0ab16bb7d17875f0a41bcb4aacec2aa73b4d37
+git fetch --depth 1 origin 8e623d92ee2cb74fc5765d8abce78d33a7e09e3c
+git worktree add --detach /workspace/bw-readiness 8e623d92ee2cb74fc5765d8abce78d33a7e09e3c
 [ -z "$(git -C /workspace/bw-readiness status --porcelain --untracked-files=no)" ]
 git -C /workspace/bw-readiness rev-parse HEAD >/root/prov/readiness_source
 export WINVM_SSH_CONNECT_TIMEOUT=100
@@ -74,8 +74,8 @@ target/release/examples/precomp_host_read 0 >/root/prov/precomp_runtime.txt 2>&1
 echo "PRECOMP_RUNTIME_EXIT rc=$precomp_rc $(date -u -Is)" | tee /root/prov/precomp_exit.txt
 [ "$precomp_rc" = 0 ] || [ "$precomp_rc" = 2 ]
 # Privileged read-only measurement, separate checkout and target; never product input.
-git fetch --depth 1 origin eed23319b9eb261cba6828f3fbc93056d8e15189
-git worktree add --detach /workspace/bw-tier3-kit eed23319b9eb261cba6828f3fbc93056d8e15189
+git fetch --depth 1 origin a6456796e4af84d3b0c8bcb3558b63c2e85df42e
+git worktree add --detach /workspace/bw-tier3-kit a6456796e4af84d3b0c8bcb3558b63c2e85df42e
 [ -z "$(git -C /workspace/bw-tier3-kit status --porcelain --untracked-files=no)" ]
 git -C /workspace/bw-tier3-kit rev-parse HEAD >/root/prov/precomp_tier3_source
 df -h /

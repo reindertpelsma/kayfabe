@@ -1,0 +1,34 @@
+{
+  "utc": "2026-10-23T00:47:30.766041+00:00",
+  "own_id": 57296911,
+  "all_owned_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340,
+    57296911
+  ],
+  "remaining_owned_ids": [],
+  "api_absence_verified": true,
+  "own_timer_audit": {
+    "auto_destroy_pid": {
+      "pid": 869739,
+      "same_owned_process_alive": false
+    },
+    "budget_watch_pid": {
+      "pid": 869742,
+      "same_owned_process_alive": false
+    }
+  },
+  "trusted_host_used": false,
+  "own_cargo_target_removed": true,
+  "current_phase_runtime_estimate_usd": 1.0923235034287035,
+  "shared_credit_after_observed": 35.56489695216169
+}
