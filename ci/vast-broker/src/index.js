@@ -989,8 +989,15 @@ export function createService({
               console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
             }
           }
-        } catch {
-          console.log(JSON.stringify({ event: 'cleanup_unavailable' }));
+        } catch (e) {
+          // A configuration refusal names only the variable; operators must not read silence.
+          console.log(
+            JSON.stringify(
+              e instanceof BrokerError && /^CONFIG_[A-Z_]+:[A-Z_]+$/.test(e.state)
+                ? { event: 'cleanup_config_error', state: e.state }
+                : { event: 'cleanup_unavailable' },
+            ),
+          );
         }
       });
     },
