@@ -57,3 +57,28 @@ for (const field of ['dph_total', 'inet_up_cost'])
     assert.notEqual(response.status, 200);
     assert.ok(h.cloud.deletes.includes(String(instance.id)));
   });
+for (const route of ['/status/123-1', '/logs/123-1?cursor=0'])
+  test('round Worker GitHub secret redacted from box reflection ' + route, async () => {
+    const sentinel = 'worker-read-sentinel-' + 'q'.repeat(40);
+    const h = await setup({ GITHUB_API_TOKEN: sentinel });
+    await h.call();
+    assert.equal((await h.report({ seq: 1, kind: 'log', text: sentinel })).status, 200);
+    const response = await h.call(route, { method: 'GET' });
+    assert.equal(response.status, 200);
+    assert.ok(!(await response.text()).includes(sentinel));
+    assert.ok(!JSON.stringify([...h.storage.data]).includes(sentinel));
+  });
+for (const encoded of [false, true])
+  test('round blob redirect cannot embed Worker credential ' + encoded, async () => {
+    const { mintBlob } = await import('../src/blobs.js');
+    const sentinel = 'worker/read+credential=';
+    const env = { GITHUB_API_TOKEN: sentinel, BLOB_REPO: 'owner/store',
+      BLOB_ALLOWED_TAG_PREFIXES: '["allowed-"]' };
+    const ledger = { get:async()=>0, put:async()=>{}, save:async()=>{} };
+    const fetcher = async url => url.includes('/tags/')
+      ? Response.json({assets:[{id:1,name:'asset',size:1}]})
+      : new Response(null,{status:302,headers:{Location:
+        'https://release-assets.githubusercontent.com/asset?credential=' +
+        (encoded ? encodeURIComponent(sentinel) : sentinel)}});
+    await assert.rejects(mintBlob(fetcher,env,ledger,{},'allowed-v1','asset',1800000000000));
+  });
