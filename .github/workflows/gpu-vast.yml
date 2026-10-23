@@ -190,11 +190,16 @@ jobs:
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
           state=UNAVAILABLE
           case "$BROKER_STATE" in
-            NONE|CREATING|BOOTING|TESTING|GRACE|MANUAL|NOT_NEEDED|NOT_ELIGIBLE|BUSY|UNAVAILABLE|UNAVAILABLE_BUDGET|NEEDS_APPROVAL|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND|OWNERSHIP_MISMATCH|RATE_LIMIT)
+            NONE|CREATING|BOOTING|TESTING|GRACE|NOT_ELIGIBLE|BUSY|UNAVAILABLE)
+              state=$BROKER_STATE ;;
+            UNAVAILABLE_BUDGET|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND)
+              state=$BROKER_STATE ;;
+            OWNERSHIP_MISMATCH|RATE_LIMIT)
               state=$BROKER_STATE ;;
           esac
           result=error
           # NOT_NEEDED needs two agreeing decisions; the action-free policy-check job is one.
+          # The Worker never decides a skip: a GPU success needs a verified GRACE/NONE PASS.
           if [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
             "$POLICY_RUN" = 0 && "${POLICY_CHECK_RESULT:-}" = success &&
             "${POLICY_CHECK_RUN:-}" = 0 && "$GPU_RESULT" = skipped ]]; then
@@ -203,8 +208,7 @@ jobs:
           elif [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
             "$POLICY_RUN" = 1 && "$GPU_RESULT" = success &&
             "$BROKER_VERDICT" = PASS && "$BROKER_VERIFIED" = 1 &&
-            ( "$state" = GRACE || "$state" = MANUAL || "$state" = NONE ||
-            "$state" = NOT_NEEDED ) ]]; then
+            ( "$state" = GRACE || "$state" = NONE ) ]]; then
             result=success
           elif [[ "$BROKER_VERDICT" = FAIL ]]; then
             result=failure

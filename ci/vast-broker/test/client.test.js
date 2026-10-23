@@ -118,7 +118,7 @@ test('workflow posts failure when structured box verdict fails', async () => {
 });
 for (const [state, code] of [
   ['UNAVAILABLE_BUDGET', 409],
-  ['NEEDS_APPROVAL', 403],
+  ['NOT_ELIGIBLE', 409],
 ])
   test('workflow exposes failing refusal ' + state, async () => {
     const r = await client(state, 'UNAVAILABLE', code);
@@ -131,11 +131,12 @@ for (const pending of [false, true])
     assert.equal(r.status, 1);
     assert.equal(r.calls.filter((x) => /\/(rent|status\/)/.test(x.url)).length, pending ? 2 : 1);
   });
-test('NOT_NEEDED is explicit successful status bound to nonce', async () => {
+// Review W2 (2026-10-23): the Worker never decides a skip; a Worker-sent NOT_NEEDED is refused.
+test('Worker-sent NOT_NEEDED is refused, never a successful status', async () => {
   const r = await client('NOT_NEEDED', 'PASS');
-  assert.equal(r.status, 0);
-  assert.equal(r.statuses.at(-1).state, 'success');
-  assert.match(r.statuses.at(-1).description, /NOT_NEEDED/);
+  assert.equal(r.status, 1);
+  assert.notEqual(r.statuses.at(-1).state, 'success');
+  assert.doesNotMatch(r.statuses.at(-1).description, /NOT_NEEDED/);
 });
 for (const dependency of ['skipped', 'cancelled'])
   test('final status rejects ' + dependency + ' even with verified PASS', async () => {

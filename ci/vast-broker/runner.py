@@ -16,9 +16,7 @@ STATES = {
     "BOOTING",
     "TESTING",
     "GRACE",
-    "NOT_NEEDED",
     "NOT_ELIGIBLE",
-    "NEEDS_APPROVAL",
     "RENTING_DISABLED",
     "BUSY",
     "UNAVAILABLE",
@@ -437,9 +435,7 @@ def validate_status(data, ctx, manifest, http_status):
     ]:
         if data[key] is not None and (not integer(data[key], data["started_at"], 4102444800000)):
             raise Invalid()
-    if data["state"] != "NOT_NEEDED" and (
-        data["soft_deadline_at"] is None or data["boot_deadline_at"] is None
-    ):
+    if data["soft_deadline_at"] is None or data["boot_deadline_at"] is None:
         raise Invalid()
     if (
         data["hard_deadline_at"] is not None
@@ -447,22 +443,19 @@ def validate_status(data, ctx, manifest, http_status):
         and data["soft_deadline_at"] >= data["hard_deadline_at"]
     ):
         raise Invalid()
-    if data["verdict"] == "PASS" and data["state"] not in {"GRACE", "NONE", "NOT_NEEDED"}:
+    # A PASS needs a GPU result; the Worker never decides a skip (review W2).
+    if data["verdict"] == "PASS" and data["state"] not in {"GRACE", "NONE"}:
         raise Invalid()
     if data["state"] == "GRACE" and data["result_at"] is None:
         raise Invalid()
-    if data["result_at"] is not None and data["state"] != "NOT_NEEDED":
+    if data["result_at"] is not None:
         validate_suites(data["suites"], data["verdict"])
     elif data["suites"] != []:
         raise Invalid()
-    if (
-        data["verdict"] == "PASS"
-        and data["state"] != "NOT_NEEDED"
-        and (
-            data["result_at"] is None
-            or data["driver_version"] == "unknown"
-            or data["compute_cap"] < 750
-        )
+    if data["verdict"] == "PASS" and (
+        data["result_at"] is None
+        or data["driver_version"] == "unknown"
+        or data["compute_cap"] < 750
     ):
         raise Invalid()
     return data
@@ -671,11 +664,7 @@ class Runner:
                 admitted = True
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
-                if (
-                    data["state"] == "NOT_NEEDED"
-                    or data["state"] in {"GRACE", "NONE"}
-                    and data["result_at"] is not None
-                ):
+                if final:
                     if self.cursor != data["log_cursor"] or self.hash != data["log_sha256"]:
                         raise Invalid()
                     self.metadata = data

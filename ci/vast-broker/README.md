@@ -163,6 +163,9 @@ authority is report/kill/blob-url.
 [SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] Review/approval modes, draft, base
 and path policy are removed from the Worker; it authorizes signed identity + pinned workflow +
 triggering_actor == owner + sha == run head, and the YAML decides when to run.
+[SUPERSEDED 2026-10-24, final review W2] A Worker-sent NOT_NEEDED is no longer a state: the runner
+refuses it (and the dead MANUAL / NEEDS_APPROVAL), and only the two agreeing workflow path
+decisions in `gpu-vast.yml` post NOT_NEEDED success.
 [CODE READ] Automatic PR events use default `owner_push_or_review`: numeric GitHub event actor/triggering-actor identity is the owner, or an owner review approves exactly that PR head SHA. Commit author text has no authority. An owner push also vouches for earlier commits on that branch. Drafts refuse by default. Push storms do not queue rentals: superseded work is destroyed and the newer request returns BUSY. `review_or_author`, `review_only`, `owner_push` and `actor_only` are explicit alternatives. Automatic PRs require an API-checked master base (ALLOWED_BASE_BRANCHES) and a non-draft head. The Worker excludes only a complete all-skipped PR file list using PATH_SKIP_PATTERNS; unknown/truncated lists run, and API errors fail. ci/vast-broker always runs. NOT_NEEDED is an explicit successful job/status. The BASE workflow permits owner dispatch on master only. A repeat request within the same runner nonce is idempotent; a fresh run cannot inherit another run's cached PASS. Rerun the owner's dispatch after the minimum gap to request another rental.
 
 [SUPERSEDED 2026-10-23 jose round: `npm ci --ignore-scripts` first; no linker or mutants]
