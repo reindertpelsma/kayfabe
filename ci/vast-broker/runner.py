@@ -749,9 +749,10 @@ class Runner:
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:
             # Owner ruling 2026-10-24 item 4: with the verified final result in hand, stop the box
-            # now (best effort; the Worker's grace timer is the fallback). A result whose final
-            # fetch failed validation is left to that timer; other failures stop as before.
-            if terminal or not final and not self.infrastructure_failure:
+            # now (best effort; the Worker's grace timer is the fallback). Edits2 D: an announced
+            # result whose final fetch failed (hash, cursor or read) is stopped too. Only an
+            # infrastructure fault before any result skips the stop, so paid work survives it.
+            if terminal or final or not self.infrastructure_failure:
                 try:
                     self.read("/stop/" + self.ctx["run"], "POST")
                 except Exception:
