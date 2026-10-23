@@ -86,3 +86,18 @@ packages / 159,395,796 raw bytes; its compressed .deb asset is 159,253,208 bytes
 re-downloaded and hash checked, including with the Worker's read-only store credential in run
 `v8-cloudinit-cache-ro-20261023`. [Publication](../../traces/vast_cloud_init_20261018/cache_publication.json),
 [read-only check](../../traces/vast_cloud_init_20261018/cache_ro.json), [producer](../../traces/vast_cloud_init_20261018/cache_build.json).
+
+## Fresh lease after the cloud-init replay
+
+MEASURED on 2026-10-23, run `v8-cloudinit-proof-kvm-20261023`, source d196c055a:
+first report121.775s; .deb fetch/hash/extract7.027s; vendor2.361s; full cache20.346s;
+provision340.059s to READY580.159.04. Cache plus provision sums to360.405s, excluding small inter-stage overhead.
+INFERRED from this run: setup meets the roughly900s target.
+Host CUDA4/4, kf tests3749/0, gates9/9+gate10 and kf3 build passed. Raw defer-liveness returned
+wrapper rc6 after six passing arms; remaining raw/thin/census/fat work stopped. Runner bound
+FAIL; this does not establish the underlying client/Xid cause. SSH diagnostics were denied,
+so separate APT timing and independent artifact/hardware snapshots remain unavailable.
+The final failure hardware was580.159.04 after initial575.51.03; the checkout's Cargo paths
+were used by the executed clients. Exact teardown is complete; inferred cost upper0.242045705 USD,
+not an invoice, from the recorded price/lifetime and full transfer reserve in this run.
+[Full result, limits and remaining gaps](../../traces/vast_cloud_init_20261018/LIVE_RUN.md).

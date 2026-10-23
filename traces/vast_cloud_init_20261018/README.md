@@ -1,5 +1,8 @@
 # Cloud-init replay and one further KVM acceptance
 
+STATUS: LIVE, 2026-10-23. MEASURED, run `v8-cloudinit-proof-kvm-20261023`: READY and host CUDA
+passed; bound FAIL/raw_suite at defer-liveness; exact teardown complete. [Live outcome](LIVE_RUN.md).
+
 MEASURED on 2026-10-23, run `v8-cloud-init-gpu-free-20261023`: [325 tests](preflight.json),
 96 noncanonical mutations each with at least two named killers, canonical [60/60](canonical.txt).
 Components: payload29 + provider-env8 + diagnostic10 + package-policy6 + cache/helper/home43.

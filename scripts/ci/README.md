@@ -1,7 +1,8 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: code as of 2026-10-23. MEASURED: KVM run `v8-kvm-20261023` returned FAIL/setup_cache;
-unattended environment loading and original-grace MANUAL retention worked. The follow-up
-acknowledgement fix has GPU-free tests only. [V8 evidence](../../traces/vast_setup_v8_20261018/LIVE_RUN.md).
+STATUS: code as of 2026-10-23. MEASURED: run `v8-cloudinit-proof-kvm-20261023`, source
+`d196c055a`: cache20.346s; provision340.059s to READY; host CUDA4/4; tests3749/0; gates9/9+10.
+Raw defer-liveness returned wrapper rc6 after six passing arms; thin/fat were not reached.
+[Latest evidence and gaps](../../traces/vast_cloud_init_20261018/LIVE_RUN.md).
 The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/ci/vast_onstart.sh`.
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:

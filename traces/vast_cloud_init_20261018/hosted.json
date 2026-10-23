@@ -1,0 +1,21 @@
+{
+  "run": "v8-cloud-init-hosted-20261023",
+  "checks": [
+    {
+      "conclusion": "success",
+      "databaseId": 39929665645,
+      "headSha": "d196c055ab97e63293804ede0ff354f25a6067ba",
+      "name": "Vast box scripts",
+      "status": "completed",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39929665645"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 39929672948,
+      "headSha": "d196c055ab97e63293804ede0ff354f25a6067ba",
+      "name": "Vast box scripts",
+      "status": "completed",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39929672948"
+    }
+  ]
+}
