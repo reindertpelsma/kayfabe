@@ -274,7 +274,14 @@ class V7Tests(unittest.TestCase):
         with patch.object(self.m.subprocess, "check_output", return_value="bad"):
             self.assertEqual(self.m.hardware()["gpu_name"], "unknown")
 
-    def _main_fixture(self, failure=None, free=100_000_000_000, kvm=True, legacy_client=None):
+    def _main_fixture(
+        self,
+        failure=None,
+        free=100_000_000_000,
+        kvm=True,
+        legacy_client=None,
+        initial_hardware=None,
+    ):
         from types import SimpleNamespace
 
         native_path = Path
@@ -343,7 +350,7 @@ class V7Tests(unittest.TestCase):
             ), patch.object(self.m, "Path", side_effect=mapped), patch.object(
                 self.m, "prepare_checkout", return_value="fixture"
             ), patch.object(
-                self.m, "hardware", return_value=hardware
+                self.m, "hardware", side_effect=[initial_hardware or hardware, hardware]
             ), patch.object(
                 self.m, "bounded_text", side_effect=lambda p: original_bounded_text(mapped(p))
             ), patch.object(
@@ -382,6 +389,18 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(result["verdict"], "PASS")
         self.assertIn("merge_bar", calls)
+
+    def test_failed_provision_reports_the_driver_after_swap(self):
+        initial = {"gpu_name": "RTX 3060", "compute_cap": 860, "driver_version": "575.51.03"}
+        rc, result, _ = self._main_fixture(failure="provision", initial_hardware=initial)
+        self.assertEqual(rc, 1)
+        self.assertEqual(result["hardware"]["driver_version"], "580.159.04")
+
+    def test_failed_provision_refreshes_an_initial_unknown_compute_cap(self):
+        initial = {"gpu_name": "RTX 3060", "compute_cap": 0, "driver_version": "unknown"}
+        rc, result, _ = self._main_fixture(failure="provision", initial_hardware=initial)
+        self.assertEqual(rc, 1)
+        self.assertEqual(result["hardware"]["compute_cap"], 860)
 
     def test_whole_adapter_timeout_keeps_merge_prefix(self):
         rc, result, calls = self._main_fixture(failure="merge_bar")
