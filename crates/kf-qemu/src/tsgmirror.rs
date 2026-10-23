@@ -719,8 +719,16 @@ pub fn log_ok(counter: &std::sync::atomic::AtomicU32, max: u32) -> bool {
 pub static BIRTH_LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 /// The `TSG-MIRROR CTX` line budget (per process).
 pub static CTX_LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-/// Lines each of the two kinds may print.
+/// The `TSG-MIRROR REFUSED` line budget (per process): a guest can ask for a refused birth in a loop.
+pub static REFUSED_LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+/// Lines each of the three kinds may print.
 pub const LOG_MAX: u32 = 512;
+
+/// May the plane print one more `TSG-MIRROR REFUSED` line? (RED stub: unbounded.)
+#[must_use]
+pub fn refused_line_ok() -> bool {
+    true
+}
 
 /// Counters, in the `chan[...]` status line. Plain atomics: bounded by construction.
 #[derive(Debug, Default)]
@@ -821,6 +829,15 @@ mod tests {
             engine: GR,
             space: SPACE,
         }
+    }
+
+    /// A hostile guest looping refused births gets at most `LOG_MAX` refusal lines per process; the budget then says no
+    /// (the counters keep counting every refusal, `Stats::note`).
+    #[test]
+    fn the_refusal_line_budget_is_bounded() {
+        let allowed = (0..LOG_MAX * 4).filter(|_| refused_line_ok()).count();
+        assert!(allowed <= LOG_MAX as usize, "{allowed} refusal lines allowed, budget is {LOG_MAX}");
+        assert!(!refused_line_ok(), "the budget stays shut once spent");
     }
 
     // ---------------------------------------------------------------- the fake host
