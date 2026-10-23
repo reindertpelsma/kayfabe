@@ -1,0 +1,11 @@
+{
+  "classification": "MEASURED",
+  "evidence": "cuda-helper-stage.json",
+  "run": 4605,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "source_sha256": "08259449d448efa3f548a35ad636269da29ff08b8ff266d17a204bb6f133918f",
+  "binary_sha256": "5b1b68178036442b68e825921d9e8ee11e25e4d52c90b9f8cfb2848631b76638",
+  "guest_sha256": "5b1b68178036442b68e825921d9e8ee11e25e4d52c90b9f8cfb2848631b76638",
+  "exit": 0,
+  "oracle": "Unchanged public kf_cuda_control.c compiled with canonical -Wall -Wextra -Werror -O2 -static flags; no helper was installed in the base image."
+}

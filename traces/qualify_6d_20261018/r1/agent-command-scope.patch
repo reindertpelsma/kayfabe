@@ -1,0 +1,5 @@
+--- q4-agent-before.py
++++ q4-agent-scoped.py
+@@ -28 +28 @@
+-    cmd = sys.argv[2]; t = int(sys.argv[3]) if len(sys.argv) > 3 else 120
++    cmd = "& {\n" + sys.argv[2] + "\n}"; t = int(sys.argv[3]) if len(sys.argv) > 3 else 120

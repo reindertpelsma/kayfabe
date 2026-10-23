@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "evidence": "4605/transport-result.json",
+  "run": 4605,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "desktop_hold": "PASS",
+  "app_rows_started": 1,
+  "cuda_callback": "PASS by unchanged canonical verdict.py on retained exact facts and output (parser-control.json)",
+  "other_five_rows": "NOT_RUN",
+  "attempt_status": "HARNESS_JSON_TYPE_FAILURE",
+  "cause": "Get-Content extended strings serialized as metadata objects rather than plain text; host json.loads received a dict",
+  "new_host_xids": 0,
+  "clean_shutdown": true,
+  "restoration": {
+    "cuInit": 0,
+    "nvidia_bound": true,
+    "gdm": "active",
+    "module_reload": false
+  },
+  "retry_run": 4606
+}

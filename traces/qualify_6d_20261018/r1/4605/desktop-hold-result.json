@@ -1,0 +1,7 @@
+{
+  "classification": "MEASURED",
+  "verdict": "PASS",
+  "reason": "TEN_MINUTE_HOLD_COMPLETED",
+  "elapsed_s": 601.0929329160135,
+  "samples": 33
+}
