@@ -1,0 +1,15 @@
+2026-10-23T15:01:32+00:00
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+KVM_PRESENT
+8
+               total        used        free      shared  buff/cache   available
+Mem:           17949         522       16758           1         668       17146
+Swap:              0           0           0
+NVIDIA GeForce RTX 3090, 575.51.03
+Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo:    8598     100    0    0    0     0          0         0     8598     100    0    0    0     0       0          0
+  ens3:   37538     148    0    0    0     0          0         0    30304     136    0    0    0     0       0          0
+tailscale0:      86       1    0    0    0     0          0         0      288       6    0    0    0     0       0          0
+docker0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0

@@ -1,0 +1,12 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "utc": "2026-10-23T14:58:40.300833+00:00",
+  "operation": "idempotent public SSH key attach verification",
+  "returncode": 0,
+  "json_reply": false,
+  "success": null,
+  "status_code": null,
+  "stdout_bytes": 71,
+  "stderr_bytes": 0
+}

@@ -1,0 +1,21 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "ssh_ready_utc": "2026-10-23T15:01:33.343774+00:00",
+  "strict_pinned_ssh": true,
+  "actual_rate_usd_h": 0.29000000000000004,
+  "initial_host_driver": "575.51.03",
+  "actual_os_running_observed_age_seconds": 461.633341,
+  "early_candidate_key_probes": 2,
+  "final_running_event_keyscan": "PASS eight host-key lines; no previously pinned key replaced",
+  "inventory": "initial_inventory.txt",
+  "controller_pid": 1469,
+  "cpu_count": 8,
+  "ram_mib": 17949,
+  "disk_free_gb": 167,
+  "kvm": true,
+  "deadline_epoch": 1792777339.1888254,
+  "deadline_extended": false,
+  "guard_prearmed_pid": 1498466
+}

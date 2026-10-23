@@ -1,0 +1,11 @@
+{
+  "id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "bundle_sha256": "5b416824b0fd75577e61cc6504722c5260b7671e12e6bc9c6de78b28d3486ddf",
+  "bytes": 538768,
+  "files": 35,
+  "controller_receipt": "CONTROLLER_PID=1469",
+  "ssh_host_keys_pinned": true,
+  "allocation_exporter_sha256": "1e9219c6ef395c67ebbdfc705d15d68c06c05c5b5f98142db5e9a7671875b10b",
+  "allocation_exporter_verified_after_extract": true
+}
