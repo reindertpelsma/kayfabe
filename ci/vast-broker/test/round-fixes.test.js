@@ -161,7 +161,7 @@ for (const action of ['stop', 'cron']) {
 }
 for (const field of ['inet_up_cost', 'inet_down_cost']) {
   test('round transfer price capped per GB ' + field, async () => {
-    const h = await setup();
+    const h = await setup({ HARD_RUNTIME_MINUTES: '180', MAX_PRICE_USD_HOUR: '1' });
     h.cloud.offer[field] = 0.1;
     await h.call();
     assert.equal(h.cloud.creates, 0);
