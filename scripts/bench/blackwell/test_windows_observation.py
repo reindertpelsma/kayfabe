@@ -177,6 +177,12 @@ NEGATIVES = {
         not_before_utc="2026-10-23T12:01:00+00:00"
     ),
     "limit_cannot_be_raised_stops": lambda lines, args: args["authority"].update(record_limit=9),
+    "authority_over_150_minutes_stops": lambda lines, args: args["authority"].update(
+        expires_utc="2026-10-23T13:31:00+00:00"
+    ),
+    "permanent_authority_stops": lambda lines, args: args["authority"].update(
+        expires_utc="2027-10-23T13:30:00+00:00"
+    ),
     "fault_before_enable_stops": lambda lines, args: args["permit"].update(
         armed_utc="2026-10-23T11:59:30+00:00"
     ),
