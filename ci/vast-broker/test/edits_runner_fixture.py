@@ -110,6 +110,20 @@ elif case == "stop-not-after-invalid-final":
     result = run()
     assert result["verified"] == 0 and result["verdict"] == "UNAVAILABLE", result
     assert stops() == [], calls
+elif case == "worker-not-needed-refused":
+    # Review W2: the Worker never decides a skip; a Worker-sent NOT_NEEDED + PASS is refused.
+    overrides = dict(state="NOT_NEEDED", id=None, log_cursor=0, log_sha256=m.ZERO, suites=[])
+    result = run()
+    assert result["verified"] == 0 and result["verdict"] != "PASS", result
+    for state in ["NOT_NEEDED", "NEEDS_APPROVAL", "MANUAL"]:
+        assert state not in m.STATES, state
+        for patch in [{}, {"suites": [], "result_at": None, "verdict": "UNAVAILABLE"}]:
+            try:
+                m.validate_status(dict(final, state=state, **patch), ctx, manifest, 200)
+            except m.Invalid:
+                pass
+            else:
+                raise AssertionError("state accepted: " + state)
 else:
     raise AssertionError("unknown case " + case)
 print("ok " + case)
