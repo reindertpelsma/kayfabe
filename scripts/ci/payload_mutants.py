@@ -43,6 +43,19 @@ def scoped(name, old, new):
 
 CASES = [
     (
+        "failed-provision-hardware-stale",
+        replace('            result["hardware"] = hardware()', "            pass"),
+    ),
+    (
+        "hardware-refreshed-only-after-success",
+        replace(
+            '            result["hardware"] = hardware()\n'
+            '            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)',
+            '            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)\n'
+            '            result["hardware"] = hardware()',
+        ),
+    ),
+    (
         "existing-client-target-redirected",
         replace(
             '            CARGO_TARGET_DIR=str(root / "target"),',

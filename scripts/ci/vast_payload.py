@@ -461,8 +461,8 @@ def main():
             )
 
         def provision_grade(rc):
-            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)
             result["hardware"] = hardware()
+            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)
             tags = {
                 s
                 for s in (root / "tools/drivermatrix/tags.txt").read_text().splitlines()
