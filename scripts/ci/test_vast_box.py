@@ -439,6 +439,18 @@ class Reporter(Daemon):
             for value in ACCESS.values():
                 self.assertNotIn(value, out + b.texts())
 
+    # Final review A05: half a pair sends no Access header at all (both or none).
+    def test_reports_carry_no_access_header_for_half_a_pair(self):
+        halves = [{n: ACCESS[n]} for n in ACCESS]
+        halves += [dict({n: ""}, **{o: ACCESS[o] for o in ACCESS if o != n}) for n in ACCESS]
+        for half in halves:
+            b = self.broker()
+            self.start(b, env_extra=half, log_text="line\n")
+            result_file(self.result)
+            rc, out = self.finish()
+            self.assertEqual(rc, 0, out)
+            self.assertEqual({r["access"] for r in b.reports()}, {(None, None)}, str(half))
+
     def test_result_has_exactly_the_worker_schema_and_bindings(self):
         b = self.broker()
         self.start(b)
@@ -925,6 +937,32 @@ class Kill(Tmp):
                     self.assertNotIn(value, argv + proc.stdout + proc.stderr)
                     self.assertEqual(value in stdin, access is not None, tool)
                 self.assertEqual("CF-Access-Client-Secret:" in stdin, access is not None)
+
+    # Final review A04/A06: half a pair sends no Access header at all (both or none).
+    def test_kill_and_blob_send_no_access_header_for_half_a_pair(self):
+        record = self.tmp / "rec"
+        stub = 'printf "%s\\n" "$@" > "$KF_REC.argv"; cat > "$KF_REC.stdin"; printf 200\n'
+        bindir = make_bin(
+            self.tmp / "bin", ["sh", "cat", "printf", "tr", "head"], {"curl": "#!/bin/sh\n" + stub}
+        )
+        for tool, args in (("kf-box-kill", ["why"]), ("kf-box-blob-url", ["tag", "name"])):
+            # The other half unset, or set but empty (set -u alone covers only the first).
+            halves = [{n: ACCESS[n]} for n in ACCESS]
+            halves += [dict({n: ""}, **{o: ACCESS[o] for o in ACCESS if o != n}) for n in ACCESS]
+            for half in halves:
+                name = next(n for n in half if half[n])
+                proc = self.run_tool(
+                    tool,
+                    "https://h.example/p",
+                    *args,
+                    env={"PATH": str(bindir), "KF_REC": str(record)},
+                    access=half,
+                )
+                self.assertEqual(proc.returncode, 0, tool + proc.stderr)
+                stdin = Path(str(record) + ".stdin").read_text()
+                self.assertIn("Authorization: Bearer " + TOKEN, stdin)
+                self.assertNotIn("CF-Access-Client", stdin, tool + " " + name)
+                self.assertNotIn(ACCESS[name], stdin)
 
     def test_tools_refuse_a_malformed_access_pair(self):
         b = self.broker()
