@@ -1921,6 +1921,8 @@ impl Pump {
                     "kf3: USER_RING_POINTER_MARKERS_LATCHED_OFF {:#x}:{:#x} mode={mode:?} relayed={relayed} put_abs={put_abs} — first packet open at a GP_PUT boundary in this VM: Pointer-mode markers are switched OFF for every channel (performance fallback: bounded spin and the counted backstop; no entry is lost or duplicated). Anchored windows stay.",
                     key.0, key.1
                 ),
+                // stub of the observability change: the bind line comes with the pump wiring
+                Notice::Bound { .. } => {}
                 Notice::WindowFresh {
                     cursor,
                     anchor,

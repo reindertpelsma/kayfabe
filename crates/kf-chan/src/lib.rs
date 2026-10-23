@@ -31,6 +31,7 @@ pub mod user_batch;
 pub mod user_consumption;
 pub mod user_gate;
 pub mod user_lazy;
+pub mod user_log;
 pub mod user_lifecycle;
 pub mod user_loop;
 pub mod user_progress;

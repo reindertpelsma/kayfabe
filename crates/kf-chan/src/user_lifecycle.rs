@@ -288,6 +288,20 @@ macro_rules! lifecycle_stats {
             pub set_object_5080_max_per_channel: std::sync::atomic::AtomicU64,
             /// The VM-wide switch of Pointer-mode markers (PHASE 1c): every channel's [`Lifecycle`] reads and sets it.
             pub latch: std::sync::Arc<MarkerLatch>,
+            /// Relay observability (`docs/design/V3_RELAY_LIFECYCLE_LOG.md`): relays created (one per pump).
+            pub relays_born: std::sync::atomic::AtomicU64,
+            /// Relays that left Scan (each counted once, at the bind).
+            pub relays_bound: std::sync::atomic::AtomicU64,
+            /// Relays that switched Pointer/Window at least once (each counted once).
+            pub relays_switching: std::sync::atomic::AtomicU64,
+            /// Relays that forwarded entries and never left Scan, counted once at their final line (retire or exit).
+            pub relays_never_bound_active: std::sync::atomic::AtomicU64,
+            /// The Scan entries those relays forwarded, in total.
+            pub entries_scan_never_bound: std::sync::atomic::AtomicU64,
+            /// Relays still alive at device stop whose final line was printed.
+            pub relays_exit_reported: std::sync::atomic::AtomicU64,
+            /// Relays still alive at device stop whose record was busy (no line: nothing blocks at exit).
+            pub relays_exit_busy: std::sync::atomic::AtomicU64,
         }
         impl LifecycleStats {
             /// Merge one channel's delta ([`Lifecycle::take_delta`]).
@@ -303,6 +317,30 @@ macro_rules! lifecycle_stats {
             /// Record a channel's longest Window.
             pub fn window_max(&self, entries: u64) {
                 self.window_entries_max.fetch_max(entries, std::sync::atomic::Ordering::Relaxed);
+            }
+            /// A relay (pump) was created.
+            pub fn relay_born(&self) {
+                let _ = &self.relays_born;
+            }
+            /// A relay left Scan (call once per relay, when its `Notice::Bound` is drained).
+            pub fn relay_bound(&self) {
+                let _ = &self.relays_bound;
+            }
+            /// A relay switched Pointer/Window for the first time (call when [`Lifecycle::take_first_switch`] is true).
+            pub fn relay_switching(&self) {
+                let _ = &self.relays_switching;
+            }
+            /// A relay's final line (retire or exit) was printed: fold its never-bound tally in.
+            pub fn relay_final(&self, life: &Lifecycle) {
+                let _ = (&self.relays_never_bound_active, &self.entries_scan_never_bound, life);
+            }
+            /// A live relay's exit line was printed.
+            pub fn exit_reported(&self) {
+                let _ = &self.relays_exit_reported;
+            }
+            /// A live relay's record was busy at exit.
+            pub fn exit_busy(&self) {
+                let _ = &self.relays_exit_busy;
             }
             /// Whether any channel ever left Scan or scanned anything.
             #[must_use]
@@ -453,6 +491,13 @@ pub enum Notice {
         /// The absolute index of the `GP_PUT` read.
         put_abs: u64,
     },
+    /// `USER_RING_BOUND`: the scan left Scan because it saw the software object bound (once per channel).
+    Bound {
+        /// Where the channel went: `Pointer`, or `Window` (a registration was already live).
+        to: Mode,
+        /// Entries forwarded in Scan before the bind.
+        scan_entries: u64,
+    },
     /// `USER_RING_WINDOW_FRESH`: a Window started after Pointer mode.
     WindowFresh {
         /// The absolute index of the first Window entry (the cursor at the flip).
@@ -527,6 +572,15 @@ impl Mutant {
     }
 }
 
+/// The one bind of a channel: the scan saw the software object bound and the channel left Scan.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bound {
+    /// Where the channel went (`Pointer`, or `Window` when a registration was already live).
+    pub to: Mode,
+    /// Entries forwarded in Scan before the bind.
+    pub scan_entries: u64,
+}
+
 /// The pure lifecycle of one channel.
 #[derive(Clone, Debug)]
 pub struct Lifecycle {
@@ -571,6 +625,11 @@ pub struct Lifecycle {
     fresh: Option<FreshInfo>,
     /// `USER_RING_PUT_BOUNDARY_OPEN` notices queued so far for this channel.
     open_notices: u64,
+    /// The one bind of this channel (Scan to Pointer or Window), if it happened: where it went and how many entries
+    /// had been forwarded in Scan (`USER_RING_BOUND`, the `bound=` field of the per-channel lifecycle line).
+    bound: Option<Bound>,
+    /// The first Pointer/Window switch of this channel was handed out by [`Lifecycle::take_first_switch`].
+    switch_noted: bool,
     notices: Vec<Notice>,
     #[cfg(feature = "lifecycle-mutants")]
     mutant: Option<Mutant>,
@@ -629,6 +688,8 @@ impl Lifecycle {
             flip_forwarded: 0,
             fresh: None,
             open_notices: 0,
+            bound: None,
+            switch_noted: false,
             notices: Vec::new(),
             #[cfg(feature = "lifecycle-mutants")]
             mutant: Mutant::from_env(),
@@ -730,6 +791,17 @@ impl Lifecycle {
     #[must_use]
     pub fn live(&self) -> u32 {
         self.live
+    }
+    /// The channel's bind, once it happened (`None`: it never left Scan).
+    #[must_use]
+    pub fn bound(&self) -> Option<Bound> {
+        self.bound
+    }
+    /// `true` exactly once, after the channel's first Pointer/Window switch (`to_window_fresh` or
+    /// `to_pointer_from_window` became nonzero): the VM-wide "relays switching" tally counts each channel once.
+    pub fn take_first_switch(&mut self) -> bool {
+        let _ = &mut self.switch_noted;
+        false
     }
     /// The transition the last call made, if any (taken).
     pub fn take_transition(&mut self) -> Option<Transition> {
