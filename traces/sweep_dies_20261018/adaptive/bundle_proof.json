@@ -1,0 +1,12 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-23T00:28:57.330729+00:00",
+  "mode": "GPU-free packaging, no lease creation",
+  "bundle_prepared": true,
+  "calibration_export_precedes_install": true,
+  "canonical_bind_and_arm_copied": true,
+  "all_shells_syntax_valid": true,
+  "shared_sw2_source": "4ede56ac7",
+  "shared_policy_sha256": "110848529fbfafa8264f993fd02b426d030ca90486af4905016bbf68dc543fbe",
+  "temporary_bundle_removed": true
+}

@@ -471,7 +471,7 @@ shot_to() {  # FILE.png — the default graphic console (std VGA in install, kf3
 # ------------------------------------------------------------------------------------------------
 ssh_opts() {
   SSHO=(-i "$VM/secrets/ssh_ed25519" -o StrictHostKeyChecking=accept-new
-        -o "UserKnownHostsFile=$VM/run/known_hosts" -o ConnectTimeout=8 -o ServerAliveInterval=15
+        -o "UserKnownHostsFile=$VM/run/known_hosts" -o "ConnectTimeout=${WINVM_SSH_CONNECT_TIMEOUT:-8}" -o ServerAliveInterval=15
         -o ServerAliveCountMax=4 -o BatchMode=yes -o LogLevel=ERROR)
 }
 gssh() { ssh_opts; timeout "${SSH_TIMEOUT:-900}" ssh -n -p "$SSH_PORT" "${SSHO[@]}" "$WIN_USER@127.0.0.1" "$@"; }
@@ -559,9 +559,17 @@ check_boot() {
        -device virtio-blk-pci,drive=sys,bootindex=0
        -serial "file:$VM/logs/installcheck_b1_serial.log")
   rm -f "$VM/run/stop-requested"
+  local readiness_boot_start=$SECONDS
   SHOT_EVERY=60 vm_start installcheck 1
   local rc=0
   if wait_ssh 1800; then
+    # Optional bench calibration on this standard-VGA baseline, once per owned box.
+    if [ -n "${WINVM_READINESS_PROFILE:-}" ]; then
+      python3 "$HERE/readiness.py" calibrate --out "$WINVM_READINESS_PROFILE" \
+        --lease "${WINVM_READINESS_LEASE:?owned lease ledger required}" \
+        --boot-seconds "$((SECONDS-readiness_boot_start))" -- bash "$0" ssh \
+        'Get-CimInstance Win32_OperatingSystem -ErrorAction Stop | Out-Null; Write-Output KF_READINESS_SAMPLE' || return $?
+    fi
     log "first logon said: $(gssh 'Get-Content C:\kf\install-done.txt' 2>/dev/null | tr -d '\r')"
     run_check installcheck || rc=$?
     gscp_from "C:/kf/firstlogon.log" "$VM/logs/firstlogon.log" || true

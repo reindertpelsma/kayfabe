@@ -42,6 +42,8 @@ cleanup(){
 }
 trap cleanup EXIT
 cd /root/kayfabe
+. scripts/bench/windows/readiness.sh
+readiness_stage "/root/prov/arm_${run}_readiness_stage.json" 600 3600
 [ "$(git rev-parse HEAD)" = "$BASE" ]
 python3 /root/kayfabe/scripts/bench/diesweep/desktop/live_qemu.py --assert-none
 [ ! -e "/root/prov/arm_${run}.started" ]
@@ -79,28 +81,22 @@ owned_pid=$(cat "$VM/run/qemu.pid")
 mkdir -p "/root/prov/arms/$run"
 python3 -I /root/s2/rpc_timing.py "$QLOG" "/root/prov/arms/$run/rpc_timing.jsonl" "$owned_pid" >"/root/prov/arms/$run/rpc_timing_controller.log" 2>&1 &
 observer_pid=$!
-boot_wait=$SECONDS
-for i in $(seq 1 90); do
- [ -e "/proc/$owned_pid/exe" ] || { echo ARM_QEMU_EXITED_BEFORE_ENABLE_STOP; exit 20; }
- [ $((SECONDS-boot_wait)) -lt 450 ] || { echo ARM_SSH_READINESS_TIMEOUT_STOP; exit 21; }
- timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null 2>/dev/null | grep -q KF_SSH_UP && break
- sleep 5
-done
-timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null | grep KF_SSH_UP
+[ -e "/proc/$owned_pid/exe" ] || { echo ARM_QEMU_EXITED_BEFORE_ENABLE_STOP; exit 20; }
+readiness_wait "arm_${run}_ssh" bash "$W" ssh 'echo KF_SSH_UP'
 python3 /root/s2/bind_receipt.py "arm_${run}" "$binary" "$profile"
-timeout 30 bash "$W" ssh 'New-Item -ItemType Directory -Force C:\kfmedia | Out-Null' </dev/null
-bash "$W" scp-to /workspace/bench/kfapps.iso C:/kfmedia/kfapps.iso
-bash "$W" scp-to /workspace/bench/cuda_nvrtc.zip C:/kfmedia/cuda_nvrtc.zip
+readiness_step once "arm_${run}_media_dir" 15 120 bash "$W" ssh 'New-Item -ItemType Directory -Force C:\kfmedia | Out-Null' </dev/null
+readiness_step once "arm_${run}_app_copy" 180 1200 bash "$W" scp-to /workspace/bench/kfapps.iso C:/kfmedia/kfapps.iso
+readiness_step once "arm_${run}_nvrtc_copy" 120 600 bash "$W" scp-to /workspace/bench/cuda_nvrtc.zip C:/kfmedia/cuda_nvrtc.zip
 echo "APPDISK_GUEST_COPY_DONE $(date -u -Is)"
 for f in verify_stage580.ps1 enable580_once.ps1 diag_min.ps1 collect_crash.ps1; do bash "$W" scp-to "/root/s2/probes/$f" "C:/kf/$f"; done
-timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
+readiness_step query "arm_${run}_verify_stage580" 30 240 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
 grep '^STAGE580_READY=1 ' "/root/prov/arm_${run}_pre_enable.txt"
 if grep -aq 'kf-rm: rpc-trace' "$QLOG"; then echo PRECONDITION_REFUSED_GSP_WHILE_DISABLED; exit 7; fi
-timeout 600 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\enable580_once.ps1' </dev/null >"/root/prov/arm_${run}_enable.txt" 2>&1
+readiness_step once "arm_${run}_enable580_once" 150 900 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\enable580_once.ps1' </dev/null >"/root/prov/arm_${run}_enable.txt" 2>&1
 cat "/root/prov/arm_${run}_enable.txt"
 # Read actual PnP/CIM/System state now, before the known40second crash window.
 # This observation delay is not a product/driver timeout or TDR policy change.
-timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag.txt" 2>&1
+readiness_step query "arm_${run}_diag_min" 30 240 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\diag_min.ps1' </dev/null >"/root/prov/arm_${run}_diag.txt" 2>&1
 cat "/root/prov/arm_${run}_diag.txt"
 export KF_GUEST_USER=kf
 if KF_GUEST_PW=$(cat "$VM/secrets/win_password") python3 scripts/bench/windows/signin.py "$VM/run/qmp.sock" "$VM/run/qga.sock" >"/root/prov/arm_${run}_signin.txt" 2>&1; then :; else

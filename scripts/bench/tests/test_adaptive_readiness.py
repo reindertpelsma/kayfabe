@@ -125,19 +125,30 @@ class Queries(Scaling):
             self.query([self.result(255, 'KF_READY\n', 'banner exchange timed out'), self.result(0, '')])
 
     def test_retry_uses_remaining_budget_without_reset(self):
-        left = iter([500, 500, 7, 6])
-        self.query([subprocess.TimeoutExpired('owned-query', 40), self.result()], remaining=lambda: next(left))
+        left = [500]
+        def timeout():
+            left[0] = 7
+            raise subprocess.TimeoutExpired('owned-query', 40)
+        self.query([timeout, self.result()], remaining=lambda: left[0])
         self.assertEqual(self.calls, [40, 7])
 
     def test_actual_result_after_stage_deadline_is_refused(self):
-        left = iter([1, 0])
+        left = [1]
+        def late():
+            left[0] = 0
+            return self.result()
         with self.assertRaises(self.r.BudgetExpired):
-            self.query([self.result()], remaining=lambda: next(left))
+            self.query([late], remaining=lambda: left[0])
+        self.assertEqual(len(self.calls), 1)
 
     def test_second_actual_result_after_stage_deadline_is_refused(self):
-        left = iter([50, 40, 1, 0])
+        left = [50]
+        def late():
+            left[0] = 0
+            return self.result()
         with self.assertRaises(self.r.BudgetExpired):
-            self.query([subprocess.TimeoutExpired('owned-query', 40), self.result()], remaining=lambda: next(left))
+            self.query([subprocess.TimeoutExpired('owned-query', 40), late], remaining=lambda: left[0])
+        self.assertEqual(len(self.calls), 2)
 
 
 class SingleAttempt(Scaling):
@@ -183,6 +194,42 @@ class SshWiring(unittest.TestCase):
 
     def test_slower_profile_reaches_inner_ssh(self):
         self.assertIn('ConnectTimeout=160', self.connection_timeout(160))
+
+
+class CliEvidence(unittest.TestCase):
+    def invoke(self, mode):
+        r = importlib.import_module('readiness')
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); profile = root / 'profile.json'; stage = root / 'stage.json'
+            receipt = root / 'receipt.json'; count = root / 'count'; command = root / 'query.py'
+            value = r.make_profile(60, 2, box_id=1234, source='a' * 40)
+            profile.write_text(json.dumps(value))
+            import time
+            stage.write_text(json.dumps(dict(profile_sha256=r.digest(value), box_id=1234,
+                                             end_monotonic=time.monotonic() + 60)))
+            command.write_text("from pathlib import Path\nimport sys\np=Path(sys.argv[1]);n=int(p.read_text())+1 if p.exists() else 1;p.write_text(str(n))\nprint('PARTIAL' if n==1 else 'ACTUAL')\nprint('KF_READY')\nraise SystemExit(124 if n==1 else 0)\n")
+            p = subprocess.run([sys.executable, str(WINDOWS / 'readiness.py'), mode,
+                                '--profile', str(profile), '--stage', str(stage),
+                                '--nominal', '5', '--ceiling', '30', '--marker', 'KF_READY',
+                                '--receipt', str(receipt), '--', sys.executable, str(command), str(count)],
+                               capture_output=True, text=True, timeout=20)
+            return p, int(count.read_text()), json.loads(receipt.read_text())
+
+    def test_real_readonly_retry_discards_partial_command_output(self):
+        p, count, receipt = self.invoke('query')
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(count, 2)
+        self.assertNotIn('PARTIAL', p.stdout)
+        self.assertIn('ACTUAL', p.stdout)
+        self.assertEqual([x['returncode'] for x in receipt['attempts']], [124, 0])
+
+    def test_real_side_effect_timeout_does_not_retry_or_publish_partial(self):
+        p, count, receipt = self.invoke('once')
+        self.assertEqual(p.returncode, 75, p.stderr)
+        self.assertEqual(count, 1)
+        self.assertNotIn('PARTIAL', p.stdout)
+        self.assertNotIn('KF_READY', p.stdout)
+        self.assertEqual(receipt['result'], 'READINESS_INCONCLUSIVE')
 
 
 if __name__ == '__main__':

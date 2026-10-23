@@ -26,5 +26,10 @@
     "rpc_ordinal": null,
     "windows_event_times": null
   },
-  "evidence_path": "traces/sweep_dies_20261018/lease_57280778/bind_final/"
+  "evidence_path": "traces/sweep_dies_20261018/lease_57280778/bind_final/",
+  "owner_review_2026_10_23": {
+    "bind_interpretation": "INCONCLUSIVE_FIXED_READINESS",
+    "driver_outcome": "UNMEASURED",
+    "next": "new calibrated lease under the shared SW2 readiness primitives"
+  }
 }

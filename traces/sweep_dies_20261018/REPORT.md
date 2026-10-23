@@ -1,3 +1,7 @@
+STATUS: LIVE — adaptive readiness resume, 2026-10-23.
+
+CODE READ (2026-10-23, owner02:20 instruction): earlier GA102 bind readiness timeout is inconclusive about the driver. Shared SW2 policy4ede56ac7 is reused by scripts/bench/windows/readiness.py; GPU-free scaling/retry/ceiling/reserve proofs are green. New GA102 lease follows publication; no lease is active during this proof. See docs/design/S4_ADAPTIVE_READINESS_20261023.md and adaptive/ evidence.
+
 STATUS: PARTIAL — S4 final update, 2026-10-22 23:58 UTC.
 
 CODE READ (2026-10-22): branch `codex/sweep-dies-20261022`; this update supersedes earlier live/pending/stopped summaries below. The publication head is the containing commit, checked against origin after push; the external S4 report records its exact hash at closeout.

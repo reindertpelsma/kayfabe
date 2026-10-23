@@ -1,0 +1,126 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-23T00:28:56.458620+00:00",
+  "tests_per_mutant": 57,
+  "mutants": [
+    {
+      "mutant": "fixed_scale_four",
+      "kills": 15,
+      "tests": [
+        "adaptive_tests.Queries.test_extreme_boot_caps_at_ten",
+        "adaptive_tests.Queries.test_extreme_query_caps_at_ten",
+        "adaptive_tests.Queries.test_slow_query_alone_scales_every_step",
+        "adaptive_tests.Queries.test_small_query_alone_does_not_remove_boot_slowdown",
+        "adaptive_tests.Queries.test_step_obeys_absolute_ceiling",
+        "adaptive_tests.Scaling.test_extreme_boot_caps_at_ten",
+        "adaptive_tests.Scaling.test_extreme_query_caps_at_ten",
+        "adaptive_tests.Scaling.test_slow_query_alone_scales_every_step",
+        "adaptive_tests.Scaling.test_small_query_alone_does_not_remove_boot_slowdown",
+        "adaptive_tests.Scaling.test_step_obeys_absolute_ceiling",
+        "adaptive_tests.SingleAttempt.test_extreme_boot_caps_at_ten",
+        "adaptive_tests.SingleAttempt.test_extreme_query_caps_at_ten",
+        "adaptive_tests.SingleAttempt.test_slow_query_alone_scales_every_step",
+        "adaptive_tests.SingleAttempt.test_small_query_alone_does_not_remove_boot_slowdown",
+        "adaptive_tests.SingleAttempt.test_step_obeys_absolute_ceiling"
+      ]
+    },
+    {
+      "mutant": "ignore_absolute_ceiling",
+      "kills": 6,
+      "tests": [
+        "adaptive_tests.Queries.test_second_step_also_obeys_its_ceiling",
+        "adaptive_tests.Queries.test_step_obeys_absolute_ceiling",
+        "adaptive_tests.Scaling.test_second_step_also_obeys_its_ceiling",
+        "adaptive_tests.Scaling.test_step_obeys_absolute_ceiling",
+        "adaptive_tests.SingleAttempt.test_second_step_also_obeys_its_ceiling",
+        "adaptive_tests.SingleAttempt.test_step_obeys_absolute_ceiling"
+      ]
+    },
+    {
+      "mutant": "ignore_remaining_stage",
+      "kills": 10,
+      "tests": [
+        "adaptive_tests.Queries.test_a_slower_box_cannot_spend_the_export_reserve",
+        "adaptive_tests.Queries.test_export_reserve_caps_stage_before_scaled_bound",
+        "adaptive_tests.Queries.test_remaining_stage_can_shorten_a_step",
+        "adaptive_tests.Queries.test_retry_uses_remaining_budget_without_reset",
+        "adaptive_tests.Scaling.test_a_slower_box_cannot_spend_the_export_reserve",
+        "adaptive_tests.Scaling.test_export_reserve_caps_stage_before_scaled_bound",
+        "adaptive_tests.Scaling.test_remaining_stage_can_shorten_a_step",
+        "adaptive_tests.SingleAttempt.test_a_slower_box_cannot_spend_the_export_reserve",
+        "adaptive_tests.SingleAttempt.test_export_reserve_caps_stage_before_scaled_bound",
+        "adaptive_tests.SingleAttempt.test_remaining_stage_can_shorten_a_step"
+      ]
+    },
+    {
+      "mutant": "spend_export_reserve",
+      "kills": 6,
+      "tests": [
+        "adaptive_tests.Queries.test_a_slower_box_cannot_spend_the_export_reserve",
+        "adaptive_tests.Queries.test_export_reserve_caps_stage_before_scaled_bound",
+        "adaptive_tests.Scaling.test_a_slower_box_cannot_spend_the_export_reserve",
+        "adaptive_tests.Scaling.test_export_reserve_caps_stage_before_scaled_bound",
+        "adaptive_tests.SingleAttempt.test_a_slower_box_cannot_spend_the_export_reserve",
+        "adaptive_tests.SingleAttempt.test_export_reserve_caps_stage_before_scaled_bound"
+      ]
+    },
+    {
+      "mutant": "remove_first_retry",
+      "kills": 9,
+      "tests": [
+        "adaptive_tests.CliEvidence.test_real_readonly_retry_discards_partial_command_output",
+        "adaptive_tests.Queries.test_first_banner_failure_retries_once",
+        "adaptive_tests.Queries.test_first_timeout_retries_and_accepts_only_fresh_output",
+        "adaptive_tests.Queries.test_outer_timeout_output_is_not_success",
+        "adaptive_tests.Queries.test_partial_banner_output_is_not_success",
+        "adaptive_tests.Queries.test_retry_uses_remaining_budget_without_reset",
+        "adaptive_tests.Queries.test_second_actual_result_after_stage_deadline_is_refused",
+        "adaptive_tests.Queries.test_second_banner_failure_stops_without_a_third_query",
+        "adaptive_tests.Queries.test_second_timeout_stops_without_a_third_query"
+      ]
+    },
+    {
+      "mutant": "allow_third_query",
+      "kills": 2,
+      "tests": [
+        "adaptive_tests.Queries.test_second_banner_failure_stops_without_a_third_query",
+        "adaptive_tests.Queries.test_second_timeout_stops_without_a_third_query"
+      ]
+    },
+    {
+      "mutant": "accept_late_result",
+      "kills": 2,
+      "tests": [
+        "adaptive_tests.Queries.test_actual_result_after_stage_deadline_is_refused",
+        "adaptive_tests.Queries.test_second_actual_result_after_stage_deadline_is_refused"
+      ]
+    },
+    {
+      "mutant": "retry_side_effect",
+      "kills": 3,
+      "tests": [
+        "adaptive_tests.CliEvidence.test_real_side_effect_timeout_does_not_retry_or_publish_partial",
+        "adaptive_tests.SingleAttempt.test_enable_timeout_is_never_retried",
+        "adaptive_tests.SingleAttempt.test_installer_outer_timeout_is_never_retried"
+      ]
+    },
+    {
+      "mutant": "accept_transient_output",
+      "kills": 3,
+      "tests": [
+        "adaptive_tests.CliEvidence.test_real_readonly_retry_discards_partial_command_output",
+        "adaptive_tests.Queries.test_outer_timeout_output_is_not_success",
+        "adaptive_tests.Queries.test_partial_banner_output_is_not_success"
+      ]
+    },
+    {
+      "mutant": "keep_eight_second_banner",
+      "kills": 2,
+      "tests": [
+        "adaptive_tests.SshWiring.test_fourfold_profile_reaches_inner_ssh",
+        "adaptive_tests.SshWiring.test_slower_profile_reaches_inner_ssh"
+      ]
+    }
+  ],
+  "original_source_unchanged": true
+}
