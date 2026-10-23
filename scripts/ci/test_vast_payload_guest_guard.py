@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
@@ -110,6 +112,59 @@ class GuestDelegation(unittest.TestCase):
         self.assertEqual(allowed, "")
         self.assertIn("SERIAL_DIAGNOSTIC_EVIDENCE", output)
         self.assertIn("QEMU_DIAGNOSTIC_EVIDENCE", output)
+
+
+class GuestHook(unittest.TestCase):
+    def invoke(self, arm):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = root / "trace"
+            qlog = root / "qemu.log"
+            timer = root / "timeout"
+            timer.write_text(
+                "#!" + sys.executable + "\nimport os,json,sys\nfrom pathlib import Path\n"
+                'Path(os.environ["TRACE"]+".timer").write_text(json.dumps(sys.argv[1:3]))\n'
+                "os.execvp(sys.argv[3],sys.argv[3:])\n"
+            )
+            timer.chmod(0o700)
+            python = root / "python3"
+            python.write_text(
+                "#!" + sys.executable + "\nimport os,json,sys\nfrom pathlib import Path\n"
+                'Path(os.environ["TRACE"]).write_text(json.dumps(sys.argv))\n'
+            )
+            python.chmod(0o700)
+            env = {
+                **os.environ,
+                "PATH": str(root) + ":" + os.environ["PATH"],
+                "BASH_ENV": str(ROOT / "scripts/ci/vast_payload_hooks.sh"),
+                "KF_PAYLOAD_ROOT": str(ROOT),
+                "TRACE": str(trace),
+                "QLOG": str(qlog),
+            }
+            command = (
+                "timeout --kill-after=3 180 /fixture/qemu-system-x86_64 -name kf-fastguest "
+                '-append "KF_ARMS=$1,--probe-launch-dma" > "$QLOG" 2>&1'
+            )
+            result = subprocess.run(
+                ["/bin/bash", "-c", command, "fixture", arm],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            args = json.loads(trace.read_text())
+            self.assertEqual(
+                json.loads(Path(str(trace) + ".timer").read_text()), ["--kill-after=3", "180"]
+            )
+            self.assertIn("--guest-exec", args)
+            self.assertEqual(args[args.index("--guest-exec") + 1], str(qlog))
+
+    def test_defer_hook_keeps_real_regular_log_and_original_timeout(self):
+        self.invoke("--defer-liveness")
+
+    def test_missing_hook_keeps_real_regular_log_and_original_timeout(self):
+        self.invoke("--missing-page-fault")
 
     def test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs(self):
         rc, output, allowed, failed, _ = self.invoke("--missing-page-fault", refused=True)
