@@ -1,0 +1,261 @@
+{
+  "run": "v7-payload-mutants-20261023",
+  "cases": [
+    {
+      "mutant": "provision-exit-only",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_provision_missing_build_refuses",
+        "test_vast_payload.PayloadTests.test_provision_red_cannot_be_hidden_by_ready",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_build_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_rc_refuses"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "merge-evidence-bypass",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_gate10_fallback_is_existing_allowed_bar",
+        "test_vast_payload.PayloadTests.test_merge_exact_revision_and_counts",
+        "test_vast_payload.PayloadTests.test_merge_missing_birth_census_refuses",
+        "test_vast_payload.PayloadTests.test_merge_missing_thin_refuses",
+        "test_vast_payload.PayloadTests.test_merge_nonzero_exit_refuses_even_green_text",
+        "test_vast_payload.PayloadTests.test_merge_wrong_revision_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_conflicting_gate_summary_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_conflicting_test_totals_refuse",
+        "test_vast_payload_v7.V7Tests.test_merge_nonzero_recorded_exit_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_prefix_survives_partial_evidence",
+        "test_vast_payload_v7.V7Tests.test_merge_requires_exit_marker",
+        "test_vast_payload_v7.V7Tests.test_raw_red_keeps_earlier_merge_rows",
+        "test_vast_payload_v7.V7Tests.test_thin_red_keeps_raw_and_build_rows",
+        "test_vast_payload_v7.V7Tests.test_timeout_does_not_erase_completed_tests",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 16
+    },
+    {
+      "mutant": "ladder-exit-only",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_ladder_duplicate_row_refuses",
+        "test_vast_payload.PayloadTests.test_ladder_fat_four_unique_correct_rungs",
+        "test_vast_payload.PayloadTests.test_ladder_nonzero_boot_refuses_even_pass",
+        "test_vast_payload.PayloadTests.test_ladder_red_row_cannot_hide_behind_exit_zero",
+        "test_vast_payload.PayloadTests.test_ladder_wrong_revision_refuses",
+        "test_vast_payload_v7.V7Tests.test_ladder_repeated_last_rung_refuses"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "red-record-ignored",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_first_raw_red_is_detected",
+        "test_vast_payload.PayloadTests.test_first_thin_red_is_detected",
+        "test_vast_payload.PayloadTests.test_provision_red_is_detected",
+        "test_vast_payload.PayloadTests.test_runtime_stops_first_red_child",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_build_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_red_crate_test_totals_are_not_progress",
+        "test_vast_payload_v7.V7Tests.test_red_cuda_row_is_not_progress"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "deadline-status-forged",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_runtime_expired_deadline_never_starts",
+        "test_vast_payload.PayloadTests.test_runtime_soft_deadline_kills_own_work",
+        "test_vast_payload_v7.V7Tests.test_timeout_really_stops_grandchild_work"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "finished-prefix-lost",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "first-red-continues",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_first_bad_stage_cancels_later_stages",
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "result-never-published",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_result_has_only_the_pr104_payload_keys",
+        "test_vast_payload_v7.V7Tests.test_result_is_accepted_by_pr104_reader",
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_disk_preflight_prevents_spend_work",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_requires_actual_kvm_device",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "approved-source-unpinned",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_source_pin_uses_local_exact_approved_objects",
+        "test_vast_payload_v7.V7Tests.test_wrong_checkout_is_refused_before_remote_changes"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "xid-unconditionally-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_cannot_rescue_failed_command",
+        "test_vast_payload.PayloadTests.test_xid_excess_count_refuses",
+        "test_vast_payload.PayloadTests.test_xid_instrument_unreadable_refuses",
+        "test_vast_payload.PayloadTests.test_xid_lost_baseline_refuses",
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload.PayloadTests.test_xid_wrong_address_refuses",
+        "test_vast_payload.PayloadTests.test_xid_wrong_code_refuses",
+        "test_vast_payload_v7.V7Tests.test_duplicate_marker_cannot_expand_allowance",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_marker_must_have_the_source_constant",
+        "test_vast_payload_v7.V7Tests.test_non_ce_client_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_only_the_marked_control_may_fault",
+        "test_vast_payload_v7.V7Tests.test_other_fault_type_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_other_page_fault_type_is_rejected_on_ce1",
+        "test_vast_payload_v7.V7Tests.test_read_fault_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm",
+        "test_vast_payload_v7.V7Tests.test_unknown_client_is_rejected"
+      ],
+      "count": 18
+    },
+    {
+      "mutant": "hardware-unvalidated",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_malformed_hardware_stays_unknown",
+        "test_vast_payload_v7.V7Tests.test_two_gpus_cannot_masquerade_as_one"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-stage-attribution-lost",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_watch_failure_retains_merge_stage_attribution",
+        "test_vast_payload_v7.V7Tests.test_watch_failure_retains_provision_attribution"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "unattributed-stage-xid-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_extra_record_next_to_approved_fault",
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_unattributed_new_xid"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "duplicate-cuda-rung-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_ladder_duplicate_row_refuses",
+        "test_vast_payload_v7.V7Tests.test_ladder_repeated_last_rung_refuses"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "merge-exit-marker-ignored",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_merge_nonzero_recorded_exit_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_requires_exit_marker"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "wrong-control-va",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_named_missing_page_control_allowed",
+        "test_vast_payload_v7.V7Tests.test_marker_must_have_the_source_constant",
+        "test_vast_payload_v7.V7Tests.test_real_hook_accepts_only_marked_raw_fault"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "unreadable-watch-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_cannot_rescue_failed_command",
+        "test_vast_payload.PayloadTests.test_xid_excess_count_refuses",
+        "test_vast_payload.PayloadTests.test_xid_instrument_unreadable_refuses",
+        "test_vast_payload.PayloadTests.test_xid_lost_baseline_refuses",
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload.PayloadTests.test_xid_wrong_address_refuses",
+        "test_vast_payload.PayloadTests.test_xid_wrong_code_refuses",
+        "test_vast_payload_v7.V7Tests.test_duplicate_marker_cannot_expand_allowance",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_marker_must_have_the_source_constant",
+        "test_vast_payload_v7.V7Tests.test_non_ce_client_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_only_the_marked_control_may_fault",
+        "test_vast_payload_v7.V7Tests.test_other_fault_type_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_other_page_fault_type_is_rejected_on_ce1",
+        "test_vast_payload_v7.V7Tests.test_read_fault_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_real_hook_accepts_only_marked_raw_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm",
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_unattributed_new_xid",
+        "test_vast_payload_v7.V7Tests.test_unknown_client_is_rejected"
+      ],
+      "count": 20
+    },
+    {
+      "mutant": "other-page-type-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_other_fault_type_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_other_page_fault_type_is_rejected_on_ce1"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "non-ce-client-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_non_ce_client_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_unknown_client_is_rejected"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "wrong-arm-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_only_the_marked_control_may_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "xid-refusal-status-forged",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "arm-watch-not-installed",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "arm-hook-bypassed",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_real_hook_accepts_only_marked_raw_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 3
+    }
+  ]
+}

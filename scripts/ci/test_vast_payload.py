@@ -40,20 +40,21 @@ def ladder(mode="host"):
 
 
 def watch(delta="", before=0, after=0, rc=0):
-    return "[xid-watch] host_dmesg_lines=20  (readable)\n[xid-watch] xid_before=" + str(
-        before
-    ) + "\n[xid-watch] --- command output begins ---\nfixture\n" "[xid-watch] --- command output ends (rc=" + str(
-        rc
-    ) + ") ---\n[xid-watch] xid_after=" + str(
-        after
-    ) + "\n" + (
-        "[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — "
-        "the run is VOID whatever it printed:\n"
-        + "".join("    " + s + "\n" for s in delta.splitlines())
-        + "[xid-watch]   ⊘ An explanatory line\n"
-        if delta
-        else "[xid-watch] ★ HOST Xid CLEAN\n"
+    head = (
+        "[xid-watch] host_dmesg_lines=20  (readable)\n"
+        f"[xid-watch] xid_before={before}\n"
+        "[xid-watch] --- command output begins ---\nfixture\n"
+        f"[xid-watch] --- command output ends (rc={rc}) ---\n"
+        f"[xid-watch] xid_after={after}\n"
     )
+    if delta:
+        return (
+            head + "[xid-watch] ★★★ NEW HOST Xid ACROSS THE COMMAND — "
+            "the run is VOID whatever it printed:\n"
+            + "".join("    " + line + "\n" for line in delta.splitlines())
+            + "[xid-watch]   ⊘ An explanatory line\n"
+        )
+    return head + "[xid-watch] ★ HOST Xid CLEAN\n"
 
 
 XID = (

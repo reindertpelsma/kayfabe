@@ -302,6 +302,9 @@ class V7Tests(unittest.TestCase):
             original_bounded_text = self.m.bounded_text
 
             def runner(command, deadline, output, progress):
+                self.assertEqual(
+                    os.environ["BASH_ENV"], str(repo / "scripts/ci/vast_payload_hooks.sh")
+                )
                 tag = command[2]
                 name = tag.split("_", 1)[1]
                 calls.append(name)
