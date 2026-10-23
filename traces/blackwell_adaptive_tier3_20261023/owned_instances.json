@@ -1,1 +1,35 @@
-[]
+[
+  {
+    "id": 57296911,
+    "offer": 54462683,
+    "machine_id": 150531,
+    "gpu_offer": "RTX 5070 Ti",
+    "candidate_die": "GB203",
+    "measurement_date": "2026-10-23",
+    "quote_dph": 0.2689814814814815,
+    "verification": "verified",
+    "reliability": 0.9933227,
+    "created_utc": "2026-10-23T00:35:35.161997+00:00",
+    "credit_before": 35.60802751746178,
+    "prior_lane_runtime_usd": 1.028135286387037,
+    "prior_lane_spend_guard_usd": 1.028135286387037,
+    "reservation_usd": 1.5454475308641975,
+    "budget_stop": 6,
+    "phase_cap": 8,
+    "credit_reserve": 5,
+    "auto_destroy_minutes": 170.0,
+    "budget_cutoff_minutes": 170,
+    "guard_rate": 0.36898148148148147,
+    "product_head": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "destroyed": false,
+    "authority": "owner02:20 adaptive readiness plus privileged read-only tier3 kit; NEXT lease after both green and pushed; phase cap8 stop6 reserve5",
+    "auto_destroy_requested_minutes": 170,
+    "auto_destroy_pid": 869739,
+    "auto_destroy_verified": true,
+    "auto_destroy_armed_utc": "2026-10-23T00:35:35.229808+00:00",
+    "budget_watch_pid": 869742,
+    "budget_watch_verified": true,
+    "auto_destroy_pid_starttime": 238132285,
+    "budget_watch_pid_starttime": 238132290
+  }
+]
