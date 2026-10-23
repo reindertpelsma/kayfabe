@@ -1,0 +1,120 @@
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00027:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00027:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe008e engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00027:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe008f host_veid=Some(0) space=0xcafe0086 chan_flags=0x201620 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0002a:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0002a:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe00ac engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0002a:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe00ad host_veid=Some(0) space=0xcafe00a4 chan_flags=0x80201720 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0002e:0xff0e0000 mode=LEGACY host_tsg=0xcafe00b7 engine=0xc shard=0x0 first_chan_flags=0x202020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0002f:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0002f:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe00d5 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0002f:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe00d6 host_veid=Some(0) space=0xcafe00a4 chan_flags=0x80202120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00030:0xff0e0000 mode=LEGACY host_tsg=0xcafe00e3 engine=0xc shard=0x0 first_chan_flags=0x202220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00031:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00031:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe010a engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00031:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe010b host_veid=Some(0) space=0xcafe00a4 chan_flags=0x80202320 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00033:0xff0e0000 mode=LEGACY host_tsg=0xcafe0116 engine=0xc shard=0x0 first_chan_flags=0x202420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00036:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00036:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0155 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00036:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0156 host_veid=Some(0) space=0xcafe014d chan_flags=0x80202520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00038:0xff0e0000 mode=LEGACY host_tsg=0xcafe0161 engine=0xc shard=0x0 first_chan_flags=0x202620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0003b:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0003b:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe01c1 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0003b:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe01c2 host_veid=Some(0) space=0xcafe01b9 chan_flags=0x80202720 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0003c:0xff0e0000 mode=LEGACY host_tsg=0xcafe01cf engine=0xc shard=0x0 first_chan_flags=0x203020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0003f:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0003f:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe01f2 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0003f:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe01f3 host_veid=Some(0) space=0xcafe01ea chan_flags=0x80203120 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00042:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00043:0xff0e0000 mode=LEGACY host_tsg=0xcafe0204 engine=0xc shard=0x0 first_chan_flags=0x203220 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00042:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0208 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00042:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0209 host_veid=Some(0) space=0xcafe01fb chan_flags=0x80203320 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00048:0xff0e0000 mode=LEGACY host_tsg=0xcafe02a0 engine=0xc shard=0x0 first_chan_flags=0x203420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00049:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00049:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe02b6 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00049:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe02b7 host_veid=Some(0) space=0xcafe0246 chan_flags=0x80203520 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0004a:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0004a:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe02ce engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0004a:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe02d0 host_veid=Some(0) space=0xcafe0286 chan_flags=0x80203620 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00050:0xff0e0000 mode=LEGACY host_tsg=0xcafe0314 engine=0xc shard=0x0 first_chan_flags=0x203720 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00051:0xff0e0000 mode=LEGACY host_tsg=0xcafe0344 engine=0xc shard=0x0 first_chan_flags=0x204020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00054:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00054:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe038d engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00054:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe038e host_veid=Some(0) space=0xcafe0385 chan_flags=0x80204120 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00055:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00055:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe03b3 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00055:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe03b4 host_veid=Some(0) space=0xcafe01ea chan_flags=0x80204220 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00056:0xff0e0000 mode=LEGACY host_tsg=0xcafe03d2 engine=0xc shard=0x0 first_chan_flags=0x204320 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00057:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00057:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0404 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00057:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0405 host_veid=Some(0) space=0xcafe0385 chan_flags=0x80204120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00058:0xff0e0000 mode=LEGACY host_tsg=0xcafe042c engine=0xc shard=0x0 first_chan_flags=0x204420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0005b:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0005b:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe049e engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0005b:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe049f host_veid=Some(0) space=0xcafe047d chan_flags=0x80204120 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0005c:0xff0e0000 mode=LEGACY host_tsg=0xcafe04e8 engine=0xc shard=0x0 first_chan_flags=0x204420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0005f:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0005f:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe051f engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0005f:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0520 host_veid=Some(0) space=0xcafe014d chan_flags=0x80202520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00060:0xff0e0000 mode=LEGACY host_tsg=0xcafe0530 engine=0xc shard=0x0 first_chan_flags=0x202620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00063:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00063:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe056a engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00063:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe056b host_veid=Some(0) space=0xcafe0562 chan_flags=0x80202520 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00064:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00064:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0576 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00064:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0577 host_veid=Some(0) space=0xcafe014d chan_flags=0x80202620 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00065:0xff0e0000 mode=LEGACY host_tsg=0xcafe0582 engine=0xc shard=0x0 first_chan_flags=0x204520 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00066:0xff0e0000 mode=LEGACY host_tsg=0xcafe0588 engine=0xc shard=0x0 first_chan_flags=0x204620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00069:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00069:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe05da engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00069:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe05db host_veid=Some(0) space=0xcafe0562 chan_flags=0x80204720 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0006c:0xff0e0000 mode=LEGACY host_tsg=0xcafe05e7 engine=0xc shard=0x0 first_chan_flags=0x205020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00084:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00084:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe069d engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00084:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe069e host_veid=Some(0) space=0xcafe0695 chan_flags=0x80205120 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00087:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00087:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe06ae engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00087:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe06af host_veid=Some(0) space=0xcafe0690 chan_flags=0x80205220 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00088:0xff0e0000 mode=LEGACY host_tsg=0xcafe06b9 engine=0xc shard=0x0 first_chan_flags=0x205320 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00089:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00089:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe06c5 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00089:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe06c6 host_veid=Some(0) space=0xcafe06a6 chan_flags=0x80205420 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0008a:0xff0e0000 mode=LEGACY host_tsg=0xcafe06d1 engine=0xb shard=0x0 first_chan_flags=0x205520 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0008b:0xff0e0000 mode=LEGACY host_tsg=0xcafe06e7 engine=0xc shard=0x0 first_chan_flags=0x205620 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0008c:0xff0e0000 mode=LEGACY host_tsg=0xcafe06f6 engine=0xb shard=0x0 first_chan_flags=0x205720 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0008d:0xff0e0000 mode=LEGACY host_tsg=0xcafe0709 engine=0xc shard=0x0 first_chan_flags=0x206020 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0008e:0xff0e0000 mode=LEGACY host_tsg=0xcafe071c engine=0xc shard=0x0 first_chan_flags=0x206120 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0008f:0xff0e0000 mode=LEGACY host_tsg=0xcafe072e engine=0xc shard=0x0 first_chan_flags=0x206220 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00090:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00090:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0747 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00090:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0748 host_veid=Some(0) space=0xcafe0690 chan_flags=0x80206320 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00091:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00091:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0768 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00091:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0769 host_veid=Some(0) space=0xcafe06a6 chan_flags=0x80206420 host_rq1=false
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00090:0xff0e0201 parent(tsg)=0xff0e0000 flags=0x1 kind=ASYNC declared_subctxId=0x3f hVASpace=0x0
+kf3: TSG-MIRROR CTX 0xc1d00090:0xff0e0000 guest_ctx=0xff0e0201 kind=Async host_ctx=0xcafe0773 host_veid=Some(3f) space=0xcafe0690 chan_flags=0x80206530 host_rq1=true
+kf3: TSG-MIRROR BIRTH 0xc1d00092:0xff0e0000 mode=LEGACY host_tsg=0xcafe077c engine=0xc shard=0x0 first_chan_flags=0x206620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00091:0xff0e0201 parent(tsg)=0xff0e0000 flags=0x1 kind=ASYNC declared_subctxId=0x3f hVASpace=0x0
+kf3: TSG-MIRROR CTX 0xc1d00091:0xff0e0000 guest_ctx=0xff0e0201 kind=Async host_ctx=0xcafe0789 host_veid=Some(3f) space=0xcafe06a6 chan_flags=0x80206730 host_rq1=true
+kf3: TSG-MIRROR BIRTH 0xc1d00093:0xff0e0000 mode=LEGACY host_tsg=0xcafe0790 engine=0xc shard=0x0 first_chan_flags=0x207020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d00098:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d00098:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe07ba engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d00098:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe07bb host_veid=Some(0) space=0xcafe0690 chan_flags=0x80205220 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d00099:0xff0e0000 mode=LEGACY host_tsg=0xcafe07c6 engine=0xc shard=0x0 first_chan_flags=0x205420 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d0009e:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d0009e:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe088e engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d0009e:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe088f host_veid=Some(0) space=0xcafe06a6 chan_flags=0x80205520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d0009f:0xff0e0000 mode=LEGACY host_tsg=0xcafe089a engine=0xc shard=0x0 first_chan_flags=0x205620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d000a0:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d000a0:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe08bc engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d000a0:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe08bd host_veid=Some(0) space=0xcafe06a6 chan_flags=0x80205520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d000a1:0xff0e0000 mode=LEGACY host_tsg=0xcafe08ca engine=0xc shard=0x0 first_chan_flags=0x205620 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d000a2:0xff0e0000 mode=LEGACY host_tsg=0xcafe08d4 engine=0xc shard=0x0 first_chan_flags=0x205720 ctxShare=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d000a3:0xff0e0000 mode=LEGACY host_tsg=0xcafe08e7 engine=0xb shard=0x0 first_chan_flags=0x206020 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d000a6:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d000a6:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0900 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d000a6:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0901 host_veid=Some(0) space=0xcafe06a6 chan_flags=0x80205520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d000a7:0xff0e0000 mode=LEGACY host_tsg=0xcafe090c engine=0xc shard=0x0 first_chan_flags=0x205620 ctxShare=0x0
+kf-rm: chanlink: CTXSHARE-FACTS 0xc1d000a8:0xff0e0200 parent(tsg)=0xff0e0000 flags=0x0 kind=SYNC declared_subctxId=0x0 hVASpace=0x0
+kf3: TSG-MIRROR BIRTH 0xc1d000a8:0xff0e0000 mode=EXPLICIT host_tsg=0xcafe0932 engine=0x1 first_ctx=0xff0e0200 kind=Sync ctx_flags=Some(
+kf3: TSG-MIRROR CTX 0xc1d000a8:0xff0e0000 guest_ctx=0xff0e0200 kind=Sync host_ctx=0xcafe0933 host_veid=Some(0) space=0xcafe06a6 chan_flags=0x80205520 host_rq1=false
+kf3: TSG-MIRROR BIRTH 0xc1d000a9:0xff0e0000 mode=LEGACY host_tsg=0xcafe0941 engine=0xc shard=0x0 first_chan_flags=0x205620 ctxShare=0x0

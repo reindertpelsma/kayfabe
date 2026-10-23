@@ -2947,7 +2947,7 @@ impl Device {
             )
         };
         let chan = format!(
-            " chan[births={} pt_births={} acts={}/{}refused birth_refused_cap={} worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
+            " chan[births={} pt_births={} acts={}/{}refused birth_refused_cap={} worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}] {}]",
             self.chans.births.load(o),
             self.chans.pt_births.load(o),
             self.chans.acts_run.load(o),
@@ -2961,7 +2961,8 @@ impl Device {
             ws.host_rings.load(o),
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
-            toks.join(" ")
+            toks.join(" "),
+            self.chans.mirror_stats.summary()
         );
         let ic = &self.irq_counts;
         let irq = format!(

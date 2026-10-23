@@ -1,0 +1,10 @@
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T iteration period us n=2994 med=193.1 mean=201.4 p95=286.0 p99=316.6 min=129.0 max=1073.2
+GP SEQ_STEP_DONE 1 T:3:copy:3000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T iteration period us n=2994 med=849.0 mean=1012.8 p95=1006.9 p99=1167.1 min=691.5 max=164925.0
+GP SEQ_STEP_DONE 2 T:0:copy:3000
+GP adapter NVIDIA GeForce RTX 4070 dedicated 7843 MiB
+GP T iteration period us n=2994 med=1558.2 mean=1622.6 p95=1817.7 p99=2094.8 min=1430.8 max=52388.4
+GP SEQ_STEP_DONE 3 T:2:copy:3000
+GP iteration period SEQ_END

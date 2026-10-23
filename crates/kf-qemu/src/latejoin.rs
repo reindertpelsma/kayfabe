@@ -98,6 +98,9 @@ pub enum LateJoin {
     GuestNotScheduled,
     /// The twin's host group was scheduled, once, from the guest's own scheduled state.
     Authored,
+    /// ★ 2026-10-18 (`crate::tsgmirror`): the twin joined a standing explicit host TSG, which is already
+    /// scheduled; a late member runs without a schedule of its own. Nothing was authored.
+    SkippedExplicit,
 }
 
 /// ★ A twin was just born: if (and only if) the guest has scheduled the TSG it was allocated in,
