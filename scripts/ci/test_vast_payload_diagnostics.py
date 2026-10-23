@@ -71,11 +71,8 @@ class ArmDiagnostics(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             log = root / "watch"
-            text = (
-                watch(XID, 0, 1)
-                if fault
-                else watch("", 0, 0).replace("\nfixture\n", "\n" + body + "\n", 1)
-            )
+            text = watch(XID, 0, 1) if fault else watch("", 0, 0)
+            text = text.replace("\nfixture\n", "\n" + body + "\n", 1)
             log.write_text(text)
             env = {
                 "KF_PAYLOAD_LOG": str(root / "output"),
@@ -112,6 +109,17 @@ class ArmDiagnostics(unittest.TestCase):
         _, output = self.invoke(body="HEAD_EVIDENCE\n" + "x" * 150000 + "\nTAIL_EVIDENCE\n")
         self.assertIn("HEAD_EVIDENCE", output)
         self.assertIn("TAIL_EVIDENCE", output)
+
+    def test_refused_large_arm_diagnostics_are_bounded(self):
+        _, output = self.invoke(fault=True, body="HEAD_FAULT\n" + "y" * 150000 + "\nTAIL_FAULT\n")
+        self.assertLess(len(output.encode()), 40000)
+        self.assertIn("truncated", output)
+
+    def test_refused_large_arm_keeps_head_tail_and_fault(self):
+        _, output = self.invoke(fault=True, body="HEAD_FAULT\n" + "y" * 150000 + "\nTAIL_FAULT\n")
+        self.assertIn("HEAD_FAULT", output)
+        self.assertIn("TAIL_FAULT", output)
+        self.assertIn("NVRM", output)
 
     def failed_result(self, arm):
         with tempfile.TemporaryDirectory() as directory:
