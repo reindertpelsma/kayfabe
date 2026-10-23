@@ -51,3 +51,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       175G   33G  142G  19% /
 PRECOMP_TIER3_BEGIN 2026-10-23T03:05:49+00:00
 PRECOMP_TIER3_EXIT rc=0 2026-10-23T03:05:49+00:00
+SWEEP2_BIND_READY 2026-10-23T03:17:10+00:00
+{"cell": "on_precision", "utc": "2026-10-23T03:17:10.601059+00:00", "latest_start_utc": "2026-10-23T03:59:02.956202+00:00", "budget_cutoff_minutes": 98, "may_start": true}
+VALIDATION_ARM_BEGIN on_precision 2026-10-23T03:17:10+00:00
+VALIDATION_ARM_RESULT run=on_precision rc=255 2026-10-23T03:18:45+00:00

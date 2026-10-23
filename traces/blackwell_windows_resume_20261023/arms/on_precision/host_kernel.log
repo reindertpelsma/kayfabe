@@ -1,0 +1,5 @@
+2026-10-23T03:17:25.256320+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T03:17:25.473325+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+2026-10-23T03:18:23.591366+0000 ubuntu kernel: x86/PAT: kf3-vamgr:107715 freeing invalid memtype [mem 0x380000800000-0x3800009fffff]
+2026-10-23T03:18:23.591475+0000 ubuntu kernel: x86/PAT: kf3-vamgr:107715 freeing invalid memtype [mem 0x380000a00000-0x380000bfffff]
+2026-10-23T03:18:23.591483+0000 ubuntu kernel: x86/PAT: kf3-vamgr:107715 freeing invalid memtype [mem 0x380000c00000-0x380000dfffff]

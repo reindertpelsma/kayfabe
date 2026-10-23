@@ -1,0 +1,2 @@
+COLLECT_START run=on_precision (standard VGA, no kf3 device) 2026-10-23T03:18:45+00:00
+[2026-10-23T03:18:45Z] detached: tag=on_precision_collect, log logs/on_precision_collect_run.log (stdout logs/on_precision_collect_run.out)
