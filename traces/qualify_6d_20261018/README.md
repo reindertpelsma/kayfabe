@@ -6,7 +6,15 @@ MEASURED on 2026-10-22: r1/stage1-ci.json records stable, aarch64, broker and fi
 
 MEASURED at revision 01a171e63: r1/stage2-hardware.json records native 9/9 plus gate 10 PASS (12/12 USER births, zero refusals or new Xids) and Linux fast 30/30 with only five approved exact-match intentional Xids (four defer-liveness, one missing-page-fault), zero unmatched new Xids. The first Linux broker preflight did not launch a VM because Xwayland was not yet running in the active GNOME session. Windows run 4600 uses the production Wayland broker. r1/4600/desktop-hold-result.json records 604 seconds across 33 samples with zero 153/4101, reboot, Budget or poison diagnostics; subsequent smokes are in progress. A read-only X client then activated GNOME’s on-demand Xwayland; the separate Linux broker lane can be retried after Windows.
 
-# Round 6D: stage 1 FAIL; hardware qualification not started
+MEASURED at run 4606 / revision 01a171e63: r1/matrix-4606.json records 6/6 PASS (CUDA callback/occupancy, D3D12 DIRECT+COPY fences, driver status, DXGI adapter enumeration, OpenCL ICD), each with rc=0 and zero TDR/WER. r1/heaven-4606.json records one completed 260.607-second D3D11 Ultra AA0 windowed 1920x1080 pass: 253.124 fps, score 6376.19, no guest events. Pre-Heaven host load was 0.96 on 24 logical CPUs with quiet active. Historical README references are separate production and experimental paths, not matched repeats of this pin.
+
+MEASURED at run 4606 / revision 01a171e63: traces/qualify_6d_20261018/r1/heaven-4606.json records 58.18 broker new-content fps, 1.77 repeats/s, gap counts >33/50/100 ms = 429/17/3 across 260.182 seconds and a 150.01-ms maximum.
+
+CODE READ at revision 01a171e63: broker/nb_tick.c provides threshold counters and window maxima; traces/qualify_6d_20261018/r1/heaven-4606.json leaves both percentile-low fields null because no raw content-gap series was captured.
+
+CODE READ: the current plan still has Minecraft in progress and Energy, CATIA/Creo and K2 unexercised.
+
+# Superseded 70da04ffa checkpoint: stage 1 build failure
 
 CODE READ: the requested candidate is revision 70da04ffaebdee3b51e5eca6aa1eb3919e92e80d. ROUND_6D.md requires stopping at the first red stage. This lane changes no product code and makes no push to the candidate branch.
 

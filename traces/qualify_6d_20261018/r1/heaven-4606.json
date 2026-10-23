@@ -1,0 +1,78 @@
+{
+  "classification": "MEASURED",
+  "evidence": "heaven-4606.json",
+  "run": 4606,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "n": 1,
+  "verdict": "PASS",
+  "settings": "1920x1080 windowed Direct3D11 Ultra AA0; canonical F9 benchmark",
+  "vendor_metrics": {
+    "Time": 260.607,
+    "Frames": 65966.0,
+    "FPS": 253.124,
+    "Min FPS": 42.7126,
+    "Max FPS": 534.477,
+    "Score": 6376.19
+  },
+  "spread": "Not measured, one completed pass",
+  "guest_events": [],
+  "load_before": {
+    "classification": "MEASURED",
+    "evidence": "load-before-heaven.json",
+    "stage": "Heaven-windowed",
+    "time": "2026-10-23T00:22:15.625742+00:00",
+    "uptime": "02:22:15 up 13 days,  6:43,  4 users,  load average: 0.96, 1.16, 1.71",
+    "load_average": [
+      0.9599609375,
+      1.1611328125,
+      1.70947265625
+    ],
+    "logical_cpus": 24,
+    "host_quiet": true
+  },
+  "broker": {
+    "scope": "Only complete per-second counter windows inside host F9 through F9 + vendor measured duration",
+    "window_count": 260,
+    "seconds": 260.182,
+    "new_content_presents": 15137,
+    "new_content_fps": 58.17850581516015,
+    "repeat_per_second": 1.7718366374307215,
+    "max_new_content_gap_ms": 150.01,
+    "gap_counts": {
+      "33": 429,
+      "50": 17,
+      "100": 3
+    },
+    "gaps_per_minute": {
+      "33": 98.93074847606675,
+      "50": 3.920332690193787,
+      "100": 0.6918234159165507
+    },
+    "one_percent_low_fps": null,
+    "point_one_percent_low_fps": null,
+    "quantile_limitation": "Stock stats have threshold counts and window maxima, not the raw content-gap series. No percentiles inferred."
+  },
+  "reference_scope": "CODE READ README.md at 70da04ffa: earlier production89\u2013102, experimental296\u2013299, native VFIO330 fps (2026-10-15). These are historical references, not matched repeats of this candidate.",
+  "reference_fps": {
+    "old_production": [
+      89,
+      102
+    ],
+    "old_experimental": [
+      296,
+      299
+    ],
+    "old_vfio": 330
+  },
+  "candidate_over_historical_reference": {
+    "old_production": [
+      2.481607843137255,
+      2.8440898876404495
+    ],
+    "old_experimental": [
+      0.8465685618729096,
+      0.8551486486486486
+    ],
+    "old_vfio": 0.7670424242424242
+  }
+}

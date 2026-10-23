@@ -1,0 +1,84 @@
+{
+  "classification": "MEASURED",
+  "evidence": "matrix-4606.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4606,
+  "passed": 6,
+  "failed": 0,
+  "rows": [
+    {
+      "id": "cuda_callback",
+      "verdict": "PASS",
+      "rc": 0,
+      "secs": 3,
+      "quiet": 2,
+      "note": "",
+      "proof": "out",
+      "tdr": 0,
+      "wer": 0,
+      "rebooted": false
+    },
+    {
+      "id": "cuda_occupancy",
+      "verdict": "PASS",
+      "rc": 0,
+      "secs": 3,
+      "quiet": 1,
+      "note": "",
+      "proof": "out",
+      "tdr": 0,
+      "wer": 0,
+      "rebooted": false
+    },
+    {
+      "id": "d3d12_signal_probe",
+      "verdict": "PASS",
+      "rc": 0,
+      "secs": 3,
+      "quiet": 1,
+      "note": "",
+      "proof": "out",
+      "tdr": 0,
+      "wer": 0,
+      "rebooted": false
+    },
+    {
+      "id": "driver_status",
+      "verdict": "PASS",
+      "rc": 0,
+      "secs": 1,
+      "quiet": 0,
+      "note": "",
+      "proof": "out",
+      "tdr": 0,
+      "wer": 0,
+      "rebooted": false
+    },
+    {
+      "id": "dxgi_adapters",
+      "verdict": "PASS",
+      "rc": 0,
+      "secs": 1,
+      "quiet": 0,
+      "note": "",
+      "proof": "out",
+      "tdr": 0,
+      "wer": 0,
+      "rebooted": false
+    },
+    {
+      "id": "opencl_icd",
+      "verdict": "PASS",
+      "rc": 0,
+      "secs": 1,
+      "quiet": 0,
+      "note": "",
+      "proof": "out",
+      "tdr": 0,
+      "wer": 0,
+      "rebooted": false
+    }
+  ],
+  "raw_facts": "/data/codex-Q4/round-6d/r1/energy-bisect/4606/matrix-subset.json",
+  "oracles": "Unchanged candidate apps.json and verdict.py; transport normalizes extended strings and preserves per-app tokens."
+}

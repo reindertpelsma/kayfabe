@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "0c1764931277c0062f07d8041ba6e3276ffe5723",
+  "head": "4a39ff8699a2914679e4db4baad0ab8b91e5f0b5",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/qualify_6d_20261018/README.md",
@@ -36,7 +36,9 @@
     "traces/qualify_6d_20261018/r1/ci-gate-excerpts.txt",
     "traces/qualify_6d_20261018/r1/ci-wait-context.json",
     "traces/qualify_6d_20261018/r1/cuda-helper-stage.json",
+    "traces/qualify_6d_20261018/r1/heaven-4606.json",
     "traces/qualify_6d_20261018/r1/local-not-started.json",
+    "traces/qualify_6d_20261018/r1/matrix-4606.json",
     "traces/qualify_6d_20261018/r1/parser-control.json",
     "traces/qualify_6d_20261018/r1/plan.md",
     "traces/qualify_6d_20261018/r1/sa02-positive-census.json",
@@ -49,5 +51,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T00:21:17.475787+00:00"
+  "time": "2026-10-23T00:35:31.004487+00:00"
 }
