@@ -28,6 +28,8 @@ a["offers"] = [
         "effective_hourly": 0.5,
         "estimated_total": 1.51,
         "kvm": True,
+        "machine_id": 100001,
+        "host_id": 3001,
     }
 ]
 a["verified_counts"] = [{"die": "GA106", "total": 3, "verified": 2}]

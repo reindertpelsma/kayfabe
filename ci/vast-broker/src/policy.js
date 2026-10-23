@@ -14,6 +14,9 @@ export function refuse(state = 'UNAVAILABLE', status = 503, reason) {
 }
 export const numericId = (v) => typeof v === 'string' && /^[1-9][0-9]{0,19}$/.test(v);
 export const hexSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
+// Public Vast ids (machine_id, host_id) as shown in /availability and the status object
+// (owner ruling 2026-10-24 item 9): a positive safe integer, otherwise null, never invented.
+export const providerId = (v) => (Number.isSafeInteger(v) && v > 0 ? v : null);
 export const IMAGE = 'docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16';
 export const MODELS = []; // Historical local-smoke import only; production has no SKU query whitelist.
 export function configuration(env) {

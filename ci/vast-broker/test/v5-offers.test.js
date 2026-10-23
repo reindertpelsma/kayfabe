@@ -151,7 +151,9 @@ for (const profile of ['check', 'sweep'])
     assert.ok(Array.isArray(r.offers));
     assert.ok(r.offers.some((x) => x.die === 'GA106'));
     if (profile === 'check') assert.ok(!r.offers.some((x) => x.die === 'AD107'));
-    assert.doesNotMatch(JSON.stringify(r), /machine_id|public_ip|offer_id|100001|100002/);
+    // Owner ruling 2026-10-24 item 9 supersedes the machine_id ban: the public machine_id and
+    // host_id are shown; the offer (ask) id, IPs and hostnames still never cross.
+    assert.doesNotMatch(JSON.stringify(r), /public_ip|offer_id|hostname|"id":/);
     assert.equal(h.cloud.creates, 0);
     assert.ok(r.rejected && r.thresholds && r.verified_counts);
   });

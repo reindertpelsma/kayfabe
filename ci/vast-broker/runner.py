@@ -197,9 +197,44 @@ def validate_selection(value):
         raise Invalid()
 
 
+# Every offer rejection code the Worker can emit (src/policy.js offerRejections, src/offers.js).
+REJECTION_CODES = frozenset(
+    {
+        "VERIFICATION",
+        "CAPABILITY",
+        "MACHINE",
+        "BAD_HOST",
+        "DIE",
+        "RELIABILITY",
+        "CPU_RAM",
+        "PERFORMANCE",
+        "NETWORK",
+        "DISK_BW",
+        "DRIVER",
+        "PRICE_FIELDS",
+        "COUNTRY",
+        "PRICE",
+    }
+)
+
+
+def provider_id(v):
+    """A public Vast machine_id or host_id (item 9): a positive safe integer or null."""
+    return v is None or integer(v, 1, 2**53 - 1)
+
+
 def validate_availability(data, profile):
     if (
-        set(data) != {"profile", "offers", "thresholds", "rejected", "verified_counts", "cache"}
+        set(data)
+        != {
+            "profile",
+            "offers",
+            "thresholds",
+            "rejected",
+            "rejected_offers",
+            "verified_counts",
+            "cache",
+        }
         or data["profile"] != profile
     ):
         raise Invalid()
@@ -223,6 +258,8 @@ def validate_availability(data, profile):
                 "effective_hourly",
                 "estimated_total",
                 "kvm",
+                "machine_id",
+                "host_id",
             }
             or not class_token(row["die"])
             or row["die"] in seen
@@ -231,6 +268,8 @@ def validate_availability(data, profile):
             or not integer(row["compute_cap"], 750, 2000)
             or not integer(row["count"], 1, 100)
             or row["kvm"] is not True
+            or not provider_id(row["machine_id"])
+            or not provider_id(row["host_id"])
         ):
             raise Invalid()
         seen.add(row["die"])
@@ -276,25 +315,29 @@ def validate_availability(data, profile):
         raise Invalid()
     if (
         not isinstance(data["rejected"], dict)
-        or not set(data["rejected"])
-        <= {
-            "VERIFICATION",
-            "CAPABILITY",
-            "MACHINE",
-            "BAD_HOST",
-            "DIE",
-            "RELIABILITY",
-            "CPU_RAM",
-            "PERFORMANCE",
-            "NETWORK",
-            "DISK_BW",
-            "DRIVER",
-            "PRICE_FIELDS",
-            "COUNTRY",
-            "PRICE",
-        }
+        or not set(data["rejected"]) <= REJECTION_CODES
         or not all(integer(v, 0, 100) for v in data["rejected"].values())
+        or not isinstance(data["rejected_offers"], list)
+        or len(data["rejected_offers"]) > 100
     ):
+        raise Invalid()
+    counts = {}
+    for row in data["rejected_offers"]:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"machine_id", "host_id", "reasons"}
+            or not provider_id(row["machine_id"])
+            or not provider_id(row["host_id"])
+            or not isinstance(row["reasons"], list)
+            or not 1 <= len(row["reasons"]) <= len(REJECTION_CODES)
+            or not all(isinstance(x, str) and x in REJECTION_CODES for x in row["reasons"])
+            or len(set(row["reasons"])) != len(row["reasons"])
+        ):
+            raise Invalid()
+        for reason in row["reasons"]:
+            counts[reason] = counts.get(reason, 0) + 1
+    # The counts and the rows come from one Worker pass; they must agree exactly.
+    if counts != data["rejected"]:
         raise Invalid()
     if (
         not isinstance(data["cache"], dict)
@@ -311,6 +354,8 @@ STATUS_KEYS = {
     "verdict",
     "run",
     "id",
+    "machine_id",
+    "host_id",
     "sha",
     "cleanup_pending",
     "result_at",
@@ -388,6 +433,8 @@ def validate_status(data, ctx, manifest, http_status):
         not isinstance(data["id"], str) or not re.fullmatch("[1-9][0-9]{0,19}", data["id"])
     ):
         raise Invalid()
+    if not provider_id(data["machine_id"]) or not provider_id(data["host_id"]):
+        raise Invalid()
     if type(data["cleanup_pending"]) is not bool or not integer(data["log_cursor"], 0, 10000):
         raise Invalid()
     for key in ["result_at", "ended_at", "started_at", "deadline_at"]:
@@ -459,6 +506,10 @@ def validate_status(data, ctx, manifest, http_status):
     ):
         raise Invalid()
     return data
+
+
+def shown_id(value):
+    return "-" if value is None else str(value)
 
 
 class Runner:
@@ -607,7 +658,7 @@ class Runner:
             validate_availability(availability, profile)
             lines = [
                 "Availability: " + profile,
-                "die gpu compute_cap count effective_hourly estimated_total kvm",
+                "die gpu compute_cap count effective_hourly estimated_total kvm machine_id host_id",
             ]
             for row in availability["offers"]:
                 lines.append(
@@ -620,6 +671,8 @@ class Runner:
                             format(row["effective_hourly"], ".6f"),
                             format(row["estimated_total"], ".6f"),
                             "1",
+                            shown_id(row["machine_id"]),
+                            shown_id(row["host_id"]),
                         ]
                     )
                 )
@@ -631,6 +684,22 @@ class Runner:
                 "Rejected counts: "
                 + " ".join(k + "=" + str(v) for k, v in sorted(availability["rejected"].items()))
             )
+            # Packed a few per line: the display budget is 200 lines for the whole run.
+            line = ""
+            for row in availability["rejected_offers"]:
+                entry = (
+                    shown_id(row["machine_id"])
+                    + "/"
+                    + shown_id(row["host_id"])
+                    + ":"
+                    + ",".join(row["reasons"])
+                )
+                if line and len(line) + len(entry) > 800:
+                    lines.append("Rejected offers (machine_id/host_id:reasons): " + line)
+                    line = ""
+                line += (" " if line else "") + entry
+            if line:
+                lines.append("Rejected offers (machine_id/host_id:reasons): " + line)
             lines.append(
                 "Verified counts: "
                 + " ".join(
@@ -738,6 +807,8 @@ class Runner:
                     ("Profile", d["profile"]),
                     ("Die class", d["die"]),
                     ("Provider country (untrusted)", d.get("country", "UNKNOWN")),
+                    ("Vast machine id", shown_id(d["machine_id"])),
+                    ("Vast host id", shown_id(d["host_id"])),
                     ("Driver (untrusted)", d["driver_version"]),
                     ("Selection reason", d["selection_reason"]),
                     ("Preferences ignored", str(d["preferences_ignored"])),

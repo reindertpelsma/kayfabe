@@ -18,6 +18,8 @@ def extra_status(verdict="PASS", pending=False):
         rows[0]["pass"] = 0
         rows[0]["fail"] = 1
     return dict(
+        machine_id=100001,
+        host_id=3001,
         profile="check",
         die="AD104",
         compute_cap=890,
@@ -52,6 +54,7 @@ def availability():
             "verified": 1,
         },
         "rejected": {},
+        "rejected_offers": [],
         "verified_counts": [],
         "cache": {"hit": True, "age_ms": 0},
     }

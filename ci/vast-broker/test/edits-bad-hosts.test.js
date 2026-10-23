@@ -104,6 +104,8 @@ s=importlib.util.spec_from_file_location('runner',sys.argv[1]);m=importlib.util.
 sys.modules['runner']=m;s.loader.exec_module(m)
 scope={};exec(open(sys.argv[2]).read(),scope)
 data=scope['availability']();data['rejected']={'BAD_HOST':3,'MACHINE':1}
+data['rejected_offers']=[{'machine_id':9,'host_id':4242,'reasons':['BAD_HOST','MACHINE']}]
+data['rejected_offers']+=[{'machine_id':i,'host_id':4242,'reasons':['BAD_HOST']} for i in (7,8)]
 m.validate_availability(data,'check')
 `;
   const p = spawnSync(

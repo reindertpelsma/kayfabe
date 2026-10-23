@@ -26,6 +26,8 @@ data = {
     "verdict": "PASS",
     "run": ctx["run"],
     "id": "900",
+    "machine_id": 100001,
+    "host_id": 3001,
     "sha": ctx["sha"],
     "cleanup_pending": phase != "NONE",
     "result_at": 2000,

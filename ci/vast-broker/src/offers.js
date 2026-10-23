@@ -1,7 +1,7 @@
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
-import {gpuClass,offerPrice,offerRejections,refuse} from './policy.js';
+import {gpuClass,offerPrice,offerRejections,providerId,refuse} from './policy.js';
 // Denied-country spellings: ISO alpha-2 and alpha-3 codes and the names Vast or a geolocation
 // database may print (review V13: a long form must never pass as UNKNOWN). Matching ignores
 // case, apostrophes, parentheses and extra spaces.
@@ -116,6 +116,7 @@ export class OfferBook {
     const samples = new Map(),
       verified = new Map(),
       rejected = {},
+      rejectedOffers = [],
       allowed = [];
     for (const offer of this.cached) {
       const die = gpuClass(offer, cfg);
@@ -155,6 +156,12 @@ export class OfferBook {
       )
         reasons.push('COUNTRY');
       for (const reason of reasons) rejected[reason] = (rejected[reason] ?? 0) + 1;
+      if (reasons.length)
+        rejectedOffers.push({
+          machine_id: providerId(offer.machine_id),
+          host_id: providerId(offer.host_id),
+          reasons,
+        });
       if (!reasons.length)
         allowed.push({
           ...offer,
@@ -175,6 +182,9 @@ export class OfferBook {
           effective_hourly: offer.pricing.effective,
           estimated_total: offer.pricing.total,
           kvm: true,
+          // The row's representative: the cheapest allowed offer of this die.
+          machine_id: providerId(offer.machine_id),
+          host_id: providerId(offer.host_id),
         });
       else {
         prior.count++;
@@ -183,6 +193,8 @@ export class OfferBook {
           prior.compute_cap = offer.compute_cap;
           prior.effective_hourly = offer.pricing.effective;
           prior.estimated_total = offer.pricing.total;
+          prior.machine_id = providerId(offer.machine_id);
+          prior.host_id = providerId(offer.host_id);
         }
       }
     }
@@ -197,6 +209,7 @@ export class OfferBook {
         verified: 1,
       },
       rejected,
+      rejected_offers: rejectedOffers,
       verified_counts: [...verified.values()].sort((a, b) => a.die.localeCompare(b.die)),
       cache: { hit, age_ms: this.now() - this.at },
     };

@@ -16,7 +16,7 @@ import {Github} from './github.js';
 import {allowedWorkflowRef} from './workflow-authority.js';
 // prettier-ignore
 import {mintBlob,checkBlobBudget} from './blobs.js';
-import { offerPrice } from './policy.js';
+import { offerPrice, providerId } from './policy.js';
 // prettier-ignore
 import {Vast} from './vast.js';
 // prettier-ignore
@@ -112,6 +112,8 @@ export function createService({
   const expose = (r, key = r.key) => ({
     run: key,
     id: r.id,
+    machine_id: providerId(r.machineId),
+    host_id: providerId(r.hostId),
     sha: r.sha,
     state: phase(r),
     verdict:
@@ -748,6 +750,7 @@ export function createService({
         country: offer.country,
         computeCap: offer.compute_cap,
         machineId: offer.machine_id,
+        hostId: providerId(offer.host_id),
         driver: offer.driver_version,
         preferencesIgnored: chosen.ignored,
         selectionReason: chosen.reason,
