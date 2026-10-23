@@ -34,6 +34,7 @@ RELEASE_RE = re.compile(
 RATIO_HEADER_RE = re.compile(r'(?i)\bratio\b|\bover\b')
 SCORE_HEADER_RE = re.compile(r'(?i)composite|fps|score|ratio|\bover\b')
 NUMBER_RE = re.compile(r'(?<![\w.\-])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?')
+LABEL_TAIL_RE = re.compile(r'[%x]? ' + re.escape(NC))
 RELEASE_LINE_RE = re.compile(r'^[#> ]*Release:\s*(.+?)\s*$', re.MULTILINE)
 
 
@@ -169,7 +170,7 @@ def check_text(text, kind):
             for found_number in NUMBER_RE.finditer(cell):
                 token = found_number.group(0)
                 floaty = '.' in token or 'e' in token.lower()
-                labelled = cell[found_number.end():].startswith(' ' + NC)
+                labelled = LABEL_TAIL_RE.match(cell[found_number.end():]) is not None
                 if (floaty or SCORE_HEADER_RE.search(head)) and not labelled:
                     problems.append('unlabelled number %s in column %r' % (token, head))
     return problems
