@@ -32,3 +32,9 @@ that persist contract values in /etc/environment instead of exporting them to a 
 startup process. Only missing protocol names are parsed as data; process values win and
 unrelated provider/account credentials are never imported. The daemon still uses the validated
 root-only env file. [Recovery evidence](../../traces/vast_payload_v7_20261018/PROVIDER_ENV.md).
+
+[CODE READ: vast_payload.py provision_grade] Cargo outputs stay in the approved checkout's
+`target/`, where the existing bench and fast-guest helpers resolve their clients. Hardware is
+queried again before grading provisioning, including its failure path. The live run exposed
+both integration defects; their fixes have red/green and mutation coverage but no fresh VM run.
+[Final live evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md).

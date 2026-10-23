@@ -2,6 +2,38 @@
   "run": "v7-payload-mutants-20261023",
   "cases": [
     {
+      "mutant": "failed-provision-hardware-stale",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "hardware-refreshed-only-after-success",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "existing-client-target-redirected",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "existing-client-target-nested",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper"
+      ],
+      "count": 2
+    },
+    {
       "mutant": "provision-exit-only",
       "killers": [
         "test_vast_payload.PayloadTests.test_provision_missing_build_refuses",
@@ -79,15 +111,21 @@
     {
       "mutant": "first-red-continues",
       "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
         "test_vast_payload_v7.V7Tests.test_first_bad_stage_cancels_later_stages",
         "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
         "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
       ],
-      "count": 3
+      "count": 5
     },
     {
       "mutant": "result-never-published",
       "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
         "test_vast_payload_v7.V7Tests.test_result_has_only_the_pr104_payload_keys",
         "test_vast_payload_v7.V7Tests.test_result_is_accepted_by_pr104_reader",
         "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
@@ -96,7 +134,7 @@
         "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
         "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
       ],
-      "count": 7
+      "count": 11
     },
     {
       "mutant": "approved-source-unpinned",
@@ -243,10 +281,14 @@
     {
       "mutant": "arm-watch-not-installed",
       "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
         "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
         "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
       ],
-      "count": 2
+      "count": 6
     },
     {
       "mutant": "arm-hook-bypassed",

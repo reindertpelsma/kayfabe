@@ -31,5 +31,5 @@ repo-side entrypoint was restarted via the VM's valid login environment on the S
 No code was edited on that VM, no payload was injected, and no second rental was created.
 The Worker then accepted reports and the original payload entered provisioning. This is a
 controlled recovery, not a claim of successful unattended startup. The new loader is locally
-verified only; it has not run on the rented source SHA. Final suite/spend/absence evidence
-will distinguish these scopes explicitly.
+verified only; it has not run on the rented source SHA. Final suite/spend/absence evidence in [LIVE_RUN.md](LIVE_RUN.md)
+distinguishes these scopes explicitly.

@@ -5,11 +5,16 @@
 EXPECTED RED commits were cherry-picked as c4f13c6c6 and fb6669d96. New strict-contract,
 stage-attribution and finished-prefix probes were committed separately before their fixes.
 
-[MEASURED: 2026-10-23, run v7-payload-tests-20261023; tests.json] The initial reusable/strict suite had 55 import
-errors before the adapter existed. Two attribution probes and two first-red prefix probes
-then failed before their fixes. The final GPU-free payload suite passes 79/79.
-[MEASURED: run v7-payload-mutants-20261023; mutants.json] All 23 mutations have at least two
-independently named killers. Black, shellcheck and the payload-owned 100-column check pass.
+[MEASURED: 2026-10-23, run v7-all-vast-tests-20261023; all_tests.json] Final local checks pass
+198/198: 83 payload, 72 canonical box, 17 provider environment and 26 diagnostic probes. The
+initial payload implementation had 55 import errors, followed by two attribution and two
+finished-prefix red probes. Two Cargo-consumer and two failed-hardware probes then reproduced
+live findings before their separate fixes. Black, shellcheck and the 100-column check pass.
+[MEASURED: 2026-10-23, run v7-payload-mutants-20261023; mutants.json,
+provider_env_mutants.json, diagnostic_mutants.json] All 45 new mutations (27 payload, eight
+provider environment, ten diagnostic) have at least two independently named killers.
+The 60 canonical mutations are also killed under PR #104's separate rule; see
+canonical_box_mutants.txt. Format-only commit 828afa829 has unchanged ASTs in format_ast.json.
 
 [CODE READ: scripts/ci/vast_payload.py, scripts/ci/vast_payload_hooks.sh] The adapter delegates
 provision_full, host CUDA ladder, merge_check and fat-guest CUDA ladder in that order. It
@@ -30,8 +35,16 @@ Unreadable/lost-baseline instruments, other arms, extra records, other VA/type/c
 The marker does not expose its channel identity, so this first version scopes by arm and VA;
 S4's exact-channel guard replaces xid_ok when available, rather than inventing a channel table.
 
-[CODE READ: V7_PAYLOAD.md acceptance contract] The real production-mode KVM acceptance is
-PENDING. It must use the unchanged checkpoint Worker bundle, vm:true, ssh_direct, the check
-profile and production bootstrap/env contract. One rental only, $4 total cap and stop at $3,
-an independent reaper before creation, exact-ID/label verification and final API absence.
-No deployment or committed renting enablement is part of this lane.
+[MEASURED: 2026-10-23, run v7-kvm-20261023; live_run.json, cleanup.json] One production KVM
+rental completed with a runner-validated FAIL/provision. Estimated upper spend was 1.442036 USD
+under the 4 USD cap. A real direct interactive SSH login changed GRACE to MANUAL. Owner stop
+and independent API recheck confirmed exact ID/label absence; local processes and the reaper
+stopped. No deployment or production renting enablement occurred. The Worker bundle is unchanged.
+
+[CODE READ: vast_payload.py, vast_report.py] The live source was immutable 28084b96c. The new
+provider-env loader, corrected Cargo target path and failed-provision hardware refresh have
+local test/mutation coverage; they have not had a fresh VM run. Full host CUDA, merge_check and
+fat CUDA results remain unverified. Hosted OIDC, billed Cloudflare CPU, survival past the old
+grace deadline and S4's exact-channel guard remain gaps. Format pass 2, Worker README restructure
+and review lows remain deferred. [Live report](LIVE_RUN.md), [startup fix](PROVIDER_ENV.md),
+[diagnostic exception](DIAGNOSTIC_LOGS.md), [final log](public_log_final.txt).
