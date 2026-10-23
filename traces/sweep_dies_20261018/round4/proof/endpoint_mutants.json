@@ -1,0 +1,15 @@
+{
+  "kind": "MEASURED",
+  "run": "endpoint_green.log / two mutants",
+  "mutants": [
+    {
+      "mutant": "ignore_relay",
+      "killers": 4
+    },
+    {
+      "mutant": "reject_null_map",
+      "killers": 2
+    }
+  ],
+  "source_restored": true
+}

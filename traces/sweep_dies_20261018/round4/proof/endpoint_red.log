@@ -1,0 +1,101 @@
+test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) ... 
+  test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_host': '-bad'}) ... ERROR
+  test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_host': 'bad host'}) ... ERROR
+  test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_port': 65536}) ... ERROR
+  test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_port': 'bad'}) ... ERROR
+test_direct_mapped_endpoint_is_preserved (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_direct_mapped_endpoint_is_preserved) ... ERROR
+test_incomplete_relay_is_not_a_ready_route (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_incomplete_relay_is_not_a_ready_route) ... ok
+test_not_running_still_is_not_ready (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_not_running_still_is_not_ready) ... ok
+test_null_map_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_map_endpoint_preserves_exact_host_and_port) ... ERROR
+test_null_ports_do_not_hide_relay (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_ports_do_not_hide_relay) ... ERROR
+test_relay_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_endpoint_preserves_exact_host_and_port) ... ERROR
+test_relay_fields_nominate_running_vm (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_fields_nominate_running_vm) ... FAIL
+
+======================================================================
+ERROR: test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_host': '-bad'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 48, in test_bad_host_or_port_never_becomes_an_endpoint
+    self.assertIsNone(self.module().provider_ssh_endpoint(self.relay(**changes)))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+ERROR: test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_host': 'bad host'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 48, in test_bad_host_or_port_never_becomes_an_endpoint
+    self.assertIsNone(self.module().provider_ssh_endpoint(self.relay(**changes)))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+ERROR: test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_port': 65536})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 48, in test_bad_host_or_port_never_becomes_an_endpoint
+    self.assertIsNone(self.module().provider_ssh_endpoint(self.relay(**changes)))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+ERROR: test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) (changes={'ssh_port': 'bad'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 48, in test_bad_host_or_port_never_becomes_an_endpoint
+    self.assertIsNone(self.module().provider_ssh_endpoint(self.relay(**changes)))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+ERROR: test_direct_mapped_endpoint_is_preserved (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_direct_mapped_endpoint_is_preserved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 37, in test_direct_mapped_endpoint_is_preserved
+    self.assertEqual(self.module().provider_ssh_endpoint(row), ('192.0.2.10', 12345))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+ERROR: test_null_map_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_map_endpoint_preserves_exact_host_and_port)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 31, in test_null_map_endpoint_preserves_exact_host_and_port
+    self.assertEqual(self.module().provider_ssh_endpoint(self.relay(ports=None)),
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+ERROR: test_null_ports_do_not_hide_relay (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_ports_do_not_hide_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 24, in test_null_ports_do_not_hide_relay
+    self.assertTrue(self.module().ssh_route_is_ready(self.relay(ports=None)))
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/windows/readiness.py", line 175, in ssh_route_is_ready
+    return running and bool(row.get('ports', {}).get('22/tcp'))
+                            ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'get'
+
+======================================================================
+ERROR: test_relay_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_endpoint_preserves_exact_host_and_port)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 27, in test_relay_endpoint_preserves_exact_host_and_port
+    self.assertEqual(self.module().provider_ssh_endpoint(self.relay()),
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'provider_ssh_endpoint'
+
+======================================================================
+FAIL: test_relay_fields_nominate_running_vm (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_fields_nominate_running_vm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 21, in test_relay_fields_nominate_running_vm
+    self.assertTrue(self.module().ssh_route_is_ready(self.relay()))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.011s
+
+FAILED (failures=1, errors=8)

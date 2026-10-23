@@ -1,0 +1,18 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57384343,
+  "utc": "2026-10-23T14:48:11.423385+00:00",
+  "source": "provider authenticated instance API",
+  "cur_state": "running",
+  "actual_status": null,
+  "container_ports_map_present": false,
+  "relay_ssh_host_present": true,
+  "relay_ssh_port_present": true,
+  "defect": "Legacy connector recognizes only ports map; public helper now preserves provider relay host/port as a candidate route. SSH pin, exact owned id, price and KVM checks still required.",
+  "proof": "proof/endpoint_green.log:16/16, EXPECTED RED b79170c00; relay/null-map mutants4/2killers",
+  "old_connector_owned_pid": 1484101,
+  "old_connector_stopped": true,
+  "readiness_deadline_reset": false,
+  "gpu_runtime_source": "b66adb6e76eac5258c4c1425cbccea0890d2c3d0",
+  "note": "Only the local connection helper changes; no GPU source/guard change."
+}

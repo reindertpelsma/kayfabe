@@ -169,10 +169,34 @@ def bounded_command(command, limit):
 
 
 
+def provider_ssh_endpoint(row):
+    """Return a provider-advertised endpoint; SSH pinning remains the caller's job."""
+    def endpoint(host, port):
+        if not isinstance(host, str) or not host or not host[0].isalnum():
+            return None
+        if len(host) > 253 or any(not (c.isalnum() or c in '.:-') for c in host):
+            return None
+        try:
+            number = int(port)
+        except (TypeError, ValueError):
+            return None
+        return (host, number) if 0 < number <= 65535 else None
+
+    ports = row.get('ports') or {}
+    mapped = ports.get('22/tcp') if isinstance(ports, dict) else None
+    if isinstance(mapped, list) and mapped and isinstance(mapped[0], dict):
+        direct = endpoint(row.get('public_ipaddr'), mapped[0].get('HostPort'))
+        if direct is not None:
+            return direct
+    return endpoint(row.get('ssh_host'), row.get('ssh_port'))
+
+
 def ssh_route_is_ready(row):
     """Provider candidate only; caller must still pin SSH, price, own ID and KVM."""
     running = row.get('actual_status') == 'running' or row.get('cur_state') == 'running'
-    return running and bool(row.get('ports', {}).get('22/tcp'))
+    ports = row.get('ports') or {}
+    mapped = isinstance(ports, dict) and bool(ports.get('22/tcp'))
+    return running and (mapped or provider_ssh_endpoint(row) is not None)
 
 
 def utc():

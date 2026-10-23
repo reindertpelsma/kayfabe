@@ -1,0 +1,53 @@
+test_bad_host_or_port_never_becomes_an_endpoint (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_bad_host_or_port_never_becomes_an_endpoint) ... ok
+test_direct_mapped_endpoint_is_preserved (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_direct_mapped_endpoint_is_preserved) ... ok
+test_incomplete_relay_is_not_a_ready_route (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_incomplete_relay_is_not_a_ready_route) ... ok
+test_not_running_still_is_not_ready (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_not_running_still_is_not_ready) ... ok
+test_null_map_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_map_endpoint_preserves_exact_host_and_port) ... FAIL
+test_null_ports_do_not_hide_relay (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_ports_do_not_hide_relay) ... FAIL
+test_relay_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_endpoint_preserves_exact_host_and_port) ... FAIL
+test_relay_fields_nominate_running_vm (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_fields_nominate_running_vm) ... FAIL
+
+======================================================================
+FAIL: test_null_map_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_map_endpoint_preserves_exact_host_and_port)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 31, in test_null_map_endpoint_preserves_exact_host_and_port
+    self.assertEqual(self.module().provider_ssh_endpoint(self.relay(ports=None)),
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     ('ssh3.vast.ai', 20046))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != ('ssh3.vast.ai', 20046)
+
+======================================================================
+FAIL: test_null_ports_do_not_hide_relay (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_null_ports_do_not_hide_relay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 24, in test_null_ports_do_not_hide_relay
+    self.assertTrue(self.module().ssh_route_is_ready(self.relay(ports=None)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_relay_endpoint_preserves_exact_host_and_port (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_endpoint_preserves_exact_host_and_port)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 27, in test_relay_endpoint_preserves_exact_host_and_port
+    self.assertEqual(self.module().provider_ssh_endpoint(self.relay()),
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     ('ssh3.vast.ai', 20046))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != ('ssh3.vast.ai', 20046)
+
+======================================================================
+FAIL: test_relay_fields_nominate_running_vm (scripts.bench.tests.test_provider_ssh_endpoint.EndpointTests.test_relay_fields_nominate_running_vm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_provider_ssh_endpoint.py", line 21, in test_relay_fields_nominate_running_vm
+    self.assertTrue(self.module().ssh_route_is_ready(self.relay()))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.013s
+
+FAILED (failures=4)
