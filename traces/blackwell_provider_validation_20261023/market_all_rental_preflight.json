@@ -1,6 +1,6 @@
 {
-  "utc": "2026-10-23T01:21:50.667463+00:00",
-  "credit_usd": 35.43175140516132,
+  "utc": "2026-10-23T01:25:51.205107+00:00",
+  "credit_usd": 35.41702559216128,
   "offers": [
     {
       "id": 56550364,
@@ -16,7 +16,7 @@
       "disk_space": 712.7000000000002
     },
     {
-      "id": 43994882,
+      "id": 43994880,
       "machine_id": 69146,
       "gpu_name": "RTX 5090",
       "candidate_die": "GB202",
@@ -27,19 +27,6 @@
       "reliability": 0.9960245,
       "inet_down": 1374.8,
       "disk_space": 331.125
-    },
-    {
-      "id": 38341566,
-      "machine_id": 59458,
-      "gpu_name": "RTX 5090",
-      "candidate_die": "GB202",
-      "verification": "deverified",
-      "dph_total": 0.40138888888888885,
-      "cpu_cores_effective": 24.0,
-      "cpu_ram": 64392,
-      "reliability": 0.9742189,
-      "inet_down": 1375.8,
-      "disk_space": 612.0
     },
     {
       "id": 57254352,
@@ -86,10 +73,10 @@
       "gpu_name": "RTX 5090",
       "candidate_die": "GB202",
       "verification": "verified",
-      "dph_total": 1.9294444444444445,
+      "dph_total": 1.9694444444444446,
       "cpu_cores_effective": 32.0,
       "cpu_ram": 128356,
-      "reliability": 0.9964412,
+      "reliability": 0.9964413,
       "inet_down": 715.8,
       "disk_space": 1241.0
     }
