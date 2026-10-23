@@ -41,7 +41,10 @@ class Budget:
 def first_query(fetch, budget, requested):
     for attempt in range(2):
         try:
-            text = fetch(budget.timeout(requested))
+            allowed = budget.timeout(requested)
+            if attempt == 0:
+                allowed = min(allowed, budget.timeout(float("inf")) / 2)
+            text = fetch(allowed)
         except subprocess.TimeoutExpired:
             if attempt == 1:
                 raise
