@@ -1,0 +1,2 @@
+UNVERIFIED-HOST preflight
+{"selected_offer": 54877110, "machine": 39248, "geolocation": "Quebec, CA", "die": "GB205", "plan": {"armed_utc": "2026-10-23T22:19:43.326301+00:00", "deadline_utc": "2026-10-24T01:19:43.326301+00:00", "seconds": 10800, "quoted_rate": 0.26731481481481484, "rate_bound": 0.36731481481481487, "reservation_usd": 1.6019444444444446, "credit_after_reservation": 26.39077319711627, "stop_usd": 2.0, "cap_usd": 2.5, "reserve_usd": 8.0, "leases_authorized": 1}, "creates": 0}

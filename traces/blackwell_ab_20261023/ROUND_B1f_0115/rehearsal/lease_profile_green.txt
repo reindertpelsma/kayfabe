@@ -1,0 +1,38 @@
+test_default_offer_rejects_7_core_offer (test_lease_profile.Defaults.test_default_offer_rejects_7_core_offer) ... ok
+test_default_plan_150_minutes (test_lease_profile.Defaults.test_default_plan_150_minutes) ... ok
+test_default_rejects_seven (test_lease_profile.Defaults.test_default_rejects_seven) ... ok
+test_default_values_unchanged (test_lease_profile.Defaults.test_default_values_unchanged) ... ok
+test_default_rejects_any_host_fault (test_lease_profile.PreflightJudge.test_default_rejects_any_host_fault) ... ok
+test_default_requires_sound (test_lease_profile.PreflightJudge.test_default_requires_sound) ... ok
+test_profile_accepts_only_the_7_core_fault (test_lease_profile.PreflightJudge.test_profile_accepts_only_the_7_core_fault) ... ok
+test_profile_rejects_6_cores (test_lease_profile.PreflightJudge.test_profile_rejects_6_cores) ... ok
+test_profile_rejects_7_core_fault_with_8_visible (test_lease_profile.PreflightJudge.test_profile_rejects_7_core_fault_with_8_visible) ... ok
+test_profile_rejects_any_other_fault (test_lease_profile.PreflightJudge.test_profile_rejects_any_other_fault) ... ok
+test_profile_rejects_kvm_fault (test_lease_profile.PreflightJudge.test_profile_rejects_kvm_fault) ... ok
+test_profile_rejects_nproc_mismatch (test_lease_profile.PreflightJudge.test_profile_rejects_nproc_mismatch) ... ok
+test_profile_rejects_ram_fault (test_lease_profile.PreflightJudge.test_profile_rejects_ram_fault) ... ok
+test_profile_with_sound_preflight_passes (test_lease_profile.PreflightJudge.test_profile_with_sound_preflight_passes) ... ok
+test_ceiling_restored_after_override_plan (test_lease_profile.Profile.test_ceiling_restored_after_override_plan) ... ok
+test_deviation_fields (test_lease_profile.Profile.test_deviation_fields) ... ok
+test_plan_3h_and_stop_binds (test_lease_profile.Profile.test_plan_3h_and_stop_binds) ... ok
+test_prefer_keeps_only_99805_rows (test_lease_profile.Profile.test_prefer_keeps_only_99805_rows) ... ok
+test_prefer_machine_99805_else_all (test_lease_profile.Profile.test_prefer_machine_99805_else_all) ... ok
+test_profile_accepts_7_rejects_6 (test_lease_profile.Profile.test_profile_accepts_7_rejects_6) ... ok
+test_scaled_worker_counts (test_lease_profile.Profile.test_scaled_worker_counts) ... ok
+test_unknown_profile_refused (test_lease_profile.Profile.test_unknown_profile_refused) ... ok
+test_unknown_profile_refused_by_guest_smp (test_lease_profile.Profile.test_unknown_profile_refused_by_guest_smp) ... ok
+test_unknown_profile_refused_by_offer_floor (test_lease_profile.Profile.test_unknown_profile_refused_by_offer_floor) ... ok
+test_bind_build_jobs_7 (test_lease_profile.Wiring.test_bind_build_jobs_7) ... ok
+test_common_guest_smp_6 (test_lease_profile.Wiring.test_common_guest_smp_6) ... ok
+test_controller_gates_preflight_through_profile (test_lease_profile.Wiring.test_controller_gates_preflight_through_profile) ... ok
+test_controller_runs_judge_line (test_lease_profile.Wiring.test_controller_runs_judge_line) ... ok
+test_fuzz_arm_unchanged (test_lease_profile.Wiring.test_fuzz_arm_unchanged) ... ok
+test_guest_and_build_scaling_in_run_kit (test_lease_profile.Wiring.test_guest_and_build_scaling_in_run_kit) ... ok
+test_install_guest_smp_6 (test_lease_profile.Wiring.test_install_guest_smp_6) ... ok
+test_operator_search_has_no_default_floor (test_lease_profile.Wiring.test_operator_search_has_no_default_floor) ... ok
+test_operator_uses_profile (test_lease_profile.Wiring.test_operator_uses_profile) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 0.298s
+
+OK
