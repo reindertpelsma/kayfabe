@@ -724,10 +724,15 @@ pub static REFUSED_LINES: std::sync::atomic::AtomicU32 = std::sync::atomic::Atom
 /// Lines each of the three kinds may print.
 pub const LOG_MAX: u32 = 512;
 
-/// May the plane print one more `TSG-MIRROR REFUSED` line? (RED stub: unbounded.)
+/// May the plane print one more `TSG-MIRROR REFUSED` line? `true` for the first [`LOG_MAX`] calls of the process, then
+/// `false` forever (the counter saturates: it never wraps back into the budget).
 #[must_use]
 pub fn refused_line_ok() -> bool {
-    true
+    REFUSED_LINES
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+            (n < LOG_MAX).then_some(n.saturating_add(1))
+        })
+        .is_ok()
 }
 
 /// Counters, in the `chan[...]` status line. Plain atomics: bounded by construction.

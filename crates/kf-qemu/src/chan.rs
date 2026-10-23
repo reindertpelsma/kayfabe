@@ -6032,10 +6032,13 @@ impl ChanPlane {
             Ok(p) => Ok(Some(p)),
             Err(r) => {
                 self.mirror_stats.note(&r);
-                eprintln!(
-                    "kf3: TSG-MIRROR REFUSED {:#x}:{:#x} tsg={tsg:#x} ctxShare={:#x} flags={:#x} status={:#x} class={:?}: {}",
-                    a.client, a.handle, a.ctx_share, a.flags, r.status, r.class, r.why
-                );
+                // A guest can ask for a refused birth in a loop: the counters count every one, the text is capped.
+                if crate::tsgmirror::refused_line_ok() {
+                    eprintln!(
+                        "kf3: TSG-MIRROR REFUSED {:#x}:{:#x} tsg={tsg:#x} ctxShare={:#x} flags={:#x} status={:#x} class={:?}: {}",
+                        a.client, a.handle, a.ctx_share, a.flags, r.status, r.class, r.why
+                    );
+                }
                 Err(r)
             }
         }
