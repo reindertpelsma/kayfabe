@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+"""Round4 cannot allocate before its destroy guard is armed."""
+import importlib.util
+from pathlib import Path
+import unittest
+
+PATH = Path(__file__).resolve().parents[1] / 'diesweep/lease_guard.py'
+
+
+def policy():
+    spec = importlib.util.spec_from_file_location('s4_lease_guard', PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def offer(**changes):
+    row = dict(dph_total=.20, vms_enabled=True, num_gpus=1, disk_space=180,
+               geolocation='Ontario, CA', inet_down_cost=.001, inet_up_cost=.001)
+    row.update(changes)
+    return row
+
+
+class BudgetTests(unittest.TestCase):
+    def test_owner_price_boundary_is_inclusive(self):
+        policy().validate_offer(offer(dph_total=2.50))
+
+    def test_above_owner_price_refuses(self):
+        with self.assertRaises(ValueError):
+            policy().validate_offer(offer(dph_total=2.51))
+
+    def test_denied_country_codes_refuse(self):
+        for country in ('CU', 'IR', 'KP', 'SY'):
+            with self.subTest(country=country), self.assertRaises(ValueError):
+                policy().validate_offer(offer(geolocation='region, ' + country))
+
+    def test_denied_country_names_refuse(self):
+        for country in ('Cuba', 'Iran', 'North Korea', 'Syria'):
+            with self.subTest(country=country), self.assertRaises(ValueError):
+                policy().validate_offer(offer(geolocation=country))
+
+    def test_missing_country_and_nonfinite_price_refuse(self):
+        for changes in ({'geolocation': ''}, {'dph_total': float('nan')},
+                        {'dph_total': float('inf')}, {'dph_total': 0}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                policy().validate_offer(offer(**changes))
+
+    def test_non_kvm_or_small_disk_refuses(self):
+        for changes in ({'vms_enabled': False}, {'disk_space': 179}, {'num_gpus': 2}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                policy().validate_offer(offer(**changes))
+
+    def test_reservation_stays_below_stop_and_three_hours(self):
+        plan = policy().reservation(offer(), spent=0, credit=28.8, now=1000)
+        self.assertLessEqual(plan['reserved_usd'], 2.50)
+        self.assertLessEqual(plan['deadline_epoch'] - 1000, 3 * 3600)
+        self.assertAlmostEqual(plan['rate_guard'], .30)
+
+    def test_expensive_quote_cannot_spend_stop_reserve(self):
+        with self.assertRaises(ValueError):
+            policy().reservation(offer(dph_total=1), spent=0, credit=28.8, now=1000)
+
+    def test_prior_round_spend_is_included(self):
+        with self.assertRaises(ValueError):
+            policy().reservation(offer(), spent=2, credit=28.8, now=1000)
+
+    def test_five_dollar_credit_reserve_is_untouched(self):
+        with self.assertRaises(ValueError):
+            policy().reservation(offer(), spent=0, credit=5.1, now=1000)
+
+    def test_transfer_quotes_have_explicit_reservation(self):
+        plan = policy().reservation(offer(), spent=0, credit=28.8, now=1000)
+        self.assertGreaterEqual(plan['transfer_reserved_usd'], 80 * .001 + 2 * .001)
+
+    def test_negative_spend_and_invalid_duration_refuse(self):
+        for changes in ({'spent': -1}, {'minutes': 181}, {'minutes': 0}):
+            args = dict(spent=0, credit=28.8, now=1000)
+            args.update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                policy().reservation(offer(), **args)
+
+
+class PrearmTests(unittest.TestCase):
+    def execute(self, ready=True):
+        calls = []
+        def arm():
+            calls.append('armed')
+            return ready
+        def create():
+            calls.append('create')
+            return {'success': True, 'new_contract': 123}
+        def save(iid):
+            calls.append(('registered', iid))
+        result = policy().armed_create(arm, create, save)
+        return result, calls
+
+    def test_guard_is_ready_before_create(self):
+        _, calls = self.execute()
+        self.assertEqual(calls[:2], ['armed', 'create'])
+
+    def test_created_exact_id_is_registered(self):
+        result, calls = self.execute()
+        self.assertEqual(result, 123)
+        self.assertEqual(calls[-1], ('registered', 123))
+
+    def test_missing_ready_marker_refuses_create(self):
+        with self.assertRaises(ValueError):
+            self.execute(False)
+
+    def test_failed_create_never_registers_any_id(self):
+        calls = []
+        with self.assertRaises(ValueError):
+            policy().armed_create(lambda: True, lambda: {'success': False}, calls.append)
+        self.assertEqual(calls, [])
+
+    def test_missing_id_is_never_a_destroy_target(self):
+        self.assertIsNone(policy().owned_id({'intent': 'fixture'}, 'fixture'))
+
+    def test_foreign_intent_and_invalid_ids_refuse(self):
+        for plan in ({'intent': 'foreign', 'id': 123},
+                     {'intent': 'fixture', 'id': 0}, {'intent': 'fixture', 'id': '123'}):
+            with self.subTest(plan=plan), self.assertRaises(ValueError):
+                policy().owned_id(plan, 'fixture')
