@@ -12,6 +12,6 @@ ADAPTIVE GA102 — LIVE 2026-10-23
 10. CODE READ (2026-10-23, commitac21aef93): common Windows adapter reuses SW2 policy4ede56ac7; measured4–10x factor, ceilings, persisted stage and export reserve; side effects single attempt.
 11. MEASURED (2026-10-23, `../adaptive/green.log`, `../adaptive/sw2_shared_green.log`): adaptive57/57 and shared21/21 pass; prior desktop70/70 pass.
 12. MEASURED (2026-10-23, `../adaptive/mutants.json`): ten mutants killed15/6/10/6/9/2/2/3/3/2; source restored; no Rust change/added lint site, fresh clippy not run.
-13. CODE READ (2026-10-23): Windows580.88 bind/ON/desktop/apps/Unigine/600s hold pending; no driver verdict is implied by earlier fixed-bound failure.
+13. CODE READ (2026-10-23): 580.88 bindPASS/Code22, both GSPkeys1; parent sealed/stopped01:39:44Z (`bind_complete/`). Cold ON child reachedSSH with exactsource/flags; enable/desktop/apps/Unigine/600s hold pending.
 14. INFERRED (2026-10-23, `START.json`): conservative prior$6.722848 plus full new allowance$1.632778=$8.355626<12; Round3 exposure$4.552008<8; reserve$5 untouched.
 15. CODE READ (2026-10-23): only own lease57296386 active; preserve bounded evidence before exact-id teardown/API absence, then Turing if a compliant offer is available.

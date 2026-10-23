@@ -1,0 +1,31 @@
+{
+  "pid": 100563,
+  "exe": "/workspace/bench/kf3-bins/ac21aef9/qemu-system-x86_64",
+  "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744",
+  "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57296386/secureboot/kf-gop.ac21aef9.signed.efi,id=kf0,guest-driver=580.65.06",
+  "flags": {
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_RPC_BODY_TRACE": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_RPC_TRACE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1"
+  },
+  "p19_count": 19,
+  "harness_checkout": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7"
+}

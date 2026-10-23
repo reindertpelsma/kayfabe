@@ -1,0 +1,105 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "utc": "2026-10-23T01:43:11.317075+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 2328,
+      "sha256": "c43ac8b7c258679c336cdb1b8c255306860da6b1369b7e039439cad7685806cd"
+    },
+    "arm_ampere_s4.log": {
+      "bytes": 678,
+      "sha256": "043faa71bce702d7901d3af0b801ffd1a1479b4dc71abdad77f0336e51b4a2b3"
+    },
+    "arm_ampere_s4_process_receipt.json": {
+      "bytes": 1217,
+      "sha256": "caf876d37a55c39f705628903bf07aa7e3304b066a628728e4a168702eeb4d5f"
+    },
+    "bwr_binding.json": {
+      "bytes": 204,
+      "sha256": "6e1482827b6bddb445efaac973ad717a38e13ce0df97b1824c76cd9ed94e1f0d"
+    },
+    "bwr_bind_readiness_stage.json": {
+      "bytes": 310,
+      "sha256": "103839a0625cafb5a214e91b78dd73ffd5d31437b3da4c6c5eab3e20a6af3ed6"
+    },
+    "bwr_cim_readiness.json": {
+      "bytes": 491,
+      "sha256": "abda25d0d14faf2dc33c84d63474a6011afe78571321c8ff0c8fb9c2763c68d4"
+    },
+    "bwr_crashdump_readiness.json": {
+      "bytes": 490,
+      "sha256": "73f1e0088703124fb1eab10324b7d449176d5f65e21cdebc8e8a608f3d9c5acc"
+    },
+    "bwr_bind_ssh_readiness.json": {
+      "bytes": 1004,
+      "sha256": "3da7ea3daabfb9705d95dc0bcdda0d2a2cf861d31f9bde8bd6a071c64e5636f4"
+    },
+    "bwr_parent_sha256.txt": {
+      "bytes": 124,
+      "sha256": "534e6330017bf49aba73d01a44c73e71e5ea974f634c5a0ce98bf6e39635ea69"
+    },
+    "box_readiness.json": {
+      "bytes": 249,
+      "sha256": "4fee8b7df54e33fa03009e02050729959e14b86f1a13bedcbc864b03b0ddf18f"
+    },
+    "bwr_bind.log": {
+      "bytes": 3832,
+      "sha256": "df41cbbdecc444c8153e6ff72a8fd3f9a5be0af1ca5102d03531b8b0fa8dcaf5"
+    },
+    "bwr_cold_readiness.json": {
+      "bytes": 490,
+      "sha256": "f7f360215ec00923e1bf2e4e5fb3d95b14feb83904dd8544156a5cc8ea5b623c"
+    },
+    "bwr_bind_process_receipt.json": {
+      "bytes": 1184,
+      "sha256": "00cb80ed0604da14b217ff32c4948632ec4623f24330f54003462c3bd2021e2e"
+    },
+    "bwr_cold_ready.txt": {
+      "bytes": 426,
+      "sha256": "d2c880a7888640e46af1b4edd92f3986d3f7ed749835704d63e0aad7d5a9ac39"
+    },
+    "bwr_stop_readiness.json": {
+      "bytes": 490,
+      "sha256": "480303d77ccae34c8c2ec6b8f388e74f2fa2111acf1b804f2412715196f06234"
+    },
+    "sweep_windows_install.log": {
+      "bytes": 6395,
+      "sha256": "f188e87471b06c7aeb70d3dd84325db70f6a0eaf38f2cf59ee0b28b400584e33"
+    },
+    "bwr_crashdump.txt": {
+      "bytes": 204,
+      "sha256": "1fc352e9f6c48bebce892b77925e4a19fbe6af658b591779c74fea1904027f92"
+    },
+    "arm_ampere_s4_media_dir_readiness.json": {
+      "bytes": 490,
+      "sha256": "c6c56abeea30d983de3ea29fcb479d89a3fb6bd5e2e3f712db22bb94f8e4944b"
+    },
+    "arm_counts.json": {
+      "bytes": 26,
+      "sha256": "20f27e82ace6bbd3166a55746626894883ba47d149b7a69ca1b2f157a4e2f05a"
+    },
+    "arm_ampere_s4_readiness_stage.json": {
+      "bytes": 315,
+      "sha256": "11f6552da133a5a758bdebf39baba6afc11ba928bc76f8e47d58ba01688222f5"
+    },
+    "native_xid_watch.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bwr_install_readiness.json": {
+      "bytes": 491,
+      "sha256": "a7f9cc8ca46f30c22acc871718bc0a8cc5cca178a233a36da180646d2e9f1833"
+    },
+    "arm_ampere_s4_start_receipt.json": {
+      "bytes": 583,
+      "sha256": "3c7e143a8316c9b54b59a461e439c4d8645695b52f837b440ba260dc1beb30de"
+    },
+    "arm_ampere_s4_ssh_readiness.json": {
+      "bytes": 488,
+      "sha256": "5bc12431d5dc3776fd4ff4457c3668439f5a0f1457dafb16e333f1911648baa0"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}

@@ -1,3 +1,5 @@
+MEASURED LIVE UPDATE (2026-10-23, lease57296386, `lease_57296386/bind_complete/`): signed Windows580.88 binds as32.0.15.8088/Code22; both GSPkeys1, cold parent sealed and stopped01:39:44Z. New ON child reachedSSH, exactsource/flags receiptPASS; GPU enable/desktop/apps/hold still pending.
+
 MEASURED LIVE UPDATE (2026-10-23, lease57296386, `lease_57296386/baseline_calibration/box_readiness.json`): nativePASS; generic Windows first installation boot exited0; verification boot48s and one OS CIM query15.4196s produced factor8. Baseline verification/bind/ON/apps/hold are still pending; no new driver verdict.
 
 STATUS: LIVE — adaptive readiness resume, 2026-10-23.

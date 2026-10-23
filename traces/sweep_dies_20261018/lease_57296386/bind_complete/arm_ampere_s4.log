@@ -1,0 +1,7 @@
+READINESS_STAGE seconds=3600.0
+
+/workspace/sweep-win-57296386/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=ampere_s4 source=ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7 profile=on 2026-10-23T01:40:53+00:00
+[2026-10-23T01:40:53Z] detached: tag=ampere_s4, log logs/ampere_s4_run.log (stdout logs/ampere_s4_run.out)
+KF_SSH_UP
+{"pid": 102721, "exe": "/workspace/bench/kf3-bins/ac21aef9/qemu-system-x86_64", "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57296386/secureboot/kf-gop.ac21aef9.signed.efi,id=kf0,guest-driver=580.65.06"}

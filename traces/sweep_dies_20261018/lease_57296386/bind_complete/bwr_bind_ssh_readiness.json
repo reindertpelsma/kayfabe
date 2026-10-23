@@ -1,0 +1,42 @@
+{
+  "started_utc": "2026-10-23T01:31:12.287405+00:00",
+  "box_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "scale": 8,
+  "profile_sha256": "632136f8d143c834e020b90bf46367cdd23bb4e9d183cdf76591ea7bca68f006",
+  "mode": "wait",
+  "attempts": [
+    {
+      "attempt": 1,
+      "timeout_seconds": 160,
+      "returncode": 255,
+      "remaining_seconds": 2699.961569868
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 160,
+      "returncode": 255,
+      "remaining_seconds": 2699.915634754
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 160,
+      "returncode": 255,
+      "remaining_seconds": 2661.180086054
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 160,
+      "returncode": 255,
+      "remaining_seconds": 2661.146061123
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 160,
+      "returncode": 0,
+      "remaining_seconds": 2644.647534373
+    }
+  ],
+  "result": "ACTUAL_REPLY",
+  "finished_utc": "2026-10-23T01:32:07.640040+00:00"
+}

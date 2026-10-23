@@ -1,0 +1,9 @@
+{
+  "profile_sha256": "632136f8d143c834e020b90bf46367cdd23bb4e9d183cdf76591ea7bca68f006",
+  "box_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "created_utc": "2026-10-23T01:31:12.160520+00:00",
+  "seconds": 3600.0,
+  "end_monotonic": 6842.0150553,
+  "export_reserve_seconds": 1200
+}
