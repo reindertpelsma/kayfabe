@@ -1415,6 +1415,8 @@ static bool x11_gc_build(struct nb_x11 *x)
 #ifdef NB_HAVE_XCB_RENDER
     /* static: 1 MiB, single-threaded broker, rebuilt only on change. */
     static uint32_t px[NB_CURSOR_SCALED_MAX * NB_CURSOR_SCALED_MAX];
+    /* static: 512 KiB, single-threaded broker; the pointer's cropped copy */
+    static struct nb_cursor crop;
     const struct nb_cursor *c = x->gcur;
     struct nb_cursor_geom g;
     uint32_t nx = 1, dx = 1, ny = 1, dy = 1;
@@ -1424,6 +1426,11 @@ static bool x11_gc_build(struct nb_x11 *x)
 
     if (!x->argb_fmt || !c || !c->defined) {
         return false;
+    }
+    /* The pointer is the drawn box of the guest's cursor, not its whole
+     * 256x256 hardware-cursor buffer (same rule as the Wayland pointer). */
+    if (nb_cursor_crop(c, &crop)) {
+        c = &crop;
     }
     if (x->current >= 0 && x->bufs[x->current].valid &&
         x->bufs[x->current].w > 0 && x->bufs[x->current].h > 0 &&
