@@ -2,11 +2,14 @@
 
 import copy
 import datetime as dt
+import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 try:
@@ -144,6 +147,10 @@ def install_negative(name, mutate):
 
 NEGATIVES = {
     "foreign_pid_stops": lambda lines, args: [xid(pid=999)],
+    "foreign_pid_beside_owned_record_stops": lambda lines, args: [
+        xid(),
+        xid(0x0E00000B, pid=222, second=2),
+    ],
     "reused_pid_life_stops": lambda lines, args: args["permit"].update(starttime=191784),
     "different_executable_stops": lambda lines, args: args["permit"].update(exe="/other/qemu"),
     "wrong_pci_stops": lambda lines, args: [xid().replace("00:07", "00:08")],
@@ -236,6 +243,80 @@ class HostHealth(unittest.TestCase):
     def test_no_cuda_device_stops(self):
         with self.assertRaises(ValueError):
             self.probe(cuda_text='{"cuInit":0,"cuDeviceGetCount":0,"devices":0}')
+
+
+class WatcherLifecycle(unittest.TestCase):
+    def setUp(self):
+        self.assertIsNotNone(O, "per-arm observation implementation missing")
+
+    def exercise(self, new_fault_after_exit=False, owner_error="owned QEMU exited"):
+        class Clock(dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return NOW
+
+        initial = [
+            {"cursor": "a", "priority": 6, "line": "kernel initial one"},
+            {"cursor": "b", "priority": 6, "line": "kernel initial two"},
+        ]
+        one = initial + [{"cursor": "c", "priority": 3, "line": xid()}]
+        two = one + [{"cursor": "d", "priority": 3, "line": xid(0x0E00000B, second=2)}]
+        first, second = (one, two) if new_fault_after_exit else (two, two)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, value in [
+                ("native.json", {"approved_native_xid_lines": [], "pci": PHASE["pci"]}),
+                ("phase.json", PHASE),
+                ("permit.json", PERMIT),
+                ("authority.json", AUTHORITY),
+            ]:
+                (root / name).write_text(json.dumps(value))
+            with (
+                patch.object(O, "kernel_rows", side_effect=[initial, first, second]),
+                patch.object(O, "check_host_health", return_value={"devices": 1}),
+                patch.object(
+                    O.G, "validate_phase_owner", side_effect=[True, True, O.Refused(owner_error)]
+                ) as validate,
+                patch.object(O.G, "abort_owned_qemu", return_value=False) as abort,
+                patch.object(O.G.N, "terminate_owned_tree") as terminate,
+                patch.object(O.os, "getpgid", return_value=1234),
+                patch.object(O.os, "getpgrp", return_value=1234),
+                patch.object(O.dt, "datetime", Clock),
+                patch.object(O.time, "sleep", side_effect=[None, KeyboardInterrupt]),
+            ):
+                arguments = [
+                    str(root / "native.json"),
+                    1234,
+                    str(root / "phase.json"),
+                    str(root / "fatal.json"),
+                    str(root / "authority.json"),
+                    str(root / "permit.json"),
+                ]
+                if new_fault_after_exit:
+                    with self.assertRaises(O.Refused):
+                        O.watch(*arguments)
+                    self.assertTrue((root / "fatal.json").exists())
+                    abort.assert_called_once()
+                    terminate.assert_called_once_with(1234)
+                else:
+                    with self.assertRaises(KeyboardInterrupt):
+                        O.watch(*arguments)
+                    self.assertFalse((root / "fatal.json").exists())
+                    abort.assert_not_called()
+                    terminate.assert_not_called()
+                    self.assertEqual(validate.call_count, 2)
+
+    def test_guest_exit_without_new_faults_can_reach_collection(self):
+        self.exercise()
+
+    def test_pid_reuse_without_new_faults_does_not_signal_the_replacement(self):
+        self.exercise(owner_error="starttime changed after guest exit")
+
+    def test_new_fault_after_owned_qemu_exits_is_fatal(self):
+        self.exercise(new_fault_after_exit=True)
+
+    def test_new_fault_after_pid_reuse_is_fatal(self):
+        self.exercise(new_fault_after_exit=True, owner_error="starttime changed")
 
 
 if __name__ == "__main__":
