@@ -84,6 +84,16 @@ class ProviderRetry(unittest.TestCase):
             self.retire(row=dict(self.row, id=72))
         self.assertEqual(self.events, [])
 
+    def test_missing_absence_proof_prevents_bad_list_publication(self):
+        with self.assertRaisesRegex(ValueError, "absence"):
+            self.retire(absent=lambda _: None)
+        self.assertFalse(self.bad.exists())
+
+    def test_another_foreign_instance_cannot_be_destroyed(self):
+        with self.assertRaises(ValueError):
+            self.retire(row=dict(self.row, id=9999))
+        self.assertEqual(self.events, [])
+
     def test_an_ssh_ready_instance_cannot_enter_provider_retry(self):
         with self.assertRaises(ValueError):
             self.retire(row=dict(self.row, ssh_ready_utc="actual"))
