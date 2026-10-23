@@ -1,0 +1,21 @@
+COLLECT_START run=on_derived (standard VGA, no kf3 device) 2026-10-23T06:11:46+00:00
+[2026-10-23T06:11:46Z] detached: tag=on_derived_collect, log logs/on_derived_collect_run.log (stdout logs/on_derived_collect_run.out)
+KF_SSH_UP
+CLOCK host=2026-10-23T06:14:31.667039338 guest=2026-10-23T06:14:38.3515393Z
+COLLECT_DONE
+COLLECT_METADATA_READY 2026-10-23T06:15:09+00:00
+WER_TIMES_DONE
+HDR_DONE
+Traceback (most recent call last):
+  File "/root/sweep2/dump_header.py", line 52, in <module>
+    main(sys.argv)
+  File "/root/sweep2/dump_header.py", line 45, in main
+    print(json.dumps(parse_hexline(l)))
+  File "/root/sweep2/dump_header.py", line 35, in parse_hexline
+    d = parse(bytes.fromhex(f[3]))
+  File "/root/sweep2/dump_header.py", line 17, in parse
+    raise ValueError("not a PAGEDU64 dump header")
+ValueError: not a PAGEDU64 dump header
+[2026-10-23T06:15:49Z] stopping kfwin (pid 117180)
+[2026-10-23T06:16:17Z] stopped
+COLLECT_EXIT run=on_derived rc=1 2026-10-23T06:16:17+00:00

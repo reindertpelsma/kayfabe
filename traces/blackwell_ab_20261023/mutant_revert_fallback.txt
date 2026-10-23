@@ -1,0 +1,49 @@
+test_collection_keeps_supported_headers_on_both_sides_of_unsupported_one (test_dump_header_evidence.DumpHeaderEvidence.test_collection_keeps_supported_headers_on_both_sides_of_unsupported_one) ... ERROR
+test_short_header_is_retained_as_unparsed (test_dump_header_evidence.DumpHeaderEvidence.test_short_header_is_retained_as_unparsed) ... ERROR
+test_transport_errors_still_refuse (test_dump_header_evidence.DumpHeaderEvidence.test_transport_errors_still_refuse) ... ok
+test_zero_signature_retains_raw_header_without_a_bugcheck_claim (test_dump_header_evidence.DumpHeaderEvidence.test_zero_signature_retains_raw_header_without_a_bugcheck_claim) ... ERROR
+
+======================================================================
+ERROR: test_collection_keeps_supported_headers_on_both_sides_of_unsupported_one (test_dump_header_evidence.DumpHeaderEvidence.test_collection_keeps_supported_headers_on_both_sides_of_unsupported_one)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_dump_header_evidence.py", line 49, in test_collection_keeps_supported_headers_on_both_sides_of_unsupported_one
+    dump_header.main(["dump_header.py", "--hexlines"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "scripts/bench/blackwell/dump_header.py", line 45, in main
+    print(json.dumps(parse_hexline(l)))
+                     ~~~~~~~~~~~~~^^^
+  File "scripts/bench/blackwell/dump_header.py", line 35, in parse_hexline
+    d = parse(bytes.fromhex(f[3]))
+  File "scripts/bench/blackwell/dump_header.py", line 17, in parse
+    raise ValueError("not a PAGEDU64 dump header")
+ValueError: not a PAGEDU64 dump header
+
+======================================================================
+ERROR: test_short_header_is_retained_as_unparsed (test_dump_header_evidence.DumpHeaderEvidence.test_short_header_is_retained_as_unparsed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_dump_header_evidence.py", line 58, in test_short_header_is_retained_as_unparsed
+    result = dump_header.parse_hexline(collector_line(raw))
+  File "scripts/bench/blackwell/dump_header.py", line 35, in parse_hexline
+    d = parse(bytes.fromhex(f[3]))
+  File "scripts/bench/blackwell/dump_header.py", line 17, in parse
+    raise ValueError("not a PAGEDU64 dump header")
+ValueError: not a PAGEDU64 dump header
+
+======================================================================
+ERROR: test_zero_signature_retains_raw_header_without_a_bugcheck_claim (test_dump_header_evidence.DumpHeaderEvidence.test_zero_signature_retains_raw_header_without_a_bugcheck_claim)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_dump_header_evidence.py", line 30, in test_zero_signature_retains_raw_header_without_a_bugcheck_claim
+    result = dump_header.parse_hexline(collector_line(raw))
+  File "scripts/bench/blackwell/dump_header.py", line 35, in parse_hexline
+    d = parse(bytes.fromhex(f[3]))
+  File "scripts/bench/blackwell/dump_header.py", line 17, in parse
+    raise ValueError("not a PAGEDU64 dump header")
+ValueError: not a PAGEDU64 dump header
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+FAILED (errors=3)

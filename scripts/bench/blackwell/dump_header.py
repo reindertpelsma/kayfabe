@@ -4,6 +4,7 @@ Public layout (Microsoft DUMP_HEADER64): BugCheckCode @56 (u32), BugCheckParamet
 SystemTime @4008 (FILETIME). No memory, context or module bytes are read or exported.
 Usage: dump_header.py FILE.dmp | dump_header.py --hexlines < collector-output   (JSON per dump)
 """
+
 import datetime
 import json
 import struct
@@ -18,7 +19,9 @@ def parse(raw: bytes) -> dict:
     code = struct.unpack_from("<I", raw, 56)[0]
     params = [struct.unpack_from("<Q", raw, 64 + 8 * i)[0] for i in range(4)]
     ft = struct.unpack_from("<Q", raw, 4008)[0]
-    t = datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(microseconds=ft // 10)
+    t = datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(
+        microseconds=ft // 10
+    )
     return {
         "bugcheck": hex(code),
         "parameters": [hex(p) for p in params],
@@ -32,9 +35,19 @@ def parse_hexline(line: str) -> dict:
     f = line.split()
     if len(f) != 4 or f[0] != "HDR":
         raise ValueError("not an HDR line")
-    d = parse(bytes.fromhex(f[3]))
+    raw = bytes.fromhex(f[3])
+    file_bytes = int(f[2])
+    try:
+        d = parse(raw)
+    except ValueError as error:
+        d = {
+            "parse_status": "unparsed",
+            "note": "unparsed header, raw bytes retained in evidence",
+            "parse_error": str(error),
+            "raw_header_hex": raw.hex(),
+        }
     d["file"] = f[1]
-    d["bytes"] = int(f[2])
+    d["bytes"] = file_bytes
     return d
 
 
