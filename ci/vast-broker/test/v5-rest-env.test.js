@@ -11,7 +11,7 @@ test('Vast REST environment is a JSON map with protocol-seven values', async () 
   assert.equal(typeof env, 'object');
   assert.equal(Array.isArray(env), false);
   assert.equal(env.KF_PROTOCOL, '7');
-  assert.match(env.KF_RUN_TOKEN, /^v2\./);
+  assert.match(env.KF_RUN_TOKEN, /^eyJ[\w-]+\.eyJ[\w-]+\.[\w-]{43}$/);
   assert.equal(env.KF_RUNNER_NONCE.length, 64);
   assert.ok(Object.values(env).every((v) => typeof v === 'string'));
   assert.ok(Object.keys(env).every((k) => /^KF_[A-Z_]+$/.test(k)));

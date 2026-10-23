@@ -8,7 +8,7 @@ and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. The r
 | --- | --- |
 | KF_PROTOCOL | Decimal protocol, currently 7 |
 | KF_BROKER_URL | HTTPS origin plus required secret path, no trailing slash |
-| KF_RUN_ID / KF_RUN_TOKEN | Positive run-attempt / this run's HMAC capability |
+| KF_RUN_ID / KF_RUN_TOKEN | Positive run-attempt / this run's capability: an HS256 JWT (claims run, attempt, sha, nonce, exp = hard limit) that only the Worker verifies |
 | KF_NONCE / KF_SHA / KF_RUNNER_NONCE | 32 / 40 / 64 lowercase hex |
 | KF_REPO | Public owner/repository |
 | KF_SOFT_DEADLINE | Required Worker-clock absolute epoch seconds |

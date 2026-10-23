@@ -60,8 +60,8 @@ def _match(pattern):
     return lambda v: re.fullmatch(pattern, v) is not None
 
 
-TOKEN = (r"v2\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\."
-         r"[0-9a-f]{32}\.[0-9a-f]{40}\.[A-Za-z0-9_-]{43}")
+# The run token is a compact HS256 JWT minted and verified only by the Worker (protocol 7).
+TOKEN = r"[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{1,512}\.[A-Za-z0-9_-]{43}"
 # (name, required, check). Optional entries are validated only when present.
 SPEC = [
     ("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
@@ -94,10 +94,6 @@ def validate_env(env):
         elif not check(value):
             problems.append("%s: malformed" % name)
     bad = {p.split(":")[0] for p in problems}
-    token, run = env.get("KF_RUN_TOKEN", ""), env.get("KF_RUN_ID", "")
-    if not {"KF_RUN_TOKEN", "KF_RUN_ID"} & bad:
-        if ".".join(token.split(".")[1:3]).replace(".", "-") != run:
-            problems.append("KF_RUN_TOKEN: does not match KF_RUN_ID")
     soft, hard = env.get("KF_SOFT_DEADLINE", ""), env.get("KF_HARD_DEADLINE", "")
     if not {"KF_SOFT_DEADLINE", "KF_HARD_DEADLINE"} & bad and soft and hard:
         if int(soft) >= int(hard):

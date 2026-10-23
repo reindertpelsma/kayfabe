@@ -1,4 +1,7 @@
-import { webcrypto, createHmac } from 'node:crypto';
+import { webcrypto, createHmac, timingSafeEqual } from 'node:crypto';
+import { useTimingSafeEqual } from '../src/tokens.js';
+// Plain Node has no crypto.subtle.timingSafeEqual (a Workers API): install Node's.
+useTimingSafeEqual(timingSafeEqual);
 import { readFileSync } from 'node:fs';
 // The tested commit's reporter, served by the mock contents API (V6 protocol marker).
 export const reporterSource = readFileSync(
@@ -293,19 +296,16 @@ export class MockCloud {
       : new Response('', { status: 404 });
   };
 }
+// Run tokens minted independently of jose (node:crypto HMAC) so tests cross-check jose.
 export function callbackToken(record, secret = env.RUN_TOKEN_SECRET, patch = {}) {
   const r = { ...record, ...patch },
-    expiry = r.reportExpiry ?? Math.floor((r.started + r.ttl) / 1000);
-  const message = ['v2', r.run, r.attempt, r.sha, r.label, expiry, r.nonce].join('|');
-  return [
-    'v2',
-    r.run,
-    r.attempt,
-    expiry,
-    r.nonce,
-    r.sha,
-    createHmac('sha256', secret).update(message).digest('base64url'),
-  ].join('.');
+    exp = r.reportExpiry ?? Math.floor((r.started + r.ttl) / 1000);
+  const b64 = (v) => Buffer.from(JSON.stringify(v)).toString('base64url');
+  const input =
+    b64({ alg: 'HS256' }) +
+    '.' +
+    b64({ run: r.run, attempt: r.attempt, sha: r.sha, nonce: r.nonce, exp });
+  return input + '.' + createHmac('sha256', secret).update(input).digest('base64url');
 }
 export async function setup(overrides = {}) {
   const { createService } = await import('../src/index.js');

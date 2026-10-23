@@ -1,19 +1,6 @@
-// prettier-ignore
-import {numericId,hexSha,refuse} from './policy.js';
+import { SignJWT, jwtVerify } from 'jose';
+import { numericId, hexSha, refuse } from './policy.js';
 const tokenEncoder = new TextEncoder();
-const tag64 = (bytes) =>
-  btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/=+$/, '');
-const hmacKey = (secret) =>
-  crypto.subtle.importKey(
-    'raw',
-    tokenEncoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify'],
-  );
 export const validSecret = (value) =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{32,256}$/.test(value);
 export async function sha256Hex(value) {
@@ -35,29 +22,29 @@ export async function logChain(previous, text) {
   wire.set(bytes, 36);
   return sha256Hex(wire);
 }
+// Platform seam: Cloudflare Workers provide crypto.subtle.timingSafeEqual; plain Node (the
+// tests) installs node:crypto's timingSafeEqual with useTimingSafeEqual. Without one, refuse.
+let timingSafeEqual = globalThis.crypto?.subtle?.timingSafeEqual?.bind(globalThis.crypto.subtle);
+export const useTimingSafeEqual = (compare) => (timingSafeEqual = compare);
 export async function constantTimeEqual(expected, provided) {
   if (typeof expected !== 'string' || typeof provided !== 'string' || provided.length > 256)
     return false;
-  // Native HMAC verification compares fixed-size tags inside the crypto implementation.
-  const key = await hmacKey('kayfabe-owner-stop-comparison-v1');
-  const tag = await crypto.subtle.sign('HMAC', key, tokenEncoder.encode(expected));
-  return crypto.subtle.verify('HMAC', key, tag, tokenEncoder.encode(provided));
+  if (!timingSafeEqual) refuse();
+  // Equal-length digests: the platform compare needs equal lengths and leaks no length.
+  const digest = async (text) =>
+    new Uint8Array(await crypto.subtle.digest('SHA-256', tokenEncoder.encode(text)));
+  return timingSafeEqual(await digest(expected), await digest(provided));
 }
+// Per-run box capability: a jose HS256 JWT over run, attempt, tested sha and the per-rental
+// nonce, expiring at the hard limit (owner addendum 2026-10-23 19:45).
 export class RunTokens {
   constructor(secret, now = Date.now) {
     this.now = now;
     this.secret = secret;
-    this.key = null;
   }
-  async cryptoKey() {
+  key() {
     if (!validSecret(this.secret)) refuse();
-    return (this.key ??= await hmacKey(this.secret));
-  }
-  message(r, expiry) {
-    return ['v2', r.run, r.attempt, r.sha, r.label, expiry, r.nonce].join('|');
-  }
-  fields(token) {
-    return tokenFields(token);
+    return tokenEncoder.encode(this.secret);
   }
   async issue(r) {
     if (
@@ -70,34 +57,28 @@ export class RunTokens {
       !Number.isSafeInteger(r.reportExpiry)
     )
       refuse();
-    const tag = new Uint8Array(
-      await crypto.subtle.sign(
-        'HMAC',
-        await this.cryptoKey(),
-        tokenEncoder.encode(this.message(r, r.reportExpiry)),
-      ),
-    );
-    return ['v2', r.run, r.attempt, r.reportExpiry, r.nonce, r.sha, tag64(tag)].join('.');
+    return new SignJWT({ run: r.run, attempt: r.attempt, sha: r.sha, nonce: r.nonce })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime(r.reportExpiry)
+      .sign(this.key());
   }
   async verifyStateless(token) {
+    if (typeof token !== 'string' || token.length > 1024) return null;
     try {
-      const fields = this.fields(token);
-      if (!fields || fields.reportExpiry * 1000 <= this.now()) return null;
-      const bytes = Uint8Array.from(
-        atob(fields.tag.replaceAll('-', '+').replaceAll('_', '/') + '='),
-        (x) => x.charCodeAt(0),
-      );
-      if (bytes.length !== 32 || tag64(bytes) !== fields.tag) return null;
+      const { payload: c } = await jwtVerify(token, this.key(), {
+        algorithms: ['HS256'],
+        currentDate: new Date(this.now()),
+        requiredClaims: ['exp'],
+      });
       if (
-        !(await crypto.subtle.verify(
-          'HMAC',
-          await this.cryptoKey(),
-          bytes,
-          tokenEncoder.encode(this.message(fields, fields.reportExpiry)),
-        ))
+        !numericId(c.run) ||
+        !numericId(c.attempt) ||
+        !hexSha(c.sha) ||
+        !/^[0-9a-f]{32}$/.test(c.nonce)
       )
         return null;
-      return fields;
+      const key = c.run + '-' + c.attempt;
+      return { ...c, key, label: 'kf-ci-' + key, reportExpiry: c.exp };
     } catch {
       return null;
     }
@@ -116,31 +97,4 @@ export class RunTokens {
       fields.reportExpiry === r.reportExpiry
     );
   }
-}
-
-export function tokenFields(token) {
-  if (typeof token !== 'string' || token.length > 256) return null;
-  const parts = token.split('.');
-  if (parts.length !== 7) return null;
-  const [version, run, attempt, expiry, nonce, sha, tag] = parts;
-  if (
-    version !== 'v2' ||
-    !numericId(run) ||
-    !numericId(attempt) ||
-    !/^[1-9][0-9]{0,12}$/.test(expiry) ||
-    !/^[0-9a-f]{32}$/.test(nonce) ||
-    !hexSha(sha) ||
-    !/^[A-Za-z0-9_-]{43}$/.test(tag)
-  )
-    return null;
-  return {
-    run,
-    attempt,
-    key: run + '-' + attempt,
-    label: 'kf-ci-' + run + '-' + attempt,
-    reportExpiry: Number(expiry),
-    nonce,
-    sha,
-    tag,
-  };
 }

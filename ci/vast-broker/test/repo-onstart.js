@@ -11,8 +11,7 @@ export function boxEnv(patch = {}) {
     KF_PROTOCOL: '7',
     KF_BROKER_URL: 'https://broker.example',
     KF_RUN_ID: '123-1',
-    KF_RUN_TOKEN:
-      'v2.123.1.1800030000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
+    KF_RUN_TOKEN: 'eyJhbGciOiJIUzI1NiJ9.eyJydW4iOiIxMjMiLCJhdHRlbXB0IjoiMSJ9.' + 'A'.repeat(43),
     KF_NONCE: 'b'.repeat(32),
     KF_SHA: 'a'.repeat(40),
     KF_REPO: 'reindertpelsma/kayfabe',

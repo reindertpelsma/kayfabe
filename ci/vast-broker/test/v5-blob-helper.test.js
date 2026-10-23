@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { helperProbe, repoSource } from './repo-onstart.js';
+import { boxEnv, helperProbe, repoSource } from './repo-onstart.js';
 for (const prefix of ['', 'x'.repeat(32)])
   test('blob helper scoped URL and HTTPS ' + prefix.length, async () => {
     const base = 'https://broker.example' + (prefix ? '/' + prefix : '');
@@ -10,7 +10,7 @@ for (const prefix of ['', 'x'.repeat(32)])
     assert.equal(r.status, 0, r.stderr);
     assert.ok(r.args.includes(base + '/blob-url/123-1/dummy-blobs-20261022/blob-a.txt'));
     assert.ok(r.args.includes('=https'));
-    assert.ok(r.stdin.includes('Authorization: Bearer v2.123.1.'));
+    assert.ok(r.stdin.includes('Authorization: Bearer ' + boxEnv().KF_RUN_TOKEN + '"'));
     assert.ok(!r.args.join(' ').includes('v1.'));
     assert.ok(!r.args.includes('--location'));
     assert.match(repoSource('vast_onstart.sh'), /install -m 700 "\$here\/kf-box-blob-url"/);

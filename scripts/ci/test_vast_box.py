@@ -307,11 +307,6 @@ class EnvValidation(Tmp):
             self.assertEqual(problems, [name + ": malformed"])
             self.assertNotIn(ACCESS[name], "".join(problems))
 
-    def test_token_must_match_run_id(self):
-        env = good_env("https://h.example/pfx")
-        env["KF_RUN_ID"] = "4242-8"
-        self.assertTrue(any("KF_RUN_TOKEN" in p for p in load().validate_env(env)))
-
     def test_problems_never_contain_values(self):
         env = good_env("https://h.example/pfx")
         env["KF_RUN_TOKEN"] = "v1.1.2.3.secret-token-value-xyz"

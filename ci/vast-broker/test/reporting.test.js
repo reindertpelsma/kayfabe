@@ -48,13 +48,8 @@ for (const text of [
     await h.call('/stop/123-1');
     assert.equal((await status(h)).verdict, 'FAIL');
   });
-for (const patch of [
-  { sha: 'e'.repeat(40) },
-  { label: 'kf-ci-other' },
-  { run: '124' },
-  { attempt: '2' },
-])
-  test('HMAC binds immutable ledger field ' + Object.keys(patch)[0], async () => {
+for (const patch of [{ sha: 'e'.repeat(40) }, { run: '124' }, { attempt: '2' }])
+  test('run token binds immutable ledger field ' + Object.keys(patch)[0], async () => {
     const h = await rent();
     const token = callbackToken(await record(h), env.RUN_TOKEN_SECRET, patch);
     assert.equal((await h.report(log(), { token })).status, 401);

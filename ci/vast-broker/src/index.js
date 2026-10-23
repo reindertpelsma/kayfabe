@@ -780,9 +780,8 @@ export function createService({
         provision: cfg.provision,
         grace: cfg.grace,
         gpu: offer.gpu_name,
-        reportExpiry: Math.floor(
-          (started + cfg.hard + Math.max(cfg.passGrace, cfg.failGrace) + cfg.cronPeriod) / 1000,
-        ),
+        // Box capability lifetime: the hard limit (no route serves a box past it).
+        reportExpiry: Math.floor((started + cfg.hard) / 1000),
         price: offer.pricing.effective,
         id: null,
         closed: null,
