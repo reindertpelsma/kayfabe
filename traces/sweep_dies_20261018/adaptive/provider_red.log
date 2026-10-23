@@ -1,0 +1,101 @@
+EEEEEEEE
+======================================================================
+ERROR: test_actual_running_with_both_labels_remains_supported (test_vast_ssh_readiness.ProviderState.test_actual_running_with_both_labels_remains_supported)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 25, in test_actual_running_with_both_labels_remains_supported
+    self.assertTrue(self.ready('running', 'running'))
+                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_actual_running_without_current_remains_supported (test_vast_ssh_readiness.ProviderState.test_actual_running_without_current_remains_supported)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 22, in test_actual_running_without_current_remains_supported
+    self.assertTrue(self.ready('running', None))
+                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_created_actual_with_running_current_can_be_probed (test_vast_ssh_readiness.ProviderState.test_created_actual_with_running_current_can_be_probed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 16, in test_created_actual_with_running_current_can_be_probed
+    self.assertTrue(self.ready('created', 'running'))
+                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_empty_ssh_route_is_not_a_candidate (test_vast_ssh_readiness.ProviderState.test_empty_ssh_route_is_not_a_candidate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 37, in test_empty_ssh_route_is_not_a_candidate
+    self.assertFalse(self.ready('created', 'running', {'22/tcp': []}))
+                     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_loading_without_running_state_is_not_a_candidate (test_vast_ssh_readiness.ProviderState.test_loading_without_running_state_is_not_a_candidate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 28, in test_loading_without_running_state_is_not_a_candidate
+    self.assertFalse(self.ready('loading', 'loading'))
+                     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_missing_actual_with_running_current_can_be_probed (test_vast_ssh_readiness.ProviderState.test_missing_actual_with_running_current_can_be_probed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 19, in test_missing_actual_with_running_current_can_be_probed
+    self.assertTrue(self.ready(None, 'running'))
+                    ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_missing_ssh_route_is_not_a_candidate (test_vast_ssh_readiness.ProviderState.test_missing_ssh_route_is_not_a_candidate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 34, in test_missing_ssh_route_is_not_a_candidate
+    self.assertFalse(self.ready('running', 'running', {}))
+                     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+======================================================================
+ERROR: test_stopped_without_running_state_is_not_a_candidate (test_vast_ssh_readiness.ProviderState.test_stopped_without_running_state_is_not_a_candidate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 31, in test_stopped_without_running_state_is_not_a_candidate
+    self.assertFalse(self.ready('stopped', 'stopped'))
+                     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/s4-wt/scripts/bench/tests/test_vast_ssh_readiness.py", line 11, in ready
+    return importlib.import_module('readiness').ssh_route_is_ready(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'readiness' has no attribute 'ssh_route_is_ready'
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.013s
+
+FAILED (errors=8)
