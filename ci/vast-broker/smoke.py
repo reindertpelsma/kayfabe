@@ -152,12 +152,12 @@ class Client:
         )
         return code, data
 
-    def rent(self, tested_sha, pr=7):
+    def rent(self, tested_sha):
         self.runner_nonce = secrets.token_hex(32)
         code, data = self.call(
             "/rent",
             "POST",
-            body={"runner_nonce": self.runner_nonce, "tested_sha": tested_sha, "pr_number": pr},
+            body={"runner_nonce": self.runner_nonce, "tested_sha": tested_sha, "profile": "check"},
         )
         if code == 200 and (
             data.get("runner_nonce") != self.runner_nonce or data.get("sha") != tested_sha
@@ -377,9 +377,7 @@ def main():
             p = args.evidence / "render-input.json"
             data = json.loads(p.read_text())
             p.write_text(
-                json.dumps(
-                    {k: v for k, v in data.items() if k not in {"id", "run", "pr"}}, indent=2
-                )
+                json.dumps({k: v for k, v in data.items() if k not in {"id", "run"}}, indent=2)
                 + "\n"
             )
         else:

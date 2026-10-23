@@ -12,7 +12,7 @@ exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 extra_status = scope["extra_status"]
 availability = scope["availability"]
 case = sys.argv[1]
-ctx = {"sha": "a" * 40, "run": "123-1", "pr": 7, "nonce": "f" * 64}
+ctx = {"sha": "a" * 40, "run": "123-1", "nonce": "f" * 64}
 manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
 if case.startswith("transport-"):
     import time
@@ -81,7 +81,6 @@ status = {
     "run": ctx["run"],
     "id": "900",
     "sha": ctx["sha"],
-    "pr": 7,
     "cleanup_pending": True,
     "result_at": 2000,
     "ended_at": None,

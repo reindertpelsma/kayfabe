@@ -109,11 +109,10 @@ export function createService({
     else values.push(r.lastPostAt + r.heartbeatTimeout);
     return Math.min(...values.filter((x) => Number.isSafeInteger(x)));
   }
-  const expose = (r, key = r.key, pr = r.pr) => ({
+  const expose = (r, key = r.key) => ({
     run: key,
     id: r.id,
     sha: r.sha,
-    pr,
     state: phase(r),
     verdict:
       r.ended !== null || r.resultAt !== undefined ? r.verdict || 'UNAVAILABLE' : 'UNAVAILABLE',
@@ -635,22 +634,19 @@ export function createService({
           await readBounded(request, 2048),
         );
         rentRequest = JSON.parse(text);
-        const keys = Object.keys(rentRequest),
-          matches = [
-            ...text.matchAll(/"(runner_nonce|tested_sha|pr_number|profile|preferences)"\s*:/g),
-          ];
+        // runner_nonce, tested_sha and profile are required; preferences is optional.
+        const allowed = ['runner_nonce', 'tested_sha', 'profile', 'preferences'],
+          keys = Object.keys(rentRequest),
+          matches = [...text.matchAll(/"(runner_nonce|tested_sha|profile|preferences)"\s*:/g)];
         if (
           keys.length < 3 ||
-          keys.length > 5 ||
-          !keys.every((k) =>
-            ['runner_nonce', 'tested_sha', 'pr_number', 'profile', 'preferences'].includes(k),
-          ) ||
+          keys.length > 4 ||
+          !keys.every((k) => allowed.includes(k)) ||
+          !allowed.slice(0, 3).every((k) => keys.includes(k)) ||
           matches.length !== keys.length ||
           new Set(matches.map((x) => x[1])).size !== keys.length ||
           !/^([0-9a-f]{64})$/.test(rentRequest.runner_nonce) ||
-          !/^([0-9a-f]{40})$/.test(rentRequest.tested_sha) ||
-          (rentRequest.pr_number !== null &&
-            (!Number.isSafeInteger(rentRequest.pr_number) || rentRequest.pr_number <= 0))
+          !/^([0-9a-f]{40})$/.test(rentRequest.tested_sha)
         )
           throw Error();
       } catch {
@@ -675,7 +671,7 @@ export function createService({
       return json(expose(r, key));
     }
     const profile =
-      path === '/availability' ? url.searchParams.get('profile') : (rentRequest.profile ?? 'check');
+      path === '/availability' ? url.searchParams.get('profile') : rentRequest.profile;
     if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);
     if (path === '/availability' && url.search !== '?profile=' + profile)
       refuse('BAD_REQUEST', 400);
@@ -697,11 +693,7 @@ export function createService({
         new Set(rentRequest.preferences).size !== rentRequest.preferences.length)
     )
       refuse('BAD_REQUEST', 400);
-    // pr_number is the runner's informational label only; it never authorizes anything.
-    const target = {
-      ...(await github.authorize(c, rentRequest.tested_sha)),
-      pr: rentRequest.pr_number,
-    };
+    const target = await github.authorize(c, rentRequest.tested_sha);
     const prior = await ledger.granted(key);
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);

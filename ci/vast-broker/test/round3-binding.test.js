@@ -5,7 +5,7 @@ import { setup, sha, nonce, env, jwt } from './helpers.js';
 import { createGateway } from '../src/index.js';
 // Component tests inject auth; v5-front-auth tests the real gateway.
 const worker = createGateway({ authorize: async () => {} });
-const request = { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 };
+const request = { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' };
 for (const size of [180, 700])
   test('R3 public ingress preserves bounded nonce rent body ' + size, async () => {
     let received;
@@ -68,20 +68,13 @@ test('R3 missing rent nonce refuses before create', async () => {
   assert.equal(response.status, 400);
   assert.equal(h.cloud.creates, 0);
 });
-// The tested commit must be the run head; pr_number is an informational echo only.
+// The tested commit must be the run head.
 for (const tested of ['d'.repeat(40), 'e'.repeat(40)])
   test('R3 rent crosschecks caller tested_sha ' + tested[0], async () => {
     const h = await setup();
     const response = await h.call('/rent', { body: { ...request, tested_sha: tested } });
     assert.equal(response.status, 409);
     assert.equal(h.cloud.creates, 0);
-  });
-for (const pr of [8, null])
-  test('R3 rent echoes caller pr_number without authority ' + pr, async () => {
-    const h = await setup();
-    const response = await h.call('/rent', { body: { ...request, pr_number: pr } });
-    assert.equal(response.status, 200);
-    assert.equal((await response.json()).pr, pr);
   });
 test('R3 same run cannot replace runner nonce', async () => {
   const h = await setup();

@@ -34,7 +34,6 @@ const cfg = () =>
 const body = (profile = 'check', preferences) => ({
   runner_nonce: 'f'.repeat(64),
   tested_sha: sha,
-  pr_number: 7,
   profile,
   ...(preferences === undefined ? {} : { preferences }),
 });
@@ -238,7 +237,7 @@ for (const cap of [1, 2.5])
               workflow_ref: env.REPOSITORY + '/.github/workflows/gpu-vast.yml@refs/heads/master',
             }
           : sweepClaims,
-      body: { ...body(cap === 1 ? 'check' : 'sweep', ['GA106']), pr_number: null },
+      body: { ...body(cap === 1 ? 'check' : 'sweep', ['GA106']) },
     });
     assert.equal(r.status, cap === 1 ? 503 : 200);
   });
@@ -265,8 +264,7 @@ for (const binding of ['ROLLING_SPEND_USD', 'CREDIT_RESERVE_USD'])
     });
     sweep(h);
     assert.equal(
-      (await h.call('/rent', { claims: sweepClaims, body: { ...body('sweep'), pr_number: null } }))
-        .status,
+      (await h.call('/rent', { claims: sweepClaims, body: { ...body('sweep') } })).status,
       409,
     );
     assert.equal(h.cloud.creates, 0);
@@ -296,7 +294,7 @@ for (const order of [false, true])
     await h.storage.put('rotation:lastDie', 'GA106');
     const r = await h.call('/rent', {
       claims: sweepClaims,
-      body: { ...body('sweep', ['rotate']), pr_number: null },
+      body: { ...body('sweep', ['rotate']) },
     });
     assert.equal(r.status, 200);
     assert.equal((await h.storage.get('record:123-1')).die, 'AD104');
@@ -363,7 +361,7 @@ for (const died of ['GA106', 'AD104'])
     await h.storage.put('passed:' + died, clock - 86400000);
     const r = await h.call('/rent', {
       claims: sweepClaims,
-      body: { ...body('sweep', ['rotate']), pr_number: null },
+      body: { ...body('sweep', ['rotate']) },
     });
     assert.equal(r.status, 200);
     assert.equal((await h.storage.get('record:123-1')).die, died === 'GA106' ? 'AD104' : 'GA106');

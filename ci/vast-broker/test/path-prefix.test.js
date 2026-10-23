@@ -15,7 +15,7 @@ const request = async (
     method = path.includes('/status/') ? 'GET' : 'POST',
     token,
     body = path.endsWith('/rent')
-      ? { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 }
+      ? { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' }
       : undefined,
   } = {},
 ) =>

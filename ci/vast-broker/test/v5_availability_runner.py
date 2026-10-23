@@ -14,7 +14,6 @@ ctx = {
     "run": "123-1",
     "sha": "a" * 40,
     "nonce": "f" * 64,
-    "pr": 7,
     "profile": "check",
     "preferences": ["AD104"],
 }
@@ -60,7 +59,6 @@ status = {
     "run": ctx["run"],
     "id": "900",
     "sha": ctx["sha"],
-    "pr": 7,
     "cleanup_pending": True,
     "result_at": 2000,
     "ended_at": None,

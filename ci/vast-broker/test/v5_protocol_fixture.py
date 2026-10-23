@@ -8,7 +8,7 @@ m = importlib.util.module_from_spec(spec)
 sys.modules["runner"] = m
 spec.loader.exec_module(m)
 phase = sys.argv[1]
-ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "pr": 7, "profile": "check"}
+ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "profile": "check"}
 manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
 names = {
     "provision": 1,
@@ -27,7 +27,6 @@ data = {
     "run": ctx["run"],
     "id": "900",
     "sha": ctx["sha"],
-    "pr": 7,
     "cleanup_pending": phase != "NONE",
     "result_at": 2000,
     "ended_at": 3000 if phase == "NONE" else None,

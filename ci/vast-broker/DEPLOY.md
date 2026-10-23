@@ -32,7 +32,8 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
   `github/docs` `pull_request_target` runs, PR #46406): the
   run's `head_sha` is the PR head, while the OIDC `sha`/`workflow_sha` name the base commit, so
   those claims are not compared for that event.
-- `pr_number` in the rent body is an informational echo for the runner; it authorizes nothing.
+- The rent body is exactly `runner_nonce`, `tested_sha`, `profile` and optional `preferences`
+  (owner ruling 2026-10-24: `pr_number` is refused, and the status object has no `pr`).
 - When to run (branches, drafts, docs-only paths) lives only in `gpu-vast.yml` and the trusted
   BASE helper `trigger-policy.mjs`.
 

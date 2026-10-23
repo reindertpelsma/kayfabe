@@ -10,7 +10,6 @@ for (const denied of ['UNKNOWN', 'AD107'])
         body: {
           runner_nonce: 'f'.repeat(64),
           tested_sha: sha,
-          pr_number: 7,
           profile: 'check',
           preferences: [denied, 'AD104'],
         },

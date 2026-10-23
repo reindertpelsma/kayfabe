@@ -313,7 +313,6 @@ STATUS_KEYS = {
     "run",
     "id",
     "sha",
-    "pr",
     "cleanup_pending",
     "result_at",
     "ended_at",
@@ -379,12 +378,7 @@ def validate_status(data, ctx, manifest, http_status):
         return data
     if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:
         raise Invalid()
-    if (
-        data["run"] != ctx["run"]
-        or data["sha"] != ctx["sha"]
-        or data["pr"] != ctx["pr"]
-        or type(data["pr"]) not in {int, type(None)}
-    ):
+    if data["run"] != ctx["run"] or data["sha"] != ctx["sha"]:
         raise Invalid()
     if data["runner_nonce"] != ctx["nonce"] or not hex_value(data["log_sha256"], 64):
         raise Invalid()
@@ -654,7 +648,6 @@ class Runner:
             request = {
                 "runner_nonce": self.ctx["nonce"],
                 "tested_sha": self.ctx["sha"],
-                "pr_number": self.ctx["pr"],
                 "profile": profile,
             }
             if "preferences" in self.ctx:
@@ -861,7 +854,6 @@ def main():
             if event_name == "pull_request_target"
             else base
         )
-        pr = event.get("number") if event_name == "pull_request_target" else None
         profile = "sweep" if sys.argv[2:] == ["--profile", "sweep"] else "check"
         if sys.argv[2:] and profile != "sweep":
             raise Invalid()
@@ -885,11 +877,7 @@ def main():
         if event_name == "workflow_dispatch" and os.environ["GITHUB_REF"] != "refs/heads/master":
             raise Invalid()
         run = os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]
-        if (
-            not re.fullmatch("[1-9][0-9]{0,19}-[1-9][0-9]{0,19}", run)
-            or pr is not None
-            and not integer(pr, 1, 2147483647)
-        ):
+        if not re.fullmatch("[1-9][0-9]{0,19}-[1-9][0-9]{0,19}", run):
             raise Invalid()
         origin = os.environ["WORKER_URL"].rstrip("/")
         prefix = os.environ.get("WORKER_PATH", "")
@@ -932,7 +920,6 @@ def main():
             **({"preferences": preferences} if preferences is not None else {}),
             "sha": sha,
             "run": run,
-            "pr": pr,
             "nonce": secrets.token_hex(32),
             "redactions": [
                 origin,

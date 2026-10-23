@@ -145,7 +145,6 @@ with tempfile.TemporaryDirectory(prefix="v3-r3-main-") as directory:
                 run="123-1",
                 id=None if state == "NOT_NEEDED" else "900",
                 sha=sha,
-                pr=None if args.get("manual") or args.get("push") else 7,
                 cleanup_pending=True,
                 result_at=None if pending else 2000,
                 ended_at=None,

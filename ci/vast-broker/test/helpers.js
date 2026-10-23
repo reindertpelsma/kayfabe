@@ -416,10 +416,7 @@ export async function setup(overrides = {}) {
             cloud.run.event === 'pull_request_target'
               ? (cloud.run.pull_requests?.[0]?.head.sha ?? cloud.run.head_sha)
               : cloud.run.head_sha,
-          pr_number:
-            cloud.run.event === 'workflow_dispatch'
-              ? null
-              : (cloud.run.pull_requests?.[0]?.number ?? null),
+          profile: 'check',
         };
       const authorization =
         token ??

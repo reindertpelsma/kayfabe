@@ -42,7 +42,7 @@ const target = (h, change) => {
     body: {
       runner_nonce: 'f'.repeat(64),
       tested_sha: change === 'tested-sha' ? 'e'.repeat(40) : sha,
-      pr_number: 7,
+      profile: 'check',
     },
   });
 };

@@ -25,7 +25,6 @@ for (const target of [sha, 'e'.repeat(40)])
       body: {
         runner_nonce: 'f'.repeat(64),
         tested_sha: target,
-        pr_number: null,
         profile: 'sweep',
         preferences: ['AD104'],
       },

@@ -74,7 +74,7 @@ test('fixed create request never returns upstream credentials', async () => {
   const r = await rent(h);
   assert.equal(r.id, '900');
   assert.equal(r.sha, sha);
-  assert.equal(r.pr, 7);
+  assert.equal('pr' in r, false);
   const c = h.cloud.calls.find((c) => c.url.endsWith('/asks/5/')).body;
   assert.equal(c.vm, true);
   assert.equal(c.disk, 120);

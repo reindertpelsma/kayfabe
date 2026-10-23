@@ -64,9 +64,8 @@ export class Ledger {
     const key = await this.get('run:' + run);
     return key ? this.get('record:' + key) : null;
   }
-  async grant(run, record, pr = record.pr) {
+  async grant(run, record) {
     await this.put('run:' + run, record.key);
-    await this.put('run-pr:' + run, pr);
   }
   async openRecords() {
     const entries = await this.storage.list({ prefix: 'open:', limit: 1000 });

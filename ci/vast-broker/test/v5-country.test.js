@@ -102,7 +102,11 @@ for (const country of ['https://attacker.invalid', 'US\n::error::x'])
     const data = await response.json();
     const code = `import importlib.util,json,sys
 s=importlib.util.spec_from_file_location('runner',sys.argv[1]);m=importlib.util.module_from_spec(s);sys.modules['runner']=m;s.loader.exec_module(m)
-d=json.loads(sys.stdin.read());ctx={'run':d['run'],'sha':d['sha'],'pr':d['pr'],'nonce':d['runner_nonce']};manifest={k:d[k] for k in ['protocol_version','worker_version','bundle_sha256']};m.validate_status(d,ctx,manifest,200);d['country']=sys.argv[2]
+d=json.loads(sys.stdin.read())
+ctx={'run':d['run'],'sha':d['sha'],'nonce':d['runner_nonce']}
+manifest={k:d[k] for k in ['protocol_version','worker_version','bundle_sha256']}
+m.validate_status(d,ctx,manifest,200)
+d['country']=sys.argv[2]
 try:m.validate_status(d,ctx,manifest,200)
 except m.Invalid:pass
 else:raise AssertionError('hostile country accepted')

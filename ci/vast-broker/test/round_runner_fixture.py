@@ -14,7 +14,7 @@ scope = {}
 exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 m.time.sleep = lambda _: None
 case = sys.argv[1]
-ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64, "pr": 7}
+ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64}
 manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
 base = {
     "state": "TESTING",
@@ -22,7 +22,6 @@ base = {
     "run": ctx["run"],
     "id": "900",
     "sha": ctx["sha"],
-    "pr": 7,
     "cleanup_pending": True,
     "result_at": None,
     "ended_at": None,
