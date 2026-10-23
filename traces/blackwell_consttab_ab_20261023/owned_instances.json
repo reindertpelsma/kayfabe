@@ -33,6 +33,9 @@
     "auto_destroy_method": "lease_relative_exact_id_ready_marker",
     "budget_watch_pid": 1089314,
     "budget_watch_pid_starttime": 239716764,
-    "budget_watch_verified": true
+    "budget_watch_verified": true,
+    "ssh_ready_utc": "2026-10-23T05:07:01.850649+00:00",
+    "ssh_hostkey_fingerprint": "SHA256:KLPA2CjfywyrRcX+wiR+uImwhR5uBogi79fYomuHxDQ",
+    "observed_dph_total": 1.09
   }
 ]

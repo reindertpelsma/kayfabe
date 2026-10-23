@@ -1,0 +1,41 @@
+{
+  "utc": "2026-10-23T05:09:46.121440+00:00",
+  "all_four_original_media_verified": true,
+  "files": [
+    {
+      "file": "OpenSSH-Win64-v10.0.0.0.msi",
+      "bytes": 6586368,
+      "sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9"
+    },
+    {
+      "file": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "bytes": 890807536,
+      "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9"
+    },
+    {
+      "file": "virtio-win-0.1.302.iso",
+      "bytes": 877373440,
+      "sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d"
+    },
+    {
+      "file": "win11_ltsc_2024_eval_x64_en-us.iso",
+      "bytes": 5112850432,
+      "sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68"
+    }
+  ],
+  "next": "unmodified win_vm.sh fetch re-verifies the same pins",
+  "parallel_transport": {
+    "utc": "2026-10-23T05:07:50.839844+00:00",
+    "own_id": 57324106,
+    "workers_per_file": 8,
+    "file_start_stagger_seconds": 3,
+    "helper_unmodified": true,
+    "helper_sha256": "5415c4fb76c193b70db7d200a384da81e478c820316eaebdc1f545e3a2e674c3",
+    "original_deadline_utc": "2026-10-23T05:27:50.839673+00:00",
+    "total_media_upload_budget_seconds": 1200,
+    "prior_lease_transport_learning": "use tested8 streams; avoid16 authentication burst",
+    "cause": "inferred SSH unauthenticated-start burst; measured maxstartups10:30:100",
+    "hypothesis": "tested8-stream groups with staggered starts finish within original bound",
+    "falsifier": "any failed chunk/size/hash or deadline; no controller starts on failure"
+  }
+}
