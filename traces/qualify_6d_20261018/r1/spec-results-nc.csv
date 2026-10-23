@@ -1,0 +1,20 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: RTX 4070; KVM/kayfabe 01a171e63 versus KVM/VFIO; Windows 11 NVIDIA 580.88; 1920x1080; 12 GiB guest RAM, 8 vCPU; production kayfabe store 8192 MiB; VFIO guest reports 12282 MiB. Historical references and different display carriers are not matched repeats.
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
+arm,run,vendor_run,workload,composite
+6d-production,4607,result_2026-10-23-01-09-40,catia-07,49.39 (nc)
+6d-production,4607,result_2026-10-23-01-09-40,creo-04,69.31 (nc)
+6d-production,4607,result_2026-10-23-01-22-32,catia-07,49.46 (nc)
+6d-production,4607,result_2026-10-23-01-22-32,creo-04,69.99 (nc)
+6d-production,4601,result_2026-10-23-00-47-13,energy-04,41.53 (nc)
+6d-production,4602,result_2026-10-23-00-52-13,energy-04,44.6 (nc)
+6d-production,4603,result_2026-10-23-00-57-09,energy-04,41.38 (nc)
+6d-production,4604,result_2026-10-23-01-02-10,energy-04,41.16 (nc)
+VFIO-reference,result_2026-10-21-23-51-37,result_2026-10-21-23-51-37,blender-01,61.61 (nc)
+VFIO-reference,result_2026-10-21-23-51-37,result_2026-10-21-23-51-37,catia-07,63.1 (nc)
+VFIO-reference,result_2026-10-21-23-51-37,result_2026-10-21-23-51-37,creo-04,104.94 (nc)
+VFIO-reference,result_2026-10-21-23-51-37,result_2026-10-21-23-51-37,energy-04,54.57 (nc)
+VFIO-reference,result_2026-10-22-01-15-28,result_2026-10-22-01-15-28,blender-01,60.61 (nc)
+VFIO-reference,result_2026-10-22-01-15-28,result_2026-10-22-01-15-28,catia-07,63.13 (nc)
+VFIO-reference,result_2026-10-22-01-15-28,result_2026-10-22-01-15-28,creo-04,103.97 (nc)
+VFIO-reference,result_2026-10-22-01-15-28,result_2026-10-22-01-15-28,energy-04,54.67 (nc)

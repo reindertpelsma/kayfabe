@@ -18,16 +18,6 @@
       "progress_strand_count": 0,
       "ring_refused_segments": 0,
       "no_ce_object_mentions": 0,
-      "vendor_scores": [
-        {
-          "run": "result_2026-10-23-00-47-13",
-          "version": "1.0.2",
-          "source": "result.json",
-          "composite": 41.53,
-          "renderer": "GeForce RTX 4070",
-          "workload": "energy-04"
-        }
-      ],
       "verdict": "PASS",
       "restored": true,
       "host_stop": {
@@ -83,16 +73,6 @@
       "progress_strand_count": 0,
       "ring_refused_segments": 0,
       "no_ce_object_mentions": 0,
-      "vendor_scores": [
-        {
-          "run": "result_2026-10-23-00-52-13",
-          "version": "1.0.2",
-          "source": "result.json",
-          "composite": 44.6,
-          "renderer": "GeForce RTX 4070",
-          "workload": "energy-04"
-        }
-      ],
       "verdict": "PASS",
       "restored": true,
       "host_stop": {
@@ -148,16 +128,6 @@
       "progress_strand_count": 0,
       "ring_refused_segments": 0,
       "no_ce_object_mentions": 0,
-      "vendor_scores": [
-        {
-          "run": "result_2026-10-23-00-57-09",
-          "version": "1.0.2",
-          "source": "result.json",
-          "composite": 41.38,
-          "renderer": "GeForce RTX 4070",
-          "workload": "energy-04"
-        }
-      ],
       "verdict": "PASS",
       "restored": true,
       "host_stop": {
@@ -213,16 +183,6 @@
       "progress_strand_count": 0,
       "ring_refused_segments": 0,
       "no_ce_object_mentions": 0,
-      "vendor_scores": [
-        {
-          "run": "result_2026-10-23-01-02-10",
-          "version": "1.0.2",
-          "source": "result.json",
-          "composite": 41.16,
-          "renderer": "GeForce RTX 4070",
-          "workload": "energy-04"
-        }
-      ],
       "verdict": "PASS",
       "restored": true,
       "host_stop": {
@@ -265,5 +225,9 @@
       ]
     }
   ],
-  "coverage_limitation": "MEASURED in runs 4601-4604: the historical COPY2 channel token 0x806 retired with forwarded=0 and submissions=0 in every trial; the historical failing segment was not exercised. The observed 0/4 workload failure rate does not establish that mechanism is fixed."
+  "coverage_limitation": "MEASURED in runs 4601-4604: the historical COPY2 channel token 0x806 retired with forwarded=0 and submissions=0 in every trial; the historical failing segment was not exercised. The observed 0/4 workload failure rate does not establish that mechanism is fixed.",
+  "specviewperf_release": "SPECviewperf 15.x (patch level not recorded)",
+  "specviewperf_configuration": "RTX 4070; KVM/kayfabe 01a171e63 versus KVM/VFIO; Windows 11 NVIDIA 580.88; 1920x1080; 12 GiB guest RAM, 8 vCPU; production kayfabe store 8192 MiB; VFIO guest reports 12282 MiB. Historical references and different display carriers are not matched repeats.",
+  "specviewperf_disclaimer": "(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org",
+  "score_evidence": "spec-results-nc.csv"
 }

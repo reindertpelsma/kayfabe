@@ -1,0 +1,17 @@
+{
+  "classification": "MEASURED",
+  "evidence": "energy-bisect/4610/k2-config.json",
+  "run": 4610,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "gdm_stopped": "inactive",
+  "host_total_mib": 12282,
+  "free_before_mib": 11473,
+  "used_before_mib": 400,
+  "configured_fb_mb": 9216,
+  "reserve_mib": 2048,
+  "backend": "test",
+  "feedback": "synthetic 60 Hz; not physical display presentation",
+  "profile": false,
+  "matched_vram": false,
+  "limitation": "Physical VFIO exposes the whole card; this larger owned store still reserves host/context VRAM."
+}

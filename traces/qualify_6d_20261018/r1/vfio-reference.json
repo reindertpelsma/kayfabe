@@ -1,0 +1,29 @@
+{
+  "classification": "MEASURED",
+  "evidence": "vfio-reference.json",
+  "source": "VF1 benchmark-summary.json, pre-selected.json, command.json",
+  "gpu": {
+    "gpu": "NVIDIA GeForce RTX 4070, 580.88, 12282 MiB, 908 MiB, 0 %",
+    "time": "2026-10-22T02:41:48.0536775+02:00",
+    "task": "Ready",
+    "remaining": []
+  },
+  "configuration": {
+    "-m": "12288",
+    "-smp": "8",
+    "-cpu": "host,-vmx,migratable=off,+invtsc,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_time,hv_synic,hv_stimer,hv_tlbflush,hv_ipi,hv_frequencies",
+    "-machine": "pc,accel=kvm,smm=on,memory-backend=ram0"
+  },
+  "runs": [
+    {
+      "run": "result_2026-10-21-23-51-37"
+    },
+    {
+      "run": "result_2026-10-22-01-15-28"
+    }
+  ],
+  "specviewperf_release": "SPECviewperf 15.x (patch level not recorded)",
+  "specviewperf_configuration": "RTX 4070; KVM/kayfabe 01a171e63 versus KVM/VFIO; Windows 11 NVIDIA 580.88; 1920x1080; 12 GiB guest RAM, 8 vCPU; production kayfabe store 8192 MiB; VFIO guest reports 12282 MiB. Historical references and different display carriers are not matched repeats.",
+  "specviewperf_disclaimer": "(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org",
+  "score_evidence": "spec-results-nc.csv"
+}

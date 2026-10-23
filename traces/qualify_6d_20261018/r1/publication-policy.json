@@ -1,0 +1,15 @@
+{
+  "classification": "MEASURED",
+  "evidence": "publication-policy.json",
+  "time": "2026-10-23T02:16:18.119041+00:00",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "tool_source_branch": "claude/spec-stamp-20261023",
+  "tool_source_commit": "9eec6ba6b0a4e420e0c750443a2d0e65f346c252",
+  "tool_path": "scripts/bench/specviewperf/spec_stamp.py",
+  "tool_sha256": "67330d7631007a6212b305021ba5682b432d4d305ce9ab003c2012f41d5bfc20",
+  "stamped_file": "spec-results-nc.csv",
+  "stamped_score_count": 16,
+  "stamp_validation": "PASS",
+  "private_score_policy": "Numerical Steel Nomad results removed from current public evidence; private copy retained. No Geekbench results were added.",
+  "correction": "Additive commit; prior commits are not rewritten."
+}

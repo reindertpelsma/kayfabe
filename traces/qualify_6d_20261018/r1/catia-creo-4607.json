@@ -201,40 +201,6 @@
       }
     ]
   },
-  "vendor_scores": [
-    {
-      "run": "result_2026-10-23-01-09-40",
-      "version": "1.0.6",
-      "source": "result.json",
-      "composite": 49.39,
-      "renderer": "GeForce RTX 4070",
-      "workload": "catia-07"
-    },
-    {
-      "run": "result_2026-10-23-01-09-40",
-      "version": "1.0.1",
-      "source": "result.json",
-      "composite": 69.31,
-      "renderer": "GeForce RTX 4070",
-      "workload": "creo-04"
-    },
-    {
-      "run": "result_2026-10-23-01-22-32",
-      "version": "1.0.6",
-      "source": "result.json",
-      "composite": 49.46,
-      "renderer": "GeForce RTX 4070",
-      "workload": "catia-07"
-    },
-    {
-      "run": "result_2026-10-23-01-22-32",
-      "version": "1.0.1",
-      "source": "result.json",
-      "composite": 69.99,
-      "renderer": "GeForce RTX 4070",
-      "workload": "creo-04"
-    }
-  ],
   "export_errors": [],
   "process_exit_census": {
     "viewperf_exe_exits_observed": 38,
@@ -245,5 +211,9 @@
     "viewperf_live_at_final_guest_snapshot": 0,
     "forced_kill_count": null,
     "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
-  }
+  },
+  "specviewperf_release": "SPECviewperf 15.x (patch level not recorded)",
+  "specviewperf_configuration": "RTX 4070; KVM/kayfabe 01a171e63 versus KVM/VFIO; Windows 11 NVIDIA 580.88; 1920x1080; 12 GiB guest RAM, 8 vCPU; production kayfabe store 8192 MiB; VFIO guest reports 12282 MiB. Historical references and different display carriers are not matched repeats.",
+  "specviewperf_disclaimer": "(nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org",
+  "score_evidence": "spec-results-nc.csv"
 }

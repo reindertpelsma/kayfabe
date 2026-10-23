@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "evidence": "load-before-spec.json",
+  "stage": "SPEC-4610-round-6d-K2-larger-vram-x2",
+  "time": "2026-10-23T02:07:58.808187+00:00",
+  "uptime": "04:07:58 up 13 days,  8:29,  6 users,  load average: 1.45, 0.70, 0.75",
+  "load_average": [
+    1.4501953125,
+    0.69677734375,
+    0.75439453125
+  ],
+  "logical_cpus": 24,
+  "host_quiet": true
+}
