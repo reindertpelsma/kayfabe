@@ -38,6 +38,17 @@ export const ALLOWED = new Set([
   'BAD_HOST_IDS',
   'LOG_RETENTION_HOURS',
 ]);
+// WORKER_URL is a Worker secret (`wrangler secret put WORKER_URL`). The vars file may carry it
+// only so the helper checks its format before any upload; it is never sent as a var.
+export const CHECK_ONLY = new Set(['WORKER_URL']);
+const bareOrigin = (value) => {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' && value === u.origin;
+  } catch {
+    return false;
+  }
+};
 class Refusal extends Error {}
 const fail = (message) => {
   throw new Refusal(message);
@@ -55,7 +66,7 @@ export function parseVars(text) {
     if (/^ACCESS_/.test(key))
       fail(key + ' is retired: Cloudflare Access is configured in the dashboard only');
     if (/^BOX_ACCESS_/.test(key)) fail(key + ' is a secret: use wrangler secret put');
-    if (!ALLOWED.has(key))
+    if (!ALLOWED.has(key) && !CHECK_ONLY.has(key))
       fail(key + ' is not an allowed public var (secrets: wrangler secret put)');
     vars.set(key, value);
   });
@@ -63,6 +74,8 @@ export function parseVars(text) {
     fail('OWNER_GITHUB_ID must be present and numeric');
   if (vars.has('RENTING_ENABLED') && !['true', 'false'].includes(vars.get('RENTING_ENABLED')))
     fail('RENTING_ENABLED must be true or false');
+  if (vars.has('WORKER_URL') && !bareOrigin(vars.get('WORKER_URL')))
+    fail('WORKER_URL must be the bare https origin (no trailing slash, path, query or user)');
   return vars;
 }
 
@@ -127,14 +140,16 @@ function main(argv) {
       for (const [key, value] of vars) result = result.split(value).join('<' + key + '>');
       return result;
     };
+    const upload = [...vars].filter(([key]) => !CHECK_ONLY.has(key));
     process.stdout.write(
       'deploy: bundle ' +
         digest +
         ' (' +
         bundle.length +
         ' bytes) verified; vars ' +
-        [...vars.keys()].join(',') +
+        upload.map(([key]) => key).join(',') +
         ' (values withheld)' +
+        (vars.has('WORKER_URL') ? '; WORKER_URL format checked (secret, not uploaded)' : '') +
         (dryRun ? '; dry run' : '') +
         '\n',
     );
@@ -143,7 +158,7 @@ function main(argv) {
       ...(dryRun ? ['--dry-run'] : []),
       '--no-bundle',
       join(out, 'index.js'),
-      ...[...vars].flatMap(([key, value]) => ['--var', key + ':' + value]),
+      ...upload.flatMap(([key, value]) => ['--var', key + ':' + value]),
     ]);
     process.stdout.write(redact(run.stdout));
     process.stderr.write(redact(run.stderr));

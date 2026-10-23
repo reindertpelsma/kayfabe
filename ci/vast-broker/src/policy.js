@@ -27,21 +27,15 @@ export function configuration(env) {
   // Named (never echoed): without the owner id no rental starts and no cleanup can authorize.
   if (!numericId(env.OWNER_GITHUB_ID)) refuse('CONFIG_VAR:OWNER_GITHUB_ID', 503);
   if (!/^[-\w.]+\/[-\w.]+$/.test(env.REPOSITORY || '')) refuse();
+  // The bare https origin: it is the OIDC audience and the base of KF_BROKER_URL, so a
+  // trailing slash or a path is a named configuration error (review f).
   let u;
   try {
     u = new URL(env.WORKER_URL);
   } catch {
-    refuse();
+    refuse('CONFIG_VAR:WORKER_URL', 503);
   }
-  if (
-    u.protocol !== 'https:' ||
-    u.username ||
-    u.password ||
-    u.search ||
-    u.hash ||
-    u.pathname !== '/'
-  )
-    refuse();
+  if (u.protocol !== 'https:' || env.WORKER_URL !== u.origin) refuse('CONFIG_VAR:WORKER_URL', 503);
   const list = (name, fallback) => {
     let value;
     try {
