@@ -13,10 +13,18 @@ export function offerCountry(offer) {
     IRAN: 'IR',
     'NORTH KOREA': 'KP',
     SYRIA: 'SY',
+    // Owner ruling 2026-10-24: broken or very slow CDN/Ubuntu-mirror access there.
+    CHINA: 'CN',
+    'HONG KONG': 'HK',
+    MACAU: 'MO',
+    MACAO: 'MO',
     CU: 'CU',
     IR: 'IR',
     KP: 'KP',
     SY: 'SY',
+    CN: 'CN',
+    HK: 'HK',
+    MO: 'MO',
   };
   if (deniedNames[country.toUpperCase()]) return deniedNames[country.toUpperCase()];
   return offer.geolocation.includes(',') && /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';

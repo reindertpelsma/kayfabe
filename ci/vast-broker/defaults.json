@@ -201,5 +201,5 @@
   "preferredCountries": ["US", "CA"],
   "maxInetUsdPerGb": 0.005,
   "lifecycleCacheMs": 60000,
-  "deniedCountries": ["CU", "IR", "KP", "SY"]
+  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"]
 }
