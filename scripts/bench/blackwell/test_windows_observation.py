@@ -2,6 +2,7 @@
 
 import copy
 import datetime as dt
+import io
 import json
 import subprocess
 import sys
@@ -9,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 try:
@@ -249,6 +250,53 @@ class WatchFinished(BaseException):
     pass
 
 
+class KernelSnapshot(unittest.TestCase):
+    def setUp(self):
+        self.assertIsNotNone(O, "per-arm observation implementation missing")
+
+    def snapshot(self, require_outer_deadline=False):
+        messages = ["native record one", "native record two"]
+        raw = b"".join(
+            (
+                json.dumps(
+                    {
+                        "__REALTIME_TIMESTAMP": str(1792756741000000 + index),
+                        "__CURSOR": str(index),
+                        "_HOSTNAME": "ubuntu",
+                        "PRIORITY": "6",
+                        "MESSAGE": message,
+                    }
+                )
+                + "\n"
+            ).encode()
+            for index, message in enumerate(messages)
+        )
+        calls = []
+
+        def popen(argv, **kwargs):
+            calls.append(argv)
+            if require_outer_deadline and argv[0] != "timeout":
+                raise RuntimeError("pipe read has no external wall bound")
+            proc = MagicMock()
+            proc.stdout = io.BytesIO(raw)
+            proc.wait.return_value = 0
+            proc.poll.return_value = 0
+            return proc
+
+        with patch.object(O.subprocess, "Popen", side_effect=popen):
+            rows = O.kernel_rows()
+        return rows, calls
+
+    def test_kernel_pipe_has_an_external_deadline_before_read(self):
+        _, calls = self.snapshot()
+        self.assertEqual(calls[0][0], "timeout")
+        self.assertLessEqual(float(calls[0][1]), 3)
+
+    def test_blocking_pipe_cannot_escape_the_external_deadline(self):
+        rows, _ = self.snapshot(require_outer_deadline=True)
+        self.assertEqual(len(rows), 2)
+
+
 class WatcherLifecycle(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(O, "per-arm observation implementation missing")
@@ -286,7 +334,14 @@ class WatcherLifecycle(unittest.TestCase):
                 patch.object(O.os, "getpgid", return_value=1234),
                 patch.object(O.os, "getpgrp", return_value=1234),
                 patch.object(O.dt, "datetime", Clock),
-                patch.object(O.time, "sleep", side_effect=[None, KeyboardInterrupt]),
+                patch.object(
+                    O.time,
+                    "sleep",
+                    side_effect=[
+                        None,
+                        WatchFinished if new_fault_after_exit else KeyboardInterrupt,
+                    ],
+                ),
             ):
                 arguments = [
                     str(root / "native.json"),
