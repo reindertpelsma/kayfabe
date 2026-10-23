@@ -34,14 +34,9 @@ for (const name of ['self_test', 'gpu_probe'])
     );
     assert.equal(r.status, 0, r.stderr);
   });
-for (const path of ['', 'x'.repeat(32)])
-  test('checkpoint fetches only approved SHA ' + path.length, () => {
-    const s = onstart(sha, nonce, 180, env.REPOSITORY, {
-      url: env.WORKER_URL,
-      run: '123-1',
-      token: 'v2.123.1.1800030000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
-      path,
-    });
+for (const repo of [env.REPOSITORY])
+  test('checkpoint fetches only approved SHA', () => {
+    const s = onstart(sha, repo);
     assert.ok(
       s.includes('git clone --filter=blob:none --no-checkout https://github.com/' + env.REPOSITORY),
     );

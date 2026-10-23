@@ -7,18 +7,6 @@ import { spawnSync } from 'node:child_process';
 import { setup, sha, nonce, clock, callbackToken, env } from './helpers.js';
 import { probe, repoSource } from './repo-onstart.js';
 const root = new URL('../../../', import.meta.url);
-const onstartArgs = {
-  url: 'https://broker.example',
-  run: '123-1',
-  token: 'v2.123.1.1800009000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
-};
-for (const field of ['url', 'run', 'token'])
-  test('onstart rejects callback interpolation ' + field, async () => {
-    const { onstart } = await import('../src/onstart.js');
-    assert.throws(() =>
-      onstart(sha, nonce, 20, env.REPOSITORY, { ...onstartArgs, [field]: "';$(id)\n" }),
-    );
-  });
 test('fixed onstart posts bounded JSON to Worker only and backs up output', () => {
   const r = probe(
     "assert sender.url==env['KF_BROKER_URL']+'/report/'+env['KF_RUN_ID']; assert m.HttpsTransport(env['KF_RUN_TOKEN']).token==env['KF_RUN_TOKEN']; assert any(isinstance(h,m._NoRedirect) for h in m.HttpsTransport(env['KF_RUN_TOKEN']).opener.handlers)",

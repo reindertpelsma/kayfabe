@@ -1,25 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sha, nonce, env } from './helpers.js';
-const callback = {
-  url: env.WORKER_URL,
-  run: '123-1',
-  token: 'v2.123.1.1800009000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
-};
 const sanitize = async () => import('../src/sanitize.js');
 for (const v of ['$(id)', '`id`', "'", '\n', 'a'.repeat(39), 'A'.repeat(40)])
   test('onstart rejects SHA injection ' + JSON.stringify(v), async () => {
     const { onstart } = await import('../src/onstart.js');
-    assert.throws(() => onstart(v, nonce, 20, env.REPOSITORY, callback));
+    assert.throws(() => onstart(v, env.REPOSITORY));
   });
-for (const v of ['$()', '\n', "'", 'b'.repeat(31), 'B'.repeat(32)])
-  test('onstart rejects nonce injection ' + JSON.stringify(v), async () => {
-    const { onstart } = await import('../src/onstart.js');
-    assert.throws(() => onstart(sha, v, 20, env.REPOSITORY, callback));
-  });
-test('onstart embeds constrained commit and callback nonce', async () => {
+test('onstart embeds the constrained commit', async () => {
   const { onstart } = await import('../src/onstart.js');
-  const s = onstart(sha, nonce, 20, env.REPOSITORY, callback);
+  const s = onstart(sha, env.REPOSITORY);
   assert.match(s, /git checkout --detach/);
   assert.match(s, /rev-parse HEAD/);
   assert.match(s, /vast_onstart.sh/);

@@ -1,51 +1,9 @@
-// prettier-ignore
-import {DEFAULTS} from './defaults.js';
-// prettier-ignore
-import {hexSha} from './policy.js';
-import { tokenFields } from './tokens.js';
-// prettier-ignore
-import {validPathPrefix} from './routes.js';
-export function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {
-  if (
-    !hexSha(sha) ||
-    typeof nonce !== 'string' ||
-    !/^[0-9a-f]{32}$/.test(nonce) ||
-    !Number.isInteger(minutes) ||
-    minutes < 1 ||
-    minutes > DEFAULTS.maxMinutes ||
-    !/^[-\w.]+\/[-\w.]+$/.test(repo)
-  )
-    throw Error('Invalid fixed onstart inputs');
-  let origin;
-  try {
-    const u = new URL(callback.url);
-    if (
-      u.protocol !== 'https:' ||
-      u.username ||
-      u.password ||
-      u.search ||
-      u.hash ||
-      u.pathname !== '/'
-    )
-      throw Error();
-    origin = u.origin;
-  } catch {
-    throw Error('Invalid callback origin');
-  }
-  const fields = tokenFields(callback.token);
-  if (!fields || fields.key !== callback.run || fields.sha !== sha || fields.nonce !== nonce)
-    throw Error('Invalid callback capability');
-  const prefix = callback.path ?? '';
-  if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');
-  const grace = callback.graceMinutes ?? DEFAULTS.failGraceMinutes;
-  if (!Number.isInteger(grace) || grace < 1 || grace > 15) throw Error('Invalid grace');
-  if (callback.runnerNonce !== undefined && !/^[0-9a-f]{64}$/.test(callback.runnerNonce))
-    throw Error('Invalid runner nonce');
-  if (
-    callback.softDeadline !== undefined &&
-    (!Number.isSafeInteger(callback.softDeadline) || callback.softDeadline <= 0)
-  )
-    throw Error('Invalid soft deadline');
+import { DEFAULTS } from './defaults.js';
+import { hexSha } from './policy.js';
+// The provider's onstart: clone, check out the exact tested commit, exec the repo-side script.
+// Only the two interpolated values are inputs; per-run data travels in the KF_* environment.
+export function onstart(sha, repo) {
+  if (!hexSha(sha) || !/^[-\w.]+\/[-\w.]+$/.test(repo)) throw Error('Invalid fixed onstart inputs');
   return `#!/bin/bash
 set -eu
 git clone --filter=blob:none --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src

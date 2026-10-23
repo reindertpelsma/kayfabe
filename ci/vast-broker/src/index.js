@@ -798,15 +798,7 @@ export function createService({
         liveCheckedAt: null,
       };
     const runToken = await tokens.issue(r),
-      script = onstart(target.sha, n, cfg.ttl / 60000, cfg.repo, {
-        url: cfg.audience,
-        run: key,
-        token: runToken,
-        path: env.BROKER_PATH_PREFIX ?? '',
-        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,
-        runnerNonce: r.runnerNonce,
-        softDeadline: r.softDeadline,
-      });
+      script = onstart(target.sha, cfg.repo);
     r.scriptHash = await sha256Hex(script);
     await ledger.reserve(r);
     await workerLine(

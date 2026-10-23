@@ -182,18 +182,6 @@ test('prefixed authenticated result retains its own instance until grace', async
   await h.service.sweep();
   assert.deepEqual(h.cloud.deletes, ['900']);
 });
-for (const bad of ["';$(id)", 'bad/path', 'p'.repeat(129), 'short'])
-  test('onstart rejects prefix interpolation ' + bad.length, () =>
-    assert.throws(() =>
-      onstart(sha, nonce, 20, env.REPOSITORY, {
-        url: env.WORKER_URL,
-        path: bad,
-        run: '123-1',
-        token:
-          'v2.123.1.1800009000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
-      }),
-    ),
-  );
 test('fixed callback URL includes the exact optional prefix', async () => {
   const h = await rent();
   const body = h.cloud.calls.find((x) => x.url.endsWith('/asks/5/')).body;
