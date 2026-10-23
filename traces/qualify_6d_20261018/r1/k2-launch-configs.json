@@ -1,0 +1,221 @@
+{
+  "classification": "MEASURED",
+  "evidence": "k2-launch-configs.json",
+  "runs": [
+    {
+      "classification": "MEASURED",
+      "run": 4610,
+      "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+      "config": {
+        "classification": "MEASURED",
+        "evidence": "energy-bisect/4610/k2-config.json",
+        "run": 4610,
+        "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+        "gdm_stopped": "inactive",
+        "host_total_mib": 12282,
+        "free_before_mib": 11473,
+        "used_before_mib": 400,
+        "configured_fb_mb": 9216,
+        "reserve_mib": 2048,
+        "backend": "test",
+        "feedback": "synthetic 60 Hz; not physical display presentation",
+        "profile": false,
+        "matched_vram": false,
+        "limitation": "Physical VFIO exposes the whole card; this larger owned store still reserves host/context VRAM."
+      },
+      "guest_vram": {
+        "csv": "NVIDIA GeForce RTX 4070, 580.88, 9216 MiB\r\n",
+        "exit": 0
+      },
+      "flags": {
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_DIAG_PROGRESS": "1000"
+      },
+      "loads": {
+        "load-before-desktop-stop": {
+          "classification": "MEASURED",
+          "evidence": "load-before-desktop-stop.json",
+          "stage": "K2-4610",
+          "time": "2026-10-23T02:07:06.146860+00:00",
+          "uptime": "04:07:06 up 13 days,  8:28,  7 users,  load average: 0.24, 0.38, 0.66",
+          "load_average": [
+            0.23583984375,
+            0.3759765625,
+            0.6611328125
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "load-before-vm": {
+          "classification": "MEASURED",
+          "evidence": "load-before-vm.json",
+          "stage": "K2-4610",
+          "time": "2026-10-23T02:07:11.091539+00:00",
+          "uptime": "04:07:11 up 13 days,  8:28,  7 users,  load average: 0.30, 0.39, 0.66",
+          "load_average": [
+            0.29736328125,
+            0.38671875,
+            0.6630859375
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "load-before-spec": {
+          "classification": "MEASURED",
+          "evidence": "load-before-spec.json",
+          "stage": "SPEC-4610-round-6d-K2-larger-vram-x2",
+          "time": "2026-10-23T02:07:58.808187+00:00",
+          "uptime": "04:07:58 up 13 days,  8:29,  6 users,  load average: 1.45, 0.70, 0.75",
+          "load_average": [
+            1.4501953125,
+            0.69677734375,
+            0.75439453125
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        }
+      },
+      "safe_qemu_configuration": [
+        [
+          "-m",
+          "12288"
+        ],
+        [
+          "-smp",
+          "8"
+        ]
+      ],
+      "configured_display_device": [
+        "kf3-gpu,gpu-uuid=b7594b81-b2a0-47cb-b2b3-b0b7dcc60267,fb-mb=9216,bar1-size=8589934592,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=/data/codex-Q4/round-6d/r1/headless-runtime/windows-run4610.sock,display-broker-uid=1000,gop=on"
+      ]
+    },
+    {
+      "classification": "MEASURED",
+      "run": 4611,
+      "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+      "config": {
+        "classification": "MEASURED",
+        "evidence": "energy-bisect/4611/k2-config.json",
+        "run": 4611,
+        "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+        "gdm_stopped": "inactive",
+        "host_total_mib": 12282,
+        "free_before_mib": 11840,
+        "used_before_mib": 33,
+        "configured_fb_mb": 9216,
+        "reserve_mib": 2048,
+        "backend": "test",
+        "feedback": "synthetic 60 Hz; not physical display presentation",
+        "profile": true,
+        "matched_vram": false,
+        "limitation": "Physical VFIO exposes the whole card; this larger owned store still reserves host/context VRAM."
+      },
+      "guest_vram": {
+        "csv": "NVIDIA GeForce RTX 4070, 580.88, 9216 MiB\r\n",
+        "exit": 0
+      },
+      "flags": {
+        "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+        "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+        "KF3_KERNEL_GR_CE": "1",
+        "KF3_KERNEL_GR_WORK": "1",
+        "KF3_TRANSLATED_CE_RELAY": "1",
+        "KF3_DEFERRED_API": "1",
+        "KF3_PREEMPT_BIND_PROBE": "1",
+        "KF3_DISPLAY_IMP_ENABLE": "1",
+        "KF3_DISPLAY_CTRL_PROBE": "1",
+        "KF3_ZCULL_BIND_PROBE": "1",
+        "KF3_SW_RUNLIST_HOST_OWNED": "1",
+        "KF3_ASYNC_PREEMPT": "1",
+        "KF3_GFX_POOL_PROBE": "1",
+        "KF3_SW_RUNLIST_PROBE": "1",
+        "KF3_MEMORY_LIST_PROBE": "1",
+        "KF3_DISPLAY_SDR_COLOR": "1",
+        "KF3_DISPLAY_CAPS_PROBE": "1",
+        "KF3_DISPLAY_LUT_MIRROR": "1",
+        "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+        "KF3_LIFECYCLE_COUNT": "1",
+        "KF3_LIFECYCLE_PERIOD_S": "5",
+        "KF3_DIAG_PROGRESS": "1000",
+        "KF3_PROF": "1"
+      },
+      "loads": {
+        "load-before-desktop-stop": {
+          "classification": "MEASURED",
+          "evidence": "load-before-desktop-stop.json",
+          "stage": "K2-4611",
+          "time": "2026-10-23T03:08:40.274361+00:00",
+          "uptime": "05:08:40 up 13 days,  9:29,  8 users,  load average: 0.00, 0.41, 1.46",
+          "load_average": [
+            0.0,
+            0.40869140625,
+            1.46240234375
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "load-before-vm": {
+          "classification": "MEASURED",
+          "evidence": "load-before-vm.json",
+          "stage": "K2-4611",
+          "time": "2026-10-23T03:08:42.012144+00:00",
+          "uptime": "05:08:42 up 13 days,  9:30,  7 users,  load average: 0.00, 0.41, 1.46",
+          "load_average": [
+            0.0,
+            0.40869140625,
+            1.46240234375
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "load-before-spec": {
+          "classification": "MEASURED",
+          "evidence": "load-before-spec.json",
+          "stage": "SPEC-4611-round-6d-K2-profile-energy",
+          "time": "2026-10-23T03:09:24.948582+00:00",
+          "uptime": "05:09:24 up 13 days,  9:30,  7 users,  load average: 2.20, 0.92, 1.58",
+          "load_average": [
+            2.20068359375,
+            0.9189453125,
+            1.5830078125
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        }
+      },
+      "safe_qemu_configuration": [
+        [
+          "-m",
+          "12288"
+        ],
+        [
+          "-smp",
+          "8"
+        ]
+      ],
+      "configured_display_device": [
+        "kf3-gpu,gpu-uuid=b7594b81-b2a0-47cb-b2b3-b0b7dcc60267,fb-mb=9216,bar1-size=8589934592,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0,display-broker=/data/codex-Q4/round-6d/r1/headless-runtime/windows-run4611.sock,display-broker-uid=1000,gop=on"
+      ]
+    }
+  ]
+}

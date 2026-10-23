@@ -1,0 +1,171 @@
+{
+  "classification": "MEASURED",
+  "evidence": "host-return.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "time": "2026-10-23T03:14:15.410299+00:00",
+  "watchdog_cleanup": [
+    {
+      "pid": 2310803,
+      "starttime": 114552856,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2310800,
+        "leader_starttime": 114552856,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4600/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4600 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2328868,
+      "starttime": 114629543,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2328865,
+        "leader_starttime": 114629543,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4605/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4605 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2332948,
+      "starttime": 114720139,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2332945,
+        "leader_starttime": 114720139,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4606/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4606 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2339346,
+      "starttime": 114885593,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2339343,
+        "leader_starttime": 114885593,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4601/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4601 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2340176,
+      "starttime": 114915320,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2340173,
+        "leader_starttime": 114915320,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4602/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4602 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2340830,
+      "starttime": 114945283,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2340827,
+        "leader_starttime": 114945282,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4603/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4603 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2342678,
+      "starttime": 114974573,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2342675,
+        "leader_starttime": 114974573,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4604/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4604 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    },
+    {
+      "pid": 2343547,
+      "starttime": 115020074,
+      "parent": 1,
+      "ownership_witness": {
+        "session_leader": 2343544,
+        "leader_starttime": 115020074,
+        "source_receipt": "windows-20261022/boundary-kayfabe-4607/session-owned.json",
+        "launch_environment": {
+          "KF3_REV": "01a171e6",
+          "WIN_TITLE": "K1 SPECviewperf 4607 01a171e6",
+          "WIN_DIR": "/data/codex-Q4/round-6d/r1/windows-20261022"
+        }
+      }
+    }
+  ],
+  "live_owned_workers": [],
+  "host_target_existed": true,
+  "host_target_deleted": true,
+  "health_exit": 0,
+  "health": {
+    "classification": "MEASURED",
+    "evidence": "final-health.json",
+    "time": "2026-10-23T05:14:16.300472+02:00",
+    "nvidia_smi_before": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 525 MiB",
+      "stderr": ""
+    },
+    "cuda_before": 0,
+    "cuda_after": 0,
+    "nvidia_smi_after": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 525 MiB",
+      "stderr": ""
+    },
+    "gdm": {
+      "exit": 0,
+      "stdout": "active",
+      "stderr": ""
+    },
+    "nvidia_bound": true,
+    "automatic_login": {
+      "configured": true,
+      "enabled": true,
+      "user_present": true
+    },
+    "display_before": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "gdm_restart_for_display": false,
+    "display_after": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "ubuntu_logged_in": true
+  },
+  "new_vm_work_after_yield": "FORBIDDEN_UNTIL_CONTROLLER_RETURNS_HOST"
+}

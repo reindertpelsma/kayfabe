@@ -1,0 +1,13 @@
+{
+  "classification": "MEASURED",
+  "evidence": "cleanup.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "time": "2026-10-23T03:15:30.851025+00:00",
+  "dev_target_deleted": true,
+  "host_target_deleted": true,
+  "host_yield_evidence": "host-yielded.json",
+  "no_gpu_or_vm_work_after_yield": true,
+  "source_product_unchanged": true,
+  "lane_branch_only": true,
+  "claims_scope": "Only files added/changed by Q4, as permitted by lane assignment"
+}

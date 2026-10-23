@@ -1,0 +1,15 @@
+{
+  "classification": "MEASURED",
+  "evidence": "host-yielded.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "time": "2026-10-23T03:15:01.773832+00:00",
+  "marker_sha256": "9cba080de8fc22c1ede2be4ae6f3a4df26c47b33c3574df269139e7cf9555cf8",
+  "owned_workers": [],
+  "owned_agents": [],
+  "quiet_flag_present": false,
+  "own_fastguest_lease_released": true,
+  "bounded_reacquire_and_release_exit": 0,
+  "health_evidence": "host-return.json",
+  "gpu_or_vm_work_after_yield": "FORBIDDEN until controller returns host",
+  "remaining": "Review qualification-verdict.json correctness and measurement gaps; final docs push only"
+}

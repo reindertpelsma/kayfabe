@@ -1,0 +1,96 @@
+{
+  "classification": "INFERRED",
+  "evidence": "qualification-verdict.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "verdict": "PARTIAL_HOLD_MERGE",
+  "scope": "ROUND_6D correctness qualification followed by nonblocking diagnostic performance",
+  "passed_observations": {
+    "hosted_ci": "exact-head stable/aarch64/broker/firmware, existing debt only",
+    "native": "9/9 plus gate10; USER births12/12",
+    "linux_fast": "30/30; only5 exact approved intentional controls",
+    "windows_hold": "two sessions over600s, 33samples each",
+    "app_matrix": "6/6 unchanged canonical predicates",
+    "heaven": "one260.607s pass",
+    "minecraft": "one616.9s process-health smoke; menus and world creation included",
+    "steel_nomad": "one functional completion; numerical score private",
+    "energy_fresh_boots": "4/4 completed, zero guard failures",
+    "catia_creo": "two iterations each, zero guard failures",
+    "broker": "frame, hover/hide, native grab/release/input pass",
+    "K2_score_arm": "two each blender/catia/creo/energy; final response recovered after proven collection race"
+  },
+  "blocking_or_unverified": [
+    {
+      "item": "Linux cursor pixel oracle",
+      "status": "FAIL",
+      "evidence": "cursor-colour-analysis.json",
+      "detail": "Maximum channel errors48/52 exceed tolerance2. An extra alpha multiplication fits within1; component and matched-baseline regression remain unresolved."
+    },
+    {
+      "item": "Linux full desktop condition",
+      "status": "FAIL",
+      "evidence": "broker6-observations.txt",
+      "detail": "Cinnamon exited; fallback executable absent. Xorg and functional cursor/input tests continued."
+    },
+    {
+      "item": "SA-02 chosen-client negative cases",
+      "status": "NOT_EXERCISED",
+      "evidence": "sa02-broker6.json",
+      "detail": "Requests returned ordinary different handles; required input condition was not established."
+    },
+    {
+      "item": "Historical failing COPY2 segment",
+      "status": "NOT_EXERCISED",
+      "evidence": "energy-coverage.json",
+      "detail": "The historical channel had zero submissions/forwarding in every fresh Energy trial."
+    },
+    {
+      "item": "Hue/Digital Vibrance change",
+      "status": "UNVERIFIED",
+      "evidence": "smoke-4606.json",
+      "detail": "The installed NVIDIA interfaces lacked the required controls."
+    },
+    {
+      "item": "Production Wayland grabbed cursor overlay",
+      "status": "UNVERIFIED",
+      "evidence": "broker6-observations.txt",
+      "detail": "Linux X11 grab used VMM composition and Windows used a software cursor."
+    }
+  ],
+  "perf_limits": [
+    "K2 capacity9216MiB vs VFIO12282MiB; carriers differ; not matched VRAM or a causal single-change experiment",
+    "Existing KF3_PROF does not measure direct USER doorbell-to-submit",
+    "Broker1%/0.1% new-content lows unavailable without raw gap series"
+  ],
+  "recommendations": [
+    "Hold merge and review the cursor/desktop red evidence against a matched baseline",
+    "Provide an approved chosen-client SA-02 input path and CE-specific repro before claiming those mechanisms qualified",
+    "Have the owner perform Hue/Vibrance and production Wayland grabbed-cursor checks",
+    "Use a direct USER submission correlation before deciding inline stage2"
+  ],
+  "product_changes": false,
+  "candidate_branch_writes": false,
+  "merge_performed": false,
+  "profile_status": "run4611 PASS; existing RPC/drainer snapshots captured; direct USER interval UNMEASURED",
+  "host_handoff_status": "YIELDED at 2026-10-23T03:15:01.773832+00:00; no further GPU/VM work until controller return",
+  "host_handoff_evidence": "host-yielded.json",
+  "time": "2026-10-23T03:15:30.850836+00:00",
+  "test_controls": {
+    "helper_encoder": {
+      "before_passed": 1,
+      "before_failed": 2,
+      "after_passed": 3,
+      "after_failed": 0,
+      "mutation_kills": 2,
+      "restored_passed": 3
+    },
+    "lab_agent_publication": {
+      "before_passed": 1,
+      "before_failed": 2,
+      "after_passed": 3,
+      "after_failed": 0,
+      "mutation_kills": 2,
+      "restored_passed": 3
+    },
+    "scope": "Both fixes are separate harness/helper controls; no candidate behavior change"
+  }
+}
