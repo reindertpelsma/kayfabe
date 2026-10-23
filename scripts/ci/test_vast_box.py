@@ -30,6 +30,7 @@ TOKEN = "v2.4242.7.1729000000." + "cd" * 16 + "." + "1234abcd" * 5 + "." + ("Zk9
 NONCE = "ab" * 16
 SHA = "1234abcd" * 5
 RNONCE = "cd" * 32
+ACCESS = {"KF_ACCESS_ID": "0123abcd" * 4 + ".access", "KF_ACCESS_SECRET": "9f8e7d6c" * 8}
 PREFIX = "/pfx-9f3a7c"
 HARDWARE = {
     "gpu_name": "NVIDIA GeForce RTX 3060",
@@ -124,6 +125,10 @@ class Broker:
     def handle(self, path, headers, body, method="POST"):
         auth = headers.get("Authorization")
         record = {"path": path, "auth": auth, "body": body, "method": method, "t": time.time()}
+        record["access"] = (
+            headers.get("CF-Access-Client-Id"),
+            headers.get("CF-Access-Client-Secret"),
+        )
         with self.lock:
             self.requests.append(record)
         parts = path.split("/")
@@ -285,6 +290,16 @@ class EnvValidation(Tmp):
                     problems = m.validate_env(env)
                     self.assertTrue(any(name in p for p in problems), problems)
 
+    def test_access_pair_is_optional_and_checked_when_present(self):
+        env = good_env("https://h.example/pfx")
+        self.assertEqual(load().validate_env(dict(env, **ACCESS)), [])
+        for name in ACCESS:
+            bad = dict(env, **ACCESS)
+            bad[name] = "has space" + ACCESS[name]
+            problems = load().validate_env(bad)
+            self.assertEqual(problems, [name + ": malformed"])
+            self.assertNotIn(ACCESS[name], "".join(problems))
+
     def test_token_must_match_run_id(self):
         env = good_env("https://h.example/pfx")
         env["KF_RUN_ID"] = "4242-8"
@@ -411,6 +426,17 @@ class Reporter(Daemon):
         self.assertEqual({r["path"] for r in b.requests}, {PREFIX + "/report/" + RUN})
         for payload in b.accepted:
             self.assertLessEqual(set(payload), {"seq", "kind", "text", "result"})
+
+    def test_reports_carry_the_access_pair_only_when_set(self):
+        for access, expected in ((ACCESS, tuple(ACCESS.values())), ({}, (None, None))):
+            b = self.broker()
+            self.start(b, env_extra=access, log_text="line\n")
+            result_file(self.result)
+            rc, out = self.finish()
+            self.assertEqual(rc, 0, out)
+            self.assertEqual({r["access"] for r in b.reports()}, {expected})
+            for value in ACCESS.values():
+                self.assertNotIn(value, out + b.texts())
 
     def test_result_has_exactly_the_worker_schema_and_bindings(self):
         b = self.broker()
@@ -784,15 +810,16 @@ def make_bin(dest, names, extra=None):
 
 
 class Kill(Tmp):
-    def env_file(self, url):
+    def env_file(self, url, access=None):
         path = self.tmp / "env"
         lines = ["export KF_BROKER_URL='%s'" % url, "export KF_RUN_ID='%s'" % RUN]
+        lines += ["export %s='%s'" % item for item in (access or {}).items()]
         path.write_text("\n".join(lines + ["export KF_RUN_TOKEN='%s'" % TOKEN]) + "\n")
         path.chmod(0o600)
         return path
 
-    def run_tool(self, name, url, *args, env=None, timeout=40):
-        env_file = self.env_file(url)
+    def run_tool(self, name, url, *args, env=None, timeout=40, access=None):
+        env_file = self.env_file(url, access)
         return subprocess.run(
             ["sh", str(SCRIPTS / name), *args],
             env=base_env(dict({"KF_CI_ENV_FILE": str(env_file)}, **(env or {}))),
@@ -866,6 +893,45 @@ class Kill(Tmp):
             self.assertIn(flag, argv)
         self.assertNotIn("--location", argv)
         self.assertNotIn("-L", argv.split())
+
+    # Owner ruling 2026-10-23 21:45: the box sends the Worker-injected Access pair, when set.
+    def test_kill_sends_the_access_pair_only_when_set(self):
+        b = self.broker()
+        self.assertEqual(self.run_tool("kf-box-kill", b.url, access=ACCESS).returncode, 0)
+        self.assertEqual(self.run_tool("kf-box-kill", b.url).returncode, 0)
+        pair = (ACCESS["KF_ACCESS_ID"], ACCESS["KF_ACCESS_SECRET"])
+        self.assertEqual([r["access"] for r in b.requests], [pair, (None, None)])
+
+    def test_kill_and_blob_keep_the_access_pair_off_the_command_line(self):
+        record = self.tmp / "rec"
+        stub = 'printf "%s\\n" "$@" > "$KF_REC.argv"; cat > "$KF_REC.stdin"; printf 200\n'
+        bindir = make_bin(
+            self.tmp / "bin", ["sh", "cat", "printf", "tr", "head"], {"curl": "#!/bin/sh\n" + stub}
+        )
+        for tool, args in (("kf-box-kill", ["why"]), ("kf-box-blob-url", ["tag", "name"])):
+            for access in (ACCESS, None):
+                proc = self.run_tool(
+                    tool,
+                    "https://h.example/p",
+                    *args,
+                    env={"PATH": str(bindir), "KF_REC": str(record)},
+                    access=access,
+                )
+                self.assertEqual(proc.returncode, 0, tool + proc.stderr)
+                argv = Path(str(record) + ".argv").read_text()
+                stdin = Path(str(record) + ".stdin").read_text()
+                for value in ACCESS.values():
+                    self.assertNotIn(value, argv + proc.stdout + proc.stderr)
+                    self.assertEqual(value in stdin, access is not None, tool)
+                self.assertEqual("CF-Access-Client-Secret:" in stdin, access is not None)
+
+    def test_tools_refuse_a_malformed_access_pair(self):
+        b = self.broker()
+        for tool, args in (("kf-box-kill", []), ("kf-box-blob-url", ["tag", "name"])):
+            bad = dict(ACCESS, KF_ACCESS_SECRET='x" url = "https://evil.example')
+            self.assertNotEqual(self.run_tool(tool, b.url, *args, access=bad).returncode, 0)
+        self.assertEqual(b.requests, [])
+
 
 PAYLOAD_HEADER = "#!/bin/bash\n"
 
@@ -960,6 +1026,24 @@ class Onstart(Tmp):
         for name in ("KF_BROKER_URL", "KF_RUN_ID", "KF_RUNNER_NONCE"):
             self.assertNotIn(name + "=", dump)
         self.assertNotIn(PREFIX, dump)
+
+    def test_payload_never_sees_the_access_pair_but_the_helpers_do(self):
+        b = self.broker()
+        root = self.tree(self.OK_PAYLOAD)
+        self.assertEqual(self.onstart(root, b, env_extra=ACCESS).returncode, 0)
+        dump = (self.tmp / "dump").read_text()
+        for name, value in ACCESS.items():
+            self.assertNotIn(name + "=", dump)
+            self.assertNotIn(value, dump)
+        self.assertEqual({r["access"] for r in b.reports()}, {tuple(ACCESS.values())})
+        out = subprocess.run(
+            ["sh", str(self.bin / "kf-box-kill"), "after run"],
+            env=base_env({"KF_CI_ENV_FILE": str(self.run_dir / "env")}),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(b.hits("kill")[0]["access"], tuple(ACCESS.values()))
 
     def test_payload_still_gets_its_own_inputs(self):
         dump = self.payload_env()
