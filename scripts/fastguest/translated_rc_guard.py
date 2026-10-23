@@ -112,7 +112,7 @@ def check(manifest, qemu, guest, journal):
     cfg = one(records(qemu, "RC_NEGCTL_CONFIG "), "host bench configuration")
     require(cfg, run=run, source=source)
     begin = one(records(guest, "KF_RC_PROBE_BEGIN "), "guest probe birth")
-    require(begin, run=run, mode=mode, **{"class":"0xc56f"})
+    require(begin, run=run, mode=mode, async_ce=1, **{"class":"0xc56f"})
     owner = number(begin,"owner")
     result = one(records(guest,"KF_RC_OWNER "),"owning process result")
     require(result,run=run,pid=owner,errno=5 if mode=="on" else 0,channel_error=1 if mode=="on" else 0)

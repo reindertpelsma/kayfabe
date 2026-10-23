@@ -146,7 +146,8 @@ static int __init probe_init(void)
     s = nvUvmInterfaceQueryCopyEnginesCaps(device, &caps);
     if (s != NV_OK) goto bad;
     /* This C56F control qualifies the first ten public COPY engine IDs only. */
-    for (ce=0; ce<10; ce++) if (caps.copyEngineCaps[ce].supported) break;
+    for (ce=0; ce<10; ce++)
+        if (caps.copyEngineCaps[ce].supported && !caps.copyEngineCaps[ce].grce) break;
     if (ce==10) goto bad;
     engine = NV2080_ENGINE_TYPE_COPY(ce);
     error = create_channel(&bystander, ce);
@@ -157,7 +158,7 @@ static int __init probe_init(void)
     if (s != NV_OK || !pb_va || pb_va >= (1ULL<<40)) goto bad;
     s = nvUvmInterfaceMemoryCpuMap(space, pb_va, 4096, &pb_cpu, 4096);
     if (s != NV_OK) goto bad;
-    pr_info("KF_RC_PROBE_BEGIN run=%s mode=%s chid=0x%x engine=0x%x class=0xc56f owner=%d\n",
+    pr_info("KF_RC_PROBE_BEGIN run=%s mode=%s chid=0x%x engine=0x%x class=0xc56f async_ce=1 owner=%d\n",
             run, fault ? "on" : "off", victim.info.hwChannelId, engine, task_tgid_nr(current));
     error = progress(1);
     if (error) goto bad;
