@@ -406,6 +406,7 @@ export async function setup(overrides = {}) {
         method = path.startsWith('/status') ? 'GET' : 'POST',
         token,
         ghToken = null,
+        protocol = '5',
       } = {},
     ) {
       if (path === '/rent' && body === undefined)
@@ -435,6 +436,7 @@ export async function setup(overrides = {}) {
           method,
           headers: {
             Authorization: 'Bearer ' + authorization,
+            ...(protocol === null ? {} : { 'X-KF-Protocol': protocol }),
             ...(ghToken ? { 'X-GH-Token': ghToken } : {}),
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
