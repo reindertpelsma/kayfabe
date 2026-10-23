@@ -1,6 +1,6 @@
 # S4 adaptive Windows readiness
 
-STATUS: LIVE, 2026-10-23; GPU-free proof green; measured box calibration recorded, bind/ON pending.
+STATUS: PARTIAL, 2026-10-23; shared adaptive proof and actual GA102 bind/Code0 complete; post-enable diagnostic inconclusive, graphics live dump unresolved; apps/Unigine/hold unrun.
 
 MEASURED (2026-10-23, lease57296386, `traces/sweep_dies_20261018/lease_57296386/baseline_calibration/box_readiness.json`): standard-VGA verification boot48s, successful OS CIM roundtrip15.419614402s, one query attempt, factor8. One-box calibration is a bench observation, not a per-die constant or a driver outcome.
 
@@ -25,3 +25,5 @@ INFERRED hypothesis (2026-10-23): measured readiness prevents this lane from tre
 MEASURED (2026-10-23, lease57296386, `traces/sweep_dies_20261018/lease_57296386/stopped_complete/arm_ampere_s4.log`): after two diagnostic query timeouts, the300s outer cleanup bound interrupted win_vm stop before its QMP quit fallback; the VM was still running. MEASURED (same lease, `stopped_complete/s4_manual_stop_receipt.json`): direct documented QMP quit succeeded and owned PID exited. CODE READ: arm cleanup now reaches an independent20s local QMP quit fallback when the owned PID remains live and the PID file still matches; final exit verification remains mandatory, with no signal kill or guest-health acceptance.
 
 MEASURED (2026-10-23, `traces/sweep_dies_20261018/adaptive/cleanup/`): tests-first4cases,2RED→4GREEN; restoring omitted fallback kills2tests; full existing desktop suite74/74PASS.
+
+MEASURED (2026-10-23, lease57296386, `traces/sweep_dies_20261018/lease_57296386/stopped_complete/`): factor8 gave a complete bind SSH reply after55.35s; actual signed580.88 Code22 and ON Code0 followed. The next diagnostic exhausted two240s queries and returned readiness inconclusive. A plain shell pulse succeeded21.36s; two WER193/815 records remain unresolved. No causal comparison with the earlier host, driver-failure verdict from timeout, or app/hold acceptance is claimed. MEASURED (same lease, `TEARDOWN.json`): exact-ID API absence verified02:04:33Z, timer cancelled afterward.

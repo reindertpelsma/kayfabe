@@ -1,0 +1,26 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-23T02:08:14.325245+00:00",
+  "command": "S4 rent_resume.py turing adaptive_turing",
+  "source": "5124411b7e7b0b77a5e51bad1fb7d8fd855d0851",
+  "result": "NO_ELIGIBLE_OFFER",
+  "returncode": 1,
+  "reason": "No eligible family offer under owner price guard",
+  "provider_verification_queries": [
+    "true",
+    "false",
+    "any"
+  ],
+  "requirements": {
+    "vms_enabled": true,
+    "num_gpus": 1,
+    "disk_gb": 180,
+    "price_guard_usd_h": 1,
+    "memory_mb_min": 20000,
+    "effective_cores_min": 4,
+    "inet_down_min": 200
+  },
+  "created_new_lease": false,
+  "new_ledger_exists": false,
+  "note": "Refusal occurred before create; no safety or eligibility requirement relaxed."
+}

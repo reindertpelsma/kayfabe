@@ -1,10 +1,12 @@
+MEASURED (2026-10-23, `adaptive_turing_availability/census.json`): fresh02:06:18Z API census returned35 KVM/single-GPU/180GB/price<=1 offers and0 Turing offers; diagnostic5GB search returned24 Turing offers, all KVM-disabled. The explicit family selector searched verified/unverified/any and refused before creating a lease (`selector_refusal.json`). CODE READ: the full KVM model list contains no candidate class for the six unmeasured dies, so their current rentable count remains0/6; historical coverage remains14measured-any-item/0inherited/6unmeasured of20. These counts describe snapshots and equal-weight dies, not permanent availability or sales market share.
+
 # S4 Round 3 constant tiers and coverage plan
 
 MEASURED (2026-10-22, `turing_availability/final_offer_census.json`): later23:57:27Z availability supersedes the earlier TU106 quote below for the current retry:0 Turing candidates among30 KVM/single-GPU/180GB/price<=1 offers. Existing constant coverage remains14/20; no new Turing lease or constant receipt. No permanent unavailability is inferred.
 
 CODE READ (owner ruling 2026-10-22,23:00): admission prerequisite below is SUPERSEDED by `docs/design/S4_XID_ADMISSION_20261022.md`, commit 597d60fe1. Exact source channel/VA/type plus CE-family membership now authorizes the deliberate copy-engine controls. Tier findings and coverage remain research; no per-die route table or RE is required for this approved guard policy.
 
-STATUS: RESEARCH / LIVE, 2026-10-22. CODE READ: owner ROUND3 and Addenda1/2 plus workstation scope update; follow `docs/design/V3_CONSTANT_STRATEGY.md` tiers in order. This is a GPU-free plan and evidence inventory, not a runtime constant/admission table.
+STATUS: RESEARCH / PARTIAL, updated2026-10-23. CODE READ: owner ROUND3 and Addenda1/2 plus workstation scope update; follow `docs/design/V3_CONSTANT_STRATEGY.md` tiers in order. This is a GPU-free plan and evidence inventory, not a runtime constant/admission table.
 
 CODE READ (2026-10-22 owner scope): target20 implementation dies below, Turing and newer consumer AND workstation SKUs. Pascal/older are out of scope. Driver branch, vBIOS policy and ECC can differ across workstation/consumer SKUs; no board-specific data is collected. Same silicon permits inheritance only for constants with a written floorsweeping-independent mechanism. **PCE/LCE masks, engine counts and CE routes always come from the current host at runtime; none may be inherited from a die row.** No CE-route table will be shipped.
 

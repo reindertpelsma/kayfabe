@@ -1826,5 +1826,15 @@
     "fraction_unobserved": 0.85,
     "TU106": "pending on lease57262021; existing595.91.07 native30/30 reused, missing Xid-source correlation measured once",
     "not_an_inheritance": "observed CE client can depend on host harvesting and is not a reusable per-die route constant"
+  },
+  "latest_availability": {
+    "kind": "MEASURED",
+    "date": "2026-10-23",
+    "evidence": "adaptive_turing_availability/census.json",
+    "total_kvm_offers": 35,
+    "eligible_turing_offers": 0,
+    "rentable_unmeasured": 0,
+    "unrentable_unmeasured": 6,
+    "note": "Snapshot only; any-item measurement coverage remains14/20, inherited0; never an engine-route runtime table or acceptance claim."
   }
 }

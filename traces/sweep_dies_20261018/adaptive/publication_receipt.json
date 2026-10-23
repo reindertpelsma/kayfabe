@@ -1,0 +1,9 @@
+{
+  "kind": "MEASURED",
+  "utc": "2026-10-23T02:10:50.551118+00:00",
+  "branch": "codex/sweep-dies-20261022",
+  "verified_origin_head": "5124411b7e7b0b77a5e51bad1fb7d8fd855d0851",
+  "secret_scan_hits": 0,
+  "s4_changed_files_claims_new": 0,
+  "scope": "Changed-file scope from393d6b49a, owner ruling for evidence-only skip-ci branch; inherited global claim debt not edited. Last publication passed these checks; every subsequent push repeats them."
+}

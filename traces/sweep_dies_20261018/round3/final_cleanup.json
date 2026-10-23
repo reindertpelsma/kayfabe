@@ -1,11 +1,12 @@
 {
   "class": "MEASURED",
-  "utc": "2026-10-22T23:58:21.514595+00:00",
+  "utc": "2026-10-23T02:10:50.173794+00:00",
   "own_ids_api_absent": [
     57193877,
     57209908,
     57262021,
-    57280778
+    57280778,
+    57296386
   ],
   "owned_timers_live": 0,
   "owned_helpers_live": [],
@@ -22,7 +23,7 @@
   "own_dev_cargo_target": "absent",
   "gpu_or_cargo_locks_acquired_this_resume": 0,
   "all_rentals_closed": true,
-  "conservative_lane_usd": 6.722848189335185,
-  "conservative_round3_usd": 2.919230069887037,
+  "conservative_lane_usd": 8.071120868676852,
+  "conservative_round3_usd": 4.267502749228703,
   "estimate_not_invoice": true
 }
