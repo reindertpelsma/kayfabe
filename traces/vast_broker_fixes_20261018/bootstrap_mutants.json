@@ -1,0 +1,26 @@
+[
+  {
+    "mutant": "required-prefix",
+    "count": 2,
+    "killers": [
+      "renting requires pre-OIDC prefix /rent",
+      "renting requires pre-OIDC prefix /availability?profile=check"
+    ]
+  },
+  {
+    "mutant": "create-env",
+    "count": 2,
+    "killers": [
+      "create carries environment contract KF_RUN_TOKEN",
+      "create carries environment contract KF_SHA"
+    ]
+  },
+  {
+    "mutant": "tiny-bootstrap",
+    "count": 2,
+    "killers": [
+      "tiny onstart golden template reindertpelsma/kayfabe",
+      "tiny onstart golden template example/project"
+    ]
+  }
+]

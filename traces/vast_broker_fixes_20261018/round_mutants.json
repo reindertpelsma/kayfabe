@@ -1,0 +1,689 @@
+[
+  {
+    "mutant": "front-MAC",
+    "count": 4,
+    "killers": [
+      "round front verifies nonce MAC before DO /report/123-1",
+      "round front rejects expired capability /report/123-1",
+      "round front verifies nonce MAC before DO /hold/123-1",
+      "round front rejects expired capability /hold/123-1"
+    ]
+  },
+  {
+    "mutant": "front-expiry",
+    "count": 2,
+    "killers": [
+      "round front rejects expired capability /report/123-1",
+      "round front rejects expired capability /hold/123-1"
+    ]
+  },
+  {
+    "mutant": "nonce-MAC",
+    "count": 9,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true",
+      "round front accepts valid stateless capability /report/123-1",
+      "round front accepts valid stateless capability /hold/123-1",
+      "round exhausted blob scope performs no provider inspection run",
+      "round exhausted blob scope performs no provider inspection day",
+      "round full log cannot discard manual control state hold",
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "short-token-life",
+    "count": 2,
+    "killers": [
+      "round callback lifetime follows hard limit 5",
+      "round callback lifetime follows hard limit 10"
+    ]
+  },
+  {
+    "mutant": "closed-preauth",
+    "count": 4,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true",
+      "round stale authenticated flood never queues stopped",
+      "round stale authenticated flood never queues closed"
+    ]
+  },
+  {
+    "mutant": "ended-kill-receipt",
+    "count": 2,
+    "killers": [
+      "round ended kill receipt skips busy queue false",
+      "round ended kill receipt skips busy queue true"
+    ]
+  },
+  {
+    "mutant": "bounded-record-queue",
+    "count": 2,
+    "killers": [
+      "round own record queue is bounded /status/123-1",
+      "round own record queue is bounded /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "create-label-ownership",
+    "count": 4,
+    "killers": [
+      "round create-owned ID survives label change stop",
+      "round create-owned ID survives label change cron",
+      "round changed create label emits a fixed ownership event /status/123-1",
+      "round changed create label emits a fixed ownership event /stop/123-1"
+    ]
+  },
+  {
+    "mutant": "fixed-label-event",
+    "count": 2,
+    "killers": [
+      "round changed create label emits a fixed ownership event /status/123-1",
+      "round changed create label emits a fixed ownership event /stop/123-1"
+    ]
+  },
+  {
+    "mutant": "per-GB-admission",
+    "count": 2,
+    "killers": [
+      "round transfer price capped per GB inet_up_cost",
+      "round transfer price capped per GB inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "per-GB-provider-query",
+    "count": 2,
+    "killers": [
+      "round provider query carries per GB ceiling inet_up_cost",
+      "round provider query carries per GB ceiling inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "contract-create-check",
+    "count": 2,
+    "killers": [
+      "round changed contract price destroys new owned box dph_total",
+      "round changed contract price destroys new owned box inet_down_cost"
+    ]
+  },
+  {
+    "mutant": "contract-recovery-check",
+    "count": 2,
+    "killers": [
+      "round recovered create repricing is checked before rent response dph_total",
+      "round recovered create repricing is checked before rent response inet_up_cost"
+    ]
+  },
+  {
+    "mutant": "export-deny",
+    "count": 4,
+    "killers": [
+      "round denied country cannot rent CU",
+      "round denied country cannot rent IR",
+      "round denied country cannot rent KP",
+      "round denied country cannot rent SY"
+    ]
+  },
+  {
+    "mutant": "unknown-country",
+    "count": 2,
+    "killers": [
+      "round unknown country obeys owner config undefined",
+      "round unknown country obeys owner config malformed"
+    ]
+  },
+  {
+    "mutant": "OIDC-issuance-bounds",
+    "count": 19,
+    "killers": [
+      "round Access route matrix /rent no-iat",
+      "round Access route matrix /rent future-iat",
+      "round Access route matrix /availability no-iat",
+      "round Access route matrix /availability future-iat",
+      "round Access route matrix /status/123-1 no-iat",
+      "round Access route matrix /status/123-1 future-iat",
+      "round Access route matrix /stop/123-1 no-iat",
+      "round Access route matrix /stop/123-1 future-iat",
+      "round Access route matrix /stop-all no-iat",
+      "round Access route matrix /stop-all future-iat",
+      "round Access route matrix /logs/123-1 no-iat",
+      "round Access route matrix /logs/123-1 future-iat",
+      "round Access route matrix /stop-timer/123-1 no-iat",
+      "round Access route matrix /stop-timer/123-1 future-iat",
+      "round OIDC rejects stale or unbounded issue time {}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1800000061}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1799996399}",
+      "round OIDC rejects stale or unbounded issue time {\"iat\":1800000000,\"exp\":1800003601}"
+    ]
+  },
+  {
+    "mutant": "blob-prefix-default-deny",
+    "count": 2,
+    "killers": [
+      "round blob tag scope defaults denied undefined",
+      "round blob tag scope defaults denied []"
+    ]
+  },
+  {
+    "mutant": "blob-quota-before-inspect",
+    "count": 2,
+    "killers": [
+      "round exhausted blob scope performs no provider inspection run",
+      "round exhausted blob scope performs no provider inspection day"
+    ]
+  },
+  {
+    "mutant": "full-log-state-save",
+    "count": 2,
+    "killers": [
+      "round full log cannot discard manual control state hold",
+      "round full log cannot discard manual control state stop-timer"
+    ]
+  },
+  {
+    "mutant": "runner-status-retry",
+    "count": 7,
+    "killers": [
+      "round runner retries status without destructive cleanup BUSY",
+      "round runner retries status without destructive cleanup RATE_LIMITED",
+      "round runner retries status without destructive cleanup UNAVAILABLE",
+      "round runner retries status without destructive cleanup exhausted",
+      "round runner retries status without destructive cleanup exhausted-rate",
+      "round runner retries status without destructive cleanup malformed-503",
+      "round runner retries status without destructive cleanup malformed-403"
+    ]
+  },
+  {
+    "mutant": "runner-infra-no-stop",
+    "count": 2,
+    "killers": [
+      "round runner retries status without destructive cleanup exhausted",
+      "round runner retries status without destructive cleanup exhausted-rate"
+    ]
+  },
+  {
+    "mutant": "GitHub-lifecycle-cache",
+    "count": 2,
+    "killers": [
+      "round lifecycle reads share bounded GitHub cache pr",
+      "round lifecycle reads share bounded GitHub cache branch"
+    ]
+  },
+  {
+    "mutant": "Worker-GitHub-authority",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round Worker GitHub token retains public fallback 401",
+      "round Worker GitHub token retains public fallback 403"
+    ]
+  },
+  {
+    "mutant": "caller-token-ignored",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round caller GitHub credential is not forwarded /rent",
+      "round caller GitHub credential is not forwarded /availability?profile=check"
+    ]
+  },
+  {
+    "mutant": "merged-asset-token",
+    "count": 2,
+    "killers": [
+      "round primary GitHub token authorizes asset metadata undefined",
+      "round primary GitHub token authorizes asset metadata deprecated-asset-token"
+    ]
+  },
+  {
+    "mutant": "Worker-token-redaction",
+    "count": 2,
+    "killers": [
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "asset-redirect-credential-leak",
+    "count": 2,
+    "killers": [
+      "round blob redirect cannot embed Worker credential false",
+      "round blob redirect cannot embed Worker credential true"
+    ]
+  },
+  {
+    "mutant": "owner-config-name",
+    "count": 2,
+    "killers": [
+      "round owner secret format diagnostic RUN_TOKEN_SECRET",
+      "round owner secret format diagnostic OWNER_STOP_TOKEN"
+    ]
+  },
+  {
+    "mutant": "owner-config-value-log",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round owner secret format diagnostic RUN_TOKEN_SECRET",
+      "round owner secret format diagnostic OWNER_STOP_TOKEN",
+      "round owner secret format diagnostic BROKER_PATH_PREFIX"
+    ]
+  },
+  {
+    "mutant": "Access-gateway-gate",
+    "count": 103,
+    "killers": [
+      "round Access route matrix /rent box",
+      "round Access route matrix /rent none",
+      "round Access route matrix /rent forged",
+      "round Access route matrix /rent aud",
+      "round Access route matrix /rent expired",
+      "round Access route matrix /rent unknown",
+      "round Access route matrix /rent issuer",
+      "round Access route matrix /rent no-iat",
+      "round Access route matrix /rent future-iat",
+      "round Access route matrix /availability box",
+      "round Access route matrix /availability none",
+      "round Access route matrix /availability forged",
+      "round Access route matrix /availability aud",
+      "round Access route matrix /availability expired",
+      "round Access route matrix /availability unknown",
+      "round Access route matrix /availability issuer",
+      "round Access route matrix /availability no-iat",
+      "round Access route matrix /availability future-iat",
+      "round Access route matrix /status/123-1 box",
+      "round Access route matrix /status/123-1 none",
+      "round Access route matrix /status/123-1 forged",
+      "round Access route matrix /status/123-1 aud",
+      "round Access route matrix /status/123-1 expired",
+      "round Access route matrix /status/123-1 unknown",
+      "round Access route matrix /status/123-1 issuer",
+      "round Access route matrix /status/123-1 no-iat",
+      "round Access route matrix /status/123-1 future-iat",
+      "round Access route matrix /stop/123-1 box",
+      "round Access route matrix /stop/123-1 none",
+      "round Access route matrix /stop/123-1 forged",
+      "round Access route matrix /stop/123-1 aud",
+      "round Access route matrix /stop/123-1 expired",
+      "round Access route matrix /stop/123-1 unknown",
+      "round Access route matrix /stop/123-1 issuer",
+      "round Access route matrix /stop/123-1 no-iat",
+      "round Access route matrix /stop/123-1 future-iat",
+      "round Access route matrix /stop-all box",
+      "round Access route matrix /stop-all none",
+      "round Access route matrix /stop-all forged",
+      "round Access route matrix /stop-all aud",
+      "round Access route matrix /stop-all expired",
+      "round Access route matrix /stop-all unknown",
+      "round Access route matrix /stop-all issuer",
+      "round Access route matrix /stop-all no-iat",
+      "round Access route matrix /stop-all future-iat",
+      "round Access route matrix /logs/123-1 box",
+      "round Access route matrix /logs/123-1 none",
+      "round Access route matrix /logs/123-1 forged",
+      "round Access route matrix /logs/123-1 aud",
+      "round Access route matrix /logs/123-1 expired",
+      "round Access route matrix /logs/123-1 unknown",
+      "round Access route matrix /logs/123-1 issuer",
+      "round Access route matrix /logs/123-1 no-iat",
+      "round Access route matrix /logs/123-1 future-iat",
+      "round Access route matrix /stop-timer/123-1 box",
+      "round Access route matrix /stop-timer/123-1 none",
+      "round Access route matrix /stop-timer/123-1 forged",
+      "round Access route matrix /stop-timer/123-1 aud",
+      "round Access route matrix /stop-timer/123-1 expired",
+      "round Access route matrix /stop-timer/123-1 unknown",
+      "round Access route matrix /stop-timer/123-1 issuer",
+      "round Access route matrix /stop-timer/123-1 no-iat",
+      "round Access route matrix /stop-timer/123-1 future-iat",
+      "round Access route matrix /report/123-1 runner",
+      "round Access route matrix /report/123-1 none",
+      "round Access route matrix /report/123-1 forged",
+      "round Access route matrix /report/123-1 aud",
+      "round Access route matrix /report/123-1 expired",
+      "round Access route matrix /report/123-1 unknown",
+      "round Access route matrix /report/123-1 issuer",
+      "round Access route matrix /report/123-1 no-iat",
+      "round Access route matrix /report/123-1 future-iat",
+      "round Access route matrix /hold/123-1 runner",
+      "round Access route matrix /hold/123-1 none",
+      "round Access route matrix /hold/123-1 forged",
+      "round Access route matrix /hold/123-1 aud",
+      "round Access route matrix /hold/123-1 expired",
+      "round Access route matrix /hold/123-1 unknown",
+      "round Access route matrix /hold/123-1 issuer",
+      "round Access route matrix /hold/123-1 no-iat",
+      "round Access route matrix /hold/123-1 future-iat",
+      "round Access route matrix /kill/123-1 runner",
+      "round Access route matrix /kill/123-1 none",
+      "round Access route matrix /kill/123-1 forged",
+      "round Access route matrix /kill/123-1 aud",
+      "round Access route matrix /kill/123-1 expired",
+      "round Access route matrix /kill/123-1 unknown",
+      "round Access route matrix /kill/123-1 issuer",
+      "round Access route matrix /kill/123-1 no-iat",
+      "round Access route matrix /kill/123-1 future-iat",
+      "round Access route matrix /blob-url/123-1/v1/asset runner",
+      "round Access route matrix /blob-url/123-1/v1/asset none",
+      "round Access route matrix /blob-url/123-1/v1/asset forged",
+      "round Access route matrix /blob-url/123-1/v1/asset aud",
+      "round Access route matrix /blob-url/123-1/v1/asset expired",
+      "round Access route matrix /blob-url/123-1/v1/asset unknown",
+      "round Access route matrix /blob-url/123-1/v1/asset issuer",
+      "round Access route matrix /blob-url/123-1/v1/asset no-iat",
+      "round Access route matrix /blob-url/123-1/v1/asset future-iat",
+      "round partial Access public config ACCESS_TEAM_DOMAIN",
+      "round partial Access public config ACCESS_AUD",
+      "round partial Access public config ACCESS_RUNNER_CLIENT_ID",
+      "round partial Access public config ACCESS_BOX_CLIENT_ID"
+    ]
+  },
+  {
+    "mutant": "Access-role-allowlist",
+    "count": 22,
+    "killers": [
+      "round Access route matrix /rent box",
+      "round Access route matrix /rent unknown",
+      "round Access route matrix /availability box",
+      "round Access route matrix /availability unknown",
+      "round Access route matrix /status/123-1 box",
+      "round Access route matrix /status/123-1 unknown",
+      "round Access route matrix /stop/123-1 box",
+      "round Access route matrix /stop/123-1 unknown",
+      "round Access route matrix /stop-all box",
+      "round Access route matrix /stop-all unknown",
+      "round Access route matrix /logs/123-1 box",
+      "round Access route matrix /logs/123-1 unknown",
+      "round Access route matrix /stop-timer/123-1 box",
+      "round Access route matrix /stop-timer/123-1 unknown",
+      "round Access route matrix /report/123-1 runner",
+      "round Access route matrix /report/123-1 unknown",
+      "round Access route matrix /hold/123-1 runner",
+      "round Access route matrix /hold/123-1 unknown",
+      "round Access route matrix /kill/123-1 runner",
+      "round Access route matrix /kill/123-1 unknown",
+      "round Access route matrix /blob-url/123-1/v1/asset runner",
+      "round Access route matrix /blob-url/123-1/v1/asset unknown"
+    ]
+  },
+  {
+    "mutant": "Access-partial-config",
+    "count": 4,
+    "killers": [
+      "round partial Access public config ACCESS_TEAM_DOMAIN",
+      "round partial Access public config ACCESS_AUD",
+      "round partial Access public config ACCESS_RUNNER_CLIENT_ID",
+      "round partial Access public config ACCESS_BOX_CLIENT_ID"
+    ]
+  },
+  {
+    "mutant": "runner-Access-headers",
+    "count": 2,
+    "killers": [
+      "round actual controller Access A headers and masking false",
+      "round actual controller Access A headers and masking true"
+    ]
+  },
+  {
+    "mutant": "box-reporter-Access-headers",
+    "count": 2,
+    "killers": [
+      "round optional Access headers use the intended transport reporter",
+      "round optional Access headers use the intended transport daemon"
+    ]
+  },
+  {
+    "mutant": "box-shell-Access-headers",
+    "count": 3,
+    "killers": [
+      "round optional Access headers use the intended transport kill",
+      "round optional Access headers use the intended transport hold",
+      "round optional Access headers use the intended transport blob"
+    ]
+  },
+  {
+    "mutant": "box-Access-injection",
+    "count": 2,
+    "killers": [
+      "round complete Access B is injected only as box environment KF_ACCESS_ID",
+      "round complete Access B is injected only as box environment KF_ACCESS_SECRET"
+    ]
+  },
+  {
+    "mutant": "Access-A-secret-isolation",
+    "count": 2,
+    "killers": [
+      "round Access A secret cannot cross the broker job pending",
+      "round Access A secret cannot cross the broker job report"
+    ]
+  },
+  {
+    "mutant": "reaper-age",
+    "count": 2,
+    "killers": [
+      "round reaper deletes only strictly overdue owned namespace 194",
+      "round reaper deletes only strictly overdue owned namespace 195"
+    ]
+  },
+  {
+    "mutant": "reaper-namespace",
+    "count": 3,
+    "killers": [
+      "round reaper deletes only strictly overdue owned namespace 194",
+      "round reaper deletes only strictly overdue owned namespace 195",
+      "round reaper deletes only strictly overdue owned namespace 196"
+    ]
+  },
+  {
+    "mutant": "reaper-snapshot",
+    "count": 2,
+    "killers": [
+      "round reaper revalidates snapshot before deletion label",
+      "round reaper revalidates snapshot before deletion start_date"
+    ]
+  },
+  {
+    "mutant": "reaper-public-control",
+    "count": 2,
+    "killers": [
+      "round reaper exposes no public control path /stop-all",
+      "round reaper exposes no public control path /rent"
+    ]
+  },
+  {
+    "mutant": "front-pull-request-deny",
+    "count": 2,
+    "killers": [
+      "round pull_request fails at front before ledger /rent",
+      "round pull_request fails at front before ledger /status/123-1"
+    ]
+  },
+  {
+    "mutant": "Access-signature",
+    "count": 7,
+    "killers": [
+      "round Access route matrix /rent forged",
+      "round Access route matrix /availability forged",
+      "round Access route matrix /status/123-1 forged",
+      "round Access route matrix /stop/123-1 forged",
+      "round Access route matrix /stop-all forged",
+      "round Access route matrix /logs/123-1 forged",
+      "round Access route matrix /stop-timer/123-1 forged"
+    ]
+  },
+  {
+    "mutant": "Access-audience",
+    "count": 7,
+    "killers": [
+      "round Access route matrix /rent aud",
+      "round Access route matrix /availability aud",
+      "round Access route matrix /status/123-1 aud",
+      "round Access route matrix /stop/123-1 aud",
+      "round Access route matrix /stop-all aud",
+      "round Access route matrix /logs/123-1 aud",
+      "round Access route matrix /stop-timer/123-1 aud"
+    ]
+  },
+  {
+    "mutant": "Access-expiry",
+    "count": 7,
+    "killers": [
+      "round Access route matrix /rent expired",
+      "round Access route matrix /availability expired",
+      "round Access route matrix /status/123-1 expired",
+      "round Access route matrix /stop/123-1 expired",
+      "round Access route matrix /stop-all expired",
+      "round Access route matrix /logs/123-1 expired",
+      "round Access route matrix /stop-timer/123-1 expired"
+    ]
+  },
+  {
+    "mutant": "Access-missing-assertion",
+    "count": 11,
+    "killers": [
+      "round Access route matrix /rent none",
+      "round Access route matrix /availability none",
+      "round Access route matrix /status/123-1 none",
+      "round Access route matrix /stop/123-1 none",
+      "round Access route matrix /stop-all none",
+      "round Access route matrix /logs/123-1 none",
+      "round Access route matrix /stop-timer/123-1 none",
+      "round Access route matrix /report/123-1 none",
+      "round Access route matrix /hold/123-1 none",
+      "round Access route matrix /kill/123-1 none",
+      "round Access route matrix /blob-url/123-1/v1/asset none"
+    ]
+  },
+  {
+    "mutant": "Worker-token-value-log",
+    "count": 2,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check"
+    ]
+  },
+  {
+    "mutant": "Worker-token-response-leak",
+    "count": 4,
+    "killers": [
+      "round Worker GitHub credential wins over caller /rent",
+      "round Worker GitHub credential wins over caller /availability?profile=check",
+      "round Worker GitHub secret redacted from box reflection /status/123-1",
+      "round Worker GitHub secret redacted from box reflection /logs/123-1?cursor=0"
+    ]
+  },
+  {
+    "mutant": "reaper-delete-only",
+    "count": 3,
+    "killers": [
+      "round reaper deletes only strictly overdue owned namespace 196",
+      "round reaper has no broker or ledger dependency absent",
+      "round reaper has no broker or ledger dependency unavailable"
+    ]
+  },
+  {
+    "mutant": "Access-key-by-kid",
+    "count": 2,
+    "killers": [
+      "round Access selects signing key by kid runner",
+      "round Access selects signing key by kid box"
+    ]
+  },
+  {
+    "mutant": "Access-owner-config-route",
+    "count": 2,
+    "killers": [
+      "round owner Access config diagnostic survives malformed prefix /availability",
+      "round owner Access config diagnostic survives malformed prefix /bad/path/availability"
+    ]
+  },
+  {
+    "mutant": "contract-liability-retention",
+    "count": 2,
+    "killers": [
+      "round contract decrease never releases historical liability compute",
+      "round contract decrease never releases historical liability network"
+    ]
+  },
+  {
+    "mutant": "YAML-authority-base",
+    "count": 2,
+    "killers": [
+      "round Worker authority ignores YAML trigger attribute base0",
+      "round Worker authority ignores YAML trigger attribute base1"
+    ]
+  },
+  {
+    "mutant": "YAML-authority-draft",
+    "count": 2,
+    "killers": [
+      "round Worker authority ignores YAML trigger attribute draft0",
+      "round Worker authority ignores YAML trigger attribute draft1"
+    ]
+  },
+  {
+    "mutant": "YAML-authority-path",
+    "count": 2,
+    "killers": [
+      "round Worker authority ignores YAML trigger attribute paths0",
+      "round Worker authority ignores YAML trigger attribute paths1"
+    ]
+  },
+  {
+    "mutant": "workflow-path-race",
+    "count": 2,
+    "killers": [
+      "round workflow PR path policy race",
+      "round workflow PR path policy closed-race"
+    ]
+  },
+  {
+    "mutant": "Access-audience-array",
+    "count": 4,
+    "killers": [
+      "round Access accepts bound audience array runner 1",
+      "round Access accepts bound audience array runner 2",
+      "round Access accepts bound audience array box 1",
+      "round Access accepts bound audience array box 2"
+    ]
+  },
+  {
+    "mutant": "Access-audience-membership",
+    "count": 2,
+    "killers": [
+      "round Access rejects audience array runner wrong",
+      "round Access rejects audience array box wrong"
+    ]
+  },
+  {
+    "mutant": "Access-audience-type",
+    "count": 4,
+    "killers": [
+      "round Access rejects audience array runner number",
+      "round Access rejects audience array runner null",
+      "round Access rejects audience array box number",
+      "round Access rejects audience array box null"
+    ]
+  },
+  {
+    "mutant": "Access-audience-size",
+    "count": 2,
+    "killers": [
+      "round Access rejects audience array runner oversize",
+      "round Access rejects audience array box oversize"
+    ]
+  },
+  {
+    "mutant": "GitHub-audience-scalar",
+    "count": 2,
+    "killers": [
+      "round GitHub audience stays scalar 1",
+      "round GitHub audience stays scalar 2"
+    ]
+  }
+]

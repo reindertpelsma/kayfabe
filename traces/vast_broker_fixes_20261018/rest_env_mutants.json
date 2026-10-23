@@ -1,0 +1,26 @@
+[
+  {
+    "mutant": "REST-env-as-text",
+    "count": 2,
+    "killers": [
+      "Vast REST environment is a JSON map with protocol-five values",
+      "Vast REST environment round-trips into the canonical PR104 reporter"
+    ]
+  },
+  {
+    "mutant": "REST-protocol-missing",
+    "count": 2,
+    "killers": [
+      "Vast REST environment is a JSON map with protocol-five values",
+      "Vast REST environment round-trips into the canonical PR104 reporter"
+    ]
+  },
+  {
+    "mutant": "REST-runner-nonce-missing",
+    "count": 2,
+    "killers": [
+      "Vast REST environment is a JSON map with protocol-five values",
+      "Vast REST environment round-trips into the canonical PR104 reporter"
+    ]
+  }
+]

@@ -1,0 +1,222 @@
+[
+  {
+    "mutant": "repository",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects repository feature/owner",
+      "round pure workflow authority rejects repository owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "workflow-path",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects path feature/owner",
+      "round pure workflow authority rejects path owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "ref-tags",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects tag feature/owner",
+      "round pure workflow authority rejects tag owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "ref-pull",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects PR feature/owner",
+      "round pure workflow authority rejects PR owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "owner-actor",
+    "count": 4,
+    "killers": [
+      "round pure workflow authority rejects actor feature/owner",
+      "round pure workflow authority rejects api-actor feature/owner",
+      "round pure workflow authority rejects actor owner-unicode-\u00e9",
+      "round pure workflow authority rejects api-actor owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "API-actor",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects api-actor feature/owner",
+      "round pure workflow authority rejects api-actor owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "triggering-actor",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects triggering feature/owner",
+      "round pure workflow authority rejects triggering owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "fork",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects fork feature/owner",
+      "round pure workflow authority rejects fork owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "run-repository",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects run-repo feature/owner",
+      "round pure workflow authority rejects run-repo owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "run-attempt",
+    "count": 4,
+    "killers": [
+      "round pure workflow authority rejects run-id feature/owner",
+      "round pure workflow authority rejects attempt feature/owner",
+      "round pure workflow authority rejects run-id owner-unicode-\u00e9",
+      "round pure workflow authority rejects attempt owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "SHA-event",
+    "count": 4,
+    "killers": [
+      "round pure workflow authority rejects sha feature/owner",
+      "round pure workflow authority rejects event feature/owner",
+      "round pure workflow authority rejects sha owner-unicode-\u00e9",
+      "round pure workflow authority rejects event owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "branch",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects branch feature/owner",
+      "round pure workflow authority rejects branch owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "job-ref",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority rejects job-ref feature/owner",
+      "round pure workflow authority rejects job-ref owner-unicode-\u00e9"
+    ]
+  },
+  {
+    "mutant": "profile-pin",
+    "count": 2,
+    "killers": [
+      "round pure workflow authority keeps master pin 42",
+      "round pure workflow authority keeps master pin 43"
+    ]
+  },
+  {
+    "mutant": "push-support",
+    "count": 4,
+    "killers": [
+      "round owner push rents exact API-bound head master",
+      "round owner push rents exact API-bound head feature/owner",
+      "round owner branch workflow passes front API proof /rent",
+      "round owner branch workflow passes front API proof /status/123-1"
+    ]
+  },
+  {
+    "mutant": "live-run",
+    "count": 2,
+    "killers": [
+      "round push API authority refuses completed master",
+      "round push API authority refuses completed feature/owner"
+    ]
+  },
+  {
+    "mutant": "dispatch-branch-proof",
+    "count": 4,
+    "killers": [
+      "round dispatch refuses unproven reachability unreachable",
+      "round dispatch refuses unproven reachability diverged",
+      "round dispatch refuses unproven reachability merge-base",
+      "round dispatch refuses unproven reachability bad-branch"
+    ]
+  },
+  {
+    "mutant": "bounded-proof-work",
+    "count": 2,
+    "killers": [
+      "round reachability API work is bounded false",
+      "round reachability API work is bounded true"
+    ]
+  },
+  {
+    "mutant": "runner-push",
+    "count": 2,
+    "killers": [
+      "round BASE controller supports push event false",
+      "round BASE controller supports push event true"
+    ]
+  },
+  {
+    "mutant": "runner-selected-SHA",
+    "count": 4,
+    "killers": [
+      "round dispatch selects SHA while retaining BASE e",
+      "round dispatch selects SHA while retaining BASE f",
+      "round dispatch rejects non-string selected SHA []",
+      "round dispatch rejects non-string selected SHA {}"
+    ]
+  },
+  {
+    "mutant": "runner-SHA-type",
+    "count": 2,
+    "killers": [
+      "round dispatch rejects non-string selected SHA []",
+      "round dispatch rejects non-string selected SHA {}"
+    ]
+  },
+  {
+    "mutant": "YAML-selected-context",
+    "count": 2,
+    "killers": [
+      "round reviewed YAML policy concurrency",
+      "round YAML target SHA includes the manual selection"
+    ]
+  },
+  {
+    "mutant": "YAML-push-branches",
+    "count": 2,
+    "killers": [
+      "round reviewed YAML policy push",
+      "round YAML excludes unintended automatic push branches"
+    ]
+  },
+  {
+    "mutant": "workflow-explicit-exclusion-success",
+    "count": 2,
+    "killers": [
+      "trusted path policy explicitly succeeds without a GPU job PASS",
+      "trusted path policy explicitly succeeds without a GPU job UNAVAILABLE"
+    ]
+  },
+  {
+    "mutant": "workflow-policy-dependency",
+    "count": 2,
+    "killers": [
+      "failed path policy never permits a skipped GPU job failure",
+      "failed path policy never permits a skipped GPU job skipped"
+    ]
+  },
+  {
+    "mutant": "workflow-policy-BASE-source",
+    "count": 2,
+    "killers": [
+      "round actual policy bootstrap runs only BASE modules workflow_dispatch",
+      "round actual policy bootstrap runs only BASE modules unknown"
+    ]
+  }
+]

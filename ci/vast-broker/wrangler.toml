@@ -19,7 +19,7 @@ crons = ["* * * * *"]
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # Owner assertion of the exact emitted module; see deployment.json and trace doc.
-DEPLOYED_BUNDLE_SHA256 = "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+DEPLOYED_BUNDLE_SHA256 = "da460023ef114344e1172cc82d1641ed84b0fd8efd782acb35f8be973e5fa233"
 OWNER_GITHUB_ID = "REPLACE_ME"
 REPOSITORY = "reindertpelsma/kayfabe"
 REPOSITORY_GITHUB_ID = "1311106387"
@@ -27,14 +27,20 @@ OIDC_SUB = "repo:reindertpelsma/kayfabe:environment:gpu-vast"
 CHECK_JOB_WORKFLOW_REFS = '["reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master"]'
 SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-sweep.yml@refs/heads/master"
 APPROVAL_MODE = "owner_push_or_review"
-RENT_DRAFTS = "false"
-ALLOWED_BASE_BRANCHES = '["master"]'
-PATH_SKIP_PATTERNS = '["**/*.md","docs/**","traces/**","archive/**","LICENSE*",".github/ISSUE_TEMPLATE/**"]'
+# Trigger filters belong to gpu-vast.yml and trigger-policy.mjs.
 
 # Secret bindings: WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
 # Optional secret BROKER_PATH_PREFIX: one random base64url segment, 32-128 chars.
 # RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
-# GitHub bearer remains request-only, never a binding.
+# Optional GITHUB_API_TOKEN: read-only GitHub checks and release metadata.
+# BLOB_GITHUB_TOKEN: deprecated asset-only fallback.
+# Optional BOX_ACCESS_ID/BOX_ACCESS_SECRET: complete box service-token B pair.
 # No Cloudflare or Vast secret belongs in GitHub Actions.
 
 # Optional PREFERRED_COUNTRIES JSON overrides defaults.json; eligibility always comes first.
+
+# Optional Access assertion gate: set all four public vars together (or leave all absent).
+# ACCESS_TEAM_DOMAIN = "olifon.cloudflareaccess.com"
+# ACCESS_AUD = "application-audience"
+# ACCESS_RUNNER_CLIENT_ID = "runner-token-client-id.access"
+# ACCESS_BOX_CLIENT_ID = "box-token-client-id.access"

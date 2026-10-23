@@ -1,0 +1,31 @@
+{
+  "run_date": "2026-10-23",
+  "baseline_passed": 1113,
+  "tests": 1465,
+  "passed": 1465,
+  "failed": 0,
+  "skipped": 0,
+  "mutants": 366,
+  "minimum_named_killers": 2,
+  "workflow_commit": "4dd877bed5d6ac596e0a4ddb9f40f91f232b572f",
+  "implementation_commit": "76b5be2b231ab02291af8bbe502130cccdd8e044",
+  "candidate_bundle_sha256": "da460023ef114344e1172cc82d1641ed84b0fd8efd782acb35f8be973e5fa233",
+  "candidate_bundle_bytes": 128712,
+  "deployed": false,
+  "provider_calls": 0,
+  "hardware_runs": 0,
+  "campaigns": {
+    "authorization_mutants.json": 26,
+    "blob_mutants.json": 9,
+    "bootstrap_mutants.json": 3,
+    "country_mutants.json": 9,
+    "identity_mutants.json": 8,
+    "legacy_mutants.json": 94,
+    "rest_env_mutants.json": 3,
+    "round_mutants.json": 61,
+    "runner_mutants.json": 38,
+    "security_mutants.json": 14,
+    "v4_mutants.json": 28,
+    "v5_mutants.json": 73
+  }
+}
