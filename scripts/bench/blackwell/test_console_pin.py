@@ -76,9 +76,23 @@ class ConsolePin(unittest.TestCase):
         with self.assertRaises(C.PinMismatch):
             self.wait(["256 SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB host (ED25519)", FP])
 
-    def test_conflicting_published_ed25519_keys_refuse(self):
-        with self.assertRaises(C.PinMismatch):
-            self.wait(["ssh-ed25519 " + KEY + "\nssh-ed25519 " + OTHER])
+    def test_matching_public_key_keeps_original_acceptance_with_other_keys_in_console(self):
+        result, calls, sleeps, receipts = self.wait(
+            ["ssh-ed25519 " + KEY + "\nssh-ed25519 " + OTHER]
+        )
+        self.assertEqual(result["fingerprint"], FP)
+
+    def test_matching_fingerprint_is_not_overruled_by_an_untyped_extra_fingerprint(self):
+        text = FP + "\nSHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+        result, calls, sleeps, receipts = self.wait([text])
+        self.assertEqual(result["fingerprint"], FP)
+        self.assertEqual(receipts[0]["state"], "match")
+
+    def test_matching_pin_can_arrive_after_an_empty_console_with_other_pins_present(self):
+        text = "SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n" + FP
+        result, calls, sleeps, receipts = self.wait(["booting", text])
+        self.assertEqual(result["fingerprint"], FP)
+        self.assertEqual([at for at, _ in calls], [0, 20])
 
     def test_absent_past_adaptive_stage_bound_refuses(self):
         with self.assertRaises(C.PinExpired):
