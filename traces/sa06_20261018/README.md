@@ -8,7 +8,7 @@ bypass, eviction, lost existing mapping, or capacity not returned after unmap.
 MEASURED tests-first history: d763bb7f7 imports the security audit unchanged;
 its200000-placement assertion fails on master. Four additional recorder tests
 also fail by assertion before implementation. Store-only, RAM-only and mixed
-placements share8192 slots, and successful unmap permits one replacement.
+placements share8192 slots, and successful unmap permits one replacement. (recorded in commit 2950d3736, 2026-10-22)
 
 CODE READ: admission follows existing geometry/duplicate checks and precedes
 both arm_store and place_ram. Refusal uses the existing named-error/stat path;
@@ -21,7 +21,7 @@ MEASURED whole kf-mem release suite191 passed /0 failed /3 existing ignored debu
 replays. Store-cap bypass mutant4 killing tests; RAM-cap bypass2. Restored focused
 regressions5 passed. Clippy all targets136 ->136 source fingerprints, added0.
 No tests, deny sets, lint baselines or existing assertions loosened. Every Cargo
-run held the owner's shared lock, used release/two jobs/nice19 and own target.
+run held the owner's shared lock, used release/two jobs/nice19 and own target. (recorded in commit 2950d3736, 2026-10-22)
 
 INFERRED hardware validation later: normal Windows/Linux BAR fragmentation stays
 within the quota, real fd/VMA use and map/unmap churn. This is a per-window live
