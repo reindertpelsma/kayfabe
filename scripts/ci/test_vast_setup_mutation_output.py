@@ -1,4 +1,5 @@
 """Named canonical killers must parse both supported Python unittest formats."""
+
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -38,9 +39,7 @@ class MutationOutput(unittest.TestCase):
         )
 
     def test_error_with_a_different_inner_method_is_not_a_killer(self):
-        self.assertEqual(
-            self.parsed("ERROR: test_two (test_vast_box.Onstart.test_other)\n"), set()
-        )
+        self.assertEqual(self.parsed("ERROR: test_two (test_vast_box.Onstart.test_other)\n"), set())
 
     def test_fail_from_another_module_is_not_a_killer(self):
         self.assertEqual(self.parsed("FAIL: test_one (unrelated.EnvValidation.test_one)\n"), set())
@@ -48,5 +47,15 @@ class MutationOutput(unittest.TestCase):
     def test_error_from_another_module_is_not_a_killer(self):
         self.assertEqual(self.parsed("ERROR: test_two (unrelated.Onstart)\n"), set())
 
+    def test_python310_message_subtest_counts_the_named_method(self):
+        text = "FAIL: test_bad_result_files_fail_closed (test_vast_box.FinalResult) [dup key]\n"
+        self.assertEqual(self.parsed(text), {"FinalResult.test_bad_result_files_fail_closed"})
+
+    def test_python314_message_subtest_counts_the_named_method(self):
+        text = "ERROR: test_two (test_vast_box.Onstart.test_two) [case label]\n"
+        self.assertEqual(self.parsed(text), {"Onstart.test_two"})
+
     def test_process_traceback_is_not_a_named_killer(self):
-        self.assertEqual(self.parsed("Traceback (most recent call last):\nRuntimeError: stopped\n"), set())
+        self.assertEqual(
+            self.parsed("Traceback (most recent call last):\nRuntimeError: stopped\n"), set()
+        )
