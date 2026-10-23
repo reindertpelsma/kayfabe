@@ -1,3 +1,5 @@
+**STATUS: RESEARCH, 2026-10-09.**
+
 **Amended 2026-10-18 (CODE READ; hitch diagnostic gates):**
 `KF3_DIAG_STEP_METERS=1` enables display-worker step timing; `KF3_DIAG_EVENT_RING=1`
 enables the relay's bounded lock-step event ring. Both are class M, off when unset or

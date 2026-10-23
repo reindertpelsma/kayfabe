@@ -1,5 +1,7 @@
 # OVERNIGHT NOTES — w825 (2026-09-23/24)
 
+**STATUS: LIVE, 2026-09-24.**
+
 STATUS: LIVE — the running log of the overnight autonomy session. Box 52236011 (RTX 3060,
 GA106, 580.159.04). Baseline `w825base`: thin guest 17/30 (honest 15/30).
 

@@ -1,3 +1,5 @@
+**STATUS: LIVE, 2026-10-14.**
+
 **CORRECTION 2026-10-20 (read before §0 and §8):** this document's claim that the relay is validated and that "no timer carries correctness" holds for *liveness* only (every covered entry is eventually
 relayed). It does **not** hold for *bounded fairness*: `worker::run_with_relay` looked at non-doorbell wake sources (engine events whose dispatch injects the guest's completion interrupt, the waiting
 relays' marker/carried waits, demand left by a lost `try_lock`) only when a pass served nothing, so a self-re-ringing relay (`Need::Again`) could keep the worker permanently busy and starve another

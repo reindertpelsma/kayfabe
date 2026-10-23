@@ -1,5 +1,7 @@
 # Windows USER worker refusals and observation plan
 
+**STATUS: RESEARCH, 2026-10-12.**
+
 ★ 2026-10-14 (`V3_USER_RING_SCAN_RACE.md`): the `user_scan Header / Legacy / MethodOverflow / SubDeviceMask`
 refusals of the Win11 + 580.88 runs were early reads, not framing the scanner lacks — the relay read pushbuffers
 behind an unreached `GP_ENTRY1_SYNC_WAIT` (now gated, `kf_chan::user_gate::SyncGate`), and a relay that stopped

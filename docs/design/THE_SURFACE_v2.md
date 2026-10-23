@@ -1,5 +1,7 @@
 # The surface we present — every RPC, register and channel operation, and the plan for it
 
+**STATUS: LIVE, 2026-09-20.**
+
 > ⊘ **DATA SUPERSEDED by `THE_SURFACE_v3.md` (2026-09-20, which says so itself); note added
 > 2026-09-26.** Its per-row *data* describes the pre-v3 tree at `w749-fable-legb`. Its KEEP/DELETE
 > *plans* were kept by v3 (per `THE_SURFACE_v3.md`).

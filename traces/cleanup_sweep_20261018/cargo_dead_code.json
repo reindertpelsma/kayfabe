@@ -1,0 +1,644 @@
+{
+  "scope": "per workspace crate, release, all targets, default features; RUSTFLAGS=-W dead_code",
+  "results": [
+    {
+      "crate": "kf-mem",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 6.28,
+      "warnings_including_dependencies": 121,
+      "errors": []
+    },
+    {
+      "crate": "kf-trap",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 5.29,
+      "warnings_including_dependencies": 164,
+      "errors": []
+    },
+    {
+      "crate": "kf-rm",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 6.69,
+      "warnings_including_dependencies": 29,
+      "errors": []
+    },
+    {
+      "crate": "kf-core",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.34,
+      "warnings_including_dependencies": 206,
+      "errors": []
+    },
+    {
+      "crate": "kf-qemu",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 6.18,
+      "warnings_including_dependencies": 194,
+      "errors": []
+    },
+    {
+      "crate": "kf-trace",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.14,
+      "warnings_including_dependencies": 5,
+      "errors": []
+    },
+    {
+      "crate": "kf-crec",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.53,
+      "warnings_including_dependencies": 25,
+      "errors": []
+    },
+    {
+      "crate": "kf-util",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.44,
+      "warnings_including_dependencies": 7,
+      "errors": []
+    },
+    {
+      "crate": "kf-arch",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.24,
+      "warnings_including_dependencies": 7,
+      "errors": []
+    },
+    {
+      "crate": "kf-abi",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 4.58,
+      "warnings_including_dependencies": 27,
+      "errors": []
+    },
+    {
+      "crate": "kf-gsp",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.58,
+      "warnings_including_dependencies": 20,
+      "errors": []
+    },
+    {
+      "crate": "kf-linux-raw",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 7.13,
+      "warnings_including_dependencies": 7,
+      "errors": []
+    },
+    {
+      "crate": "kf-host",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.52,
+      "warnings_including_dependencies": 19,
+      "errors": []
+    },
+    {
+      "crate": "kf-chip",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.66,
+      "warnings_including_dependencies": 18,
+      "errors": []
+    },
+    {
+      "crate": "kf-harness",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 2.03,
+      "warnings_including_dependencies": 172,
+      "errors": []
+    },
+    {
+      "crate": "kf-chan",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 2.84,
+      "warnings_including_dependencies": 162,
+      "errors": []
+    },
+    {
+      "crate": "kf-cuda",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.98,
+      "warnings_including_dependencies": 15,
+      "errors": []
+    },
+    {
+      "crate": "kf-disp",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 2.23,
+      "warnings_including_dependencies": 37,
+      "errors": []
+    },
+    {
+      "crate": "kf-broker",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.83,
+      "warnings_including_dependencies": 4,
+      "errors": []
+    },
+    {
+      "crate": "kf-oprom",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.34,
+      "warnings_including_dependencies": 0,
+      "errors": []
+    },
+    {
+      "crate": "kf-census",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.93,
+      "warnings_including_dependencies": 25,
+      "errors": []
+    },
+    {
+      "crate": "kf-gop-image",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.16,
+      "warnings_including_dependencies": 0,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-doorbell",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.75,
+      "warnings_including_dependencies": 7,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-rm-ladder",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 26.29,
+      "warnings_including_dependencies": 112,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-util",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.4,
+      "warnings_including_dependencies": 7,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-arch",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.22,
+      "warnings_including_dependencies": 5,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-chips",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.27,
+      "warnings_including_dependencies": 24,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-abi",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 2.28,
+      "warnings_including_dependencies": 4,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-mmu",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.82,
+      "warnings_including_dependencies": 36,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-vmm",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.15,
+      "warnings_including_dependencies": 4,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-cuda",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.48,
+      "warnings_including_dependencies": 11,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-isolate",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.31,
+      "warnings_including_dependencies": 13,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-isolate-host",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 1.81,
+      "warnings_including_dependencies": 81,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-completion",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.18,
+      "warnings_including_dependencies": 3,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-device",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 2.99,
+      "warnings_including_dependencies": 100,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-gsp",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.3,
+      "warnings_including_dependencies": 25,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-trace",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.21,
+      "warnings_including_dependencies": 21,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-mocks",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.34,
+      "warnings_including_dependencies": 8,
+      "errors": []
+    },
+    {
+      "crate": "kayfabe-linux-raw",
+      "exit": 0,
+      "build_finished": true,
+      "seconds": 0.96,
+      "warnings_including_dependencies": 13,
+      "errors": []
+    }
+  ],
+  "diagnostics": [
+    {
+      "message": "fields `cuMemUnmap` and `cuMemAddressFree` are never read",
+      "package": "kf-cuda",
+      "spans": [
+        {
+          "file_name": "crates/kf-cuda/src/driver_unsafe.rs",
+          "line_start": 253,
+          "line_end": 253
+        },
+        {
+          "file_name": "crates/kf-cuda/src/driver_unsafe.rs",
+          "line_start": 254,
+          "line_end": 254
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "function `host_version_gate` is never used",
+      "package": "kf-host",
+      "spans": [
+        {
+          "file_name": "crates/kf-host/src/lib.rs",
+          "line_start": 307,
+          "line_end": 307
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "function `head` is never used",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/pace.rs",
+          "line_start": 945,
+          "line_end": 945
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "function `sent` is never used",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/pace.rs",
+          "line_start": 1477,
+          "line_end": 1477
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "method `is_current` is never used",
+      "package": "kf-qemu",
+      "spans": [
+        {
+          "file_name": "crates/kf-qemu/src/userbirth.rs",
+          "line_start": 151,
+          "line_end": 151
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "fields `seq` and `want` are never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 99,
+          "line_end": 99
+        },
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 99,
+          "line_end": 99
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `seq` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 100,
+          "line_end": 100
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `0` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 101,
+          "line_end": 101
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `imm` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 102,
+          "line_end": 102
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "fields `from` and `seq` are never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 104,
+          "line_end": 104
+        },
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 104,
+          "line_end": 104
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `0` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 105,
+          "line_end": 105
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `slot` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 108,
+          "line_end": 108
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `seq` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 109,
+          "line_end": 109
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `seq` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 110,
+          "line_end": 110
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `0` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 113,
+          "line_end": 113
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `req` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 116,
+          "line_end": 116
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `log_lines` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 784,
+          "line_end": 784
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "field `t0` is never read",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 880,
+          "line_end": 880
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "constant `CALLS` is never used",
+      "package": "kf-disp",
+      "spans": [
+        {
+          "file_name": "crates/kf-disp/src/engine/lockstep_soak.rs",
+          "line_start": 883,
+          "line_end": 883
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "constant `WPR2_LO_UP` is never used",
+      "package": "kayfabe-device",
+      "spans": [
+        {
+          "file_name": "crates/kayfabe-device/src/ga10x.rs",
+          "line_start": 280,
+          "line_end": 280
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "constant `WPR2_HI_UP` is never used",
+      "package": "kayfabe-device",
+      "spans": [
+        {
+          "file_name": "crates/kayfabe-device/src/ga10x.rs",
+          "line_start": 284,
+          "line_end": 284
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "methods `release_birth_space` and `birth_space_census` are never used",
+      "package": "kayfabe-isolate-host",
+      "spans": [
+        {
+          "file_name": "crates/kayfabe-isolate-host/src/rm.rs",
+          "line_start": 4371,
+          "line_end": 4371
+        },
+        {
+          "file_name": "crates/kayfabe-isolate-host/src/rm.rs",
+          "line_start": 4388,
+          "line_end": 4388
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "method `minted_by` is never used",
+      "package": "kayfabe-isolate-host",
+      "spans": [
+        {
+          "file_name": "crates/kayfabe-isolate-host/src/rm.rs",
+          "line_start": 916,
+          "line_end": 916
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "constant `P2_COPY_ENGINE` is never used",
+      "package": "kayfabe-rm-ladder",
+      "spans": [
+        {
+          "file_name": "crates/kayfabe-rm-ladder/src/main.rs",
+          "line_start": 18366,
+          "line_end": 18366
+        }
+      ],
+      "package_version": "0.1.0"
+    },
+    {
+      "message": "fields `cuMemUnmap` and `cuMemAddressFree` are never read",
+      "package": "kayfabe-cuda",
+      "spans": [
+        {
+          "file_name": "crates/kayfabe-cuda/src/driver_unsafe.rs",
+          "line_start": 169,
+          "line_end": 169
+        },
+        {
+          "file_name": "crates/kayfabe-cuda/src/driver_unsafe.rs",
+          "line_start": 170,
+          "line_end": 170
+        }
+      ],
+      "package_version": "0.1.0"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # The v3 plan — what gets built, in what order, and what proves each step
 
+**STATUS: LIVE, 2026-09-20.**
+
 > ### ★ STATUS UPDATE — 2026-09-26: EXECUTED THROUGH P7; the LLM bar is NOT met
 > This plan was a proposal on 2026-09-20. It has since been built in the `kf-*` crates (execution
 > rules: `V3_BUILD.md`), and the phase gates below are passed on hardware at `master` `74dc3113`

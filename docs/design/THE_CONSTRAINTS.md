@@ -1,5 +1,7 @@
 # THE CONSTRAINTS — what kayfabe must do, not just do
 
+**STATUS: LIVE, 2026-09-13.**
+
 > ### ★ STATUS NOTE — 2026-09-26 (v3)
 > The constraints below still govern, and v3 (`THE_ARCHITECTURE_v3.md`) is built to them. For
 > example: only BAR0 writes are trapped, BAR1/BAR2 never are, there is no blocking work on a vCPU,

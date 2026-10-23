@@ -1,5 +1,7 @@
 # The `UVM_MAP_EXTERNAL_ALLOCATION` wall
 
+**STATUS: LIVE, 2026-09-13.**
+
 > # ★★★★★ SOLVED (w707/w708) — `CUP3_VAL=43`. READ THIS, THEN THE HUNT BELOW.
 >
 > **The cause:** `MAX_ENTRIES_PER_DOORBELL = 8` documents itself as leaving the remainder *"for

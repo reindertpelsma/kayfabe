@@ -1,5 +1,7 @@
 # V3 headless-graphics test set — nvkvm-pv's headless graphics workloads on kayfabe v3
 
+**STATUS: LIVE, 2026-09-30.**
+
 ★ *2026-09-30 (§0, R4): bare metal 38/38 on a new RTX 3070 box at `738c90e5`; the guest set was not re-run.*
 **STATUS: LIVE, 2026-09-26 (branch `v3-gfxset`; the head to merge is `d06833f0` = master `59cc98a9` + this
 branch).** Measured on one RTX 3070 (GA104, vast 52775275, destroyed after the run; every result is in
