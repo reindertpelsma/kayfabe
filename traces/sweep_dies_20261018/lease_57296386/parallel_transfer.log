@@ -1,0 +1,9 @@
+{"chunk": 7, "offset": 5937098496, "bytes": 848156928, "elapsed_s": 38.454}
+{"chunk": 0, "offset": 0, "bytes": 848156928, "elapsed_s": 47.858}
+{"chunk": 2, "offset": 1696313856, "bytes": 848156928, "elapsed_s": 64.904}
+{"chunk": 3, "offset": 2544470784, "bytes": 848156928, "elapsed_s": 77.112}
+{"chunk": 5, "offset": 4240784640, "bytes": 848156928, "elapsed_s": 78.221}
+{"chunk": 4, "offset": 3392627712, "bytes": 848156928, "elapsed_s": 82.019}
+{"chunk": 6, "offset": 5088941568, "bytes": 848156928, "elapsed_s": 92.231}
+{"chunk": 1, "offset": 848156928, "bytes": 848156928, "elapsed_s": 96.447}
+{"kind": "MEASURED", "bytes": 6785255424, "sha256": "183c13aa6b2c3c20475f7e1c5eed9979ca973056886d2b519c013386ba4da652", "workers": 8, "elapsed_s": 140.121, "receipt": "WHOLE_FILE_PIN_OK"}
