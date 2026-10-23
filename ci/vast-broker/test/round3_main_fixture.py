@@ -17,6 +17,8 @@ args = json.loads(sys.argv[1])
 origin = "https://quiet-tenant.workers.example"
 prefix = args.get("path", "unit-path-only-" + "p" * 32)
 manifest = {"protocol_version": 4, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest["protocol_version"] = args.get("manifest_protocol", manifest["protocol_version"])
+status_protocol = args.get("status_protocol", manifest["protocol_version"])
 sha = "a" * 40
 base = "d" * 40
 calls = []
@@ -155,7 +157,7 @@ with tempfile.TemporaryDirectory(prefix="v3-r3-main-") as directory:
                 tail_bytes_dropped=0,
                 runner_nonce=nonce,
                 log_sha256="0" * 64 if pending else h,
-                **manifest,
+                **dict(manifest, protocol_version=status_protocol),
             )
         if code == 200:
             data.update(extra_status(verdict, pending, state == "NOT_NEEDED"))
