@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 async function workflow() {
-  return readFile('.github/workflows/gpu-vast.yml', 'utf8');
+  return readFile(repoRoot + '.github/workflows/gpu-vast.yml', 'utf8');
 }
 // FALSIFIER: trigger expansion spends on unintended branches or changes the BASE controller SHA.
 for (const item of ['push', 'sha-input', 'concurrency'])
@@ -23,7 +25,7 @@ for (const access of [false, true])
     const p = spawnSync(
       'python3',
       ['-I', 'ci/vast-broker/test/round3_main_fixture.py', JSON.stringify({ push: true, access })],
-      { encoding: 'utf8', timeout: 5000 },
+      { encoding: 'utf8', timeout: 5000, cwd: repoRoot },
     );
     assert.equal(p.status, 0, p.stderr);
     const r = JSON.parse(p.stdout);
@@ -39,7 +41,7 @@ for (const selected of ['e'.repeat(40), 'f'.repeat(40)])
         'ci/vast-broker/test/round3_main_fixture.py',
         JSON.stringify({ manual: true, selected_sha: selected }),
       ],
-      { encoding: 'utf8', timeout: 5000 },
+      { encoding: 'utf8', timeout: 5000, cwd: repoRoot },
     );
     assert.equal(p.status, 0, p.stderr);
     const r = JSON.parse(p.stdout);
@@ -56,7 +58,7 @@ for (const selected of [[], {}])
         'ci/vast-broker/test/round3_main_fixture.py',
         JSON.stringify({ manual: true, selected_sha: selected }),
       ],
-      { encoding: 'utf8', timeout: 5000 },
+      { encoding: 'utf8', timeout: 5000, cwd: repoRoot },
     );
     assert.equal(p.status, 0, p.stderr);
     const r = JSON.parse(p.stdout);

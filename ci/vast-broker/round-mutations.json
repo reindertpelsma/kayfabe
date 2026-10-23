@@ -1029,6 +1029,32 @@
       "tests": [
         "round-access-audience.test.js"
       ]
+    },
+    {
+      "name": "V11-lifecycle-cwd",
+      "file": "test/round-lifecycle.test.js",
+      "patches": [
+        [
+          "cwd: repoRoot,",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-cwd.test.js"
+      ]
+    },
+    {
+      "name": "V11-yaml-path",
+      "file": "test/broker.test.js",
+      "patches": [
+        [
+          "const text = await readFile(repoRoot + '.github/workflows/gpu-vast.yml', 'utf8');\n  assert.match(text, /!github\\.event\\.pull_request\\.draft/);\n  assert.equal((await h.call()).status, 200);\n  assert.equal(h.cloud.creates, 1);\n});\ntest('YAML controls reviewed draft'",
+          "const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');\n  assert.match(text, /!github\\.event\\.pull_request\\.draft/);\n  assert.equal((await h.call()).status, 200);\n  assert.equal(h.cloud.creates, 1);\n});\ntest('YAML controls reviewed draft'"
+        ]
+      ],
+      "tests": [
+        "round-cwd.test.js"
+      ]
     }
   ]
 }
