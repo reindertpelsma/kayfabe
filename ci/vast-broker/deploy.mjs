@@ -33,6 +33,10 @@ export const ALLOWED = new Set([
   'CREDIT_RESERVE_USD',
   'BLOB_REPO',
   'BLOB_ALLOWED_TAG_PREFIXES',
+  // Owner-edited lists and retention (owner ruling 2026-10-24): edit the var and redeploy.
+  'BAD_MACHINE_IDS',
+  'BAD_HOST_IDS',
+  'LOG_RETENTION_HOURS',
 ]);
 class Refusal extends Error {}
 const fail = (message) => {

@@ -29,6 +29,7 @@
   "sweepDaily": 8,
   "sweepSkipPassedDays": 0,
   "badMachines": [42636, 44906, 11908, 24044, 18856, 91962, 56883, 55691],
+  "badHosts": [],
   "gpuDeny": [],
   "checkDies": ["GA106", "AD104", "GA102", "AD102"],
   "sweepDies": [

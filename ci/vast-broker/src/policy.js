@@ -201,6 +201,18 @@ export function configuration(env) {
     !cfg.badMachines.every((x) => Number.isSafeInteger(x) && x > 0)
   )
     refuse();
+  // Owner ruling 2026-10-24: hoster-level blacklist (every machine of a listed host_id).
+  try {
+    cfg.badHosts = JSON.parse(env.BAD_HOST_IDS ?? JSON.stringify(DEFAULTS.badHosts));
+  } catch {
+    refuse('CONFIG_VAR:BAD_HOST_IDS', 503);
+  }
+  if (
+    !Array.isArray(cfg.badHosts) ||
+    cfg.badHosts.length > 256 ||
+    !cfg.badHosts.every((x) => Number.isSafeInteger(x) && x > 0)
+  )
+    refuse('CONFIG_VAR:BAD_HOST_IDS', 503);
   cfg.gpuDeny = list('GPU_DENY_PATTERNS', DEFAULTS.gpuDeny);
   cfg.dieRules = data('GPU_DIE_RULES', DEFAULTS.dieRules);
   if (
@@ -412,6 +424,7 @@ export function offerRejections(
     badMachines.includes(offer.machine_id)
   )
     reasons.push('MACHINE');
+  if (cfg.badHosts.includes(offer.host_id)) reasons.push('BAD_HOST');
   if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))
     reasons.push('DIE');
   if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');

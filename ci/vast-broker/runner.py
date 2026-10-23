@@ -283,6 +283,7 @@ def validate_availability(data, profile):
             "VERIFICATION",
             "CAPABILITY",
             "MACHINE",
+            "BAD_HOST",
             "DIE",
             "RELIABILITY",
             "CPU_RAM",

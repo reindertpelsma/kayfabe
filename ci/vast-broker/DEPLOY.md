@@ -124,6 +124,14 @@ recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (own
 2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and
 applies before price and country preference; the names CUBA, IRAN, NORTH KOREA, SYRIA, CHINA, HONG KONG, MACAU and MACAO
 map to their codes.
+[CODE READ: src/policy.js; owner ruling 2026-10-24 item 6] Two owner-edited blacklists, both
+public vars (JSON arrays of positive integers, at most 256 each): BAD_MACHINE_IDS (default the
+`badMachines` list in defaults.json) rejects an offer by `machine_id` (reason `MACHINE`), and
+BAD_HOST_IDS (default `badHosts: []`) rejects every offer whose `host_id`, the hoster, is listed
+(reason `BAD_HOST`). An invalid BAD_HOST_IDS refuses with `CONFIG_VAR:BAD_HOST_IDS`. To change
+either, edit the var in the vars file and redeploy with the helper (no owner endpoint exists or
+is wanted; a deploy without the var falls back to defaults.json). The Worker's learned
+`bad-machine:` ledger entries (frozen KVM boot) stay machine-level.
 ALLOW_UNKNOWN_COUNTRY defaults to true; set false to reject unknown metadata. PREFERRED_COUNTRIES
 ranks only remaining eligible offers. Contract price failure revokes the run and attempts
 deletion; failed deletion retains the liability for cleanup retry.
