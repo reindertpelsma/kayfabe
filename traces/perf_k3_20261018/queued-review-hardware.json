@@ -15,5 +15,7 @@
       "dependency": "Wait for codex/6d-review-fixes-20261023 with F1 ce_seed=<class> birth diagnostic and repro input. Do not invent an input.",
       "status": "WAITING_FOR_F1_BRANCH_AFTER_K3"
     }
-  ]
+  ],
+  "snapshot_status": "HISTORICAL_SNAPSHOT_SUPERSEDED",
+  "superseded_by": "final-summary.json"
 }

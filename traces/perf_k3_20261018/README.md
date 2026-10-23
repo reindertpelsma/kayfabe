@@ -1,6 +1,6 @@
 # Q4 K3 perf investigation
 
-STATUS: K3 CORE ANSWERED WITH LIMITS, 2026-10-23. Candidate correctness remains PARTIAL/HOLD.
+STATUS: K3 ANSWERED WITH LIMITS; HOST YIELDED, 2026-10-23. Candidate correctness remains PARTIAL/HOLD.
 
 MEASURED runs4620/4621: paired diagnostic CATIA/Creo arms each completed once on
 candidate01a171e63 and physical VFIO, with no reset observer failure. See
@@ -42,24 +42,50 @@ remain authoritative.
 
 ## Review follow-ups on candidate714ec29d3
 
-MEASURED 2026-10-23, ce714-ci-final.json: all five hosted CI jobs passed,
-including stable and slow. MEASURED ce714-native.json, 2026-10-23: the supplied
-native --ce-seed-only oracle passed with ce_seed0xc7b5, seeded_launches1, the
-engine-written semaphore and resource release; no class refusal or new Xid.
+MEASURED 2026-10-23, [ce714-ci-final.json](ce714-ci-final.json): exact
+714ec29d3 passed all five hosted CI jobs, including stable and slow. The supplied
+[native --ce-seed-only oracle](ce714-native.json) passed once with host-derived
+ce_seed=0xc7b5, seeded_launches=1, a correct engine-written semaphore and resource
+release, with zero NoCeObject/ForeignClass and zero new Xid. This is a native
+kernel-model ring, not a VMM channel-birth test.
 
-MEASURED 2026-10-23, ce714-linux-guest-ram.json / ce714-linux-ce-client.json:
-both positive copy arms passed. Their VMM KERNEL copy births carry ce_seed0xc7b5,
-but seeded_launches stayed0. They do not prove missing-bind execution in a VMM.
-The UVM-only probe supplied no own-channel copy witness; its original strict
-assertion failure is retained in ce714-linux-uvm-control.json and excluded
-from copy coverage. No gate was relaxed.
+MEASURED 2026-10-23, [Linux guest-RAM copy](ce714-linux-guest-ram.json) and
+[Linux copy](ce714-linux-ce-client.json): both thin-guest copy arms passed and
+completed real forwarded work. Their KERNEL BORN lines carry ce_seed=0xc7b5,
+but every corresponding seeded_launches counter stayed0. The UVM-only probe's
+original strict copy-witness assertion failure is retained in
+[ce714-linux-uvm-control.json](ce714-linux-uvm-control.json); it is excluded from
+copy coverage, and its gate was not weakened or rerun.
 
-MEASURED 2026-10-23, ce714-energy-4630-lifecycles.json: first new-head Energy
-trial completed with no class refusal; six KERNEL copy lifetimes had zero
-seeded launches. Three further fresh boots are in progress. A workload pass
-without a positive lifecycle witness is not a pass of the missing-bind hypothesis.
+MEASURED 2026-10-23, [Energy four-boot series](ce714-energy-four.json): all four
+fresh production-configuration boots, runs4630–4633, completed with zero153/4101,
+reboots, Budget/poison, class refusals or new Xid. Each restored cleanly. Each
+boot had six KERNEL copy lifetimes with host-derived ce_seed=0xc7b5; all had
+seeded_launches=0. The predeclared prediction of a positive missing-bind witness
+in these Energy trials met its falsifier. Workload completion is positive
+regression coverage, not proof of the VMM missing-bind mechanism. The native
+positive remains separate. See each run's JSON and lifecycle correlation.
 
-CODE READ controller instruction2026-10-23: RowsLog remains a research note;
-no implementation before a longer CATIA falsifier. The master cursor repeat
-will keep the same RGB oracle and expected shape, with physical-pointer placement
-corrected first. Earlier invalid master captures remain in master7/8/9.json.
+MEASURED 2026-10-23, [matched master cursor](master10-cursor-comparison.json):
+master e9c6d39e5 reproduces the original RGB oracle failures48/52, with matching
+254/281-pixel shapes. The saved guest and host pixel maps are individually
+identical to the earlier candidate01a captures after hotspot alignment. The
+same oracle, tolerance2 and hook hashes were used; physical pointer placement
+was corrected first. A host-only Xcursor control preserved every RGBA byte.
+INFERRED from master10-cursor-comparison.json: this discrepancy predates6d;
+its responsible component remains unlocalized. The RGB oracle still fails.
+Earlier invalid master7/8/9 attempts are preserved and excluded.
+
+CODE READ controller ruling2026-10-23: RowsLog remains research only, with no
+implementation before the longer CATIA falsifier. No production optimization
+was made. The full native/Linux suites and all application smokes were not
+rerun on714ec29d3; candidate correctness remains PARTIAL/HOLD, including the
+independent review's M3 lockstep question. This lane does not decide a merge.
+
+MEASURED 2026-10-23, [host-yield.json](host-yield.json): host yielded at
+06:49:51UTC, ahead of the four-hour deadline07:40:08UTC. The final
+[restore receipt](k3-host-return.json) confirms NVIDIA bound, fresh cuInit0,
+GDM active, Ubuntu logged in, autologin configured and two monitors. Own
+workers are absent, dedicated Cargo targets removed, fastguest lock released
+and quiet flag absent. No GPU/VM work follows yield until the controller
+explicitly returns the host. [Final summary](final-summary.json).

@@ -1,0 +1,50 @@
+{
+  "classification": "MEASURED",
+  "evidence": "k3-host-return.json",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "time": "2026-10-23T06:41:29.599657+00:00",
+  "watchdog_cleanup": [],
+  "live_owned_workers": [],
+  "host_target_existed": false,
+  "host_target_deleted": true,
+  "health_exit": 0,
+  "health": {
+    "classification": "MEASURED",
+    "evidence": "final-health.json",
+    "time": "2026-10-23T08:41:29.647804+02:00",
+    "nvidia_smi_before": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 43, 445 MiB",
+      "stderr": ""
+    },
+    "cuda_before": 0,
+    "cuda_after": 0,
+    "nvidia_smi_after": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 43, 445 MiB",
+      "stderr": ""
+    },
+    "gdm": {
+      "exit": 0,
+      "stdout": "active",
+      "stderr": ""
+    },
+    "nvidia_bound": true,
+    "automatic_login": {
+      "configured": true,
+      "enabled": true,
+      "user_present": true
+    },
+    "display_before": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "gdm_restart_for_display": false,
+    "display_after": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "ubuntu_logged_in": true
+  },
+  "new_vm_work_after_yield": "FORBIDDEN_UNTIL_CONTROLLER_RETURNS_HOST"
+}

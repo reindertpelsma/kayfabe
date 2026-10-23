@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "evidence": "local-cleanup-k3.json",
+  "time": "2026-10-23T06:44:40.720648+00:00",
+  "own_cargo_rustc_processes": [],
+  "target_existed": true,
+  "target_deleted": true,
+  "scope": "Only dedicated Q4 Cargo target removed; worktree and host runtime firmware/binaries retained"
+}

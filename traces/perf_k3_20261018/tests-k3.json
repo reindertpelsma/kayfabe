@@ -26,5 +26,6 @@
   },
   "clippy_added": 0,
   "fmt": "PASS",
-  "hosted_CI": "aarch64/broker/firmware green; stable still running. No candidate/integration write; diagnostic work under repo local-green rule, CI status retained."
+  "hosted_CI": "Exact70f7fb591 run39900357701: stable/aarch64/broker/firmware success; slow skipped. Final evidence ci-instrument-final.json.",
+  "hosted_CI_at_test_time": "aarch64/broker/firmware green; stable still running. No candidate/integration write; diagnostic work under repo local-green rule, CI status retained."
 }

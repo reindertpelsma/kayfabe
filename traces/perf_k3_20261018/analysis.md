@@ -5,8 +5,8 @@ candidate6d's PARTIAL/HOLD correctness verdict. No runtime optimization was made
 
 MEASURED 2026-10-23, runs4620/4621/4622: CATIA and Creo completed once per boot
 in each of candidate, VFIO and optional-instrument arms. No new host Xid, guest153
-or4101, reboot, budget refusal or nonzero viewperf exit was observed. The latest
-[host check](health-after-profiles.json) has NVIDIA bound, fresh cuInit0, GDM active,
+or4101, reboot, budget refusal or nonzero viewperf exit was observed. The post-profile
+[host check after profiling](health-after-profiles.json) has NVIDIA bound, fresh cuInit0, GDM active,
 ubuntu logged in and two monitors. These are separate diagnostic profiling arms.
 
 | Hypothesis / falsifier stated in plan.json | Result and evidence | Conclusion |
@@ -103,3 +103,72 @@ sanity comparison, not an estimate of instrumentation overhead or repeat spread.
 
 CODE READ controller ruling2026-10-23: the RowsLog suggestion remains research
 only. No implementation is authorized before the longer CATIA falsifier.
+
+## Mutation evidence
+
+MEASURED 2026-10-23, controls/software-controls.json: each mutation terminated
+with test exit101. Distinct failed assertions per mutant are listed below;
+these counts are not additional independent hardware trials.
+
+| Mutation | Distinct assertion killers |
+| --- | ---: |
+| Drop pending stamp | 7 |
+| Reuse consumed stamp | 2 |
+| Suppress observer completion | 2 |
+| Reverse observer result | 2 |
+| Zero histogram export | 2 |
+
+## Review hardware and final disposition
+
+MEASURED 2026-10-23, ce714-ci-final.json / ce714-build.json: exact candidate
+714ec29d3 has all five CI jobs green, eight focused native tests green, and
+successful exact-head native/QEMU builds. The earlier changed-crate suite
+ran1083 passing executions with4 existing ignores at48431b8e0; the source diff
+and its limited equivalence are recorded, not described as an exact-head rerun.
+
+MEASURED 2026-10-23, ce714-native.json: native dedicated engine0xb executes the
+supplied no-SET_OBJECT oracle with host-derived ce_seed0xc7b5, seeded_launches1,
+real engine semaphore completion and released resources. Zero NoCeObject,
+ForeignClass or new Xid. The native ring does not traverse VMM birth identity.
+
+MEASURED 2026-10-23, ce714-linux-guest-ram.json / ce714-linux-ce-client.json /
+ce714-energy-four.json: two Linux copy arms and four fresh Energy boots pass,
+with host-derived VMM ce_seed0xc7b5 and zero class refusals/new Xid. All VMM
+seeded_launches remain0, including each of24 Windows KERNEL copy lifetimes.
+The pre-run Energy positive-witness prediction meets its stated falsifier in
+these four trials. Neither lifecycle completion nor an available birth seed
+establishes missing-bind decoding. The VMM proof remains NOT EXERCISED.
+The UVM-only probe is excluded with its original strict copy assertion failure
+retained; it is not a third copy pass or a demonstrated product failure.
+
+MEASURED 2026-10-23, ce714-energy-4630.json through ce714-energy-4633.json:
+stock-broker logs include an advertised XR24 dma-buf layout import refusal and
+subsequent F_SHM fallback; the connection continued with zero rejected commits
+at detach. These existing carrier diagnostics prevent a clean dma-buf claim.
+Whole-session presents include workload idle intervals; broker low-percentile
+new-content FPS cannot be reconstructed from stock aggregate counters.
+
+MEASURED 2026-10-23, master10-cursor-comparison.json: exact mastere9c6d39e5
+and candidate01a have identical guest/reference pixel maps and identical host
+pixel maps after alignment; visible shape counts254/281 match. The original
+RGB max errors48/52 reproduce on master. Hook and oracle hashes remain as
+pinned in master-cursor-plan.json; original tolerance2 is unchanged. A host-only
+control has all RGBA differences0. INFERRED: the candidate-regression explanation
+for this specific discrepancy is falsified under the matched setup; component
+localization and a correction remain outside this run. Native hover/grab/input
+observations and the original RGB failures remain separate results.
+
+CODE READ independent review origin/claude/review-cand6d-20261023,
+docs/audits/2026-10-23-candidate6d-review.md: M3 asks for resolution of a
+candidate-only lockstep test failure. This lane did not diagnose or clear it.
+Full native gates, Linux30 and all application smokes were not repeated at714.
+Candidate correctness therefore stays PARTIAL/HOLD; no merge action was taken.
+
+MEASURED 2026-10-23, k3-host-return.json / process-audit-final.json /
+local-cleanup-k3.json / final-xid-k3.json: no own runtime/build/input workers
+remain; dedicated dev and host Cargo targets are absent. NVIDIA is bound,
+fresh cuInit0, GDM active, Ubuntu logged in, autologin configured, two monitors;
+exact journal Xid history unchanged since before run4630. Runtime firmware
+and evidence are retained. MEASURED host-yield.json: fastguest lock released,
+quiet flag absent and host yielded06:49:51UTC. No GPU or VM work is authorized
+after yield until the controller returns it.

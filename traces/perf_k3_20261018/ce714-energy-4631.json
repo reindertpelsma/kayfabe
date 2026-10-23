@@ -1,0 +1,212 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-energy-4631.json",
+  "run": 4631,
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "captured": "2026-10-23T06:35:28.774743+00:00",
+  "complete": true,
+  "result": {
+    "classification": "MEASURED",
+    "arm": "CE714-E2",
+    "run": 4631,
+    "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+    "workloads": [
+      "energy-04"
+    ],
+    "iterations": 1,
+    "resolution": "FullHD",
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T08:17:11.953841+02:00",
+      "arm": "CE714-E2",
+      "run": 4631,
+      "sample": 11,
+      "completed": true,
+      "failed": false,
+      "subtest": "06_OpunakeAnimated",
+      "guest153": 0,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 59352,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "task": 3,
+      "qemu_before": 2835329,
+      "qemu_after": 2842959,
+      "viewperf_nonzero_exits": [],
+      "ce_class_refusal": false
+    },
+    "events": [],
+    "ended": "2026-10-23T08:17:23.085163+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T08:17:24.258476+02:00",
+      "new_host_xids": 0,
+      "rm_unloads_15min": 0,
+      "reason": "COMPLETE_REQUESTED",
+      "qemu_pid": 2477142
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T08:17:35.577935+02:00",
+      "cuda": {
+        "before": 0,
+        "after": 0,
+        "reloaded": false
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "qemu_bytes": 3055492,
+  "qemu_sha256": "fd988c418b2bcf38622650295fec16c7edb9a7498692f7c073f736792ade1246",
+  "retirement_lines": 72,
+  "counter_maxima": {
+    "pointer_large_entries": 0,
+    "pointer_entry_max_bytes": 59352,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "observed_retirement_counter_sums": {
+    "pointer_large_entries": 0,
+    "pointer_entry_max_bytes": 1545772,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "budget_diagnostics_first30": [],
+  "progress_strands_first100": [],
+  "user_ring_refusal_lines": 0,
+  "ring_refused_segments": 0,
+  "no_ce_object_refusal_events": 0,
+  "no_ce_object_mentions": 0,
+  "no_ce_object_refusals_first10": [],
+  "budget_diagnostic_count": 0,
+  "progress_strand_count": 0,
+  "progress_strand_end_count": 0,
+  "broker": {
+    "stats_windows": 289,
+    "duration_seconds_approx": 290.635,
+    "feedbacks": 14753,
+    "new_content_presents": 1647,
+    "repeat_presents": 13106,
+    "discarded": 1,
+    "errors": [
+      {
+        "line": 81,
+        "diagnostic": "nvkvm-broker: ERROR: this display ADVERTISED XR24 modifier 0x0000000000000000 and then refused to import it (1920x1080, stride 7680).  Frames in that layout will be rejected rather than retried; the VMM is being told so it can send something else (shared memory), and the connection stays up."
+      },
+      {
+        "line": 94,
+        "diagnostic": "nvkvm-broker: frames now arrive as plain shared memory (F_SHM): the VMM chose this carrier; this display has refused 1 dma-buf layout(s) on this connection, and the compositor uploads every frame while it lasts (the VMM was on dma-buf before)"
+      },
+      {
+        "line": 381,
+        "diagnostic": "nvkvm-broker: client detached: closed the connection (1676 attach, 1676 commit, 0 rejected; 0 cursor, 0 cursor refused)"
+      }
+    ],
+    "new_content_fps_approx": 5.666901784024636,
+    "repeat_per_second_approx": 45.09436234452148,
+    "max_new_content_gap_us": 27901778,
+    "gaps_per_minute_approx": {
+      "cg33": 260.7394154179641,
+      "cg50": 160.61382834139042,
+      "cg100": 98.8869200199563
+    },
+    "one_percent_low": null,
+    "point_one_percent_low": null,
+    "quantile_limitation": "Stock master broker stats provide threshold counts and window maxima, not a raw new-content gap series. No percentile values inferred.",
+    "scope": "whole VM session; no-present intervals are not rendering performance scores"
+  },
+  "backing": {
+    "classification": "MEASURED",
+    "size_unchanged": true,
+    "mtime_unchanged": true
+  },
+  "flags": {
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5",
+    "KF3_DIAG_PROGRESS": "1000"
+  },
+  "process_controls": {
+    "classification": "MEASURED",
+    "passed": true,
+    "controls": [
+      {
+        "expected": 0,
+        "pid": 14720,
+        "actual": 0
+      },
+      {
+        "expected": 7,
+        "pid": 14824,
+        "actual": 7
+      },
+      {
+        "expected": 9,
+        "pid": 7468,
+        "actual": 9
+      }
+    ],
+    "observed": [
+      {
+        "time": "2026-10-23T04:13:17.3816833Z",
+        "pid": 14720,
+        "name": "cmd.exe",
+        "exit": 0
+      },
+      {
+        "time": "2026-10-23T04:13:17.3816834Z",
+        "pid": 14824,
+        "name": "cmd.exe",
+        "exit": 7
+      },
+      {
+        "time": "2026-10-23T04:13:17.3816835Z",
+        "pid": 7468,
+        "name": "cmd.exe",
+        "exit": 9
+      }
+    ]
+  },
+  "export_errors": [],
+  "process_exit_census": {
+    "viewperf_exe_exits_observed": 6,
+    "viewperf_exit_code_histogram": {
+      "0": 6
+    },
+    "viewperf_nonzero_exits": [],
+    "viewperf_live_at_final_guest_snapshot": 0,
+    "forced_kill_count": null,
+    "limitation": "WMI records exits, not the identity of the killer. No forced-kill count is inferred. On failed arms the event guard ends the guest session before workload completion. CLI ExitCode capture may be null; vendor completion plus independent observer data are retained."
+  },
+  "scores": "Omitted: correctness-only report; no vendor score claim"
+}

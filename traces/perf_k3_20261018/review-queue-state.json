@@ -12,5 +12,7 @@
   "CE": "Native --ce-seed-only passes seeded_launches1; Linux CE-copy arms pass with ce_seed present but seeded_launches0; Windows Energy four fresh boots4630..4633 in progress. Keep actual VMM witness distinct from completion.",
   "cursor": "Master8 wrong-shape observation retained; master9 hook mode error corrected, no RGB claim. Repeat after CE under matched physical-pointer precondition and unchanged RGB oracle; if needed pair candidate control.",
   "host": "Energy4631 currently active under lease/quiet; all prior arms restored cleanly, no new Xid.",
-  "cursor_precondition": "Host-only override-redirect control preserved all RGBA bytes for both expected shapes; physical cursor8526,2644 was outside the old broker window. Next unchanged RGB hook runs with the broker window moved under that point, preserving1920x1080 size."
+  "cursor_precondition": "Host-only override-redirect control preserved all RGBA bytes for both expected shapes; physical cursor8526,2644 was outside the old broker window. Next unchanged RGB hook runs with the broker window moved under that point, preserving1920x1080 size.",
+  "snapshot_status": "HISTORICAL_SNAPSHOT_SUPERSEDED",
+  "superseded_by": "final-summary.json"
 }

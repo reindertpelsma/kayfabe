@@ -1,0 +1,25 @@
+{
+  "classification": "MEASURED",
+  "evidence": "HOST_YIELDED",
+  "time": "2026-10-23T06:49:51.387884+00:00",
+  "lane": "Q4 ROUND_K3",
+  "status": "HOST_YIELDED_WAITING_FOR_CONTROLLER_RETURN",
+  "review_candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "perf_candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "instrument": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "cursor_baseline": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "restore_evidence": "round-6d/r1/k3-host-return.json",
+  "no_vm": true,
+  "quiet_flag_absent": true,
+  "fastguest_lock_released": true,
+  "new_xid_delta_since_4630": 0,
+  "completed": "K3 profiles and direct instrumentation; native CE positive; Linux copies x2; fresh Energy x4; matched master cursor comparison",
+  "remaining_plan": [
+    "Publish final evidence and 15-line report; no GPU or VM work",
+    "VMM missing-bind seeded-launch witness not exercised by prescribed arms",
+    "RowsLog remains research only, longer CATIA falsifier required before implementation",
+    "Genuine no-present comparison and worker-dispatch isolation unverified",
+    "Candidate correctness remains PARTIAL/HOLD; independent review and merge decision belong to owner/controller"
+  ],
+  "no_gpu_or_vm_work_until": "Explicit controller message returning host"
+}

@@ -1,0 +1,10 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-xid-k3.json",
+  "time": "2026-10-23T06:49:51.380047+00:00",
+  "baseline_run": 4630,
+  "xid_delta": 0,
+  "history_count": 548,
+  "history_sha256": "0374339c5c7786bf23d2ce0fd472d72c191274742418ed5de6adce560a1f6fae",
+  "scope": "Exact full journal Xid sequence unchanged since before Energy4630, including later Energy and master cursor teardown"
+}

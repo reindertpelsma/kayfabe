@@ -1,0 +1,120 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-summary.json",
+  "time": "2026-10-23T06:52:01.278256+00:00",
+  "lane": "Q4 ROUND_K3 plus queued review hardware",
+  "status": "DONE_WITH_LIMITS_HOST_YIELDED",
+  "candidate_correctness": "PARTIAL/HOLD; owner/controller merge decision, M3 not cleared here",
+  "source_pins": {
+    "perf_candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+    "instrument": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+    "review_candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+    "cursor_master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5"
+  },
+  "K3": {
+    "completed_runs": [
+      4620,
+      4621,
+      4622
+    ],
+    "workloads_per_boot": [
+      "catia-07",
+      "creo-04"
+    ],
+    "independent_boots_per_arm": 1,
+    "H1": "CATIA lower physical busy; stated falsifier met for Creo; universal starvation insufficient",
+    "H2": "Non-HLT exit cost contributes; dominance unproved",
+    "H3": "Direct kick-to-native-completion tails recorded; dispatch isolation and dominance unproved",
+    "H4": "NOT_EXERCISED: no genuine no-present arm",
+    "passthrough_positive_control_calls": 1,
+    "analysis": "analysis.md",
+    "optimization": "NONE IMPLEMENTED; RowsLog lower-bound research only; longer CATIA falsifier before changes"
+  },
+  "software": {
+    "expected_red": "Missing API compile errors, zero behavioral assertions executed",
+    "focused_exact_instrument_passed": 19,
+    "broader_test_executions_passed": 1097,
+    "existing_ignored": 4,
+    "mutant_distinct_assertion_killers": {
+      "drop_stamp": 7,
+      "reuse_stamp": 2,
+      "suppress_after": 2,
+      "reverse_outcome": 2,
+      "zero_export": 2
+    },
+    "clippy_added": 0,
+    "fmt": "PASS",
+    "exact_instrument_CI": "ci-instrument-final.json"
+  },
+  "review714": {
+    "CI": "All five jobs success; ce714-ci-final.json",
+    "exact_native_tests_passed": 8,
+    "native_CE_trials": 1,
+    "native_seeded_launches": 1,
+    "native_result": "PASS real dedicated-engine semaphore; no SET_OBJECT, resources released",
+    "Linux_copy_arms_passed": 2,
+    "UVM_only_probe": "EXCLUDED: retained strict copy-witness assertion failure; ce714-linux-uvm-control.json",
+    "Energy_fresh_boots_passed": 4,
+    "Energy_runs": [
+      4630,
+      4631,
+      4632,
+      4633
+    ],
+    "Energy_failure_count": 0,
+    "Energy_KERNEL_copy_lifetimes": 24,
+    "all_guest_copy_birth_seed": "0xc7b5 host-derived",
+    "VMM_positive_seeded_lifetimes": 0,
+    "VMM_mechanism": "NOT_EXERCISED; no mechanism pass inferred from workload completion",
+    "refusals": {
+      "NoCeObject": 0,
+      "ForeignClass": 0
+    },
+    "full_714_hardware_qualification": "NOT RERUN: native9+10, Linux30 and application-smoke matrix"
+  },
+  "cursor_baseline": {
+    "run": "q4-master-cursor10",
+    "master_original_oracle": "FAIL48/52",
+    "candidate_reference_original_oracle": "FAIL48/52",
+    "shapes_match": [
+      254,
+      281
+    ],
+    "aligned_guest_pixels_identical": true,
+    "aligned_host_pixels_identical": true,
+    "oracle_and_tolerance_unchanged": true,
+    "interpretation": "INFERRED: pre-existing discrepancy, not a candidate regression; component unlocalized",
+    "invalid_attempts_retained": [
+      "master7.json",
+      "master8.json",
+      "master9.json"
+    ]
+  },
+  "restore": {
+    "evidence": [
+      "k3-host-return.json",
+      "process-audit-final.json",
+      "local-cleanup-k3.json",
+      "final-xid-k3.json",
+      "host-yield.json"
+    ],
+    "yield_time": "2026-10-23T06:49:51.387884+00:00",
+    "GPU_VM_work_after_yield": "FORBIDDEN_UNTIL_EXPLICIT_CONTROLLER_RETURN",
+    "own_workers": 0,
+    "dedicated_targets_deleted": true,
+    "lock_released": true,
+    "quiet_flag_absent": true,
+    "cuInit": 0,
+    "NVIDIA_bound": true,
+    "GDM_active": true,
+    "ubuntu_logged_in": true,
+    "autologin_configured": true,
+    "monitors": 2
+  },
+  "remaining": [
+    "M3 independent-review lockstep question",
+    "Positive VMM missing-bind seeded launch",
+    "Worker dispatch isolation and genuine no-present comparison",
+    "RowsLog longer CATIA falsifier; no implementation authorized"
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-energy-four.json",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "hypothesis": "CE-class-at-birth eliminates Energy failures with NoCeObject",
+  "falsifier_before_execution": "Any Energy failure with NoCeObject",
+  "requested_fresh_trials": 4,
+  "trials": [
+    {
+      "run": 4630,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "foreign_class_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T08:12:27.681748+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2476284
+      },
+      "result": "energy-bisect/4630/result.json",
+      "has_workload_sample": true
+    },
+    {
+      "run": 4631,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "foreign_class_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T08:17:24.258476+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2477142
+      },
+      "result": "energy-bisect/4631/result.json",
+      "has_workload_sample": true
+    },
+    {
+      "run": 4632,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "foreign_class_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T08:22:22.319339+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2477802
+      },
+      "result": "energy-bisect/4632/result.json",
+      "has_workload_sample": true
+    },
+    {
+      "run": 4633,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "foreign_class_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T08:27:20.445844+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2478665
+      },
+      "result": "energy-bisect/4633/result.json",
+      "has_workload_sample": true
+    }
+  ],
+  "verdict": "PASS",
+  "failures": 0,
+  "n": 4,
+  "no_ce_failure_trials": 0,
+  "end": "2026-10-23T06:27:32.343360+00:00",
+  "lifecycle_evidence": [
+    "ce714-energy-4630-lifecycles.json",
+    "ce714-energy-4631-lifecycles.json",
+    "ce714-energy-4632-lifecycles.json",
+    "ce714-energy-4633-lifecycles.json"
+  ],
+  "positive_VMM_seeded_lifetimes": 0,
+  "mechanism_verdict": "NOT_EXERCISED_IN_VMM",
+  "native_positive": "ce714-native.json: seeded_launches1, real engine semaphore, no SET_OBJECT",
+  "predeclared_positive_VMM_witness_hypothesis": "FALSIFIER_MET: no positive VMM seeded launch in any prescribed fresh Energy trial",
+  "predeclared_positive_VMM_witness_plan": "ce714-energy-plan.json"
+}

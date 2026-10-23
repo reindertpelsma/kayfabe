@@ -1,0 +1,89 @@
+{
+  "classification": "MEASURED",
+  "evidence": "master10-cursor-comparison.json",
+  "run": "q4-master-cursor10",
+  "master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "candidate_reference": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "oracle": "Unmodified scripts/bench/display/xcursor.py, aligned by hotspot, original tolerance2; no alpha correction applied to pass the oracle",
+  "rows": [
+    {
+      "pattern": "hover",
+      "guest_visible": 254,
+      "host_visible": 254,
+      "same_visible_positions": true,
+      "max_rgba_difference": [
+        48,
+        48,
+        48,
+        0
+      ],
+      "additional_alpha_formula_max_RGB_difference": 1,
+      "reference_guest_pixels_identical_to_candidate01a": true,
+      "host_pixels_identical_to_candidate01a": true
+    },
+    {
+      "pattern": "cross",
+      "guest_visible": 281,
+      "host_visible": 281,
+      "same_visible_positions": true,
+      "max_rgba_difference": [
+        52,
+        52,
+        52,
+        0
+      ],
+      "additional_alpha_formula_max_RGB_difference": 1,
+      "reference_guest_pixels_identical_to_candidate01a": true,
+      "host_pixels_identical_to_candidate01a": true
+    }
+  ],
+  "original_RGB_oracle": "FAIL_ON_BOTH_HEADS",
+  "regression_comparison": "IDENTICAL_OLD_DISCREPANCY",
+  "interpretation": "INFERRED: matching shapes and identical aligned pixels place this cursor RGB discrepancy before candidate6d. Additional-alpha fit is a numerical fit, not component localization or permission to change the oracle.",
+  "setup": "Same host/parent/broker source and oracle; only own broker window placed under the measured physical pointer and one native motion sent, before original hook; window1920x1080. Earlier wrong-shape/mode-error attempts retained.",
+  "capture_digests": [
+    {
+      "pattern": "hover",
+      "role": "guest",
+      "candidate_raw_sha256": "1dee40e39271a596ee07588eafb74cc10cff27077578da4f0e4b92abd4c31712",
+      "master_raw_sha256": "1dee40e39271a596ee07588eafb74cc10cff27077578da4f0e4b92abd4c31712",
+      "aligned_map_sha256": "78a1e110726421be853028aacd1849be80c20347769203d353485f115395e058",
+      "visible_pixels": 254,
+      "aligned_maps_equal": true
+    },
+    {
+      "pattern": "hover",
+      "role": "host",
+      "candidate_raw_sha256": "85e753bcf1ac7f4d491a444055586fca504399fe1949c167021f92056162919d",
+      "master_raw_sha256": "85e753bcf1ac7f4d491a444055586fca504399fe1949c167021f92056162919d",
+      "aligned_map_sha256": "78a467b3900c6f51ac8b55b6e47043bc892337271cddc21a19818c1e28d0f0a9",
+      "visible_pixels": 254,
+      "aligned_maps_equal": true
+    },
+    {
+      "pattern": "cross",
+      "role": "guest",
+      "candidate_raw_sha256": "0250066e45281606b26a7297977df73b319ca9338cdfa40c17910e4fd5a9535a",
+      "master_raw_sha256": "0250066e45281606b26a7297977df73b319ca9338cdfa40c17910e4fd5a9535a",
+      "aligned_map_sha256": "d8cc8526ffaba52b3d2754fda2645853437cafb598912031b9f0e61be5519fb4",
+      "visible_pixels": 281,
+      "aligned_maps_equal": true
+    },
+    {
+      "pattern": "cross",
+      "role": "host",
+      "candidate_raw_sha256": "439a4de24b52f07ac1f0d4dbb6f3fc0e701ae8fbd87f42ba74c165cd2a7774e6",
+      "master_raw_sha256": "439a4de24b52f07ac1f0d4dbb6f3fc0e701ae8fbd87f42ba74c165cd2a7774e6",
+      "aligned_map_sha256": "de1af91ca04ca4b17201bff7d2294470c3570d90ab0ab556554c6b48a984a3eb",
+      "visible_pixels": 281,
+      "aligned_maps_equal": true
+    }
+  ],
+  "oracle_sha256": "293f6a78c67f6a9e7fc6c5553cbc80d59c9c9ab9da123507070be8ca1e9e6e07",
+  "hook_sha256": "35137d4ec1fec61c30cdbfce9998460c0c396b6b046a097e42bb4fb279a6277f",
+  "raw_host_artifacts": {
+    "candidate": "round-6d/r1/broker-bench/brk/q4-6d-r1-broker5",
+    "master": "round-6d/r1/broker-bench/brk/q4-master-cursor10",
+    "scope": "Four cur_guest/host_hover/cross.pam files per arm; aligned-map digest uses sorted x,y,r,g,b,a JSON rows with compact separators"
+  }
+}

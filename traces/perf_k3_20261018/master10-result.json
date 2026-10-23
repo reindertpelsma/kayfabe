@@ -1,0 +1,36 @@
+{
+  "classification": "MEASURED",
+  "evidence": "master10-result.json",
+  "candidate": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "tag": "q4-master-cursor10",
+  "verdict": "OBSERVATIONS_PENDING_REVIEW",
+  "base_before": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "load": {
+    "classification": "MEASURED",
+    "evidence": "load-before-vm.json",
+    "stage": "linux-broker",
+    "time": "2026-10-23T06:30:08.042189+00:00",
+    "uptime": "08:30:08 up 13 days, 12:51,  3 users,  load average: 0.20, 2.09, 2.35",
+    "load_average": [
+      0.2041015625,
+      2.09326171875,
+      2.3486328125
+    ],
+    "logical_cpus": 24,
+    "host_quiet": true
+  },
+  "start": "2026-10-23T06:30:08.064939+00:00",
+  "exit": 0,
+  "new_host_xids": [],
+  "base_after": {
+    "bytes": 7010713600,
+    "mtime_ns": 1791717251657903332
+  },
+  "base_unchanged": true,
+  "health_exit": 0,
+  "end": "2026-10-23T06:34:26.102103+00:00",
+  "review_verdict": "MATCHED_BASELINE_REPRODUCES_EXISTING_RGB_FAILURE"
+}

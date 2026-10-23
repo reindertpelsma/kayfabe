@@ -60,7 +60,8 @@
       "exit": 101
     }
   ],
-  "full_two_crate_regression": "running; separate result required before instrumented VM",
+  "full_two_crate_regression": "Completed before instrumented VM:1097 executions green,4 existing ignores. Final exact19 focused tests in tests-k3.json; earlier21 included duplicate histogram tests.",
   "semantics": "First pending USER kick to next native doorbell completion on the same token; coalescing and unpaired continuation counts explicit, not one-to-one PB causality",
-  "default": "Off unless KF3_PROF=1/on and KF3_PROF_USER_SUBMIT=1; no vCPU lock, spin, dynamic allocation or flag requirement to boot"
+  "default": "Off unless KF3_PROF=1/on and KF3_PROF_USER_SUBMIT=1; no vCPU lock, spin, dynamic allocation or flag requirement to boot",
+  "full_two_crate_regression_at_record_time": "running; separate result required before instrumented VM"
 }
