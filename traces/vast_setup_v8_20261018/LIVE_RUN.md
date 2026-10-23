@@ -1,0 +1,7 @@
+# V8 acceptance — running
+
+MEASURED on 2026-10-23, run `v8-kvm-20261023`, source commit ff29c4a83a1bd359352263e135573c8167c298b6: one verified GA102 RTX 3090 KVM/ssh_direct lease was created through the unchanged accepted local Worker, after its independent exact-id reaper was armed. Effective price 0.448958333333 USD/h; compute plus storage 0.433333333333 USD/h; full transfer reserve 0.046875 USD. The read-only availability snapshot had qualifying GA102 and AD102 offers and no GA106; the cheapest qualifying die was chosen. [Run metadata](live_run.json).
+
+INFERRED: the reviewed private-store dependency cache should remove the two slow host APT phases. The falsifier was recorded before creating the lease: cache restore plus provision_full to READY exceeds about 900 s, a required dependency is missing, unattended reporting fails, or MANUAL loses the exact recorded result / expires at its saved original GRACE deadline. The lease is capped at 4 USD, stops at 3 USD and has a 150-minute independent reaper. No additional lease or source restart is authorised.
+
+MEASURED on 2026-10-23, run `v8-gpu-free-20261023`: 282 tests, 74 mutants each with at least two named failing tests, canonical 60/60 under its original rule; claims new=0 before the source push. Published assets were downloaded and rehashed and installed in a network-disabled Ubuntu container. [Cache design and before/after table](../../docs/design/VAST_SETUP_CACHE_20261023.md).

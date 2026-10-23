@@ -1,0 +1,19 @@
+{
+  "run": "v8-kvm-20261023",
+  "source_sha": "ff29c4a83a1bd359352263e135573c8167c298b6",
+  "state": "RUNNING",
+  "one_authorised_lease": true,
+  "reaper_armed_before_create": true,
+  "vm": true,
+  "runtype": "ssh_direct",
+  "effective_hourly_usd": 0.4489583333333333,
+  "compute_storage_hourly_usd": 0.4333333333333333,
+  "bandwidth_reserve_usd": 0.046875,
+  "die": "GA102",
+  "country": null,
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "hypothesis": "Verified private cache removes the dominant host dependency delay and unattended provider environment loading permits first reporting. Interactive SSH changes GRACE to MANUAL and real cron retains the exact result beyond its original grace deadline.",
+  "falsifier": "cache restore plus provision_full to READY exceeds about 900 seconds; missing required dependency; no unattended first report; MANUAL expires at the saved original grace deadline; any runner-bound result field changes.",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+}
