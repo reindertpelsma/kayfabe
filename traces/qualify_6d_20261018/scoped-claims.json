@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "0b61896be573af1b1efe1f1daf67ee5ace2b6f7f",
+  "head": "c476feca3da0e7a366ca4d843d7298434bc27ee8",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "crates/kf-chan/src/host.rs",
@@ -25,8 +25,15 @@
     "traces/perf_k3_20261018/build.json",
     "traces/perf_k3_20261018/ce-review-local.json",
     "traces/perf_k3_20261018/ce714-build.json",
+    "traces/perf_k3_20261018/ce714-ci-final.json",
+    "traces/perf_k3_20261018/ce714-energy-4630-lifecycles.json",
+    "traces/perf_k3_20261018/ce714-energy-plan.json",
     "traces/perf_k3_20261018/ce714-host-build.json",
+    "traces/perf_k3_20261018/ce714-linux-ce-client.json",
+    "traces/perf_k3_20261018/ce714-linux-guest-ram.json",
     "traces/perf_k3_20261018/ce714-linux-plan.json",
+    "traces/perf_k3_20261018/ce714-linux-uvm-control.json",
+    "traces/perf_k3_20261018/ce714-native.json",
     "traces/perf_k3_20261018/ce714-plan.json",
     "traces/perf_k3_20261018/ci-instrument-final.json",
     "traces/perf_k3_20261018/controls/observer-actual-crate.txt",
@@ -41,6 +48,7 @@
     "traces/perf_k3_20261018/controls/source-pin-correction.md",
     "traces/perf_k3_20261018/costs-4622.json",
     "traces/perf_k3_20261018/cpu-4622.json",
+    "traces/perf_k3_20261018/gpu-exit-profiles.png",
     "traces/perf_k3_20261018/health-after-profiles.json",
     "traces/perf_k3_20261018/host-xcursor-control.json",
     "traces/perf_k3_20261018/instrument-sanity-nc.md",
@@ -178,5 +186,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T05:38:32.503394+00:00"
+  "time": "2026-10-23T06:20:13.120605+00:00"
 }

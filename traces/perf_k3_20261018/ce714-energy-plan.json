@@ -1,0 +1,17 @@
+{
+  "classification": "INFERRED",
+  "evidence": "ce714-energy-plan.json",
+  "time": "2026-10-23T06:07:15.597417+00:00",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "runs": [
+    4630,
+    4631,
+    4632,
+    4633
+  ],
+  "requested": "Controller08:05: four Windows Energy workloads and correlate BORN ce_seed and seeded_launches",
+  "hypothesis": "A dedicated KERNEL copy ring will execute a launch without explicit guest SET_OBJECT under normal Energy work. FALSIFIER: no same-token host-derived seed plus positive seeded_launches and real completed native work, or any NoCeObject/ForeignClass refusal. Workload completion alone is not a mechanism witness.",
+  "method": "Four fresh CoW boots of owner4501 parent; exact714 binary, production flags excluding PROF, DIAG_PROGRESS1000,8192MiB store,12GiB RAM,8vCPU, real stock broker/host desktop. Original proven one-Energy observer with0/7/9 control exits, zero new-Xid epoch guard, bounded lease, uptime and VM quiet. Restore after every boot.",
+  "deadline": "Restore cutoff2026-10-23T07:25:00Z, hard lane deadline07:40:08Z",
+  "native_control": "ce714-native.json already passes seeded_launches1 and engine semaphore. This does not substitute for a VMM witness."
+}

@@ -1,0 +1,12 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-linux-uvm-control.json",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "suite": "737306ee8d5055fad7441874fc2b7afab3e2bbb4",
+  "run": "CE714-linux-positive",
+  "verdict": "FAIL",
+  "arm": "--uvm-invalidate",
+  "exception": "AssertionError('Missing own-channel hardware forwarding proof')",
+  "time": "2026-10-23T06:04:15.420222+00:00",
+  "review_scope": "Original copy-witness assertion failure retained. Frozen --uvm-invalidate is a UVM-only control, not a CE-copy positive. No gate was weakened or rerun. Zero new Xid independently checked against its frozen receipt; fresh CUDA0/GDM/two-monitor health passed before continuing independent Energy trials."
+}

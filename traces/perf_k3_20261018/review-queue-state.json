@@ -6,11 +6,11 @@
   "CI": {
     "run": 39904797996,
     "event": "workflow_dispatch",
-    "state": "IN_PROGRESS",
-    "reason": "Exact new head has skip-ci footer and no automatic check runs; triggered the existing manual CI workflow without changing source or branch"
+    "state": "ALL_FIVE_GREEN",
+    "head": "714ec29d3fdca0a013d9d478755346b0f1af6fa7"
   },
-  "CE": "Wait for green exact-head CI, build exact714ec29d3 native input, then execute --ce-seed-only. Local source-equivalent48431 suites1083+8 passed,0 failed,4 existing ignores. Native proof is not a VMM BORN witness.",
+  "CE": "Native --ce-seed-only passes seeded_launches1; Linux CE-copy arms pass with ce_seed present but seeded_launches0; Windows Energy four fresh boots4630..4633 in progress. Keep actual VMM witness distinct from completion.",
   "cursor": "Master8 wrong-shape observation retained; master9 hook mode error corrected, no RGB claim. Repeat after CE under matched physical-pointer precondition and unchanged RGB oracle; if needed pair candidate control.",
-  "host": "All attempted VMs stopped and health checks passed; no new Xid; quiet flag absent while awaiting CI.",
+  "host": "Energy4631 currently active under lease/quiet; all prior arms restored cleanly, no new Xid.",
   "cursor_precondition": "Host-only override-redirect control preserved all RGBA bytes for both expected shapes; physical cursor8526,2644 was outside the old broker window. Next unchanged RGB hook runs with the broker window moved under that point, preserving1920x1080 size."
 }

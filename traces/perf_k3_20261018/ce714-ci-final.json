@@ -1,0 +1,35 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-ci-final.json",
+  "head": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "run": 39904797996,
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "aarch64 \u2014 core cross-checks (no x86 assumptions)",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39904797996/job/120254148001"
+    },
+    {
+      "name": "broker \u2014 build and its GPU-free test suite (broker/)",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39904797996/job/120254148130"
+    },
+    {
+      "name": "firmware \u2014 kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39904797996/job/120254148208"
+    },
+    {
+      "name": "slow \u2014 full suite with the soaks (KAYFABE_SLOW=1)",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39904797996/job/120254148306"
+    },
+    {
+      "name": "stable \u2014 build, test, clippy, fmt, boundary",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39904797996/job/120254148426"
+    }
+  ],
+  "trigger": "Manual workflow_dispatch: exact integration head carried skip-ci; source/branch not changed."
+}

@@ -1,0 +1,38 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-native.json",
+  "run": "K3-review-CE-native",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "binary_sha256": "62ab5f7bc8d67dc4cbf8227aef8ce998b4a02fa685a4bd6ce0e63bba95bda2c4",
+  "verdict": "PASS_NATIVE_ORACLE",
+  "scope": "Native kernel-model TranslatedChannel oracle; no VMM/guest identity or guest-vector relay coverage",
+  "quiet_policy": "Absent during native correctness; fastguest lease held",
+  "load": {
+    "classification": "MEASURED",
+    "evidence": "load-before.json",
+    "stage": "review-CE-native",
+    "time": "2026-10-23T05:58:18.597351+00:00",
+    "uptime": "07:58:18 up 13 days, 12:19,  3 users,  load average: 0.00, 0.13, 0.20",
+    "load_average": [
+      0.00146484375,
+      0.12744140625,
+      0.19677734375
+    ],
+    "logical_cpus": 24,
+    "host_quiet": false
+  },
+  "exit": 0,
+  "new_host_xids": 0,
+  "log_sha256": "01e83b9927924ea8266b034b6580c925d814bd61bdc336ca618d7beffe3c71c3",
+  "proof_lines": [
+    "CE_SEED_INPUT engine=0xb ce_seed=0xc7b5 guest_set_object=absent",
+    "CHECK dedicated_ce_without_guest_set_object_completed_on_engine PASS ce_seed=0xc7b5 seeded_launches=1 semaphore=0x6a0b0002",
+    "CHECK seeded_ce_resources_released PASS Ok(()) Some(\"ring 0xff00000000 released: cpu unmapped, view ok unmap ok free ok\")",
+    "GR_TIER_VERDICT=PASS"
+  ],
+  "time": "2026-10-23T05:58:20.453977+00:00",
+  "health_exit": 0,
+  "NoCeObject_mentions": 0,
+  "ForeignClass_mentions": 0,
+  "raw_host_evidence": "round-6d/r1/review-ce714-native/native.log"
+}

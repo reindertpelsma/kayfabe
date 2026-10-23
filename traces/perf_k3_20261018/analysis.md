@@ -100,3 +100,6 @@ passed hosted stable, aarch64, broker and firmware; slow was skipped by policy.
 MEASURED 2026-10-23, [instrument-sanity-nc.md](instrument-sanity-nc.md):
 the diagnostic instrument-on/off comparison uses one boot per head; it is a
 sanity comparison, not an estimate of instrumentation overhead or repeat spread.
+
+CODE READ controller ruling2026-10-23: the RowsLog suggestion remains research
+only. No implementation is authorized before the longer CATIA falsifier.

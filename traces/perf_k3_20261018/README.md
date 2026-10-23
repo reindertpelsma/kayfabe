@@ -33,3 +33,33 @@ stacks are complete; Windows Passthrough was zero and a separate Linux positive
 control exercised one real native Passthrough call. See [analysis](analysis.md)
 for hypothesis outcomes, attribution limits and one proposed optimization.
 [The original falsifiers](plan.json) precede all runs. No optimization is claimed.
+
+MEASURED 2026-10-23, runs4620/4621: physical GPU and non-HLT exit counters
+are summarized below. One boot per arm; the detailed JSON and sampling limits
+remain authoritative.
+
+![Physical GPU and exit profiles](gpu-exit-profiles.png)
+
+## Review follow-ups on candidate714ec29d3
+
+MEASURED 2026-10-23, ce714-ci-final.json: all five hosted CI jobs passed,
+including stable and slow. MEASURED ce714-native.json, 2026-10-23: the supplied
+native --ce-seed-only oracle passed with ce_seed0xc7b5, seeded_launches1, the
+engine-written semaphore and resource release; no class refusal or new Xid.
+
+MEASURED 2026-10-23, ce714-linux-guest-ram.json / ce714-linux-ce-client.json:
+both positive copy arms passed. Their VMM KERNEL copy births carry ce_seed0xc7b5,
+but seeded_launches stayed0. They do not prove missing-bind execution in a VMM.
+The UVM-only probe supplied no own-channel copy witness; its original strict
+assertion failure is retained in ce714-linux-uvm-control.json and excluded
+from copy coverage. No gate was relaxed.
+
+MEASURED 2026-10-23, ce714-energy-4630-lifecycles.json: first new-head Energy
+trial completed with no class refusal; six KERNEL copy lifetimes had zero
+seeded launches. Three further fresh boots are in progress. A workload pass
+without a positive lifecycle witness is not a pass of the missing-bind hypothesis.
+
+CODE READ controller instruction2026-10-23: RowsLog remains a research note;
+no implementation before a longer CATIA falsifier. The master cursor repeat
+will keep the same RGB oracle and expected shape, with physical-pointer placement
+corrected first. Earlier invalid master captures remain in master7/8/9.json.

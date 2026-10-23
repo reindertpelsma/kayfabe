@@ -8,5 +8,6 @@
   "input": "F1's kf-gr-tier --ce-seed-only, unmodified; source chooses a copy engine whose host ce_is_grce query is false; new host ring, no prior graphics input, guest SET_OBJECT absent; engine writes semaphore and fetches its descriptor; release resources checked.",
   "prerequisites": "Exact-head hosted CI run39904797996: required stable/aarch64/broker/firmware green, no red job. Eight focused tests and build exact714ec29d3; source-equivalent48431 changed-crate suites1083 passed with4 existing ignores.",
   "safety": "No VM overlap; own Popen child only; existing input deadlines unchanged; any new Xid fatal, owned child terminated, restore host, stop lane.",
-  "scope_limit": "This F1 input is a native kernel-model TranslatedChannel oracle, with no VMM/guest. It does not execute ChanPlane birth identity or guest-vector relay, and cannot prove Windows Energy COPY2 submitted work. Report native success separately from those remaining VMM boundaries."
+  "scope_limit": "This F1 input is a native kernel-model TranslatedChannel oracle, with no VMM/guest. It does not execute ChanPlane birth identity or guest-vector relay, and cannot prove Windows Energy COPY2 submitted work. Report native success separately from those remaining VMM boundaries.",
+  "quiet_policy": "Native correctness: quiet flag absent as instructed. Linux VM and cursor VM: quiet flag held for the entire VM stage."
 }

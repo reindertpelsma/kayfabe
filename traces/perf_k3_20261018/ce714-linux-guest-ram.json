@@ -1,0 +1,55 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-linux-guest-ram.json",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "suite": "737306ee8d5055fad7441874fc2b7afab3e2bbb4",
+  "run": "CE714-linux-positive",
+  "verdict": "PASS_CLIENT_HARDWARE_AND_XID",
+  "arm": "--ce-client-guest-ram",
+  "forwarded_doorbells": 1,
+  "stranded_tokens": 0,
+  "births": [
+    {
+      "token": "0x801",
+      "engine": "0xb",
+      "kernel_by": "PRIVILEGE=KERNEL rm-internal",
+      "ce_seed": "0xc7b5"
+    },
+    {
+      "token": "0x802",
+      "engine": "0xb",
+      "kernel_by": "PRIVILEGE=KERNEL rm-internal",
+      "ce_seed": "0xc7b5"
+    }
+  ],
+  "retirements": [
+    {
+      "token": "0x802",
+      "forwarded": 2,
+      "submissions": 2,
+      "seeded_launches": 0,
+      "dead_none": true,
+      "last_put": 2,
+      "gp_get": 2
+    },
+    {
+      "token": "0x801",
+      "forwarded": 7,
+      "submissions": 7,
+      "seeded_launches": 0,
+      "dead_none": true,
+      "last_put": 7,
+      "gp_get": 7
+    }
+  ],
+  "NoCeObject_mentions": 0,
+  "ForeignClass_mentions": 0,
+  "candidate_seeded_witnesses_pending_native_engine_correlation": [],
+  "seeded_mechanism": "NOT_EXERCISED_BY_THIS_POSITIVE_ARM",
+  "qemu_exit": 0,
+  "client_exit": 0,
+  "serial_sha256": "3656d1f2b417db4b3fa74a1c6febc8e7b45eda978ae6f992aca85c0d6a848d82",
+  "qemu_sha256": "7442019e414215893c9d2bd0d861694512050b3a3438e00b79515d23ea461416",
+  "xid_delta": 0,
+  "time": "2026-10-23T05:59:11.195752+00:00"
+}
