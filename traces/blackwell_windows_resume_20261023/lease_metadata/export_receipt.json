@@ -1,0 +1,42 @@
+{
+  "readiness_source": {
+    "source_sha256": "ce61410206bd060ef30bb0c57bdf9cb34968fe630db34388b29124a9355a05e7",
+    "export_sha256": "ce61410206bd060ef30bb0c57bdf9cb34968fe630db34388b29124a9355a05e7"
+  },
+  "sweep_20261020_provision.log": {
+    "source_sha256": "1c44d2ec76f49fcbee9dea4affda2fdc98d5ffff4cdaf418d55c16f8f76a6553",
+    "export_sha256": "2ea2422ddefe0e44efe8e94e08f5d0d2b36cda1a26b9b6d39fb6296f1782059c"
+  },
+  "sweep_host_die.log": {
+    "source_sha256": "b0714e22d681be0d979839d81b7477328a00729964c5a7202e9c3310fe5aa59e",
+    "export_sha256": "b0714e22d681be0d979839d81b7477328a00729964c5a7202e9c3310fe5aa59e"
+  },
+  "sweep_host_preflight.log": {
+    "source_sha256": "2c690aeda24d599c098f78baa16e313ad4d2d23976c3f990ce32161eb88f19fd",
+    "export_sha256": "2c690aeda24d599c098f78baa16e313ad4d2d23976c3f990ce32161eb88f19fd"
+  },
+  "sweep_gates.log": {
+    "source_sha256": "f40c91ac1b3aa56bec8472079fe24712a061c34c06416123b2c2bc9617137679",
+    "export_sha256": "e93f0b952d1877b3b03ff252e9cb8766f86235124ca32061ec5a90af3812065f"
+  },
+  "sweep_product_source": {
+    "source_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13",
+    "export_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13"
+  },
+  "media_cache_receipt.json": {
+    "source_sha256": "0bd119f1d11e1f4b9ca5de8897f14e6dcdee0f7f45e3a6903d0fe1a20d1a6cb3",
+    "export_sha256": "0bd119f1d11e1f4b9ca5de8897f14e6dcdee0f7f45e3a6903d0fe1a20d1a6cb3"
+  },
+  "sweep_windows_media.log": {
+    "source_sha256": "7273793efb5602ec5174c6a286da8190acd637e834b83be742ad1cb92cb88da0",
+    "export_sha256": "7273793efb5602ec5174c6a286da8190acd637e834b83be742ad1cb92cb88da0"
+  },
+  "kernel_xids.json": {
+    "source_sha256": "0fb08ed8c1f5fbde3b210df7d2359dc630f20e410c918e22002c2c6863cc6094",
+    "export_sha256": "4b0515c65c96989684077463b11c00b9fdc4dfbaae15d4c2f73010c79e4dceb0"
+  },
+  "precomp_kernel_permission.json": {
+    "source_sha256": "0fb08ed8c1f5fbde3b210df7d2359dc630f20e410c918e22002c2c6863cc6094",
+    "export_sha256": "f219c403a1a4491a3ed9a492a173b9e9a7cd5f11b9338e8561a4aa8495fc816b"
+  }
+}
