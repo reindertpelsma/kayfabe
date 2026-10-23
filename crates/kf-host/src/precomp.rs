@@ -32,7 +32,7 @@ pub fn read_with(
     read_checked(version, addresses, control)
 }
 
-/// Privileged, read-only sweep measurement, separate from the runtime tier-2 API.
+/// CODE READ 2026-10-23: privileged read-only sweep, separate from runtime tier2.
 /// No product caller uses this entry point and a refusal is never retried with writes.
 ///
 /// # Errors
@@ -112,7 +112,7 @@ fn read_checked(
 
 impl crate::HostRm {
     /// Read the own die's public capability plan for a privileged sweep only.
-    /// This is measurement evidence, not a runtime fallback or guest control path.
+    /// CODE READ 2026-10-23: measurement evidence, no runtime or guest-control caller.
     ///
     /// # Errors
     /// Missing admin capability, unsupported ABI, invalid plan or host refusal.
