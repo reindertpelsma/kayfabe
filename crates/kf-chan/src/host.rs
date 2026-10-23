@@ -260,7 +260,7 @@ fn gp_get_release(
 }
 
 impl HostRing {
-    /// Install a measurement observer. No observer is required to boot or submit work.
+    /// Install a profiling observer. No observer is required to boot or submit work.
     pub fn set_submit_observer(
         &mut self,
         observer: std::sync::Arc<dyn crate::submit_observer::Observer>,

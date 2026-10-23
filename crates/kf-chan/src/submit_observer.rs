@@ -1,4 +1,4 @@
-//! Optional measurement around a real native doorbell; never a scheduling input.
+//! Optional profiling around a real native doorbell; never a scheduling input.
 
 /// A callback's private correlation stamps, not product permission or completion.
 #[derive(Clone, Copy)]

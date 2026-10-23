@@ -1,0 +1,7 @@
+error: couldn't find file `crates/kf-qemu/tests/../src/submitprof.rs`
+ --> crates/kf-qemu/tests/submit_profile.rs:5:1
+  |
+5 | mod submitprof;
+  | ^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error

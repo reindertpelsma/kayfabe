@@ -1,0 +1,66 @@
+{
+  "classification": "MEASURED",
+  "evidence": "software-controls.json",
+  "base_candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "instrument_commit": "93dab55d1",
+  "time": "2026-10-23T04:02:08.386509+00:00",
+  "expected_red": {
+    "profiler": "2334e8d76: absent module compile failure; zero behavioral tests executed",
+    "observer": "8d4229f79: absent module compile failure; zero behavioral tests executed"
+  },
+  "green": {
+    "profiler_and_histogram": 17,
+    "observer": 4,
+    "failed": 0
+  },
+  "mutants": [
+    {
+      "mutant": "drop-pending-stamp",
+      "killed_by": [
+        "a_doorbell_during_a_native_call_belongs_to_the_next_call",
+        "a_doorbell_is_not_reused_for_multiple_native_submits",
+        "coalescing_retains_first_pending_stamp",
+        "invalid_indices_and_backwards_clocks_do_not_create_samples",
+        "pending_doorbell_measures_actual_native_completion",
+        "route_histograms_are_independent",
+        "token_reuse_discards_stamps_from_the_previous_birth"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "reuse-pending-stamp",
+      "killed_by": [
+        "a_doorbell_during_a_native_call_belongs_to_the_next_call",
+        "a_doorbell_is_not_reused_for_multiple_native_submits"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "suppress-observer-after",
+      "killed_by": [
+        "native_error_is_returned_unchanged_and_never_marked_success",
+        "success_is_returned_unchanged_and_recorded_after_exactly_one_call"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "reverse-observer-outcome",
+      "killed_by": [
+        "native_error_is_returned_unchanged_and_never_marked_success",
+        "success_is_returned_unchanged_and_recorded_after_exactly_one_call"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "zero-histogram-export",
+      "killed_by": [
+        "histogram_export_counts_every_sample",
+        "histogram_export_supports_workload_interval_subtraction"
+      ],
+      "exit": 101
+    }
+  ],
+  "full_two_crate_regression": "running; separate result required before instrumented VM",
+  "semantics": "First pending USER kick to next native doorbell completion on the same token; coalescing and unpaired continuation counts explicit, not one-to-one PB causality",
+  "default": "Off unless KF3_PROF=1/on and KF3_PROF_USER_SUBMIT=1; no vCPU lock, spin, dynamic allocation or flag requirement to boot"
+}

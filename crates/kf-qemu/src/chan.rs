@@ -1187,7 +1187,7 @@ impl kf_rm::defapi::FifoUpdateFilter for PtFifoUpdateFilter {
     }
 }
 
-/// Measurement-only observer for authored Translated native-ring doorbells.
+/// Profiling-only observer for authored Translated native-ring doorbells.
 struct NativeSubmitProfile {
     profile: Arc<crate::submitprof::SubmitProfile>,
     idx: u32,

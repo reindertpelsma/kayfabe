@@ -1,0 +1,21 @@
+
+running 17 tests
+test a_doorbell_during_a_native_call_belongs_to_the_next_call ... ok
+test a_doorbell_is_not_reused_for_multiple_native_submits ... ok
+test absent_or_disabled_parent_flag_never_arms_user_measurement ... ok
+test coalescing_retains_first_pending_stamp ... ok
+test disabled_profile_records_nothing_and_allocates_no_token_slots ... ok
+test extra_flag_is_explicit_and_parent_on_spelling_is_preserved ... ok
+test failed_native_calls_never_become_success_latency ... ok
+test histogram_export_counts_every_sample ... ok
+test histogram_export_supports_workload_interval_subtraction ... ok
+test invalid_indices_and_backwards_clocks_do_not_create_samples ... ok
+test no_doorbell_is_explicitly_unpaired_not_a_zero_latency_sample ... ok
+test pending_doorbell_measures_actual_native_completion ... ok
+test prof::tests::buckets_are_monotone_and_bound_their_samples ... ok
+test prof::tests::the_offset_table_counts_per_offset ... ok
+test reset_during_a_native_call_discards_its_old_life_ticket ... ok
+test route_histograms_are_independent ... ok
+test token_reuse_discards_stamps_from_the_previous_birth ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s

@@ -1,4 +1,4 @@
-//! The measurement callback cannot suppress, duplicate or alter a native call.
+//! The profiling callback cannot suppress, duplicate or alter a native call.
 #[path = "../src/submit_observer.rs"]
 mod submit_observer;
 

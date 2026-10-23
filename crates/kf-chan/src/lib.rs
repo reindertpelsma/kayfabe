@@ -44,5 +44,5 @@ pub mod video_generated;
 pub mod vtables;
 pub mod worker;
 
-/// Optional native-submit measurement callbacks.
+/// Optional native-submit profiling callbacks.
 pub mod submit_observer;

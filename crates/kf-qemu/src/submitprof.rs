@@ -1,7 +1,7 @@
-//! Optional direct USER-doorbell to next native-submit completion measurements.
+//! Optional direct USER-doorbell to next native-submit completion profilings.
 //!
 //! `KF3_PROF=1 KF3_PROF_USER_SUBMIT=1` enables this at construction. Nothing uses a
-//! measurement to decide work or progress. A bounded token table holds the first pending
+//! profiling to decide work or progress. A bounded token table holds the first pending
 //! doorbell; the next native call consumes it. Coalesced kicks, unpaired calls, failures and
 //! token-life changes are explicit. One doorbell can fan out to many native calls, so unpaired
 //! continuations are never assigned zero latency or silently included in the histogram.
@@ -54,7 +54,7 @@ struct Stats {
     latency: Hist,
 }
 
-/// A measurement ticket captured immediately before the native doorbell call.
+/// A profiling ticket captured immediately before the native doorbell call.
 /// It grants no product permission and owns no guest or native resource.
 pub struct Ticket {
     idx: u32,
@@ -102,14 +102,14 @@ impl SubmitProfile {
         }
     }
 
-    /// Read both measurement flags once, independent of prof::init construction order.
+    /// Read both profiling flags once, independent of prof::init construction order.
     pub fn from_env(slots: usize) -> Self {
         let base = std::env::var("KF3_PROF").ok();
         let extra = std::env::var("KF3_PROF_USER_SUBMIT").ok();
         Self::new(flags_enabled(base.as_deref(), extra.as_deref()), slots)
     }
 
-    /// Cached measurement-only switch.
+    /// Cached profiling-only switch.
     #[inline]
     pub fn enabled(&self) -> bool {
         self.enabled
@@ -159,7 +159,7 @@ impl SubmitProfile {
         }
     }
 
-    /// Complete only the measurement after the real native call returns.
+    /// Complete only the profiling after the real native call returns.
     pub fn finish(&self, ticket: Ticket, now: u64, ok: bool) {
         if !ticket.enabled {
             return;
@@ -275,7 +275,8 @@ impl Ticket {
     }
 }
 
-/// The measurement arm requires both explicit flags; construction can precede prof::init.
+/// The profiling arm requires both explicit flags; construction can precede
+/// prof::init.
 pub fn flags_enabled(base: Option<&str>, extra: Option<&str>) -> bool {
     matches!(base, Some("1" | "on")) && extra == Some("1")
 }

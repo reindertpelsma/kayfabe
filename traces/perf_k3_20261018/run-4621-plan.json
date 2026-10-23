@@ -1,0 +1,15 @@
+{
+  "classification": "INFERRED",
+  "evidence": "run-4621-plan.json",
+  "candidate_reference": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4621,
+  "time": "2026-10-23T04:04:15.401667+00:00",
+  "hypotheses_before_run": {
+    "H1": "Compare same-workload GPU busy distributions with run4620. FALSIFIER: means differ by at most5 percentage points while score gap persists. Align active windows, driver/capacity/carrier limits explicit.",
+    "H2": "Compare KVM active exits/time with run4620. FALSIFIER: low active exit rate/time, excluding HLT idle waits. Five-second separate trace windows, not headline timings."
+  },
+  "preconditions": "Owner has returned host, no VM remains, baseline4620 restored; own CoW of same parent and copied variables; exact VF1 bounded safety/restoration sequence copied to own directory, GPU+audio detach and restore, no unknown process kills.",
+  "restoration_evidence": "Historical VF1 reported a modprobe failure; current procedure explicitly unbinds VFIO before native module probe. Preserve any failure, stop future GPU work and restore with final-health check.",
+  "sampling": "Host NVML for kayfabe, guest physical NVML for VFIO; both200ms query GPU/memory busy, clocks, power and memory. CPU/KVM host-only; no virtual NVML utilization used for kayfabe.",
+  "limits": "VFIO full12282MiB versus kayfabe9216MiB; physical display versus test carrier; matched image/CPU/RAM/resolution, not a single-change causal experiment."
+}
