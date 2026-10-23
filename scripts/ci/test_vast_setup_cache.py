@@ -103,7 +103,7 @@ class SetupCache(unittest.TestCase):
         with self.assertRaises(setup.CacheRefused):
             self.validate(lambda x, r: x["assets"][0].update(size=True))
 
-    def download(self, body=b"data", mutate=None, opener=None):
+    def download(self, body=b"data", mutate=None, opener=None, use_default=False):
         desc = {"kind": "debs", "name": "debs.tar.gz", "size": 4, "sha256": sha(b"data")}
         locator = {
             "name": desc["name"],
@@ -114,7 +114,9 @@ class SetupCache(unittest.TestCase):
             mutate(desc, locator)
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / desc["name"]
-            setup.download_asset(locator, desc, path, opener=opener or Opener(body))
+            setup.download_asset(
+                locator, desc, path, opener=None if use_default else opener or Opener(body)
+            )
             self.assertEqual(path.read_bytes(), body)
             self.assertFalse(path.with_suffix(".partial").exists())
 
@@ -126,9 +128,29 @@ class SetupCache(unittest.TestCase):
     def test_download_url_is_exact_and_redirects_disabled(self):
         opener = Opener()
         with patch.object(setup.urllib.request, "build_opener", return_value=opener) as build:
-            self.download(opener=None)
+            self.download(use_default=True)
         self.assertIsInstance(build.call_args.args[0], setup.NoRedirect)
         self.assertIn("secret=SIGNED", opener.requests[0][0].full_url)
+
+    def test_redirect_handler_refuses_a_foreign_host(self):
+        self.assertIsNone(
+            setup.NoRedirect().redirect_request(None, None, 302, "x", {}, "https://evil.example/")
+        )
+
+    def test_redirect_handler_refuses_even_the_same_host(self):
+        self.assertIsNone(
+            setup.NoRedirect().redirect_request(
+                None, None, 307, "x", {}, "https://release-assets.githubusercontent.com/another"
+            )
+        )
+
+    def test_wrong_distro_refuses(self):
+        with self.assertRaises(setup.CacheRefused):
+            self.validate(lambda x, r: x["platform"].update(version="24.04"))
+
+    def test_wrong_architecture_refuses(self):
+        with self.assertRaises(setup.CacheRefused):
+            self.validate(lambda x, r: x["platform"].update(arch="aarch64"))
 
     def test_download_wrong_hash_refuses(self):
         with self.assertRaises(setup.CacheRefused):
@@ -176,6 +198,8 @@ class SetupCache(unittest.TestCase):
             root = Path(d)
             archive = root / "cache.tar.gz"
             with tarfile.open(archive, "w:gz") as tar:
+                if name == "/escape":
+                    name = str(root / "absolute-escape")
                 info = tarfile.TarInfo(name)
                 info.mode = 0o644
                 if kind:
@@ -219,6 +243,33 @@ class SetupCache(unittest.TestCase):
     def test_second_expansion_boundary_refuses(self):
         with self.assertRaises(setup.CacheRefused):
             self.extract(limit=1)
+
+    def test_existing_extraction_directory_is_preserved(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            marker = root / "owned.txt"
+            marker.write_text("keep")
+            with self.assertRaises(setup.CacheRefused):
+                setup.unpack_checked(root / "missing.tar.gz", root, "vendor")
+            self.assertEqual(marker.read_text(), "keep")
+
+    def test_existing_empty_destination_is_not_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / "existing"
+            target.mkdir()
+            with self.assertRaises(setup.CacheRefused):
+                setup.unpack_checked(Path(d) / "missing.tar.gz", target, "vendor")
+            self.assertTrue(target.is_dir())
+
+    def test_update_uses_only_the_local_repo(self):
+        command = setup.apt_command(Path("/cache"), ["update", "-qq"])
+        self.assertIn("Dir::Etc::sourcelist=/cache/sources.list", command)
+        self.assertIn("Dir::Etc::sourceparts=-", command)
+
+    def test_install_cannot_read_global_source_fragments(self):
+        command = setup.apt_command(Path("/another"), ["install", "-y", "qemu-utils"])
+        self.assertIn("Dir::Etc::sourceparts=-", command)
+        self.assertIn("Dir::State::lists=/another/lists", command)
 
     def test_vendor_config_is_global_and_preserves_unrelated_values(self):
         with tempfile.TemporaryDirectory() as d:
