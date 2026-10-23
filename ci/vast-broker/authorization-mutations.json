@@ -125,8 +125,8 @@
       "file": "../../.github/workflows/gpu-vast.yml",
       "patches": [
         [
-          "\"$POLICY_RUN\" = 0 && \"$GPU_RESULT\" = skipped",
-          "\"$POLICY_RUN\" = disabled && \"$GPU_RESULT\" = skipped"
+          "\"$POLICY_RUN\" = 0 && \"${POLICY_CHECK_RESULT:-}\" = success",
+          "\"$POLICY_RUN\" = disabled && \"${POLICY_CHECK_RESULT:-}\" = success"
         ]
       ],
       "tests": [
@@ -158,7 +158,8 @@
       ],
       "tests": [
         "round-policy-bootstrap.test.js"
-      ]
+      ],
+      "replace_all": true
     }
   ]
 }

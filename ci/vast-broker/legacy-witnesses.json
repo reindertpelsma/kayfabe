@@ -436,25 +436,6 @@
       "ci/vast-broker/test/broker.test.js"
     ]
   },
-  "owner numeric identity": {
-    "names": [
-      "run API must bind triggering_actor",
-      "nonowner push cannot spoof approval with owner name",
-      "nonowner push cannot spoof approval with owner email"
-    ],
-    "files": [
-      "ci/vast-broker/test/auth.test.js"
-    ]
-  },
-  "review head SHA": {
-    "names": [
-      "review_only rejects old-head",
-      "review cannot authorize a nonowner push at a newer head"
-    ],
-    "files": [
-      "ci/vast-broker/test/auth.test.js"
-    ]
-  },
   "draft refusal": {
     "names": [
       "draft owner push does not rent",
@@ -563,10 +544,13 @@
   "TTL destruction": {
     "names": [
       "V4 accepted callback ends provisioning deadline",
-      "V4 hard TTL survives restart with accepted progress and no result"
+      "V4 hard TTL survives restart with accepted progress and no result",
+      "round cron hard deadline ends a box with fresh heartbeats false",
+      "round cron hard deadline ends a box with fresh heartbeats true"
     ],
     "files": [
-      "ci/vast-broker/test/v4-lifecycle.test.js"
+      "ci/vast-broker/test/v4-lifecycle.test.js",
+      "ci/vast-broker/test/round-hard-timeout.test.js"
     ]
   },
   "SHA/nonce shell validation": {
@@ -618,12 +602,11 @@
   },
   "documented offer pricing type": {
     "names": [
-      "review_or_author accepts owner author",
-      "review mode accepts exact head approval by numeric owner",
-      "actor_only is explicitly selectable"
+      "simplify owner-triggered collaborator PR rents without PR lookups",
+      "simplify push to master rents only for owner trigger 42"
     ],
     "files": [
-      "ci/vast-broker/test/auth.test.js"
+      "ci/vast-broker/test/round-simplify.test.js"
     ]
   },
   "poll permissions guard": {
@@ -781,15 +764,6 @@
     "files": [
       "ci/vast-broker/test/eligibility.test.js",
       "ci/vast-broker/test/native-github.test.js"
-    ]
-  },
-  "owner branch without PR": {
-    "names": [
-      "owner dispatch permits branch without a PR owner-pr",
-      "owner dispatch permits branch without a PR integration/test"
-    ],
-    "files": [
-      "ci/vast-broker/test/eligibility.test.js"
     ]
   },
   "immutable API cache": {

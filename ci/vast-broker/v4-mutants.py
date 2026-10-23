@@ -70,7 +70,12 @@ MUTATIONS = [
         "src/index.js",
         "if(record.hardDeadline!==null&&now()>=record.hardDeadline)",
         "if(false)",
-        ["v4-lifecycle.test.js", "reporting.test.js", "v5-lifecycle.test.js"],
+        [
+            "v4-lifecycle.test.js",
+            "reporting.test.js",
+            "v5-lifecycle.test.js",
+            "round-hard-timeout.test.js",
+        ],
         "replace",
     ),
     (

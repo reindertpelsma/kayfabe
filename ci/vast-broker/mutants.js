@@ -445,7 +445,7 @@ const baseline = spawnSync(process.execPath, ['--test', 'ci/vast-broker/test'], 
   cwd: root,
   encoding: 'utf8',
   maxBuffer: 8 * 1024 * 1024,
-  timeout: 60000,
+  timeout: 180000, // the whole suite, including nested cwd runs
 });
 if (baseline.status !== 0) throw Error('Baseline is not green; refusing mutation attribution.');
 const results =
@@ -512,7 +512,7 @@ for (const [name, path, mutate] of mutations.filter(
         cwd: root,
         encoding: 'utf8',
         maxBuffer: 8 * 1024 * 1024,
-        timeout: 60000,
+        timeout: 180000,
       });
       output = r.stdout + r.stderr;
       killed = [...output.matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1]);
@@ -543,7 +543,7 @@ if (process.env.MUTANT_FILTER) {
 }
 const text =
   '# Recorded manual mutation checks\n\n' +
-  '[MEASURED: 2026-10-23 offline V1 security-fixes mutation campaign] ' +
+  '[MEASURED: 2026-10-23 offline fixes2 mutation campaign, branch claude/vast-broker-fixes2] ' +
   process.version +
   '; explicit patches in `../mutants.js`. Every source file restored in f' +
   'inally; syntax checked before tests. Full unmutated suite is green bef' +
