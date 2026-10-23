@@ -1,3 +1,7 @@
+MEASURED (2026-10-23, lease57296386, `lease_57296386/TEARDOWN.json`): exact-ID API absence verified02:04:33Z; owned auto-destroy cancelled afterward. INFERRED (same receipt): runtime estimate$0.348273, conservative$1.348273; lane total$8.071121<12, Round3$4.267503<8; invoice unverified.
+
+MEASURED (2026-10-23, `adaptive/cleanup/cleanup_red.log`, `cleanup_green.log`): cleanup proof4tests,2expected failures before fix then4PASS. Interrupted graceful stop now still reaches bounded QMP quit for the same owned PID/socket; original arm failure remains. MEASURED (`adaptive/cleanup/cleanup_mutants.json`): removing fallback kills2tests; existing desktop suite74/74PASS including4new tests. CODE READ: product Rust/QEMU unchanged; added Rust lint sites0, fresh clippy not run.
+
 ADAPTIVE GA102 — PARTIAL, 2026-10-23; supersedes earlier LIVE entries.
 
 1. MEASURED (lease57296386, `START.json`): RTX3090/GA102, host595.91.07 OPEN, sourceac21aef93; quote$0.223333/h, auto170min armed first.

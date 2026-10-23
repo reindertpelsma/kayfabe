@@ -1,0 +1,31 @@
+test_changed_pid_never_receives_qmp_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_changed_pid_never_receives_qmp_quit) ... ok
+test_interrupted_graceful_stop_still_reaches_qmp_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_interrupted_graceful_stop_still_reaches_qmp_quit) ... FAIL
+test_qmp_fallback_preserves_original_arm_failure (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_qmp_fallback_preserves_original_arm_failure) ... FAIL
+test_successful_graceful_stop_does_not_send_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_successful_graceful_stop_does_not_send_quit) ... ok
+
+======================================================================
+FAIL: test_interrupted_graceful_stop_still_reaches_qmp_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_interrupted_graceful_stop_still_reaches_qmp_quit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_cleanup.py", line 50, in test_interrupted_graceful_stop_still_reaches_qmp_quit
+    self.assertIn('FALLBACK 20 python3 scripts/bench/windows/qmp.py', p.stdout)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'FALLBACK 20 python3 scripts/bench/windows/qmp.py' not found in 'PRE_CLEANUP_START rc=1 2026-10-23T02:05:26+00:00\nGRACEFUL_ATTEMPT\nOWN_VM_STILL_ALIVE_STOP\nARM_EXIT run=fixture rc=15 2026-10-23T02:05:26+00:00\n'
+
+======================================================================
+FAIL: test_qmp_fallback_preserves_original_arm_failure (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_qmp_fallback_preserves_original_arm_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/s4-wt/scripts/bench/tests/test_desktop_cleanup.py", line 55, in test_qmp_fallback_preserves_original_arm_failure
+    self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 15 != 1 : PRE_CLEANUP_START rc=1 2026-10-23T02:05:26+00:00
+GRACEFUL_ATTEMPT
+OWN_VM_STILL_ALIVE_STOP
+ARM_EXIT run=fixture rc=15 2026-10-23T02:05:26+00:00
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.159s
+
+FAILED (failures=2)

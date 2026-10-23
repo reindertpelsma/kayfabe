@@ -1,0 +1,9 @@
+test_changed_pid_never_receives_qmp_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_changed_pid_never_receives_qmp_quit) ... ok
+test_interrupted_graceful_stop_still_reaches_qmp_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_interrupted_graceful_stop_still_reaches_qmp_quit) ... ok
+test_qmp_fallback_preserves_original_arm_failure (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_qmp_fallback_preserves_original_arm_failure) ... ok
+test_successful_graceful_stop_does_not_send_quit (scripts.bench.tests.test_desktop_cleanup.CleanupTests.test_successful_graceful_stop_does_not_send_quit) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.255s
+
+OK

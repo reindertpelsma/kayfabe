@@ -1,0 +1,12 @@
+{
+  "id": 57296386,
+  "destroyed_utc": "2026-10-23T02:04:33.870693+00:00",
+  "api_absence_verified": true,
+  "pre_teardown_origin_head": "ac9848fea6cad448beb176f7edef831592157c28",
+  "auto_destroy_cancelled_after_absence": true,
+  "runtime_hours": 1.5594299075000002,
+  "runtime_cost_estimate_usd": 0.3482726793416667,
+  "cost_upper_usd": 1.3482726793416666,
+  "kind": "MEASURED",
+  "accounting_note": "Runtime estimate, not invoice; conservative allowance adds1USD for transfers."
+}

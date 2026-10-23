@@ -1,0 +1,11 @@
+{
+  "kind": "MEASURED",
+  "test_run": "cleanup_mutant.log",
+  "mutant": "remove documented QMP fallback",
+  "killers": 2,
+  "tests": [
+    "test_interrupted_graceful_stop_still_reaches_qmp_quit",
+    "test_qmp_fallback_preserves_original_arm_failure"
+  ],
+  "source_restored": true
+}
