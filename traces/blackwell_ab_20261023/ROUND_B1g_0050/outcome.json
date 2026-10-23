@@ -1,0 +1,105 @@
+{
+  "round": "B1g_0050",
+  "operator": "Claude",
+  "grant": "controller 00:50: up to 3 sequential attempts, different machines, total stop 2.00/cap 2.50",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "profile": "7-visible-core deviation",
+  "cpu_visible": null,
+  "status": "NO RENTAL: attempt-1 fresh snapshot had no qualifying offer (harness exit 75); attempts used 0/3",
+  "known_bad_added": [
+    {
+      "machine_id": 39248,
+      "instance_id": 57431305,
+      "reason": "host_identity_pin_mismatch"
+    }
+  ],
+  "pin_type_hypothesis": "pin_type_hypothesis.json: falsified (no type-comparison defect); guard unchanged; console key-line export added (rehearsal/test_pin_evidence.py 13/13, RED first, 7 mutants >=2 killers)",
+  "market_utc": "2026-10-23T22:31:58.043617+00:00",
+  "offers": [
+    {
+      "id": 54877110,
+      "machine": 39248,
+      "gpu": "RTX 5070",
+      "dph": 0.26731481481481484,
+      "cores": 10.0,
+      "geo": "Quebec, CA",
+      "excluded_because": "known-bad (B1f host_identity_pin_mismatch)"
+    },
+    {
+      "id": 43994875,
+      "machine": 69146,
+      "gpu": "RTX 5090",
+      "dph": 0.38805555555555554,
+      "cores": 32.0,
+      "geo": ", CN",
+      "excluded_because": "known-bad (B1b provider_boot_timeout)"
+    },
+    {
+      "id": 57254352,
+      "machine": 41012,
+      "gpu": "RTX 5090",
+      "dph": 0.5347222222222222,
+      "cores": 32.0,
+      "geo": "Mexico, MX",
+      "excluded_because": "is_vm_deverified=True"
+    },
+    {
+      "id": 57376526,
+      "machine": 43459,
+      "gpu": "RTX 5090",
+      "dph": 0.6013888888888889,
+      "cores": 24.0,
+      "geo": "Taiwan, TW",
+      "excluded_because": "is_vm_deverified=True"
+    },
+    {
+      "id": 50420387,
+      "machine": 148403,
+      "gpu": "RTX 5090",
+      "dph": 0.777037037037037,
+      "cores": 18.285714285714285,
+      "geo": "Estonia, EE",
+      "excluded_because": "is_vm_deverified=True"
+    },
+    {
+      "id": 54642865,
+      "machine": 153274,
+      "gpu": "RTX 5090",
+      "dph": 1.4542592592592594,
+      "cores": 16.0,
+      "geo": "Ontario, CA",
+      "excluded_because": "1.454 USD/h: under stop 2.00 the plan gives < 90 min runtime (eligibility floor)"
+    }
+  ],
+  "leases_created": [],
+  "leases_destroyed": [],
+  "spend_usd": 0.0,
+  "matrix": [
+    {
+      "arm": "Native raw + fuzz 3 pinned / 1 unpinned",
+      "die": "none (no lease)",
+      "flags": "7-visible-core deviation",
+      "verdict": "UNRUN",
+      "evidence": "attempt1/preflight.txt, attempt1/market.json"
+    },
+    {
+      "arm": "B",
+      "die": "none (no lease)",
+      "flags": "7-visible-core deviation",
+      "verdict": "UNRUN",
+      "evidence": "attempt1/preflight.txt, attempt1/market.json"
+    },
+    {
+      "arm": "B1",
+      "die": "none (no lease)",
+      "flags": "7-visible-core deviation",
+      "verdict": "UNRUN",
+      "evidence": "attempt1/preflight.txt, attempt1/market.json"
+    }
+  ],
+  "xid32_list": [],
+  "tdr_verdict": "UNRUN",
+  "alias_revoked_repeats": "UNRUN (n=0)"
+}

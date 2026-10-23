@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_pin_evidence (unittest.loader._FailedTest.test_pin_evidence)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_pin_evidence
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_pin_evidence.py", line 18, in <module>
+    import pin_evidence as E  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'pin_evidence'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

@@ -1,0 +1,65 @@
+{
+  "hypothesis": "the identity guard compares console fingerprints against a different key TYPE than the one it scans (ed25519 vs rsa vs ecdsa)",
+  "falsifier": "if the guard only ever accepts an exact ed25519 fingerprint and every successful lease matched exactly the scanned ed25519 key, type confusion cannot cause a false accept; B1f is then a mismatch of the published ed25519 pins or of untyped extra fingerprints",
+  "code_read": {
+    "scan": "ssh-keyscan -t ed25519 (ops.py ready)",
+    "accept": "exact SHA256 of the scanned ed25519 key in the published pin set (console_pin.wait_for_pin)",
+    "pin_set": "full 'ssh-ed25519 <b64>' keys plus SHA256 fingerprints on lines labelled ED25519 or carrying no RSA/ECDSA label; RSA/ECDSA-labelled lines excluded",
+    "unknown_type": "an unlabelled fingerprint of unknown type counts as a published pin; if it differs, the guard refuses (fail-closed)"
+  },
+  "measured": [
+    {
+      "lease_id": 57366202,
+      "state": "match",
+      "published_fingerprints": 2,
+      "scanned_ed25519_in_published": true,
+      "polls": 1,
+      "elapsed_since_create_s": 194.2,
+      "source": "bw3-final-run/console_pin_57366202.jsonl"
+    },
+    {
+      "lease_id": 57388945,
+      "state": "match",
+      "published_fingerprints": 2,
+      "scanned_ed25519_in_published": true,
+      "polls": 1,
+      "elapsed_since_create_s": 511.3,
+      "source": "bw3-round-b1-run/console_pin_57388945.jsonl"
+    },
+    {
+      "lease_id": 57429076,
+      "state": "match",
+      "published_fingerprints": 2,
+      "scanned_ed25519_in_published": true,
+      "polls": 1,
+      "elapsed_since_create_s": 99.7,
+      "source": "bw3-round-b1e-run/console_pin_57429076.jsonl"
+    },
+    {
+      "lease_id": 57431305,
+      "state": "mismatch",
+      "published_fingerprints": 2,
+      "scanned_ed25519_in_published": false,
+      "polls": 1,
+      "elapsed_since_create_s": 259.9,
+      "source": "bw3-round-b1f-run/console_pin_57431305.jsonl"
+    },
+    {
+      "lease_id": 57363603,
+      "state": "mismatch",
+      "published_fingerprints": 2,
+      "scanned_ed25519_in_published": true,
+      "polls": 1,
+      "elapsed_since_create_s": 352.5,
+      "source": "bw3-unverified-run/console_pin_57363603.jsonl"
+    }
+  ],
+  "measured_notes": [
+    "every console published exactly 2 pins (n=6 receipts); in the 4 accepted leases the scanned ed25519 was one of them",
+    "the extra pin is different on every lease and is not the operator client key (compared by fingerprint equality, not printed)",
+    "B1f lease 57431305: neither of its 2 pins equals the scanned ed25519; raw console text was not retained by the operator, so the extra pins' key types are UNKNOWN",
+    "a prior audit (blackwell_fields_phase_20261022/provision/hostkey_publication_audit.json) shows the console prints the ED25519 fingerprint line and the full ssh-ed25519 key of the same host"
+  ],
+  "verdict": "NOT a type-comparison defect: the guard never accepts a different type (falsifier holds). B1f is either a genuine ed25519 mismatch or a refusal caused by two untyped non-ed25519 fingerprints before the ed25519 line appeared; with the console text not retained this is UNDETERMINED (INFERRED either way). Guard decision left unchanged (fail-closed).",
+  "change": "operator-side evidence only: each polled console is kept privately in the operator workspace and its host-key lines (public fingerprints/keys and their type labels) are exported, so the next refusal can be classified; the guard source and decision are unchanged"
+}

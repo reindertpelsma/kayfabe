@@ -1,0 +1,7 @@
+ops_capture_dropped killers=2
+type_ignored killers=3
+guard_view_true killers=2
+unbounded killers=2
+raw_not_kept killers=2
+whole_console_exported killers=2
+malformed_raises killers=2
