@@ -1,0 +1,10 @@
+{
+  "base": "1ac2b51d56ca5fc20bcc08b30c496e20d920635b",
+  "base_tests": 146,
+  "after_tests": 187,
+  "dropped_tests": [],
+  "native_guard": 18,
+  "rust_files_changed": 0,
+  "rust_clippy_added": 0,
+  "shell_syntax": "pass"
+}

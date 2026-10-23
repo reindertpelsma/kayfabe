@@ -1,0 +1,66 @@
+[
+  {
+    "mutant": "abort_on_missing_sample",
+    "distinct_killers": 14,
+    "cases": [
+      "test_init_query_samples.MissingSamples.test_cli_inner_timeout_after_handshake_cannot_publish_its_output",
+      "test_init_query_samples.MissingSamples.test_cli_inner_timeout_is_missing_initial_sample_not_state",
+      "test_init_query_samples.MissingSamples.test_cli_outer_timeout_then_actual_handshake_and_code0",
+      "test_init_query_samples.MissingSamples.test_code0_after_a_missing_first_sample_is_not_a_handshake",
+      "test_init_query_samples.MissingSamples.test_code43_after_a_missing_first_sample_is_not_a_handshake",
+      "test_init_query_samples.MissingSamples.test_first_timeout_waits_for_an_actual_disabled_sample",
+      "test_init_query_samples.MissingSamples.test_missing_samples_after_handshake_never_invent_code0",
+      "test_init_query_samples.MissingSamples.test_only_timeouts_exhaust_attempts_without_forging_readiness",
+      "test_init_query_samples.MissingSamples.test_owner_change_during_timeout_is_refused_before_pause",
+      "test_init_query_samples.MissingSamples.test_partial_code0_from_timeout_cannot_supply_enable_evidence",
+      "test_init_query_samples.MissingSamples.test_partial_disabled_output_from_timeout_cannot_supply_handshake",
+      "test_init_query_samples.MissingSamples.test_reused_pid_during_timeout_is_refused_before_pause",
+      "test_init_query_samples.MissingSamples.test_timeout_between_handshake_and_code0_keeps_same_owner_proof",
+      "test_init_query_samples.MissingSamples.test_timeout_does_not_reset_an_existing_handshake"
+    ]
+  },
+  {
+    "mutant": "attempt_index_replaces_handshake",
+    "distinct_killers": 6,
+    "cases": [
+      "test_init_query_samples.MissingSamples.test_cli_inner_timeout_is_missing_initial_sample_not_state",
+      "test_init_query_samples.MissingSamples.test_cli_outer_timeout_then_actual_handshake_and_code0",
+      "test_init_query_samples.MissingSamples.test_code0_after_a_missing_first_sample_is_not_a_handshake",
+      "test_init_query_samples.MissingSamples.test_code43_after_a_missing_first_sample_is_not_a_handshake",
+      "test_init_query_samples.MissingSamples.test_first_timeout_waits_for_an_actual_disabled_sample",
+      "test_init_query_samples.MissingSamples.test_partial_disabled_output_from_timeout_cannot_supply_handshake"
+    ]
+  },
+  {
+    "mutant": "partial_timeout_output_is_evidence",
+    "distinct_killers": 2,
+    "cases": [
+      "test_init_query_samples.MissingSamples.test_partial_code0_from_timeout_cannot_supply_enable_evidence",
+      "test_init_query_samples.MissingSamples.test_partial_disabled_output_from_timeout_cannot_supply_handshake"
+    ]
+  },
+  {
+    "mutant": "skip_failed_query_owner_validation",
+    "distinct_killers": 2,
+    "cases": [
+      "test_init_query_samples.MissingSamples.test_owner_change_during_timeout_is_refused_before_pause",
+      "test_init_query_samples.MissingSamples.test_reused_pid_during_timeout_is_refused_before_pause"
+    ]
+  },
+  {
+    "mutant": "accept_result_after_deadline",
+    "distinct_killers": 2,
+    "cases": [
+      "test_init_query_samples.MissingSamples.test_code0_result_after_total_deadline_is_not_recorded",
+      "test_init_query_samples.MissingSamples.test_disabled_result_after_total_deadline_never_creates_ready"
+    ]
+  },
+  {
+    "mutant": "unknown_command_failure_is_retryable",
+    "distinct_killers": 2,
+    "cases": [
+      "test_init_query_samples.MissingSamples.test_unknown_command_failure_after_handshake_remains_fatal",
+      "test_init_query_samples.MissingSamples.test_unknown_command_failure_before_handshake_remains_fatal"
+    ]
+  }
+]
