@@ -53,6 +53,8 @@ jobs:
           npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
           python3 -m pip install black==25.1.0
           python3 -m black --check --config ci/vast-broker/pyproject.toml ci/vast-broker
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
           node --test ci/vast-broker/test
       - uses: dtolnay/rust-toolchain@master
         with:
