@@ -1,0 +1,188 @@
+{
+  "classification": "MEASURED",
+  "evidence": "costs-4622.json",
+  "run": 4622,
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "rows": [
+    {
+      "workload": "catia-07",
+      "covered_seconds": 185.5886013507843,
+      "bar0_writes": 3597102,
+      "interrupt_tree_writes": 3326654,
+      "interrupt_tree_write_fraction_lower_bound": 0.9248150316560386,
+      "usermode_doorbell_writes": 216256,
+      "usermode_doorbells_per_s": 1165.2439774102866,
+      "bar0_writes_per_s": 19382.12785601554,
+      "counters": {
+        "va": {
+          "walks": 52746,
+          "walk_sum_ms": 24499,
+          "host_calls": 103214,
+          "invals": 629
+        },
+        "acts": {
+          "irq_raised": 786826,
+          "irq_writes": 3326655
+        },
+        "workers": {
+          "busy_ms": 74230.90000000001,
+          "wait_ms": 297032.4999999999,
+          "served": 6881733
+        }
+      },
+      "top_offsets": [
+        {
+          "offset": "0xb81210",
+          "name": "CPU_INTR_LEAF_EN_SET",
+          "writes": 508790
+        },
+        {
+          "offset": "0xb81410",
+          "name": "CPU_INTR_LEAF_EN_CLEAR",
+          "writes": 470487
+        },
+        {
+          "offset": "0xb81608",
+          "name": "CPU_INTR_TOP_EN_SET",
+          "writes": 469905
+        },
+        {
+          "offset": "0xb81208",
+          "name": "CPU_INTR_LEAF_EN_SET",
+          "writes": 469905
+        },
+        {
+          "offset": "0xb81408",
+          "name": "CPU_INTR_LEAF_EN_CLEAR",
+          "writes": 469903
+        },
+        {
+          "offset": "0xb81610",
+          "name": "CPU_INTR_TOP_EN_CLEAR",
+          "writes": 469903
+        },
+        {
+          "offset": "0xb81000",
+          "name": "CPU_INTR_LEAF(w1c)",
+          "writes": 459388
+        },
+        {
+          "offset": "0xbb0090",
+          "name": "USERMODE_DOORBELL",
+          "writes": 216256
+        },
+        {
+          "offset": "0x690000",
+          "name": "other",
+          "writes": 28502
+        },
+        {
+          "offset": "0x611800",
+          "name": "other",
+          "writes": 11517
+        },
+        {
+          "offset": "0xb81010",
+          "name": "CPU_INTR_LEAF(w1c)",
+          "writes": 8373
+        },
+        {
+          "offset": "0x6b0000",
+          "name": "other",
+          "writes": 7036
+        }
+      ]
+    },
+    {
+      "workload": "creo-04",
+      "covered_seconds": 305.9555265903473,
+      "bar0_writes": 6026764,
+      "interrupt_tree_writes": 5473610,
+      "interrupt_tree_write_fraction_lower_bound": 0.9082170796799078,
+      "usermode_doorbell_writes": 470521,
+      "usermode_doorbells_per_s": 1537.8738382130753,
+      "bar0_writes_per_s": 19698.170081004646,
+      "counters": {
+        "va": {
+          "walks": 94911,
+          "walk_sum_ms": 75268,
+          "host_calls": 194569,
+          "invals": 507
+        },
+        "acts": {
+          "irq_raised": 1208517,
+          "irq_writes": 5473602
+        },
+        "workers": {
+          "busy_ms": 73670.89999999994,
+          "wait_ms": 538502.8999999999,
+          "served": 15925699
+        }
+      },
+      "top_offsets": [
+        {
+          "offset": "0xb81210",
+          "name": "CPU_INTR_LEAF_EN_SET",
+          "writes": 831218
+        },
+        {
+          "offset": "0xb81000",
+          "name": "CPU_INTR_LEAF(w1c)",
+          "writes": 779691
+        },
+        {
+          "offset": "0xb81410",
+          "name": "CPU_INTR_LEAF_EN_CLEAR",
+          "writes": 769972
+        },
+        {
+          "offset": "0xb81608",
+          "name": "CPU_INTR_TOP_EN_SET",
+          "writes": 769838
+        },
+        {
+          "offset": "0xb81208",
+          "name": "CPU_INTR_LEAF_EN_SET",
+          "writes": 769837
+        },
+        {
+          "offset": "0xb81408",
+          "name": "CPU_INTR_LEAF_EN_CLEAR",
+          "writes": 769835
+        },
+        {
+          "offset": "0xb81610",
+          "name": "CPU_INTR_TOP_EN_CLEAR",
+          "writes": 769835
+        },
+        {
+          "offset": "0xbb0090",
+          "name": "USERMODE_DOORBELL",
+          "writes": 470521
+        },
+        {
+          "offset": "0x690000",
+          "name": "other",
+          "writes": 46514
+        },
+        {
+          "offset": "0x611800",
+          "name": "other",
+          "writes": 17395
+        },
+        {
+          "offset": "0xb81010",
+          "name": "CPU_INTR_LEAF(w1c)",
+          "writes": 13384
+        },
+        {
+          "offset": "0x6b0000",
+          "name": "other",
+          "writes": 11479
+        }
+      ]
+    }
+  ],
+  "method": "Same interior5s snapshots as submit histogram windows; cumulative counters subtracted. All-offset total exported; only top40 offset rows exported per snapshot. Offset breakdown includes only offsets present at every selected endpoint, so IRQ fraction is a lower bound.",
+  "limits": "Worker busy and VA walk sums are elapsed and may overlap. GPU/walk timing averages rounded and not summed into frame critical path. Interrupt tree writes are guest writes, not proof that every NPF exit is one of those writes."
+}

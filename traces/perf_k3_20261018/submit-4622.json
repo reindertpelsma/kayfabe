@@ -1,0 +1,750 @@
+{
+  "classification": "MEASURED",
+  "evidence": "submit-4622.json",
+  "run": 4622,
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "profile_only": true,
+  "rows": [
+    {
+      "workload": "catia-07",
+      "path": "translated",
+      "calls": 333889,
+      "paired": 36699,
+      "unpaired": 297190,
+      "failed": 0,
+      "discarded": 0,
+      "histogram_samples": 36699,
+      "paired_fraction": 0.1099137737391768,
+      "covered_seconds": 185.5886013507843,
+      "subtest_active_seconds": 216.0,
+      "boundary_exclusion_seconds": [
+        [
+          "01_FourICDCarsWhite",
+          2.1335580348968506,
+          0.6344144344329834
+        ],
+        [
+          "02_MultiJetEngines",
+          4.402056694030762,
+          3.5431506633758545
+        ],
+        [
+          "03_ThreeLoftJetsDarkMirror",
+          1.4630870819091797,
+          2.4566397666931152
+        ],
+        [
+          "04_ThreeLoftJetsWhite",
+          2.5860092639923096,
+          2.329665422439575
+        ],
+        [
+          "05_ConceptCars",
+          2.693150758743286,
+          3.2567882537841797
+        ],
+        [
+          "06_LoftJets",
+          1.7740554809570312,
+          3.1388227939605713
+        ]
+      ],
+      "p50_upper_us": 131.071,
+      "p99_upper_us": 3145.727,
+      "highest_occupied_bucket_upper_us": 117440.511,
+      "mean_us_rounded_sum": 473.50881495408595,
+      "histogram_count_minus_paired": 0,
+      "global_coalesced_delta_shared_across_paths": 46309,
+      "bins": {
+        "31": 1,
+        "33": 3,
+        "36": 1,
+        "37": 1,
+        "40": 4,
+        "41": 4,
+        "42": 4,
+        "43": 5,
+        "44": 11,
+        "45": 18,
+        "46": 21,
+        "47": 12,
+        "48": 39,
+        "49": 83,
+        "50": 79,
+        "51": 161,
+        "52": 1567,
+        "53": 2533,
+        "54": 1771,
+        "55": 846,
+        "56": 630,
+        "57": 162,
+        "58": 98,
+        "59": 48,
+        "60": 108,
+        "61": 323,
+        "62": 2710,
+        "63": 3460,
+        "64": 1996,
+        "65": 722,
+        "66": 600,
+        "67": 566,
+        "68": 891,
+        "69": 645,
+        "70": 533,
+        "71": 440,
+        "72": 1060,
+        "73": 1068,
+        "74": 896,
+        "75": 886,
+        "76": 1858,
+        "77": 1563,
+        "78": 2284,
+        "79": 1615,
+        "80": 1770,
+        "81": 1231,
+        "82": 535,
+        "83": 249,
+        "84": 184,
+        "85": 71,
+        "86": 61,
+        "87": 39,
+        "88": 35,
+        "89": 40,
+        "90": 47,
+        "91": 24,
+        "92": 11,
+        "94": 16,
+        "98": 8,
+        "100": 4,
+        "103": 3,
+        "104": 2,
+        "26": 1,
+        "29": 1,
+        "39": 1,
+        "93": 33,
+        "106": 1,
+        "101": 3,
+        "95": 2,
+        "96": 1
+      }
+    },
+    {
+      "workload": "catia-07",
+      "path": "user_relay",
+      "calls": 5985789,
+      "paired": 133250,
+      "unpaired": 5852539,
+      "failed": 0,
+      "discarded": 0,
+      "histogram_samples": 133250,
+      "paired_fraction": 0.02226105865074763,
+      "covered_seconds": 185.5886013507843,
+      "subtest_active_seconds": 216.0,
+      "boundary_exclusion_seconds": [
+        [
+          "01_FourICDCarsWhite",
+          2.1335580348968506,
+          0.6344144344329834
+        ],
+        [
+          "02_MultiJetEngines",
+          4.402056694030762,
+          3.5431506633758545
+        ],
+        [
+          "03_ThreeLoftJetsDarkMirror",
+          1.4630870819091797,
+          2.4566397666931152
+        ],
+        [
+          "04_ThreeLoftJetsWhite",
+          2.5860092639923096,
+          2.329665422439575
+        ],
+        [
+          "05_ConceptCars",
+          2.693150758743286,
+          3.2567882537841797
+        ],
+        [
+          "06_LoftJets",
+          1.7740554809570312,
+          3.1388227939605713
+        ]
+      ],
+      "p50_upper_us": 3.071,
+      "p99_upper_us": 1572.863,
+      "highest_occupied_bucket_upper_us": 234881.023,
+      "mean_us_rounded_sum": 84.4015009380863,
+      "histogram_count_minus_paired": 0,
+      "global_coalesced_delta_shared_across_paths": 46309,
+      "bins": {
+        "22": 3,
+        "23": 101,
+        "24": 478,
+        "25": 1105,
+        "26": 885,
+        "27": 450,
+        "28": 1338,
+        "29": 1807,
+        "30": 1267,
+        "31": 1290,
+        "32": 3011,
+        "33": 3956,
+        "34": 2979,
+        "35": 3547,
+        "36": 5811,
+        "37": 5664,
+        "38": 5069,
+        "39": 5780,
+        "40": 8237,
+        "41": 4657,
+        "42": 3150,
+        "43": 2268,
+        "44": 3161,
+        "45": 2288,
+        "46": 1993,
+        "47": 1601,
+        "48": 2295,
+        "49": 2284,
+        "50": 3481,
+        "51": 4748,
+        "52": 12365,
+        "53": 11385,
+        "54": 6699,
+        "55": 3588,
+        "56": 2927,
+        "57": 1249,
+        "58": 684,
+        "59": 437,
+        "60": 440,
+        "61": 261,
+        "62": 210,
+        "63": 184,
+        "64": 337,
+        "65": 297,
+        "66": 250,
+        "67": 217,
+        "68": 415,
+        "69": 322,
+        "70": 295,
+        "71": 243,
+        "72": 392,
+        "73": 313,
+        "74": 253,
+        "75": 269,
+        "76": 744,
+        "77": 580,
+        "78": 486,
+        "79": 392,
+        "80": 691,
+        "81": 491,
+        "82": 311,
+        "83": 161,
+        "84": 160,
+        "85": 76,
+        "86": 65,
+        "87": 47,
+        "88": 79,
+        "89": 37,
+        "90": 61,
+        "91": 21,
+        "92": 20,
+        "93": 17,
+        "94": 6,
+        "96": 2,
+        "97": 10,
+        "98": 13,
+        "99": 4,
+        "100": 23,
+        "101": 2,
+        "102": 3,
+        "103": 2,
+        "104": 5,
+        "110": 1,
+        "105": 1,
+        "106": 1,
+        "109": 1,
+        "108": 1
+      }
+    },
+    {
+      "workload": "catia-07",
+      "path": "passthrough",
+      "calls": 0,
+      "paired": 0,
+      "unpaired": 0,
+      "failed": 0,
+      "discarded": 0,
+      "histogram_samples": 0,
+      "paired_fraction": null,
+      "covered_seconds": 185.5886013507843,
+      "subtest_active_seconds": 216.0,
+      "boundary_exclusion_seconds": [
+        [
+          "01_FourICDCarsWhite",
+          2.1335580348968506,
+          0.6344144344329834
+        ],
+        [
+          "02_MultiJetEngines",
+          4.402056694030762,
+          3.5431506633758545
+        ],
+        [
+          "03_ThreeLoftJetsDarkMirror",
+          1.4630870819091797,
+          2.4566397666931152
+        ],
+        [
+          "04_ThreeLoftJetsWhite",
+          2.5860092639923096,
+          2.329665422439575
+        ],
+        [
+          "05_ConceptCars",
+          2.693150758743286,
+          3.2567882537841797
+        ],
+        [
+          "06_LoftJets",
+          1.7740554809570312,
+          3.1388227939605713
+        ]
+      ],
+      "p50_upper_us": null,
+      "p99_upper_us": null,
+      "highest_occupied_bucket_upper_us": null,
+      "mean_us_rounded_sum": null,
+      "histogram_count_minus_paired": 0,
+      "global_coalesced_delta_shared_across_paths": 46309,
+      "bins": {}
+    },
+    {
+      "workload": "creo-04",
+      "path": "translated",
+      "calls": 239165,
+      "paired": 54264,
+      "unpaired": 184901,
+      "failed": 0,
+      "discarded": 0,
+      "histogram_samples": 54264,
+      "paired_fraction": 0.22688938598875252,
+      "covered_seconds": 305.9555265903473,
+      "subtest_active_seconds": 372.0,
+      "boundary_exclusion_seconds": [
+        [
+          "01_ScorpionShadedReflections",
+          2.061711311340332,
+          0.7399828433990479
+        ],
+        [
+          "02_SubmarineShadedReflections",
+          4.275415897369385,
+          4.669150352478027
+        ],
+        [
+          "03_WorldCarShadedReflections",
+          0.33741044998168945,
+          4.6324591636657715
+        ],
+        [
+          "04_WorldCarShaded",
+          0.3740198612213135,
+          3.567099094390869
+        ],
+        [
+          "05_ScorpionShaded",
+          1.474985122680664,
+          1.4598257541656494
+        ],
+        [
+          "06_SubmarineShaded",
+          3.584787130355835,
+          3.3896610736846924
+        ],
+        [
+          "07_WorldCarShadedEdges",
+          1.6449615955352783,
+          3.2676453590393066
+        ],
+        [
+          "08_ScorpionShadedEdges",
+          1.7810916900634766,
+          1.1145312786102295
+        ],
+        [
+          "09_SubmarineShadedHQEdges",
+          3.8909378051757812,
+          4.07051944732666
+        ],
+        [
+          "10_WorldCarHiddenLines",
+          0.9525415897369385,
+          1.012575626373291
+        ],
+        [
+          "11_ScorpionHiddenLines",
+          4.000166177749634,
+          1.9041674137115479
+        ],
+        [
+          "12_SubmarineNoHidden",
+          3.120241641998291,
+          2.850269079208374
+        ],
+        [
+          "13_ScorpionNoHidden",
+          2.1507508754730225,
+          3.7175657749176025
+        ]
+      ],
+      "p50_upper_us": 81.919,
+      "p99_upper_us": 10485.759,
+      "highest_occupied_bucket_upper_us": 83886.079,
+      "mean_us_rounded_sum": 746.0876455845502,
+      "histogram_count_minus_paired": 0,
+      "global_coalesced_delta_shared_across_paths": 99888,
+      "bins": {
+        "29": 1,
+        "31": 1,
+        "33": 2,
+        "34": 1,
+        "36": 7,
+        "37": 3,
+        "39": 2,
+        "40": 1,
+        "41": 11,
+        "42": 12,
+        "43": 4,
+        "44": 20,
+        "45": 26,
+        "46": 21,
+        "47": 20,
+        "48": 62,
+        "49": 76,
+        "50": 86,
+        "51": 215,
+        "52": 2278,
+        "53": 3640,
+        "54": 3052,
+        "55": 1846,
+        "56": 1428,
+        "57": 455,
+        "58": 217,
+        "59": 152,
+        "60": 256,
+        "61": 781,
+        "62": 4765,
+        "63": 5844,
+        "64": 3003,
+        "65": 541,
+        "66": 293,
+        "67": 275,
+        "68": 697,
+        "69": 837,
+        "70": 869,
+        "71": 945,
+        "72": 2133,
+        "73": 1629,
+        "74": 1156,
+        "75": 872,
+        "76": 1214,
+        "77": 1187,
+        "78": 958,
+        "79": 1008,
+        "80": 2183,
+        "81": 1678,
+        "82": 1542,
+        "83": 1168,
+        "84": 1687,
+        "85": 799,
+        "86": 272,
+        "87": 154,
+        "88": 349,
+        "89": 437,
+        "90": 308,
+        "91": 159,
+        "92": 161,
+        "93": 130,
+        "94": 197,
+        "95": 94,
+        "96": 21,
+        "97": 4,
+        "98": 7,
+        "99": 1,
+        "100": 1,
+        "101": 1,
+        "104": 1,
+        "28": 1,
+        "30": 1,
+        "32": 2,
+        "38": 4
+      }
+    },
+    {
+      "workload": "creo-04",
+      "path": "user_relay",
+      "calls": 14762800,
+      "paired": 316364,
+      "unpaired": 14446436,
+      "failed": 0,
+      "discarded": 0,
+      "histogram_samples": 316364,
+      "paired_fraction": 0.021429810063131657,
+      "covered_seconds": 305.9555265903473,
+      "subtest_active_seconds": 372.0,
+      "boundary_exclusion_seconds": [
+        [
+          "01_ScorpionShadedReflections",
+          2.061711311340332,
+          0.7399828433990479
+        ],
+        [
+          "02_SubmarineShadedReflections",
+          4.275415897369385,
+          4.669150352478027
+        ],
+        [
+          "03_WorldCarShadedReflections",
+          0.33741044998168945,
+          4.6324591636657715
+        ],
+        [
+          "04_WorldCarShaded",
+          0.3740198612213135,
+          3.567099094390869
+        ],
+        [
+          "05_ScorpionShaded",
+          1.474985122680664,
+          1.4598257541656494
+        ],
+        [
+          "06_SubmarineShaded",
+          3.584787130355835,
+          3.3896610736846924
+        ],
+        [
+          "07_WorldCarShadedEdges",
+          1.6449615955352783,
+          3.2676453590393066
+        ],
+        [
+          "08_ScorpionShadedEdges",
+          1.7810916900634766,
+          1.1145312786102295
+        ],
+        [
+          "09_SubmarineShadedHQEdges",
+          3.8909378051757812,
+          4.07051944732666
+        ],
+        [
+          "10_WorldCarHiddenLines",
+          0.9525415897369385,
+          1.012575626373291
+        ],
+        [
+          "11_ScorpionHiddenLines",
+          4.000166177749634,
+          1.9041674137115479
+        ],
+        [
+          "12_SubmarineNoHidden",
+          3.120241641998291,
+          2.850269079208374
+        ],
+        [
+          "13_ScorpionNoHidden",
+          2.1507508754730225,
+          3.7175657749176025
+        ]
+      ],
+      "p50_upper_us": 10.239,
+      "p99_upper_us": 1835.007,
+      "highest_occupied_bucket_upper_us": 50331.647,
+      "mean_us_rounded_sum": 67.05061258550278,
+      "histogram_count_minus_paired": 0,
+      "global_coalesced_delta_shared_across_paths": 99888,
+      "bins": {
+        "22": 6,
+        "23": 173,
+        "24": 708,
+        "25": 1246,
+        "26": 990,
+        "27": 498,
+        "28": 1451,
+        "29": 1996,
+        "30": 1537,
+        "31": 1460,
+        "32": 3515,
+        "33": 4744,
+        "34": 3625,
+        "35": 4302,
+        "36": 7019,
+        "37": 6823,
+        "38": 6133,
+        "39": 6651,
+        "40": 9996,
+        "41": 5877,
+        "42": 3869,
+        "43": 2603,
+        "44": 3448,
+        "45": 2485,
+        "46": 2284,
+        "47": 2099,
+        "48": 3161,
+        "49": 4152,
+        "50": 9983,
+        "51": 26129,
+        "52": 81337,
+        "53": 46856,
+        "54": 20005,
+        "55": 9451,
+        "56": 7594,
+        "57": 2979,
+        "58": 1624,
+        "59": 922,
+        "60": 845,
+        "61": 345,
+        "62": 245,
+        "63": 197,
+        "64": 324,
+        "65": 311,
+        "66": 281,
+        "67": 316,
+        "68": 741,
+        "69": 801,
+        "70": 810,
+        "71": 607,
+        "72": 911,
+        "73": 615,
+        "74": 591,
+        "75": 489,
+        "76": 705,
+        "77": 648,
+        "78": 617,
+        "79": 475,
+        "80": 1199,
+        "81": 1011,
+        "82": 858,
+        "83": 604,
+        "84": 617,
+        "85": 323,
+        "86": 170,
+        "87": 109,
+        "88": 217,
+        "89": 196,
+        "90": 151,
+        "91": 106,
+        "92": 80,
+        "93": 71,
+        "94": 30,
+        "96": 2,
+        "98": 1,
+        "99": 6,
+        "101": 1,
+        "95": 7
+      }
+    },
+    {
+      "workload": "creo-04",
+      "path": "passthrough",
+      "calls": 0,
+      "paired": 0,
+      "unpaired": 0,
+      "failed": 0,
+      "discarded": 0,
+      "histogram_samples": 0,
+      "paired_fraction": null,
+      "covered_seconds": 305.9555265903473,
+      "subtest_active_seconds": 372.0,
+      "boundary_exclusion_seconds": [
+        [
+          "01_ScorpionShadedReflections",
+          2.061711311340332,
+          0.7399828433990479
+        ],
+        [
+          "02_SubmarineShadedReflections",
+          4.275415897369385,
+          4.669150352478027
+        ],
+        [
+          "03_WorldCarShadedReflections",
+          0.33741044998168945,
+          4.6324591636657715
+        ],
+        [
+          "04_WorldCarShaded",
+          0.3740198612213135,
+          3.567099094390869
+        ],
+        [
+          "05_ScorpionShaded",
+          1.474985122680664,
+          1.4598257541656494
+        ],
+        [
+          "06_SubmarineShaded",
+          3.584787130355835,
+          3.3896610736846924
+        ],
+        [
+          "07_WorldCarShadedEdges",
+          1.6449615955352783,
+          3.2676453590393066
+        ],
+        [
+          "08_ScorpionShadedEdges",
+          1.7810916900634766,
+          1.1145312786102295
+        ],
+        [
+          "09_SubmarineShadedHQEdges",
+          3.8909378051757812,
+          4.07051944732666
+        ],
+        [
+          "10_WorldCarHiddenLines",
+          0.9525415897369385,
+          1.012575626373291
+        ],
+        [
+          "11_ScorpionHiddenLines",
+          4.000166177749634,
+          1.9041674137115479
+        ],
+        [
+          "12_SubmarineNoHidden",
+          3.120241641998291,
+          2.850269079208374
+        ],
+        [
+          "13_ScorpionNoHidden",
+          2.1507508754730225,
+          3.7175657749176025
+        ]
+      ],
+      "p50_upper_us": null,
+      "p99_upper_us": null,
+      "highest_occupied_bucket_upper_us": null,
+      "mean_us_rounded_sum": null,
+      "histogram_count_minus_paired": 0,
+      "global_coalesced_delta_shared_across_paths": 99888,
+      "bins": {}
+    }
+  ],
+  "snapshots": 167,
+  "method": "First/last complete profiler snapshots fully inside each completed subtest; subtract counters and buckets, then sum intervals. Never subtract percentiles. Quantiles and interval maximum estimates are bucket upper bounds; exact cumulative maximum cannot be subtracted.",
+  "limits": "First pending guest doorbell to next native doorbell completion on same token; not one-to-one pushbuffer causality or worker scheduling alone. Gates, empty kicks and guest-produced work can intervene. Unpaired fanout/continuations never assigned zero. Completion-window attribution can include a kick before the window. Background snapshots race active calls; bucket/count discrepancies recorded. No GPU execution/completion time. Initial KVM entry excluded.",
+  "raw_host_evidence": "round-6d/r1/windows-20261022/boundary-kayfabe-4622/qemu.log",
+  "candidate_base": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "whole_session_final_cumulative_lines": [
+    "kf3: PROF user_submit path=translated calls=663062 paired=118870 unpaired=544192 failed=0 discarded=0 coalesced_total=178283 n=118870 sum_ms=63699.1 avg_us=535.9 p50_us=81.9 p90_us=1572.9 p99_us=7340.0 max_us=112104.8 bins=26:1,28:1,29:3,30:1,31:2,32:2,33:5,34:2,35:1,36:9,37:6,38:4,39:3,40:10,41:20,42:19,43:11,44:41,45:55,46:51,47:41,48:123,49:193,50:200,51:562,52:6160,53:9394,54:6918,55:3783,56:2774,57:841,58:430,59:281,60:545,61:1553,62:11487,63:13792,64:7108,65:1635,66:1109,67:1016,68:1958,69:1920,70:1839,71:1804,72:3944,73:3349,74:2661,75:2112,76:3577,77:3080,78:3449,79:2758,80:4108,81:3009,82:2119,83:1449,84:1906,85:884,86:337,87:200,88:400,89:489,90:371,91:190,92:179,93:164,94:213,95:96,96:22,97:5,98:49,99:4,100:14,101:4,102:3,103:3,104:8,106:1",
+    "kf3: PROF user_submit path=user_relay calls=25341722 paired=585228 unpaired=24756494 failed=0 discarded=0 coalesced_total=178283 n=585228 sum_ms=52157.1 avg_us=89.1 p50_us=10.2 p90_us=16.4 p99_us=1572.9 max_us=11773082.7 bins=22:13,23:449,24:1637,25:3108,26:2582,27:1273,28:3773,29:5208,30:3805,31:3813,32:8942,33:11819,34:9076,35:10785,36:17733,37:16953,38:15171,39:17119,40:24495,41:14374,42:9412,43:6467,44:8829,45:6364,46:5579,47:4812,48:7234,49:9803,50:19328,51:41663,52:118914,53:71487,54:32938,55:16100,56:13320,57:5582,58:3149,59:1898,60:1770,61:803,62:563,63:477,64:840,65:758,66:670,67:668,68:1466,69:1400,70:1413,71:1066,72:1554,73:1125,74:1033,75:913,76:1669,77:1353,78:1187,79:948,80:1976,81:1551,82:1211,83:792,84:794,85:428,86:245,87:163,88:324,89:249,90:238,91:135,92:107,93:88,94:45,95:8,96:17,97:20,98:33,99:20,100:48,101:7,102:17,103:13,104:9,105:1,106:1,108:1,109:1,110:1,117:1,133:1",
+    "kf3: PROF user_submit path=passthrough calls=0 paired=0 unpaired=0 failed=0 discarded=0 coalesced_total=178283 n=0 sum_ms=0.0 avg_us=0.0 p50_us=0.0 p90_us=0.0 p99_us=0.0 max_us=0.0 bins="
+  ],
+  "whole_session_scope": "Includes boot, loading and idle periods; session max is exact to displayed0.1us precision. Never used as the workload maximum."
+}

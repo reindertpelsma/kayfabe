@@ -1,6 +1,6 @@
 # Q4 K3 perf investigation
 
-STATUS: IN PROGRESS, 2026-10-23. Candidate correctness remains PARTIAL/HOLD.
+STATUS: K3 CORE ANSWERED WITH LIMITS, 2026-10-23. Candidate correctness remains PARTIAL/HOLD.
 
 MEASURED runs4620/4621: paired diagnostic CATIA/Creo arms each completed once on
 candidate01a171e63 and physical VFIO, with no reset observer failure. See
@@ -28,7 +28,8 @@ MEASURED 2026-10-23, controls/software-controls.json and tests-k3.json:19 focuse
 1097 broader executions passed with4 existing ignores, five mutants killed by
 at least two assertions each, clippy added0. See [test proof](tests-k3.json).
 
-INFERRED plan for run4622: direct histograms and CPU stacks will distinguish
-native submission path costs. Windows Passthrough coverage is not assumed;
-[the Linux positive plan](linux-profile-plan.json) supplies a separate control.
+MEASURED 2026-10-23, run4622 and linux-profile.json: direct histograms and CPU
+stacks are complete; Windows Passthrough was zero and a separate Linux positive
+control exercised one real native Passthrough call. See [analysis](analysis.md)
+for hypothesis outcomes, attribution limits and one proposed optimization.
 [The original falsifiers](plan.json) precede all runs. No optimization is claimed.

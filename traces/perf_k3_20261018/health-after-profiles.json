@@ -1,0 +1,38 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-health.json",
+  "time": "2026-10-23T06:55:01.140046+02:00",
+  "nvidia_smi_before": {
+    "exit": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 580 MiB",
+    "stderr": ""
+  },
+  "cuda_before": 0,
+  "cuda_after": 0,
+  "nvidia_smi_after": {
+    "exit": 0,
+    "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 580 MiB",
+    "stderr": ""
+  },
+  "gdm": {
+    "exit": 0,
+    "stdout": "active",
+    "stderr": ""
+  },
+  "nvidia_bound": true,
+  "automatic_login": {
+    "configured": true,
+    "enabled": true,
+    "user_present": true
+  },
+  "display_before": {
+    "monitor_count": 2,
+    "logical_monitor_count": 2
+  },
+  "gdm_restart_for_display": false,
+  "display_after": {
+    "monitor_count": 2,
+    "logical_monitor_count": 2
+  },
+  "ubuntu_logged_in": true
+}

@@ -1,0 +1,82 @@
+{
+  "classification": "MEASURED",
+  "evidence": "cpu-4622.json",
+  "run": 4622,
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "workload": "creo-04",
+  "window_seconds": 30,
+  "frequency_requested_hz": 99,
+  "samples": 947,
+  "lost_samples": 0,
+  "event": "cpu-clock:u",
+  "sites": [
+    {
+      "self_percent": 7.07,
+      "thread": "kf3-worker0",
+      "symbol": "[.] <kf_linux_raw::mapping_unsafe::VolatileRegion>::load_u32"
+    },
+    {
+      "self_percent": 6.76,
+      "thread": "kf3-worker1",
+      "symbol": "[.] <kf_linux_raw::mapping_unsafe::VolatileRegion>::load_u32"
+    },
+    {
+      "self_percent": 3.8,
+      "thread": "qemu-system-x86",
+      "symbol": "[.] __GI___ioctl"
+    },
+    {
+      "self_percent": 2.96,
+      "thread": "kf3-worker0",
+      "symbol": "[.] kf_qemu::chan::userpump::publish_guarded::<<kf_qemu::chan::userpump::PumpIo as kf_chan::user_turn::Io>::publish_entry::{closure#0}>::{closure#0}::{closure#3}::{closure#0}"
+    },
+    {
+      "self_percent": 2.43,
+      "thread": "kf3-worker0",
+      "symbol": "[.] __memmove_avx512_unaligned_erms"
+    },
+    {
+      "self_percent": 1.16,
+      "thread": "kf3-worker0",
+      "symbol": "[.] <kf_qemu::submitprof::SubmitProfile>::measure::<(), kf_host::RmError, kf_qemu::chan::userpump::publish_guarded<<kf_qemu::chan::userpump::Pump>::publish<<kf_qemu::chan::userpump::Pump>::segment_turn::{closure#2}>::{closure#0}>::{closure#2}>"
+    },
+    {
+      "self_percent": 1.16,
+      "thread": "kf3-worker1",
+      "symbol": "[.] kf_qemu::chan::userpump::publish_guarded::<<kf_qemu::chan::userpump::PumpIo as kf_chan::user_turn::Io>::publish_entry::{closure#0}>::{closure#0}::{closure#3}::{closure#0}"
+    },
+    {
+      "self_percent": 1.06,
+      "thread": "kf3-worker0",
+      "symbol": "[.] <kf_qemu::mem::RamMap>::admit_user_generation::<core::result::Result<(), kf_chan::user_turn::Fail>, kf_qemu::chan::userpump::publish_guarded<<kf_qemu::chan::userpump::PumpIo as kf_chan::user_turn::Io>::publish_entry::{closure#0}>::{closure#0}::{closure#2}::{closure#0}>"
+    },
+    {
+      "self_percent": 1.06,
+      "thread": "kf3-worker1",
+      "symbol": "[.] __memmove_avx512_unaligned_erms"
+    }
+  ],
+  "all_worker_self_percent": 52.8,
+  "all_display_self_percent": 29.87,
+  "limits": "Userspace CPU samples only; exclude kernel CPU and guest execution. One30s window, correlated samples, percentages rounded. No worker call-chain claim: DWARF unwinding yielded no frames for many worker samples although leaf addresses resolved in perf report. Unresolved closed-driver addresses are not published or interpreted.",
+  "host_trace": "round-6d/r1/energy-bisect/4622/cpu-creo-30s.data",
+  "catia_short_window": {
+    "seconds": 5,
+    "samples": 213,
+    "lost_samples": 0,
+    "RowsLog_sites": [
+      {
+        "thread": "kf3-worker1",
+        "symbol": "[.] <kf_qemu::mem::RowsLog>::changed_since",
+        "self_percent": 4.23
+      },
+      {
+        "thread": "kf3-worker0",
+        "symbol": "[.] <kf_qemu::mem::RowsLog>::changed_since",
+        "self_percent": 1.41
+      }
+    ],
+    "RowsLog_self_percent": 5.640000000000001,
+    "scope": "Short exploratory window, not a replicate of the30s Creo capture"
+  }
+}

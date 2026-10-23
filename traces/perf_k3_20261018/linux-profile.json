@@ -1,0 +1,25 @@
+{
+  "classification": "MEASURED",
+  "evidence": "linux-profile.json",
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "suite": "737306ee8d5055fad7441874fc2b7afab3e2bbb4",
+  "run": "K3-linux-positive",
+  "verdict": "PASS",
+  "arm": "--ce-client-guest-ram",
+  "forwarded_doorbells": 1,
+  "stranded_tokens": 0,
+  "passthrough_profile_calls": 1,
+  "profile_coverage": "EXERCISED",
+  "qemu_exit": 0,
+  "client_exit": 0,
+  "serial_sha256": "7f69893f9e1b26454bbe9340e904afd0fd4c089858357b0db34ec99cc1f36abe",
+  "qemu_sha256": "ee62374a6dfbb81b3d6cf15a3050b62d9a8bf6188c66c82c66d48ec0bf9d742f",
+  "xid_delta": 0,
+  "time": "2026-10-23T04:54:17.091447+00:00",
+  "scope": "Functional Passthrough instrument positive control only, n=1 native call; no latency-distribution inference",
+  "final_profiler_lines": [
+    "kf3: PROF user_submit path=translated calls=3 paired=3 unpaired=0 failed=0 discarded=0 coalesced_total=0 n=3 sum_ms=0.7 avg_us=218.1 p50_us=41.0 p90_us=655.4 p99_us=655.4 max_us=579.5 bins=60:2,76:1",
+    "kf3: PROF user_submit path=user_relay calls=0 paired=0 unpaired=0 failed=0 discarded=0 coalesced_total=0 n=0 sum_ms=0.0 avg_us=0.0 p50_us=0.0 p90_us=0.0 p99_us=0.0 max_us=0.0 bins=",
+    "kf3: PROF user_submit path=passthrough calls=1 paired=1 unpaired=0 failed=0 discarded=0 coalesced_total=0 n=1 sum_ms=0.0 avg_us=0.7 p50_us=0.8 p90_us=0.8 p99_us=0.8 max_us=0.7 bins=37:1"
+  ]
+}

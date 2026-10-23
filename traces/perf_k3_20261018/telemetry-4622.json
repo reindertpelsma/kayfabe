@@ -1,0 +1,317 @@
+{
+  "classification": "MEASURED",
+  "evidence": "telemetry-4622.json",
+  "run": 4622,
+  "profile_only": true,
+  "rows": [
+    {
+      "workload": "catia-07",
+      "active_seconds": 216.0,
+      "gpu_samples": 1079,
+      "metrics": {
+        "gpu_busy_pct": {
+          "mean": 74.0259499536608,
+          "min": 1.0,
+          "max": 100.0
+        },
+        "memory_busy_pct": {
+          "mean": 20.599629286376274,
+          "min": 1.0,
+          "max": 100.0
+        },
+        "graphics_clock_MHz": {
+          "mean": 2841.4087117701574,
+          "min": 2490.0,
+          "max": 2865.0
+        },
+        "memory_clock_MHz": {
+          "mean": 10251.0,
+          "min": 10251.0,
+          "max": 10251.0
+        },
+        "power_W": {
+          "mean": 106.35598702502317,
+          "min": 40.1,
+          "max": 159.55
+        },
+        "memory_used_MiB": {
+          "mean": 10079.475440222428,
+          "min": 10064.0,
+          "max": 10103.0
+        }
+      },
+      "top_threads": [
+        {
+          "tid": 2406740,
+          "comm": "qemu-system-x86",
+          "samples": 216,
+          "cpu_pct": 39.65324074074074,
+          "guest_pct": 24.400277777777777,
+          "system_pct": 11.646481481481482,
+          "usr_pct": 3.611111111111111
+        },
+        {
+          "tid": 2406770,
+          "comm": "kf3-worker0",
+          "samples": 216,
+          "cpu_pct": 20.800231481481482,
+          "guest_pct": 0.0,
+          "system_pct": 2.9768055555555555,
+          "usr_pct": 17.823425925925925
+        },
+        {
+          "tid": 2406771,
+          "comm": "kf3-worker1",
+          "samples": 216,
+          "cpu_pct": 19.971805555555555,
+          "guest_pct": 0.0,
+          "system_pct": 2.805509259259259,
+          "usr_pct": 17.166296296296295
+        },
+        {
+          "tid": 2406741,
+          "comm": "qemu-system-x86",
+          "samples": 216,
+          "cpu_pct": 19.129305555555554,
+          "guest_pct": 14.995185185185186,
+          "system_pct": 3.745277777777778,
+          "usr_pct": 0.5184722222222222
+        },
+        {
+          "tid": 2406743,
+          "comm": "qemu-system-x86",
+          "samples": 216,
+          "cpu_pct": 18.754490740740742,
+          "guest_pct": 15.972083333333334,
+          "system_pct": 2.4953703703703702,
+          "usr_pct": 0.4351851851851852
+        },
+        {
+          "tid": 2406738,
+          "comm": "qemu-system-x86",
+          "samples": 216,
+          "cpu_pct": 14.921203703703704,
+          "guest_pct": 12.490694444444445,
+          "system_pct": 2.3888425925925927,
+          "usr_pct": 0.2916666666666667
+        },
+        {
+          "tid": 2406772,
+          "comm": "kf3-display",
+          "samples": 216,
+          "cpu_pct": 14.078101851851851,
+          "guest_pct": 0.0,
+          "system_pct": 0.09259259259259259,
+          "usr_pct": 13.98550925925926
+        },
+        {
+          "tid": 2406739,
+          "comm": "qemu-system-x86",
+          "samples": 216,
+          "cpu_pct": 13.360972222222221,
+          "guest_pct": 11.106435185185186,
+          "system_pct": 1.9675462962962964,
+          "usr_pct": 0.4073611111111111
+        },
+        {
+          "tid": 2406742,
+          "comm": "qemu-system-x86",
+          "samples": 216,
+          "cpu_pct": 11.620046296296296,
+          "guest_pct": 9.272916666666667,
+          "system_pct": 2.0925,
+          "usr_pct": 0.4166666666666667
+        },
+        {
+          "tid": 2406774,
+          "comm": "kf3-vamgr",
+          "samples": 216,
+          "cpu_pct": 8.42587962962963,
+          "guest_pct": 0.0,
+          "system_pct": 7.189768518518519,
+          "usr_pct": 1.2361111111111112
+        }
+      ],
+      "qemu_total_cpu_pct": 204.80521630236794,
+      "qemu_process_cpu_pct": 204.7977314814815,
+      "qemu_guest_cpu_pct": 99.33458333333334
+    },
+    {
+      "workload": "creo-04",
+      "active_seconds": 372.0,
+      "gpu_samples": 1858,
+      "metrics": {
+        "gpu_busy_pct": {
+          "mean": 59.58342303552207,
+          "min": 2.0,
+          "max": 100.0
+        },
+        "memory_busy_pct": {
+          "mean": 15.979009687836383,
+          "min": 1.0,
+          "max": 54.0
+        },
+        "graphics_clock_MHz": {
+          "mean": 2816.455866523143,
+          "min": 2490.0,
+          "max": 2880.0
+        },
+        "memory_clock_MHz": {
+          "mean": 10251.0,
+          "min": 10251.0,
+          "max": 10251.0
+        },
+        "power_W": {
+          "mean": 83.07006996770721,
+          "min": 38.26,
+          "max": 141.44
+        },
+        "memory_used_MiB": {
+          "mean": 10079.395586652314,
+          "min": 10067.0,
+          "max": 10091.0
+        }
+      },
+      "top_threads": [
+        {
+          "tid": 2406740,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 42.21731182795699,
+          "guest_pct": 26.510510752688173,
+          "system_pct": 11.981075268817204,
+          "usr_pct": 3.7337903225806452
+        },
+        {
+          "tid": 2406741,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 22.74435483870968,
+          "guest_pct": 19.97021505376344,
+          "system_pct": 2.349435483870968,
+          "usr_pct": 0.5241666666666667
+        },
+        {
+          "tid": 2406743,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 20.3627688172043,
+          "guest_pct": 16.193440860215055,
+          "system_pct": 3.846774193548387,
+          "usr_pct": 0.43545698924731185
+        },
+        {
+          "tid": 2406739,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 18.52040322580645,
+          "guest_pct": 16.63064516129032,
+          "system_pct": 1.6424462365591397,
+          "usr_pct": 0.34946236559139787
+        },
+        {
+          "tid": 2406742,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 17.735967741935482,
+          "guest_pct": 13.7575,
+          "system_pct": 3.585994623655914,
+          "usr_pct": 0.4838709677419355
+        },
+        {
+          "tid": 2406738,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 14.521424731182796,
+          "guest_pct": 12.830564516129032,
+          "system_pct": 1.5026881720430108,
+          "usr_pct": 0.32526881720430106
+        },
+        {
+          "tid": 2406744,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 14.10467741935484,
+          "guest_pct": 12.343951612903226,
+          "system_pct": 1.510725806451613,
+          "usr_pct": 0.3548387096774194
+        },
+        {
+          "tid": 2406745,
+          "comm": "qemu-system-x86",
+          "samples": 372,
+          "cpu_pct": 13.120860215053764,
+          "guest_pct": 10.795618279569892,
+          "system_pct": 2.086021505376344,
+          "usr_pct": 0.35481182795698923
+        },
+        {
+          "tid": 2406770,
+          "comm": "kf3-worker0",
+          "samples": 372,
+          "cpu_pct": 13.061317204301075,
+          "guest_pct": 0.0,
+          "system_pct": 2.2338172043010753,
+          "usr_pct": 10.8275
+        },
+        {
+          "tid": 2406771,
+          "comm": "kf3-worker1",
+          "samples": 372,
+          "cpu_pct": 11.166209677419355,
+          "guest_pct": 0.0,
+          "system_pct": 2.0966935483870968,
+          "usr_pct": 9.069516129032259
+        }
+      ],
+      "qemu_total_cpu_pct": 216.44562799584227,
+      "qemu_process_cpu_pct": 216.15158602150538,
+      "qemu_guest_cpu_pct": 129.03244623655914
+    }
+  ],
+  "invalid_GPU_rows": 0,
+  "alignment": "Union of completed subtest Started..Completed UTC intervals; host NVIDIA timestamps Europe/Amsterdam, VFIO guest NVIDIA timestamps UTC. Vendor boundary granularity1s; initial data loading excluded.",
+  "limits": "One boot per arm. GPU utilization poll interval200ms; driver samples are correlated, not independent repeat runs. CPU100% is one logical core. NVML GPU busy includes all physical GPU work, including kayfabe CUDA work.",
+  "CPU_component_additivity": {
+    "assertion": "FAILED; never used for inference or relaxed to a larger tolerance",
+    "nonadditive_active_rows": 479,
+    "examples": [
+      {
+        "time": 1792730482.0,
+        "tid": 2406742,
+        "fields": [
+          0.0,
+          0.0,
+          2.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "time": 1792730482.0,
+        "tid": 2406743,
+        "fields": [
+          0.0,
+          0.0,
+          2.0,
+          0.0,
+          1.0
+        ]
+      },
+      {
+        "time": 1792730483.0,
+        "tid": 2406741,
+        "fields": [
+          0.0,
+          2.0,
+          27.0,
+          0.0,
+          28.0
+        ]
+      }
+    ],
+    "scope": "Use directly reported total CPU and independent process total. Guest/user/system columns are retained individually and are not added to infer host overhead."
+  },
+  "controls": "All19 subtest intervals completed; GPU sample density4..5.1/s; no invalid GPU rows. CPU component additivity failed and is excluded from derived overhead claims.",
+  "candidate_base": "01a171e63a82198eef54c54935c5f9db5ed8e81b"
+}

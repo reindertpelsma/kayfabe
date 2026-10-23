@@ -1,0 +1,16 @@
+{
+  "classification": "INFERRED",
+  "evidence": "master-cursor-plan.json",
+  "time": "2026-10-23T05:00:54.159620+00:00",
+  "stage": "Review follow-up after K3 core",
+  "master": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "candidate_reference": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "hypothesis": "The cursor RGB oracle mismatch predates candidate6d. FALSIFIER BEFORE baseline: the same aligned hover/cross oracle passes tolerance2 on master while failing48/52 on candidate. A different magnitude or image content requires a qualified comparison, not regression clearance.",
+  "method": "Same host/guest parent, CoW overlay, broker binary source identical master vs candidate (git diff broker empty), same already-proven broker6 native input and unmodified RGB oracle. Exact master kf3 binary; production8192MiB store,6vCPU,8GiB RAM and driver580.159.04. No candidate/source branch changes, own branch only.",
+  "harness_pins": {
+    "broker_hook.sh": "35137d4ec1fec61c30cdbfce9998460c0c396b6b046a097e42bb4fb279a6277f",
+    "xcursor.py": "293f6a78c67f6a9e7fc6c5553cbc80d59c9c9ab9da123507070be8ca1e9e6e07"
+  },
+  "safety": "Bounded fastguest lease, quiet flag and recorded uptime, zero new Xid, own process receipts, clean restore. Historical SA02 case wrapper omitted; cursor hook unchanged.",
+  "other_queue": "Dedicated CE no-SET_OBJECT hardware remains dependent on a GREEN F1 repro branch; current branch head acb89830e is EXPECTED RED, not eligible."
+}
