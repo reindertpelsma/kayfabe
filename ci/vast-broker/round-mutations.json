@@ -1140,6 +1140,74 @@
         "round-reaper-continue.test.js",
         "round-reaper.test.js"
       ]
+    },
+    {
+      "name": "V7-unpinned-action",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4",
+          "actions/setup-node@v4"
+        ]
+      ],
+      "tests": [
+        "round-workflow-v7.test.js"
+      ]
+    },
+    {
+      "name": "V7-lone-policy-green",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "            \"$POLICY_RUN\" = 0 && \"${POLICY_CHECK_RESULT:-}\" = success &&\n            \"${POLICY_CHECK_RUN:-}\" = 0 && \"$GPU_RESULT\" = skipped ]]; then",
+          "            \"$POLICY_RUN\" = 0 && \"$GPU_RESULT\" = skipped ]]; then"
+        ]
+      ],
+      "tests": [
+        "round-workflow-v7.test.js",
+        "client.test.js"
+      ]
+    },
+    {
+      "name": "V7-policy-check-action",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "    outputs:\n      run: ${{ steps.policy.outputs.run }}\n    steps:\n      - name: Fail safe to run when file metadata is uncertain\n",
+          "    outputs:\n      run: ${{ steps.policy.outputs.run }}\n    steps:\n      - uses: actions/setup-node@v4\n      - name: Fail safe to run when file metadata is uncertain\n"
+        ]
+      ],
+      "tests": [
+        "round-workflow-v7.test.js"
+      ]
+    },
+    {
+      "name": "V7-dispatch-trigger",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "    types: [opened, synchronize, reopened, ready_for_review]\n",
+          "    types: [opened, synchronize, reopened, ready_for_review]\n  workflow_dispatch:\n"
+        ]
+      ],
+      "tests": [
+        "round-workflow-v7.test.js",
+        "round-workflow-policy.test.js"
+      ]
+    },
+    {
+      "name": "V7-sweep-sha-input",
+      "file": "../../.github/workflows/gpu-vast-sweep.yml",
+      "patches": [
+        [
+          "        default: rotate\n        type: string\n",
+          "        default: rotate\n        type: string\n      tested_sha:\n        required: false\n        type: string\n"
+        ]
+      ],
+      "tests": [
+        "round-workflow-v7.test.js",
+        "v5-workflows.test.js"
+      ]
     }
   ]
 }

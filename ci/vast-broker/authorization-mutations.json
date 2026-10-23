@@ -108,20 +108,6 @@
       ]
     },
     {
-      "name": "YAML-selected-context",
-      "file": "../../.github/workflows/gpu-vast.yml",
-      "patches": [
-        [
-          "github.event.inputs.sha",
-          "github.sha"
-        ]
-      ],
-      "tests": [
-        "round-workflow-policy.test.js"
-      ],
-      "replace_all": true
-    },
-    {
       "name": "YAML-push-branches",
       "file": "../../.github/workflows/gpu-vast.yml",
       "patches": [

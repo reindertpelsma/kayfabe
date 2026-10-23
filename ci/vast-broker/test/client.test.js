@@ -68,6 +68,8 @@ with open(os.environ['STATUS_LOG'],'a') as f:f.write(json.dumps(body)+'\\n')
       PENDING_RESULT: 'success',
       POLICY_RESULT: policyResult,
       POLICY_RUN: policyRun,
+      POLICY_CHECK_RESULT: policyResult,
+      POLICY_CHECK_RUN: policyRun,
       GPU_RESULT: forcedResult ?? (controller.status === 0 ? 'success' : 'failure'),
       BROKER_STATE: fields.state,
       BROKER_VERDICT: fields.verdict,
