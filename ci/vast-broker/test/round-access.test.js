@@ -37,3 +37,11 @@ for (const path of ['.github/workflows/gpu-vast.yml', '.github/workflows/gpu-vas
     assert.doesNotMatch(text, /BOX_ACCESS_ID|BOX_ACCESS_SECRET|KF_ACCESS_SECRET/);
   });
 }
+for (const job of ['pending', 'report'])
+  test('round Access A secret cannot cross the broker job ' + job, async () => {
+    const { checkWorkflows } = await import('../workflow-guard.js');
+    const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+    const changed = text.replace('  '+job+':\n', '  '+job+':\n    env:\n'+
+      '      WRONG_ACCESS: ${{ secrets.VAST_BROKER_ACCESS_SECRET }}\n');
+    assert.ok(checkWorkflows({'gpu-vast.yml':changed}).length > 0);
+  });
