@@ -78,6 +78,22 @@ def retire(row, owned_ids, reason, bad_path, destroy, absent, utc):
     save(bad_path, rows)
 
 
+def can_replace(previous, bad_rows):
+    if (
+        previous.get("ssh_ready_utc")
+        or previous.get("work_started")
+        or not previous.get("destroyed")
+        or not previous.get("absence_verified_utc")
+    ):
+        return False
+    return any(
+        int(r["instance_id"]) == int(previous["id"])
+        and int(r["machine_id"]) == int(previous["machine_id"])
+        and r.get("reason") in {"provider_host_error", "provider_boot_timeout"}
+        for r in bad_rows
+    )
+
+
 def reserve_retry(path):
     state = load(path, {"retries_used": 0})
     used = state.get("retries_used")
