@@ -1,0 +1,74 @@
+{
+  "XID_STOP": {
+    "source_sha256": "a64383661509c79193d0f0b460dfe9e85cc2f8b50e93fdf6f5c27776ebae6473",
+    "rental_path": "/root/prov/XID_STOP",
+    "export_sha256": "3b9aded9305b84f35c092eac0bd2cdb24bef1b282f7d705c04bb960b3c6e0690",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "sweep_bare595.log": {
+    "source_sha256": "3d491fed907672651bc2a6ac4331f9a5c5804ea90681e42261aec67d24dd1e6a",
+    "rental_path": "/root/prov/sweep_bare595.log",
+    "export_sha256": "df9ddcf564a576e7025352513c704dcdf618fa05f8e4d2fbdf104dd01e3016ca",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "sweep_20261020_provision.log": {
+    "source_sha256": "7b7af39d76d1cec13aac3a34dec6b69f7954e85edbf12ec7bc322ad04937927a",
+    "rental_path": "/root/prov/sweep_20261020_provision.log",
+    "export_sha256": "3c39ecfb0d04f9aab971c1e4379dd5dd59309c2eea5ce3b2ed71f86e9ada8a5d",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "capc_native595_missing-page-fault.log": {
+    "source_sha256": "5e7dd8ece77205ac3c4b4ae51c8654405c212a378913a115ada20ad463806311",
+    "rental_path": "/workspace/bench/capc_native595_missing-page-fault.log",
+    "export_sha256": "2348ef911dd731df86c49ccc9e4c9188a1ad177d763788aa2a9695103a1e510b",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "capc_native595_defer-liveness.log": {
+    "source_sha256": "d08d4e8d305136aeb8401f4685935629fe2ce0f0f0f6803a941e684073a8b5fc",
+    "rental_path": "/workspace/bench/capc_native595_defer-liveness.log",
+    "export_sha256": "b8ac3ca8ccdbb34ec6dc2aa833a438801e10277b60d9d1754a4fab5961a2d31f",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "capc_native595_concurrent-fuzz.log": {
+    "source_sha256": "ace71d66bb1cde0e3d5f415aa2373d6183ac61cfc8c51af71babfa1c3458a6dd",
+    "rental_path": "/workspace/bench/capc_native595_concurrent-fuzz.log",
+    "export_sha256": "f0fe734f09cc798fc00934d492b8efa96f72be55fa06a5bc25cdd42f099f0a76",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "kernel_full.txt": {
+    "source_sha256": "2112f3765d05ac92283abf50ea3a1c318189e965f4dc33777a59724d8c1ee8f6",
+    "returncode": 0,
+    "export_sha256": "43b199441b72efa718a8a6a2836dc03492f237622b6e84298698e90546ebc0f6",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  },
+  "dmesg_full.txt": {
+    "source_sha256": "f87330c6af05edb8c5c5fd2e70e8337e50f8f1a7245342bc92268d833fec24f7",
+    "returncode": 0,
+    "export_sha256": "a11eacc904602540e4fac6a3b0416d8aacfd859c5a57aef46826ce00b51ee834",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "OBSERVATION/UNVERIFIED-HOST labels, GPU UUID redaction, trailing whitespace/newline normalization; source hashes unchanged"
+  }
+}

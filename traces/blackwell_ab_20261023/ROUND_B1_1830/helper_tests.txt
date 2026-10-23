@@ -1,4 +1,6 @@
 UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
 .................................................................READINESS 2026-10-23T00:10:10+00:00 running
 CONSOLE_PIN absent 1
 CONSOLE_PIN match 2

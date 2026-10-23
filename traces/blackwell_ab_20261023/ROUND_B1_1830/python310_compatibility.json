@@ -1,0 +1,19 @@
+{
+  "utc": "2026-10-23T15:39:20.982165+00:00",
+  "lease_id": 57388945,
+  "python": "3.10.12",
+  "old_sha256": "08bc04e20ddaf2f627849f5d472cf537659ad156dfde223ecb7d59da0ef8b2ee",
+  "new_sha256": "cd5be061bbf9c0d81eb9e974bae7b268ed6002a9380e1df04beafc3f65d19b67",
+  "cpu_fixture_cases": 2,
+  "kernel_record_decode": "PASS",
+  "kernel_context_decode": "PASS",
+  "live_Xid_records": 0,
+  "before_observer_start": true,
+  "admission_rule_changed": false,
+  "mode": "bw3-saved-xid32-observation-v1",
+  "attestation": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "reason": "Python3.10 kernel timestamp codec, same strptime format as existing guard; exact admission policy unchanged",
+  "tests_first": true
+}

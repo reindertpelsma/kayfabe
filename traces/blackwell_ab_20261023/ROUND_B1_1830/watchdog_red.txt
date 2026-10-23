@@ -1,4 +1,6 @@
 UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
 FFFFFFFFFFFF
 ======================================================================
 FAIL: test_absence_is_queried_after_destroy_before_completion (test_precreate_watchdog.PrecreateWatchdog.test_absence_is_queried_after_destroy_before_completion)

@@ -3,12 +3,16 @@
   "host_verification": "UNVERIFIED-HOST",
   "utc": "2026-10-23T14:37:49.108948+00:00",
   "owner_instructions": "controller18:30 ROUND_B1.md",
-  "status": "controller17:00 scope resolved; ready to rent cached selection",
+  "status": "CLOSED: native concurrent-fuzz failure; B/B1 UNRUN",
   "leases_authorized": 1,
-  "leases_created": [],
-  "leases_destroyed": [],
+  "leases_created": [
+    57388945
+  ],
+  "leases_destroyed": [
+    57388945
+  ],
   "market_queries": 1,
-  "round_cost_usd": 0,
+  "round_cost_usd": 0.19761721433277776,
   "stop_usd": 2.5,
   "cap_usd": 3,
   "reserve_usd": 8,
@@ -16,7 +20,7 @@
   "cached_media_pins_verified": 4,
   "old_own_ids_active": [],
   "tests_baseline": 255,
-  "tests_after": 335,
+  "tests_after": 337,
   "new_budget_tests": 18,
   "red_tests_before_fix": 14,
   "budget_mutants": 10,
@@ -74,5 +78,8 @@
   "mode_mutants": 10,
   "hold_tests": 4,
   "hold_mutants": 2,
-  "rule_sources_frozen": 87
+  "rule_sources_frozen": 87,
+  "admitted_Xid32": 0,
+  "mode_native_result": "OBSERVATION UNRUN",
+  "post_identity_timestamp_codec_correction": "python310_compatibility.json"
 }

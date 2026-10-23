@@ -1,0 +1,72 @@
+{
+  "utc": "2026-10-23T16:03:02.268537+00:00",
+  "lease_id": 57388945,
+  "host_verification": "UNVERIFIED-HOST",
+  "provider_verification": "verified",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "known_own_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340,
+    57296911,
+    57302449,
+    57310491,
+    57324106,
+    57340681,
+    57359730,
+    57363603,
+    57366202,
+    57388945
+  ],
+  "still_live_own_ids": [],
+  "timers": {
+    "auto_destroy_pid": {
+      "pid": 1519909,
+      "proc_exists": false
+    },
+    "budget_watch_pid": {
+      "pid": 1519916,
+      "proc_exists": false
+    }
+  },
+  "destroyed": true,
+  "absence_verified_utc": "2026-10-23T16:02:27.179152+00:00",
+  "cancelled_only_after_absence": true,
+  "gpu_queries_after_fatal": 0,
+  "guest_boots_after_fatal": 0,
+  "no_second_lease": true,
+  "active_local_round_processes": [],
+  "local_cargo_target_created": false,
+  "local_GPU_lock_taken": false,
+  "post_compat_source_hashes_checked": 87,
+  "post_compat_changed_sources": [],
+  "protected_guard_hashes": {
+    "/workspace/bw-native-edge-wt/scripts/bench/blackwell/windows_observation.py": {
+      "before": "192d07e891418eaead48bcf3f37eeff2e54223ec8efb58b9df8f68fc62680091",
+      "after": "192d07e891418eaead48bcf3f37eeff2e54223ec8efb58b9df8f68fc62680091"
+    },
+    "/workspace/bw-native-edge-wt/scripts/bench/blackwell/console_pin.py": {
+      "before": "2222e2c8950a994351c946ed09fa860416933a048f0bdd085b7dc155f3935c01",
+      "after": "2222e2c8950a994351c946ed09fa860416933a048f0bdd085b7dc155f3935c01"
+    },
+    "/workspace/bw-native-edge-wt/scripts/bench/blackwell/phase_xid_guard.py": {
+      "before": "8d0121d056561018c175b993243ef0819315ba15757a94038ef3b6c5cc7d3fae",
+      "after": "8d0121d056561018c175b993243ef0819315ba15757a94038ef3b6c5cc7d3fae"
+    },
+    "/workspace/bw-native-edge-wt/scripts/bench/blackwell/xid_policy.py": {
+      "before": "7563095ffc1d55292d4deaf6e60b5da677c3ff564b3e60c29ed4b5119aa4d1ac",
+      "after": "7563095ffc1d55292d4deaf6e60b5da677c3ff564b3e60c29ed4b5119aa4d1ac"
+    }
+  },
+  "capability_active": false,
+  "capability_closed_reason": "lease API-absent and rental host destroyed; no observation arm ever started"
+}

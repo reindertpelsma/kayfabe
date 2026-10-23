@@ -1,30 +1,34 @@
-# BW3 round B1 preparation, 2026-10-23
+# BW3 round B1 closeout — OBSERVATION, 2026-10-23
 
 1. Lane and requested work
 
-BW3, branch `codex/bw-native-edge-probe-20261022`. The controller18:30 instruction authorizes one RTX50 lease, round stop2.50USD/cap3.00USD/reserve8.00USD, hourly price<=2.50USD, denied-country exclusions, timer armed before create, then B hold/collection and optional B1. Code head ccdb9c82206982c3f56bf8549d60ec46a2d424dd contains the prepared budget support. Origin remains160dc031ad51cda74ac3848f33386237fcd8c2d4. No merge or push was performed. No market query or rental has occurred in this round.
+BW3, branch `codex/bw-native-edge-probe-20261022`. The controller18:30 round grant allowed one RTX50 lease, stop2.50USD/cap3.00USD/reserve8.00USD, timer armed before create, B hold/collection and optional B1. The controller17:00 decision resolved the admission scope: exact owned-QEMU Xid32 channels0x14/0x1000000b, intr00200000, max8 per arm, in a separate lease-only OBSERVATION mode; it never grants PASS or attestation. Native/production/CI exact-VA/type/client rules remain unchanged. Evidence is in this directory. Origin remains160dc031ad51cda74ac3848f33386237fcd8c2d4; later lane commits are held locally pending the unchanged claims gate. No merge, force-push or second lease.
 
-2. Result (UNVERIFIED-HOST grant; no current host)
+2. Result (<=15 lines)
 
-- DONE — CODE READ `ROUND_B1.md`: new one-lease stop2.50/cap3/reserve8 instructions read; previous phase estimate5.759571019USD remains historical, not a new-round allowance.
-- DONE — MEASURED preparation2026-10-23, `helper_tests.txt`: baseline255 helper cases, then292 pass after18 budget-planning and19 watchdog cases. Tests-only commits precede each implementation/correction.
-- DONE — MEASURED preparation2026-10-23, `budget_mutations.json` and `watchdog_mutations.json`:20 new mutants each have>=2 distinct test killers; formatting, source100-column bound, whitespace and staged-secret checks pass.
-- DONE — CODE READ `scripts/bench/blackwell/round_budget.py`: fixed pre-allocation deadline,150-minute ceiling, price bound,0.50USD uncertainty,60s teardown margin and account reserve. `precreate_watchdog.py` signals armed before contract publication, binds one recorded id, checks actual rate/credit and verifies exact-id APIabsence after destroy. The deadline is rechecked after a provider response. Neither a watchdog nor a rental was launched; rental-path integration remains pending.
-- DONE — MEASURED preparation2026-10-23, `preparation.json`: four official cached media files match original size/SHA pins; shared credit28.804882486USD at preflight; all19 prior ownids API-absent. New-round createdids=[], destroyedids=[], runtimecost0USD.
-- WAITING — CODE READ `ROUND_B1.md`: its exactchannel+VA+faulttype+CE-client instruction cannot match the saved Xid32 records, which have only code/PID/channel/intr. `../UNVERIFIED-HOST_1345/lease_metadata/kernel_xids.json` records the previous lease57366202 pair0x14/0x1000000b, intr00200000. No VA, faulttype or client was recorded for either32.
-- DONE — CODE READ `scripts/bench/blackwell/phase_xid_guard.py`: the source-marked native Xid31 controls already enforce exact channel/VA/fault/access/PID/device/recovery and operation-appropriate engine/client family. They are distinct from the QEMU Xid32 observer. Native controls and the Xid32 guard were not changed.
-- NOT DONE — preparation2026-10-23: no new host, native suite, Windows installation, B/B1 ON arm,10-minute hold, guest events, dump header or TDR verdict. No page/inheritance/containment outcome exists for this round.
+- DONE — MEASURED lease57388945 on 2026-10-23, `market.json`/`owned_instances.json`: one market snapshot selected provider-verified offer50694293/machine45428, RTX5060Ti advertisedGB206, QuebecCA. Bad-listed machines and denied countries were excluded. The conservative UNVERIFIED-HOST artifact label denotes untrusted experiment evidence; the provider's verified status is retained separately. One lease, zero provider retries.
+- DONE — MEASURED lease57388945 on 2026-10-23, `precreate_watch_ready.json`: watchdog1519909 was ARMED at15:25:27.347817UTC before create15:25:28.607553UTC. Backup1519916 then signalled ready. Fixeddeadline17:55:27.347817UTC was not extended. Quote0.297981481USD/h, actual0.320666667USD/h; guarded reservation1.494953704USD.
+- DONE — MEASURED lease57388945 on 2026-10-23, `rehearsal/receipt.json`/`ssh_identity.json`: final operator receipt replay accepted / accepted after20s / refused before SSH. New-round spend fixture0USD replaced the older phase fixture5.2USD. Console identity matched at15:34:02.730649UTC; disk167GB free and KVM checks passed; all four media size/SHA checks passed before controller4566 started.
+- DONE — CODE READ `scripts/bench/blackwell/saved_xid32_observation.py`: separate named mode enforces the exact pair/intr/code, owned PID life/device, expiry, one-enable arms and8-record ceiling. Records include untruncated raw lines and OBSERVATION/no-PASS/no-attestation fields; surrounding kernel rows and full dmesg snapshots are retained. Existing observation/default/native guards were not relaxed.
+- DONE — MEASURED lease57388945 on 2026-10-23, `python310_compatibility.json`: hostPython3.10.12 rejected compact kernel timezone+0000. Two regression cases and a two-killer mutant cover the correction to the existing guard's strptime syntax. Two of87 source hashes changed after SSH, before controller/observation-watcher/Windows-ON start; this supersedes the earlier source-freeze statement for that codec correction. Actual-host CPU fixtures passed2; admission policy and production guards were unchanged. These CPU fixtures are not live Xid observations.
+- DONE — MEASURED lease57388945 on 2026-10-23, `lease_metadata/sweep_host_die.log`/`sweep_gates.log`: unprivileged probeGB206, driver595.91.07 open; gates9/9 plus gate10 and12/12 USER births passed.
+- FAIL — MEASURED lease57388945 on 2026-10-23, `native_failure/capc_native595_concurrent-fuzz.log`: actual concurrent-fuzz childrc1, one ALIAS_REVOKED invariant failure in the9-worker crowd arm pinned to3 cores. Unpinned3-worker, per-core3-worker and same-width unpinned9-worker controls passed. This is one invocation, not a repeatability or causal finding.
+- STOPPED — MEASURED lease57388945 on 2026-10-23, `lease_metadata/XID_STOP`/`native_failure/sweep_bare595.log`: the native wrapper recorded the real failure and returned7. Two later cells (cross-client-leak/rpc-mixed-allocs) were blocked before launching their clients. The suite reports27PASS/3FAIL/0CRASH/30 arms, representing one executed failure and two blocked cells, not three independent failures.
+- DONE — MEASURED lease57388945 on 2026-10-23, `native_failure/kernel_full.txt`/`dmesg_full.txt`: full saved kernel/dmesg context exported. Exactly five intentional native Xid31 controls were recorded; no Xid32 occurred and no saved-pair observation was admitted. There was no GPU query or guest boot after fatal.
+- UNRUN — MEASURED lease57388945 on 2026-10-23, `outcome.json`: CUDA/GR-tier validation, Windows install/bind, B/B1, page row, Code0 hold, guest153/4101/41/1001 events, dump header, TDR verdict and Xid32 channel decode. The native precondition stopped the run before any Windows arm.
+- DONE — MEASURED lease57388945 on 2026-10-23, `closure.json`/`COST_FINAL.json`: exact-id APIabsence16:02:27.179152UTC preceded timer cancellation; both timerPIDs gone, all20 known ownids absent. Runtime estimate0.197617214USD<stop2.50/cap3; observed shared credit28.334037805USD>reserve8. Credit movement is not exclusive lane billing. Historical prior-round estimate5.759571019USD is separate from this new round.
 
-| Arm | Die | OS | Guest driver | Rev | Flags | Verdict | Evidence |
+| Arm | Die | OS | Driver | Rev | Flags | Result | Evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| B | unassigned | LTSC2024 planned | 580.88 planned | 48b027267 | existing p19, one enable planned | UNRUN | preparation.json |
-| B1 | unassigned | LTSC2024 planned | 580.88 planned | cb80cbd29 | existing p19, one enable planned | UNRUN | preparation.json |
+| Native raw | GB206 | Ubuntu22.04 | 595.91.07 open | 6e3fd3fd6 | native suite | FAIL | native_failure/capc_native595_concurrent-fuzz.log |
+| B | GB206 host | LTSC2024 planned, uninstalled | 580.88 planned | 48b027267 | p19, one enable planned | UNRUN | lease_metadata/XID_STOP |
+| B1 | GB206 host | LTSC2024 planned, uninstalled | 580.88 planned | cb80cbd29 | p19, one enable planned | UNRUN | lease_metadata/XID_STOP |
 
-Xid list for this round: none (no lease). The prior pair is quoted only to identify the unresolved admission scope. No record is silently excluded and no VA/type/client metadata is invented.
+Xid list: five source-marked intentional31s, all retained in `outcome.json` and the full raw kernel/dmesg exports. Four COPY-read controls use CE0/HUBCLIENT_CE1, exact PTE/virtual-read addresses0x60/0x62/0x64_00010000 and source channels2/3; the missing-page GRAPHICS semaphore-write control uses GR_HOST0/HUBCLIENT_ESC0, channel3, PDE/virtual-write0xa_11000000. Xid32 list=[], admitted countB=0/B1=0. These native controls are distinct from the requested saved32 observation mode.
 
 3. Tests and mutations
 
-MEASURED preparation2026-10-23: budget EXPECTED RED baf0164b4 had14 failures before implementation c039a073c; final18 cases pass. Watchdog EXPECTED RED07c9d0a62 had12 failures before implementation f029a6545; slow-response EXPECTED RED f4ff871f0 had2 failures before ccdb9c822 rechecked the deadline after the provider response; final19 cases pass. Full helper suite255 before/292 after. No hardware sample (n=0), spread or performance result.
+MEASURED preparation 2026-10-23, `helpers_after_python310.txt`: helper suite255 before this round,337 after. New coverage:18 cost-plan,19 pre-create watchdog,41 saved-signature observation/context/compatibility,4 hold-trigger cases. Final operator rehearsal3 passed separately. Tests-only EXPECTED RED commits precede the cost planner, watchdog, slow-provider correction, new mode, enable-Code0 hold correction and Python3.10 codec correction; the compatibility fixture's helper reference was corrected in a following test commit. Reverting the codec still fails both compatibility regressions. Black100, source line bound, whitespace and staged-secret checks pass. New33 mutants each have>=2 killers. Existing guard tests remain in the337 count; no hardware attestation follows from these CPU tests.
 
 | Mutant | Distinct test killers |
 | --- | ---: |
@@ -48,17 +52,32 @@ MEASURED preparation2026-10-23: budget EXPECTED RED baf0164b4 had14 failures bef
 | destroy_ack_is_absence | 2 |
 | closed_row_hides_live_id | 2 |
 | teardown_retry_removed | 2 |
+| ninth_record_admitted | 2 |
+| other_channel_admitted | 4 |
+| other_xid_number_admitted | 5 |
+| foreign_pid_admitted | 2 |
+| different_intr_admitted | 2 |
+| observation_flag_ignored | 2 |
+| attestation_permission_ignored | 2 |
+| raw_line_truncated | 2 |
+| records_marked_pass | 2 |
+| records_attest | 3 |
+| enable_observation_lost | 2 |
+| nonzero_status_admitted | 3 |
+| compact_offset_iso_parser_restored | 2 |
 
-4. Required clarification
+4. Decisions
 
-1. Does the owner intend exact owned-QEMU Xid32 signatures0x14/0x1000000b with intr00200000, max8 per arm and all other guards retained, or require VA/type/CE-client proof before admitting them? Recommendation: explicitly scope the32 observation signature; do not infer missing MMU/client fields or broaden the guard from a Xid31 rule. The asynchronous question remains pending.
+1. Investigate/reproduce the native concurrent-fuzz crowd ALIAS_REVOKED failure on declared source6e3fd3fd6 before another Windows observation lease; recommendation: keep the native gate and compare the same-width unpinned control, without changing timers or masking the invariant.
+2. If hardware work resumes, issue a fresh lease grant; recommendation: retain exact saved32 OBSERVATION scope, full context capture and non-attestation labels. The one lease for this round is exhausted.
+3. Resolve the inherited claims diagnostics before publishing this held lane head; recommendation: preserve the global new=0 gate and repair attribution on the appropriate parent line.
 
-The controlling COMMON.md instruction is: "If something contradicts the code or these instructions, STOP and write down options; never improvise a design change." ROUND_B1.md says "exact channel + exact VA + exact fault type admitted; client only required to be in the copy-engine family". The preserved32 records lack those fields, so rental waits for this clarification; the one lease remains unused. Publication checks did not prevent hardware work.
+5. Unverified items
 
-5. Unverified items and falsifier
+INFERRED lease57388945: the pinned crowd result does not establish why the alias probe failed, prove a hardware/provider fault, or establish repeatability. The log directly records VA_A landing before VA_B mapping and a later Lost probe; root cause is unresolved. No Windows boot or Xid32 exists in this round, so page sufficiency/inheritance, channel32 VA/type/client decode, guest survival, fault containment, B1 RC reporting and TDR remain untested. No post-fatal host-health query was performed. The last host-driver validation preceded the native failure.
 
-All new hardware observations remain unrun. FALSIFIER recorded before any later rental: guest TDR or bugcheck within the10-minute hold after an admitted pair refutes survival/containment for that actual die. No admitted fault means containment remains untested. Exact32 channel identity and CE-family attribution remain unresolved from the previous trace. The cached media pins do not establish a current host identity or readiness.
+FALSIFIER recorded before rental in `owner_authority.json`/`run_kit/manifest.json`: a guest TDR or bugcheck within10 minutes after the admitted exact pair refutes survival/containment for the actual die. No admitted fault leaves containment untested. This falsifier was not exercised. No new GB202 or inherited-page result exists.
 
 6. Cleanup and publication
 
-MEASURED preparation2026-10-23: no new instance or active timer, no own workload/build/SSH process, no local Cargo target created, no GPU lock taken. Prior19 own instances remain absent. All work is local, append-only on the lane branch; native/observation rules remain unchanged. Current support is not wired into an allocation while the admission decision is pending. No claims gate was run to stop a live experiment; the inherited814-diagnostic blocker was documented by the previous closeout and remains unchanged. Before any eventual push, the full global claims new=0 requirement still applies; neither checker nor debt baseline was modified.
+MEASURED lease57388945 on 2026-10-23, `closure.json`: APIabsence verified before cancelling the pre-create/backup timers; both gone, all20 known ownids absent, no active local operator/workload/SSH/build process. Rental QEMU/controller/builds ended with destruction. No local Cargo target was created and no local GPU lock was taken; no foreign resource was changed. Raw private receipts remain in the operator workspace; small text evidence and original/exported source hashes are retained here. Publication checks run after live collection/destruction; see `claims.json`. No checker/debt baseline or admission rule was waived.

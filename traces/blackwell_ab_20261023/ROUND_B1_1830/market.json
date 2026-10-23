@@ -1,7 +1,7 @@
 {
   "host_verification": "UNVERIFIED-HOST",
   "utc": "2026-10-23T15:23:57.891713+00:00",
-  "credit_usd": 28.6763606905605,
+  "credit_usd": 28.66860106056049,
   "offers": [
     {
       "id": 50694293,
@@ -164,5 +164,7 @@
       "geolocation": "Denmark, DK"
     }
   ],
-  "authority": "controller17:00 one-lease OBSERVATION, no denied countries or bad machines"
+  "authority": "controller17:00 one-lease OBSERVATION, no denied countries or bad machines",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
 }

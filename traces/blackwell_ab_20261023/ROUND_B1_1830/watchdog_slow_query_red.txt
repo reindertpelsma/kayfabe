@@ -1,4 +1,6 @@
 UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
 ...........F.....F.
 ======================================================================
 FAIL: test_provider_response_crossing_deadline_triggers_immediate_teardown (test_precreate_watchdog.PrecreateWatchdog.test_provider_response_crossing_deadline_triggers_immediate_teardown)

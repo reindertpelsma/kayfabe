@@ -1,4 +1,6 @@
 UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
 FFFFFFFFFFFFFF
 ======================================================================
 FAIL: test_cheap_lease_retains_150_minute_ceiling (test_round_budget.RoundBudget.test_cheap_lease_retains_150_minute_ceiling)

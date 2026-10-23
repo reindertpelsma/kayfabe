@@ -1,3 +1,5 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
 UNVERIFIED-HOST OBSERVATION
 test_derived_nonmatching_pin_control_refuses_without_ssh (test_console_pin_receipt_replay.FinalOperatorReceiptReplay.test_derived_nonmatching_pin_control_refuses_without_ssh) ... READINESS 2026-10-23T00:05:52.518532+00:00 running
 CONSOLE_PIN mismatch 1

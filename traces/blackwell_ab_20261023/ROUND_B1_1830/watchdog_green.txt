@@ -1,4 +1,6 @@
 UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
 ...................
 ----------------------------------------------------------------------
 Ran 19 tests in 0.174s

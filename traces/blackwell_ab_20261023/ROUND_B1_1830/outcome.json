@@ -1,0 +1,179 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "provider_verification": "verified",
+  "host_trust": "untrusted",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "mode": "bw3-saved-xid32-observation-v1",
+  "lease_id": 57388945,
+  "utc": "2026-10-23T16:04:56.354150+00:00",
+  "overall": "STOPPED_NATIVE_PRECONDITION",
+  "actual_die": "GB206",
+  "host_OS": "Ubuntu22.04, kernel6.8.0-59-generic",
+  "host_driver": "595.91.07 open",
+  "host_product_rev": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "native_fixture_rev": "618f0431815d037d4226b642ae37e76967353e90",
+  "gates": {
+    "pass": 9,
+    "fail": 0,
+    "gate10": "PASS",
+    "births": 12,
+    "USER_births": 12
+  },
+  "raw_suite": {
+    "reported_pass": 27,
+    "reported_fail": 3,
+    "crash": 0,
+    "arms": 30,
+    "actual_failing_cell": "concurrent-fuzz",
+    "actual_child_rc": 1,
+    "wrapper_rc": 7,
+    "violation": "ALIAS_REVOKED",
+    "violations": 1,
+    "stopped_before_clients": [
+      "cross-client-leak",
+      "rpc-mixed-allocs"
+    ],
+    "controls": [
+      {
+        "FUZZ_ARM": "unpinned",
+        "verdict": "PASS",
+        "why": "CLEAN",
+        "threads": "3",
+        "pin": "unpinned",
+        "cores": "3",
+        "ops": "192",
+        "engine_ops": "46",
+        "alias_ops": "18",
+        "overlap": "145",
+        "viol": "0",
+        "refused": "0",
+        "pinned": "0/3",
+        "finished": "3/3"
+      },
+      {
+        "FUZZ_ARM": "percore",
+        "verdict": "PASS",
+        "why": "CLEAN",
+        "threads": "3",
+        "pin": "percore",
+        "cores": "3",
+        "ops": "192",
+        "engine_ops": "46",
+        "alias_ops": "18",
+        "overlap": "149",
+        "viol": "0",
+        "refused": "0",
+        "pinned": "3/3",
+        "finished": "3/3"
+      },
+      {
+        "FUZZ_ARM": "crowd-free",
+        "verdict": "PASS",
+        "why": "CLEAN",
+        "threads": "9",
+        "pin": "unpinned",
+        "cores": "3",
+        "ops": "576",
+        "engine_ops": "134",
+        "alias_ops": "52",
+        "overlap": "2152",
+        "viol": "0",
+        "refused": "0",
+        "pinned": "0/9",
+        "finished": "9/9"
+      },
+      {
+        "FUZZ_ARM": "crowd",
+        "verdict": "FAIL",
+        "why": "INVARIANT_VIOLATED",
+        "threads": "9",
+        "pin": "crowd",
+        "cores": "3",
+        "ops": "576",
+        "engine_ops": "134",
+        "alias_ops": "52",
+        "overlap": "1841",
+        "viol": "1",
+        "refused": "0",
+        "pinned": "9/9",
+        "finished": "9/9"
+      }
+    ],
+    "n": 1
+  },
+  "kernel_Xid_lines": [
+    "2026-10-23T15:58:20.179964+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92967, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:58:23.209473+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92967, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:58:26.222458+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92967, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:58:29.313454+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92967, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:58:34.192459+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93024, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "intentional_native_Xid31_count": 5,
+  "Xid32_count": 0,
+  "admitted_Xid32": [],
+  "admitted_Xid32_count_per_arm": {
+    "B": 0,
+    "B1": 0
+  },
+  "native_CUDA": "UNRUN",
+  "native_GRtier": "UNRUN",
+  "Windows_install": "UNRUN",
+  "page_served": "UNRUN",
+  "hold_10min": "UNRUN",
+  "guest_events_153_4101_41_1001": "UNRUN",
+  "minidump_header": "UNRUN",
+  "TDR_verdict": "UNRUN",
+  "channel32_decode": "UNRUN: no Xid32 in this lease",
+  "falsifier_outcome": "untested; no Windows arm or admitted pair",
+  "source_compatibility": {
+    "correction": "kernel compact timezone parser for hostPython3.10.12",
+    "after_SSH_before_controller_and_observer": true,
+    "admission_policy_changed": false,
+    "production_CI_guards_changed": false,
+    "changed_source_hashes": 2,
+    "receipt": "python310_compatibility.json"
+  },
+  "instances_created": [
+    57388945
+  ],
+  "instances_destroyed": [
+    57388945
+  ],
+  "runtime_estimate_usd": 0.19761721433277776,
+  "second_lease": false,
+  "matrix": [
+    {
+      "arm": "native raw",
+      "die": "GB206",
+      "OS": "Ubuntu22.04",
+      "driver": "595.91.07 open",
+      "rev": "6e3fd3fd6",
+      "flags": "native bare suite; no Windows flags",
+      "verdict": "FAIL",
+      "evidence": "native_failure/capc_native595_concurrent-fuzz.log"
+    },
+    {
+      "arm": "B",
+      "die": "GB206 host measured",
+      "OS": "WindowsLTSC2024 planned, not installed",
+      "driver": "580.88 planned, not installed",
+      "rev": "48b027267",
+      "flags_file": "run_kit/p19.flags",
+      "flags_sha256": "9e2207bc7f0fe1caa56b5fbc35cad57d51b063389dd50ffbb85851a50200732d",
+      "verdict": "UNRUN",
+      "evidence": "lease_metadata/XID_STOP"
+    },
+    {
+      "arm": "B1",
+      "die": "GB206 host measured",
+      "OS": "WindowsLTSC2024 planned, not installed",
+      "driver": "580.88 planned, not installed",
+      "rev": "cb80cbd29",
+      "flags_file": "run_kit/p19.flags",
+      "flags_sha256": "9e2207bc7f0fe1caa56b5fbc35cad57d51b063389dd50ffbb85851a50200732d",
+      "verdict": "UNRUN",
+      "evidence": "lease_metadata/XID_STOP"
+    }
+  ]
+}
