@@ -78,7 +78,7 @@ class SavedPairObservation(unittest.TestCase):
     def python310_iso(self, value):
         if value.endswith("+0000"):
             raise ValueError("Python3.10 fromisoformat rejects compact offset")
-        return old.aware(value)
+        return old.O.aware(value)
 
     def test_kernel_record_accepts_compact_offset_with_python310_iso_parser(self):
         with patch.object(O, "aware", side_effect=self.python310_iso):
