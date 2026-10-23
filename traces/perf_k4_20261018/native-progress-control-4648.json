@@ -1,0 +1,1 @@
+{"classification": "MEASURED", "evidence": "native-progress-connection-control.json", "run": 4648, "passed": true, "guest_signature_field_received": true, "signature_empty_before_workload": true, "scope": "Read-only round-trip proves the controller agent route; empty pre-workload signature is not fabricated progress"}

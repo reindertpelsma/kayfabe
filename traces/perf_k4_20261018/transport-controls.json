@@ -1,0 +1,26 @@
+{
+  "classification": "MEASURED",
+  "evidence": "transport-controls.json",
+  "expected_red_commit": "f29d3e7cd",
+  "red": "new API missing/import failure, zero behavioral assertions; not a production defect",
+  "green_passed": 3,
+  "mutants": [
+    {
+      "mutant": "truncate",
+      "distinct_assertion_killers": [
+        "FAIL: test_large_installer_is_exact (test_agent_transport.AgentTransportTests.test_large_installer_is_exact)",
+        "FAIL: test_unicode_and_newlines_are_exact (test_agent_transport.AgentTransportTests.test_unicode_and_newlines_are_exact)"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "drop-newlines",
+      "distinct_assertion_killers": [
+        "FAIL: test_large_installer_is_exact (test_agent_transport.AgentTransportTests.test_large_installer_is_exact)",
+        "FAIL: test_unicode_and_newlines_are_exact (test_agent_transport.AgentTransportTests.test_unicode_and_newlines_are_exact)"
+      ],
+      "exit": 1
+    }
+  ],
+  "runtime_scope": "Exact script moved from argv to stdin; same agent queue/command behavior, no guard or timer change"
+}

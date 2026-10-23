@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-// Q4 K4 proxy, reuses own public app-matrix device/shader helpers; no workload capture/replay.
-//   kf_dxprobe.exe d3d11|d3d12 [--any-vendor] [--iters N]
-// Enumerates the DXGI adapters, picks the NVIDIA one (VendorId 0x10DE; the Microsoft Basic Render
-// Driver / WARP is NEVER used, so a software fallback cannot pass), creates a hardware device on it,
-// runs a compute shader (and, for D3D11, a draw) whose result is read back and compared, and waits
-// on real GPU fences. Output is line oriented: `KFDX <key> <value...>`, the verdict is the last
-// line `KFDX RESULT OK|FAIL <why>`; exit code 0 iff OK. --any-vendor is for running the probe
-// under Wine on a GPU-less machine (logic test only); the matrix never passes it.
-// Shaders are compiled at run time with the system's d3dcompiler_47.dll (SM 5.0, DXBC), so the guest
-// needs no SDK. Build: build_tools.sh (mingw-w64, static).
+// Q4 K4 generic D3D11 present/offscreen proxy, public own app-matrix helpers.
+// Usage: present-proxy.exe present|offscreen 3000|300000 seconds
+// NVIDIA hardware only. Generated grid, known-pixel readback, real GPU queries.
+// No proprietary workload command/shader capture, no software fallback.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <d3d11.h>
@@ -92,7 +86,7 @@ int main(int argc,char **argv){
  if(argc!=4 || (strcmp(argv[1],"present")&&strcmp(argv[1],"offscreen"))){fprintf(stderr,"present-proxy present|offscreen 3000|300000 seconds\n");return 64;}
  bool present=!strcmp(argv[1],"present");unsigned vertices=(unsigned)atoi(argv[2]),duration=(unsigned)atoi(argv[3]);
  if((vertices!=3000&&vertices!=300000)||duration<1||duration>30)return 64;
- SetProcessDPIAware();std::string name;auto *ad=pick_adapter(false,name);if(!ad)return 2;
+ SetProcessDPIAware();DWORD session=0;ProcessIdToSessionId(GetCurrentProcessId(),&session);printf("PROXY_DISPLAY primary_width=%d primary_height=%d virtual_width=%d virtual_height=%d session=%lu\n",GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN),GetSystemMetrics(SM_CXVIRTUALSCREEN),GetSystemMetrics(SM_CYVIRTUALSCREEN),(unsigned long)session);std::string name;auto *ad=pick_adapter(false,name);if(!ad)return 2;
  ID3D11Device *dev=nullptr;ID3D11DeviceContext *ctx=nullptr;D3D_FEATURE_LEVEL got;D3D_FEATURE_LEVEL want[]={D3D_FEATURE_LEVEL_11_0};
  HRESULT hr=D3D11CreateDevice(ad,D3D_DRIVER_TYPE_UNKNOWN,nullptr,0,want,1,D3D11_SDK_VERSION,&dev,&got,&ctx);if(!check(SUCCEEDED(hr),"hardware D3D11",hr))return 2;
  IDXGIAdapter3 *a3=nullptr;ad->QueryInterface(__uuidof(IDXGIAdapter3),(void**)&a3);

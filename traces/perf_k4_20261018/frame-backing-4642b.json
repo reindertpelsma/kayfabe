@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "evidence": "frame-backing-4642b.json",
+  "run": 4642,
+  "time": "2026-10-23T08:46:24.952138+00:00",
+  "processes": [
+    {
+      "pid": 2509353,
+      "starttime": 117693728,
+      "ownership": "Own exact run socket identifier4642 in broker argv under Q4 directory",
+      "backing_kind_size_exporter": [
+        {
+          "kind": "dmabuf",
+          "bytes": 8294400,
+          "exporter": "udmabuf"
+        }
+      ]
+    }
+  ],
+  "limit": "Only retained descriptors; metadata only, no frame contents. Missing frames remain inconclusive."
+}

@@ -1,0 +1,136 @@
+{
+  "classification": "MEASURED",
+  "evidence": "first-clean-pair.json",
+  "scope": "First independent clean boot per arm; second pair still running",
+  "runs": [
+    {
+      "run": 4642,
+      "arm": "K4-KF1-clean",
+      "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "sample": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T10:50:33.108935+02:00",
+        "arm": "K4-KF1-clean",
+        "run": 4642,
+        "sample": 42,
+        "completed": true,
+        "completed_workloads": [
+          "catia-07",
+          "creo-04"
+        ],
+        "failed": false,
+        "subtest": [
+          "creo-04",
+          "13_ScorpionNoHidden"
+        ],
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "counters": {
+          "pointer_large_entries": 9112,
+          "pointer_entry_max_bytes": 1043244,
+          "refused_scan_budget": 0,
+          "poisoned": 0
+        },
+        "task": 3,
+        "qemu_before": 21007717,
+        "qemu_after": 21025941,
+        "viewperf_nonzero_exits": []
+      },
+      "events": [],
+      "proxy": {
+        "verdict": "PASS",
+        "phases": 12,
+        "end": "2026-10-23T06:51:27.4499599Z"
+      },
+      "controller_exit": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T10:52:05.594924+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2509355
+      },
+      "restoration": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T10:52:16.075213+02:00",
+        "cuda": {
+          "before": 0,
+          "after": 0,
+          "reloaded": false
+        },
+        "gdm": "active",
+        "nvidia_bound": true,
+        "smi_exit": 0
+      },
+      "restored": true
+    },
+    {
+      "run": 4648,
+      "arm": "K4-VFIO1-clean",
+      "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "sample": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T11:06:31.302673+02:00",
+        "arm": "K4-VFIO1-clean",
+        "run": 4648,
+        "sample": 35,
+        "completed": true,
+        "completed_workloads": [
+          "catia-07",
+          "creo-04"
+        ],
+        "failed": false,
+        "subtest": [
+          "creo-04",
+          "13_ScorpionNoHidden"
+        ],
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "counters": {
+          "pointer_large_entries": 0,
+          "pointer_entry_max_bytes": 0,
+          "refused_scan_budget": 0,
+          "poisoned": 0
+        },
+        "task": 3,
+        "qemu_before": 0,
+        "qemu_after": 0,
+        "viewperf_nonzero_exits": []
+      },
+      "events": [],
+      "proxy": {
+        "verdict": "PASS",
+        "phases": 12,
+        "end": "2026-10-23T07:07:16.3759433Z"
+      },
+      "controller_exit": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "reason": "REQUESTED_STOP",
+        "new_host_xids": 0,
+        "time": "2026-10-23T09:08:03.875098+00:00"
+      },
+      "restoration": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T09:08:27.006703+00:00",
+        "cuda": {
+          "before": 0,
+          "after": 0
+        },
+        "gdm": "active",
+        "nvidia_bound": true,
+        "smi_exit": 0
+      },
+      "restored": true
+    }
+  ]
+}

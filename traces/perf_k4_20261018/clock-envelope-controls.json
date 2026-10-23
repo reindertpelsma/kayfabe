@@ -1,0 +1,33 @@
+{
+  "classification": "MEASURED",
+  "evidence": "clock-envelope-controls.json",
+  "expected_red_commit": "6985bf181",
+  "expected_red": "Absent new API/import,zero runtime assertions; not a production defect claim",
+  "green_passed": 10,
+  "green_failed": 0,
+  "mutants": [
+    {
+      "mutant": "only-midpoint",
+      "exit": 1,
+      "distinct_assertion_killers": [
+        "test_center_only_accepts_after_real_end",
+        "test_center_only_accepts_before_real_start",
+        "test_certified_interval_uses_both_worst_extrema",
+        "test_upper_boundary_is_not_interior"
+      ]
+    },
+    {
+      "mutant": "reverse-worst-extrema",
+      "exit": 1,
+      "distinct_assertion_killers": [
+        "test_center_only_accepts_after_real_end",
+        "test_center_only_accepts_before_real_start",
+        "test_certified_interval_uses_both_worst_extrema",
+        "test_uncertainty_can_remove_a_whole_short_subtest",
+        "test_upper_boundary_is_not_interior"
+      ]
+    }
+  ],
+  "source_sha256": "ca03edb7a82796c11839fa0130e03bc5cd61df973bbded5754fa99ee132333e7",
+  "principle": "A sample is kept only if it remains in the subtest for every offset inside the full observed bracket union. This excludes more data than midpoint-only membership; no workload timer or safety threshold changes."
+}

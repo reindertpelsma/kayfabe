@@ -1,14 +1,15 @@
 {
   "classification": "INFERRED",
   "evidence": "proxy-plan.json",
-  "source_sha256": "d8c021d0b921d2cbcbeed13593698d609ec970ea500c36f729887ee667e3ade5",
-  "binary_sha256": "44c96800ecaa289ed00fb477ed742766ac690d99cffa979eba77cdafe757cc85",
+  "source_sha256": "4b7ae22feacd3ceb1b5c68cf1b484ab3db5fc09ff6f6ef3f6b8873bd1f5b9f9f",
+  "binary_sha256": "1f987071111164c613121774be4598c0509987e0720219ed67dccc18df059744",
   "before_execution": true,
   "hardware": "Only NVIDIA hardware DXGI adapter, no WARP; standard interactive user",
   "geometry": "Own generated full-screen tiled grid:3000 or300000 vertices per draw,16 draws/frame,8 frames/batch,1920x1080 RGBA8, alternating pixel colors each frame",
   "modes": "offscreen creates only an offscreen render target and never creates a swapchain/window or calls Present; present draws to identical target, then copies to flip-discard backbuffer and Present(0), tearing only if DXGI advertises support",
   "oracle": "Four staging readback pixel positions: black clear control, known opaque shader RGB and final frame parity; real GPU query completion and device-removed status; GPU timestamp disjoint batches retained",
-  "design": "Three repetitions per grid size/mode, mode order AB/BA/AB,3s measured phases; occurs only after headline viewset completion, separate timestamps; first already-loaded run4644 has no proxy hook, so candidate proxy independent boots n1 versus VFIO n2 unless a later explicit paired run is added",
+  "design": "Three repetitions per grid size/mode, mode order AB/BA/AB,3s measured phases. Only after headline viewset completion. Both clean candidate boots4642/4645 and VFIO4648/4643 run the same proxy; auxiliary4644 had no proxy hook and stays separate.",
   "falsifier": "Proxy present-path explanation weakens if removing all presents leaves the relative kayfabe/VFIO throughput gap within10%, qualified to this proxy. It does not falsify or prove the same-viewset/OpenGL hypothesis.",
-  "limits": "Generic D3D11 proxy, not CATIA/Creo OpenGL replay, not derived from closed binaries or proprietary content; no same-draw-size equivalence claimed. Completion fences constrain queue depth identically in both modes."
+  "limits": "Generic D3D11 proxy, not CATIA/Creo OpenGL replay, not derived from closed binaries or proprietary content; no same-draw-size equivalence claimed. Completion fences constrain queue depth identically in both modes.",
+  "display_evidence": "Each interactive proxy process records primary/virtual desktop dimensions and session. Render dimensions remain1920x1080. No display-mode changes made."
 }

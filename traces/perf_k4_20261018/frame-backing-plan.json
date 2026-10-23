@@ -1,0 +1,9 @@
+{
+  "classification": "INFERRED",
+  "evidence": "frame-backing-plan.json",
+  "time": "2026-10-23T08:43:36.106405+00:00",
+  "run": 4642,
+  "hypothesis": "The test display carrier may use host-memory frame backing, potentially contributing GPU-to-host traffic. Broker wording alone does not distinguish real GPU dma-buf from a memfd accepted by its test mode.",
+  "falsifier_before_observation": "Frame-size descriptors are GPU dma-bufs rather than memfds, or exact emitter source establishes GPU backing. Missing or already-closed frame descriptors leave the observation inconclusive.",
+  "method": "Read-only symlink/type/size observation of only the own display broker process associated with the active run socket; no frame contents, model content or unrelated process data. The own socket name is windows-broker-run4642; read only size/exporter fields from fdinfo to distinguish udmabuf over host pages from GPU allocation exports. Initial directory-only argv filter found no process and is retained as inconclusive."
+}

@@ -1,0 +1,15 @@
+{
+  "classification": "INFERRED",
+  "evidence": "windowed-proxy-plan.json",
+  "time": "2026-10-23T09:12:18.563041+00:00",
+  "runs": [
+    4649,
+    4643
+  ],
+  "hypothesis": "The first generic D3D11 Present result may depend on its borderless1920x1080 window filling the virtual desktop but only part of the larger physical VFIO desktop. Occlusion/visibility status was not logged in that primary proxy.",
+  "falsifier_before_execution": "A visible, unminimized, non-cloaked1280x720 client window on BOTH arms still exhibits the approximately60Hz candidate Present plateau while VFIO is much faster. If windowing removes the plateau, the initial proxy cannot support a generic present-throughput claim. Nonzero occluded Present statuses invalidate visible-present comparisons.",
+  "method": "Additional6 phases only after all main viewsets and original12 proxy phases: own generated3000-vertex grid, identical1920x1080 render target and swapchain,16draws/frame,8frames/batch, three3s repeats AB/BA/AB; adjusted1280x720 client at100,100, topmost only during own process, real pixel oracles, explicit Present HRESULT/occlusion, window visibility/geometry/cloak metadata. Original primary executable and12 phases remain intact.",
+  "limits": "One independent clean boot per arm for this additional control; same-viewset OpenGL no-present is still not exercised. A smaller window scales the same buffer through the compositor; GPU/driver/carrier differences remain.",
+  "source_sha256": "f63bb6e596b1e588feaf07fcccae7bdc25d22dc7013f1e3f16e24076e8a557d0",
+  "binary_sha256": "28cc20f8b5fd2d86c74d3440ec7cdf6313df08c2655ee898ccd70fc7f05f84d2"
+}

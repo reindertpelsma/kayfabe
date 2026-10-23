@@ -1,0 +1,35 @@
+{
+  "classification": "MEASURED",
+  "evidence": "aux4644-recovery.json",
+  "run": 4644,
+  "vendor_completion": "CATIA and Creo completed; sample43 has no153/4101/reboot/Budget. Original harness FAIL/export exception is not rewritten.",
+  "source": "Own stopped CoW exported via qemu-nbd --read-only over own Unix socket, dev-box guestfish --ro --format=raw -m /dev/sda3:/; only own Public output folder copied",
+  "files": {
+    "gpu.csv": {
+      "bytes": 503759,
+      "sha256": "e11faf1921d126ad28b61b6d2c944ff9ec49ec3af553da406c22e93c292282b4"
+    },
+    "nvml.csv": {
+      "bytes": 646936,
+      "sha256": "f11c64e8c6192ad077d17a52fac3fdcbcb0de8b22f72bb06e6e5024ba5fff731"
+    },
+    "memory.jsonl": {
+      "bytes": 6481364,
+      "sha256": "aab9a564a5aa4bd00e7401a2896186edf79f4dc2983da38300eeb669c10a0b48"
+    },
+    "collectors-owned.json": {
+      "bytes": 529,
+      "sha256": "d07eee58b47aa0cdf62abc6c72bda7eebe666add183b4610c27e551155badec0"
+    },
+    "cli-exit.json": {
+      "bytes": 245,
+      "sha256": "b25fe56cb5002e0626bbdf9b9ec0856672a38c512ddc31b504f4dcc3a6d51fe6"
+    },
+    "cli-status.log": {
+      "bytes": 96,
+      "sha256": "ebf5995323c1c2cd94a005a0ccd692118acce8946c446974e2b73d7b2f631fa6"
+    }
+  },
+  "resources": "Readonly NBD export, SSH forward and guestfish finished before native4646 boot; no owner backing write authorized or made",
+  "scope": "Auxiliary diagnostic run, excluded from required clean two-boot repetitions; no vendor scores exported here"
+}

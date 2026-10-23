@@ -9,17 +9,17 @@
   "evidence_branch": "codex/qualify-6d-20261023",
   "runs": [
     {
-      "id": 4644,
+      "id": 4642,
       "arm": "kayfabe",
       "repeat": 1
     },
     {
-      "id": 4641,
+      "id": 4648,
       "arm": "VFIO",
       "repeat": 1
     },
     {
-      "id": 4642,
+      "id": 4645,
       "arm": "kayfabe",
       "repeat": 2
     },
@@ -65,5 +65,30 @@
     "phase": "NO_VM_STARTED",
     "reason": "Missing copied eligibility/CI receipt; controller raised before prepare/launch. Original failure retained. Final health CUDA0/GDM/NVIDIA; no held quiet flag. History initialization corrected for finally path.",
     "replacement_run": 4644
+  },
+  "auxiliary_4644": {
+    "status": "VIEWSETS_COMPLETED_EXPORT_FAILURE_RESTORED",
+    "measurement": "Both workloads completed,zero153/4101/reboot/Budget/new Xid. Original FAIL retained due strict sampler identity and export assertions. Own raw artifacts recovered via readonly NBD and guestfish mount-ro on stopped CoW.",
+    "scope": "Not counted among required two clean boots; diagnostic data retained separately. No weakening of PID/executable/starttime guard; Windows integration controls must reproduce original array wrapper failure and validate the parser before the next benchmark."
+  },
+  "control_attempt_4641": {
+    "status": "NO_BENCHMARK_STARTED",
+    "reason": "Windows guard integration test scaffold failed on duplicate dictionary keys from script-scope accumulator; replaced with explicit local .NET list. No measurement guard was weakened.",
+    "restored": true,
+    "new_Xid_delta": 0,
+    "replacement": 4646
+  },
+  "auxiliary_4646": {
+    "status": "VIEWSETS_AND_PROXY_COMPLETED_WATCHDOG_RESTORED",
+    "reason": "Controller agent CLI lacked Q4_AGENT_STATE; real run-log progress replies were never received, so the original900s no-progress watchdog fired after workload/proxy completion during export. No timer changed. Full original FAIL is preserved.",
+    "repair": "Forward per-run agent environment into controller and gate benchmarking on a successful read-only progress-agent response, even when pre-workload signature is empty. Later real vendor-log changes remain the only liveness event.",
+    "new_Xid_delta": 0,
+    "replacement_clean_run": 4647
+  },
+  "control_attempt_4647": {
+    "status": "NO_BENCHMARK_STARTED",
+    "reason": "Initial Process.Path/starttime capture did not pass every exact image-identity control on repeat. Original failure retained; canonical identity capture now uses GetProcessTimes and QueryFullProcessImageNameW on held process handles, creation stored as exact string. No field match or negative test relaxed.",
+    "host_restored": true,
+    "new_Xid_delta": 0
   }
 }

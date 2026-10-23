@@ -1,0 +1,8 @@
+{
+  "classification": "MEASURED",
+  "evidence": "frame-backing-4642.json",
+  "run": 4642,
+  "time": "2026-10-23T08:43:36.403568+00:00",
+  "processes": [],
+  "limit": "Only observed retained descriptors; no descriptor contents read. Absence does not establish a carrier."
+}
