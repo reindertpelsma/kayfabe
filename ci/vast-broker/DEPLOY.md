@@ -122,8 +122,11 @@ $1/hour, $6 daily, $30 rolling, $8 reserve, 40-minute boot and 180-minute hard l
 MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
 recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (owner ruling
 2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and
-applies before price and country preference; the names CUBA, IRAN, NORTH KOREA, SYRIA, CHINA, HONG KONG, MACAU and MACAO
-map to their codes.
+applies before price and country preference. Besides the ISO alpha-2 code, the alpha-3 code
+and the names Vast or a geolocation database may print (CHINA, HONG KONG SAR, MACAO, SYRIAN ARAB
+REPUBLIC, "IRAN, ISLAMIC REPUBLIC OF", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF", ...) map to the
+code, case-insensitively and on any comma-separated suffix (review V13: a long form is never
+UNKNOWN).
 [CODE READ: src/policy.js; owner ruling 2026-10-24 item 6] Two owner-edited blacklists, both
 public vars (JSON arrays of positive integers, at most 256 each): BAD_MACHINE_IDS (default the
 `badMachines` list in defaults.json) rejects an offer by `machine_id` (reason `MACHINE`), and

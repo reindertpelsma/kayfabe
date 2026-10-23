@@ -2,32 +2,91 @@
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
 import {gpuClass,offerPrice,offerRejections,refuse} from './policy.js';
-// Vast currently returns geolocation as "region, ISO country code". Region text
-// is discarded. Missing/odd metadata ranks last and never removes an offer.
+// Denied-country spellings: ISO alpha-2 and alpha-3 codes and the names Vast or a geolocation
+// database may print (review V13: a long form must never pass as UNKNOWN). Matching ignores
+// case, apostrophes, parentheses and extra spaces.
+const normal = (text) =>
+  text
+    .toUpperCase()
+    .replace(/['\u2018\u2019`]/g, '')
+    .replace(/[()]/g, ' ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+const DENIED_NAMES = new Map(
+  Object.entries({
+    CU: ['CU', 'CUB', 'Cuba', 'Republic of Cuba'],
+    IR: [
+      'IR',
+      'IRN',
+      'Iran',
+      'Islamic Republic of Iran',
+      'Iran, Islamic Republic of',
+      'Iran (Islamic Republic of)',
+    ],
+    KP: [
+      'KP',
+      'PRK',
+      'North Korea',
+      'DPRK',
+      'DPR Korea',
+      'Korea DPR',
+      'Korea, North',
+      "Democratic People's Republic of Korea",
+      "Korea, Democratic People's Republic of",
+      "Korea (Democratic People's Republic of)",
+    ],
+    SY: ['SY', 'SYR', 'Syria', 'Syrian Arab Republic'],
+    // Owner ruling 2026-10-24: broken or very slow CDN/Ubuntu-mirror access there.
+    CN: [
+      'CN',
+      'CHN',
+      'China',
+      'PRC',
+      "People's Republic of China",
+      "China, People's Republic of",
+      'Mainland China',
+    ],
+    HK: [
+      'HK',
+      'HKG',
+      'Hong Kong',
+      'Hong Kong SAR',
+      'Hong Kong SAR, China',
+      'Hong Kong SAR China',
+      'Hong Kong, China',
+      'Hong Kong Special Administrative Region',
+    ],
+    MO: [
+      'MO',
+      'MAC',
+      'Macau',
+      'Macao',
+      'Macau SAR',
+      'Macao SAR',
+      'Macau SAR, China',
+      'Macao SAR, China',
+      'Macao SAR China',
+      'Macau, China',
+      'Macao, China',
+      'Macau Special Administrative Region',
+      'Macao Special Administrative Region',
+    ],
+  }).flatMap(([code, names]) => names.map((name) => [normal(name), code])),
+);
+// Vast currently returns geolocation as "region, ISO country code". Region text is discarded;
+// a denied name matches on any comma-separated suffix, longest first. Missing/odd metadata
+// ranks last and never removes an offer.
 export function offerCountry(offer) {
   if (typeof offer.geolocation !== 'string' || offer.geolocation.length > 256 || !offer.geolocation)
     return 'UNKNOWN';
-  const country = offer.geolocation.split(',').at(-1).trim();
-  const deniedNames = {
-    CUBA: 'CU',
-    IRAN: 'IR',
-    'NORTH KOREA': 'KP',
-    SYRIA: 'SY',
-    // Owner ruling 2026-10-24: broken or very slow CDN/Ubuntu-mirror access there.
-    CHINA: 'CN',
-    'HONG KONG': 'HK',
-    MACAU: 'MO',
-    MACAO: 'MO',
-    CU: 'CU',
-    IR: 'IR',
-    KP: 'KP',
-    SY: 'SY',
-    CN: 'CN',
-    HK: 'HK',
-    MO: 'MO',
-  };
-  if (deniedNames[country.toUpperCase()]) return deniedNames[country.toUpperCase()];
-  return offer.geolocation.includes(',') && /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
+  const parts = offer.geolocation.split(',');
+  for (let i = 0; i < parts.length; i++) {
+    const denied = DENIED_NAMES.get(normal(parts.slice(i).join(',')));
+    if (denied) return denied;
+  }
+  const country = parts.at(-1).trim();
+  return parts.length > 1 && /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
 }
 function countryRank(offer, cfg) {
   const index = cfg.preferredCountries.indexOf(offer.country);
