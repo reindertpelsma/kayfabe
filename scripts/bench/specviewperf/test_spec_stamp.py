@@ -4,8 +4,9 @@ Owner decision 2026-10-23: scores may be public only as non-compliant numbers. R
 therefore come from spec_stamp.py, never from hand-typed text, and a table that lacks the
 disclaimer or holds an unlabelled score fails the checker.
 """
-import io
 import contextlib
+import io
+import re
 import unittest
 
 import spec_stamp as s
@@ -130,7 +131,7 @@ class Ratios(unittest.TestCase):
     def test_no_ratio_column_by_default(self):
         for kind in ('md', 'csv'):
             text = self.cmp(kind=kind)
-            self.assertNotIn('ratio', text.lower())
+            self.assertIsNone(re.search(r'(?i)\bratio\b', text))
             self.assertNotIn(RESEARCH, text)
             self.assertIn('36.03 (nc)', text)
             self.assertIn('61.61 (nc)', text)

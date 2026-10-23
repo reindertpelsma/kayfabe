@@ -4,15 +4,19 @@
 Input: text-only guest export JSON {root: ..., files: [{path: ..., text: ...}]}.
 No composite is inferred from a partial XML file. Vendor CSV composites should
 be collected separately with the workload's completion status.
+
+Every table written here is stamped "(nc)" with the disclaimer (spec_stamp.py); the exact
+SPECviewperf release and the configuration must be passed in.
 """
 import argparse
-import csv
 import json
 import math
 from pathlib import Path, PurePosixPath
 import re
 import sys
 import xml.etree.ElementTree as ET
+
+import spec_stamp
 
 
 def parse_stdout(text):
@@ -25,7 +29,8 @@ def parse_stdout(text):
             if not math.isfinite(fps) or fps <= 0:
                 raise ValueError('invalid measured FPS')
             rows.append({'workload':root.attrib['Name'],'subtest':index,'fps':fps,
-                         'frames':int(test.attrib['Frames']),'seconds':float(test.attrib['Seconds'])})
+                         'frames':int(test.attrib['Frames']),
+                         'seconds':float(test.attrib['Seconds'])})
     return rows
 
 
@@ -80,26 +85,36 @@ def rows_from_export(data,arm):
     return rows
 
 
-def main():
+SCORE_FIELDS=['arm','run','workload','composite','reported_composite','workload_status',
+              'source','version']
+FPS_FIELDS=['arm','run','workload','subtest','fps','frames','seconds','workload_status']
+
+
+def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('export',type=Path)
     p.add_argument('--arm',required=True)
+    p.add_argument('--release',required=True,
+                   help='exact SPECviewperf release run, e.g. "SPECviewperf 15.0.1"')
+    p.add_argument('--config',required=True,
+                   help='one line: host GPU, virtualisation layer, guest OS and driver')
     p.add_argument('--output',type=Path)
     p.add_argument('--scores-output',type=Path)
-    a=p.parse_args()
+    a=p.parse_args(argv)
+    spec_stamp.check_release(a.release)
+    spec_stamp.check_config(a.config)
     data=json.loads(a.export.read_text(encoding='utf-8-sig'))
     rows=rows_from_export(data,a.arm)
     if a.scores_output:
-        with a.scores_output.open('w', newline='') as scores_file:
-            writer=csv.DictWriter(scores_file,fieldnames=['arm','run','workload','composite','reported_composite','workload_status','source','version'],lineterminator='\n')
-            writer.writeheader();writer.writerows(scores_from_export(data,a.arm))
-    fields=['arm','run','workload','subtest','fps','frames','seconds','workload_status']
-    stream=a.output.open('w',newline='') if a.output else sys.stdout
-    try:
-        writer=csv.DictWriter(stream,fieldnames=fields,lineterminator='\n')
-        writer.writeheader();writer.writerows(rows)
-    finally:
-        if a.output:stream.close()
+        text=spec_stamp.render_csv(scores_from_export(data,a.arm),SCORE_FIELDS,
+                                   ['composite','reported_composite'],a.release,a.config)
+        a.scores_output.write_text(spec_stamp.require_valid(text,'csv'))
+    text=spec_stamp.render_csv(rows,FPS_FIELDS,['fps','seconds'],a.release,a.config)
+    spec_stamp.require_valid(text,'csv')
+    if a.output:
+        a.output.write_text(text)
+    else:
+        sys.stdout.write(text)
 
 
 if __name__=='__main__':main()

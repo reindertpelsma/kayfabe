@@ -2,7 +2,8 @@
 import unittest
 from result_table import parse_stdout, parse_statuses, rows_from_export
 
-XML = '<Results Name="blender-01"><Test Index="2" Frames="594" Seconds="21.71" FPS_2="27.36" /></Results>'
+XML = ('<Results Name="blender-01"><Test Index="2" Frames="594" Seconds="21.71" '
+       'FPS_2="27.36" /></Results>')
 
 
 class ResultTests(unittest.TestCase):
@@ -25,11 +26,14 @@ class ResultTests(unittest.TestCase):
         with self.assertRaises(ValueError):parse_stdout(XML.replace('27.36','-1'))
 
     def test_statuses_are_run_level_only(self):
-        text='[Workload: blender-01] Failed -- check logs\n[Workload:energy-04] Completed\n[workload: blender-01 / subtest: 02_Foo] Completed'
+        text=('[Workload: blender-01] Failed -- check logs\n[Workload:energy-04] Completed\n'
+              '[workload: blender-01 / subtest: 02_Foo] Completed')
         self.assertEqual(parse_statuses(text),{'blender-01':'Failed','energy-04':'Completed'})
 
     def test_failed_workload_retains_numeric_row_and_failure(self):
-        data={'root':'result_native','files':[{'path':'result_one/run-log.txt','text':'[Workload:blender-01] Failed -- errors'}, {'path':'result_one/blender-01/stdout.log','text':XML}]}
+        data={'root':'result_native','files':[
+            {'path':'result_one/run-log.txt','text':'[Workload:blender-01] Failed -- errors'},
+            {'path':'result_one/blender-01/stdout.log','text':XML}]}
         row=rows_from_export(data,'vfio')[0]
         self.assertEqual(row['workload_status'],'Failed')
         self.assertEqual(row['run'],'result_one')

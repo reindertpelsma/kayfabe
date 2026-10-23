@@ -5,8 +5,10 @@ from result_table import scores_from_export
 
 class CompositeTests(unittest.TestCase):
     def data(self,status='Completed',value=61.61):
-        return {'root':'results','files':[{'path':'result_one/run-log.txt','text':f'[Workload:blender-01] {status}'}],
-                'scores':[{'run':'result_one','workload':'blender-01','composite':value,'source':'result.json','version':'1.0.1'}]}
+        log=f'[Workload:blender-01] {status}'
+        return {'root':'results','files':[{'path':'result_one/run-log.txt','text':log}],
+                'scores':[{'run':'result_one','workload':'blender-01','composite':value,
+                           'source':'result.json','version':'1.0.1'}]}
 
     def test_complete_workload_keeps_vendor_composite(self):
         row=scores_from_export(self.data(),'vfio')[0]
