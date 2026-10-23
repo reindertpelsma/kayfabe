@@ -1,5 +1,10 @@
 STATUS: LIVE-DESIGN, 2026-10-23 — V1 offline security fixes from reviewed ffd1d1d51.
 
+[SUPERSEDED IN PART 2026-10-23 21:45, jose round] The box Access pair pass-through returns
+(Worker secrets BOX_ACCESS_ID/BOX_ACCESS_SECRET -> KF_ACCESS_ID/KF_ACCESS_SECRET, box protocol 7);
+the Worker still verifies no Access JWT. Run tokens are jose HS256 JWTs and the mutation tooling
+is deleted. Current state: ci/vast-broker/README.md (top section).
+
 [SUPERSEDED IN PART 2026-10-23, owner rulings 19:10 and 19:25, branch
 claude/vast-broker-fixes2-20261023] The Worker Access JWT switch and box Access tokens, the
 MANUAL/hold/stop-timer modes, review and approval modes, Worker draft/base/path policy, the

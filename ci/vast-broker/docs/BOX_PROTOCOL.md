@@ -2,13 +2,15 @@
 
 CODE READ: box protocol 7; the repo reporter declares `BOX_PROTOCOL = "7"` and accepts only
 that value. Before renting, the Worker reads `scripts/ci/vast_report.py` at the exact tested SHA
-and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. The runner status protocol is separate (5 since 2026-10-23: the runner sends `X-KF-Protocol: 5`, and each side refuses the other version). The bootstrap clones the public repository, fetches and checks out the exact approved SHA, verifies HEAD, and execs the configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the checkout.
+and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. The bootstrap clones the
+public repository, fetches and checks out the exact approved SHA, verifies HEAD, and execs the
+configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the checkout.
 
 | Variable | Format |
 | --- | --- |
 | KF_PROTOCOL | Decimal protocol, currently 7 |
 | KF_BROKER_URL | HTTPS origin plus required secret path, no trailing slash |
-| KF_RUN_ID / KF_RUN_TOKEN | Positive run-attempt / this run's capability: an HS256 JWT (claims run, attempt, sha, nonce, exp = hard limit) that only the Worker verifies |
+| KF_RUN_ID / KF_RUN_TOKEN | Run-attempt / HS256 JWT run, attempt, sha, nonce, exp (Worker checks) |
 | KF_NONCE / KF_SHA / KF_RUNNER_NONCE | 32 / 40 / 64 lowercase hex |
 | KF_REPO | Public owner/repository |
 | KF_SOFT_DEADLINE | Required Worker-clock absolute epoch seconds |
@@ -17,6 +19,9 @@ and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. The r
 | KF_GRACE_FAIL | Required grace ceiling in seconds |
 | KF_GRACE_PASS | Optional grace ceiling in seconds |
 | KF_ACCESS_ID / KF_ACCESS_SECRET | Optional Cloudflare Access service-token pair; both or none |
+
+The runner status protocol is separate: 5 since 2026-10-23 (the runner sends `X-KF-Protocol: 5`;
+each side refuses the other version).
 
 Protocol 7 (2026-10-23): the box sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` on every
 broker request when the Worker injected the pair (Worker secrets `BOX_ACCESS_ID` /
