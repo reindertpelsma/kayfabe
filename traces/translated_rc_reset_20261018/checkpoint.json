@@ -1,0 +1,8 @@
+{
+  "runtime_diff_files": 0,
+  "clippy_new": 0,
+  "claims_new": 0,
+  "claims_resolved": 0,
+  "claims_existing_at_start": 3924,
+  "scope": "relative to PR71 head; recorded repository debt has 167 pre-existing differences"
+}

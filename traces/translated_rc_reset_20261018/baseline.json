@@ -1,0 +1,13 @@
+{
+  "base": "1c6452a276d7014bece3adf42d68cbd4edffbc18",
+  "date": "2026-10-22",
+  "cargo_prefix": "flock -w 600 /tmp/claude-0/kf-local-cargo.lock env CARGO_TARGET_DIR=<lane-target> nice -n 19 cargo",
+  "test_args": ["test", "--release", "-j2", "-p", "kf-rm", "-p", "kf-qemu", "-p", "kf-harness"],
+  "tests": {"passed": 1263, "failed": 0, "ignored": 0, "targets": 100},
+  "clippy_args": ["clippy", "--release", "-j2", "-p", "kf-rm", "-p", "kf-qemu", "-p", "kf-harness", "--all-targets", "--message-format=json"],
+  "clippy": {"warning_sites": 271, "errors": 0},
+  "claims": {"baseline_sites": 3924, "already_outside_recorded_debt": 167},
+  "runtime_changed": false,
+  "mutation_runs": 0,
+  "hardware_runs": 0
+}

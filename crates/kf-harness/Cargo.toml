@@ -5,6 +5,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+rc-negative-control = ["kf-chan/rc-negative-control"]
+
+[[bin]]
+name = "kf-rc-native"
+path = "src/bin/kf-rc-native.rs"
+required-features = ["rc-negative-control"]
+
 [dependencies]
 kf-arch.workspace = true
 kf-abi.workspace = true

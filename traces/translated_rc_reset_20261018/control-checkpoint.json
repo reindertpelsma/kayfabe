@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-23",
+  "runtime_source": "6c65d4e2134fdeef5208f5a1bf74a5ac6431e2f0",
+  "status": "PARTIAL: final Rust validation stopped at shared cargo reservation timeout",
+  "reset_channel": "refusal preserved by accepted owner decision; no recovery claim",
+  "python": {
+    "tests": 59,
+    "failures": 0,
+    "mutants_killed": 7,
+    "minimum_killers": 2,
+    "hardware_evidence": false
+  },
+  "prior_rust_checkpoint": {
+    "source": "37b6491a6",
+    "new_arm_tests_passed": 21,
+    "failed": 0,
+    "does_not_cover_latest_native_bystander_edits": true
+  },
+  "prior_clippy_checkpoint": {
+    "source": "37b6491a6",
+    "packages": [
+      "kf-chan",
+      "kf-qemu",
+      "kf-harness"
+    ],
+    "all_targets": true,
+    "feature": "rc-negative-control",
+    "before_identities": 278,
+    "after_identities": 278,
+    "added": 0,
+    "errors": 0,
+    "final_native_edits_verified": false
+  },
+  "claims": {
+    "branch_start_identities": 3924,
+    "after_identities": 3924,
+    "added": 0,
+    "inherited_outside_recorded_debt": 167,
+    "debt_file_changed": false
+  },
+  "blocked": {
+    "attempt": "first Rust mutant (one-shot removed)",
+    "command": [
+      "flock",
+      "-w",
+      "600",
+      "/tmp/claude-0/kf-local-cargo.lock",
+      "env",
+      "CARGO_TARGET_DIR=<lane-target>",
+      "nice",
+      "-n",
+      "19",
+      "cargo",
+      "test",
+      "-p",
+      "kf-chan",
+      "--features",
+      "rc-negative-control",
+      "--test",
+      "rc_negative",
+      "--release",
+      "-j2"
+    ],
+    "wait_seconds": 600,
+    "exit_code": 1,
+    "output_bytes": 0,
+    "cargo_started": false,
+    "mutant_restored": true,
+    "count_as_surviving_mutant": false
+  },
+  "not_done": [
+    "Rust mutation kill table",
+    "final full kf-* GPU-free suite",
+    "final feature-enabled Clippy after native bystander changes",
+    "full patched guest-driver and probe module link against selected guest kernel",
+    "hardware native signature and fresh OFF/ON Linux guest runs"
+  ],
+  "c_checks": {
+    "probe_and_guest_bridge_objects": "compiled against dev headers 7.0.0-38",
+    "owner_client": "static compile Wall Wextra Werror",
+    "full_guest_driver_linked": false
+  },
+  "hardware": {
+    "n": 0,
+    "spread": null,
+    "Blackwell_ON": "optional future authorized lease"
+  },
+  "cleanup": {
+    "cargo_target_deleted": true,
+    "guest_build_tree_deleted": true,
+    "static_owner_binary_deleted": true,
+    "owned_jobs_running": 0,
+    "owned_resource_locks": 0
+  }
+}

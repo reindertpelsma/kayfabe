@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-23",
+  "bf_head": "1c78c481e783b6f2b44a86ed5027a14e5ed7c779",
+  "hardware_runs": 0,
+  "source_sha256": "cc50478e2d372722c5b29657c75bd8b6312ea7fb507def34da416099d92065fe",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "mutants": [
+    {
+      "mutant": "one-shot-removed",
+      "mutant_sha256": "3402797ea2aa5563f78ecf9c598bf698e7b07e8bb223726ba1e96da4a425934d",
+      "exit_code": 101,
+      "killers": [
+        "chid_and_engine_mapping_preserve_the_other_owner",
+        "error_reaches_only_the_faulting_channels_process",
+        "matching_slot_claims_once",
+        "supported_copy_engine_can_claim_its_own_slot",
+        "concurrent_candidates_have_one_winner"
+      ],
+      "killed": 5
+    },
+    {
+      "mutant": "trigger-ignored",
+      "mutant_sha256": "a63b6590c5e16e8c8f2168476f9be32dfa79e6f50cc37beb709808de6f6ab301",
+      "exit_code": 101,
+      "killers": [
+        "unrelated_put_does_not_consume_the_arm",
+        "unreadable_put_does_not_consume_the_arm"
+      ],
+      "killed": 2
+    },
+    {
+      "mutant": "native-user-check-removed",
+      "mutant_sha256": "259279baeb7827a87b7364e3e019bd9d1392684c2b79bafbe6eee7b799291e90",
+      "exit_code": 101,
+      "killers": [
+        "native_privilege_check_precedes_any_store",
+        "privilege_failure_cannot_write_even_to_an_unavailable_ring"
+      ],
+      "killed": 2
+    },
+    {
+      "mutant": "bad-opcode-replaced",
+      "mutant_sha256": "ba3f8af51ed6678a89bcd3c806cfcfabc20260a8083375ca61de27732b4af364",
+      "exit_code": 101,
+      "killers": [
+        "error_reaches_only_the_faulting_channels_process",
+        "chid_and_engine_mapping_preserve_the_other_owner",
+        "native_stream_is_reserved_opcode_not_guest_data"
+      ],
+      "killed": 3
+    },
+    {
+      "mutant": "push-error-ignored",
+      "mutant_sha256": "1863366137816e4f43605774aa87ebdc9a2ce8d3135ce405b7eca1f839e3dfa3",
+      "exit_code": 101,
+      "killers": [
+        "failed_push_cannot_try_a_failing_doorbell",
+        "failed_push_never_rings_or_retries"
+      ],
+      "killed": 2
+    },
+    {
+      "mutant": "doorbell-before-store",
+      "mutant_sha256": "25983f11b28b1dd3003fb07166269cb717d10f43737616ff60c09b4cd655c8d4",
+      "exit_code": 101,
+      "killers": [
+        "failed_push_never_rings_or_retries",
+        "failed_push_cannot_try_a_failing_doorbell",
+        "failed_ring_is_not_reported_as_injection_success",
+        "native_submission_is_authored_and_ordered"
+      ],
+      "killed": 4
+    }
+  ],
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "kf-chan",
+    "--features",
+    "rc-negative-control",
+    "--test",
+    "rc_negative",
+    "--release",
+    "-j8"
+  ],
+  "before": {
+    "passed": 21,
+    "failed": 0
+  },
+  "after": {
+    "passed": 21,
+    "failed": 0
+  },
+  "status": "PASS",
+  "source_restored": true
+}

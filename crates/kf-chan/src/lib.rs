@@ -22,6 +22,8 @@ pub mod host;
 pub mod passthrough;
 pub mod ptnsi;
 pub mod rc;
+#[cfg(feature = "rc-negative-control")]
+pub mod rc_negative;
 pub mod ring;
 pub mod swmethod;
 pub mod tmode;
