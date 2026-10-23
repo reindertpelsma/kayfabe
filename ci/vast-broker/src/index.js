@@ -719,6 +719,7 @@ export function createService({
     if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.
     if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
+    await github.boxProtocol(target.sha);
     const chosen = await offers.select(
         await offers.evaluate(vast, cfg, ledger, profile),
         cfg,

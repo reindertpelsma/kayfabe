@@ -18,7 +18,9 @@ export class Github {
   }
   async get(path, missing = false, lifecycle = false) {
     // Cache immutable facts and explicit lifecycle reads; admission/review/head reads stay fresh.
-    const immutable = /^commits\/[0-9a-f]{40}$/.test(path),
+    const immutable =
+        /^commits\/[0-9a-f]{40}$/.test(path) ||
+        /^contents\/scripts\/ci\/vast_report\.py\?ref=[0-9a-f]{40}$/.test(path),
       cacheKey = (lifecycle ? 'lifecycle:' : '') + path,
       cached = this.cache.get(cacheKey),
       ttl = lifecycle ? DEFAULTS.lifecycleCacheMs : 5000;
@@ -52,6 +54,21 @@ export class Github {
       this.cache.set(cacheKey, { at: this.now(), value: structuredClone(value) });
     }
     return value;
+  }
+  // Box code runs from the tested commit. Before any paid call, its reporter must declare the
+  // Worker's box protocol (an older reporter rejects the run token and bills until boot timeout).
+  async boxProtocol(sha) {
+    if (!hexSha(sha)) refuse('BAD_REQUEST', 400);
+    const file = await this.get('contents/' + DEFAULTS.reporterPath + '?ref=' + sha, true);
+    let text = '';
+    try {
+      if (file?.type === 'file' && file.encoding === 'base64' && typeof file.content === 'string')
+        text = new TextDecoder('utf-8', { fatal: true }).decode(
+          Uint8Array.from(atob(file.content.replace(/\n/g, '')), (c) => c.charCodeAt(0)),
+        );
+    } catch {}
+    const declared = /^BOX_PROTOCOL = "([0-9]{1,4})"$/m.exec(text)?.[1];
+    if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409); // MUTANT box-protocol
   }
   async run(id, missing = false, lifecycle = false) {
     return this.get('actions/runs/' + id, missing, lifecycle);

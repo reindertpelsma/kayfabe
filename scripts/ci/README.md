@@ -7,7 +7,8 @@ env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_re
 `test_vast_box.py`, `vast_box_mutants.py`. There is no hold helper or login hook (owner ruling
 2026-10-23 19:10) and no box-side Cloudflare Access header.
 
-Env (protocol 4 or 5). Required: `KF_PROTOCOL`, `KF_BROKER_URL` (https origin + secret path, no
+Env (protocol 6, declared by `BOX_PROTOCOL` in `vast_report.py`). Required: `KF_PROTOCOL`,
+`KF_BROKER_URL` (https origin + secret path, no
 trailing slash), `KF_RUN_ID`, `KF_RUN_TOKEN` (must match the run id), `KF_NONCE` (32 hex), `KF_SHA`
 (40), `KF_RUNNER_NONCE` (64), `KF_REPO`, `KF_SOFT_DEADLINE` (epoch s), `KF_HEARTBEAT_SECONDS`,
 `KF_GRACE_FAIL`. Checked if present: `KF_BOOT_DEADLINE`, `KF_HARD_DEADLINE`, `KF_GRACE_PASS`. A
