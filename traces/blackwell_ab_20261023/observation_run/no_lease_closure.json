@@ -1,0 +1,30 @@
+{
+  "utc": "2026-10-23T10:00:42.800063+00:00",
+  "new_lease_created": false,
+  "new_ledger_rows": 0,
+  "known_own_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340,
+    57296911,
+    57302449,
+    57310491,
+    57324106,
+    57340681
+  ],
+  "known_own_ids_api_absent": true,
+  "own_ids_present": [],
+  "other_instances_untouched": true,
+  "timers_started_for_this_attempt": 0,
+  "hardware_observation": "UNRUN_NO_ELIGIBLE_VERIFIED_GB202",
+  "prior_phase_runtime_usd": 5.148077591179074,
+  "new_runtime_spend_usd": 0
+}

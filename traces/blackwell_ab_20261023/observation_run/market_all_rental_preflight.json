@@ -1,5 +1,5 @@
 {
-  "utc": "2026-10-23T09:57:33.246394+00:00",
+  "utc": "2026-10-23T10:00:07.127516+00:00",
   "credit_usd": 29.757424765660858,
   "offers": [
     {
@@ -16,17 +16,17 @@
       "disk_space": 331.125
     },
     {
-      "id": 57254352,
-      "machine_id": 41012,
+      "id": 42143434,
+      "machine_id": 52992,
       "gpu_name": "RTX 5090",
       "candidate_die": "GB202",
       "verification": "deverified",
-      "dph_total": 0.5347222222222222,
-      "cpu_cores_effective": 32.0,
-      "cpu_ram": 63400,
-      "reliability": 0.9911933,
-      "inet_down": 940.0,
-      "disk_space": 1440.0
+      "dph_total": 0.6416666666666667,
+      "cpu_cores_effective": 16.0,
+      "cpu_ram": 63940,
+      "reliability": 0.9899797,
+      "inet_down": 887.4,
+      "disk_space": 1417.8
     },
     {
       "id": 55429765,
