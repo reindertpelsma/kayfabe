@@ -22,7 +22,7 @@
     "budget_cutoff_minutes": 170,
     "guard_rate": 0.48005555555555557,
     "product_head": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
-    "destroyed": false,
+    "destroyed": true,
     "authority": "owner03:15 provider-only retry grant; initial failed57296911, at most2 replacements/different machines; native then tier3 then adaptiveWindows; phase8 stop6 reserve5",
     "auto_destroy_requested_minutes": 170,
     "auto_destroy_pid": 904229,
@@ -34,6 +34,13 @@
     "budget_watch_pid_starttime": 238434011,
     "ssh_ready_utc": "2026-10-23T01:29:12.811746+00:00",
     "ssh_hostkey_fingerprint": "SHA256:JUlveysQK/x/eJxo0KqYKurwvj3EvUDU0E3tkWNmyHY",
-    "observed_dph_total": 0.42866666666666664
+    "observed_dph_total": 0.42866666666666664,
+    "absence_verified_utc": "2026-10-23T02:25:37.530362+00:00",
+    "elapsed_hours_until_absence": 0.9958631594444445,
+    "runtime_cost_estimate_usd": 0.42689334101518517,
+    "lane_runtime_total_usd": 1.5192168444438887,
+    "credit_after_observed": 34.30682600516138,
+    "auto_destroy_cancelled_after_absence": true,
+    "budget_watch_cancelled_after_absence": true
   }
 ]

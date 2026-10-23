@@ -109,10 +109,10 @@
   },
   "kernel_xids.json": {
     "source_sha256": "dc1a892aafea5c5cc4fc5cd457315e1a3cef88dcdda8cc672b548f67514ccbc1",
-    "export_sha256": "d40db7baf09e1e2d78cb14febc2797a60be74986fdd8900f4bb7387e62be625e"
+    "export_sha256": "8deb356edfada01c9cd8e98b923c78c601899fdc16bd7e1d01334982c1e2a403"
   },
   "precomp_kernel_permission.json": {
     "source_sha256": "dc1a892aafea5c5cc4fc5cd457315e1a3cef88dcdda8cc672b548f67514ccbc1",
-    "export_sha256": "e5e79bcc1f507fc025c791f8aa27a23949ccfe403945730da51331443da9298f"
+    "export_sha256": "cafc70560c6dc4c14728b6e46174c04c13be9729dfd3bd999b5d32df746d4de5"
   }
 }

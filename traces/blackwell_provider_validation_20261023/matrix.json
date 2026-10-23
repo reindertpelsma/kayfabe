@@ -30,7 +30,7 @@
     "cause": "tuple-versus-JSON-list comparison",
     "actual_xids_equal_approved_ordered": true,
     "fix": "da6d5498dd091ca3d30fef943f5225c45fbc22b6",
-    "resume": "PREPARED_NOT_EXECUTED_OWNER_DECISION_PENDING"
+    "resume": "PREPARED_NOT_EXECUTED_LEASE_CLOSED_PENDING_CHECKPOINT_DECISION"
   },
   {
     "stage": "Windows580.88_fieldON_hold_B1",
@@ -39,5 +39,15 @@
     "code43": null,
     "tdr": null,
     "rpcs": null
+  },
+  {
+    "stage": "teardown",
+    "instance": 57302449,
+    "api_absence_utc": "2026-10-23T02:25:37.530362+00:00",
+    "all_owned_ids_absent": 13,
+    "current_runtime_estimate_usd": 0.42689334101518517,
+    "phase_runtime_estimate_usd": 1.5192168444438887,
+    "credit_after_observed": 34.30682600516138,
+    "not_a_provider_failure": true
   }
 ]
