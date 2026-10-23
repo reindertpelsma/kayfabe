@@ -125,7 +125,23 @@ fn inherited(name: &str) {
     let all = rows();
     let own = run(name, &all).unwrap();
     let donor = run("GB202", &all).unwrap();
-    assert_eq!(own.page, donor.page);
+    let table = kf_disp::class::for_version("580.65.06").unwrap();
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    for window in 0..row.windows {
+        for kind in ['A', 'B', 'C', 'D', 'E', 'F'] {
+            let offset = table
+                .a(
+                    row.classes.caps,
+                    &format!("PRECOMP_WIN_PIPE_HDR_CAP{kind}"),
+                    window,
+                )
+                .unwrap();
+            assert_eq!(own.page.word(offset), donor.page.word(offset));
+        }
+    }
+    let before = base(row, die(name));
+    assert_eq!(own.page.word(0x00c), before.page.word(0x00c));
+    assert_eq!(own.unmeasured, before.unmeasured);
     let marked: Vec<_> = own
         .provenance
         .iter()
@@ -238,7 +254,16 @@ fn gb202_missing_first_word_refuses() {
 }
 #[test]
 fn gb206_missing_last_word_refuses() {
-    partial("GB206", 0x87c);
+    let row = &kf_chip::display::BLACKWELL_GB20X;
+    let last = kf_disp::class::for_version("580.65.06")
+        .unwrap()
+        .a(
+            row.classes.caps,
+            "PRECOMP_WIN_PIPE_HDR_CAPF",
+            row.windows - 1,
+        )
+        .unwrap();
+    partial("GB206", last);
 }
 #[test]
 fn gb202_wrong_host_branch_refuses() {
