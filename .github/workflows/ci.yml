@@ -2318,6 +2318,26 @@ jobs:
           KERNEL_CONFIG: ${{ runner.temp }}/kconfig
         run: bash scripts/display/gop_standin.sh
 
+  broker:
+    name: broker — build and its GPU-free test suite (broker/)
+    # The host display broker (window, input grab, cursor plane) needs no GPU: `make check` drives it with
+    # a test backend, a test client, a FUSE stall and a Python harness (selftest.sh, the cursor/XOR/tick unit
+    # tests, the lifecycle and clipboard tests). NB_REQUIRE_FUSE=1 makes the FUSE case a failure instead of a
+    # skip, as the Makefile documents. Added 2026-10-21 (owner: "the broker is something CI can test well").
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the broker's build dependencies and FUSE
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential pkg-config python3 fuse3 \
+            libwayland-dev wayland-protocols libxcb1-dev libxcb-dri3-dev libxcb-present-dev \
+            libxcb-render0-dev libxcb-xinput-dev
+      - name: Build and test (make -C broker check)
+        env:
+          NB_REQUIRE_FUSE: "1"
+        run: make -C broker check
+
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)
     # Nightly cron + manual dispatch only — never the push path (the push gate's
