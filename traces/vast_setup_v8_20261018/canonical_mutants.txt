@@ -71,6 +71,6 @@ timeout: 5 mutants, 5 distinct killers
 payload-absent: 3 mutants, 3 distinct killers
 payload-env: 4 mutants, 3 distinct killers
 tool-install: 3 mutants, 2 distinct killers
-contract-failure: 3 mutants, 3 distinct killers
+contract-failure: 3 mutants, 5 distinct killers
 hold-hook: 5 mutants, 4 distinct killers
 mutants: 60, killed: 60, problems: 0

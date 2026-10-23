@@ -1,22 +1,22 @@
 # Vast setup dependency cache — V8
 
-MEASURED on 2026-10-23, run `v7-kvm-20261023` (source `28084b96cebad2a853d72171f72f8d776946b8ba`): the saved timings below come from [V7 evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md); the destroyed box was not queried again. V8 rental values remain pending.
+MEASURED on 2026-10-23, run `v7-kvm-20261023` (source `28084b96cebad2a853d72171f72f8d776946b8ba`): the saved timings below come from [V7 evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md); the destroyed box was not queried again. V8 used source commit ff29c4a83a1bd359352263e135573c8167c298b6; its [rental evidence](../../traces/vast_setup_v8_20261018/LIVE_RUN.md) records a fail-closed readiness race before package work.
 
 | Phase | V7 seconds | V8 seconds | Evidence / limit |
 |---|---:|---:|---|
-| Provider create → running | 904.048 | pending | Provider polling interval: 20 s |
-| Create → first report | 1954.956 | pending | V7 required an unchanged-source manual restart |
-| provision_box | 3295 | pending | 02:00:03–02:54:58 UTC |
-| Before APT completion | 3232 | pending | Includes preflight/update/download; not an exact APT command duration |
-| dpkg configuration | 57 | pending | APT history 02:52:58–02:53:55; excludes downloads |
-| Toolchain/targets + workspace build | ≤63 | pending | Remaining provision_box window; individual times not recorded |
-| Host driver | 237 | pending | Open 580.159.04 |
-| Bench host dependencies | 904 | pending | Existing provision_bench_tree host APT |
-| QEMU track A | ~87 | pending | Unpack/Rust/Ninja included; A_RC=0 |
-| Nested fat guest preparation | 207 | pending | Ubuntu 24.04 guest; separate from the host cache |
-| Musl build | 23.30 | pending | V7 then failed at an adapter output-path mismatch, since fixed |
-| Dependency-cache restore | absent | pending | V8 reports download/extract/install and total seconds |
-| Payload entry → READY | not reached | pending | Target approximately 900 s; measured independently of provider boot |
+| First independent running poll | 904.048 | 145.918 | V7: from create response; V8: from rent-start; both 20 s polling |
+| First accepted report | 1954.956 | 130.610 | V7: from create response, manual restart; V8: from rent-start, unattended |
+| provision_box | 3295 | NOT RUN | 02:00:03–02:54:58 UTC |
+| Before APT completion | 3232 | NOT RUN | Includes preflight/update/download; not an exact APT command duration |
+| dpkg configuration | 57 | NOT RUN | APT history 02:52:58–02:53:55; excludes downloads |
+| Toolchain/targets + workspace build | ≤63 | NOT RUN | Remaining provision_box window; individual times not recorded |
+| Host driver | 237 | NOT RUN | Open 580.159.04 |
+| Bench host dependencies | 904 | NOT RUN | Existing provision_bench_tree host APT |
+| QEMU track A | ~87 | NOT RUN | Unpack/Rust/Ninja included; A_RC=0 |
+| Nested fat guest preparation | 207 | NOT RUN | Ubuntu 24.04 guest; separate from the host cache |
+| Musl build | 23.30 | NOT RUN | V7 then failed at an adapter output-path mismatch, since fixed |
+| Dependency-cache restore | absent | FAIL before download | V8 reports download/extract/install and total seconds |
+| Payload entry → READY | not reached | NOT RUN | Target approximately 900 s; measured independently of provider boot |
 
 MEASURED on 2026-10-23, run `v7-kvm-20261023`: the saved archive snapshot contained 327 complete .deb files / 1,355,662,990 bytes, including the image baseline; the transaction-only count/size was not preserved. Release-file probes returned 346,021 / 1,849,679 / 1,336,943 B/s for archive / Azure / edge; Azure was chosen. These small-file probes do not establish bulk throughput.
 
@@ -26,7 +26,7 @@ MEASURED on 2026-10-23, run `v8-cache-build-20261023`, [producer evidence](../..
 
 MEASURED on 2026-10-23, run `v8-cache-offline-20261023`: a fresh Ubuntu 22.04 container with networking disabled installed that closure in 14.330 s after a 0.040 s local-index update. This is a local installation check, not the rental setup measurement. [Published cache evidence](../../traces/vast_setup_v8_20261018/cache_publication.json) records both downloaded-and-verified release assets: 158,145,005-byte .deb archive and 7,888,026-byte Cargo vendor archive (54 crate directories; root and firmware locks).
 
-CODE READ: the one-off owner-invoked producer is `bash scripts/ci/build_setup_cache.sh /absolute/new/output setup-cache-<tag>`; it uses the digest-pinned Ubuntu 22.04 producer Dockerfile, signed APT SHA256 metadata, bounded six-way prefetch and `cargo vendor --locked --sync firmware/kf-gop/Cargo.toml`. Review the generated lock, publish the two assets to the private store with `gh release create`, and commit the reviewed lock. This flow has no PR trigger, rental or private-store credential inside the producer container.
+CODE READ: the one-off owner-invoked producer is `bash scripts/ci/build_setup_cache.sh /absolute/new/output setup-cache-<tag>`; it uses the digest-pinned Ubuntu 22.04 producer Dockerfile, signed APT SHA256 metadata, bounded six-way prefetch and `cargo vendor --locked --sync firmware/kf-gop/Cargo.toml`. Review the generated lock, publish the two assets to the private store with `gh release create --prerelease --latest=false`, and commit the reviewed lock. This flow has no PR trigger, rental or private-store credential inside the producer container.
 
 CODE READ: the production tiny onstart remains unchanged. Repo-side onstart installs `kf-box-blob-url`; the dependency consumer requests two run-scoped locators, keeps each signed URL out of logs/argv, permits only fixed GitHub CDN HTTPS hosts without redirects or credentials, and checks exact size plus SHA256 before extraction. Extraction rejects traversal, links, special files and expansion beyond 8 GB. Existing extraction directories are preserved on refusal. No store PAT, Vast key, App key or owner stop token reaches the box.
 
@@ -37,3 +37,7 @@ CODE READ: at boot three bounded bulk probes record network conditions; restored
 INFERRED: avoiding the two host dependency downloads should remove the dominant V7 delay. Falsifier for the fresh lease: dependency restore plus provision_full to READY still exceeds about 900 s, or any required build dependency is absent. The single V8 lease must also show unattended first reporting and MANUAL retention beyond the saved GRACE deadline; no source restart is permitted for those claims.
 
 MEASURED on 2026-10-23, run `v8-gpu-free-20261023`, [preflight evidence](../../traces/vast_setup_v8_20261018/preflight.json): 282 GPU-free tests pass. The standalone EXPECTED RED commits precede the implementation (package policy, forced CI profile, cache identity/extraction, APT metadata/probes, blob-helper port, entry order, recommendations, epoch filenames and APT hook). Explicit fixture migration adds the new helper to both canonical copy lists; production inline-onstart expectations are not restored. The new cache/policy and existing payload/environment/diagnostic mutation ledgers name at least two failing tests per mutant. Canonical 60-case mutation results are recorded separately under their original rule.
+
+MEASURED on 2026-10-23, run `v8-kvm-20261023`: no fresh-lease package/cache/build durations exist because the first blob mint was refused while Vast still reported created. The provider loader and original-grace MANUAL retention were demonstrated; the setup-speed hypothesis remains unverified on a rental. The subsequent event-based repo fix has GPU-free tests only. A new acceptance lease requires owner authorisation; the single V8 lease is destroyed.
+
+CODE READ: deployment of this payload uses the already-shipped blob route. Set Worker var `BLOB_REPO=reindertpelsma/win-gpu-image-private-store` and Worker secret `BLOB_GITHUB_TOKEN` to a contents-read credential for that store. If `BLOB_ALLOWED_TAG_PREFIXES` is configured, include `setup-cache-` in its JSON list. These settings stay in the Worker; the box receives only its existing run capability. No Worker bundle rebuild or CI repository secret is required for the cache.

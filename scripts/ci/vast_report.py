@@ -318,6 +318,8 @@ class Reporter:
         self.seq = self.posts = self.bytes = self.requests = self.attempts = 0
         self.pending = self.ack = self.last_req = None
         self.next_try, self.dead, self.fallback_used = 0.0, False, False
+        self.progress_acked = False
+        self.progress_refused = False
         self.last_ok = self.last_post = self.clock()
 
     def say(self, message):
@@ -396,6 +398,8 @@ class Reporter:
         message, state = self.pending, (doc or {}).get("state") if isinstance(doc, dict) else None
         if status == 200:
             self.pending, self.attempts, self.last_ok = None, 0, self.clock()
+            if message["kind"] == "progress":
+                self.progress_acked = True
             if message["kind"] == "result":
                 self.ack = doc if isinstance(doc, dict) else {}
             return
@@ -404,6 +408,8 @@ class Reporter:
             self.dead, self.pending = True, None
             return
         if status in (400, 413):
+            if message["kind"] == "progress":
+                self.progress_refused = True
             self.say("broker rejected a %s report (HTTP %d)" % (message["kind"], status))
             self.pending = None
             if message["kind"] == "result" and not self.fallback_used and self.fallback:
@@ -520,6 +526,7 @@ def run_daemon(args, env):
     reporter = make_reporter(env, args)
     tail, soft = LogTail(args.log), int(env["KF_SOFT_DEADLINE"])
     reporter.progress("Box ready; payload starting")
+    ready_fd = getattr(args, "ready_fd", None)
     done = None
     while done is None:
         data = tail.read()
@@ -531,6 +538,12 @@ def run_daemon(args, env):
             done = {"rc": 124, "timeout": True, "reason": None}
         if done is None:
             reporter.pump()
+            if ready_fd is not None and (
+                reporter.progress_acked or reporter.dead or reporter.progress_refused
+            ):
+                os.write(ready_fd, b"READY\n" if reporter.progress_acked else b"REFUSED\n")
+                os.close(ready_fd)
+                ready_fd = None
             time.sleep(reporter.limits.poll)
     for data in iter(tail.read, b""):
         reporter.feed(data)
@@ -628,6 +641,7 @@ def parser():
             p.add_argument("--log", required=True)
             p.add_argument("--done", required=True)
             p.add_argument("--result", default=RESULT_PATH)
+            p.add_argument("--ready-fd", type=int)
     return top
 
 

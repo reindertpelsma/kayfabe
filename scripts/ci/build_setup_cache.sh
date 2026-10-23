@@ -16,4 +16,4 @@ docker run --rm --cpus 2 --memory 2g -v "$root:/src:ro" -v "$output:/out" \
         --sync firmware/kf-gop/Cargo.toml "$output/vendor" > "$output/vendor-config.txt"
 )
 python3 "$root/scripts/ci/setup_cache_build.py" lock "$root" "$output" "$tag"
-printf '%s\n' "Review setup-cache.lock.json, then publish debs.tar.gz and vendor.tar.gz with gh release create."
+printf '%s\n' "Review setup-cache.lock.json, then publish debs.tar.gz and vendor.tar.gz with gh release create --prerelease --latest=false."

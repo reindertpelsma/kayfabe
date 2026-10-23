@@ -12,6 +12,55 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 CASES = [
     (
+        "permanent-progress-refusal-event",
+        "vast_report.py",
+        "self.progress_refused = True",
+        "self.progress_refused = False",
+        "readiness",
+    ),
+    (
+        "restore-requires-ack-event",
+        "vast_setup.py",
+        "    wait_for_ready()\n    cache.mkdir",
+        "    cache.mkdir",
+        "readiness",
+    ),
+    (
+        "skip-ack-event",
+        "vast_setup.py",
+        "    fd = None\n    try:",
+        "    return\n    fd = None\n    try:",
+        "readiness",
+    ),
+    (
+        "refusal-is-not-ready",
+        "vast_setup.py",
+        'os.read(fd, 16) != b"READY\\n"',
+        'os.read(fd, 16) not in (b"READY\\n", b"REFUSED\\n")',
+        "readiness",
+    ),
+    (
+        "progress-marked-before-ack",
+        "vast_report.py",
+        "self.progress_acked = False",
+        "self.progress_acked = True",
+        "readiness",
+    ),
+    (
+        "refused-ack-sends-ready",
+        "vast_report.py",
+        'b"READY\\n" if reporter.progress_acked else b"REFUSED\\n"',
+        'b"READY\\n"',
+        "readiness",
+    ),
+    (
+        "payload-missing-ready-channel",
+        "vast_onstart.sh",
+        '"KF_BROKER_READY_FD=$ready_fd"',
+        '"KF_BROKER_READY_FD="',
+        "readiness",
+    ),
+    (
         "provision-local-apt-hook",
         "vast_payload_hooks.sh",
         'if [ -n "${KF_APT_CACHE_ROOT:-}" ]; then',

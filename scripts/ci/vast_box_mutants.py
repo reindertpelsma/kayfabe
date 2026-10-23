@@ -502,7 +502,10 @@ CASES = [
         V,
         'report check-env --write "$run_dir/env" || exit 2',
         'report check-env --write "$run_dir/env" || true',
-        [ON + "test_malformed_variable_posts_a_fail_result_and_skips_the_payload"],
+        [
+            ON + "test_bad_contract_cannot_run_with_an_existing_run_directory",
+            ON + "test_bad_contract_cannot_reuse_a_stale_valid_environment",
+        ],
     ),
     (
         "contract-failure",

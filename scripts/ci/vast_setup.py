@@ -233,6 +233,26 @@ def apt(cache, arguments):
     return rc
 
 
+def wait_for_ready():
+    """Wait for the reporter acknowledgement event; the existing payload deadline bounds it."""
+    fd = None
+    try:
+        value = os.environ["KF_BROKER_READY_FD"]
+        if not re.fullmatch(r"[1-9][0-9]{0,5}", value) or not 3 <= int(value) <= 999999:
+            raise ValueError()
+        fd = int(value)
+        if os.read(fd, 16) != b"READY\n":
+            raise ValueError()
+    except (KeyError, OSError, ValueError):
+        raise CacheRefused("broker acknowledgement unavailable") from None
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
 def restore(root, cache=CACHE_ROOT):
     root, cache = Path(root), Path(cache)
     started = time.time()
@@ -245,6 +265,7 @@ def restore(root, cache=CACHE_ROOT):
     facts["arch"] = platform.machine()
     lock = json.loads((root / "scripts/ci/setup-cache.lock.json").read_text())
     validate_lock(lock, root, facts, policy_digest(root))
+    wait_for_ready()
     cache.mkdir(parents=True, exist_ok=False)
     for asset in lock["assets"]:
         at = time.time()

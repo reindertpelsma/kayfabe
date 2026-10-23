@@ -56,6 +56,7 @@ TOOLS = ["bash", "sh", "env", "python3", "git", "timeout", "install", "mkdir", "
 TOOLS += ["sleep", "date", "rm", "mv", "dirname", "tr", "setsid", "nohup", "kill", "ls", "head"]
 TOOLS += ["id", "basename", "touch", "tee", "wc", "grep", "sort", "seq", "cp", "sed", "ln"]
 TOOLS += ["readlink", "mktemp", "true", "false", "cut", "stat", "uname", "printf", "echo"]
+TOOLS += ["mkfifo"]  # Coreutils IPC primitive used by the internal readiness channel.
 CERT = {}
 
 
@@ -1135,6 +1136,23 @@ class Onstart(Tmp):
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse((self.ws / "payload-ran").exists())
         self.assertEqual(b.results()[0]["suites"][0]["name"], "env_contract")
+
+    def malformed_in_existing_run_directory(self, stale):
+        b = self.broker()
+        root = self.tree('touch "$KF_CI_WORKSPACE/payload-ran"\n')
+        self.run_dir.mkdir(parents=True)
+        if stale:
+            load().write_env_file(str(self.run_dir / "env"), good_env(b.url))
+        proc = self.onstart(root, b, env_extra={"KF_GRACE_FAIL": "soon"})
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse((self.ws / "payload-ran").exists())
+        self.assertEqual(b.results()[0]["suites"][0]["name"], "env_contract")
+
+    def test_bad_contract_cannot_run_with_an_existing_run_directory(self):
+        self.malformed_in_existing_run_directory(False)
+
+    def test_bad_contract_cannot_reuse_a_stale_valid_environment(self):
+        self.malformed_in_existing_run_directory(True)
 
     def test_stale_result_file_is_not_trusted(self):
         b = self.broker()

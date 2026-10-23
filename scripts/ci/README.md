@@ -1,6 +1,7 @@
 # Vast box scripts (repo side of the CI broker)
-STATUS: code as of 2026-10-23. MEASURED: production KVM run `v7-kvm-20261023` reached
-a bound FAIL/provision; see [V7 evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md).
+STATUS: code as of 2026-10-23. MEASURED: KVM run `v8-kvm-20261023` returned FAIL/setup_cache;
+unattended environment loading and original-grace MANUAL retention worked. The follow-up
+acknowledgement fix has GPU-free tests only. [V8 evidence](../../traces/vast_setup_v8_20261018/LIVE_RUN.md).
 The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/ci/vast_onstart.sh`.
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
@@ -44,3 +45,8 @@ CODE READ: `kf-box-blob-url <tag> <name>` resolves a private release asset using
 scoped token; the token stays on curl stdin. The payload first restores the dependency cache
 from the [reviewed lock](setup-cache.lock.json), then delegates to the existing box provision
 and merge bar. [Cache design and timing table](../../docs/design/VAST_SETUP_CACHE_20261023.md).
+
+CODE READ: dependency setup waits for the reporter's first accepted progress acknowledgement
+through the internal KF_BROKER_READY_FD pipe. This prevents private blob fetches racing Vast's
+created-to-running transition. The pipe carries no token; existing deadlines and terminal auth
+refusals remain in force. Ordinary payloads retain the offline log path.

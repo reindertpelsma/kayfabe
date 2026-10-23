@@ -51,7 +51,13 @@ install -m 644 "$here/kf-ci-hold.sh" "$profile_dir/kf-ci-hold.sh"
 
 rm -f "$result" "$run_dir/done" "$run_dir/done.tmp"
 : >"$log"
-report daemon --log "$log" --done "$run_dir/done" --result "$result" &
+# An internal pipe carries the first accepted report event to dependency consumers.
+# Keep ordinary/offline payloads runnable; only private blob setup waits on this event.
+ready_pipe=$run_dir/ready.$$
+mkfifo -m 600 "$ready_pipe" || exit 2
+exec {ready_fd}<>"$ready_pipe" || exit 2
+rm -f "$ready_pipe"
+report daemon --log "$log" --done "$run_dir/done" --result "$result" --ready-fd "$ready_fd" &
 reporter=$!
 
 rc=0
@@ -74,6 +80,7 @@ else
         exec timeout --signal=TERM --kill-after=30s "${remaining}s" \
             env -u KF_RUN_TOKEN -u KF_BROKER_URL -u KF_RUN_ID -u KF_RUNNER_NONCE \
             "KF_SOFT_DEADLINE_MS=$((KF_SOFT_DEADLINE * 1000))" \
+            "KF_BROKER_READY_FD=$ready_fd" \
             bash "$payload" "$KF_SHA" "$KF_NONCE"
     ) >>"$log" 2>&1 </dev/null
     rc=$?
@@ -82,6 +89,8 @@ else
         [ "$(date +%s)" -ge $((KF_SOFT_DEADLINE - 2)) ] && timed_out=1
     fi
 fi
+
+exec {ready_fd}>&-
 
 {
     printf 'rc=%d\ntimeout=%d\n' "$rc" "$timed_out"

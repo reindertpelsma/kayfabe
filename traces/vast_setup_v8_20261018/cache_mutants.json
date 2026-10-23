@@ -2,6 +2,84 @@
   "run": "v8-setup-cache-mutants-20261023",
   "cases": [
     {
+      "mutant": "permanent-progress-refusal-event",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline"
+      ]
+    },
+    {
+      "mutant": "restore-requires-ack-event",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_when_report_was_refused",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_without_the_readiness_channel"
+      ]
+    },
+    {
+      "mutant": "skip-ack-event",
+      "count": 14,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_lost_progress_ack_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_not_ready_progress_must_be_acknowledged_before_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_arbitrary_bytes_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_channel_blocks_until_the_ack_event",
+        "test_vast_setup_readiness.ReadinessSignal.test_closed_channel_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_missing_channel_fails_closed",
+        "test_vast_setup_readiness.ReadinessSignal.test_refused_report_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_standard_input_cannot_be_used_as_the_channel",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_when_report_was_refused",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_without_the_readiness_channel"
+      ]
+    },
+    {
+      "mutant": "refusal-is-not-ready",
+      "count": 6,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_refused_report_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_when_report_was_refused"
+      ]
+    },
+    {
+      "mutant": "progress-marked-before-ack",
+      "count": 6,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_lost_progress_ack_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_not_ready_progress_must_be_acknowledged_before_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch"
+      ]
+    },
+    {
+      "mutant": "refused-ack-sends-ready",
+      "count": 4,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch"
+      ]
+    },
+    {
+      "mutant": "payload-missing-ready-channel",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_lost_progress_ack_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_not_ready_progress_must_be_acknowledged_before_cache_fetch"
+      ]
+    },
+    {
       "mutant": "provision-local-apt-hook",
       "count": 2,
       "killers": [
