@@ -1,0 +1,18 @@
+{
+  "classification": "MEASURED",
+  "evidence": "agent-atomic-red.json",
+  "candidate_product": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4610,
+  "time": "2026-10-23T03:04:01.907041+00:00",
+  "falsifier_before_controls": "A blocked handler body read must not expose a new result path or truncate an existing complete result. If neither occurs, early publication does not explain the empty read.",
+  "tests": {
+    "completed_JSON_publication": "PASS",
+    "new_result_invisible_until_complete": "FAIL",
+    "previous_complete_result_retained": "FAIL"
+  },
+  "passed": 1,
+  "failed": 2,
+  "source_sha256": "0cf24ac60e014e03a10831d3dee17b108ad97f404d1a89a337f5815c06549bba",
+  "scope": "Actual lab-agent POST method exercised with a gated body reader; no product code changes",
+  "hardware_observation": "All8 K2 workload completions and guard samples are retained; original final capture is zero bytes, while its exact stored job response later contains valid JSON."
+}
