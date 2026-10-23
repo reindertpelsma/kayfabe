@@ -1,151 +1,154 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM, 12 GiB RAM, 8 vCPUs, Full HD; VFIO arm = physical GeForce RTX 4070 passed through; kayfabe arm = kf3 virtual GPU (details in README.md of this directory)
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,subtest,fps,frames,seconds,workload_status
-vfio,result_2026-10-21-23-51-37,blender-01,1,12.79,297,23.22,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,2,34.5,594,17.22,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,3,80.2,1594,19.88,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,4,207.64,3188,15.35,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,5,31.36,588,18.75,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,6,39.2,594,15.15,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,7,266.42,4118,15.46,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,1,71.92,1416,19.69,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,2,78.9,1260,15.97,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,3,68.96,1195,17.33,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,4,101.5,1708,16.83,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,5,51.44,1020,19.83,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,6,30.89,516,16.7,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,1,57.7,990,17.16,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,2,56.99,910,15.97,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,3,70.67,1144,16.19,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,4,154.87,2340,15.11,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,5,225.83,3564,15.78,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,6,201.62,3040,15.08,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,7,74.37,1248,16.78,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,8,98.9,1584,16.02,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,9,59.72,936,15.67,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,10,166.65,2635,15.81,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,11,123.2,2000,16.23,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,12,120.62,1896,15.72,Completed
-vfio,result_2026-10-21-23-51-37,creo-04,13,183.27,2772,15.12,Completed
-vfio,result_2026-10-21-23-51-37,energy-04,1,60.85,1080,17.75,Completed
-vfio,result_2026-10-21-23-51-37,energy-04,2,58.0,900,15.52,Completed
-vfio,result_2026-10-21-23-51-37,energy-04,3,30.86,540,17.5,Completed
-vfio,result_2026-10-21-23-51-37,energy-04,4,80.56,1260,15.64,Completed
-vfio,result_2026-10-21-23-51-37,energy-04,5,73.85,1260,17.06,Completed
-vfio,result_2026-10-21-23-51-37,energy-04,6,40.77,630,15.45,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,1,95.71,1800,18.81,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,2,2.28,120,52.52,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,3,146.41,2640,18.03,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,4,11.64,240,20.62,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,5,91.39,1650,18.05,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,6,0.97,120,123.98,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,7,138.72,2520,18.17,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,8,90.05,1620,17.99,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,9,121.98,2430,19.92,Completed
-vfio,result_2026-10-21-23-51-37,enscape-01,10,102.55,1980,19.31,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,1,76.41,1170,15.31,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,2,88.46,1360,15.38,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,3,67.94,1035,15.23,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,4,369.95,5688,15.38,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,5,372.72,5643,15.14,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,6,327.64,4930,15.05,Completed
-vfio,result_2026-10-21-23-51-37,maya-07,7,141.91,2295,16.17,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,1,354.32,5420,15.3,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,2,412.54,6233,15.11,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,3,74.2,1120,15.09,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,4,32.47,522,16.08,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,5,43.97,672,15.28,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,6,104.49,1680,16.08,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,7,37.71,598,15.86,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,8,56.22,910,16.19,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,9,4.41,92,20.86,Completed
-vfio,result_2026-10-21-23-51-37,medical-04,10,7.19,138,19.19,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,1,666.8,10200,15.3,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,2,45.16,762,16.88,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,3,173.46,2629,15.16,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,4,69.72,1158,16.61,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,5,2.32,578,248.69,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,6,137.96,2300,16.67,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,7,61.22,969,15.83,Completed
-vfio,result_2026-10-21-23-51-37,solidworks-08,8,1.07,322,301.53,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,1,58.96,1076,18.25,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,2,58.71,1076,18.33,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,3,69.04,1076,15.59,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,4,74.27,1345,18.11,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,5,53.19,810,15.23,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,6,67.89,1080,15.91,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,7,71.51,1080,15.1,Completed
-vfio,result_2026-10-21-23-51-37,unreal_engine-01,8,58.29,1080,18.53,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,1,12.77,297,23.25,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,2,34.48,594,17.23,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,3,79.63,1594,20.02,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,4,202.83,3188,15.72,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,5,30.94,588,19.0,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,6,38.11,594,15.59,Completed
-vfio,result_2026-10-22-01-15-28,blender-01,7,260.03,3976,15.29,Completed
-vfio,result_2026-10-22-01-15-28,catia-07,1,71.53,1416,19.8,Completed
-vfio,result_2026-10-22-01-15-28,catia-07,2,78.9,1260,15.97,Completed
-vfio,result_2026-10-22-01-15-28,catia-07,3,68.84,1195,17.36,Completed
-vfio,result_2026-10-22-01-15-28,catia-07,4,101.12,1708,16.89,Completed
-vfio,result_2026-10-22-01-15-28,catia-07,5,51.85,1020,19.67,Completed
-vfio,result_2026-10-22-01-15-28,catia-07,6,31.07,516,16.61,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,1,59.66,990,16.59,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,2,55.37,840,15.17,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,3,70.04,1056,15.08,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,4,150.06,2340,15.59,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,5,226.29,3564,15.75,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,6,196.13,3040,15.5,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,7,76.43,1248,16.33,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,8,94.04,1584,16.84,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,9,59.84,936,15.64,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,10,165.17,2635,15.95,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,11,123.08,2000,16.25,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,12,118.38,1896,16.02,Completed
-vfio,result_2026-10-22-01-15-28,creo-04,13,183.45,2772,15.11,Completed
-vfio,result_2026-10-22-01-15-28,energy-04,1,61.39,1080,17.59,Completed
-vfio,result_2026-10-22-01-15-28,energy-04,2,57.95,900,15.53,Completed
-vfio,result_2026-10-22-01-15-28,energy-04,3,30.8,540,17.53,Completed
-vfio,result_2026-10-22-01-15-28,energy-04,4,81.13,1260,15.53,Completed
-vfio,result_2026-10-22-01-15-28,energy-04,5,73.71,1260,17.09,Completed
-vfio,result_2026-10-22-01-15-28,energy-04,6,40.73,630,15.47,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,1,96.88,1800,18.58,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,2,2.28,120,52.62,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,3,146.09,2640,18.07,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,4,13.05,240,18.4,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,5,91.71,1650,17.99,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,6,0.92,120,130.31,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,7,134.77,2520,18.7,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,8,89.0,1620,18.2,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,9,122.08,2430,19.9,Completed
-vfio,result_2026-10-22-01-15-28,enscape-01,10,102.65,1980,19.29,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,1,76.1,1170,15.38,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,2,85.24,1280,15.02,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,3,66.64,1035,15.53,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,4,369.95,5688,15.38,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,5,371.94,5643,15.17,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,6,323.28,4930,15.25,Completed
-vfio,result_2026-10-22-01-15-28,maya-07,7,141.78,2295,16.19,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,1,353.6,5420,15.33,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,2,416.26,6504,15.62,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,3,74.36,1120,15.06,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,4,32.43,522,16.09,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,5,43.93,672,15.3,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,6,104.59,1680,16.06,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,7,37.71,598,15.86,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,8,56.22,910,16.19,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,9,4.41,92,20.86,Completed
-vfio,result_2026-10-22-01-15-28,medical-04,10,7.19,138,19.2,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,1,628.09,9775,15.56,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,2,44.74,762,17.03,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,3,168.59,2629,15.59,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,4,69.65,1158,16.62,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,5,2.32,578,248.67,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,6,137.06,2300,16.78,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,7,61.16,969,15.84,Completed
-vfio,result_2026-10-22-01-15-28,solidworks-08,8,1.07,322,301.53,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,1,57.54,1076,18.7,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,2,58.81,1076,18.3,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,3,68.65,1076,15.67,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,4,73.51,1345,18.3,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,5,57.51,1080,18.78,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,6,68.33,1080,15.81,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,7,70.36,1080,15.35,Completed
-vfio,result_2026-10-22-01-15-28,unreal_engine-01,8,57.4,1080,18.81,Completed
+vfio,result_2026-10-21-23-51-37,blender-01,1,12.79 (nc),297,23.22 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,2,34.5 (nc),594,17.22 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,3,80.2 (nc),1594,19.88 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,4,207.64 (nc),3188,15.35 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,5,31.36 (nc),588,18.75 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,6,39.2 (nc),594,15.15 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,7,266.42 (nc),4118,15.46 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,1,71.92 (nc),1416,19.69 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,2,78.9 (nc),1260,15.97 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,3,68.96 (nc),1195,17.33 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,4,101.5 (nc),1708,16.83 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,5,51.44 (nc),1020,19.83 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,6,30.89 (nc),516,16.7 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,1,57.7 (nc),990,17.16 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,2,56.99 (nc),910,15.97 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,3,70.67 (nc),1144,16.19 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,4,154.87 (nc),2340,15.11 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,5,225.83 (nc),3564,15.78 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,6,201.62 (nc),3040,15.08 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,7,74.37 (nc),1248,16.78 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,8,98.9 (nc),1584,16.02 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,9,59.72 (nc),936,15.67 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,10,166.65 (nc),2635,15.81 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,11,123.2 (nc),2000,16.23 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,12,120.62 (nc),1896,15.72 (nc),Completed
+vfio,result_2026-10-21-23-51-37,creo-04,13,183.27 (nc),2772,15.12 (nc),Completed
+vfio,result_2026-10-21-23-51-37,energy-04,1,60.85 (nc),1080,17.75 (nc),Completed
+vfio,result_2026-10-21-23-51-37,energy-04,2,58.0 (nc),900,15.52 (nc),Completed
+vfio,result_2026-10-21-23-51-37,energy-04,3,30.86 (nc),540,17.5 (nc),Completed
+vfio,result_2026-10-21-23-51-37,energy-04,4,80.56 (nc),1260,15.64 (nc),Completed
+vfio,result_2026-10-21-23-51-37,energy-04,5,73.85 (nc),1260,17.06 (nc),Completed
+vfio,result_2026-10-21-23-51-37,energy-04,6,40.77 (nc),630,15.45 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,1,95.71 (nc),1800,18.81 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,2,2.28 (nc),120,52.52 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,3,146.41 (nc),2640,18.03 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,4,11.64 (nc),240,20.62 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,5,91.39 (nc),1650,18.05 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,6,0.97 (nc),120,123.98 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,7,138.72 (nc),2520,18.17 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,8,90.05 (nc),1620,17.99 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,9,121.98 (nc),2430,19.92 (nc),Completed
+vfio,result_2026-10-21-23-51-37,enscape-01,10,102.55 (nc),1980,19.31 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,1,76.41 (nc),1170,15.31 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,2,88.46 (nc),1360,15.38 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,3,67.94 (nc),1035,15.23 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,4,369.95 (nc),5688,15.38 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,5,372.72 (nc),5643,15.14 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,6,327.64 (nc),4930,15.05 (nc),Completed
+vfio,result_2026-10-21-23-51-37,maya-07,7,141.91 (nc),2295,16.17 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,1,354.32 (nc),5420,15.3 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,2,412.54 (nc),6233,15.11 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,3,74.2 (nc),1120,15.09 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,4,32.47 (nc),522,16.08 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,5,43.97 (nc),672,15.28 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,6,104.49 (nc),1680,16.08 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,7,37.71 (nc),598,15.86 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,8,56.22 (nc),910,16.19 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,9,4.41 (nc),92,20.86 (nc),Completed
+vfio,result_2026-10-21-23-51-37,medical-04,10,7.19 (nc),138,19.19 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,1,666.8 (nc),10200,15.3 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,2,45.16 (nc),762,16.88 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,3,173.46 (nc),2629,15.16 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,4,69.72 (nc),1158,16.61 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,5,2.32 (nc),578,248.69 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,6,137.96 (nc),2300,16.67 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,7,61.22 (nc),969,15.83 (nc),Completed
+vfio,result_2026-10-21-23-51-37,solidworks-08,8,1.07 (nc),322,301.53 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,1,58.96 (nc),1076,18.25 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,2,58.71 (nc),1076,18.33 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,3,69.04 (nc),1076,15.59 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,4,74.27 (nc),1345,18.11 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,5,53.19 (nc),810,15.23 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,6,67.89 (nc),1080,15.91 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,7,71.51 (nc),1080,15.1 (nc),Completed
+vfio,result_2026-10-21-23-51-37,unreal_engine-01,8,58.29 (nc),1080,18.53 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,1,12.77 (nc),297,23.25 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,2,34.48 (nc),594,17.23 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,3,79.63 (nc),1594,20.02 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,4,202.83 (nc),3188,15.72 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,5,30.94 (nc),588,19.0 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,6,38.11 (nc),594,15.59 (nc),Completed
+vfio,result_2026-10-22-01-15-28,blender-01,7,260.03 (nc),3976,15.29 (nc),Completed
+vfio,result_2026-10-22-01-15-28,catia-07,1,71.53 (nc),1416,19.8 (nc),Completed
+vfio,result_2026-10-22-01-15-28,catia-07,2,78.9 (nc),1260,15.97 (nc),Completed
+vfio,result_2026-10-22-01-15-28,catia-07,3,68.84 (nc),1195,17.36 (nc),Completed
+vfio,result_2026-10-22-01-15-28,catia-07,4,101.12 (nc),1708,16.89 (nc),Completed
+vfio,result_2026-10-22-01-15-28,catia-07,5,51.85 (nc),1020,19.67 (nc),Completed
+vfio,result_2026-10-22-01-15-28,catia-07,6,31.07 (nc),516,16.61 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,1,59.66 (nc),990,16.59 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,2,55.37 (nc),840,15.17 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,3,70.04 (nc),1056,15.08 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,4,150.06 (nc),2340,15.59 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,5,226.29 (nc),3564,15.75 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,6,196.13 (nc),3040,15.5 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,7,76.43 (nc),1248,16.33 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,8,94.04 (nc),1584,16.84 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,9,59.84 (nc),936,15.64 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,10,165.17 (nc),2635,15.95 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,11,123.08 (nc),2000,16.25 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,12,118.38 (nc),1896,16.02 (nc),Completed
+vfio,result_2026-10-22-01-15-28,creo-04,13,183.45 (nc),2772,15.11 (nc),Completed
+vfio,result_2026-10-22-01-15-28,energy-04,1,61.39 (nc),1080,17.59 (nc),Completed
+vfio,result_2026-10-22-01-15-28,energy-04,2,57.95 (nc),900,15.53 (nc),Completed
+vfio,result_2026-10-22-01-15-28,energy-04,3,30.8 (nc),540,17.53 (nc),Completed
+vfio,result_2026-10-22-01-15-28,energy-04,4,81.13 (nc),1260,15.53 (nc),Completed
+vfio,result_2026-10-22-01-15-28,energy-04,5,73.71 (nc),1260,17.09 (nc),Completed
+vfio,result_2026-10-22-01-15-28,energy-04,6,40.73 (nc),630,15.47 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,1,96.88 (nc),1800,18.58 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,2,2.28 (nc),120,52.62 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,3,146.09 (nc),2640,18.07 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,4,13.05 (nc),240,18.4 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,5,91.71 (nc),1650,17.99 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,6,0.92 (nc),120,130.31 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,7,134.77 (nc),2520,18.7 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,8,89.0 (nc),1620,18.2 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,9,122.08 (nc),2430,19.9 (nc),Completed
+vfio,result_2026-10-22-01-15-28,enscape-01,10,102.65 (nc),1980,19.29 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,1,76.1 (nc),1170,15.38 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,2,85.24 (nc),1280,15.02 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,3,66.64 (nc),1035,15.53 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,4,369.95 (nc),5688,15.38 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,5,371.94 (nc),5643,15.17 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,6,323.28 (nc),4930,15.25 (nc),Completed
+vfio,result_2026-10-22-01-15-28,maya-07,7,141.78 (nc),2295,16.19 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,1,353.6 (nc),5420,15.33 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,2,416.26 (nc),6504,15.62 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,3,74.36 (nc),1120,15.06 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,4,32.43 (nc),522,16.09 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,5,43.93 (nc),672,15.3 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,6,104.59 (nc),1680,16.06 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,7,37.71 (nc),598,15.86 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,8,56.22 (nc),910,16.19 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,9,4.41 (nc),92,20.86 (nc),Completed
+vfio,result_2026-10-22-01-15-28,medical-04,10,7.19 (nc),138,19.2 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,1,628.09 (nc),9775,15.56 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,2,44.74 (nc),762,17.03 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,3,168.59 (nc),2629,15.59 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,4,69.65 (nc),1158,16.62 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,5,2.32 (nc),578,248.67 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,6,137.06 (nc),2300,16.78 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,7,61.16 (nc),969,15.84 (nc),Completed
+vfio,result_2026-10-22-01-15-28,solidworks-08,8,1.07 (nc),322,301.53 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,1,57.54 (nc),1076,18.7 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,2,58.81 (nc),1076,18.3 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,3,68.65 (nc),1076,15.67 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,4,73.51 (nc),1345,18.3 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,5,57.51 (nc),1080,18.78 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,6,68.33 (nc),1080,15.81 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,7,70.36 (nc),1080,15.35 (nc),Completed
+vfio,result_2026-10-22-01-15-28,unreal_engine-01,8,57.4 (nc),1080,18.81 (nc),Completed

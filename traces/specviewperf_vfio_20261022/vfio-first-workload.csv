@@ -1,9 +1,12 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM, 12 GiB RAM, 8 vCPUs, Full HD; VFIO arm = physical GeForce RTX 4070 passed through; kayfabe arm = kf3 virtual GPU (details in README.md of this directory)
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,subtest,fps,frames,seconds,workload_status
-vfio,result_2026-10-21-23-51-37,blender-01,1,12.79,297,23.22,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,2,34.5,594,17.22,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,3,80.2,1594,19.88,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,4,207.64,3188,15.35,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,5,31.36,588,18.75,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,6,39.2,594,15.15,Completed
-vfio,result_2026-10-21-23-51-37,blender-01,7,266.42,4118,15.46,Completed
-vfio,result_2026-10-21-23-51-37,catia-07,1,71.92,1416,19.69,Incomplete
+vfio,result_2026-10-21-23-51-37,blender-01,1,12.79 (nc),297,23.22 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,2,34.5 (nc),594,17.22 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,3,80.2 (nc),1594,19.88 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,4,207.64 (nc),3188,15.35 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,5,31.36 (nc),588,18.75 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,6,39.2 (nc),594,15.15 (nc),Completed
+vfio,result_2026-10-21-23-51-37,blender-01,7,266.42 (nc),4118,15.46 (nc),Completed
+vfio,result_2026-10-21-23-51-37,catia-07,1,71.92 (nc),1416,19.69 (nc),Incomplete

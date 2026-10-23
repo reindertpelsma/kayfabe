@@ -1,28 +1,31 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM, 12 GiB RAM, 8 vCPUs, Full HD; VFIO arm = physical GeForce RTX 4070 passed through; kayfabe arm = kf3 virtual GPU (details in README.md of this directory)
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,workload,subtest,fps,frames,seconds,evidence
-kayfabe,blender-01,2,27.36,594,21.71,MEASURED; preserved stdout XML; partial suite
-kayfabe,blender-01,3,51.20,797,15.57,MEASURED; preserved stdout XML; partial suite
-kayfabe,blender-01,4,60.06,1594,26.54,MEASURED; preserved stdout XML; partial suite
-kayfabe,blender-01,5,27.83,441,15.84,MEASURED; preserved stdout XML; partial suite
-kayfabe,blender-01,6,36.28,594,16.37,MEASURED; preserved stdout XML; partial suite
-kayfabe,blender-01,7,60.06,994,16.55,MEASURED; preserved stdout XML; partial suite
-kayfabe,catia-07,1,39.89,708,17.75,MEASURED; preserved stdout XML; partial suite
-kayfabe,catia-07,2,70.32,1080,15.36,MEASURED; preserved stdout XML; partial suite
-kayfabe,catia-07,4,87.82,1464,16.67,MEASURED; preserved stdout XML; partial suite
-kayfabe,catia-07,5,44.87,1020,22.73,MEASURED; preserved stdout XML; partial suite
-kayfabe,creo-04,5,205.42,3168,15.42,MEASURED; preserved stdout XML; partial suite
-kayfabe,creo-04,10,144.21,2170,15.05,MEASURED; preserved stdout XML; partial suite
-kayfabe,creo-04,11,84.93,1400,16.49,MEASURED; preserved stdout XML; partial suite
-kayfabe,energy-04,1,61.33,1080,17.61,MEASURED; preserved stdout XML; partial suite
-kayfabe,energy-04,2,58.06,900,15.50,MEASURED; preserved stdout XML; partial suite
-kayfabe,energy-04,3,14.13,270,19.11,MEASURED; preserved stdout XML; partial suite
-kayfabe,energy-04,4,80.23,1260,15.70,MEASURED; preserved stdout XML; partial suite
-kayfabe,energy-04,5,73.98,1260,17.03,MEASURED; preserved stdout XML; partial suite
-kayfabe,energy-04,6,30.11,540,17.94,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,1,41.50,1080,26.02,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,2,1.36,120,88.22,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,3,51.57,990,19.20,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,4,2.97,120,40.37,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,5,34.94,660,18.89,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,6,0.71,120,169.06,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,7,63.25,1260,19.92,MEASURED; preserved stdout XML; partial suite
-kayfabe,enscape-01,8,46.07,1080,23.44,MEASURED; preserved stdout XML; partial suite
+kayfabe,blender-01,2,27.36 (nc),594,21.71 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,blender-01,3,51.20 (nc),797,15.57 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,blender-01,4,60.06 (nc),1594,26.54 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,blender-01,5,27.83 (nc),441,15.84 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,blender-01,6,36.28 (nc),594,16.37 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,blender-01,7,60.06 (nc),994,16.55 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,catia-07,1,39.89 (nc),708,17.75 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,catia-07,2,70.32 (nc),1080,15.36 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,catia-07,4,87.82 (nc),1464,16.67 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,catia-07,5,44.87 (nc),1020,22.73 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,creo-04,5,205.42 (nc),3168,15.42 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,creo-04,10,144.21 (nc),2170,15.05 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,creo-04,11,84.93 (nc),1400,16.49 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,energy-04,1,61.33 (nc),1080,17.61 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,energy-04,2,58.06 (nc),900,15.50 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,energy-04,3,14.13 (nc),270,19.11 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,energy-04,4,80.23 (nc),1260,15.70 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,energy-04,5,73.98 (nc),1260,17.03 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,energy-04,6,30.11 (nc),540,17.94 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,1,41.50 (nc),1080,26.02 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,2,1.36 (nc),120,88.22 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,3,51.57 (nc),990,19.20 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,4,2.97 (nc),120,40.37 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,5,34.94 (nc),660,18.89 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,6,0.71 (nc),120,169.06 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,7,63.25 (nc),1260,19.92 (nc),MEASURED; preserved stdout XML; partial suite
+kayfabe,enscape-01,8,46.07 (nc),1080,23.44 (nc),MEASURED; preserved stdout XML; partial suite

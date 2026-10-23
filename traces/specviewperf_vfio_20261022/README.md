@@ -1,5 +1,9 @@
 # VF1 physical-GPU SPECviewperf15 reference — 2026-10-22
 
+> Release: SPECviewperf 15.x (patch level not recorded)
+> Configuration: Windows guest (owner image) in a QEMU/KVM VM, 12 GiB RAM, 8 vCPUs, Full HD; VFIO arm = physical GeForce RTX 4070 passed through; kayfabe arm = kf3 virtual GPU (details in README.md of this directory)
+> (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
+
 MEASURED: **PARTIAL overall.** Both full native iterations completed all nine
 workloads:150subtest rows,18Completed statuses. The selected follow-up and Steel
 Nomad were not run after the command channel failed and the unchanged15-minute
@@ -14,15 +18,15 @@ is(max-min)/mean with n=2. Official CSV values agree with selected result.json.
 
 | Workload | VFIO1 | VFIO2 | Range/mean |
 |---|---:|---:|---:|
-| blender-01 | 61.61 | 60.61 | 1.64% |
-| catia-07 | 63.10 | 63.13 | 0.05% |
-| creo-04 | 104.94 | 103.97 | 0.93% |
-| energy-04 | 54.57 | 54.67 | 0.18% |
-| enscape-01 | 37.26 | 37.39 | 0.35% |
-| maya-07 | 162.14 | 160.37 | 1.10% |
-| medical-04 | 50.54 | 50.58 | 0.08% |
-| solidworks-08 | 29.51 | 29.19 | 1.09% |
-| unreal_engine-01 | 63.58 | 63.70 | 0.19% |
+| blender-01 | 61.61 (nc) | 60.61 (nc) | 1.64% (nc) |
+| catia-07 | 63.10 (nc) | 63.13 (nc) | 0.05% (nc) |
+| creo-04 | 104.94 (nc) | 103.97 (nc) | 0.93% (nc) |
+| energy-04 | 54.57 (nc) | 54.67 (nc) | 0.18% (nc) |
+| enscape-01 | 37.26 (nc) | 37.39 (nc) | 0.35% (nc) |
+| maya-07 | 162.14 (nc) | 160.37 (nc) | 1.10% (nc) |
+| medical-04 | 50.54 (nc) | 50.58 (nc) | 0.08% (nc) |
+| solidworks-08 | 29.51 (nc) | 29.19 (nc) | 1.09% (nc) |
+| unreal_engine-01 | 63.58 (nc) | 63.70 (nc) | 0.19% (nc) |
 
 MEASURED: the preserved kayfabe run marked Blender,CATIA,Creo Failed; Energy
 Completed(45.60); Enscape remained incomplete; the remaining workloads had no
