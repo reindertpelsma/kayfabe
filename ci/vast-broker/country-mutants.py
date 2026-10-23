@@ -38,7 +38,10 @@ cases = [
     (
         "country-normalization",
         "src/offers.js",
-        "return /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';",
+        (
+            "return offer.geolocation.includes(',') && /^[A-Z]{2}$/.test(country) "
+            "? country : 'UNKNOWN';"
+        ),
         "return country;",
     ),
     ("country-ledger", "src/index.js", "        country: offer.country,\n", ""),

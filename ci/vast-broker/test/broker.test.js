@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { setup, clock, sha, nonce, env } from './helpers.js';
 const state = async (r) => (await r.json()).state;
@@ -85,7 +86,7 @@ test('returns immediately without waiting for logs or boot', async () => {
   const h = await setup();
   h.cloud.logReady = false;
   await rent(h);
-  assert.equal(h.cloud.inspected.length, 0);
+  assert.equal(h.cloud.inspected.length, 1); // Immediate contract-price check, no boot wait.
   assert.equal(
     h.cloud.calls.some((c) => c.url.includes('request_logs')),
     false,
@@ -301,6 +302,7 @@ for (const id of ['777', '888'])
 test('foreign run cannot read ledger instance', async () => {
   const h = await setup();
   await rent(h);
+  h.cloud.inspected = [];
   assert.equal((await h.call('/status/123-1', { claims: { run_id: '124' } })).status, 401);
   assert.deepEqual(h.cloud.inspected, []);
 });
@@ -310,16 +312,22 @@ test('foreign run cannot destroy ledger instance', async () => {
   assert.equal((await h.call('/stop/123-1', { claims: { run_id: '124' } })).status, 401);
   assert.deepEqual(h.cloud.deletes, []);
 });
-test('changed label prevents deletion', async () => {
+test('reconciled changed label prevents deletion', async () => {
   const h = await setup();
   await rent(h);
+  const r = await h.storage.get('record:123-1');
+  r.idSource = 'reconcile';
+  await h.storage.put('record:123-1', r);
   h.cloud.instances.get('900').label = 'owner-dev';
   await h.call('/stop/123-1');
   assert.deepEqual(h.cloud.deletes, []);
 });
-test('changed label prevents status log access', async () => {
+test('reconciled changed label prevents status log access', async () => {
   const h = await setup();
   await rent(h);
+  const r = await h.storage.get('record:123-1');
+  r.idSource = 'reconcile';
+  await h.storage.put('record:123-1', r);
   h.cloud.instances.get('900').label = 'kf-ci-other';
   assert.notEqual((await h.call('/status/123-1')).status, 200);
   assert.equal(
@@ -393,18 +401,22 @@ test('completed run without marker is cleaned', async () => {
   await h.service.sweep();
   assert.deepEqual(h.cloud.deletes, ['900']);
 });
-test('draft owner push does not rent', async () => {
+test('YAML controls draft owner push', async () => {
   const h = await setup();
   h.cloud.prs[0].draft = true;
-  assert.equal(await state(await h.call()), 'NEEDS_APPROVAL');
-  assert.equal(h.cloud.creates, 0);
+  const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+  assert.match(text, /!github\.event\.pull_request\.draft/);
+  assert.equal((await h.call()).status, 200);
+  assert.equal(h.cloud.creates, 1);
 });
-test('draft review does not override default refusal', async () => {
+test('YAML controls reviewed draft', async () => {
   const h = await setup();
   h.cloud.prs[0].draft = true;
   h.cloud.reviews = [{ id: 1, user: { id: 42 }, state: 'APPROVED', commit_id: sha }];
-  assert.equal(await state(await h.call()), 'NEEDS_APPROVAL');
-  assert.equal(h.cloud.creates, 0);
+  const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+  assert.match(text, /!github\.event\.pull_request\.draft/);
+  assert.equal((await h.call()).status, 200);
+  assert.equal(h.cloud.creates, 1);
 });
 test('draft rental is explicitly configurable', async () => {
   const h = await setup({ RENT_DRAFTS: 'true' });
@@ -421,10 +433,7 @@ for (const restart of [false, true])
     h.cloud.run.head_sha = newSha;
     h.cloud.run.pull_requests[0].head.sha = newSha;
     h.cloud.prs[0].head.sha = newSha;
-    assert.equal(
-      await state(await h.call('/rent', { claims: { run_id: '124', sha: 'f'.repeat(40) } })),
-      'BUSY',
-    );
+    assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'BUSY');
     assert.equal(h.cloud.creates, 1);
     assert.deepEqual(h.cloud.deletes, ['900']);
   });
@@ -499,7 +508,7 @@ for (const restart of [false, true])
       String(u).includes('/pulls/8/reviews') ? Response.json([]) : original(u, i);
     h.restart();
     assert.equal(
-      await state(await h.call('/rent', { claims: { run_id: '124', ref: 'refs/pull/8/merge' } })),
+      await state(await h.call('/rent', { claims: { run_id: '124', ref: 'refs/heads/master' } })),
       'UNAVAILABLE_BUDGET',
     );
     assert.equal(h.cloud.creates, 1);

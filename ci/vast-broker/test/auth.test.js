@@ -141,23 +141,23 @@ for (const change of [
       actor: { id: 43 },
       triggering_actor: { id: 43 },
       head_sha: 'd'.repeat(40),
-      head_branch: 'master',
+      head_branch: null,
       event: 'push',
       run_attempt: 2,
       id: 124,
       repository: { full_name: 'elsewhere/repo' },
     }[change];
-    assert.notEqual((await h.call()).status, 200);
+    assert.notEqual((await h.call('/rent', { claims: { sha, workflow_sha: sha } })).status, 200);
     assert.equal(h.cloud.creates, 0);
   });
 }
-for (const change of ['old-head', 'fork', 'different-branch', 'closed', 'ambiguous', 'unknown']) {
+for (const change of ['old-head', 'fork', 'malformed-branch', 'closed', 'ambiguous', 'unknown']) {
   test('PR identity rejects ' + change, async () => {
     const h = await setup();
     const p = h.cloud.prs[0];
     if (change === 'old-head') p.head.sha = 'd'.repeat(40);
     if (change === 'fork') p.head.repo.full_name = 'fork/repo';
-    if (change === 'different-branch') p.head.ref = 'other';
+    if (change === 'malformed-branch') p.head.ref = null;
     if (change === 'closed') p.state = 'closed';
     if (change === 'ambiguous') {
       h.cloud.prs.push({ ...p, number: 8 });

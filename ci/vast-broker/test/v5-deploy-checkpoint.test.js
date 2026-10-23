@@ -39,7 +39,7 @@ for (const path of ['', 'x'.repeat(32)])
     const s = onstart(sha, nonce, 180, env.REPOSITORY, {
       url: env.WORKER_URL,
       run: '123-1',
-      token: 'v1.123.1.1800030000.' + 'A'.repeat(43),
+      token: 'v2.123.1.1800030000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
       path,
     });
     assert.ok(

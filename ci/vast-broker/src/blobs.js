@@ -3,7 +3,7 @@ import {DEFAULTS} from './defaults.js';
 // prettier-ignore
 import {readBounded,refuse} from './policy.js';
 // Resolve metadata only. Never follow a redirect or acquire release bytes.
-export async function mintBlob(fetcher, env, ledger, record, tag, name, now) {
+export async function checkBlobBudget(env, ledger, record, tag, name, now) {
   const safe = (s, n) =>
     typeof s === 'string' &&
     new RegExp('^[A-Za-z0-9._-]{1,' + n + '}$').test(s) &&
@@ -12,9 +12,9 @@ export async function mintBlob(fetcher, env, ledger, record, tag, name, now) {
   if (!safe(tag, 64) || !safe(name, 100)) refuse('BAD_REQUEST', 400);
   if (
     !/^[-\w.]+\/[-\w.]+$/.test(env.BLOB_REPO ?? '') ||
-    typeof env.BLOB_GITHUB_TOKEN !== 'string' ||
-    !env.BLOB_GITHUB_TOKEN ||
-    /[\r\n]/.test(env.BLOB_GITHUB_TOKEN)
+    typeof (env.GITHUB_API_TOKEN || env.BLOB_GITHUB_TOKEN) !== 'string' ||
+    !(env.GITHUB_API_TOKEN || env.BLOB_GITHUB_TOKEN) ||
+    /[\r\n]/.test(env.GITHUB_API_TOKEN || env.BLOB_GITHUB_TOKEN)
   )
     refuse();
   let prefixes;
@@ -23,7 +23,12 @@ export async function mintBlob(fetcher, env, ledger, record, tag, name, now) {
   } catch {
     refuse();
   }
-  if (!Array.isArray(prefixes) || prefixes.length > 32 || !prefixes.every((x) => safe(x, 64)))
+  if (
+    !Array.isArray(prefixes) ||
+    !prefixes.length ||
+    prefixes.length > 32 ||
+    !prefixes.every((x) => safe(x, 64))
+  )
     refuse();
   if (prefixes.length && !prefixes.some((p) => tag.startsWith(p))) refuse('UNAUTHORIZED', 401);
   const bound = (key, fallback, max) => {
@@ -36,12 +41,16 @@ export async function mintBlob(fetcher, env, ledger, record, tag, name, now) {
     dayKey = 'blob-day:' + Math.floor(now / 86400000),
     used = (await ledger.get(dayKey)) ?? 0;
   if ((record.blobMints ?? 0) >= runLimit || used >= dayLimit) refuse('RATE_LIMITED', 429);
+  return { dayKey, used };
+}
+export async function mintBlob(fetcher, env, ledger, record, tag, name, now) {
+  const { dayKey, used } = await checkBlobBudget(env, ledger, record, tag, name, now);
   record.blobMints = (record.blobMints ?? 0) + 1;
   await ledger.save(record);
   await ledger.put(dayKey, used + 1);
   const headers = {
       Accept: 'application/vnd.github+json',
-      Authorization: 'Bearer ' + env.BLOB_GITHUB_TOKEN,
+      Authorization: 'Bearer ' + (env.GITHUB_API_TOKEN || env.BLOB_GITHUB_TOKEN),
       'User-Agent': 'kayfabe-vast-broker',
       'X-GitHub-Api-Version': '2022-11-28',
     },
@@ -85,6 +94,18 @@ export async function mintBlob(fetcher, env, ledger, record, tag, name, now) {
     if (response.status !== 302 || response.redirected) refuse();
     const location = response.headers.get('Location');
     if (!location || location.length > 8192) refuse();
+    let decoded;
+    try {
+      decoded = decodeURIComponent(location);
+    } catch {
+      refuse();
+    }
+    if (
+      [env.GITHUB_API_TOKEN, env.BLOB_GITHUB_TOKEN].some(
+        (value) => value && (location.includes(value) || decoded.includes(value)),
+      )
+    )
+      refuse();
     let url;
     try {
       url = new URL(location);

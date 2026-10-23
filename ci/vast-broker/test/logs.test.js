@@ -4,7 +4,7 @@ import { sha, nonce, env } from './helpers.js';
 const callback = {
   url: env.WORKER_URL,
   run: '123-1',
-  token: 'v1.123.1.1800009000.' + 'A'.repeat(43),
+  token: 'v2.123.1.1800009000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
 };
 const sanitize = async () => import('../src/sanitize.js');
 for (const v of ['$(id)', '`id`', "'", '\n', 'a'.repeat(39), 'A'.repeat(40)])

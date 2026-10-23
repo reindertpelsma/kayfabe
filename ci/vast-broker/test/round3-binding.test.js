@@ -70,7 +70,7 @@ for (const key of ['tested_sha', 'pr_number'])
     const response = await h.call('/rent', {
       body: { ...request, [key]: key === 'tested_sha' ? 'd'.repeat(40) : 8 },
     });
-    assert.equal(response.status, 409);
+    assert.equal(response.status, 401);
     assert.equal(h.cloud.creates, 0);
   });
 test('R3 same run cannot replace runner nonce', async () => {
@@ -157,4 +157,15 @@ for (const key of ['runner_nonce', 'sha'])
     });
     assert.equal(response.status, 400);
     assert.equal((await h.storage.get('record:123-1')).verdict, null);
+  });
+for (const pr of [8, 9])
+  test('R3 owner dispatch crosschecks PR caller context ' + pr, async () => {
+    const h = await setup();
+    h.cloud.run.event = 'workflow_dispatch';
+    const response = await h.call('/rent', {
+      claims: { event_name: 'workflow_dispatch', ref: 'refs/heads/owner-pr' },
+      body: { ...request, pr_number: pr },
+    });
+    assert.equal(response.status, 409);
+    assert.equal(h.cloud.creates, 0);
   });

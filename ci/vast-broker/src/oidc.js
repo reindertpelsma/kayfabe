@@ -5,9 +5,24 @@ import {fetchJson,refuse} from './policy.js';
 const JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const ISSUER = 'https://token.actions.githubusercontent.com';
 export class OidcVerifier {
-  constructor(fetcher = fetch, now = Date.now, { issuer = ISSUER, jwks = JWKS } = {}) {
+  constructor(
+    fetcher = fetch,
+    now = Date.now,
+    {
+      issuer = ISSUER,
+      jwks = JWKS,
+      maxLifetime = 3600,
+      maxAge = 600,
+      requireNbf = true,
+      allowAudienceArray = false,
+    } = {},
+  ) {
     this.fetcher = fetcher;
     this.now = now;
+    this.maxLifetime = maxLifetime;
+    this.maxAge = maxAge;
+    this.requireNbf = requireNbf;
+    this.allowAudienceArray = allowAudienceArray;
     this.issuer = issuer;
     this.jwks = jwks;
     this.keys = new Map();
@@ -95,15 +110,28 @@ export class OidcVerifier {
       (await crypto.subtle.verify('RSASSA-PKCS1-v1_5', this.keys.get(h.kid), sig, input));
     if (!(await verify())) refuse('UNAUTHORIZED', 401);
     const seconds = this.now() / 1000;
+    const allowedArray =
+      this.allowAudienceArray &&
+      Array.isArray(c.aud) &&
+      c.aud.length > 0 &&
+      c.aud.length <= 16 &&
+      c.aud.every(
+        (value) => typeof value === 'string' && value.length > 0 && value.length <= 256,
+      ) &&
+      c.aud.includes(audience);
     if (
+      !Number.isSafeInteger(c.iat) ||
+      c.iat > seconds + 60 ||
+      seconds - c.iat > this.maxAge ||
+      c.exp <= c.iat ||
+      c.exp - c.iat > this.maxLifetime ||
       c.iss !== this.issuer ||
-      c.aud !== audience ||
+      (c.aud !== audience && !allowedArray) ||
       typeof c.exp !== 'number' ||
       !Number.isFinite(c.exp) ||
       c.exp <= seconds ||
-      typeof c.nbf !== 'number' ||
-      !Number.isFinite(c.nbf) ||
-      c.nbf > seconds
+      ((this.requireNbf || c.nbf !== undefined) &&
+        (typeof c.nbf !== 'number' || !Number.isFinite(c.nbf) || c.nbf > seconds))
     )
       refuse('UNAUTHORIZED', 401);
     return c;

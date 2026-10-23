@@ -1,0 +1,10 @@
+name = "kayfabe-vast-reaper"
+main = "worker.js"
+no_bundle = true
+compatibility_date = "2026-10-21"
+workers_dev = false
+[triggers]
+crons = ["*/5 * * * *"]
+[vars]
+REAPER_HARD_MINUTES = "180"
+REAPER_MARGIN_MINUTES = "15"

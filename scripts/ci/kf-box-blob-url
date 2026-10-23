@@ -4,12 +4,16 @@ set -eu
 env_file=${KF_CI_ENV_FILE:-/run/kf-ci/env}
 # shellcheck disable=SC1090
 . "$env_file"
+# shellcheck source=scripts/ci/kf-access-headers.sh
+. "$(dirname "$0")/kf-access-headers.sh"
+kf_access_validate || exit 2
 [ "$#" -eq 2 ] || exit 2
 for value in "$1" "$2"; do
     case "$value" in ''|.|..|*[!A-Za-z0-9._-]*) exit 2;; esac
 done
 [ "${#1}" -le 64 ] && [ "${#2}" -le 100 ] || exit 2
 case ${KF_RUN_TOKEN:-} in ''|*[!A-Za-z0-9._-]*) exit 2;; esac
-printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN" |
+{ printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN";
+    kf_access_headers; } |
     curl --config - --silent --show-error --fail --max-time 20 --max-redirs 0 --proto '=https' \
         --noproxy '*' "${KF_BROKER_URL:?}/blob-url/${KF_RUN_ID:?}/$1/$2"

@@ -20,7 +20,7 @@ for (const name of ['KF_ACCESS_ID', 'KF_ACCESS_SECRET']) {
     assert.ok(!JSON.stringify([...h.storage.data]).includes('s'.repeat(64)));
   });
 }
-for (const side of ['runner', 'reporter', 'helpers']) {
+for (const side of ['runner', 'reporter', 'daemon', 'kill', 'hold', 'blob']) {
   test('round optional Access headers use the intended transport ' + side, () => {
     const result = spawnSync('python3', ['ci/vast-broker/test/round_access_fixture.py', side], {
       encoding: 'utf8',
@@ -41,7 +41,38 @@ for (const job of ['pending', 'report'])
   test('round Access A secret cannot cross the broker job ' + job, async () => {
     const { checkWorkflows } = await import('../workflow-guard.js');
     const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
-    const changed = text.replace('  '+job+':\n', '  '+job+':\n    env:\n'+
-      '      WRONG_ACCESS: ${{ secrets.VAST_BROKER_ACCESS_SECRET }}\n');
-    assert.ok(checkWorkflows({'gpu-vast.yml':changed}).length > 0);
+    const changed = text.replace(
+      '  ' + job + ':\n',
+      '  ' +
+        job +
+        ':\n    env:\n' +
+        '      WRONG_ACCESS: ${{ secrets.VAST_BROKER_ACCESS_SECRET }}\n',
+    );
+    assert.ok(checkWorkflows({ 'gpu-vast.yml': changed }).length > 0);
+  });
+
+for (const manual of [false, true])
+  test('round actual controller Access A headers and masking ' + manual, () => {
+    const p = spawnSync(
+      'python3',
+      [
+        '-I',
+        'ci/vast-broker/test/round3_main_fixture.py',
+        JSON.stringify({ access: true, manual }),
+      ],
+      { encoding: 'utf8', timeout: 5000 },
+    );
+    assert.equal(p.status, 0, p.stderr);
+    const r = JSON.parse(p.stdout);
+    assert.equal(r.status, 0);
+    for (const call of r.calls) {
+      if (call.url.startsWith('https://oidc.example/')) {
+        assert.ok(!call.headers['CF-Access-Client-Id']);
+      } else {
+        assert.equal(call.headers['CF-Access-Client-Id'], 'runner-a.access');
+        assert.equal(call.headers['CF-Access-Client-Secret'], 'a'.repeat(64));
+        assert.ok(call.masks.includes('a'.repeat(64)));
+      }
+    }
+    assert.ok(!r.summary.includes('a'.repeat(64)));
   });

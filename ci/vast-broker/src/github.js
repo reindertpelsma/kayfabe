@@ -1,4 +1,7 @@
 // prettier-ignore
+import {allowedWorkflowRef} from './workflow-authority.js';
+import { DEFAULTS } from './defaults.js';
+// prettier-ignore
 import {fetchJson,refuse,numericId,hexSha,skippedFiles} from './policy.js';
 export class Github {
   constructor(fetcher, cfg, token, { cache = new Map(), now = Date.now } = {}) {
@@ -13,12 +16,20 @@ export class Github {
       ...(token ? { Authorization: 'Bearer ' + token } : {}),
     };
   }
-  async get(path, missing = false) {
-    // Cache only immutable commit facts. Admission/run/review/file/head reads stay fresh.
+  async get(path, missing = false, lifecycle = false) {
+    // Cache immutable facts and explicit lifecycle reads; admission/review/head reads stay fresh.
     const immutable = /^commits\/[0-9a-f]{40}$/.test(path),
-      cached = this.cache.get(path);
-    if (immutable && cached && this.now() - cached.at < 5000) return structuredClone(cached.value);
-    if (!/^[A-Za-z0-9_/?=&.-]+$/.test(path) || path.includes('..') || path.startsWith('/'))
+      cacheKey = (lifecycle ? 'lifecycle:' : '') + path,
+      cached = this.cache.get(cacheKey),
+      ttl = lifecycle ? DEFAULTS.lifecycleCacheMs : 5000;
+    if ((immutable || lifecycle) && cached && this.now() - cached.at < ttl)
+      return structuredClone(cached.value);
+    const comparison = /^compare\/[0-9a-f]{40}\.\.\.[0-9a-f]{40}\?per_page=1&page=[12]$/.test(path);
+    if (
+      !/^[A-Za-z0-9_/?=&.-]+$/.test(path) ||
+      (path.includes('..') && !comparison) ||
+      path.startsWith('/')
+    )
       refuse();
     const publicFallback = async (url, init) => {
       const response = await this.fetcher(url, init);
@@ -36,17 +47,17 @@ export class Github {
       { method: 'GET', headers: this.headers },
       missing,
     );
-    if (immutable) {
+    if (immutable || lifecycle) {
       if (this.cache.size >= 32) this.cache.delete(this.cache.keys().next().value);
-      this.cache.set(path, { at: this.now(), value: structuredClone(value) });
+      this.cache.set(cacheKey, { at: this.now(), value: structuredClone(value) });
     }
     return value;
   }
-  async run(id, missing = false) {
-    return this.get('actions/runs/' + id, missing);
+  async run(id, missing = false, lifecycle = false) {
+    return this.get('actions/runs/' + id, missing, lifecycle);
   }
-  async pr(number) {
-    return this.get('pulls/' + number);
+  async pr(number, lifecycle = false) {
+    return this.get('pulls/' + number, false, lifecycle);
   }
   async allSkipped(p) {
     const count = p.changed_files;
@@ -59,6 +70,33 @@ export class Github {
     }
     return skippedFiles(files, count, this.cfg.patterns);
   }
+  async reachable(sha) {
+    const heads = new Set();
+    for (let page = 1; page <= 5; page++) {
+      const branches = await this.get('branches?per_page=100&page=' + page);
+      if (!Array.isArray(branches) || branches.length > 100) return false;
+      for (const branch of branches) {
+        if (typeof branch?.name !== 'string' || !branch.name || !hexSha(branch.commit?.sha))
+          return false;
+        if (branch.commit.sha === sha) return true;
+        if (heads.size < 16) heads.add(branch.commit.sha);
+      }
+      if (branches.length < 100) break;
+    }
+    for (const head of heads) {
+      const comparison = await this.get('compare/' + sha + '...' + head + '?per_page=1&page=2');
+      if (
+        ['ahead', 'identical'].includes(comparison.status) &&
+        comparison.base_commit?.sha === sha &&
+        comparison.merge_base_commit?.sha === sha &&
+        comparison.behind_by === 0 &&
+        Number.isSafeInteger(comparison.ahead_by) &&
+        comparison.ahead_by >= 0
+      )
+        return true;
+    }
+    return false;
+  }
   async authorize(c, hint) {
     const cfg = this.cfg;
     if (
@@ -69,13 +107,14 @@ export class Github {
       !hexSha(c.sha)
     )
       refuse('UNAUTHORIZED', 401);
-    if (!['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name))
+    if (!['pull_request_target', 'workflow_dispatch', 'push'].includes(c.event_name))
       refuse('UNAUTHORIZED', 401);
     let r = await this.run(c.run_id);
     if (
       String(r.id) !== c.run_id ||
       String(r.run_attempt) !== c.run_attempt ||
       r.event !== c.event_name ||
+      r.status !== 'in_progress' ||
       String(r.actor?.id) !== c.actor_id ||
       r.repository?.full_name !== cfg.repo ||
       !hexSha(r.head_sha) ||
@@ -83,6 +122,7 @@ export class Github {
       !numericId(String(r.triggering_actor?.id))
     )
       refuse('UNAUTHORIZED', 401);
+    if (!allowedWorkflowRef(c, cfg, r, cfg.profile ?? 'check')) refuse('UNAUTHORIZED', 401);
     if (
       c.triggering_actor !== undefined &&
       String(c.triggering_actor) !== String(r.triggering_actor.id)
@@ -109,14 +149,25 @@ export class Github {
         attempt: c.run_attempt,
       };
     }
+    if (c.event_name === 'push') {
+      if (
+        c.actor_id !== cfg.owner ||
+        String(r.triggering_actor.id) !== cfg.owner ||
+        r.head_repository?.full_name !== cfg.repo ||
+        c.sha !== r.head_sha ||
+        c.ref !== 'refs/heads/' + r.head_branch
+      )
+        refuse('UNAUTHORIZED', 401);
+      const commit = await this.get('commits/' + c.sha);
+      if (commit.sha !== c.sha) refuse();
+      return { sha: c.sha, pr: null, branch: r.head_branch, run: c.run_id, attempt: c.run_attempt };
+    }
     let p;
-    const automatic = ['pull_request', 'pull_request_target'].includes(c.event_name);
     if (c.event_name === 'pull_request_target') {
       if (
-        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||
         c.sha !== r.head_sha ||
         c.workflow_sha !== r.head_sha ||
-        !cfg.checkWorkflows.includes(c.workflow_ref) ||
+        !allowedWorkflowRef(c, cfg, r, 'check') ||
         !Number.isSafeInteger(hint?.pr_number)
       )
         refuse('UNAUTHORIZED', 401);
@@ -128,14 +179,6 @@ export class Github {
       if (p.head?.repo?.full_name !== cfg.repo) refuse('NOT_ELIGIBLE', 403);
       if (p.head?.sha !== hint.tested_sha) refuse('UNAUTHORIZED', 401);
       r = { ...r, head_sha: hint.tested_sha, head_branch: p.head.ref };
-    } else if (automatic) {
-      const m = /^refs\/pull\/([1-9][0-9]*)\/merge$/.exec(c.ref || '');
-      if (!m) refuse('UNAUTHORIZED', 401);
-      const member = r.pull_requests?.filter(
-        (x) => String(x.number) === m[1] && x.head?.sha === r.head_sha,
-      );
-      if (member?.length !== 1) refuse('UNAUTHORIZED', 401);
-      p = await this.pr(m[1]);
     } else {
       if (
         c.actor_id !== cfg.owner ||
@@ -144,19 +187,22 @@ export class Github {
         c.ref !== 'refs/heads/' + r.head_branch
       )
         refuse('UNAUTHORIZED', 401);
-      const commit = await this.get('commits/' + c.sha);
-      if (commit.sha !== c.sha) refuse();
-      const prs = await this.get('commits/' + c.sha + '/pulls?per_page=100');
+      if (r.head_repository?.full_name !== cfg.repo) refuse('UNAUTHORIZED', 401);
+      const selected = hint?.tested_sha ?? c.sha;
+      if (!hexSha(selected)) refuse('BAD_REQUEST', 400);
+      const commit = await this.get('commits/' + selected);
+      if (commit.sha !== selected) refuse();
+      if (selected !== c.sha && !(await this.reachable(selected))) refuse('UNAUTHORIZED', 401);
+      r = { ...r, head_sha: selected };
+      const prs = await this.get('commits/' + selected + '/pulls?per_page=100');
       if (!Array.isArray(prs) || prs.length >= 100) refuse();
       const exact = prs.filter(
         (x) =>
-          x.state === 'open' &&
-          x.head?.sha === c.sha &&
-          x.head?.ref === r.head_branch &&
-          x.head?.repo?.full_name === cfg.repo,
+          x.state === 'open' && x.head?.sha === r.head_sha && x.head?.repo?.full_name === cfg.repo,
       );
       if (exact.length > 1) refuse();
       p = exact[0];
+      if (p) r = { ...r, head_branch: p.head.ref };
       if (!p)
         return {
           sha: r.head_sha,
@@ -171,15 +217,19 @@ export class Github {
       p.state !== 'open' ||
       !Number.isSafeInteger(p.number) ||
       p.number <= 0 ||
+      typeof p.head?.ref !== 'string' ||
+      !p.head.ref ||
       p.head?.sha !== r.head_sha ||
       p.head?.ref !== r.head_branch ||
       p.head?.repo?.full_name !== cfg.repo ||
       p.base?.repo?.full_name !== cfg.repo
     )
       refuse();
-    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base
-    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };
-    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);
+    const target = {
+      sha: p.head.sha,
+      pr: c.event_name === 'workflow_dispatch' ? null : p.number,
+      branch: r.head_branch,
+    };
     let reviews = [];
     for (let page = 1; page <= 5; page++) {
       const list = await this.get(`pulls/${p.number}/reviews?per_page=100&page=${page}`);
@@ -211,10 +261,8 @@ export class Github {
                 ? author || approved
                 : approved);
     if (!permitted) refuse('NEEDS_APPROVAL', 403);
-    const notNeeded = automatic && (await this.allSkipped(p));
     const current = await this.pr(p.number);
     if (current.head?.sha !== target.sha || current.state !== 'open') refuse();
-    if (automatic && !cfg.bases.includes(current.base?.ref)) refuse('NOT_ELIGIBLE', 403);
-    return { ...target, run: c.run_id, attempt: c.run_attempt, notNeeded };
+    return { ...target, run: c.run_id, attempt: c.run_attempt };
   }
 }

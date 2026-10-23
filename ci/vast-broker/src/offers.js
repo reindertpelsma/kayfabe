@@ -5,14 +5,21 @@ import {gpuClass,offerPrice,offerRejections,refuse} from './policy.js';
 // Vast currently returns geolocation as "region, ISO country code". Region text
 // is discarded. Missing/odd metadata ranks last and never removes an offer.
 export function offerCountry(offer) {
-  if (
-    typeof offer.geolocation !== 'string' ||
-    offer.geolocation.length > 256 ||
-    !offer.geolocation.includes(',')
-  )
+  if (typeof offer.geolocation !== 'string' || offer.geolocation.length > 256 || !offer.geolocation)
     return 'UNKNOWN';
   const country = offer.geolocation.split(',').at(-1).trim();
-  return /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
+  const deniedNames = {
+    CUBA: 'CU',
+    IRAN: 'IR',
+    'NORTH KOREA': 'KP',
+    SYRIA: 'SY',
+    CU: 'CU',
+    IR: 'IR',
+    KP: 'KP',
+    SY: 'SY',
+  };
+  if (deniedNames[country.toUpperCase()]) return deniedNames[country.toUpperCase()];
+  return offer.geolocation.includes(',') && /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
 }
 function countryRank(offer, cfg) {
   const index = cfg.preferredCountries.indexOf(offer.country);
@@ -74,6 +81,12 @@ export class OfferBook {
             : (values[mid - 1] + values[mid]) / 2
           : null;
       const reasons = offerRejections(offer, cfg, { profile, median, badMachines });
+      const country = offerCountry(offer);
+      if (
+        cfg.deniedCountries.includes(country) ||
+        (country === 'UNKNOWN' && !cfg.allowUnknownCountry)
+      )
+        reasons.push('COUNTRY');
       for (const reason of reasons) rejected[reason] = (rejected[reason] ?? 0) + 1;
       if (!reasons.length)
         allowed.push({

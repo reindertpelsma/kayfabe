@@ -57,9 +57,12 @@ def _match(pattern):
     return lambda v: re.fullmatch(pattern, v) is not None
 
 
-TOKEN = r"v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}"
+TOKEN = (r"v2\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\."
+         r"[0-9a-f]{32}\.[0-9a-f]{40}\.[A-Za-z0-9_-]{43}")
 # (name, required, check). Optional entries are validated only when present.
 SPEC = [
+    ("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
+    ("KF_ACCESS_SECRET", False, _match(r"[A-Za-z0-9_.-]{32,256}")),
     ("KF_PROTOCOL", True, lambda v: v in PROTOCOLS),
     ("KF_BROKER_URL", True, _broker_url),
     ("KF_RUN_ID", True, _match(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,19}")),
@@ -80,6 +83,8 @@ SPEC = [
 def validate_env(env):
     """Return 'NAME: problem' strings (never values) for every contract violation."""
     problems = []
+    if bool(env.get("KF_ACCESS_ID")) != bool(env.get("KF_ACCESS_SECRET")):
+        problems.append("KF_ACCESS_ID/KF_ACCESS_SECRET: incomplete pair")
     for name, required, check in SPEC:
         value = env.get(name, "")
         if value == "":
@@ -234,8 +239,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 class HttpsTransport:
     """HTTPS POST to one fixed URL; no proxies, no redirects; token only in that header."""
 
-    def __init__(self, token, timeout=10.0):
+    def __init__(self, token, timeout=10.0, access=None):
         self.token = token
+        access = access or {}
+        ident, secret = access.get("KF_ACCESS_ID", ""), access.get("KF_ACCESS_SECRET", "")
+        self.access = {}
+        if ident or secret:
+            if (not re.fullmatch(r"[A-Za-z0-9_.-]{1,256}", ident)
+                    or not re.fullmatch(r"[A-Za-z0-9_.-]{32,256}", secret)):
+                raise ValueError("incomplete or malformed Access pair")
+            self.access = {"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret}
         self.timeout = timeout
         self.opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}),
@@ -245,7 +258,8 @@ class HttpsTransport:
 
     def post(self, url, body):
         """Return (status, parsed JSON or None); status None means no HTTP answer."""
-        headers = {"Content-Type": "application/json", "Authorization": "Bearer " + self.token}
+        headers = {**self.access, "Content-Type": "application/json",
+                   "Authorization": "Bearer " + self.token}
         request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
             with self.opener.open(request, timeout=self.timeout) as response:
@@ -508,7 +522,8 @@ def make_reporter(env, args):
     heartbeat = env.get("KF_HEARTBEAT_SECONDS", "")
     seconds = int(heartbeat) if heartbeat.isdigit() and int(heartbeat) > 0 else 600
     return Reporter(
-        env["KF_BROKER_URL"], env["KF_RUN_ID"], env["KF_RUN_TOKEN"], seconds, make_limits(args)
+        env["KF_BROKER_URL"], env["KF_RUN_ID"], env["KF_RUN_TOKEN"], seconds, make_limits(args),
+        transport=HttpsTransport(env["KF_RUN_TOKEN"], access=env),
     )
 
 

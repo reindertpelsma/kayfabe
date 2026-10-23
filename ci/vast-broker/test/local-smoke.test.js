@@ -104,7 +104,7 @@ for (const skip of [true, false])
     const { r, h, localReads } = await localCall({ skip });
     assert.equal(r.status, 200);
     assert.ok(localReads >= 5);
-    assert.equal(h.cloud.creates, skip ? 0 : 1);
+    assert.equal(h.cloud.creates, 1);
   });
 for (const flag of [undefined, 'false'])
   test('local identity requires explicit flag ' + flag, async () => {

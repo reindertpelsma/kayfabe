@@ -50,14 +50,15 @@ export const baseClaims = {
   repository_owner_id: owner,
   sub: 'repo:' + repo + ':environment:gpu-vast',
   job_workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',
-  event_name: 'pull_request',
+  iat: clock / 1000,
+  event_name: 'pull_request_target',
   actor_id: owner,
-  sha: 'd'.repeat(40),
-  ref: 'refs/pull/7/merge',
+  sha,
+  ref: 'refs/heads/master',
   run_id: '123',
   run_attempt: '1',
   workflow_ref: 'reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master',
-  workflow_sha: 'd'.repeat(40),
+  workflow_sha: sha,
 };
 export async function jwt(patch = {}, header = {}, key = pair.privateKey) {
   const enc = (v) => Buffer.from(JSON.stringify(v)).toString('base64url');
@@ -66,6 +67,9 @@ export async function jwt(patch = {}, header = {}, key = pair.privateKey) {
     '.' +
     enc({
       ...baseClaims,
+      ...(!Object.hasOwn(patch, 'iat') && patch.nbf !== undefined
+        ? { iat: Math.floor(patch.nbf + 1) }
+        : {}),
       ...(patch.workflow_ref !== undefined && !Object.hasOwn(patch, 'job_workflow_ref')
         ? { job_workflow_ref: patch.workflow_ref }
         : {}),
@@ -116,7 +120,7 @@ export class MockCloud {
   run = {
     id: 123,
     run_attempt: 1,
-    event: 'pull_request',
+    event: 'pull_request_target',
     head_sha: sha,
     head_branch: 'owner-pr',
     pull_requests: [{ number: 7, head: { sha } }],
@@ -124,6 +128,7 @@ export class MockCloud {
     triggering_actor: { id: 42 },
     status: 'in_progress',
     repository: { full_name: repo },
+    head_repository: { full_name: repo },
   };
   prs = [
     {
@@ -230,6 +235,11 @@ export class MockCloud {
         onstart: body.onstart,
         image_uuid: body.image,
         actual_status: 'running',
+        dph_base: this.price - (this.offer.storage_cost * 120) / 720,
+        dph_total: this.price,
+        storage_cost: this.offer.storage_cost,
+        inet_down_cost: this.offer.inet_down_cost,
+        inet_up_cost: this.offer.inet_up_cost,
       });
       if (this.ambiguous) throw Error('PRIVATE-UPSTREAM');
       return Response.json({
@@ -266,12 +276,14 @@ export class MockCloud {
 export function callbackToken(record, secret = env.RUN_TOKEN_SECRET, patch = {}) {
   const r = { ...record, ...patch },
     expiry = r.reportExpiry ?? Math.floor((r.started + r.ttl) / 1000);
-  const message = ['v1', r.run, r.attempt, r.sha, r.label, expiry].join('|');
+  const message = ['v2', r.run, r.attempt, r.sha, r.label, expiry, r.nonce].join('|');
   return [
-    'v1',
+    'v2',
     r.run,
     r.attempt,
     expiry,
+    r.nonce,
+    r.sha,
     createHmac('sha256', secret).update(message).digest('base64url'),
   ].join('.');
 }
@@ -373,22 +385,31 @@ export async function setup(overrides = {}) {
         body,
         method = path.startsWith('/status') ? 'GET' : 'POST',
         token,
-        ghToken = 'mock-job-token',
+        ghToken = null,
       } = {},
     ) {
       if (path === '/rent' && body === undefined)
         body = {
           runner_nonce: 'f'.repeat(64),
-          tested_sha: cloud.run.head_sha,
+          tested_sha:
+            cloud.run.event === 'pull_request_target'
+              ? (cloud.run.pull_requests?.[0]?.head.sha ?? cloud.run.head_sha)
+              : cloud.run.head_sha,
           pr_number:
             cloud.run.event === 'workflow_dispatch'
-              ? (cloud.prs.find((p) => p.state === 'open' && p.head?.sha === cloud.run.head_sha)
-                  ?.number ?? null)
+              ? null
               : (cloud.run.pull_requests?.[0]?.number ?? null),
         };
       const authorization =
         token ??
-        (await jwt({ exp: time.value / 1000 + 300, nbf: time.value / 1000 - 1, ...claims }));
+        (await jwt({
+          exp: time.value / 1000 + 300,
+          nbf: time.value / 1000 - 1,
+          iat: Math.floor(time.value / 1000),
+          sha: cloud.run.head_sha,
+          workflow_sha: cloud.run.head_sha,
+          ...claims,
+        }));
       return transport.fetch(
         new Request(bindings.WORKER_URL + path, {
           method,

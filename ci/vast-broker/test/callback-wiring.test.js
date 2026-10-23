@@ -10,7 +10,7 @@ const root = new URL('../../../', import.meta.url);
 const onstartArgs = {
   url: 'https://broker.example',
   run: '123-1',
-  token: 'v1.123.1.1800009000.' + 'A'.repeat(43),
+  token: 'v2.123.1.1800009000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
 };
 for (const field of ['url', 'run', 'token'])
   test('onstart rejects callback interpolation ' + field, async () => {

@@ -2,6 +2,31 @@
 import {constantTimeEqual} from './tokens.js';
 // prettier-ignore
 import {refuse} from './policy.js';
+// This table is shared by the gateway's route recognition and Access policy.
+export function routeKind(path) {
+  if (
+    /^\/(?:rent|availability|stop-all)$/.test(path) ||
+    /^\/(?:status|stop|stop-timer|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path)
+  )
+    return 'runner';
+  if (
+    /^\/(?:report|kill|hold)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(path) ||
+    new RegExp(
+      '^/blob-url/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}/' +
+        '[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,100}$',
+    ).test(path)
+  )
+    return 'box';
+  return null;
+}
+export function secretFormatError(env) {
+  for (const name of ['RUN_TOKEN_SECRET', 'OWNER_STOP_TOKEN'])
+    if (typeof env[name] !== 'string' || !/^[A-Za-z0-9_-]{32,256}$/.test(env[name]))
+      return 'CONFIG_SECRET_FORMAT:' + name;
+  if (env.BROKER_PATH_PREFIX && !validPathPrefix(env.BROKER_PATH_PREFIX))
+    return 'CONFIG_SECRET_FORMAT:BROKER_PATH_PREFIX';
+  return null;
+}
 export const validPathPrefix = (value) =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);
 export const notFound = () =>

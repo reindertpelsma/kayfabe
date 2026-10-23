@@ -44,7 +44,8 @@ export async function constantTimeEqual(expected, provided) {
   return crypto.subtle.verify('HMAC', key, tag, tokenEncoder.encode(provided));
 }
 export class RunTokens {
-  constructor(secret) {
+  constructor(secret, now = Date.now) {
+    this.now = now;
     this.secret = secret;
     this.key = null;
   }
@@ -53,13 +54,17 @@ export class RunTokens {
     return (this.key ??= await hmacKey(this.secret));
   }
   message(r, expiry) {
-    return ['v1', r.run, r.attempt, r.sha, r.label, expiry].join('|');
+    return ['v2', r.run, r.attempt, r.sha, r.label, expiry, r.nonce].join('|');
+  }
+  fields(token) {
+    return tokenFields(token);
   }
   async issue(r) {
     if (
       !numericId(r.run) ||
       !numericId(r.attempt) ||
       !hexSha(r.sha) ||
+      !/^[0-9a-f]{32}$/.test(r.nonce ?? '') ||
       r.key !== r.run + '-' + r.attempt ||
       r.label !== 'kf-ci-' + r.key ||
       !Number.isSafeInteger(r.reportExpiry)
@@ -72,38 +77,70 @@ export class RunTokens {
         tokenEncoder.encode(this.message(r, r.reportExpiry)),
       ),
     );
-    return ['v1', r.run, r.attempt, r.reportExpiry, tag64(tag)].join('.');
+    return ['v2', r.run, r.attempt, r.reportExpiry, r.nonce, r.sha, tag64(tag)].join('.');
   }
-  async verify(token, r) {
+  async verifyStateless(token) {
     try {
-      const parts =
-        /^v1\.([1-9][0-9]{0,19})\.([1-9][0-9]{0,19})\.([1-9][0-9]{0,12})\.([A-Za-z0-9_-]{43})$/.exec(
-          token || '',
-        );
-      if (
-        !parts ||
-        !r ||
-        parts[1] !== r.run ||
-        parts[2] !== r.attempt ||
-        Number(parts[3]) !== r.reportExpiry ||
-        r.key !== r.run + '-' + r.attempt ||
-        r.label !== 'kf-ci-' + r.key ||
-        !hexSha(r.sha)
-      )
-        return false;
+      const fields = this.fields(token);
+      if (!fields || fields.reportExpiry * 1000 <= this.now()) return null;
       const bytes = Uint8Array.from(
-        atob(parts[4].replaceAll('-', '+').replaceAll('_', '/') + '='),
+        atob(fields.tag.replaceAll('-', '+').replaceAll('_', '/') + '='),
         (x) => x.charCodeAt(0),
       );
-      if (bytes.length !== 32 || tag64(bytes) !== parts[4]) return false;
-      return await crypto.subtle.verify(
-        'HMAC',
-        await this.cryptoKey(),
-        bytes,
-        tokenEncoder.encode(this.message(r, Number(parts[3]))),
-      );
+      if (bytes.length !== 32 || tag64(bytes) !== fields.tag) return null;
+      if (
+        !(await crypto.subtle.verify(
+          'HMAC',
+          await this.cryptoKey(),
+          bytes,
+          tokenEncoder.encode(this.message(fields, fields.reportExpiry)),
+        ))
+      )
+        return null;
+      return fields;
     } catch {
-      return false;
+      return null;
     }
   }
+  async verify(token, r) {
+    const fields = await this.verifyStateless(token);
+    return !!(
+      fields &&
+      r &&
+      fields.run === r.run &&
+      fields.attempt === r.attempt &&
+      fields.key === r.key &&
+      fields.label === r.label &&
+      fields.sha === r.sha &&
+      fields.nonce === r.nonce &&
+      fields.reportExpiry === r.reportExpiry
+    );
+  }
+}
+
+export function tokenFields(token) {
+  if (typeof token !== 'string' || token.length > 256) return null;
+  const parts = token.split('.');
+  if (parts.length !== 7) return null;
+  const [version, run, attempt, expiry, nonce, sha, tag] = parts;
+  if (
+    version !== 'v2' ||
+    !numericId(run) ||
+    !numericId(attempt) ||
+    !/^[1-9][0-9]{0,12}$/.test(expiry) ||
+    !/^[0-9a-f]{32}$/.test(nonce) ||
+    !hexSha(sha) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(tag)
+  )
+    return null;
+  return {
+    run,
+    attempt,
+    key: run + '-' + attempt,
+    label: 'kf-ci-' + run + '-' + attempt,
+    reportExpiry: Number(expiry),
+    nonce,
+    sha,
+    tag,
+  };
 }

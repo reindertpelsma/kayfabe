@@ -58,7 +58,7 @@ for (const path of ['', prefix])
 for (const failure of ['rent', 'status'])
   test('transport failures print no endpoint diagnostics ' + failure, () => {
     const r = run({ failure, pending: failure === 'status' });
-    assert.notEqual(r.status, 0);
+    assert.equal(r.status, failure === 'rent' ? 0 : 1); // A transient rent fault recovers.
     for (const value of [origin, 'quiet-tenant.workers.example', prefix])
       assert.ok(!r.visible.includes(value), r.visible);
     assert.doesNotMatch(r.outputs, /https:|quiet-tenant|unit-path-only/);

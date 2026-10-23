@@ -1,44 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, sha, nonce, repo, clock } from './helpers.js';
+import { configuration } from '../src/policy.js';
+import { shouldRunTrigger } from '../trigger-policy.mjs';
+const workflowRun = (h) =>
+  shouldRunTrigger({
+    eventName: 'pull_request_target',
+    repo,
+    event: { number: 7, pull_request: { head: { sha } } },
+    patterns: configuration(h.bindings).patterns,
+    fetcher: h.cloud.fetch,
+  });
 const json = async (response) => response.json();
 const dispatch = { event_name: 'workflow_dispatch', sha, ref: 'refs/heads/owner-pr' };
 for (const base of ['integration/candidate', 'another-pr'])
-  test('automatic non-master base is NOT_ELIGIBLE ' + base, async () => {
+  test('Worker authorization is independent of current PR base ' + base, async () => {
     const h = await setup();
     h.cloud.prs[0].base.ref = base;
-    assert.equal(
-      (
-        await json(
-          await h.call('/rent', {
-            claims: { base_ref: 'master', allowed_base_branches: ['master'] },
-          }),
-        )
-      ).state,
-      'NOT_ELIGIBLE',
-    );
-    assert.equal(h.cloud.creates, 0);
+    assert.equal((await h.call()).status, 200);
+    assert.equal(h.cloud.creates, 1);
   });
-test('base allowlist is explicit Worker config', async () => {
+test('owner branch authority is independent of prior base-filter config', async () => {
   const h = await setup({ ALLOWED_BASE_BRANCHES: '["stable"]' });
   h.cloud.prs[0].base.ref = 'stable';
+  h.cloud.run.head_branch = 'stable';
   assert.equal(
     (
       await h.call('/rent', {
-        claims: { workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/stable' },
+        claims: {
+          ref: 'refs/heads/stable',
+          workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/stable',
+        },
       })
     ).status,
     200,
   );
   assert.equal(h.cloud.creates, 1);
 });
-test('missing API base never trusts an OIDC base claim', async () => {
+test('missing API base is not a Worker trigger filter', async () => {
   const h = await setup();
   delete h.cloud.prs[0].base.ref;
-  assert.equal(
-    (await json(await h.call('/rent', { claims: { base_ref: 'master' } }))).state,
-    'NOT_ELIGIBLE',
-  );
+  assert.equal((await h.call('/rent', { claims: { base_ref: 'master' } })).status, 200);
 });
 test('owner dispatch permits a non-master-base PR', async () => {
   const h = await setup();
@@ -80,13 +82,7 @@ for (const files of [
     const h = await setup();
     h.cloud.files = files.map((filename) => ({ filename, status: 'modified' }));
     h.cloud.prs[0].changed_files = files.length;
-    const r = await h.call();
-    assert.equal(r.status, 200);
-    const data = await r.json();
-    assert.equal(data.state, 'NOT_NEEDED');
-    assert.equal(data.verdict, 'PASS');
-    assert.equal(data.sha, sha);
-    assert.equal(data.pr, 7);
+    assert.equal(await workflowRun(h), false);
     assert.equal(h.cloud.creates, 0);
     assert.equal(h.storage.data.size, 0);
   });
@@ -107,8 +103,8 @@ for (const filename of [
       { filename, status: 'added' },
     ];
     h.cloud.prs[0].changed_files = 2;
-    assert.equal((await h.call()).status, 200);
-    assert.equal(h.cloud.creates, 1);
+    assert.equal(await workflowRun(h), true);
+    assert.equal(h.cloud.creates, 0);
   });
 for (const [filename, previous_filename] of [
   ['src/code.rs', 'docs/old.md'],
@@ -118,8 +114,8 @@ for (const [filename, previous_filename] of [
   test('rename checks both paths ' + filename + ' from ' + previous_filename, async () => {
     const h = await setup();
     h.cloud.files = [{ filename, previous_filename, status: 'renamed' }];
-    await h.call();
-    assert.equal(h.cloud.creates, 1);
+    assert.equal(await workflowRun(h), true);
+    assert.equal(h.cloud.creates, 0);
   });
 for (const filename of [
   'docs/../src/x.md',
@@ -136,8 +132,8 @@ for (const filename of [
   test('path trickery runs ' + JSON.stringify(filename), async () => {
     const h = await setup();
     h.cloud.files = [{ filename, status: 'modified' }];
-    await h.call();
-    assert.equal(h.cloud.creates, 1);
+    assert.equal(await workflowRun(h), true);
+    assert.equal(h.cloud.creates, 0);
   });
 for (const kind of [
   'empty',
@@ -160,8 +156,8 @@ for (const kind of [
     if (kind === 'missing-name') h.cloud.files = [{ status: 'modified' }];
     if (kind === 'unknown-status') h.cloud.files[0].status = 'unknown';
     if (kind === 'rename-no-old') h.cloud.files[0].status = 'renamed';
-    assert.equal((await h.call()).status, 200);
-    assert.equal(h.cloud.creates, 1);
+    assert.equal(await workflowRun(h), true);
+    assert.equal(h.cloud.creates, 0);
   });
 test('paginated all-docs list is complete before skipping', async () => {
   const h = await setup();
@@ -170,14 +166,14 @@ test('paginated all-docs list is complete before skipping', async () => {
     Array.from({ length: 100 }, (_, i) => ({ filename: `docs/${i}.md`, status: 'modified' })),
     [{ filename: 'docs/last.md', status: 'modified' }],
   ];
-  assert.equal((await json(await h.call())).state, 'NOT_NEEDED');
+  assert.equal(await workflowRun(h), false);
   assert.equal(h.cloud.calls.filter((x) => x.url.includes('/files?')).length, 2);
 });
 for (const code of [403, 500])
-  test('file API failure is unavailable not a skip ' + code, async () => {
+  test('file API failure requests the check ' + code, async () => {
     const h = await setup();
     h.cloud.filesError = code;
-    assert.equal((await json(await h.call())).state, 'UNAVAILABLE');
+    assert.equal(await workflowRun(h), true);
     assert.equal(h.cloud.creates, 0);
   });
 test('head change while reading files cannot skip or rent', async () => {
@@ -190,6 +186,7 @@ test('head change while reading files cannot skip or rent', async () => {
     return r;
   };
   h.restart();
+  assert.equal(await workflowRun(h), true);
   assert.notEqual((await h.call()).status, 200);
   assert.equal(h.cloud.creates, 0);
 });
@@ -200,15 +197,15 @@ test('owner dispatch explicitly runs docs-only branch', async () => {
   assert.equal((await h.call('/rent', { claims: dispatch })).status, 200);
   assert.equal(h.cloud.creates, 1);
 });
-test('configured exclusions cannot skip broker code', async () => {
+test('configured workflow exclusions cannot skip broker code', async () => {
   const h = await setup({ PATH_SKIP_PATTERNS: '["**"]' });
   h.cloud.files = [{ filename: 'ci/vast-broker/src/index.js', status: 'modified' }];
-  await h.call();
-  assert.equal(h.cloud.creates, 1);
+  assert.equal(await workflowRun(h), true);
+  assert.equal(h.cloud.creates, 0);
 });
 for (const path of ['/rent', '/status/123-1'])
-  test('request GitHub bearer used only for read-only GitHub calls ' + path, async () => {
-    const h = await setup();
+  test('Worker GitHub bearer used only for read-only GitHub calls ' + path, async () => {
+    const h = await setup({ GITHUB_API_TOKEN: 'worker-read-token' });
     if (path !== '/rent') await h.call();
     h.cloud.calls = [];
     await h.call(path, { ghToken: 'per-request-bearer' });
@@ -216,7 +213,7 @@ for (const path of ['/rent', '/status/123-1'])
     assert.ok(gh.length);
     assert.ok(
       gh.every(
-        (x) => x.method === 'GET' && x.headers.get('Authorization') === 'Bearer per-request-bearer',
+        (x) => x.method === 'GET' && x.headers.get('Authorization') === 'Bearer worker-read-token',
       ),
     );
     assert.ok(
@@ -230,26 +227,26 @@ for (const path of ['/rent', '/status/123-1'])
     );
     assert.doesNotMatch(JSON.stringify([...h.storage.data]), /per-request-bearer/);
   });
-test('new request replaces prior bearer and cron retains none', async () => {
-  const h = await setup();
+test('caller cannot replace Worker bearer and cron uses it', async () => {
+  const h = await setup({ GITHUB_API_TOKEN: 'worker-read-token' });
   await h.call('/rent', { ghToken: 'first-request-token' });
   h.cloud.calls = [];
   await h.call('/status/123-1', { ghToken: 'second-request-token' });
   assert.ok(
     h.cloud.calls
       .filter((x) => x.url.includes('api.github.com'))
-      .every((x) => x.headers.get('Authorization') === 'Bearer second-request-token'),
+      .every((x) => x.headers.get('Authorization') === 'Bearer worker-read-token'),
   );
   h.cloud.calls = [];
   await h.service.sweep();
   assert.ok(
     h.cloud.calls
       .filter((x) => x.url.includes('api.github.com'))
-      .every((x) => !x.headers.has('Authorization')),
+      .every((x) => x.headers.get('Authorization') === 'Bearer worker-read-token'),
   );
   assert.doesNotMatch(
     JSON.stringify([...h.storage.data]),
-    /first-request-token|second-request-token/,
+    /first-request-token|second-request-token|worker-read-token/,
   );
 });
 test('missing bearer can use public facts', async () => {

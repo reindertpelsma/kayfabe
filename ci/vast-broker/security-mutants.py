@@ -11,7 +11,12 @@ cases = [
     (
         "preauth-before-ledger",
         "src/index.js",
-        [("await preauthenticate(request);", "/* mutant enters queue before auth */")],
+        [
+            (
+                "const receipt = await preauthenticate(request);",
+                "const receipt = undefined; /* mutant enters queue before auth */",
+            )
+        ],
     ),
     (
         "definitive-refusal-settlement",
@@ -71,8 +76,8 @@ cases = [
         "src/index.js",
         [
             (
-                "checkedIdentity(await selected.verify(bearer, cfg.audience), cfg);",
-                "await selected.verify(bearer, cfg.audience);",
+                "  checkedIdentity(c, cfg);",
+                "  return c;",
             )
         ],
     ),
@@ -127,7 +132,7 @@ for name, file, patches in cases:
         b = changed.index("    if (path === '/rent')", a)
         block = changed[a:b]
         changed = changed[:a] + changed[b:]
-        at = changed.index("        await preauthenticate(request);")
+        at = changed.index("        const receipt = await preauthenticate(request);")
         changed = (
             changed[:at]
             + "        { const path = await routePath(request,env);\n"

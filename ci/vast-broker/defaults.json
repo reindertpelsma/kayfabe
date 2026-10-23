@@ -28,23 +28,9 @@
   "sweepPrice": 2.5,
   "sweepDaily": 8,
   "sweepSkipPassedDays": 0,
-  "badMachines": [
-    42636,
-    44906,
-    11908,
-    24044,
-    18856,
-    91962,
-    56883,
-    55691
-  ],
+  "badMachines": [42636, 44906, 11908, 24044, 18856, 91962, 56883, 55691],
   "gpuDeny": [],
-  "checkDies": [
-    "GA106",
-    "AD104",
-    "GA102",
-    "AD102"
-  ],
+  "checkDies": ["GA106", "AD104", "GA102", "AD102"],
   "sweepDies": [
     "TU116",
     "TU106",
@@ -114,130 +100,87 @@
     {
       "die": "TU116",
       "cc": 750,
-      "names": [
-        "GTX_16*"
-      ]
+      "names": ["GTX_16*"]
     },
     {
       "die": "TU106",
       "cc": 750,
-      "names": [
-        "RTX_2060*"
-      ]
+      "names": ["RTX_2060*"]
     },
     {
       "die": "TU104",
       "cc": 750,
-      "names": [
-        "RTX_2070*",
-        "RTX_2080",
-        "RTX_2080_SUPER"
-      ]
+      "names": ["RTX_2070*", "RTX_2080", "RTX_2080_SUPER"]
     },
     {
       "die": "TU102",
       "cc": 750,
-      "names": [
-        "RTX_2080_TI"
-      ]
+      "names": ["RTX_2080_TI"]
     },
     {
       "die": "GA106",
       "cc": 860,
-      "names": [
-        "RTX_3060"
-      ]
+      "names": ["RTX_3060"]
     },
     {
       "die": "GA104",
       "cc": 860,
-      "names": [
-        "RTX_3060_TI",
-        "RTX_3070*"
-      ]
+      "names": ["RTX_3060_TI", "RTX_3070*"]
     },
     {
       "die": "GA102",
       "cc": 860,
-      "names": [
-        "RTX_3080*",
-        "RTX_3090*"
-      ]
+      "names": ["RTX_3080*", "RTX_3090*"]
     },
     {
       "die": "AD107",
       "cc": 890,
-      "names": [
-        "RTX_4060"
-      ]
+      "names": ["RTX_4060"]
     },
     {
       "die": "AD106",
       "cc": 890,
-      "names": [
-        "RTX_4060_TI"
-      ]
+      "names": ["RTX_4060_TI"]
     },
     {
       "die": "AD104",
       "cc": 890,
-      "names": [
-        "RTX_4070",
-        "RTX_4070_SUPER",
-        "RTX_4070_S",
-        "RTX_4070_TI"
-      ]
+      "names": ["RTX_4070", "RTX_4070_SUPER", "RTX_4070_S", "RTX_4070_TI"]
     },
     {
       "die": "AD103",
       "cc": 890,
-      "names": [
-        "RTX_4070_TI_SUPER",
-        "RTX_4080*"
-      ]
+      "names": ["RTX_4070_TI_SUPER", "RTX_4080*"]
     },
     {
       "die": "AD102",
       "cc": 890,
-      "names": [
-        "RTX_4090*"
-      ]
+      "names": ["RTX_4090*"]
     },
     {
       "die": "GB207",
       "cc": 1200,
-      "names": [
-        "RTX_5050*"
-      ]
+      "names": ["RTX_5050*"]
     },
     {
       "die": "GB206",
       "cc": 1200,
-      "names": [
-        "RTX_5060*"
-      ]
+      "names": ["RTX_5060*"]
     },
     {
       "die": "GB205",
       "cc": 1200,
-      "names": [
-        "RTX_5070"
-      ]
+      "names": ["RTX_5070"]
     },
     {
       "die": "GB203",
       "cc": 1200,
-      "names": [
-        "RTX_5070_TI",
-        "RTX_5080*"
-      ]
+      "names": ["RTX_5070_TI", "RTX_5080*"]
     },
     {
       "die": "GB202",
       "cc": 1200,
-      "names": [
-        "RTX_5090*"
-      ]
+      "names": ["RTX_5090*"]
     }
   ],
   "bootFailureFreezeMs": 120000,
@@ -254,8 +197,8 @@
   "oidcEnvironment": "gpu-vast",
   "blobRunMints": 8,
   "blobDailyMints": 64,
-  "preferredCountries": [
-    "US",
-    "CA"
-  ]
+  "preferredCountries": ["US", "CA"],
+  "maxInetUsdPerGb": 0.005,
+  "lifecycleCacheMs": 60000,
+  "deniedCountries": ["CU", "IR", "KP", "SY"]
 }

@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix="v3-r3-main-") as directory:
     if "selected_sha" in args:
         event["inputs"] = {"sha": args["selected_sha"]}
         (d / "event").write_text(json.dumps(event))
-        if isinstance(args["selected_sha"],str) and len(args["selected_sha"]) == 40:
+        if isinstance(args["selected_sha"], str) and len(args["selected_sha"]) == 40:
             sha = args["selected_sha"]
     if args.get("access"):
         os.environ["CF_ACCESS_CLIENT_ID"] = "runner-a.access"
@@ -87,8 +87,15 @@ with tempfile.TemporaryDirectory(prefix="v3-r3-main-") as directory:
         masks = [
             line[12:] for line in stdout.getvalue().splitlines() if line.startswith("::add-mask::")
         ]
-        calls.append({"url":url,"method":method,"headers":headers,"masks":masks,
-                      "request":json.loads(body) if body is not None else None})
+        calls.append(
+            {
+                "url": url,
+                "method": method,
+                "headers": headers,
+                "masks": masks,
+                "request": json.loads(body) if body is not None else None,
+            }
+        )
         if url.startswith("https://oidc.example/"):
             return m.Reply(200, {"content-type": "application/json"}, b'{"value":"mock.jwt.value"}')
         route = urllib.parse.urlsplit(url).path
@@ -170,7 +177,7 @@ print(
             "outputs": outputs,
             "calls": calls,
             "nonce": nonce,
-            "workflow_sha":os.environ["GITHUB_SHA"],
+            "workflow_sha": os.environ["GITHUB_SHA"],
         }
     )
 )

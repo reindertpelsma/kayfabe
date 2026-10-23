@@ -21,20 +21,21 @@ cases = [
         "job-workflow-ref",
         [
             (
-                "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.job_workflow_ref) ||\n",
-                "",
+                "function checkedIdentity(c, cfg) {",
+                "function checkedIdentity(c, cfg) { c.job_workflow_ref = c.workflow_ref;",
             ),
-            ("    c.job_workflow_ref !== c.workflow_ref ||\n", ""),
         ],
     ),
     ("control-per-IP", [("count >= cfg.controlIp ||", "false ||")]),
     ("control-global", [("controlCount >= cfg.controlGlobal ||", "false ||")]),
+    # 18:20 replaces configurable trigger gates with the owner branch exception.
     (
         "configured-base",
         [
             (
-                "!cfg.bases.some((base) => c.ref === 'refs/heads/' + base)",
-                "c.ref !== 'refs/heads/master'",
+                "    if (!allowedWorkflowRef(c, cfg, r, cfg.profile ?? 'check'))",
+                "    if (c.ref !== 'refs/heads/master') refuse('UNAUTHORIZED', 401);\n"
+                "    if (!allowedWorkflowRef(c, cfg, r, cfg.profile ?? 'check'))",
             )
         ],
     ),
@@ -42,8 +43,8 @@ cases = [
         "configured-workflow",
         [
             (
-                "!cfg.checkWorkflows.includes(c.workflow_ref)",
-                "c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'",
+                "  if (profile === 'sweep') return false;",
+                "  return false;",
             )
         ],
     ),
@@ -51,7 +52,11 @@ cases = [
 rows = []
 for name, patches in cases:
     configured = name.startswith("configured-")
-    p = B / ("src/github.js" if configured else "src/index.js")
+    p = B / (
+        "src/workflow-authority.js"
+        if name == "configured-workflow"
+        else "src/github.js" if configured else "src/index.js"
+    )
     test = "v5-configured-base.test.js" if configured else "v5-identity-limits.test.js"
     source = p.read_text()
     changed = source

@@ -18,18 +18,33 @@ async function policy(
   });
 }
 // FALSIFIER H13: trigger eligibility is still in Worker auth, or uncertain files skip.
-for (const attribute of ['base', 'paths', 'draft'])
-  test('round Worker authority ignores YAML trigger attribute ' + attribute, async () => {
+for (const [attribute, variant] of ['base', 'paths', 'draft'].flatMap((x) =>
+  [0, 1].map((n) => [x, n]),
+))
+  test('round Worker authority ignores YAML trigger attribute ' + attribute + variant, async () => {
     const h = await setup();
-    if (attribute === 'base') h.cloud.prs[0].base.ref = 'integration';
-    if (attribute === 'paths') h.cloud.files = [{ filename: 'docs/only.md', status: 'modified' }];
-    if (attribute === 'draft') h.cloud.prs[0].draft = true;
+    if (attribute === 'base') h.cloud.prs[0].base.ref = variant ? 'release' : 'integration';
+    if (attribute === 'paths')
+      h.cloud.files = [{ filename: variant ? 'LICENSE' : 'docs/only.md', status: 'modified' }];
+    if (attribute === 'draft') {
+      h.cloud.prs[0].draft = true;
+      if (variant) h.cloud.prs[0].title = 'Still under review';
+    }
     const response = await h.call();
     assert.equal(response.status, 200);
     assert.equal((await response.json()).state, 'BOOTING');
     assert.equal(h.cloud.creates, 1);
   });
-for (const name of ['docs', 'GPU', 'rename', 'missing', 'api-error', 'race', 'truncated'])
+for (const name of [
+  'docs',
+  'GPU',
+  'rename',
+  'missing',
+  'api-error',
+  'race',
+  'closed-race',
+  'truncated',
+])
   test('round workflow PR path policy ' + name, async () => {
     const h = await setup();
     h.cloud.files = [{ filename: 'docs/only.md', status: 'modified' }];
@@ -39,12 +54,14 @@ for (const name of ['docs', 'GPU', 'rename', 'missing', 'api-error', 'race', 'tr
     if (name === 'missing') delete h.cloud.prs[0].changed_files;
     if (name === 'api-error') h.cloud.githubError = 503;
     if (name === 'truncated') h.cloud.prs[0].changed_files = 2;
-    if (name === 'race') {
+    if (name === 'race' || name === 'closed-race') {
       const original = h.cloud.fetch;
       let reads = 0;
       h.cloud.fetch = async (url, init) => {
-        if (String(url).endsWith('/pulls/7') && ++reads === 2)
-          h.cloud.prs[0].head.sha = 'e'.repeat(40);
+        if (String(url).endsWith('/pulls/7') && ++reads === 2) {
+          if (name === 'closed-race') h.cloud.prs[0].state = 'closed';
+          else h.cloud.prs[0].head.sha = 'e'.repeat(40);
+        }
         return original(url, init);
       };
     }
