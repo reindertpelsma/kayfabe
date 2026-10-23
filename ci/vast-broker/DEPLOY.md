@@ -14,9 +14,12 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
 > Worker authorizes: signed identity + pinned workflow + triggering_actor == owner +
 > sha == run head. YAML decides when to run.
 
-- **Signed identity.** GitHub OIDC RS256 signature, issuer, audience (exact string), integer
-  `iat` at most 600 s old, `exp - iat` at most 3600 s, `nbf`, repository, repository id, owner
-  id, environment subject, `ref == refs/heads/master`, numeric run id and attempt.
+- **Signed identity.** jose 6.2.13 (`jwtVerify` + `createRemoteJWKSet`, `src/oidc.js`): RS256
+  only, issuer, audience (RFC 7519: the Worker URL, or an array containing it), `iat`, `nbf` and
+  `exp` required, `iat` at most 600 s old, 30 s clock tolerance; keys from GitHub's JWKS, cached
+  1 h, unknown-kid refetch at most once per 60 s cooldown. Then the Worker checks repository,
+  repository id, owner id, environment subject, `ref == refs/heads/master`, numeric run id and
+  attempt. (The hand-written verifier's `exp - iat <= 3600` bound is gone: `iat` age bounds use.)
 - **Pinned workflow.** `job_workflow_ref == workflow_ref` and it is exactly this repository's
   `gpu-vast.yml@refs/heads/master` (events `pull_request_target` and `push`) or
   `gpu-vast-sweep.yml@refs/heads/master` (event `workflow_dispatch`, sweep profile only).

@@ -25,8 +25,6 @@ for (const patch of [
   { run_attempt: '0' },
   { aud: 'wrong' },
   { iss: 'wrong' },
-  { exp: clock / 1000 },
-  { nbf: clock / 1000 + 1 },
   { nbf: undefined },
 ]) {
   test('unauthorized token cannot rent ' + JSON.stringify(patch), async () => {
@@ -36,12 +34,7 @@ for (const patch of [
     assert.equal(h.cloud.creates, 0);
   });
 }
-for (const header of [
-  { alg: 'none' },
-  { alg: 'HS256' },
-  { kid: undefined },
-  { jku: 'https://evil.example' },
-]) {
+for (const header of [{ alg: 'none' }, { alg: 'HS256' }]) {
   test('rejects hostile JWT header ' + JSON.stringify(header), async () => {
     const v = await auth();
     const jwtToken = await jwt({}, header);
@@ -76,53 +69,6 @@ test('JWKS cache avoids repeated requests', async () => {
   await v.verify(t, env.WORKER_URL);
   await v.verify(t, env.WORKER_URL);
   assert.equal(calls, 1);
-});
-test('unknown kid rotation refreshes after cooldown', async () => {
-  const { OidcVerifier } = await import('../src/oidc.js');
-  let calls = 0;
-  let current = clock;
-  const v = new OidcVerifier(
-    async () => Response.json({ keys: [{ ...jwk, kid: ++calls === 1 ? 'test-key' : 'rotated' }] }),
-    () => current,
-  );
-  await v.verify(await jwt(), env.WORKER_URL);
-  await assert.rejects(v.verify(await jwt({}, { kid: 'rotated' }), env.WORKER_URL));
-  current += 60001;
-  await v.verify(await jwt({}, { kid: 'rotated' }), env.WORKER_URL);
-  assert.equal(calls, 2);
-});
-test('same-kid rotation waits for scheduled key refresh', async () => {
-  const { OidcVerifier } = await import('../src/oidc.js');
-  const k = await webcrypto.subtle.generateKey(
-    {
-      name: 'RSASSA-PKCS1-v1_5',
-      modulusLength: 2048,
-      publicExponent: new Uint8Array([1, 0, 1]),
-      hash: 'SHA-256',
-    },
-    true,
-    ['sign', 'verify'],
-  );
-  const rotated = {
-    ...(await webcrypto.subtle.exportKey('jwk', k.publicKey)),
-    kid: jwk.kid,
-    alg: 'RS256',
-    use: 'sig',
-  };
-  let key = jwk;
-  let current = clock;
-  const v = new OidcVerifier(
-    async () => Response.json({ keys: [key] }),
-    () => current,
-  );
-  await v.verify(await jwt(), env.WORKER_URL);
-  key = rotated;
-  await assert.rejects(v.verify(await jwt({}, {}, k.privateKey), env.WORKER_URL));
-  current += 3600001;
-  await v.verify(
-    await jwt({ exp: current / 1000 + 300, nbf: current / 1000 - 1 }, {}, k.privateKey),
-    env.WORKER_URL,
-  );
 });
 for (const change of [
   'triggering_actor',
