@@ -1,0 +1,8 @@
+jitter_wide killers=3
+faster killers=3
+errors_2 killers=3
+allow_create killers=3
+no_8h killers=2
+no_match_file killers=3
+skip_stage killers=3
+no_reset killers=3
