@@ -1,0 +1,92 @@
+[
+  {
+    "mutant": "ignore_provider_error",
+    "killers": 3,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_gpu_startup_error_is_infrastructure",
+      "test_provider_retry.ProviderRetry.test_memory_timeout_is_infrastructure",
+      "test_provider_retry.ProviderRetry.test_provider_failed_state_is_infrastructure"
+    ]
+  },
+  {
+    "mutant": "ignore_boot_timeout",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_cold_start_has_an_absolute_twenty_minute_ceiling",
+      "test_provider_retry.ProviderRetry.test_fast_banner_calibration_has_a_ten_minute_floor"
+    ]
+  },
+  {
+    "mutant": "allow_foreign_destruction",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_a_foreign_instance_cannot_be_destroyed",
+      "test_provider_retry.ProviderRetry.test_another_foreign_instance_cannot_be_destroyed"
+    ]
+  },
+  {
+    "mutant": "ignore_api_absence",
+    "killers": 3,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_api_presence_prevents_retry_and_bad_list_publication",
+      "test_provider_retry.ProviderRetry.test_destroy_exact_id_precedes_bad_machine_publication",
+      "test_provider_retry.ProviderRetry.test_missing_absence_proof_prevents_bad_list_publication"
+    ]
+  },
+  {
+    "mutant": "allow_third_retry",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restarting_the_controller_cannot_reset_the_retry_cap",
+      "test_provider_retry.ProviderRetry.test_third_retry_is_refused"
+    ]
+  },
+  {
+    "mutant": "ignore_bad_machine",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_a_bad_machine_is_excluded_even_with_another_offer_id",
+      "test_provider_retry.ProviderRetry.test_all_offers_on_a_bad_machine_are_excluded"
+    ]
+  },
+  {
+    "mutant": "ignore_persisted_completion",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_a_native_cell_after_its_teardown",
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_an_ssh_ready_cell_after_its_teardown"
+    ]
+  },
+  {
+    "mutant": "ignore_retirement_proof",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_an_instance_not_destroyed",
+      "test_provider_retry.ProviderRetry.test_restart_cannot_replace_before_exact_api_absence"
+    ]
+  },
+  {
+    "mutant": "ignore_record_identity",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_needs_a_record_for_that_exact_instance",
+      "test_provider_retry.ProviderRetry.test_restart_needs_that_exact_machine_record"
+    ]
+  },
+  {
+    "mutant": "ignore_record_reason",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_restart_cannot_relabel_a_guest_tdr_as_infrastructure",
+      "test_provider_retry.ProviderRetry.test_restart_cannot_relabel_a_native_fault_as_a_provider_failure"
+    ]
+  },
+  {
+    "mutant": "retry_started_work",
+    "killers": 2,
+    "cases": [
+      "test_provider_retry.ProviderRetry.test_started_native_or_guest_work_is_never_retryable",
+      "test_provider_retry.ProviderRetry.test_successful_ssh_is_not_a_provider_retry"
+    ]
+  }
+]
