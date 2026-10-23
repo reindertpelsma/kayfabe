@@ -37,6 +37,8 @@ MUTANTS = [
      "LABEL_TAIL_RE = re.compile(r'[%x]? ' + re.escape(NC))", "LABEL_TAIL_RE = re.compile(r'')"),
     ('checker flags dotted versions as scores',
      "if VERSION_RE.fullmatch(cell):", "if False:"),
+    ('checker flags timestamps as scores',
+     "cell = TIME_RE.sub('TIME', cell)", "cell = cell"),
     ('checker ignores an unresearched ratio column',
      "if RATIO_HEADER_RE.search(column) and RESEARCH not in column:", "if False:"),
 ]

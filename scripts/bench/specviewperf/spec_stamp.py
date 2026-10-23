@@ -36,6 +36,9 @@ SCORE_HEADER_RE = re.compile(r'(?i)composite|fps|score|ratio|\bover\b')
 NUMBER_RE = re.compile(r'(?<![\w.\-])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?')
 LABEL_TAIL_RE = re.compile(r'[%x]? ' + re.escape(NC))
 VERSION_RE = re.compile(r'\d+\.\d+\.\d+')
+TIME_RE = re.compile(
+    r'\d{4}-\d\d-\d\d(?:[T ]\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)?)?'
+    r'|\b\d\d:\d\d:\d\d(?:\.\d+)?')
 RELEASE_LINE_RE = re.compile(r'^[#> ]*Release:\s*(.+?)\s*$', re.MULTILINE)
 
 
@@ -170,6 +173,7 @@ def check_text(text, kind):
             head = header[index] if index < len(header) else ''
             if VERSION_RE.fullmatch(cell):
                 continue
+            cell = TIME_RE.sub('TIME', cell)
             for found_number in NUMBER_RE.finditer(cell):
                 token = found_number.group(0)
                 floaty = '.' in token or 'e' in token.lower()
