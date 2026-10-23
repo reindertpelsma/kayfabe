@@ -274,6 +274,251 @@ class V7Tests(unittest.TestCase):
         with patch.object(self.m.subprocess, "check_output", return_value="bad"):
             self.assertEqual(self.m.hardware()["gpu_name"], "unknown")
 
+    def _main_fixture(self, failure=None, free=100_000_000_000, kvm=True):
+        from types import SimpleNamespace
+
+        native_path = Path
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            repo = root / "repo"
+            (repo / "scripts/ci").mkdir(parents=True)
+            (repo / "scripts/bench").mkdir(parents=True)
+            (repo / "scripts/bench/provision_box.sh").write_text("# fixture")
+            (repo / "tools/drivermatrix").mkdir(parents=True)
+            (repo / "tools/drivermatrix/tags.txt").write_text("580.159.04\n")
+            (root / "root/prov").mkdir(parents=True)
+            (root / "workspace/bench").mkdir(parents=True)
+            if kvm:
+                (root / "dev").mkdir()
+                (root / "dev/kvm").touch()
+
+            def mapped(value, *args):
+                value = str(value)
+                if value.startswith(("/workspace/", "/root/", "/dev/")):
+                    return native_path(d, value.lstrip("/"), *args)
+                return native_path(value, *args)
+
+            calls = []
+            original_bounded_text = self.m.bounded_text
+
+            def runner(command, deadline, output, progress):
+                tag = command[2]
+                name = tag.split("_", 1)[1]
+                calls.append(name)
+                bench = root / "workspace/bench"
+                (bench / ("xid_" + tag + ".log")).write_text(watch())
+                if name == "provision":
+                    (root / "root/prov/prov.log").write_text(PROVISION)
+                elif name == "merge_bar":
+                    value = MERGE
+                    if failure == "merge_bar":
+                        value = MERGE.split("BARE_SUITE_PASS=")[0]
+                    (root / "root/prov" / (tag.rsplit("_", 2)[0] + ".log")).write_text(value)
+                else:
+                    mode = "host" if name == "cuda_host" else "guest"
+                    from test_vast_payload import ladder
+
+                    original_tag = command[-3]
+                    (bench / ("cl_" + original_tag + "_" + mode + ".out")).write_text(ladder(mode))
+                return 124 if name == failure else 0
+
+            hardware = {"gpu_name": "RTX 3060", "compute_cap": 860, "driver_version": "580.159.04"}
+            with patch.object(
+                self.m, "__file__", str(repo / "scripts/ci/vast_payload.py")
+            ), patch.object(self.m, "Path", side_effect=mapped), patch.object(
+                self.m, "prepare_checkout", return_value="fixture"
+            ), patch.object(
+                self.m, "hardware", return_value=hardware
+            ), patch.object(
+                self.m, "bounded_text", side_effect=lambda p: original_bounded_text(mapped(p))
+            ), patch.object(
+                self.m.shutil, "copyfile"
+            ), patch.object(
+                self.m.shutil, "disk_usage", return_value=SimpleNamespace(free=free)
+            ), patch.object(
+                self.m.subprocess, "run"
+            ), patch.object(
+                self.m.execute_stages, "__defaults__", (runner,)
+            ), patch.dict(
+                os.environ, {"KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + 10000)}
+            ), patch(
+                "sys.argv", ["vast_payload.py", SHA, "a" * 32]
+            ):
+                rc = self.m.main()
+            result = json.loads((root / "workspace/kf-result.json").read_text())
+            return rc, result, calls
+
+    def test_whole_adapter_uses_existing_flows_in_order(self):
+        rc, result, calls = self._main_fixture()
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest"])
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertEqual(len(result["suites"]), 9)
+        self.assertEqual(set(result), {"verdict", "suites", "hardware"})
+
+    def test_whole_adapter_timeout_keeps_merge_prefix(self):
+        rc, result, calls = self._main_fixture(failure="merge_bar")
+        self.assertEqual(rc, 1)
+        self.assertEqual(calls, ["provision", "cuda_host", "merge_bar"])
+        self.assertEqual(
+            [r["name"] for r in result["suites"]],
+            ["provision", "cuda_host", "kf_tests", "gates", "kf3_build", "timeout"],
+        )
+        self.assertEqual(result["verdict"], "FAIL")
+
+    def test_whole_adapter_disk_preflight_prevents_spend_work(self):
+        rc, result, calls = self._main_fixture(free=100)
+        self.assertEqual(rc, 1)
+        self.assertEqual(calls, [])
+        self.assertEqual(result["suites"], [self.m.row("preflight", failed=1)])
+
+    def test_whole_adapter_requires_actual_kvm_device(self):
+        rc, result, calls = self._main_fixture(kvm=False)
+        self.assertEqual(rc, 1)
+        self.assertEqual(calls, [])
+        self.assertEqual(result["suites"], [self.m.row("preflight", failed=1)])
+
+    def _hook_fixture(self, arm, xid):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            bins = root / "bin"
+            bins.mkdir()
+            kernel = root / "kernel"
+            kernel.write_text("fixture kernel one\nfixture kernel two\n")
+            scripts = {
+                "dmesg": 'cat "$KF_FIXTURE_KERNEL"',
+                "nvidia-smi": 'echo "RTX 3060,580.159.04"',
+                "sleep": "exit 0",
+                "kayfabe-rm-ladder": "printf '%s\\n' '"
+                + MARK.strip()
+                + "'; "
+                + "printf '%s\\n' '"
+                + xid
+                + '\' >> "$KF_FIXTURE_KERNEL"',
+            }
+            for name, body in scripts.items():
+                path = bins / name
+                path.write_text("#!/bin/bash\n" + body + "\n")
+                path.chmod(0o700)
+            env = {
+                **os.environ,
+                "PATH": str(bins) + ":" + os.environ["PATH"],
+                "KF_FIXTURE_KERNEL": str(kernel),
+                "BENCH_DIR": str(root),
+                "XID_OUTDIR": str(root),
+                "KF_PAYLOAD_ROOT": str(Path(self.m.__file__).parents[2]),
+                "KF_PAYLOAD_XID_ALLOWED": str(root / "allowed"),
+                "KF_PAYLOAD_XID_FAILED": str(root / "failed"),
+                "BASH_ENV": str(Path(self.m.__file__).with_name("vast_payload_hooks.sh")),
+            }
+            p = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'timeout --kill-after=5 5 "$1" "$2"',
+                    "fixture",
+                    str(bins / "kayfabe-rm-ladder"),
+                    arm,
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return p.returncode, (root / "failed").exists(), (root / "allowed").exists()
+
+    def test_real_hook_accepts_only_marked_raw_fault(self):
+        self.assertEqual(self._hook_fixture("--missing-page-fault", XID), (0, False, True))
+
+    def test_real_hook_refuses_other_raw_arm(self):
+        rc, failed, allowed = self._hook_fixture("--timer", XID)
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(failed)
+        self.assertFalse(allowed)
+
+    def test_real_hook_refuses_non_ce_fault(self):
+        rc, failed, allowed = self._hook_fixture(
+            "--missing-page-fault", XID.replace("HUBCLIENT_CE0", "HUBCLIENT_GR")
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(failed)
+        self.assertFalse(allowed)
+
+    def test_other_page_fault_type_is_rejected_on_ce1(self):
+        bad = XID.replace("FAULT_PDE", "FAULT_PTE").replace("HUBCLIENT_CE0", "HUBCLIENT_CE1")
+        self.assertFalse(self.m.xid_ok(watch(bad, 0, 1), 6, "--missing-page-fault", MARK))
+
+    def test_ladder_repeated_last_rung_refuses(self):
+        from test_vast_payload import ladder
+
+        bad = ladder().replace("rung=cup8bench ", "rung=cup2 ")
+        with self.assertRaises(self.m.EvidenceError):
+            self.m.ladder_rows(bad, 0, "host", SHA)
+
+    def test_merge_requires_exit_marker(self):
+        with self.assertRaises(self.m.EvidenceError):
+            self.m.merge_rows(MERGE.split("EXIT rc=")[0], 0, SHA)
+
+    def test_merge_nonzero_recorded_exit_refuses(self):
+        with self.assertRaises(self.m.EvidenceError):
+            self.m.merge_rows(MERGE.replace("EXIT rc=0", "EXIT rc=1"), 0, SHA)
+
+    def test_hook_failure_does_not_run_later_marker(self):
+        import sys
+
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            marker = root / "late"
+            failure = root / "xid-failed"
+            failure.touch()
+            code = "import time,pathlib;time.sleep(1);pathlib.Path("
+            code += repr(str(marker)) + ").touch()"
+            with patch.dict(os.environ, {"KF_PAYLOAD_XID_FAILED": str(failure)}):
+                rc = self.m.run_bounded(
+                    [sys.executable, "-c", code], int(time.time() * 1000) + 5000, root / "log", []
+                )
+            self.assertNotEqual(rc, 0)
+            self.assertFalse(marker.exists())
+
+    def test_stage_refuses_unattributed_new_xid(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            log = root / "watch"
+            log.write_text(watch(XID, 0, 1))
+            (root / "allowed").write_text("")
+            with patch.dict(os.environ, {"KF_PAYLOAD_XID_ALLOWED": str(root / "allowed")}):
+                with self.assertRaises(self.m.EvidenceError):
+                    self.m.stage_grade(None, None, log, lambda rc: [self.m.row("stage", 1)], 6)
+
+    def test_stage_refuses_extra_record_next_to_approved_fault(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            log = root / "watch"
+            log.write_text(watch(XID + "\n" + XID.replace("20.1", "20.2"), 0, 2))
+            (root / "allowed").write_text(json.dumps(XID) + "\n")
+            with patch.dict(os.environ, {"KF_PAYLOAD_XID_ALLOWED": str(root / "allowed")}):
+                with self.assertRaises(self.m.EvidenceError):
+                    self.m.stage_grade(None, None, log, lambda rc: [self.m.row("stage", 1)], 6)
+
+    def test_raw_red_keeps_earlier_merge_rows(self):
+        text = MERGE.split("BARE_SUITE_PASS=")[0]
+        text += "BARE_CELL_ARM arm=timer verdict=FAIL rc=1\n"
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.merge_rows(text, 1, SHA)
+        self.assertEqual(
+            [r["name"] for r in caught.exception.rows], ["kf_tests", "gates", "kf3_build"]
+        )
+
+    def test_thin_red_keeps_raw_and_build_rows(self):
+        text = MERGE.split("FAST_SUITE_PASS=")[0]
+        text += "FAST_CELL_ARM arm=timer verdict=FAIL\n"
+        with self.assertRaises(self.m.EvidenceError) as caught:
+            self.m.merge_rows(text, 1, SHA)
+        self.assertEqual(
+            [r["name"] for r in caught.exception.rows],
+            ["kf_tests", "gates", "kf3_build", "raw_suite"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
