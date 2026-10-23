@@ -145,6 +145,18 @@ class ProviderRetry(unittest.TestCase):
         row.pop("absence_verified_utc")
         self.assertFalse(P.can_replace(row, self.recorded_bad()))
 
+    def test_restart_cannot_replace_an_instance_not_destroyed(self):
+        row = self.previous()
+        row["destroyed"] = False
+        self.assertFalse(P.can_replace(row, self.recorded_bad()))
+
+    def test_restart_cannot_relabel_a_guest_tdr_as_infrastructure(self):
+        self.assertFalse(
+            P.can_replace(
+                self.previous(), [dict(machine_id=15, instance_id=71, reason="guest_tdr")]
+            )
+        )
+
     def test_restart_needs_a_record_for_that_exact_instance(self):
         self.assertFalse(
             P.can_replace(
