@@ -1208,6 +1208,105 @@
         "round-workflow-v7.test.js",
         "v5-workflows.test.js"
       ]
+    },
+    {
+      "name": "V4-any-key",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "    if (/^(?:BOX_)?ACCESS_/.test(key))",
+          "    if (false)"
+        ],
+        [
+          "    if (!ALLOWED.has(key))",
+          "    if (false)"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
+    },
+    {
+      "name": "V4-allow-list",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "    if (!ALLOWED.has(key))",
+          "    if (false)"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
+    },
+    {
+      "name": "V4-skip-hash-checks",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "  if (digest !== manifest.bundle_sha256) fail(",
+          "  if (false) fail("
+        ],
+        [
+          "  if (digest !== tomlVar(toml, 'DEPLOYED_BUNDLE_SHA256'))",
+          "  if (false)"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
+    },
+    {
+      "name": "V4-echo-values",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "out = out.split(value).join('<' + key + '>');",
+          "out = out + '';"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
+    },
+    {
+      "name": "V4-owner-differs",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "  if (tomlVar(toml, 'OWNER_GITHUB_ID') !== vars.get('OWNER_GITHUB_ID'))",
+          "  if (false)"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
+    },
+    {
+      "name": "V4-wrangler-version",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "/(?:^|[^0-9.])4\\.152\\.0(?:$|[^0-9.])/m",
+          "/4\\.15/m"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
+    },
+    {
+      "name": "V4-inside-checkout",
+      "file": "deploy.mjs",
+      "patches": [
+        [
+          "  if ((path + sep).startsWith(realpathSync(checkout) + sep))",
+          "  if (false)"
+        ]
+      ],
+      "tests": [
+        "round-deploy-helper.test.js"
+      ]
     }
   ]
 }
