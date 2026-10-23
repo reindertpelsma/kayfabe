@@ -1,0 +1,13 @@
+{
+  "kind": "MEASURED",
+  "id": 57384343,
+  "destroyed_utc": "2026-10-23T14:51:09.881085+00:00",
+  "api_absence_verified": true,
+  "pre_teardown_origin_head": "9abd1dade41d8d2fc81985366c456ac72b85dc57",
+  "auto_destroy_cancelled_after_absence": true,
+  "runtime_hours": 0.1602001958333333,
+  "runtime_cost_estimate_usd": 0.03150603851388888,
+  "transfer_reserved_usd": 0.25,
+  "round4_cost_upper_usd": 0.2815060385138889,
+  "accounting": "Runtime estimate plus original reserved transfer allowance; not provider invoice."
+}
