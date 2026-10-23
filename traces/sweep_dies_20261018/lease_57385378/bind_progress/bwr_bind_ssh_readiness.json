@@ -1,0 +1,78 @@
+{
+  "started_utc": "2026-10-23T16:13:53.941987+00:00",
+  "box_id": 57385378,
+  "source": "98b599bbfc31784bcbed6b42545562094ea6eeb0",
+  "scale": 10,
+  "profile_sha256": "7183d889c1af167518772a283742a331cd5c7db0304168722b97fee155bf283a",
+  "mode": "wait",
+  "attempts": [
+    {
+      "attempt": 1,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2699.956352448
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2699.9128808630003
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2593.5742569330005
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2514.441646245
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2433.526971382
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2411.9863796150003
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2406.8628570660003
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2406.755001499
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2401.565711311
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 180,
+      "returncode": 255,
+      "remaining_seconds": 2401.449305852
+    },
+    {
+      "attempt": 1,
+      "timeout_seconds": 180,
+      "returncode": 0,
+      "remaining_seconds": 2325.1213796890006
+    }
+  ],
+  "result": "ACTUAL_REPLY",
+  "finished_utc": "2026-10-23T16:20:08.821016+00:00"
+}
