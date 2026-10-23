@@ -145,7 +145,7 @@ export function createService({
     soft_deadline_at: r.softDeadline ?? null,
     last_post_at: r.lastPostAt ?? null,
     result_deadline_at: r.resultDeadline ?? null,
-    protocol_version: 4,
+    protocol_version: DEFAULTS.statusProtocol,
     worker_version: 'v5',
     bundle_sha256: env.DEPLOYED_BUNDLE_SHA256 ?? '0'.repeat(64),
   });
@@ -618,6 +618,9 @@ export function createService({
     }
     const c = await oidc(bearer, cfg),
       key = runKey(c);
+    // Runner and Worker must speak the same status protocol; each side refuses the other.
+    if (request.headers.get('X-KF-Protocol') !== String(DEFAULTS.statusProtocol))
+      refuse('PROTOCOL_MISMATCH', 409);
     if (path === '/availability' || path === '/rent') {
       const window = Math.floor(now() / 60000);
       if (admissionWindow !== window) {

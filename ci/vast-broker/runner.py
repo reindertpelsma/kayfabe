@@ -7,6 +7,8 @@ import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, se
 from pathlib import Path
 
 MAX_RESPONSE = 262144
+# Status protocol: bump with defaults.json statusProtocol whenever the status shape changes.
+STATUS_PROTOCOL = 5
 MAX_LOG = 4194304
 STATES = {
     "NONE",
@@ -845,7 +847,7 @@ def main():
         if (
             set(manifest) != {"protocol_version", "worker_version", "bundle_sha256"}
             or type(manifest["protocol_version"]) is not int
-            or manifest["protocol_version"] != 4
+            or manifest["protocol_version"] != STATUS_PROTOCOL
             or not re.fullmatch("v[0-9A-Za-z.-]{1,31}", manifest["worker_version"])
             or not hex_value(manifest["bundle_sha256"], 64)
         ):
@@ -970,7 +972,12 @@ def main():
             return https_request(
                 origin + ("/" + prefix if prefix else "") + route,
                 method,
-                {**access, "Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                {
+                    **access,
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json",
+                    "X-KF-Protocol": str(STATUS_PROTOCOL),
+                },
                 None if body is None else json.dumps(body, separators=(",", ":")).encode(),
             )
 

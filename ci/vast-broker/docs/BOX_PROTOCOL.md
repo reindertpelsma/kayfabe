@@ -2,7 +2,7 @@
 
 CODE READ: box protocol 7; the repo reporter declares `BOX_PROTOCOL = "7"` and accepts only
 that value. Before renting, the Worker reads `scripts/ci/vast_report.py` at the exact tested SHA
-and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. Runner response protocol remains 4. The bootstrap clones the public repository, fetches and checks out the exact approved SHA, verifies HEAD, and execs the configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the checkout.
+and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. The runner status protocol is separate (5 since 2026-10-23: the runner sends `X-KF-Protocol: 5`, and each side refuses the other version). The bootstrap clones the public repository, fetches and checks out the exact approved SHA, verifies HEAD, and execs the configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the checkout.
 
 | Variable | Format |
 | --- | --- |

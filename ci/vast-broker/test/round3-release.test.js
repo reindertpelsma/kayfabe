@@ -52,7 +52,7 @@ test('R3 bundle manifest pins exact emitted Worker bytes', async () => {
     await readFile(new URL('../dist/deployment.json', import.meta.url), 'utf8'),
   );
   assert.deepEqual(manifest, {
-    protocol_version: 4,
+    protocol_version: 5,
     worker_version: 'v5',
     bundle_sha256: createHash('sha256').update(raw).digest('hex'),
   });

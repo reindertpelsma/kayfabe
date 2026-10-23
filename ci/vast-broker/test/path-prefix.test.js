@@ -20,7 +20,7 @@ const request = async (
   h.service.fetch(
     new Request(env.WORKER_URL + path, {
       method,
-      headers: { Authorization: 'Bearer ' + (token ?? (await jwt())) },
+      headers: { Authorization: 'Bearer ' + (token ?? (await jwt())), 'X-KF-Protocol': '5' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }),
   );
