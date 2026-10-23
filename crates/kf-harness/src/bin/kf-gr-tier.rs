@@ -714,3 +714,51 @@ fn run(l: &mut Checks) -> Result<(), String> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod birth_tests {
+    use super::*;
+    fn check(engine: u32, ce: u32, tier: bool, expected_ce: u32) {
+        let cfg = decoder_config(engine, ce, tier);
+        assert_eq!(cfg.ce, expected_ce);
+        assert_eq!(cfg.tier, tier);
+        assert!(cfg.inert_sw_subch);
+        assert!(!cfg.deferred_api);
+        assert_eq!(cfg.video, 0);
+    }
+    #[test]
+    fn graphics_c5_keeps_explicit_grce_binding() {
+        check(1, 0xc5b5, true, 0);
+    }
+    #[test]
+    fn graphics_c7_keeps_explicit_grce_binding() {
+        check(1, 0xc7b5, true, 0);
+    }
+    #[test]
+    fn graphics_c8_keeps_explicit_grce_binding() {
+        check(1, 0xc8b5, true, 0);
+    }
+    #[test]
+    fn dedicated_copy_c5_uses_its_host_class() {
+        check(0xb, 0xc5b5, false, 0xc5b5);
+    }
+    #[test]
+    fn dedicated_copy_c7_uses_its_host_class() {
+        check(0xb, 0xc7b5, false, 0xc7b5);
+    }
+    #[test]
+    fn dedicated_copy_c8_uses_its_host_class() {
+        check(0xb, 0xc8b5, false, 0xc8b5);
+    }
+    #[test]
+    fn hardware_seed_input_has_no_guest_set_object() {
+        let words = seeded_release(P2);
+        let mut st = kf_chan::tmode::TState::default();
+        st.gr = decoder_config(0xb, 0xc7b5, false);
+        st.tier = kf_chan::ttables::Tier::of_ce_class(st.gr.ce);
+        let ir =
+            kf_chan::tmode::decode(&words, kf_chip::is_any_dma_copy_class, &mut st, None).unwrap();
+        assert!(matches!(&ir[..], [kf_chan::tmode::Ir::Launch(l)]
+            if l.tier == kf_chan::ttables::Tier::C7b5 && l.sema.unwrap().va == VA_CHAN + SEM_CE));
+    }
+}

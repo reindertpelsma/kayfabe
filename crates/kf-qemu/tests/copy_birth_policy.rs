@@ -142,8 +142,12 @@ fn guest_object(class: u32) {
     assert!(seen.lock().unwrap().iter().any(|st| matches!(st,
         ChanStatement::EngineObject { parent, class: c, copy_engine: Some(0xb), .. }
             if *parent == a.handle && *c == class)));
-    // This is the host-fact input, separate from the guest EngineObject statement.
-    let config = kf_chan::tmode::birth_decoder_config(a.engine_type.unwrap(), 0, 0xc7b5, false);
+    let host = HostFacts {
+        ce: 0xc7b5,
+        video: 0,
+    };
+    let config = kf_qemu::chan::translated_decoder_config(a.engine_type.unwrap(), &host, false);
+    assert_eq!(kf_qemu::chan::ce_seed_log(config), "ce_seed=0xc7b5");
     let mut ring = kf_chan::ring::TranslatedRing::new_tmode(0x1000, 64, 0);
     ring.set_gr(config);
     struct Mem;
@@ -184,4 +188,67 @@ fn a_guest_c8b5_object_does_not_select_the_birth_tier() {
 #[test]
 fn a_guest_c9b5_object_does_not_select_the_birth_tier() {
     guest_object(0xc9b5);
+}
+
+struct HostFacts {
+    ce: u32,
+    video: u32,
+}
+impl kf_qemu::chan::HostRingFacts for HostFacts {
+    fn ce_class(&self) -> u32 {
+        self.ce
+    }
+    fn video_context(&self) -> Option<(u32, u32, u32)> {
+        (self.video != 0).then_some((0x42, self.video, 0x13))
+    }
+}
+#[test]
+fn birth_logging_and_wiring_use_another_host_ce_class() {
+    let host = HostFacts {
+        ce: 0xc6b5,
+        video: 0,
+    };
+    let cfg = kf_qemu::chan::translated_decoder_config(0xb, &host, false);
+    assert_eq!(cfg.ce, host.ce);
+    assert_eq!(kf_qemu::chan::ce_seed_log(cfg), "ce_seed=0xc6b5");
+}
+#[test]
+fn graphics_and_video_births_have_no_copy_seed() {
+    for (engine, video, tier) in [(1, 0, true), (0xb, 0xc9b0, false)] {
+        let host = HostFacts { ce: 0xc7b5, video };
+        let cfg = kf_qemu::chan::translated_decoder_config(engine, &host, tier);
+        assert_eq!(cfg.ce, 0);
+        assert_eq!(cfg.video, video);
+        assert_eq!(cfg.tier, tier);
+        assert_eq!(kf_qemu::chan::ce_seed_log(cfg), "ce_seed=0x0");
+    }
+}
+
+#[test]
+fn every_family_selects_and_binds_each_host_advertised_ce_class() {
+    use kf_arch::HostClasses;
+    use kf_chip::classes::classes_for;
+    for family in kf_chip::Family::ALL {
+        let set = classes_for(family);
+        for &ce in set.dma_copy {
+            let advertised = [set.channel_gpfifo[0], set.usermode[0], ce];
+            let derived =
+                kf_chip::host_classes::DerivedHostClasses::choose(family, &advertised).unwrap();
+            let class = derived.ce_object().ce_object_id().0;
+            assert_eq!(class, ce, "{family:?}");
+            let host = HostFacts {
+                ce: class,
+                video: 0,
+            };
+            let cfg = kf_qemu::chan::translated_decoder_config(0xb, &host, false);
+            assert_eq!(cfg.ce, ce);
+            let mut st = kf_chan::tmode::TState::default();
+            st.gr = cfg;
+            st.tier = kf_chan::ttables::Tier::of_ce_class(class);
+            assert!(st.tier.is_some(), "{family:?} {class:#x}");
+            let words = [kf_abi::submit::method_header_inc(4, 0, 1).unwrap(), ce];
+            kf_chan::tmode::decode(&words, kf_chip::is_any_dma_copy_class, &mut st, None)
+                .expect("the host-selected class binds on its own object");
+        }
+    }
 }

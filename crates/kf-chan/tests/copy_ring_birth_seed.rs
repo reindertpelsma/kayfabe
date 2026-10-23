@@ -286,3 +286,57 @@ fn physical_operands_still_translate_into_the_window() {
 fn another_physical_destination_still_translates() {
     physical_copy(0x8000);
 }
+
+// Observe the existing public Debug surface until the typed counter is introduced.
+fn seed_count(st: &kf_chan::tmode::TState, expected: u64) {
+    let shown = format!("{st:?}");
+    assert!(
+        shown.contains(&format!("seeded_launches: {expected},")),
+        "{shown}"
+    );
+}
+fn state() -> kf_chan::tmode::TState {
+    let mut st = kf_chan::tmode::TState::default();
+    st.gr = copy_config();
+    st.tier = Tier::of_ce_class(st.gr.ce);
+    st
+}
+#[test]
+fn seeded_launch_counter_observes_the_first_unbound_launch() {
+    let mut st = state();
+    let ir = kf_chan::tmode::decode(&semaphore(), is_ce, &mut st, None).unwrap();
+    assert_eq!(launch(&ir).tier, Tier::C7b5);
+    seed_count(&st, 1);
+}
+#[test]
+fn seeded_launch_counter_observes_each_unbound_launch() {
+    let mut st = state();
+    for _ in 0..2 {
+        kf_chan::tmode::decode(&semaphore(), is_ce, &mut st, None).unwrap();
+    }
+    seed_count(&st, 2);
+}
+#[test]
+fn an_explicit_host_bind_does_not_count_as_a_seeded_launch() {
+    let mut st = state();
+    let mut words = packet(0, &[HOST_CE]);
+    words.extend(semaphore());
+    kf_chan::tmode::decode(&words, is_ce, &mut st, None).unwrap();
+    seed_count(&st, 0);
+}
+#[test]
+fn an_explicit_bind_in_a_later_segment_preserves_the_prior_seed_count() {
+    let mut st = state();
+    kf_chan::tmode::decode(&semaphore(), is_ce, &mut st, None).unwrap();
+    kf_chan::tmode::decode(&packet(0, &[HOST_CE]), is_ce, &mut st, None).unwrap();
+    kf_chan::tmode::decode(&semaphore(), is_ce, &mut st, None).unwrap();
+    seed_count(&st, 1);
+}
+#[test]
+fn a_refused_launch_does_not_count_as_seeded_work() {
+    let mut st = state();
+    let mut words = packet(0x240, &[1, 0x2050_f061, 1]);
+    words.extend(packet(0x300, &[0x4c]));
+    assert!(kf_chan::tmode::decode(&words, is_ce, &mut st, None).is_err());
+    seed_count(&st, 0);
+}
