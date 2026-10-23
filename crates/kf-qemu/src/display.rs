@@ -117,8 +117,8 @@ fn armed_defaults_on() -> bool {
 /// runs 98/99, RTX 4070]` Windows' first colour program (window 0 ILUT and head 0 OLUT, control
 /// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
 /// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
-/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
-/// flag's scope; MIRROR uses an inferred odd extension for negative inputs.
+/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for each
+/// flag's scope. MIRROR uses an inferred odd extension for negative inputs.
 fn color_experiments() -> kf_disp::color::Experiments {
     static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
     *X.get_or_init(|| {
