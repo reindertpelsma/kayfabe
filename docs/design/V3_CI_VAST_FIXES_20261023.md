@@ -1,5 +1,12 @@
 STATUS: LIVE-DESIGN, 2026-10-23 — V1 offline security fixes from reviewed ffd1d1d51.
 
+[SUPERSEDED IN PART 2026-10-23, owner rulings 19:10 and 19:25, branch
+claude/vast-broker-fixes2-20261023] The Worker Access JWT switch and box Access tokens, the
+MANUAL/hold/stop-timer modes, review and approval modes, Worker draft/base/path policy, the
+dispatch `sha` input and owner branch-copy workflow authority described below are removed. The
+Worker authorizes signed identity + pinned workflow + triggering_actor == owner + sha == run head;
+the workflow YAML decides when to run. See ci/vast-broker/DEPLOY.md.
+
 # Worker boundary and independent cleanup
 
 [CODE READ: 2026-10-23 controller work order] The broker is the security boundary; no Vast subaccount is assumed. Work stays on codex/vast-broker-fixes-20261023. Tests, including provider/control-plane calls, use mocks only. The controller deploys. No live Vast or Cloudflare request is authorised.

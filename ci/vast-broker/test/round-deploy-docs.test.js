@@ -5,10 +5,12 @@ import { readFile } from 'node:fs/promises';
 // schedule its toml does not carry, or keeps instructions for retired features.
 const text = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 const deploy = () => text('../DEPLOY.md');
+// Prose checks ignore line wrapping and Markdown quote markers.
+const prose = async () => (await deploy()).replace(/\n> ?/g, '\n').replace(/\s+/g, ' ');
 const reaperSection = async () => (await deploy()).split('## Independent reaper')[1] ?? '';
 const crons = async (path) => /^crons = \["([^"]+)"\]$/m.exec(await text(path))?.[1];
 test('round DEPLOY test commands work from both documented directories', async () => {
-  const doc = await deploy();
+  const doc = await prose();
   assert.match(doc, /In `ci\/vast-broker`, run `npm test`/);
   assert.match(doc, /from the repository root, run `node --test ci\/vast-broker\/test`/);
 });
@@ -33,19 +35,29 @@ for (const [label, toml, phrase] of [
 test('round main Worker disables preview URLs', async () => {
   assert.match(await text('../wrangler.toml'), /^preview_urls = false$/m);
 });
-test('round DEPLOY states the authorization policy and its owner-trigger warning', async () => {
-  const doc = await deploy();
-  assert.ok(
-    doc.includes(
-      'Worker authorizes: signed identity + pinned workflow + triggering_actor == owner + ' +
-        'sha == run head. YAML decides when to run.',
-    ),
+test('round main Worker keeps workers.dev but no preview hostnames', async () => {
+  assert.match(
+    await text('../wrangler.toml'),
+    /^workers_dev = true\n(?:#.*\n)*preview_urls = false$/m,
   );
-  assert.match(doc, /Reopen, Ready for review or Update branch/);
-  assert.match(doc, /owner-applied label/);
+});
+test('round reaper ticks every five minutes for the 195-minute horizon', async () => {
+  assert.equal(await crons('../../vast-reaper/wrangler.toml'), '*/5 * * * *');
+});
+const POLICY =
+  'Worker authorizes: signed identity + pinned workflow + triggering_actor == owner + ' +
+  'sha == run head. YAML decides when to run.';
+test('round DEPLOY states the owner authorization sentence', async () => {
+  assert.ok((await prose()).includes(POLICY));
+});
+test('round DEPLOY policy section opens with the sentence and the trigger warning', async () => {
+  const section = (await prose()).split('## Authorization policy')[1].split('## ')[0];
+  assert.ok(section.indexOf(POLICY) >= 0 && section.indexOf(POLICY) < 300);
+  assert.match(section, /Reopen, Ready for review or Update branch/);
+  assert.match(section, /owner-applied label/);
 });
 test('round DEPLOY documents the helper and the first-rental acceptance checks', async () => {
-  const doc = await deploy();
+  const doc = await prose();
   assert.match(doc, /node ci\/vast-broker\/deploy\.mjs \/path\/outside\/checkout\/broker\.vars/);
   assert.match(doc, /V2 acceptance check/);
   assert.match(doc, /dashboard-only/);
@@ -57,3 +69,8 @@ for (const path of ['../DEPLOY.md', '../README.md'])
     for (const line of doc.split('\n').filter((x) => /stop-timer|\/hold|APPROVAL_MODE/.test(x)))
       assert.match(line, /SUPERSEDED|retired|removed/i, line.slice(0, 80));
   });
+test('round DEPLOY V2 acceptance check names every instance price field', async () => {
+  const section = (await prose()).split('## V2 acceptance check')[1]?.split('## ')[0] ?? '';
+  for (const field of ['dph_base', 'dph_total', 'storage_cost', 'inet_up_cost', 'inet_down_cost'])
+    assert.ok(section.includes('`' + field + '`'), field);
+});

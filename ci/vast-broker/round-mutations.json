@@ -1307,6 +1307,71 @@
       "tests": [
         "round-deploy-helper.test.js"
       ]
+    },
+    {
+      "name": "V12-preview-urls",
+      "file": "wrangler.toml",
+      "patches": [
+        [
+          "preview_urls = false",
+          "preview_urls = true"
+        ]
+      ],
+      "tests": [
+        "round-deploy-docs.test.js"
+      ]
+    },
+    {
+      "name": "V12-reaper-cron",
+      "file": "../vast-reaper/wrangler.toml",
+      "patches": [
+        [
+          "crons = [\"*/5 * * * *\"]",
+          "crons = [\"*/10 * * * *\"]"
+        ]
+      ],
+      "tests": [
+        "round-deploy-docs.test.js"
+      ]
+    },
+    {
+      "name": "V12-old-reaper-recipe",
+      "file": "DEPLOY.md",
+      "patches": [
+        [
+          "/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy --dry-run\n/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy\n/tmp/kf-vast-wrangler/node_modules/.bin/wrangler secret put REAPER_VAST_API_KEY\n",
+          "/tmp/kf-vast-wrangler/node_modules/.bin/wrangler secret put REAPER_VAST_API_KEY\n/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy --dry-run \\\n  --var OWNER_GITHUB_ID:229738317\n/tmp/kf-vast-wrangler/node_modules/.bin/wrangler deploy \\\n  --var OWNER_GITHUB_ID:229738317\n"
+        ]
+      ],
+      "tests": [
+        "round-deploy-docs.test.js"
+      ]
+    },
+    {
+      "name": "V12-policy-sentence",
+      "file": "DEPLOY.md",
+      "patches": [
+        [
+          "> sha == run head. YAML decides when to run.",
+          "> sha == run head."
+        ]
+      ],
+      "tests": [
+        "round-deploy-docs.test.js"
+      ]
+    },
+    {
+      "name": "V2-acceptance-doc",
+      "file": "DEPLOY.md",
+      "patches": [
+        [
+          "## V2 acceptance check (contract recheck)",
+          "## Contract recheck"
+        ]
+      ],
+      "tests": [
+        "round-deploy-docs.test.js"
+      ]
     }
   ]
 }
