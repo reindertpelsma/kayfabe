@@ -42,6 +42,20 @@ def scoped(name, old, new):
 
 
 CASES = [
+    (
+        "existing-client-target-redirected",
+        replace(
+            '            CARGO_TARGET_DIR=str(root / "target"),',
+            '            CARGO_TARGET_DIR="/workspace/bench/kf-verify-target",',
+        ),
+    ),
+    (
+        "existing-client-target-nested",
+        replace(
+            '            CARGO_TARGET_DIR=str(root / "target"),',
+            '            CARGO_TARGET_DIR=str(root / "target" / "misplaced"),',
+        ),
+    ),
     ("provision-exit-only", function("provision_rows", '    return [row("provision", 1)]')),
     ("merge-evidence-bypass", function("merge_rows", '    return [row("merge_bar", 1)]')),
     ("ladder-exit-only", function("ladder_rows", '    return [row("cuda_host", 4)]')),

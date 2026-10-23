@@ -437,7 +437,7 @@ def main():
             KAYFABE_REPO=str(root),
             BENCH_DIR=str(bench),
             KF_DEVICE="kf3",
-            CARGO_TARGET_DIR="/workspace/bench/kf-verify-target",
+            CARGO_TARGET_DIR=str(root / "target"),
             CARGO_BUILD_JOBS=str(min(8, os.cpu_count() or 2)),
             BASH_ENV=str(root / "scripts/ci/vast_payload_hooks.sh"),
             KF_PAYLOAD_ROOT=str(root),
