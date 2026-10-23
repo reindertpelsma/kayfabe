@@ -1,0 +1,20 @@
+test_170_minute_timer_announces_ready_before_sleep (test_lease_timer.LeaseTimer.test_170_minute_timer_announces_ready_before_sleep) ... ok
+test_another_lane_instance_does_not_block_own_absence (test_lease_timer.LeaseTimer.test_another_lane_instance_does_not_block_own_absence) ... ok
+test_closed_id_cannot_arm_a_fresh_timer (test_lease_timer.LeaseTimer.test_closed_id_cannot_arm_a_fresh_timer) ... ok
+test_empty_owned_ledger_refuses (test_lease_timer.LeaseTimer.test_empty_owned_ledger_refuses) ... ok
+test_live_own_id_retries_until_exact_absence (test_lease_timer.LeaseTimer.test_live_own_id_retries_until_exact_absence) ... ok
+test_many_foreign_instances_are_never_destroyed (test_lease_timer.LeaseTimer.test_many_foreign_instances_are_never_destroyed) ... ok
+test_over_170_minutes_refuses (test_lease_timer.LeaseTimer.test_over_170_minutes_refuses) ... ok
+test_persistent_live_id_never_gets_an_absence_receipt (test_lease_timer.LeaseTimer.test_persistent_live_id_never_gets_an_absence_receipt) ... ok
+test_shorter_budget_timer_also_announces_ready (test_lease_timer.LeaseTimer.test_shorter_budget_timer_also_announces_ready) ... ok
+test_transient_api_failure_retries (test_lease_timer.LeaseTimer.test_transient_api_failure_retries) ... OWN_TIMER_RETRY 1 CalledProcessError
+ok
+test_transient_invalid_json_retries (test_lease_timer.LeaseTimer.test_transient_invalid_json_retries) ... OWN_TIMER_RETRY 1 JSONDecodeError
+ok
+test_unknown_id_refuses_before_any_sleep_or_api (test_lease_timer.LeaseTimer.test_unknown_id_refuses_before_any_sleep_or_api) ... ok
+test_zero_delay_refuses (test_lease_timer.LeaseTimer.test_zero_delay_refuses) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.024s
+
+OK
