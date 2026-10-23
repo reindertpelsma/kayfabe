@@ -63,6 +63,8 @@ def save(rows):
 
 sys.path.insert(0, "/workspace/bw-provider-retry-wt/scripts/bench/blackwell")
 import provider_retry as P
+sys.path.insert(0, str(W / "scripts/bench/blackwell"))
+import console_pin as C
 
 def arm_watch(row, seconds, kind, rows):
     assert 0 < seconds <= 150 * 60
@@ -163,7 +165,7 @@ if mode in ("preflight", "rent"):
         for x in found:
             x["candidate_die"] = die
         return found
-    recheck_cache = D / "single_recheck_cache.json"
+    recheck_cache = D / "single_recheck_1305_cache.json"
     if recheck_cache.exists():
         offers = json.loads(recheck_cache.read_text())["offers"]
     else:
@@ -244,7 +246,7 @@ if mode in ("preflight", "rent"):
     offer = min(
         eligible,
         key=lambda x: (
-            ["GB205", "GB206", "GB203"].index(x["candidate_die"]),
+            ["GB206", "GB205", "GB203"].index(x["candidate_die"]),
             float(x["dph_total"]),
         ),
     )
@@ -282,9 +284,18 @@ if mode in ("preflight", "rent"):
         sys.exit(0)
     source = subprocess.check_output(["git", "rev-parse", "6e3fd3fd6"], cwd=W, text=True).strip()
     if rows:
-        assert P.can_replace(
+        renewed_1305 = (
+            rows[-1]["id"] == 57359730 and rows[-1].get("destroyed")
+            and rows[-1].get("absence_verified_utc") and not rows[-1].get("ssh_ready_utc")
+            and not rows[-1].get("work_started")
+            and rows[-1].get("failure") == "host-key pin absent from authenticated instance console"
+        )
+        assert renewed_1305 or P.can_replace(
             rows[-1], P.load(D / "known_bad_machines.json", [])
-        ), "last cell was not a retired provider failure; no replacement"
+        ), "last cell lacks an explicit renewed attempt or retired provider failure"
+    with (D / "owner1305_attempt_consumed.json").open("x") as out:
+        json.dump({"authority":"controller13:05 one more attempt after absent-pin readiness fix",
+                   "consumed_before_create_utc":now().isoformat()},out)
     retry_index = P.reserve_retry(D / "stretch.json")
     one_time_exception = int(offer["id"]) == 57344521 and int(offer["machine_id"]) == 150531
     if one_time_exception:
@@ -338,7 +349,7 @@ if mode in ("preflight", "rent"):
         "product_head": source,
         "measured_candidate": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
         "destroyed": False,
-        "authority": "owner12:50 exact57344521/machine150531 one-time provider exception if no eligible different-machine GB205/GB206; second host failure preSSH destroys and stops, bad list retained; per-arm Windows ON Xid32 observation: one verified RTX50 lease; measured GB202/GB206 pages, explicit GB202-to-GB203/205/207 inheritance; B48b then optional measured-page+B1; max8 exact owned-pair records, other faults/errors/health fatal; phase8 stop7.5 reserve5; fixed150-minute timer",
+        "authority": "owner13:05 one additional attempt after tests-first absent-console-pin readiness fix; single recheck GB206/GB205 elsewhere first, then exact57344521/machine150531 exception once; second host failure preSSH destroys and stops, bad list retained; per-arm Windows ON Xid32 observation: one verified RTX50 lease; measured GB202/GB206 pages, explicit GB202-to-GB203/205/207 inheritance; B48b then optional measured-page+B1; max8 exact owned-pair records, other faults/errors/health fatal; phase8 stop7.5 reserve5; fixed150-minute timer",
     }
     rows.append(row)
     save(rows)
@@ -400,37 +411,53 @@ elif mode == "ready":
     assert row["auto_destroy_verified"]
     os.kill(row["auto_destroy_pid"], 0)
     banner_seconds = None
+    pin_stage_started = pin_factor = pin_deadline = None
+
+    def lease_age():
+        return (now() - datetime.datetime.fromisoformat(row["created_utc"])).total_seconds()
+
+    def fail_readiness(reason, status, elapsed):
+        safe = {key: status.get(key) for key in (
+            "id", "actual_status", "intended_status", "status_msg", "cur_state", "dph_total"
+        )}
+        receipt = {
+            "utc": now().isoformat(), "reason": reason,
+            "machine_id": row["machine_id"], "status": safe,
+            "elapsed_seconds": elapsed, "adaptive_boot_seconds": 1200,
+            "first_pinned_banner_seconds": banner_seconds,
+            "console_stage_started_elapsed": pin_stage_started,
+            "console_factor": pin_factor, "console_deadline_since_create": pin_deadline,
+        }
+        (D / ("provider_failure_" + str(iid) + ".json")).write_text(
+            json.dumps(receipt, indent=2) + "\n"
+        )
+        print("PROVIDER_RETRYABLE", iid, reason, flush=True)
+        sys.exit(76)
+
+    def record_pin(receipt):
+        with (D / ("console_pin_" + str(iid) + ".jsonl")).open("a") as out:
+            out.write(json.dumps({"lease_id": iid, "utc": now().isoformat(), **receipt}) + "\n")
+        print("CONSOLE_PIN", receipt["state"], receipt["polls"], flush=True)
+
+    def console_text(timeout):
+        current = next(x for x in api(["show", "instances"]) if int(x["id"]) == iid)
+        reason = P.failure(current, lease_age(), banner_seconds=None)
+        if reason:
+            fail_readiness(reason, current, lease_age())
+        return subprocess.run(
+            ["vastai", "logs", str(iid), "--tail", "5000"],
+            capture_output=True, text=True, timeout=timeout,
+        ).stdout
+
     while True:
         x = next(x for x in api(["show", "instances"]) if int(x["id"]) == iid)
         print("READINESS", now().isoformat(), x.get("actual_status"), flush=True)
-        elapsed = (now() - datetime.datetime.fromisoformat(row["created_utc"])).total_seconds()
-        reason = P.failure(x, elapsed, banner_seconds=banner_seconds)
+        elapsed = lease_age()
+        reason = P.failure(x, elapsed, banner_seconds=None)
+        if pin_deadline is not None and elapsed >= pin_deadline:
+            reason = reason or "provider_boot_timeout"
         if reason:
-            safe = {
-                k: x.get(k)
-                for k in (
-                    "id",
-                    "actual_status",
-                    "intended_status",
-                    "status_msg",
-                    "cur_state",
-                    "dph_total",
-                )
-            }
-            receipt = {
-                "utc": now().isoformat(),
-                "reason": reason,
-                "machine_id": row["machine_id"],
-                "status": safe,
-                "elapsed_seconds": elapsed,
-                "adaptive_boot_seconds": P.boot_bound(banner_seconds),
-                "first_pinned_banner_seconds": banner_seconds,
-            }
-            (D / ("provider_failure_" + str(iid) + ".json")).write_text(
-                json.dumps(receipt, indent=2) + "\n"
-            )
-            print("PROVIDER_RETRYABLE", iid, reason, flush=True)
-            sys.exit(76)
+            fail_readiness(reason, x, elapsed)
         if (
             x.get("actual_status") == "created"
             and x.get("intended_status") == "stopped"
@@ -438,9 +465,7 @@ elif mode == "ready":
         ):
             subprocess.run(
                 ["vastai", "start", "instance", str(iid), "--raw"],
-                check=True,
-                capture_output=True,
-                text=True,
+                check=True, capture_output=True, text=True,
             )
             row["explicit_start_requested_utc"] = now().isoformat()
             rows = json.loads(L.read_text())
@@ -453,60 +478,55 @@ elif mode == "ready":
             assert ipaddress.ip_address(ip).is_global
             port = int(port)
             alias = "bw-fields-" + str(iid)
-            console = subprocess.run(
-                ["vastai", "logs", str(iid), "--tail", "5000"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            ).stdout
+            scan_start = time.monotonic()
             scan = subprocess.run(
                 ["ssh-keyscan", "-T", "5", "-t", "ed25519", "-p", str(port), ip],
-                capture_output=True,
-                text=True,
-                timeout=10,
+                capture_output=True, text=True, timeout=min(10, 1200 - elapsed),
             ).stdout
+            scan_seconds = max(0.001, time.monotonic() - scan_start)
             candidates = [l.split() for l in scan.splitlines() if l and not l.startswith("#")]
             for fields in candidates:
                 if len(fields) < 3:
                     continue
-                fp = "SHA256:" + base64.b64encode(
-                    hashlib.sha256(base64.b64decode(fields[2])).digest()
-                ).decode().rstrip("=")
-                if fields[2] not in console and fp not in console:
-                    continue
+                if pin_stage_started is None:
+                    pin_stage_started = lease_age()
+                    pin_factor = P.policy(scan_seconds)["factor"]
+                    pin_deadline = min(1200, pin_stage_started + C.stage_seconds(pin_factor))
+                try:
+                    proof = C.wait_for_pin(
+                        fields[2], console_text, elapsed_since_create=lease_age(),
+                        factor=pin_factor, stage_started_elapsed=pin_stage_started,
+                        clock=time.monotonic, sleep=time.sleep, record=record_pin,
+                    )
+                except C.PinExpired:
+                    fail_readiness("provider_boot_timeout", x, lease_age())
+                # A different published pin propagates immediately as a safety refusal.
+                fp = proof["fingerprint"]
                 (D / "known_hosts").write_text(alias + " " + fields[1] + " " + fields[2] + "\n")
                 (D / "ssh.conf").write_text(
                     f"Host {alias} s4-own\n HostName {ip}\n Port {port}\n User root\n IdentityFile /root/.ssh/id_ed25519\n IdentitiesOnly yes\n ForwardAgent no\n BatchMode yes\n ConnectTimeout 80\n ServerAliveInterval 15\n ServerAliveCountMax 3\n HostKeyAlias {alias}\n UserKnownHostsFile {D}/known_hosts\n StrictHostKeyChecking yes\n"
                 )
-                remaining = (
-                    P.boot_bound(banner_seconds)
-                    - (now() - datetime.datetime.fromisoformat(row["created_utc"])).total_seconds()
-                )
+                remaining = min(1200, pin_deadline) - lease_age()
                 if remaining <= 0:
-                    continue
+                    fail_readiness("provider_boot_timeout", x, lease_age())
                 banner_start = time.monotonic()
                 try:
                     result = subprocess.run(
                         ["ssh", "-F", str(D / "ssh.conf"), alias, "echo CAPC_SSH_READY"],
-                        capture_output=True,
-                        text=True,
-                        timeout=min(100, remaining),
+                        capture_output=True, text=True, timeout=min(100, remaining),
                     )
                 except subprocess.TimeoutExpired:
                     result = subprocess.CompletedProcess([], 255, "", "bounded SSH banner timeout")
                 if banner_seconds is None:
                     banner_seconds = max(0.001, time.monotonic() - banner_start)
                 if result.returncode == 0 and "CAPC_SSH_READY" in result.stdout:
-                    elapsed = (
-                        now() - datetime.datetime.fromisoformat(row["created_utc"])
-                    ).total_seconds()
-                    if elapsed >= P.boot_bound(banner_seconds):
-                        continue
+                    if lease_age() >= min(1200, pin_deadline):
+                        fail_readiness("provider_boot_timeout", x, lease_age())
                     (D / "alias").write_text(alias)
                     row.update(
-                        ssh_ready_utc=now().isoformat(),
-                        ssh_hostkey_fingerprint=fp,
+                        ssh_ready_utc=now().isoformat(), ssh_hostkey_fingerprint=fp,
                         observed_dph_total=float(x["dph_total"]),
+                        console_pin_proof=proof, console_pin_factor=pin_factor,
                     )
                     rows = json.loads(L.read_text())
                     rows[-1] = row
@@ -514,25 +534,12 @@ elif mode == "ready":
                     assert (
                         row["prior_lane_runtime_usd"]
                         + row["observed_dph_total"] * row["budget_cutoff_minutes"] / 60
-                        + 0.50
-                        < 7.5
+                        + 0.50 < 7.5
                     )
                     print("READINESS_PASS", iid, fp, flush=True)
                     sys.exit(0)
                 print("PINNED_SSH_RC", result.returncode, flush=True)
-            if candidates and not any(
-                fields[2] in console
-                or (
-                    "SHA256:"
-                    + base64.b64encode(hashlib.sha256(base64.b64decode(fields[2])).digest())
-                    .decode()
-                    .rstrip("=")
-                )
-                in console
-                for fields in candidates
-            ):
-                raise RuntimeError("host-key pin absent from authenticated instance console; STOP")
-        time.sleep(15)
+        time.sleep(20)
     raise RuntimeError("provider boot loop exited unexpectedly")
 elif mode == "destroy":
     iid = int((D / "own-id").read_text())

@@ -1,0 +1,25 @@
+...............................................................READINESS 2026-10-23T00:10:10+00:00 running
+CONSOLE_PIN absent 1
+CONSOLE_PIN match 2
+READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
+.READINESS 2026-10-23T00:19:50+00:00 running
+CONSOLE_PIN absent 1
+PROVIDER_RETRYABLE 1234 provider_boot_timeout
+.READINESS 2026-10-23T00:16:40+00:00 running
+CONSOLE_PIN match 1
+READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
+.READINESS 2026-10-23T00:10:10+00:00 running
+CONSOLE_PIN mismatch 1
+......PHASE_XID_STOP: Command 'journalctl' returned non-zero exit status 1.
+.PHASE_XID_STOP: Command 'journalctl' timed out after 10 seconds
+.......PHASE_XID_STOP: prior fatal marker
+.PHASE_XID_STOP: prior fatal marker
+........................PHASE_XID_STOP: new fault without current arm/init proof
+.PHASE_XID_STOP: new fault without current arm/init proof
+...............PHASE_XID_STOP: Command 'journalctl' returned non-zero exit status 1.
+.PHASE_XID_STOP: Command 'journalctl' timed out after 10 seconds
+................................................................................................................................
+----------------------------------------------------------------------
+Ran 250 tests in 0.163s
+
+OK

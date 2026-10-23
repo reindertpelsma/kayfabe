@@ -1,0 +1,119 @@
+[
+  {
+    "mutant": "absent_is_refusal",
+    "distinct_killers": 12,
+    "tests": [
+      "test_absent_console_then_present_after_ten_minutes_becomes_readiness",
+      "test_absent_past_adaptive_stage_bound_refuses",
+      "test_absent_past_create_ceiling_refuses",
+      "test_absent_pin_past_create_bound_is_a_readiness_timeout",
+      "test_absent_then_present_within_bound_passes",
+      "test_factor_floor_does_not_cut_off_publication_at_two_minutes",
+      "test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch",
+      "test_outer_retry_keeps_the_original_stage_deadline",
+      "test_poll_schedule_accounts_for_console_read_time",
+      "test_several_missing_console_reads_do_not_refuse_early",
+      "test_slow_factor_can_observe_later_console_publication",
+      "test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "mismatching_pin_admitted",
+    "distinct_killers": 4,
+    "tests": [
+      "test_conflicting_published_ed25519_keys_refuse",
+      "test_different_fingerprint_refuses_immediately",
+      "test_present_different_ed25519_pin_refuses_immediately",
+      "test_published_different_pin_stops_without_any_ssh_connection"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "stage_bound_removed",
+    "distinct_killers": 3,
+    "tests": [
+      "test_existing_stage_is_not_restarted_after_a_console_attempt",
+      "test_outer_retry_keeps_the_original_stage_deadline",
+      "test_present_after_adaptive_stage_bound_is_not_readiness"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "create_ceiling_removed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_present_after_create_ceiling_is_not_readiness",
+      "test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "outer_retry_restarts_stage",
+    "distinct_killers": 2,
+    "tests": [
+      "test_existing_stage_is_not_restarted_after_a_console_attempt",
+      "test_outer_retry_keeps_the_original_stage_deadline"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "late_console_result_admitted",
+    "distinct_killers": 3,
+    "tests": [
+      "test_existing_stage_is_not_restarted_after_a_console_attempt",
+      "test_present_after_adaptive_stage_bound_is_not_readiness",
+      "test_present_after_create_ceiling_is_not_readiness"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "console_poll_interval_changed",
+    "distinct_killers": 5,
+    "tests": [
+      "test_absent_then_present_within_bound_passes",
+      "test_factor_floor_does_not_cut_off_publication_at_two_minutes",
+      "test_poll_schedule_accounts_for_console_read_time",
+      "test_several_missing_console_reads_do_not_refuse_early",
+      "test_slow_factor_can_observe_later_console_publication"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "factor_floor_removed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_factor_floor_does_not_cut_off_publication_at_two_minutes",
+      "test_factor_is_clamped_to_four_through_ten"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "operator_skips_console_attestation",
+    "distinct_killers": 3,
+    "tests": [
+      "test_absent_console_then_present_after_ten_minutes_becomes_readiness",
+      "test_absent_pin_past_create_bound_is_a_readiness_timeout",
+      "test_published_different_pin_stops_without_any_ssh_connection"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "operator_late_readiness_shortened",
+    "distinct_killers": 2,
+    "tests": [
+      "test_absent_console_then_present_after_ten_minutes_becomes_readiness",
+      "test_late_matching_pin_does_not_shorten_the_create_ceiling"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "operator_ssh_budget_shortened",
+    "distinct_killers": 2,
+    "tests": [
+      "test_absent_console_then_present_after_ten_minutes_becomes_readiness",
+      "test_late_matching_pin_does_not_shorten_the_create_ceiling"
+    ],
+    "status": "KILLED"
+  }
+]

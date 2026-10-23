@@ -81,6 +81,7 @@ class OperatorConsolePin(unittest.TestCase):
             namespace = dict(
                 D=root,
                 L=ledger,
+                datetime=dt,
                 Path=Path,
                 json=json,
                 os=os,

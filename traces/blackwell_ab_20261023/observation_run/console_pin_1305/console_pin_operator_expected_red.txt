@@ -1,0 +1,338 @@
+test_absent_past_adaptive_stage_bound_refuses (test_console_pin.ConsolePin.test_absent_past_adaptive_stage_bound_refuses) ... ERROR
+test_absent_past_create_ceiling_refuses (test_console_pin.ConsolePin.test_absent_past_create_ceiling_refuses) ... ERROR
+test_absent_then_present_within_bound_passes (test_console_pin.ConsolePin.test_absent_then_present_within_bound_passes) ... ERROR
+test_conflicting_published_ed25519_keys_refuse (test_console_pin.ConsolePin.test_conflicting_published_ed25519_keys_refuse) ... ERROR
+test_different_fingerprint_refuses_immediately (test_console_pin.ConsolePin.test_different_fingerprint_refuses_immediately) ... ERROR
+test_existing_stage_is_not_restarted_after_a_console_attempt (test_console_pin.ConsolePin.test_existing_stage_is_not_restarted_after_a_console_attempt) ... ERROR
+test_factor_floor_does_not_cut_off_publication_at_two_minutes (test_console_pin.ConsolePin.test_factor_floor_does_not_cut_off_publication_at_two_minutes) ... ERROR
+test_factor_is_clamped_to_four_through_ten (test_console_pin.ConsolePin.test_factor_is_clamped_to_four_through_ten) ... ok
+test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch (test_console_pin.ConsolePin.test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch) ... ERROR
+test_outer_retry_keeps_the_original_stage_deadline (test_console_pin.ConsolePin.test_outer_retry_keeps_the_original_stage_deadline) ... ERROR
+test_poll_schedule_accounts_for_console_read_time (test_console_pin.ConsolePin.test_poll_schedule_accounts_for_console_read_time) ... ERROR
+test_present_after_adaptive_stage_bound_is_not_readiness (test_console_pin.ConsolePin.test_present_after_adaptive_stage_bound_is_not_readiness) ... ERROR
+test_present_after_create_ceiling_is_not_readiness (test_console_pin.ConsolePin.test_present_after_create_ceiling_is_not_readiness) ... ERROR
+test_present_different_ed25519_pin_refuses_immediately (test_console_pin.ConsolePin.test_present_different_ed25519_pin_refuses_immediately) ... ERROR
+test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console (test_console_pin.ConsolePin.test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console) ... ERROR
+test_several_missing_console_reads_do_not_refuse_early (test_console_pin.ConsolePin.test_several_missing_console_reads_do_not_refuse_early) ... ERROR
+test_slow_factor_can_observe_later_console_publication (test_console_pin.ConsolePin.test_slow_factor_can_observe_later_console_publication) ... ERROR
+test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create (test_console_pin.ConsolePin.test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create) ... ERROR
+test_absent_console_then_present_after_ten_minutes_becomes_readiness (test_console_pin_operator.OperatorConsolePin.test_absent_console_then_present_after_ten_minutes_becomes_readiness) ... READINESS 2026-10-23T00:10:10+00:00 running
+ERROR
+test_absent_pin_past_create_bound_is_a_readiness_timeout (test_console_pin_operator.OperatorConsolePin.test_absent_pin_past_create_bound_is_a_readiness_timeout) ... READINESS 2026-10-23T00:19:50+00:00 running
+ERROR
+test_late_matching_pin_does_not_shorten_the_create_ceiling (test_console_pin_operator.OperatorConsolePin.test_late_matching_pin_does_not_shorten_the_create_ceiling) ... READINESS 2026-10-23T00:16:40+00:00 running
+ERROR
+test_published_different_pin_stops_without_any_ssh_connection (test_console_pin_operator.OperatorConsolePin.test_published_different_pin_stops_without_any_ssh_connection) ... READINESS 2026-10-23T00:10:10+00:00 running
+ERROR
+
+======================================================================
+ERROR: test_absent_past_adaptive_stage_bound_refuses (test_console_pin.ConsolePin.test_absent_past_adaptive_stage_bound_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 85, in test_absent_past_adaptive_stage_bound_refuses
+    self.wait(["booting"], elapsed=600, factor=4)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_absent_past_create_ceiling_refuses (test_console_pin.ConsolePin.test_absent_past_create_ceiling_refuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 89, in test_absent_past_create_ceiling_refuses
+    self.wait(["booting"], elapsed=1190, factor=10)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_absent_then_present_within_bound_passes (test_console_pin.ConsolePin.test_absent_then_present_within_bound_passes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 61, in test_absent_then_present_within_bound_passes
+    result, calls, sleeps, receipts = self.wait(["booting", "ssh-ed25519 " + KEY])
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_conflicting_published_ed25519_keys_refuse (test_console_pin.ConsolePin.test_conflicting_published_ed25519_keys_refuse)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 81, in test_conflicting_published_ed25519_keys_refuse
+    self.wait(["ssh-ed25519 " + KEY + "\nssh-ed25519 " + OTHER])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_different_fingerprint_refuses_immediately (test_console_pin.ConsolePin.test_different_fingerprint_refuses_immediately)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 77, in test_different_fingerprint_refuses_immediately
+    self.wait(["256 SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB host (ED25519)", FP])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_existing_stage_is_not_restarted_after_a_console_attempt (test_console_pin.ConsolePin.test_existing_stage_is_not_restarted_after_a_console_attempt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 136, in test_existing_stage_is_not_restarted_after_a_console_attempt
+    self.wait([FP], elapsed=839, stage_started=600, costs=[2])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_factor_floor_does_not_cut_off_publication_at_two_minutes (test_console_pin.ConsolePin.test_factor_floor_does_not_cut_off_publication_at_two_minutes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 120, in test_factor_floor_does_not_cut_off_publication_at_two_minutes
+    result, calls, sleeps, receipts = self.wait([""] * 6 + [FP], factor=1)
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch (test_console_pin.ConsolePin.test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 111, in test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch
+    result, calls, sleeps, receipts = self.wait(["256 SHA256:OTHER host (ECDSA)", FP])
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_outer_retry_keeps_the_original_stage_deadline (test_console_pin.ConsolePin.test_outer_retry_keeps_the_original_stage_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 140, in test_outer_retry_keeps_the_original_stage_deadline
+    self.wait(["", FP], elapsed=839, stage_started=600)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_poll_schedule_accounts_for_console_read_time (test_console_pin.ConsolePin.test_poll_schedule_accounts_for_console_read_time)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 106, in test_poll_schedule_accounts_for_console_read_time
+    result, calls, sleeps, receipts = self.wait(["", FP], costs=[7, 2])
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_present_after_adaptive_stage_bound_is_not_readiness (test_console_pin.ConsolePin.test_present_after_adaptive_stage_bound_is_not_readiness)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 97, in test_present_after_adaptive_stage_bound_is_not_readiness
+    self.wait([FP], elapsed=0, factor=4, costs=[241])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_present_after_create_ceiling_is_not_readiness (test_console_pin.ConsolePin.test_present_after_create_ceiling_is_not_readiness)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 93, in test_present_after_create_ceiling_is_not_readiness
+    self.wait([FP], elapsed=1199, factor=4, costs=[2])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_present_different_ed25519_pin_refuses_immediately (test_console_pin.ConsolePin.test_present_different_ed25519_pin_refuses_immediately)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 73, in test_present_different_ed25519_pin_refuses_immediately
+    self.wait(["ssh-ed25519 " + OTHER, FP])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console (test_console_pin.ConsolePin.test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 129, in test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console
+    result, calls, sleeps, receipts = self.wait(["PRIVATE_BODY " + FP])
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_several_missing_console_reads_do_not_refuse_early (test_console_pin.ConsolePin.test_several_missing_console_reads_do_not_refuse_early)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 67, in test_several_missing_console_reads_do_not_refuse_early
+    result, calls, sleeps, receipts = self.wait(["", "", "", FP])
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_slow_factor_can_observe_later_console_publication (test_console_pin.ConsolePin.test_slow_factor_can_observe_later_console_publication)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 101, in test_slow_factor_can_observe_later_console_publication
+    result, calls, sleeps, receipts = self.wait(snapshots, elapsed=300, factor=10)
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create (test_console_pin.ConsolePin.test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 126, in test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create
+    self.wait([""] * 10 + [FP], elapsed=1100, factor=100)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+TypeError: wait_for_pin() got an unexpected keyword argument 'stage_started_elapsed'
+
+======================================================================
+ERROR: test_absent_console_then_present_after_ten_minutes_becomes_readiness (test_console_pin_operator.OperatorConsolePin.test_absent_console_then_present_after_ten_minutes_becomes_readiness)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 117, in test_absent_console_then_present_after_ten_minutes_becomes_readiness
+    code, calls, refusal = self.run_ready(["booting", FP], elapsed=610)
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 111, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 11, in <module>
+NameError: name 'datetime' is not defined. Did you forget to import 'datetime'?
+
+======================================================================
+ERROR: test_absent_pin_past_create_bound_is_a_readiness_timeout (test_console_pin_operator.OperatorConsolePin.test_absent_pin_past_create_bound_is_a_readiness_timeout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 128, in test_absent_pin_past_create_bound_is_a_readiness_timeout
+    code, calls, refusal = self.run_ready(["booting"], elapsed=1190, factor=10)
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 111, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 11, in <module>
+NameError: name 'datetime' is not defined. Did you forget to import 'datetime'?
+
+======================================================================
+ERROR: test_late_matching_pin_does_not_shorten_the_create_ceiling (test_console_pin_operator.OperatorConsolePin.test_late_matching_pin_does_not_shorten_the_create_ceiling)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 123, in test_late_matching_pin_does_not_shorten_the_create_ceiling
+    code, calls, refusal = self.run_ready([FP], elapsed=1000, factor=10)
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 111, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 11, in <module>
+NameError: name 'datetime' is not defined. Did you forget to import 'datetime'?
+
+======================================================================
+ERROR: test_published_different_pin_stops_without_any_ssh_connection (test_console_pin_operator.OperatorConsolePin.test_published_different_pin_stops_without_any_ssh_connection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 135, in test_published_different_pin_stops_without_any_ssh_connection
+    self.run_ready(["ssh-ed25519 " + OTHER], elapsed=610)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 111, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 11, in <module>
+NameError: name 'datetime' is not defined. Did you forget to import 'datetime'?
+
+----------------------------------------------------------------------
+Ran 22 tests in 0.015s
+
+FAILED (errors=21)

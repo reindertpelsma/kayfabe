@@ -29,7 +29,7 @@ die=row['candidate_die'];donor=die if die in ['GB202','GB206'] else 'GB202'
 authority={'version':1,'lease_id':iid,'record_limit':8,
            'arms':['on_observe_b','on_observe_b1'],
            'not_before_utc':start.isoformat(),'expires_utc':end.isoformat(),
-           'authority':'owner11:05/12:20/12:50 scoped Windows ON observation',
+           'authority':'owner11:05/12:20/12:50/13:05 scoped Windows ON observation',
            'candidate_die':die,'expected_page_donor':donor,
            'page_policy':'own exact row' if die==donor else 'inherited-with-reason',
            'allowed_pair_class':'first plain and first0e0000xx IDs pinned per arm, intr00200000',
@@ -39,7 +39,8 @@ for path in [D/'observation_authority.json',T/'observation_authority.json']:
 j=json.loads((K/'manifest.json').read_text())
 j.update(actual_lease=iid,expected_die=die,expected_donor=donor,
          provider_exception_used=row.get('one_time_provider_exception',False),
-         deadline_utc=end.isoformat())
+         deadline_utc=end.isoformat(), attempt_state='launching_authenticated_lease',
+         ssh_identity_guard_refusal=False, owner_authority='controller13:05 renewed attempt')
 (K/'manifest.json').write_text(json.dumps(j,indent=2)+'\n')
 assert not row.get('work_started') and not (D/'parallel_eight_plan.json').exists()
 row['work_started']=True

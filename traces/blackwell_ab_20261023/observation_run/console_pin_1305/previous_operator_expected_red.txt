@@ -1,0 +1,63 @@
+READINESS 2026-10-23T00:10:10+00:00 running
+READINESS 2026-10-23T00:19:50+00:00 running
+READINESS 2026-10-23T00:16:40+00:00 running
+READINESS 2026-10-23T00:16:55.100000+00:00 running
+PROVIDER_RETRYABLE 1234 provider_boot_timeout
+READINESS 2026-10-23T00:10:10+00:00 running
+test_absent_console_then_present_after_ten_minutes_becomes_readiness (test_console_pin_operator.OperatorConsolePin.test_absent_console_then_present_after_ten_minutes_becomes_readiness) ... ERROR
+test_absent_pin_past_create_bound_is_a_readiness_timeout (test_console_pin_operator.OperatorConsolePin.test_absent_pin_past_create_bound_is_a_readiness_timeout) ... ERROR
+test_late_matching_pin_does_not_shorten_the_create_ceiling (test_console_pin_operator.OperatorConsolePin.test_late_matching_pin_does_not_shorten_the_create_ceiling) ... FAIL
+test_published_different_pin_stops_without_any_ssh_connection (test_console_pin_operator.OperatorConsolePin.test_published_different_pin_stops_without_any_ssh_connection) ... ERROR
+
+======================================================================
+ERROR: test_absent_console_then_present_after_ten_minutes_becomes_readiness (test_console_pin_operator.OperatorConsolePin.test_absent_console_then_present_after_ten_minutes_becomes_readiness)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 118, in test_absent_console_then_present_after_ten_minutes_becomes_readiness
+    code, calls, refusal = self.run_ready(["booting", FP], elapsed=610)
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 112, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 139, in <module>
+RuntimeError: host-key pin absent from authenticated instance console; STOP
+
+======================================================================
+ERROR: test_absent_pin_past_create_bound_is_a_readiness_timeout (test_console_pin_operator.OperatorConsolePin.test_absent_pin_past_create_bound_is_a_readiness_timeout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 129, in test_absent_pin_past_create_bound_is_a_readiness_timeout
+    code, calls, refusal = self.run_ready(["booting"], elapsed=1190, factor=10)
+                           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 112, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 139, in <module>
+RuntimeError: host-key pin absent from authenticated instance console; STOP
+
+======================================================================
+ERROR: test_published_different_pin_stops_without_any_ssh_connection (test_console_pin_operator.OperatorConsolePin.test_published_different_pin_stops_without_any_ssh_connection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 136, in test_published_different_pin_stops_without_any_ssh_connection
+    self.run_ready(["ssh-ed25519 " + OTHER], elapsed=610)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 112, in run_ready
+    exec("if True:\n" + body, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 139, in <module>
+RuntimeError: host-key pin absent from authenticated instance console; STOP
+
+======================================================================
+FAIL: test_late_matching_pin_does_not_shorten_the_create_ceiling (test_console_pin_operator.OperatorConsolePin.test_late_matching_pin_does_not_shorten_the_create_ceiling)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin_operator.py", line 125, in test_late_matching_pin_does_not_shorten_the_create_ceiling
+    self.assertEqual(code, 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^
+AssertionError: 76 != 0
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.010s
+
+FAILED (failures=1, errors=3)
