@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY,2026-10-23, before any GA106/Turing Round4 allocation.
+STATUS: UNRUN/SAFETY STOP,2026-10-23. The GA106 candidate was allocated but never provisioned/probed; exact-ID containment/API absence is in ../lease_57398382/. No Turing rental. The before-allocation plan below remains a plan, not a result.
 
 MEASURED (2026-10-23, `offers.json`, snapshot16:41Z):39 KVM/single-GPU/180GB/price<=2.50 offers. No RTX3070/Ti/A4000 candidate class for GA104 remains; GA104 native Windows binding stays UNRUN until such a class exists. RTX3060 offer46510011/machine22775/Quebec quote0.133333USD/h and RTX2060S56309713/machine154169/Sweden0.183333USD/h are candidates, not implementation-proven dies. No candidate class for TU104,TU117,GA103,GA107,AD107,GB207 was present.
 

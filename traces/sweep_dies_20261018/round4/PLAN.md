@@ -1,4 +1,4 @@
-STATUS: LIVE,2026-10-23, S4 Round4; lease57384343 closed before GPU work; GA102 replacement57385378 active under fixed17:42:19UTC expiry. See per-lease receipts for current state.
+STATUS: CLOSED/PARTIAL/SAFETY STOP,2026-10-23. All three Round4 owned IDs57384343/57385378/57398382 are API-absent; timers0. Final outcomes in ../REPORT.md and final_cleanup.json supersede the pre-run plan below.
 
 CODE READ (owner ROUND4): hard cap3USD, stop2.50USD, price<=2.50USD/h, one box at a time, KVM image/disk180GB, retain stricter170min<3h. Pre-arm local destroy guard BEFORE create; exact-ID teardown/API absence before timer cancellation or another box. Denied countries CU/IR/KP/SY. Unverified hosts allowed, strict pinned SSH/no agent or PSK. Existing exact channel/VA/type plus CE-family negative-control admission unchanged; any unmatched/extra Xid stops.
 

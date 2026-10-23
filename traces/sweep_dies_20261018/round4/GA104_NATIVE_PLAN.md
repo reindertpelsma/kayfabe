@@ -1,4 +1,4 @@
-STATUS: DESIGN-ONLY,2026-10-23; no GA104 Round4 lease or result yet.
+STATUS: DESIGN-ONLY/UNRUN,2026-10-23; no GA104 Round4 lease or result. Latest39-offer snapshot in offers.json has no candidate GA104 class. Earlier quotes below are historical.
 
 CODE READ (owner ROUND4 and existing `traces/sweep_integrate_20261018/PHASE2_GA104_PLAN.md`): after the GA102 retry, GA104 needs a verified native Windows580.88 binding before kayfabe Windows. This is a whole-rental native Windows reference, not the generic standard-VGA kayfabe installer. The reference replaces the disposable rental Linux OS; source/history already authorize that flow. All Linux text evidence must be exported and on origin before starting it.
 

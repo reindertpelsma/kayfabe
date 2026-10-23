@@ -58,7 +58,7 @@ Current matrix (CODE READ of the dated receipts named in each row):
 | AD102 | Win580.88 /rev170054339 /P19+RPC+display/GOP ON | prior desktop+600s holdPASS; full matrixPARTIAL |`lease_57193877/ADA_RESULT.md`|
 | GA102 | Linux595.91.07 /98b599bbf | nativePASS n1 |`lease_57385378/native_complete/`|
 | GA102 | Win580.88 planned /98b599bbf /P19+RPC/BODY/DIAG1000,display/GOP ON | bindREADINESS_INCONCLUSIVE; actual ON/desktop/apps/holdUNRUN |`lease_57385378/bind_inconclusive/`|
-| GA104 | native Win580.88 prerequisite/e8883e2 planned | UNRUN/no current candidate offer |`round4/GA104_NATIVE_PLAN.md`, `offers.json`|
+| GA104 | native Win580.88 prerequisite/e8883e2 planned | UNRUN/no current candidate offer |`round4/GA104_NATIVE_PLAN.md`, `round4/offers.json`|
 | GA106 candidate | RTX3060 /runtime implementation unverified | UNRUN/safety containment only |`lease_57398382/PROGRESS.md`|
 | Turing candidate | RTX2060S/TU106 candidate /runtime implementation unverified | UNRUN after safety stop, offer existed |`round4/offers.json`, `lease_57398382/PRE_TEARDOWN.md`|
 
@@ -77,8 +77,8 @@ GA102 — Round4 per-die receipt (paths below relative to `lease_57385378/`):
 11. MEASURED (2026-10-23, lease57385378, `bind_inconclusive/bwr_final_windows_events.txt`): query returned only Kernel-Boot153/VBS-disabled records16:15:55Z and guest-clock22:52:35Z; not nvlddmkm153 or a TDR; timestamp anomaly retained.
 12. CODE READ (2026-10-23, lease57385378, `signin_overlay_receipt.json`): sign-in observer-only overlay37c5abdc4 applied before ON marker; no Rust/product/audit branch change, fresh clippy not run.
 13. MEASURED (2026-10-23, `../round4/proof/`): lease22/22, desktop77/77, provider endpoint16/16, sign-in19/19PASS; mutation killers all>=2 distinct methods.
-14. CODE READ (2026-10-23, lease57385378): exact native controls guard unchanged; cleanup/export/API-absence receipts follow before any next rental; no installer replay or new GA102 retry.
-15. CODE READ (2026-10-23, `../round4/offers.json`): latest39-offer snapshot has no GA104 class; GA106/TU106 candidates remain; native/runtime query plans subtract existing constant tables and require budget-fit before create.
+14. MEASURED (2026-10-23, lease57385378, `CLEANUP.json`, `TEARDOWN.json`): exact native controls unchanged, VM stopped16:44:41Z, API-absent16:46:12Z/timer cancelled afterward; no installer replay or new GA102 retry.
+15. CODE READ (2026-10-23, `../round4/offers.json`, `../lease_57398382/PRE_TEARDOWN.md`): latest39-offer snapshot has no GA104 class; later GA106 create-response safety event stopped remaining GPU work; TU106 acceptance UNRUN despite an offer.
 
 GA106 candidate — Round4 safety receipt (paths below relative to `lease_57398382/`; actual die unmeasured):
 
