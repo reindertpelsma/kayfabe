@@ -335,8 +335,10 @@ fn an_explicit_bind_in_a_later_segment_preserves_the_prior_seed_count() {
 #[test]
 fn a_refused_launch_does_not_count_as_seeded_work() {
     let mut st = state();
-    let mut words = packet(0x240, &[1, 0x2050_f061, 1]);
-    words.extend(packet(0x300, &[0x4c]));
-    assert!(kf_chan::tmode::decode(&words, is_ce, &mut st, None).is_err());
+    let words = packet(0x300, &[3]);
+    assert!(matches!(
+        kf_chan::tmode::decode(&words, is_ce, &mut st, None),
+        Err(Refusal::LaunchField { word: 3, .. })
+    ));
     seed_count(&st, 0);
 }
