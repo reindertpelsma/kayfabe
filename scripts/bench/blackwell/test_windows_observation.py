@@ -452,6 +452,73 @@ class WatcherLifecycle(unittest.TestCase):
     def test_phase_gap_does_not_reset_the_tenth_record_limit(self):
         self.exercise_phase_gap(10)
 
+    def runtime_failure(self, fault=None, kernel_error=None, health_error=None):
+        class Clock(dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return NOW
+
+        initial = [
+            {"cursor": "a", "priority": 6, "line": "initial kernel one"},
+            {"cursor": "b", "priority": 6, "line": "initial kernel two"},
+        ]
+        current = initial + [{"cursor": "c", "priority": 3, "line": fault or xid()}]
+        if kernel_error:
+            current.append({"cursor": "d", **kernel_error})
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, value in [
+                ("native.json", {"approved_native_xid_lines": [], "pci": PHASE["pci"]}),
+                ("phase.json", PHASE),
+                ("permit.json", PERMIT),
+                ("authority.json", AUTHORITY),
+            ]:
+                (root / name).write_text(json.dumps(value))
+            health = [{"devices": 1}, O.Refused(health_error)] if health_error else None
+            with (
+                patch.object(O, "kernel_rows", side_effect=[initial, current]),
+                patch.object(
+                    O, "check_host_health", side_effect=health, return_value={"devices": 1}
+                ),
+                patch.object(O.G, "validate_phase_owner", return_value=True),
+                patch.object(O.G, "abort_owned_qemu", return_value=True) as abort,
+                patch.object(O.G.N, "terminate_owned_tree") as terminate,
+                patch.object(O.os, "getpgid", return_value=1234),
+                patch.object(O.os, "getpgrp", return_value=1234),
+                patch.object(O.dt, "datetime", Clock),
+                patch.object(O.time, "sleep", side_effect=WatchFinished),
+            ):
+                with self.assertRaises(O.Refused):
+                    O.watch(
+                        str(root / "native.json"),
+                        1234,
+                        str(root / "phase.json"),
+                        str(root / "fatal.json"),
+                        str(root / "authority.json"),
+                        str(root / "permit.json"),
+                    )
+                self.assertTrue((root / "fatal.json").exists())
+                abort.assert_called_once()
+                terminate.assert_called_once_with(1234)
+
+    def test_runtime_nvidia_health_failure_pidfd_stops_the_guest(self):
+        self.runtime_failure(health_error="nvidia-smi failed")
+
+    def test_runtime_cuda_health_failure_pidfd_stops_the_guest(self):
+        self.runtime_failure(health_error="cuInit failed")
+
+    def test_runtime_kernel_error_pidfd_stops_the_guest(self):
+        self.runtime_failure(kernel_error={"priority": 3, "line": "NVRM: GPU fallen off bus"})
+
+    def test_runtime_warning_error_pidfd_stops_the_guest(self):
+        self.runtime_failure(kernel_error={"priority": 4, "line": "NVRM: RmInitAdapter failed"})
+
+    def test_runtime_other_xid_pidfd_stops_the_guest(self):
+        self.runtime_failure(fault=xid(code=79))
+
+    def test_runtime_foreign_pid_pidfd_stops_the_guest(self):
+        self.runtime_failure(fault=xid(pid=222))
+
 
 if __name__ == "__main__":
     unittest.main()

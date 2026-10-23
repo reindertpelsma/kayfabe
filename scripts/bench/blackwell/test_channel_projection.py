@@ -103,6 +103,51 @@ class Channels(unittest.TestCase):
         ]
         self.assertEqual([r["ordinal"] for r in C.rpc_window(rows, at.isoformat())], [1, 2, 3])
 
+    def test_window_excludes_a_row_older_than_40_seconds(self):
+        rows = [{"ordinal": 1, "observed_utc": "2026-10-23T11:59:19+00:00"}]
+        self.assertEqual(C.rpc_window(rows, "2026-10-23T12:00:00+00:00"), [])
+
+    def test_window_excludes_a_row_after_the_event(self):
+        rows = [{"ordinal": 1, "observed_utc": "2026-10-23T12:00:01+00:00"}]
+        self.assertEqual(C.rpc_window(rows, "2026-10-23T12:00:00+00:00"), [])
+
+    def test_foreign_client_does_not_supply_the_allocation_ordinal(self):
+        text = (
+            "kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc96f "
+            "client=0xa parent=0x1 handle=0x10 result=0x0\n"
+            "chan 0xb:0x10 BORN Translated: token 0x1 -> host 0x40000014 "
+            "in space engine=0x2\n"
+        )
+        self.assertIsNone(self.project(text)["births"][0]["allocation_ordinal"])
+
+    def test_other_handle_does_not_supply_the_allocation_ordinal(self):
+        text = (
+            "kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc96f "
+            "client=0xa parent=0x1 handle=0x10 result=0x0\n"
+            "chan 0xa:0x20 BORN Translated: token 0x1 -> host 0x40000014 "
+            "in space engine=0x2\n"
+        )
+        self.assertIsNone(self.project(text)["births"][0]["allocation_ordinal"])
+
+    def test_unmarked_body_bytes_are_also_excluded(self):
+        text = (
+            "body=PRIVATE_BODY_DO_NOT_EXPORT chan 0xa:0x10 BORN Translated: "
+            "token 0x1 -> host 0x40000014 in space engine=0x2\n"
+        )
+        self.assertEqual(self.project(text)["births"], [])
+
+    def test_ambiguous_join_is_not_promoted_to_measurement(self):
+        self.assertEqual(self.project("ordinary log\n")["join_classification"], "INFERRED")
+
+    def test_public_runlist_field_is_retained_in_the_offline_candidate(self):
+        text = (
+            "chan 0xa:0x10 BORN Translated: token 0x1 -> host 0x40010005 " "in space engine=0x2\n"
+        )
+        result = self.project(text, channels=("0x1000005",))
+        self.assertEqual(result["births"][0]["candidate_xid_channel"], "0x1000005")
+        self.assertEqual(result["target_candidates"]["0x1000005"], [0])
+        self.assertEqual(result["join_classification"], "INFERRED")
+
 
 if __name__ == "__main__":
     unittest.main()

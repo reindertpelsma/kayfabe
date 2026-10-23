@@ -42,6 +42,11 @@ python3() {{ return {budget}; }}
         self.assertEqual(result.returncode, 7)
         self.assertNotIn("CELL on_observe_b1", result.stdout)
 
+    def test_baseline_harness_refusal_prevents_b1(self):
+        result = self.schedule(first_rc=17)
+        self.assertEqual(result.returncode, 17)
+        self.assertNotIn("CELL on_observe_b1", result.stdout)
+
     def hold_with_early_code0(self, rc):
         source = (KIT / "arm.sh").read_text()
         marker = 'timeout 120 bash "$W" ssh '
