@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { setup, sha, nonce, env, jwt } from './helpers.js';
-import worker from '../src/index.js';
+import { createGateway } from '../src/index.js';
+// Component tests inject auth; v5-front-auth tests the real gateway.
+const worker = createGateway({ authorize: async () => {} });
 const request = { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 };
 for (const size of [180, 700])
   test('R3 public ingress preserves bounded nonce rent body ' + size, async () => {
     let received;
     const bindings = {
       ...env,
+      BROKER_PATH_PREFIX: 'g'.repeat(32),
       LEDGER: {
         idFromName: () => 1,
         get: () => ({
@@ -20,7 +23,10 @@ for (const size of [180, 700])
       },
     };
     const body = JSON.stringify(request) + ' '.repeat(size);
-    await worker.fetch(new Request(env.WORKER_URL + '/rent', { method: 'POST', body }), bindings);
+    await worker.fetch(
+      new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + '/rent', { method: 'POST', body }),
+      bindings,
+    );
     assert.equal(received, body.slice(0, 2049));
   });
 // FALSIFIER: runner nonce is optional/replaced on replay, or final/page hashes

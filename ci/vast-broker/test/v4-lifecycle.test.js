@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { configuration } from '../src/policy.js';
-import { onstart } from '../src/onstart.js';
+import { repoSource, helperProbe } from './repo-onstart.js';
 import { setup, env, nonce, sha, callbackToken } from './helpers.js';
 // FALSIFIERS: early result deletion; cross-run kill; ACK-only settlement;
 // reserve excludes cron; pending boots destroyed before provisioning bound.
@@ -151,16 +151,14 @@ test('V4 prepaid reserve includes hard TTL plus cron period', async () => {
   assert.equal((await h.storage.get('cost:123-1')).ttl, 21 * 60000);
 });
 test('V4 onstart ships plain curl own-run kill CLI and test-only timeout', () => {
-  const script = onstart(sha, nonce, 20, env.REPOSITORY, {
-    url: env.WORKER_URL,
-    run: '123-1',
-    token: 'v1.123.1.1800009000.' + 'A'.repeat(43),
-    graceMinutes: 5,
-  });
-  assert.match(script, /kf-box-kill/);
-  assert.match(script, /\/kill\/123-1/);
-  assert.match(script, /5 minutes/);
-  assert.doesNotMatch(script.split("python3 - <<'KF_REPORT'")[0], /exec timeout/);
+  const entry = repoSource('vast_onstart.sh'),
+    kill = repoSource('kf-box-kill');
+  assert.match(kill, /\/kill\/\$\{KF_RUN_ID/);
+  assert.match(kill, /--proto '=https'/);
+  assert.match(kill, /--max-redirs 0/);
+  assert.match(entry, /timeout --signal=TERM/);
+  assert.match(entry, /bash "\$payload" "\$KF_SHA" "\$KF_NONCE"/);
+  assert.match(repoSource('vast_report.py'), /ack.get\("grace_remaining_seconds"\)/);
 });
 test('V4 free-plan cron is every minute and has no DO alarm', async () => {
   assert.match(
@@ -217,37 +215,13 @@ for (const patch of [{ HARD_RUNTIME_MINUTES: '10' }, { PASS_GRACE_MINUTES: '1441
   });
 for (const reason of ['done', 'a reason with spaces'])
   test('V4 generated kill CLI sends limited capability ' + reason, async () => {
-    const { mkdtemp, writeFile, rm } = await import('node:fs/promises'),
-      { tmpdir } = await import('node:os'),
-      { spawnSync } = await import('node:child_process');
-    const dir = await mkdtemp(tmpdir() + '/v4-kill-test-');
-    try {
-      const token = 'v1.123.1.1800009000.' + 'A'.repeat(43),
-        script = onstart(sha, nonce, 20, env.REPOSITORY, {
-          url: env.WORKER_URL,
-          run: '123-1',
-          token,
-        });
-      const cli = script.split("<<'KF_KILL'\n")[1].split('\nKF_KILL')[0];
-      await writeFile(
-        dir + '/curl',
-        '#!/usr/bin/env python3\nimport sys,json\nprint(json.dumps(sys.argv[1:]))\n',
-        { mode: 0o700 },
-      );
-      const run = spawnSync('sh', ['-s', '--', reason], {
-        input: cli,
-        encoding: 'utf8',
-        env: { ...process.env, PATH: dir + ':' + process.env.PATH },
-      });
-      assert.equal(run.status, 0, run.stderr);
-      const args = JSON.parse(run.stdout);
-      assert.equal(args.at(-1), env.WORKER_URL + '/kill/123-1');
-      assert.ok(args.includes('Authorization: Bearer ' + token));
-      assert.ok(args.includes(reason));
-      assert.ok(!args.includes('-L'));
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+    const r = await helperProbe('kf-box-kill', [reason]);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.args.at(-1), 'https://broker.example/kill/123-1');
+    assert.ok(r.args.includes(reason));
+    assert.ok(!r.args.includes('-L'));
+    assert.ok(r.stdin.includes('Authorization: Bearer v1.123.1.'));
+    assert.ok(!r.args.join(' ').includes('v1.123.1.'));
   });
 test('V4 hard TTL survives restart with accepted progress and no result', async () => {
   const h = await rent();

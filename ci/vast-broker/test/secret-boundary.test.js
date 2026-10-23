@@ -94,11 +94,17 @@ for (const alias of ['WORKER_URL', 'WORKER_PATH']) {
     rejected(safe + '  extra:\n    env:\n      ' + alias + ': hidden\n    steps: []\n'),
   );
   test('broker cannot echo endpoint alias ' + alias, () =>
-    rejected(injectBroker(safe, '          echo "$' + alias + '"')),
+    assert.ok(
+      errors(injectBroker(safe, '          echo "$' + alias + '"')).includes(
+        'Broker endpoint cannot be printed',
+      ),
+    ),
   );
   test('broker cannot put endpoint alias in a summary ' + alias, () =>
-    rejected(
-      injectBroker(safe, '          printf "%s" "$' + alias + '" >> "$GITHUB_STEP_SUMMARY"'),
+    assert.ok(
+      errors(
+        injectBroker(safe, '          printf "%s" "$' + alias + '" >> "$GITHUB_STEP_SUMMARY"'),
+      ).includes('Broker endpoint cannot be printed'),
     ),
   );
   test('broker cannot export endpoint alias ' + alias, () =>

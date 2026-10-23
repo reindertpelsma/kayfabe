@@ -1,0 +1,11 @@
+[
+  {
+    "mutant": "kill-wrong-route",
+    "killers": 3,
+    "tests": [
+      "V4 onstart ships plain curl own-run kill CLI and test-only timeout",
+      "V4 generated kill CLI sends limited capability done",
+      "V4 generated kill CLI sends limited capability a reason with spaces"
+    ]
+  }
+]

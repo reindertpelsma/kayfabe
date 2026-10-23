@@ -1,0 +1,27 @@
+#!/bin/sh
+# kf-box-hold: ask the broker to keep this box for manual use (POST /hold/<run>), once the run
+# has a recorded result. Installed by vast_onstart.sh and called by kf-ci-hold.sh at SSH login.
+# This run only; cannot remove its hard limit or reach account credentials. HTTPS only, no
+# redirects, no proxy; the token reaches curl on stdin, not on its command line.
+set -eu
+env_file=${KF_CI_ENV_FILE:-/run/kf-ci/env}
+if [ ! -r "$env_file" ]; then
+    echo "kf-box-hold: cannot read $env_file" >&2
+    exit 1
+fi
+# shellcheck disable=SC1090
+. "$env_file"
+case ${KF_RUN_TOKEN:-} in
+'' | *[!A-Za-z0-9._-]*)
+    echo "kf-box-hold: no usable run token" >&2
+    exit 1
+    ;;
+esac
+code=$(printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN" |
+    curl --config - --silent --show-error --max-time 20 --max-redirs 0 --proto '=https' \
+        --noproxy '*' --request POST --data-binary '' --output /dev/null \
+        --write-out '%{http_code}' "${KF_BROKER_URL:?}/hold/${KF_RUN_ID:?}") || exit 1
+if [ "$code" != 200 ]; then
+    echo "kf-box-hold: broker answered HTTP $code" >&2
+    exit 1
+fi

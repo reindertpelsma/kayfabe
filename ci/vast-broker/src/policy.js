@@ -82,7 +82,57 @@ export function configuration(env) {
       'LICENSE*',
       '.github/ISSUE_TEMPLATE/**',
     ]);
+  if (!numericId(env.REPOSITORY_GITHUB_ID)) refuse();
+  const checkWorkflows = (() => {
+    try {
+      return JSON.parse(
+        env.CHECK_JOB_WORKFLOW_REFS ??
+          JSON.stringify(
+            bases.map(
+              (base) => env.REPOSITORY + '/' + DEFAULTS.checkWorkflowPath + '@refs/heads/' + base,
+            ),
+          ),
+      );
+    } catch {
+      refuse();
+    }
+  })();
+  const sweepWorkflow =
+    env.SWEEP_JOB_WORKFLOW_REF ??
+    env.REPOSITORY + '/' + DEFAULTS.sweepWorkflowPath + '@refs/heads/master';
+  const validWorkflow = (value) =>
+    typeof value === 'string' &&
+    value.length <= 300 &&
+    /^[A-Za-z0-9_.\/-]+@refs\/heads\/[A-Za-z0-9_.\/-]+$/.test(value);
+  if (
+    !Array.isArray(checkWorkflows) ||
+    !checkWorkflows.length ||
+    checkWorkflows.length > 32 ||
+    !checkWorkflows.every(validWorkflow) ||
+    !validWorkflow(sweepWorkflow)
+  )
+    refuse();
+  const oidcSubject =
+    env.OIDC_SUB ?? 'repo:' + env.REPOSITORY + ':environment:' + DEFAULTS.oidcEnvironment;
+  if (
+    typeof oidcSubject !== 'string' ||
+    !/^repo:[-\w.]+\/[-\w.]+:environment:[A-Za-z0-9_-]+$/.test(oidcSubject)
+  )
+    refuse();
+  const preferredCountries = list('PREFERRED_COUNTRIES', DEFAULTS.preferredCountries);
+  if (
+    !preferredCountries.every((x) => /^[A-Z]{2}$/.test(x)) ||
+    new Set(preferredCountries).size !== preferredCountries.length
+  )
+    refuse();
   const cfg = {
+    preferredCountries,
+    repositoryId: env.REPOSITORY_GITHUB_ID,
+    checkWorkflows,
+    sweepWorkflow,
+    oidcSubject,
+    controlIp: number('CONTROL_IP_PER_MINUTE', DEFAULTS.controlIpPerMinute, 600),
+    controlGlobal: number('CONTROL_GLOBAL_PER_MINUTE', DEFAULTS.controlGlobalPerMinute, 6000),
     reportCount: number('MAX_REPORTS', DEFAULTS.reportCount, DEFAULTS.reportCount),
     reportBytes: number('MAX_REPORT_BYTES', DEFAULTS.reportBytes, DEFAULTS.reportBytes),
     reportRate: number('REPORT_RATE_LIMIT', DEFAULTS.reportRate, DEFAULTS.reportRate),
@@ -110,7 +160,16 @@ export function configuration(env) {
     rolling: number('ROLLING_SPEND_USD', DEFAULTS.rolling),
     gap: number('SHA_GAP_HOURS', DEFAULTS.gapHours, 720) * 3600000,
   };
-  if (![cfg.reportCount, cfg.reportBytes, cfg.reportRate, cfg.dailyCount].every(Number.isInteger))
+  if (
+    ![
+      cfg.reportCount,
+      cfg.reportBytes,
+      cfg.reportRate,
+      cfg.dailyCount,
+      cfg.controlIp,
+      cfg.controlGlobal,
+    ].every(Number.isInteger)
+  )
     refuse();
   if (
     ![cfg.boot, cfg.hard, cfg.passGrace, cfg.failGrace, cfg.manualCeiling].every((x) =>

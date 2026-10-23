@@ -1,0 +1,20 @@
+{
+  "run": "v5-pr104-20261022",
+  "source": "e63af44ddec3a5f8ce7f09850dcf910e66728e9d",
+  "port": "eight canonical files; scoped blob helper installed conditionally",
+  "red_commit": "f33aa6513",
+  "expected_red": 2,
+  "portable": {
+    "pass": 1080,
+    "fail": 0,
+    "duration_ms": 47783.343719
+  },
+  "canonical_python": {
+    "pass": 72,
+    "fail": 0,
+    "seconds": 54.656
+  },
+  "old_test_migration": "inline generated Python/Popen fixtures now invoke actual Reporter, final_result, validate_env and scoped shell helpers; no production assertions removed",
+  "hold": "401 before result; bounded after result",
+  "live": "NOT DONE; zero creates and zero spend; configured offer filters refused current set"
+}

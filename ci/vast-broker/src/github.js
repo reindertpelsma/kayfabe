@@ -113,10 +113,10 @@ export class Github {
     const automatic = ['pull_request', 'pull_request_target'].includes(c.event_name);
     if (c.event_name === 'pull_request_target') {
       if (
-        c.ref !== 'refs/heads/master' ||
+        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||
         c.sha !== r.head_sha ||
         c.workflow_sha !== r.head_sha ||
-        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||
+        !cfg.checkWorkflows.includes(c.workflow_ref) ||
         !Number.isSafeInteger(hint?.pr_number)
       )
         refuse('UNAUTHORIZED', 401);

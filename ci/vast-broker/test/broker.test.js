@@ -77,7 +77,8 @@ test('fixed create request never returns upstream credentials', async () => {
   assert.equal(c.disk, 120);
   assert.equal(c.runtype, 'ssh_direct');
   assert.equal(c.label, 'kf-ci-123-1');
-  assert.match(c.onstart, /timeout/);
+  assert.match(c.onstart, /exec bash scripts\/ci\/vast_onstart.sh/);
+  assert.match(c.env.KF_SOFT_DEADLINE, /^[0-9]+$/);
   assert.doesNotMatch(JSON.stringify(r), /PRIVATE|key/);
 });
 test('returns immediately without waiting for logs or boot', async () => {
@@ -276,7 +277,7 @@ test('ambiguous absent instance never triggers a second creation', async () => {
   h.cloud.instances.delete('900');
   h.cloud.ambiguous = false;
   h.restart();
-  assert.equal(await state(await h.call()), 'UNAVAILABLE');
+  assert.equal(await state(await h.call()), 'CREATING');
   assert.equal(h.cloud.creates, 1);
 });
 test('reconciliation never adopts labelled foreign instance with wrong script', async () => {

@@ -51,9 +51,9 @@ with tempfile.TemporaryDirectory(prefix="v5-sender-") as directory:
 
     time.monotonic = monotonic
     code = (
-        code.replace("attempted=0", "attempted=600")
+        code.replace("attempted = 0", "attempted = 600")
         if exhausted == "attempts"
-        else code.replace("sent=0", "sent=900000")
+        else code.replace("sent = 0", "sent = 900000")
     )
     try:
         with contextlib.redirect_stdout(io.StringIO()):

@@ -1,6 +1,6 @@
-# V5 working evidence — acceptance pending
+# V5 evidence index
 
-STATUS: LIVE, 2026-10-22. No V5 rental or deployment has occurred.
+[CODE READ: REST_ENV.md, IDENTITY_SECURITY.md, BOOTSTRAP.md, BLOBS.md] Latest continuation: protocol-5 tiny bootstrap, canonical PR #104 repo-side scripts, REST env map, identity/control security and private blob route. Real non-VM A/B/C/D acceptance is complete; six rentals including two diagnostic failures are verified absent. See LIVE.md and COUNTRIES.md. No deployment. Historical read-only evidence follows.
 
 [MEASURED: 2026-10-22, run v5-readonly-20261022-availability-1, read_only.json] Native local
 Wrangler 4.152.0 executed the current Worker policy against real Vast offers,
@@ -48,7 +48,7 @@ selection-on-refusal fixes; the expired-soft-deadline probes were green controls
 [CODE READ: src/index.js] Endpoint inventory: POST /rent, GET /availability,
 GET /status/<run>, GET /logs/<run>, POST /stop/<run>, POST /stop-all,
 POST /report/<run>, POST /kill/<run>, POST /hold/<run> (MANUAL), and owner-only
-POST /stop-timer/<run>. GET /blob-url remains planned and outside this lane.
+POST /stop-timer/<run>. GET /blob-url/<run>/<tag>/<name> is implemented; see BLOBS.md and docs/BOX_PROTOCOL.md.
 
 [CODE READ: 2026-10-22, src/policy.js, src/offers.js] Verified counts and rejection totals in
 availability describe the bounded current query sample, not the entire market;
@@ -59,4 +59,4 @@ are infrastructure admission filters, never tested-code verdict thresholds.
 runner_migrated_mutants.json] The later protocol checkpoint passes 964/964 Node
 tests, 69 focused V5 mutations, 28 migrated V4 cases and 38 migrated runner cases;
 every case has at least two named killers. The 94 legacy anchors pass preflight;
-full legacy execution remains pending. No V5 rental/deployment has occurred.
+full legacy execution remains pending. No V5 rental/deployment occurred at that historical checkpoint.

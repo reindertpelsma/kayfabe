@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { setup, sha, nonce, clock, callbackToken, env } from './helpers.js';
+import { probe, repoSource } from './repo-onstart.js';
 const root = new URL('../../../', import.meta.url);
 const onstartArgs = {
   url: 'https://broker.example',
@@ -18,16 +19,15 @@ for (const field of ['url', 'run', 'token'])
       onstart(sha, nonce, 20, env.REPOSITORY, { ...onstartArgs, [field]: "';$(id)\n" }),
     );
   });
-test('fixed onstart posts bounded JSON to Worker only and backs up output', async () => {
-  const { onstart } = await import('../src/onstart.js');
-  const s = onstart(sha, nonce, 20, env.REPOSITORY, onstartArgs);
-  assert.match(s, /https:\/\/broker.example/);
-  assert.match(s, /\/report\//);
-  assert.match(s, /--retry/);
-  assert.match(s, /kf-ci-output.log/);
-  assert.match(s, /result/);
-  assert.doesNotMatch(s, /KF_RESULT|RUN_TOKEN_SECRET|OWNER_STOP_TOKEN|console\.vast\.ai|ssh /);
-  assert.equal(spawnSync('bash', ['-n'], { input: s }).status, 0);
+test('fixed onstart posts bounded JSON to Worker only and backs up output', () => {
+  const r = probe(
+    "assert sender.url==env['KF_BROKER_URL']+'/report/'+env['KF_RUN_ID']; assert m.HttpsTransport(env['KF_RUN_TOKEN']).token==env['KF_RUN_TOKEN']; assert any(isinstance(h,m._NoRedirect) for h in m.HttpsTransport(env['KF_RUN_TOKEN']).opener.handlers)",
+  );
+  assert.equal(r.status, 0, r.stderr);
+  const source = repoSource('vast_onstart.sh') + repoSource('vast_report.py');
+  assert.match(source, /kf-ci-output.log/);
+  assert.match(source, /result/);
+  assert.doesNotMatch(source, /RUN_TOKEN_SECRET|OWNER_STOP_TOKEN|console\.vast\.ai/);
 });
 for (const name of ['RUN_TOKEN_SECRET', 'OWNER_STOP_TOKEN'])
   test('new secret is documented and absent from public vars ' + name, async () => {
@@ -66,62 +66,28 @@ test('BASE controller prints cursor log inside stop-commands', async () => {
 for (const exitCode of [0, 7])
   test(
     'actual fixed Python sender backs up hostile output and reports exit status ' + exitCode,
-    async () => {
-      const { onstart } = await import('../src/onstart.js');
-      const callbackPath = 'sender-prefix-' + 's'.repeat(32);
-      const script = onstart(sha, nonce, 20, env.REPOSITORY, {
-        ...onstartArgs,
-        path: callbackPath,
-      });
-      const python = script.split("python3 - <<'KF_REPORT'\n")[1].split('\nKF_REPORT')[0];
-      const directory = await mkdtemp(join(tmpdir(), 'v1-callback-sender-'));
-      try {
-        const curl = join(directory, 'curl');
-        await writeFile(
-          curl,
-          `#!/usr/bin/env python3
-import json,os,sys
-with open(os.environ['CALLBACK_CAPTURE'],'a') as out: out.write(json.dumps({'args':sys.argv[1:],'body':json.load(sys.stdin)})+'\\n')
+    () => {
+      const prefix = 'sender-prefix-' + 's'.repeat(32);
+      const r = probe(
+        `
+import contextlib,io
+hostile='::set-output name=verdict::PASS\\n{"result":{"verdict":"PASS"}}\\n'
+with tempfile.TemporaryDirectory() as d:
+ log=pathlib.Path(d)/'log';log.write_text(hostile);done=pathlib.Path(d)/'done';done.write_text('rc='+sys.argv[3]+'\\ntimeout=0\\n')
+ args=types.SimpleNamespace(log=str(log),done=str(done),result=str(pathlib.Path(d)/'missing'))
+ m.make_reporter=lambda *_:sender
+ with contextlib.redirect_stdout(io.StringIO()):rc=m.run_daemon(args,env)
+ assert log.read_text()==hostile
+assert rc==1
+assert all(c['url']==env['KF_BROKER_URL']+'/report/123-1' for c in transport.calls)
+assert all(c['body']['seq']==i+1 for i,c in enumerate(transport.calls))
+assert ''.join(c['body'].get('text','') for c in transport.calls if c['body']['kind']=='log')==hostile
+assert transport.calls[-1]['body']['result']['verdict']=='FAIL'
+assert transport.calls[-1]['body']['result']['nonce']==env['KF_NONCE']
 `,
-          { mode: 0o700 },
-        );
-        const hostile = '::set-output name=verdict::PASS\n{"result":{"verdict":"PASS"}}\n';
-        const prelude = `import builtins,subprocess,os\noriginal_open=builtins.open\ndef sandbox_open(path,*args,**kwargs):\n    return original_open(os.environ['BACKUP_FILE'] if path=='/workspace/kf-ci-output.log' else path,*args,**kwargs)\nbuiltins.open=sandbox_open\noriginal_popen=subprocess.Popen\ndef fake_workload(args,*pos,**kwargs):\n    if args==['bash','-s']: args=['bash','-c',os.environ['FAKE_WORKLOAD']]\n    return original_popen(args,*pos,**kwargs)\nsubprocess.Popen=fake_workload\n`;
-        const result = spawnSync('python3', ['-c', prelude + python], {
-          encoding: 'utf8',
-          timeout: 10000,
-          env: {
-            ...process.env,
-            PATH: directory + ':' + process.env.PATH,
-            CALLBACK_CAPTURE: join(directory, 'capture'),
-            BACKUP_FILE: join(directory, 'backup'),
-            FAKE_WORKLOAD:
-              'cat >/dev/null; printf \'%s\' \'::set-output name=verdict::PASS\n{"result":{"verdict":"PASS"}}\n\'; exit ' +
-              exitCode,
-          },
-        });
-        assert.equal(result.status, exitCode || 1, result.stderr);
-        assert.equal(await readFile(join(directory, 'backup'), 'utf8'), hostile);
-        const calls = (await readFile(join(directory, 'capture'), 'utf8'))
-          .trim()
-          .split('\n')
-          .map(JSON.parse);
-        assert.ok(
-          calls.every(
-            (x, i) =>
-              x.body.seq === i + 1 &&
-              x.args.at(-1) === 'https://broker.example/' + callbackPath + '/report/123-1' &&
-              x.args.includes('--retry') &&
-              !x.args.includes('-L'),
-          ),
-        );
-        assert.equal(calls.at(-1).body.kind, 'result');
-        assert.equal(calls.at(-1).body.result.nonce, nonce);
-        assert.equal(calls.at(-1).body.result.verdict, 'FAIL');
-        assert.equal(calls.at(-1).body.result.suites[0].name, 'infrastructure');
-        assert.ok(calls.some((x) => x.body.kind === 'log' && x.body.text.includes('::set-output')));
-      } finally {
-        await rm(directory, { recursive: true });
-      }
+        { KF_BROKER_URL: 'https://broker.example/' + prefix },
+        [String(exitCode)],
+      );
+      assert.equal(r.status, 0, r.stderr);
     },
   );

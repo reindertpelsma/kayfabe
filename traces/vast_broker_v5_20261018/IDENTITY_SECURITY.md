@@ -1,0 +1,9 @@
+# Identity and availability controls
+
+[MEASURED: 2026-10-22 run v5-identity-controls-20261022], `9f4f5a2cc` red tests: 16 failures/21 tests before the fix; final portable suite 1028/1028 green. The six focused identity/control mutants and all 14 existing security mutants each have at least two named killers (`identity_mutants.json`, `security_mutants_final.json`). No live creation in this run.
+
+CODE READ: numeric repository ID and owner ID, environment subject and exact configured job_workflow_ref are mandatory before GitHub calls. Check workflows use configured allowed BASE refs; sweep uses the configured sweep file on master. workflow_ref and job_workflow_ref must agree. Missing fields fail closed. The existing alternate-base positive fixture now supplies its corresponding stable workflow identity explicitly. Production GitHub OIDC issuance has not been exercised.
+
+CODE READ: status/logs/OIDC stop share per-IP/global minute budgets (60/600 defaults), applied after local signature/claim checks and before DO/GitHub calls. The IP table is bounded at 4096 entries per minute. Unauthorized requests cannot consume this authenticated budget or rent admission. Owner stop bypasses it; box kill/report and cron use their independent cleanup path. Counters are per Worker isolate; the account ledger remains the serialized money boundary. This is an abuse bound, not a claim of one global cross-isolate network quota.
+
+CODE READ: existing fixes retained: JWKS cooldown/single flight, no busy starvation of cleanup, definitive refusal settlement and id-less absence recovery, same-SHA retry release, bounded post-result holds with cancellation/hard limits, and dist-only no-bundle deployment. Remaining lower-priority work is deferred by the owner's resumed ordering; no Cloudflare deployment was performed.

@@ -80,3 +80,24 @@ for (const mismatch of ['workflow-sha', 'run-sha', 'member-sha', 'member-pr'])
     assert.equal(r.status, 401);
     assert.equal(h.cloud.creates, 0);
   });
+for (const authority of ['claims', 'GitHub-run'])
+  test('R3 consistent signed BASE pair still crosschecks ' + authority, async () => {
+    const h = await setup();
+    const signed = authority === 'claims' ? 'e'.repeat(40) : 'd'.repeat(40);
+    h.cloud.run.event = 'pull_request_target';
+    h.cloud.run.head_sha = authority === 'GitHub-run' ? 'e'.repeat(40) : 'd'.repeat(40);
+    h.cloud.run.head_branch = 'master';
+    h.cloud.run.pull_requests[0].head.sha = sha;
+    const response = await h.call('/rent', {
+      claims: {
+        event_name: 'pull_request_target',
+        sha: signed,
+        workflow_sha: signed,
+        ref: 'refs/heads/master',
+      },
+      body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 },
+    });
+    assert.equal(response.status, 401);
+    assert.equal(h.cloud.creates, 0);
+    assert.ok(h.cloud.calls.some((c) => c.url.includes('/actions/runs/123')));
+  });

@@ -1,0 +1,304 @@
+{
+  "run": "v5-dummy-pr104-20261023",
+  "logical_scenarios": 4,
+  "real_rentals": 6,
+  "all_exact_ids_and_labels_absent": true,
+  "estimated_upper_usd": 0.2682154305188744,
+  "estimate_includes": "compute/storage plus complete configured transfer allowance on all six attempts; not invoice",
+  "cron_period_seconds": 60,
+  "local_limits": {
+    "boot_minutes": 3,
+    "hard_minutes": 8,
+    "soft_margin_minutes": 1,
+    "heartbeat_seconds": 60,
+    "heartbeat_timeout_minutes": 2,
+    "pass_grace_seconds": 60,
+    "fail_grace_seconds": 60
+  },
+  "identity": "local fake GitHub/JWKS; real Vast and private GitHub assets",
+  "vm": false,
+  "template": "unmodified production exact-SHA clone/checkout/exec",
+  "repo_script_base": "PR104 e63af44ddec3a5f8ce7f09850dcf910e66728e9d",
+  "results": [
+    {
+      "mode": "A",
+      "run": "1792712328215-1",
+      "sha": "08bbf41b9b0561dd7a417f22296ce4c96e8a63db",
+      "state": "NONE",
+      "verdict": "FAIL",
+      "runner_result": {
+        "state": "GRACE",
+        "verdict": "FAIL",
+        "verified": 1
+      },
+      "created_at": 1792712330.6435938,
+      "result_at": 1792712528973,
+      "deadline_at": 1792712588973,
+      "api_absent_at": 1792712638.1846528,
+      "create_to_absence_s": 307.5410590171814,
+      "deadline_to_delete_s": 43.30799984931946,
+      "deadline_to_worker_absence_s": 43.467000007629395,
+      "deadline_to_independent_absence_s": 49.211652755737305,
+      "kill_to_worker_absence_s": null,
+      "kill_to_independent_absence_s": null,
+      "exact_id_and_label_absent": true,
+      "estimated_upper_usd": 0.05108133117799405,
+      "cron": [
+        {
+          "trigger_at": 1792712391.838264,
+          "returned_at": 1792712392.3419447
+        },
+        {
+          "trigger_at": 1792712451.5526595,
+          "returned_at": 1792712452.1709445
+        },
+        {
+          "trigger_at": 1792712511.7003515,
+          "returned_at": 1792712512.0752518
+        },
+        {
+          "trigger_at": 1792712571.4575787,
+          "returned_at": 1792712571.8633275
+        },
+        {
+          "trigger_at": 1792712631.5437937,
+          "returned_at": 1792712632.465554
+        }
+      ],
+      "callbacks": [
+        {
+          "at": 1792712497766,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792712501733,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792712528589,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792712528992,
+          "route": "report",
+          "status": 200
+        }
+      ],
+      "blob_profiles": [],
+      "result_to_absence_s": 109.2116527557373
+    },
+    {
+      "mode": "B",
+      "run": "1792713205831-1",
+      "sha": "d564ebe89b09c39afae106f5c2b7ff1107c9aeb9",
+      "state": "NONE",
+      "verdict": "PASS",
+      "runner_result": {
+        "state": "NONE",
+        "verdict": "PASS",
+        "verified": 1
+      },
+      "created_at": 1792713207.1263535,
+      "result_at": 1792713345413,
+      "deadline_at": 1792713405413,
+      "api_absent_at": 1792713356.6615782,
+      "create_to_absence_s": 149.5352246761322,
+      "deadline_to_delete_s": -58.99300003051758,
+      "deadline_to_worker_absence_s": -58.83500003814697,
+      "deadline_to_independent_absence_s": -48.75142192840576,
+      "kill_to_worker_absence_s": 0.687999963760376,
+      "kill_to_independent_absence_s": 10.771578073501587,
+      "exact_id_and_label_absent": true,
+      "estimated_upper_usd": 0.03206211037768258,
+      "cron": [
+        {
+          "trigger_at": 1792713268.1330178,
+          "returned_at": 1792713268.604557
+        },
+        {
+          "trigger_at": 1792713328.0334773,
+          "returned_at": 1792713328.4198527
+        }
+      ],
+      "callbacks": [
+        {
+          "at": 1792713252870,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792713256036,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792713283747,
+          "route": "blob-url",
+          "status": 200
+        },
+        {
+          "at": 1792713283912,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792713285382,
+          "route": "blob-url",
+          "status": 200
+        },
+        {
+          "at": 1792713286122,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792713344887,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792713345417,
+          "route": "report",
+          "status": 200
+        },
+        {
+          "at": 1792713346586,
+          "route": "kill",
+          "status": 200
+        }
+      ],
+      "blob_profiles": [
+        {
+          "at": 1792713283753,
+          "status": 200,
+          "response_bytes": 644,
+          "native_v8_sampled_active_ms": 805.929,
+          "program_unclassified_ms": 310.838,
+          "profile_wall_ms": 1146.834,
+          "active_samples": 34,
+          "sampling_interval_us": 100
+        },
+        {
+          "at": 1792713285393,
+          "status": 200,
+          "response_bytes": 648,
+          "native_v8_sampled_active_ms": 8.63,
+          "program_unclassified_ms": 338.692,
+          "profile_wall_ms": 880.133,
+          "active_samples": 17,
+          "sampling_interval_us": 100
+        }
+      ],
+      "result_to_absence_s": 11.248578071594238
+    },
+    {
+      "mode": "C",
+      "run": "1792713205832-1",
+      "sha": "80ba4a99a5773df6700831f0087de88f9143c4ad",
+      "state": "NONE",
+      "verdict": "FAIL",
+      "runner_result": {
+        "state": "UNAVAILABLE",
+        "verdict": "UNAVAILABLE",
+        "verified": 0
+      },
+      "created_at": 1792713357.192926,
+      "result_at": null,
+      "deadline_at": 1792713528026,
+      "api_absent_at": 1792713548.9207132,
+      "create_to_absence_s": 191.72778725624084,
+      "deadline_to_delete_s": 11.430000066757202,
+      "deadline_to_worker_absence_s": 11.602999925613403,
+      "deadline_to_independent_absence_s": 20.894713163375854,
+      "kill_to_worker_absence_s": null,
+      "kill_to_independent_absence_s": null,
+      "exact_id_and_label_absent": true,
+      "estimated_upper_usd": 0.03714084476232528,
+      "cron": [
+        {
+          "trigger_at": 1792713418.9328258,
+          "returned_at": 1792713419.4216168
+        },
+        {
+          "trigger_at": 1792713479.06588,
+          "returned_at": 1792713479.6054583
+        },
+        {
+          "trigger_at": 1792713538.7384143,
+          "returned_at": 1792713539.6424856
+        }
+      ],
+      "callbacks": [
+        {
+          "at": 1792713408030,
+          "route": "report",
+          "status": 200
+        }
+      ],
+      "blob_profiles": []
+    },
+    {
+      "mode": "D",
+      "run": "1792713205833-1",
+      "sha": "b7ec121796bf876b479e88f34c10ffeabf916bf2",
+      "state": "NONE",
+      "verdict": "UNAVAILABLE",
+      "runner_result": {
+        "state": "UNAVAILABLE",
+        "verdict": "UNAVAILABLE",
+        "verified": 0
+      },
+      "created_at": 1792713549.4846034,
+      "result_at": null,
+      "deadline_at": 1792713730359,
+      "api_absent_at": 1792713742.365714,
+      "create_to_absence_s": 192.88111066818237,
+      "deadline_to_delete_s": 1.5380001068115234,
+      "deadline_to_worker_absence_s": 1.7090001106262207,
+      "deadline_to_independent_absence_s": 12.006714105606079,
+      "kill_to_worker_absence_s": null,
+      "kill_to_independent_absence_s": null,
+      "exact_id_and_label_absent": true,
+      "estimated_upper_usd": 0.037279670728577505,
+      "cron": [
+        {
+          "trigger_at": 1792713611.2533271,
+          "returned_at": 1792713611.7143319
+        },
+        {
+          "trigger_at": 1792713671.465481,
+          "returned_at": 1792713671.8388603
+        },
+        {
+          "trigger_at": 1792713731.112615,
+          "returned_at": 1792713732.0802648
+        }
+      ],
+      "callbacks": [],
+      "blob_profiles": []
+    }
+  ],
+  "diagnostic_failures": [
+    {
+      "scenario": "initial A",
+      "cause": "incorrect REST env wire shape; no report; real boot cleanup",
+      "estimated_upper_usd": 0.07349215555058586
+    },
+    {
+      "scenario": "initial B",
+      "cause": "local CPU observer connection failed; payload reported structured FAIL",
+      "estimated_upper_usd": 0.03715931792170912
+    }
+  ],
+  "cleanup": {
+    "children_stopped": true,
+    "live_absence_unresolved": false,
+    "independent_reaper_retained": false
+  },
+  "profiler": "native V8 sample wall deltas; idle/root/program excluded, program reported separately; sampling estimate, not Cloudflare billed CPU",
+  "worker_source": "2588349cb251f366b4078cfd8be2edb6a974c207",
+  "local_bundle_sha256": "113c84f5821f13adccb226e748f31520a77fe1bee399d36cfda88caca68861ce"
+}

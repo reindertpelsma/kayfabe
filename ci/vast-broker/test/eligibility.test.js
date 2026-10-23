@@ -22,7 +22,14 @@ for (const base of ['integration/candidate', 'another-pr'])
 test('base allowlist is explicit Worker config', async () => {
   const h = await setup({ ALLOWED_BASE_BRANCHES: '["stable"]' });
   h.cloud.prs[0].base.ref = 'stable';
-  assert.equal((await h.call()).status, 200);
+  assert.equal(
+    (
+      await h.call('/rent', {
+        claims: { workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/stable' },
+      })
+    ).status,
+    200,
+  );
   assert.equal(h.cloud.creates, 1);
 });
 test('missing API base never trusts an OIDC base claim', async () => {

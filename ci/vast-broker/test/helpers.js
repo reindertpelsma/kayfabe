@@ -7,6 +7,7 @@ export const repo = 'reindertpelsma/kayfabe';
 export const env = {
   RENTING_ENABLED: 'true',
   OWNER_GITHUB_ID: owner,
+  REPOSITORY_GITHUB_ID: '1234567',
   REPOSITORY: repo,
   WORKER_URL: 'https://broker.example',
   APPROVAL_MODE: 'owner_push_or_review',
@@ -45,6 +46,10 @@ export const baseClaims = {
   exp: clock / 1000 + 300,
   nbf: clock / 1000 - 1,
   repository: repo,
+  repository_id: env.REPOSITORY_GITHUB_ID,
+  repository_owner_id: owner,
+  sub: 'repo:' + repo + ':environment:gpu-vast',
+  job_workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',
   event_name: 'pull_request',
   actor_id: owner,
   sha: 'd'.repeat(40),
@@ -57,7 +62,15 @@ export const baseClaims = {
 export async function jwt(patch = {}, header = {}, key = pair.privateKey) {
   const enc = (v) => Buffer.from(JSON.stringify(v)).toString('base64url');
   const input =
-    enc({ alg: 'RS256', kid: 'test-key', ...header }) + '.' + enc({ ...baseClaims, ...patch });
+    enc({ alg: 'RS256', kid: 'test-key', ...header }) +
+    '.' +
+    enc({
+      ...baseClaims,
+      ...(patch.workflow_ref !== undefined && !Object.hasOwn(patch, 'job_workflow_ref')
+        ? { job_workflow_ref: patch.workflow_ref }
+        : {}),
+      ...patch,
+    });
   const sig = await webcrypto.subtle.sign(
     'RSASSA-PKCS1-v1_5',
     key,
@@ -267,7 +280,8 @@ export async function setup(overrides = {}) {
   const cloud = new MockCloud();
   const storage = new MemoryStorage();
   const time = { value: clock };
-  const bindings = { ...env, ...overrides };
+  const implicitPrefix = !Object.hasOwn(overrides, 'BROKER_PATH_PREFIX');
+  const bindings = { ...env, BROKER_PATH_PREFIX: 'unit-fixture-' + 'p'.repeat(32), ...overrides };
   let service = createService({
     env: bindings,
     storage,
@@ -275,13 +289,24 @@ export async function setup(overrides = {}) {
     now: () => time.value,
     random: () => nonce,
   });
+  const transport = {
+    fetch(request) {
+      const url = new URL(request.url);
+      if (implicitPrefix) {
+        url.pathname = '/' + bindings.BROKER_PATH_PREFIX + url.pathname;
+        request = new Request(url, request);
+      }
+      return service.fetch(request);
+    },
+    sweep: (...args) => service.sweep(...args),
+  };
   const harness = {
     cloud,
     storage,
     time,
     bindings,
     get service() {
-      return service;
+      return transport;
     },
     restart() {
       service = createService({
@@ -329,7 +354,7 @@ export async function setup(overrides = {}) {
           result: { runner_nonce: record.runnerNonce, sha: record.sha, ...payload.result },
         };
       const bearer = token ?? callbackToken(record, bindings.RUN_TOKEN_SECRET);
-      return service.fetch(
+      return transport.fetch(
         new Request(bindings.WORKER_URL + '/report/' + run, {
           method: 'POST',
           headers: {
@@ -364,7 +389,7 @@ export async function setup(overrides = {}) {
       const authorization =
         token ??
         (await jwt({ exp: time.value / 1000 + 300, nbf: time.value / 1000 - 1, ...claims }));
-      return service.fetch(
+      return transport.fetch(
         new Request(bindings.WORKER_URL + path, {
           method,
           headers: {
