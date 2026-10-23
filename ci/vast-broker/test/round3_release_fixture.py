@@ -17,13 +17,15 @@ status = {
             "state": "success",
             "creator": {"login": "github-actions[bot]", "id": 41898282},
             "target_url": "https://github.com/" + repo + "/actions/runs/123",
+            "description": "GPU broker GRACE",
         }
     ],
 }
 run = {
     "id": 123,
     "path": ".github/workflows/gpu-vast.yml",
-    "event": "workflow_dispatch",
+    # Review W4: gpu-vast.yml runs on push to master (and pull_request_target), never dispatch.
+    "event": "push",
     "head_sha": sha,
     "head_branch": "master",
     "status": "completed",
@@ -49,4 +51,16 @@ if case == "wrong-conclusion":
     run["conclusion"] = "failure"
 if case == "wrong-repo":
     run["head_repository"]["full_name"] = "fork/kayfabe"
-assert m.verify(sha, status, lambda run_id: run) == (case == "valid"), case
+if case == "valid-none":
+    status["statuses"][0]["description"] = "GPU broker NONE"
+if case == "dispatch-run":
+    run["event"] = "workflow_dispatch"
+if case == "pr-target-run":
+    run["event"] = "pull_request_target"
+if case == "wrong-branch":
+    run["head_branch"] = "feature"
+if case == "not-needed":
+    status["statuses"][0]["description"] = "GPU broker NOT_NEEDED"
+if case == "no-description":
+    del status["statuses"][0]["description"]
+assert m.verify(sha, status, lambda run_id: run) == (case in {"valid", "valid-none"}), case

@@ -13,6 +13,13 @@ for (const name of [
   'wrong-run-sha',
   'wrong-conclusion',
   'wrong-repo',
+  // Review W4 (2026-10-23): the gate follows the current gpu-vast triggers.
+  'valid-none',
+  'dispatch-run',
+  'pr-target-run',
+  'wrong-branch',
+  'not-needed',
+  'no-description',
 ])
   test('R3 release same-SHA provenance gate: ' + name, () => {
     const p = spawnSync(
