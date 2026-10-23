@@ -235,9 +235,35 @@ with adjusted timers. Confirm all owned processes exited and release the outer
 lock. Clean owned build targets with `cargo clean --target-dir` semantics or
 `find "$CARGO_TARGET_DIR" -mindepth 1 -delete`; no shared-directory deletion.
 
-MEASURED GPU-free validation, 2026-10-23: the evidence checkpoint in
-[`traces/translated_rc_reset_20261018/`](../../traces/translated_rc_reset_20261018/)
-records EXPECTED RED commits, green counts, mutation killers and diagnostic
-comparisons. C object compilation and synthetic capture acceptance are not
-hardware acceptance. Full guest-driver linking, actual Translated route, native
-Xid suffix, guest event receipt, isolation and teardown remain hardware-unverified.
+MEASURED GPU-free validation, 2026-10-23: at build-farm **BF_HEAD
+`1c78c481e783b6f2b44a86ed5027a14e5ed7c779`**, the 22 kf-* crates passed
+4020 tests, failed 0 and ignored 22 across 236 targets. Optional-feature Clippy
+for kf-chan/kf-qemu/kf-harness, all targets, completed with 277 warning identities
+versus the earlier 278, added=0/errors=0. All six Rust fault-arm mutants had at
+least two killers, and the restored code passed 21/21 tests before/after the run.
+The seven guard/observer mutants also had at least two killers; Python tests:
+59/59. Commands, exact mutation killers and diagnostic comparisons are in
+[`traces/translated_rc_reset_20261018/`](../../traces/translated_rc_reset_20261018/).
+The build-farm result supersedes the earlier dev-box cargo-lock stop.
+
+CODE READ build-farm reproduction, 2026-10-23: push the lane branch first. On the
+controller-provided build farm, run the pushed mutation runner with an unused
+lane-owned output directory; record its BF_HEAD and require it to equal the
+intended source revision. The cargo command arrays in `control-build-farm.json`
+reproduce the full suite and Clippy. The farm supplies nice 15, eight jobs and its
+own lane target; it is an authorized exception to dev-box cargo settings. Respect
+BF_REFUSED/exit75 while the host quiet flag exists; wait for the next window or
+use the documented dev-box flock, never remove that flag. No GPU or VM is used by
+these checks. Example (BF_HOST is the controller-provided SSH destination):
+
+```bash
+ssh "${BF_HOST:?}" /data/build-farm/bf b1 codex/translated-rc-reset-20261022 \
+  python3 scripts/fastguest/check_translated_rc_mutants.py \
+  --out /data/b1/rc-control-new-mutant-evidence --jobs 8
+```
+
+CODE READ limits, 2026-10-23: C object compilation and synthetic capture acceptance
+are not hardware acceptance. Full guest-driver/probe-module linking against the
+chosen guest kernel, actual Translated route, native Xid suffix, guest event
+receipt, isolation and teardown remain unverified. The native/OFF/ON runbook above
+is the remaining acceptance procedure. No reset-recovery claim is made.

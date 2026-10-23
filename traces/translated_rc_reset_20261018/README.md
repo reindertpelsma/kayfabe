@@ -1,3 +1,32 @@
+**STATUS: RESEARCH, 2026-10-23 — build-farm validation supersedes the cargo-lock stop; hardware n=0.**
+
+MEASURED build-farm resume, 2026-10-23: the controller authorized CPU builds of
+pushed branch heads through the host build farm. At **BF_HEAD
+`1c78c481e783b6f2b44a86ed5027a14e5ed7c779`**, all six Rust fault-arm mutants
+were killed by at least two tests, with 21/21 tests green before and after the
+mutation run and source restored after each mutation. Exact killers, source/mutant SHA256 values, command and
+compiler version are in `control-rust-mutations.json`. The deliberately mutated
+source is derived by the pushed runner from that BF_HEAD; it is not represented
+as an unmodified-head test. No GPU or VM was used for these build-farm checks. The six Rust variants and
+seven earlier Python variants total 13 mutants, each with at least two killers.
+
+MEASURED build-farm Clippy, 2026-10-23, same BF_HEAD: kf-chan/kf-qemu/kf-harness,
+all targets, optional feature enabled, completed with **277 diagnostic identities
+versus the earlier 278, added=0, errors=0**. The removed warning was the new test
+crate's missing module documentation. This compiles the native-bystander edits
+that were unvalidated at the historical checkpoint below. The full 22-crate
+GPU-free suite completed at that same BF_HEAD: **4020 passed, 0 failed, 22 ignored,
+236 targets**. Exact package list, commands, counts and Clippy comparison are in
+`control-build-farm.json`. The 22 ignored tests were not executed; this result
+is not hardware acceptance.
+
+CODE READ supersession, 2026-10-23: `control-checkpoint.json` and the stop text
+below preserve the earlier dev-box resource refusal. They are historical; do not
+read their “uncompiled” and “unrun” fields as the resumed validation's final state.
+The reset decision is unchanged: refusal remains until recovery proof. Full
+guest-driver linking against the selected guest kernel and native/OFF/ON hardware
+acceptance are still pending; C-object compilation is not that evidence.
+
 **STATUS: RESEARCH, 2026-10-23 — control implemented; final cargo validation blocked; hardware n=0.**
 
 MEASURED stop, 2026-10-23: the first Rust mutant attempt waited 600 seconds for
