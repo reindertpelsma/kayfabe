@@ -26,6 +26,7 @@ STATES = {
     "NOT_FOUND",
     "OWNERSHIP_MISMATCH",
     "RATE_LIMIT",
+    "RATE_LIMITED",
 }
 VERDICTS = {"PASS", "FAIL", "UNAVAILABLE"}
 ZERO = "0" * 64
@@ -288,6 +289,7 @@ def validate_availability(data, profile):
             "DISK_BW",
             "DRIVER",
             "PRICE_FIELDS",
+            "COUNTRY",
             "PRICE",
         }
         or not all(integer(v, 0, 100) for v in data["rejected"].values())
@@ -488,15 +490,58 @@ class Runner:
         self.displayed = 0
         self.display_lines = 0
         self.display_dropped = 0
+        self.infrastructure_failure = False
+        self.until = time.monotonic() + 600 * 20
 
     def read(self, route, method="GET", body=None):
-        reply = self.client(route, method, body)
+        return self.decode(self.client(route, method, body))
+
+    def decode(self, reply):
         if (
             reply.status in {301, 302, 303, 307, 308}
             or reply.headers.get("content-type", "").split(";")[0].strip() != "application/json"
         ):
             raise Invalid()
         return reply.status, strict_json(reply.body)
+
+    def retry_read(self, route, method="GET", body=None):
+        last = None
+        for attempt in range(6):
+            if time.monotonic() >= self.until:
+                self.infrastructure_failure = True
+                raise TimeoutError()
+            try:
+                reply = self.client(route, method, body)
+                if route.startswith(("/status/", "/logs/")) and reply.status != 200:
+                    # Infrastructure error bodies are not a protocol or cleanup instruction.
+                    code, data = 503, {
+                        "state": "UNAVAILABLE",
+                        "verdict": "UNAVAILABLE",
+                        "log_tail_sanitised": "",
+                        "bytes_dropped": 0,
+                    }
+                else:
+                    code, data = self.decode(reply)
+            except (OSError, TimeoutError):
+                self.infrastructure_failure = True
+                if attempt == 5:
+                    raise
+            else:
+                if code == 200:
+                    self.infrastructure_failure = False
+                    return code, data
+                validate_status(data, self.ctx, self.manifest, code)
+                transient = code in {429, 500, 502, 503, 504} or (
+                    code == 409 and data["state"] == "BUSY"
+                )
+                self.infrastructure_failure = transient or route.startswith(("/status/", "/logs/"))
+                if not transient:
+                    return code, data
+                last = (code, data)
+                if attempt == 5:
+                    return last
+            time.sleep(min(2**attempt, 20))
+        raise Invalid()
 
     def show(self, text):
         if self.displayed >= 65000 or self.display_lines >= 200:
@@ -526,7 +571,7 @@ class Runner:
 
     def pages(self, target):
         while self.cursor < target:
-            code, data = self.read("/logs/" + self.ctx["run"] + "?cursor=" + str(self.cursor))
+            code, data = self.retry_read("/logs/" + self.ctx["run"] + "?cursor=" + str(self.cursor))
             if code != 200 or set(data) != {
                 "cursor",
                 "next_cursor",
@@ -569,7 +614,7 @@ class Runner:
         terminal = False
         try:
             profile = self.ctx.get("profile", "check")
-            code, availability = self.read("/availability?profile=" + profile)
+            code, availability = self.retry_read("/availability?profile=" + profile)
             if code != 200:
                 validate_status(availability, self.ctx, self.manifest, code)
                 raise Invalid()
@@ -616,13 +661,22 @@ class Runner:
             }
             if "preferences" in self.ctx:
                 request["preferences"] = self.ctx["preferences"]
-            code, data = self.read("/rent", "POST", request)
+            code, data = self.retry_read("/rent", "POST", request)
+            admitted = False
             for attempt in range(600):
                 data = validate_status(data, self.ctx, self.manifest, code)
                 if code != 200:
+                    if self.infrastructure_failure:
+                        time.sleep(20)
+                        route = "/status/" + self.ctx["run"] if admitted else "/rent"
+                        code, data = self.retry_read(
+                            route, "GET" if admitted else "POST", None if admitted else request
+                        )
+                        continue
                     self.show(data["log_tail_sanitised"])
                     result["state"] = data["state"]
                     break
+                admitted = True
                 self.pages(data["log_cursor"])
                 if (
                     data["state"] == "NOT_NEEDED"
@@ -639,11 +693,11 @@ class Runner:
                 if data["state"] not in {"CREATING", "BOOTING", "TESTING", "MANUAL"}:
                     break
                 time.sleep(20)
-                code, data = self.read("/status/" + self.ctx["run"])
+                code, data = self.retry_read("/status/" + self.ctx["run"])
         except (Invalid, ValueError, KeyError, TypeError, UnicodeError, OSError, TimeoutError):
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:
-            if not terminal:
+            if not terminal and not self.infrastructure_failure:
                 try:
                     self.read("/stop/" + self.ctx["run"], "POST")
                 except Exception:
@@ -748,6 +802,18 @@ def deadline(seconds):
         signal.signal(signal.SIGALRM, old)
 
 
+def access_headers(environ):
+    ident = environ.get("CF_ACCESS_CLIENT_ID", "")
+    secret = environ.get("CF_ACCESS_CLIENT_SECRET", "")
+    if not ident and not secret:
+        return {}
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,256}", ident) or not re.fullmatch(
+        r"[A-Za-z0-9_.-]{32,256}", secret
+    ):
+        raise Invalid()
+    return {"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret}
+
+
 def https_request(url, method="GET", headers=None, body=None):
     u = urllib.parse.urlsplit(url)
     if u.scheme != "https" or not u.hostname or u.username or u.password or u.fragment:
@@ -801,7 +867,7 @@ def main():
         if (
             not hex_value(sha, 40)
             or not hex_value(base, 40)
-            or event_name not in {"pull_request_target", "workflow_dispatch"}
+            or event_name not in {"pull_request_target", "workflow_dispatch", "push"}
         ):
             raise Invalid()
         if event_name == "pull_request_target" and (
@@ -814,6 +880,14 @@ def main():
             raise Invalid()
         if sys.argv[2:] == ["--profile", "sweep"]:
             selected = event.get("inputs", {}).get("tested_sha", "")
+            if selected:
+                if not hex_value(selected, 40):
+                    raise Invalid()
+                sha = selected
+        if event_name == "workflow_dispatch" and sys.argv[2:] != ["--profile", "sweep"]:
+            selected = event.get("inputs", {}).get("sha", "")
+            if not isinstance(selected, str):
+                raise Invalid()
             if selected:
                 if not hex_value(selected, 40):
                     raise Invalid()
@@ -880,6 +954,11 @@ def main():
             ],
         }
 
+        access = access_headers(os.environ)
+        for value in access.values():
+            ctx["redactions"].append(value)
+            print("::add-mask::" + value, flush=True)
+
         def client(route, method="GET", body=None):
             audience = urllib.parse.quote(origin, safe="")
             print("::add-mask::" + audience, flush=True)
@@ -904,7 +983,7 @@ def main():
             return https_request(
                 origin + ("/" + prefix if prefix else "") + route,
                 method,
-                {"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                {**access, "Authorization": "Bearer " + token, "Content-Type": "application/json"},
                 None if body is None else json.dumps(body, separators=(",", ":")).encode(),
             )
 
