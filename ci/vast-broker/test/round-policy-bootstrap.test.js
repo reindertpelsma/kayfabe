@@ -4,12 +4,14 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 // FALSIFIER: policy downloads selected/PR code, needs undeclared modules, or prints credentials.
 for (const eventName of ['workflow_dispatch', 'unknown'])
   test('round actual policy bootstrap runs only BASE modules ' + eventName, async () => {
     const d = await mkdtemp(join(tmpdir(), 'v1-policy-bootstrap-'));
     try {
-      const yaml = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+      const yaml = await readFile(repoRoot + '.github/workflows/gpu-vast.yml', 'utf8');
       const script = yaml
         .split('  policy:\n')[1]
         .split('  gpu:\n')[0]
@@ -37,6 +39,7 @@ shutil.copyfile(Path(os.environ['SOURCE_ROOT'])/file,args[args.index('-o')+1])
         {
           encoding: 'utf8',
           timeout: 5000,
+          cwd: repoRoot,
           env: {
             ...process.env,
             PATH: d + ':' + process.env.PATH,

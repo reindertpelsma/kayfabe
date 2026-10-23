@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { setup } from './helpers.js';
+import { fileURLToPath } from 'node:url';
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 // FALSIFIER H6: a partial Access pair is admitted, or A/B token scopes cross transports.
 for (const which of ['BOX_ACCESS_ID', 'BOX_ACCESS_SECRET']) {
   test('round partial box Access config fails before spending ' + which, async () => {
@@ -25,6 +27,7 @@ for (const side of ['runner', 'reporter', 'daemon', 'kill', 'hold', 'blob']) {
     const result = spawnSync('python3', ['ci/vast-broker/test/round_access_fixture.py', side], {
       encoding: 'utf8',
       timeout: 5000,
+      cwd: repoRoot,
     });
     assert.equal(result.status, 0, result.stdout + result.stderr);
   });
@@ -40,7 +43,7 @@ for (const path of ['.github/workflows/gpu-vast.yml', '.github/workflows/gpu-vas
 for (const job of ['pending', 'report'])
   test('round Access A secret cannot cross the broker job ' + job, async () => {
     const { checkWorkflows } = await import('../workflow-guard.js');
-    const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+    const text = await readFile(repoRoot + '.github/workflows/gpu-vast.yml', 'utf8');
     const changed = text.replace(
       '  ' + job + ':\n',
       '  ' +
@@ -60,7 +63,7 @@ for (const manual of [false, true])
         'ci/vast-broker/test/round3_main_fixture.py',
         JSON.stringify({ access: true, manual }),
       ],
-      { encoding: 'utf8', timeout: 5000 },
+      { encoding: 'utf8', timeout: 5000, cwd: repoRoot },
     );
     assert.equal(p.status, 0, p.stderr);
     const r = JSON.parse(p.stdout);

@@ -2,6 +2,8 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { setup, clock, sha, nonce, env } from './helpers.js';
+import { fileURLToPath } from 'node:url';
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const state = async (r) => (await r.json()).state;
 const rent = async (h) => {
   const r = await h.call();
@@ -404,7 +406,7 @@ test('completed run without marker is cleaned', async () => {
 test('YAML controls draft owner push', async () => {
   const h = await setup();
   h.cloud.prs[0].draft = true;
-  const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+  const text = await readFile(repoRoot + '.github/workflows/gpu-vast.yml', 'utf8');
   assert.match(text, /!github\.event\.pull_request\.draft/);
   assert.equal((await h.call()).status, 200);
   assert.equal(h.cloud.creates, 1);
@@ -413,7 +415,7 @@ test('YAML controls reviewed draft', async () => {
   const h = await setup();
   h.cloud.prs[0].draft = true;
   h.cloud.reviews = [{ id: 1, user: { id: 42 }, state: 'APPROVED', commit_id: sha }];
-  const text = await readFile('.github/workflows/gpu-vast.yml', 'utf8');
+  const text = await readFile(repoRoot + '.github/workflows/gpu-vast.yml', 'utf8');
   assert.match(text, /!github\.event\.pull_request\.draft/);
   assert.equal((await h.call()).status, 200);
   assert.equal(h.cloud.creates, 1);

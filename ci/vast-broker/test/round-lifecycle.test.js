@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { setup, clock, nonce, callbackToken } from './helpers.js';
+import { fileURLToPath } from 'node:url';
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 // FALSIFIER H2: infrastructure status faults destroy paid work or polling bypasses fact caching.
 for (const failure of [
   'BUSY',
@@ -16,6 +18,7 @@ for (const failure of [
     const r = spawnSync('python3', ['ci/vast-broker/test/round_runner_fixture.py', failure], {
       encoding: 'utf8',
       timeout: 5000,
+      cwd: repoRoot,
     });
     assert.equal(r.status, 0, r.stdout + r.stderr);
   });
