@@ -1,0 +1,13 @@
+{
+  "classification": "INFERRED",
+  "evidence": "fullscreen-coverage-plan.json",
+  "time": "2026-10-23T09:55:35.275578+00:00",
+  "run": 4643,
+  "before_execution": true,
+  "hypothesis": "The primary borderless proxy fills the candidate display but only part of native4K primary; this explains the near60-call/s contrast.",
+  "falsifier": "Native primary set to1920x1080 still returns thousands of Present calls/s for the SAME exact borderless executable. If native also falls near refresh rate, desktop coverage remains a sufficient setup confound for the primary comparison.",
+  "method": "After viewsets and original18 proxy phases only; own guest C++ tool captures primary DEVMODE, CDS_TEST, temporary1920x1080 change without registry update, verifies applied dimensions, three3s Present phases of exact primary executable, restores and verifies saved width/height/frequency/bits/orientation/position. Held CreateProcess handle for own children, bounded wait; no foreign process kills. Other monitors remain configured.",
+  "limits": "n1 native boot, sequential display mode change, no true OpenGL no-present or matched-geometry viewset repeat. Child primary executable lacks explicit Present-status logging. Real event/Xid/restoration guards remain binding.",
+  "source_sha256": "40db82df3c47e76ad677f99808130e7e197dbbbaebd8585e73702eb40627b801",
+  "binary_sha256": "35152cb5616ec1a2a919a5cddc176ee5962c708ce201a073f727c3e6ba29ba0e"
+}

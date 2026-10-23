@@ -1,0 +1,29 @@
+{
+  "classification": "MEASURED",
+  "evidence": "proxy-artifact-check.json",
+  "tools": [
+    {
+      "tool": "present-proxy",
+      "source_sha256": "4b7ae22feacd3ceb1b5c68cf1b484ab3db5fc09ff6f6ef3f6b8873bd1f5b9f9f",
+      "binary_sha256": "1f987071111164c613121774be4598c0509987e0720219ed67dccc18df059744",
+      "installer_embedded_binary_exact": true,
+      "public_source_matches_private_build_input": true
+    },
+    {
+      "tool": "present-proxy-windowed",
+      "source_sha256": "f63bb6e596b1e588feaf07fcccae7bdc25d22dc7013f1e3f16e24076e8a557d0",
+      "binary_sha256": "28cc20f8b5fd2d86c74d3440ec7cdf6313df08c2655ee898ccd70fc7f05f84d2",
+      "installer_embedded_binary_exact": true,
+      "public_source_matches_private_build_input": true
+    },
+    {
+      "tool": "mode-control",
+      "source_sha256": "40db82df3c47e76ad677f99808130e7e197dbbbaebd8585e73702eb40627b801",
+      "binary_sha256": "35152cb5616ec1a2a919a5cddc176ee5962c708ce201a073f727c3e6ba29ba0e",
+      "installer_embedded_binary_exact": true,
+      "public_source_matches_private_build_input": true
+    }
+  ],
+  "compiler": "x86_64-w64-mingw32-g++ (GCC) 13-win32",
+  "scope": "Installed executable bytes equal declared plan binary hashes; sources public, binaries private."
+}

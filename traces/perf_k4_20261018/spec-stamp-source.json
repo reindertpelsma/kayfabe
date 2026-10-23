@@ -1,0 +1,9 @@
+{
+  "classification": "CODE READ",
+  "evidence": "spec-stamp-source.json",
+  "branch": "claude/spec-stamp-20261023",
+  "commit": "9eec6ba6b0a4e420e0c750443a2d0e65f346c252",
+  "path": "scripts/bench/specviewperf/spec_stamp.py",
+  "sha256": "67330d7631007a6212b305021ba5682b432d4d305ce9ab003c2012f41d5bfc20",
+  "configuration": "SPECviewperf15.x patch level unrecorded is explicit, never inferred from viewset versions. All composite/ratio tables rendered then required-valid by the owner stamping tool."
+}

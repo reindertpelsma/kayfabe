@@ -7,19 +7,28 @@
   "mutants": [
     {
       "mutant": "truncate",
-      "distinct_assertion_killers": [
+      "exit": 1,
+      "distinct_test_killers": [
         "FAIL: test_large_installer_is_exact (test_agent_transport.AgentTransportTests.test_large_installer_is_exact)",
         "FAIL: test_unicode_and_newlines_are_exact (test_agent_transport.AgentTransportTests.test_unicode_and_newlines_are_exact)"
-      ],
-      "exit": 1
+      ]
     },
     {
       "mutant": "drop-newlines",
-      "distinct_assertion_killers": [
+      "exit": 1,
+      "distinct_test_killers": [
         "FAIL: test_large_installer_is_exact (test_agent_transport.AgentTransportTests.test_large_installer_is_exact)",
         "FAIL: test_unicode_and_newlines_are_exact (test_agent_transport.AgentTransportTests.test_unicode_and_newlines_are_exact)"
-      ],
-      "exit": 1
+      ]
+    },
+    {
+      "mutant": "restore-os-argv",
+      "exit": 1,
+      "reason": "Putting the exact large script back in a child argv fails both large round-trip tests with the real OS byte limit; no guest/VM needed.",
+      "distinct_test_killers": [
+        "ERROR: test_large_installer_is_exact (test_agent_transport.AgentTransportTests.test_large_installer_is_exact)",
+        "ERROR: test_unicode_and_newlines_are_exact (test_agent_transport.AgentTransportTests.test_unicode_and_newlines_are_exact)"
+      ]
     }
   ],
   "runtime_scope": "Exact script moved from argv to stdin; same agent queue/command behavior, no guard or timer change"

@@ -19,7 +19,7 @@
       "repeat": 1
     },
     {
-      "id": 4645,
+      "id": 4649,
       "arm": "kayfabe",
       "repeat": 2
     },
@@ -90,5 +90,11 @@
     "reason": "Initial Process.Path/starttime capture did not pass every exact image-identity control on repeat. Original failure retained; canonical identity capture now uses GetProcessTimes and QueryFullProcessImageNameW on held process handles, creation stored as exact string. No field match or negative test relaxed.",
     "host_restored": true,
     "new_Xid_delta": 0
+  },
+  "auxiliary_4645": {
+    "status": "VIEWSETS_COMPLETED_PROXY_INSTALL_FAILED_RESTORED",
+    "reason": "212922-byte script exceeded OS argument byte limit before proxy launch; same exact script now passed via stdin to original agent CLI queue. Three round-trip tests, two mutants each fail two checks. No guard or timer changed.",
+    "replacement_clean_run": 4649,
+    "original_result": "energy-bisect/4645/result.json"
   }
 }

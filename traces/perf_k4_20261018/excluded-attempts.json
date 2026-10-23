@@ -1,0 +1,142 @@
+{
+  "classification": "MEASURED",
+  "evidence": "excluded-attempts.json",
+  "scope": "Original failed attempts retained. No replacement changes their recorded verdict; not counted as clean boots. Independent native final-health receipts take precedence over wrapper bookkeeping for actual restoration only.",
+  "attempts": [
+    {
+      "run": 4640,
+      "arm": "K4-KF1",
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "exception": "AssertionError: CONTROLLER_EXIT_BEFORE_BOOT",
+      "restored": false,
+      "telemetry_exit": null,
+      "controller_exit": 1,
+      "ended": "2026-10-23T09:12:02.619772+02:00",
+      "new_host_xids": null,
+      "sample": {
+        "completed": null,
+        "completed_workloads": null,
+        "guest153": null,
+        "guest4101": null,
+        "boot_unchanged": null,
+        "budget_refusals": null,
+        "viewperf_nonzero_exits": null
+      }
+    },
+    {
+      "run": 4641,
+      "arm": "K4-VFIO1",
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "exception": "JSONDecodeError: Expecting value: line 1 column 1 (char 0)",
+      "restored": true,
+      "telemetry_exit": 0,
+      "controller_exit": 0,
+      "ended": "2026-10-23T09:44:52.414221+02:00",
+      "new_host_xids": 0,
+      "sample": {
+        "completed": null,
+        "completed_workloads": null,
+        "guest153": null,
+        "guest4101": null,
+        "boot_unchanged": null,
+        "budget_refusals": null,
+        "viewperf_nonzero_exits": null
+      }
+    },
+    {
+      "run": 4644,
+      "arm": "K4-KF1",
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "exception": "Error: Only base64 data is allowed",
+      "restored": true,
+      "telemetry_exit": 0,
+      "controller_exit": 0,
+      "ended": "2026-10-23T09:29:53.156902+02:00",
+      "new_host_xids": 0,
+      "sample": {
+        "completed": true,
+        "completed_workloads": [
+          "catia-07",
+          "creo-04"
+        ],
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": []
+      }
+    },
+    {
+      "run": 4645,
+      "arm": "K4-KF2-clean",
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "exception": "OSError: [Errno 7] Argument list too long: 'python3'",
+      "restored": true,
+      "telemetry_exit": 0,
+      "controller_exit": 0,
+      "ended": "2026-10-23T11:24:57.085376+02:00",
+      "new_host_xids": 0,
+      "sample": {
+        "completed": true,
+        "completed_workloads": [
+          "catia-07",
+          "creo-04"
+        ],
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": []
+      }
+    },
+    {
+      "run": 4646,
+      "arm": "K4-VFIO1",
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "exception": "RuntimeError: GUEST_COMMAND_FAILED guest-nvml.csv.gz.b64 rc=1",
+      "restored": true,
+      "telemetry_exit": 0,
+      "controller_exit": 0,
+      "ended": "2026-10-23T10:06:32.684765+02:00",
+      "new_host_xids": 0,
+      "sample": {
+        "completed": true,
+        "completed_workloads": [
+          "catia-07",
+          "creo-04"
+        ],
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": []
+      }
+    },
+    {
+      "run": 4647,
+      "arm": "K4-VFIO1-clean",
+      "verdict": "FAIL",
+      "reason": "HARNESS_OR_GUARD_EXCEPTION",
+      "exception": "AssertionError: SAMPLER_IDENTITY_CONTROL_FAILED",
+      "restored": false,
+      "telemetry_exit": 0,
+      "controller_exit": 1,
+      "ended": "2026-10-23T10:22:35.811536+02:00",
+      "new_host_xids": 0,
+      "sample": {
+        "completed": null,
+        "completed_workloads": null,
+        "guest153": null,
+        "guest4101": null,
+        "boot_unchanged": null,
+        "budget_refusals": null,
+        "viewperf_nonzero_exits": null
+      }
+    }
+  ]
+}

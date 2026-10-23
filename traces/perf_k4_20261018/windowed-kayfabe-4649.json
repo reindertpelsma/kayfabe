@@ -1,0 +1,65 @@
+{
+  "classification": "MEASURED",
+  "evidence": "windowed-kayfabe-4649.json",
+  "run": 4649,
+  "scope": "One boot,three3s repetitions per mode; generated D3D11 proxy,not displayed fps or same-viewset OpenGL. Native match is pending.",
+  "phases": [
+    {
+      "file": "windowed-3000-0-offscreen.txt",
+      "records": [
+        "PROXY_DISPLAY primary_width=1920 primary_height=1080 virtual_width=1920 virtual_height=1080 session=1",
+        "PROXY_PRESENT_STATUS occluded=0 other_nonzero_status=0",
+        "PROXY_RESULT mode=offscreen vertices=3000 draws_per_frame=16 batch_frames=8 frames=12696 batches=1587 wall_s=3.001086900 context_timestamp_s=2.695834784 disjoint_batches=0 fps=4230.467302 start_epoch_ms=1792741793156 end_epoch_ms=1792741796158 tearing=0 real_pixels=1 device_reason=0x00000000 width=1920 height=1080 no_present_calls=1"
+      ],
+      "real_pixel_checks": 12
+    },
+    {
+      "file": "windowed-3000-0-present.txt",
+      "records": [
+        "PROXY_DISPLAY primary_width=1920 primary_height=1080 virtual_width=1920 virtual_height=1080 session=1",
+        "PROXY_WINDOW client_width=1280 client_height=720 visible=1 iconic=0 foreground=1 cloak_hr=0 cloaked=0",
+        "PROXY_PRESENT_STATUS occluded=0 other_nonzero_status=0",
+        "PROXY_RESULT mode=present vertices=3000 draws_per_frame=16 batch_frames=8 frames=10936 batches=1367 wall_s=3.001231200 context_timestamp_s=2.861539104 disjoint_batches=0 fps=3643.837902 start_epoch_ms=1792741796537 end_epoch_ms=1792741799539 tearing=1 real_pixels=1 device_reason=0x00000000 width=1920 height=1080 no_present_calls=0"
+      ],
+      "real_pixel_checks": 12
+    },
+    {
+      "file": "windowed-3000-1-offscreen.txt",
+      "records": [
+        "PROXY_DISPLAY primary_width=1920 primary_height=1080 virtual_width=1920 virtual_height=1080 session=1",
+        "PROXY_PRESENT_STATUS occluded=0 other_nonzero_status=0",
+        "PROXY_RESULT mode=offscreen vertices=3000 draws_per_frame=16 batch_frames=8 frames=13112 batches=1639 wall_s=3.000731700 context_timestamp_s=2.768220384 disjoint_batches=0 fps=4369.600921 start_epoch_ms=1792741803306 end_epoch_ms=1792741806308 tearing=0 real_pixels=1 device_reason=0x00000000 width=1920 height=1080 no_present_calls=1"
+      ],
+      "real_pixel_checks": 12
+    },
+    {
+      "file": "windowed-3000-1-present.txt",
+      "records": [
+        "PROXY_DISPLAY primary_width=1920 primary_height=1080 virtual_width=1920 virtual_height=1080 session=1",
+        "PROXY_WINDOW client_width=1280 client_height=720 visible=1 iconic=0 foreground=1 cloak_hr=0 cloaked=0",
+        "PROXY_PRESENT_STATUS occluded=0 other_nonzero_status=0",
+        "PROXY_RESULT mode=present vertices=3000 draws_per_frame=16 batch_frames=8 frames=10304 batches=1288 wall_s=3.000837800 context_timestamp_s=2.682390336 disjoint_batches=0 fps=3433.707747 start_epoch_ms=1792741799929 end_epoch_ms=1792741802930 tearing=1 real_pixels=1 device_reason=0x00000000 width=1920 height=1080 no_present_calls=0"
+      ],
+      "real_pixel_checks": 12
+    },
+    {
+      "file": "windowed-3000-2-offscreen.txt",
+      "records": [
+        "PROXY_DISPLAY primary_width=1920 primary_height=1080 virtual_width=1920 virtual_height=1080 session=1",
+        "PROXY_PRESENT_STATUS occluded=0 other_nonzero_status=0",
+        "PROXY_RESULT mode=offscreen vertices=3000 draws_per_frame=16 batch_frames=8 frames=13128 batches=1641 wall_s=3.000671200 context_timestamp_s=2.771014432 disjoint_batches=0 fps=4375.021162 start_epoch_ms=1792741806666 end_epoch_ms=1792741809667 tearing=0 real_pixels=1 device_reason=0x00000000 width=1920 height=1080 no_present_calls=1"
+      ],
+      "real_pixel_checks": 12
+    },
+    {
+      "file": "windowed-3000-2-present.txt",
+      "records": [
+        "PROXY_DISPLAY primary_width=1920 primary_height=1080 virtual_width=1920 virtual_height=1080 session=1",
+        "PROXY_WINDOW client_width=1280 client_height=720 visible=1 iconic=0 foreground=1 cloak_hr=0 cloaked=0",
+        "PROXY_PRESENT_STATUS occluded=0 other_nonzero_status=0",
+        "PROXY_RESULT mode=present vertices=3000 draws_per_frame=16 batch_frames=8 frames=10904 batches=1363 wall_s=3.001612400 context_timestamp_s=2.862719936 disjoint_batches=0 fps=3632.714204 start_epoch_ms=1792741810055 end_epoch_ms=1792741813057 tearing=1 real_pixels=1 device_reason=0x00000000 width=1920 height=1080 no_present_calls=0"
+      ],
+      "real_pixel_checks": 12
+    }
+  ]
+}

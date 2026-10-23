@@ -67,8 +67,21 @@ capability Gen4x16. Prelaunch4640 never created a VM; its missing staged
 receipt failure remains in prelaunch-4640.json.
 
 MEASURED 2026-10-23, transport-controls.json: three script-transport tests pass;
-two mutants each fail two assertions. EXPECTED RED f29d3e7cd was a missing
+three mutants each fail two tests. EXPECTED RED f29d3e7cd was a missing
 new API/import, with zero behavioral assertions. The212922-byte installer
 is supplied via stdin to the same agent queue, preserving exact UTF-8 and
 newlines. This fixes the mechanical argv limit without changing a timer or
 a guard. No product source or production behavior changed.
+
+MEASURED 2026-10-23, windowed-kayfabe-4649.json: the visible1280x720
+client, with unchanged1920x1080 render buffer, completes3434–3644
+Present-call loop iterations/s, zero occluded/other status. The primary
+borderless near60 result is geometry-sensitive; it does not establish a
+general kayfabe Present-throughput cap. Native windowed match remains pending.
+
+INFERRED fullscreen-coverage-plan.json: predeclared additional native4643
+control runs after all headline viewsets and proxy phases. It temporarily
+sets the primary guest display to1920x1080, repeats the SAME primary proxy
+three times, then verifies the exact saved mode was restored. Native
+thousands of calls/s in that setup falsifies display-coverage-only explanation.
+No viewset score or candidate product behavior is changed by this control.
