@@ -31,7 +31,8 @@ class FixtureSelection(unittest.TestCase):
             (root / "selector.rs").write_text(source)
             subprocess.run(
                 ["nice", "-n", "19", "rustc", str(root / "selector.rs"), "-o", str(root / "s")],
-                capture_output=True, check=True,
+                capture_output=True,
+                check=True,
             )
             env = dict(os.environ)
             env.pop("KF_BW3_FUZZ_ARM", None)

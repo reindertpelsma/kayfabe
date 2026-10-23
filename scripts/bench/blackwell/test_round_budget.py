@@ -117,10 +117,19 @@ class RoundBudget(unittest.TestCase):
         self.assertLess(row["seconds"], 6000)
         self.assertLess(row["reservation_usd"], 2.0)
 
+    def test_b1b_another_price_preserves_lower_deadline_and_recorded_cap(self):
+        row = B.plan(1.1, 28, NOW, stop_usd=2.0, cap_usd=2.5)
+        self.assertLess(row["seconds"], 4300)
+        self.assertEqual((row["stop_usd"], row["cap_usd"]), (2.0, 2.5))
+
     def test_round_override_cannot_raise_the_existing_ceiling(self):
         for stop, cap in [(2.6, 3), (2.0, 3.1), (2.5, 2.5), (0, 2.5)]:
             with self.assertRaises(ValueError):
                 B.plan(0.3, 28, NOW, stop_usd=stop, cap_usd=cap)
+
+    def test_round_override_cannot_put_cap_below_stop(self):
+        with self.assertRaises(ValueError):
+            B.plan(0.3, 28, NOW, stop_usd=2, cap_usd=1.9)
 
 
 if __name__ == "__main__":

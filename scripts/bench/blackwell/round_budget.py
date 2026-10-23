@@ -24,19 +24,23 @@ def aware(value):
     return value.astimezone(dt.timezone.utc)
 
 
-def plan(hourly, credit, armed_at):
+def plan(hourly, credit, armed_at, *, stop_usd=STOP_USD, cap_usd=CAP_USD):
     hourly = positive_number(hourly, "hourly price")
     credit = positive_number(credit, "credit")
     armed_at = aware(armed_at)
+    stop_usd = positive_number(stop_usd, "round stop")
+    cap_usd = positive_number(cap_usd, "round cap")
+    if not stop_usd < cap_usd <= CAP_USD or stop_usd > STOP_USD:
+        raise ValueError("round overrides must preserve or lower the existing ceilings")
     if hourly > MAX_RATE:
         raise ValueError("hourly price exceeds the owner limit")
     rate_bound = max(hourly * 1.15, hourly + 0.10)
-    cost_seconds = int((STOP_USD - NONRUNTIME_MARGIN) * 3600 / rate_bound)
+    cost_seconds = int((stop_usd - NONRUNTIME_MARGIN) * 3600 / rate_bound)
     seconds = min(MAX_SECONDS, cost_seconds - TEARDOWN_SECONDS)
     if seconds <= 0:
         raise ValueError("no runtime remains within the cost stop")
     reservation = rate_bound * seconds / 3600 + NONRUNTIME_MARGIN
-    if reservation >= STOP_USD or credit - reservation < RESERVE_USD:
+    if reservation >= stop_usd or credit - reservation < RESERVE_USD:
         raise ValueError("round reservation exceeds stop or account reserve")
     return {
         "armed_utc": armed_at.isoformat(),
@@ -46,8 +50,8 @@ def plan(hourly, credit, armed_at):
         "rate_bound": rate_bound,
         "reservation_usd": reservation,
         "credit_after_reservation": credit - reservation,
-        "stop_usd": STOP_USD,
-        "cap_usd": CAP_USD,
+        "stop_usd": stop_usd,
+        "cap_usd": cap_usd,
         "reserve_usd": RESERVE_USD,
         "leases_authorized": 1,
     }

@@ -57,6 +57,11 @@ class FuzzFindings(unittest.TestCase):
         self.assertEqual(result["alias_revoked_recurrences"], 3)
         self.assertEqual(calls[-1], ("crowd-free", 3))
 
+    def test_two_recurrences_and_failed_control_are_still_reported_without_gating(self):
+        result, calls = self.run_batch((0, 2, 3))
+        self.assertTrue(result["native_finding"])
+        self.assertTrue(result["continue_windows"])
+
     def test_one_failure_does_not_meet_the_two_of_three_falsifier(self):
         result, calls = self.run_batch((1,))
         self.assertFalse(result["native_finding"])
@@ -71,9 +76,17 @@ class FuzzFindings(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "unapproved"):
             self.run_batch(safety_at=1)
 
+    def test_safety_fault_before_first_sample_stops_the_batch(self):
+        with self.assertRaisesRegex(RuntimeError, "unapproved"):
+            self.run_batch(safety_at=0)
+
     def test_safety_fault_after_final_sample_still_stops_windows(self):
         with self.assertRaisesRegex(RuntimeError, "unapproved"):
             self.run_batch(safety_at=4)
+
+    def test_final_safety_fault_still_stops_when_native_failures_were_recorded(self):
+        with self.assertRaisesRegex(RuntimeError, "unapproved"):
+            self.run_batch((0, 1, 2), safety_at=4)
 
     def test_wrong_width_does_not_count_as_a_valid_pinned_sample(self):
         row = F.parse(sample().replace("threads=9", "threads=3"), "crowd", 0)
