@@ -152,7 +152,7 @@ if mode in ("preflight", "rent"):
             [
                 "search",
                 "offers",
-                f"vms_enabled=true num_gpus=1 gpu_name={sku} disk_space>=180 cpu_cores_effective>=16 cpu_ram>=32768 inet_down>200 reliability>=0.94 verified=any",
+                f"vms_enabled=true num_gpus=1 gpu_name={sku} disk_space>=180 cpu_cores_effective>=16 cpu_ram>=32 inet_down>200 reliability>=0.94 verified=any",
                 "-o",
                 "dph_total",
                 "--limit",
@@ -202,6 +202,7 @@ if mode in ("preflight", "rent"):
         x
         for x in offers
         if x.get("verification") == "verified"
+        and float(x.get("cpu_ram", 0)) >= 32768
         and int(x["machine_id"]) not in (145861, 152912)
         and int(x["id"]) != 55276777
     ]
