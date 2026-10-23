@@ -1,4 +1,4 @@
-# Fresh acceptance after accepted V8 — authorised, not yet rented
+# Fresh acceptance after accepted V8 — running
 
 CODE READ (owner instruction, 2026-10-23): one additional verified fixed-die KVM acceptance lease, cap 4 USD / stop 3 USD, independent exact-id reaper armed first. The fresh run must measure cache download/install and approximately 15-minute READY, then the existing host CUDA, merge_check, thin 30/30 and fat CUDA flows to a bound verdict. Kayfabe-side failures are findings; no tested-code changes or on-box source restart.
 
@@ -9,3 +9,5 @@ CODE READ: the blob helper retries failed GETs including provider-created 401 re
 MEASURED on 2026-10-23, run `v8-fresh-gpu-free-20261023`: the dev box's uutils0.8.0 keeps a fake transport descendant's pipe open in one hard-deadline test. The same assertions are retained and pass with the pinned rental OS's GNU coreutils8.32; the target test Dockerfile is committed. This is a runtime difference, not a relaxed deadline assertion.
 
 INFERRED: the cache plus ACK gate and bounded helper retries should remove the old dependency bottleneck while preserving the existing provision guard. The [falsifier](experiment_plan.json) was recorded before rental: cache refusal/integrity failure, setup materially exceeding 900 s, wrong Cargo output path/stale hardware, or missing suite verdict. No Worker bundle/default/time-limit change, deployment or production renting enablement is part of this run.
+
+MEASURED on 2026-10-23, run `v8-fresh-kvm-20261023`, source commit 7e0fc2fcb8d8b362cb4c872ab8e03f0c682222c9: the one authorised vm:true/ssh_direct GA102 offer was created after its independent reaper was armed. Effective price 0.422847222222 USD/h; compute/storage 0.393333333333 USD/h; full bandwidth reserve 0.088541666667 USD. No qualifying GA106 was available. [Live metadata](live_run.json).

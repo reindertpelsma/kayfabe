@@ -1,0 +1,17 @@
+{
+  "run": "v8-fresh-kvm-20261023",
+  "source_sha": "7e0fc2fcb8d8b362cb4c872ab8e03f0c682222c9",
+  "state": "RUNNING",
+  "one_authorised_lease": true,
+  "reaper_armed_first": true,
+  "vm": true,
+  "runtype": "ssh_direct",
+  "gpu_offer": "RTX 3090",
+  "die": "GA102",
+  "effective_hourly_usd": 0.42284722222222226,
+  "compute_storage_hourly_usd": 0.39333333333333337,
+  "full_bandwidth_reserve_usd": 0.08854166666666667,
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+}
