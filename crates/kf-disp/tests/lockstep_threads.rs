@@ -61,6 +61,9 @@ struct Shared {
     commits: AtomicU64,
     answered: AtomicU64,
     unsolicited: AtomicU64,
+    /// Of `unsolicited`, those that arrived within 40 ms of a tick the broker SENT: a tick the
+    /// relay had not read yet crossed them (M3; not a violation, see `on_cmd`).
+    crossings: AtomicU64,
     no_changes: AtomicU64,
     ticks_sent: AtomicU64,
     ticks_dropped: AtomicU64,
@@ -526,6 +529,9 @@ fn on_cmd(b: &mut BrokerEnd, sh: &Shared, ring: &FrameRing, cmd: Cmd, now: Insta
                              relay had read (it answered that tick's request)",
                             now.duration_since(t).as_millis()
                         ));
+                    }
+                    if now.duration_since(b.last_tick_sent) < Duration::from_millis(40) {
+                        sh.crossings.fetch_add(1, Ordering::Relaxed);
                     }
                     sh.unsolicited.fetch_add(1, Ordering::Relaxed);
                 } else {
@@ -1142,7 +1148,7 @@ fn check(r: &Result, scn: &Scn) {
 fn report(r: &Result, scn: &Scn) {
     let s = &r.sh;
     eprintln!(
-        "lockstep_threads {}: {} flips in {} ms; ticks sent {} (dropped by the broker's full buffer {}), commits {} (answered {}, unsolicited {}, no_change {}), frames published {}, worker fallbacks {}, relay drops {}, connections {}, max relay turn {} packets, max held {}, max vblank gap {} ms, max flip {} ms",
+        "lockstep_threads {}: {} flips in {} ms; ticks sent {} (dropped by the broker's full buffer {}), commits {} (answered {}, unsolicited {} of which {} crossed a tick, no_change {}), frames published {}, worker fallbacks {}, relay drops {}, connections {}, max relay turn {} packets, max held {}, max vblank gap {} ms, max flip {} ms",
         scn.name,
         s.flips.load(Ordering::Relaxed),
         r.elapsed.as_millis(),
@@ -1151,6 +1157,7 @@ fn report(r: &Result, scn: &Scn) {
         s.commits.load(Ordering::Relaxed),
         s.answered.load(Ordering::Relaxed),
         s.unsolicited.load(Ordering::Relaxed),
+        s.crossings.load(Ordering::Relaxed),
         s.no_changes.load(Ordering::Relaxed),
         s.frames_published.load(Ordering::Relaxed),
         s.worker_fallbacks.load(Ordering::Relaxed),
@@ -1487,8 +1494,8 @@ fn crossing(name: &'static str, how: Crossing) {
         "{name} ({how:?}): the relay read the resumed tick, after it sent the frame"
     );
     assert_eq!(
-        x.count(&x.sh.unsolicited),
-        1,
+        (x.count(&x.sh.unsolicited), x.count(&x.sh.crossings)),
+        (1, 1),
         "{name} ({how:?}): the fallback frame reached the broker as COMMIT.seq 0 after its tick"
     );
     let v = x.sh.violations.lock().unwrap();
