@@ -1098,6 +1098,48 @@
       "tests": [
         "round-box-protocol.test.js"
       ]
+    },
+    {
+      "name": "V9-abort-on-failure",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "          failed++; // MUTANT reaper-continue\n          continue;",
+          "          throw Error('provider');"
+        ]
+      ],
+      "tests": [
+        "round-reaper-continue.test.js",
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "V9-uncounted-failure",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "          failed++; // MUTANT reaper-continue\n",
+          "          // mutant hides the failure\n"
+        ]
+      ],
+      "tests": [
+        "round-reaper-continue.test.js",
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "V9-skip-later-rows",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "          continue;\n        }\n        if ((await list())",
+          "          break;\n        }\n        if ((await list())"
+        ]
+      ],
+      "tests": [
+        "round-reaper-continue.test.js",
+        "round-reaper.test.js"
+      ]
     }
   ]
 }

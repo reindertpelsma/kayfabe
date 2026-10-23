@@ -89,7 +89,8 @@ export function createReaper({
       }
       const second = new Map((await list()).map((row) => [row.id, row]));
       let deleted = 0,
-        unconfirmed = 0;
+        unconfirmed = 0,
+        failed = 0;
       for (const row of first) {
         const current = second.get(row.id);
         if (
@@ -99,12 +100,18 @@ export function createReaper({
           row.start_date !== current.start_date
         )
           continue;
-        const ack = await request('/api/v0/instances/' + row.id + '/', 'DELETE');
-        if (ack.success !== true) throw Error('provider');
+        // One undeletable row must not shield the others; it is retried on the next tick.
+        try {
+          const ack = await request('/api/v0/instances/' + row.id + '/', 'DELETE');
+          if (ack.success !== true) throw Error('provider');
+        } catch {
+          failed++; // MUTANT reaper-continue
+          continue;
+        }
         if ((await list()).some((item) => item.id === row.id)) unconfirmed++;
         else deleted++;
       }
-      report({ event: 'reaper_complete', deleted, unconfirmed });
+      report({ event: 'reaper_complete', deleted, unconfirmed, failed });
     } catch {
       report({ event: 'reaper_unavailable' });
     }
