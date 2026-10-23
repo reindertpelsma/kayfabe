@@ -163,3 +163,33 @@ class ArmDiagnostics(unittest.TestCase):
             {"name": "arm_missing_page_fault", "pass": 0, "fail": 1, "skip": 0},
             self.failed_result("--missing-page-fault")["suites"],
         )
+
+    def late_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "diagnostics"
+            state.write_text(json.dumps({"bytes": 1048576 - 65536, "events": []}))
+            log = root / "watch"
+            env = {
+                "KF_PAYLOAD_LOG": str(root / "output"),
+                "KF_PAYLOAD_DIAGNOSTIC_STATE": str(state),
+                "KF_PAYLOAD_XID_ALLOWED": str(root / "allowed"),
+                "KF_PAYLOAD_XID_FAILED": str(root / "failed"),
+            }
+            with patch.dict(os.environ, env), redirect_stdout(io.StringIO()):
+                for fault in (False, True):
+                    text = watch(XID, 0, 1) if fault else watch()
+                    text = text.replace("\nfixture\n", "\n" + "x" * 150000 + "\n", 1)
+                    log.write_text(text)
+                    payload.guard_command("--timer", log, 6 if fault else 0)
+            return (root / "output").read_text(), json.loads(state.read_text())
+
+    def test_late_failure_keeps_the_complete_fault_record(self):
+        output, state = self.late_failure()
+        self.assertIn(XID, output)
+        self.assertLessEqual(state["bytes"], 1048576)
+
+    def test_late_failure_keeps_its_diagnostic_end_marker(self):
+        output, state = self.late_failure()
+        self.assertTrue(output.rstrip().endswith("KF_ARM_DIAG_END arm=--timer"))
+        self.assertEqual(len(state["events"]), 2)
