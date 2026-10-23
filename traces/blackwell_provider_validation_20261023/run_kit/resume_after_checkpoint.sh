@@ -30,6 +30,9 @@ p=Path('/root/prov/native_receipt.json.ready.json')
 if p.exists():p.rename(p.with_suffix('.before_resume.json'))
 CHECKPOINT
 date -u -Is >/root/prov/windows_resume.started
+[ ! -f /root/prov/sweep_controller.pid ] || cp /root/prov/sweep_controller.pid /root/prov/sweep_controller.before_checkpoint.pid
+printf '%s\n' "$BASHPID" >/root/prov/sweep_controller.pid
+printf '%s\n' "$BASHPID" >/root/prov/windows_resume.pid
 python3 -E -s /root/sweep2/guard/blackwell/phase_xid_guard.py watch /root/prov/native_receipt.json "$controller_pgid" /root/prov/phase.json /root/prov/XID_STOP >/root/prov/resume_guard_watch.log 2>&1 &
 guard_pid=$!
 for i in $(seq 1 20); do [ -f /root/prov/native_receipt.json.ready.json ] && break; kill -0 "$guard_pid"; sleep 1; done
