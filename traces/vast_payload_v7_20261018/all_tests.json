@@ -4,11 +4,12 @@
   "tests": 194,
   "failures": 0,
   "errors": 0,
-  "seconds": 52.525,
+  "seconds": 51.31,
   "suites": {
     "canonical_box": 72,
     "payload": 79,
     "provider_environment": 17,
     "diagnostic_logs": 26
-  }
+  },
+  "tested_revision": "3f6a7249d1d3d6a1a8275c9512352f029ccacf9a"
 }

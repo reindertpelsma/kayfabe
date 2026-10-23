@@ -1,0 +1,106 @@
+{
+  "run": "v7-kvm-20261023",
+  "captured_at": 1792718848.4919024,
+  "profile": "check",
+  "availability": {
+    "profile": "check",
+    "offers": [
+      {
+        "die": "AD102",
+        "gpu_name": "RTX_4090",
+        "compute_cap": 890,
+        "count": 5,
+        "effective_hourly": 0.7689583333333334,
+        "estimated_total": 2.319430555555556,
+        "kvm": true
+      }
+    ],
+    "thresholds": {
+      "reliability": 0.98,
+      "cores": 8,
+      "cpuGhz": 2,
+      "ramMb": 34360,
+      "downMbps": 200,
+      "upMbps": 50,
+      "diskMbps": 100,
+      "medianRatio": 0.5,
+      "price": 1,
+      "bandwidth_down_gb": 15,
+      "bandwidth_up_gb": 2,
+      "verified": 1
+    },
+    "rejected": {
+      "VERIFICATION": 17,
+      "PERFORMANCE": 7,
+      "DRIVER": 22,
+      "CPU_RAM": 17,
+      "NETWORK": 3,
+      "DIE": 26,
+      "RELIABILITY": 14,
+      "DISK_BW": 1,
+      "PRICE": 14,
+      "MACHINE": 1
+    },
+    "verified_counts": [
+      {
+        "die": "AD102",
+        "total": 14,
+        "verified": 11
+      },
+      {
+        "die": "AD103",
+        "total": 2,
+        "verified": 1
+      },
+      {
+        "die": "AD106",
+        "total": 3,
+        "verified": 3
+      },
+      {
+        "die": "CC_120",
+        "total": 4,
+        "verified": 3
+      },
+      {
+        "die": "CC_86",
+        "total": 1,
+        "verified": 0
+      },
+      {
+        "die": "CC_89",
+        "total": 5,
+        "verified": 5
+      },
+      {
+        "die": "GA102",
+        "total": 9,
+        "verified": 5
+      },
+      {
+        "die": "GA104",
+        "total": 1,
+        "verified": 1
+      },
+      {
+        "die": "GA106",
+        "total": 2,
+        "verified": 0
+      },
+      {
+        "die": "GB202",
+        "total": 6,
+        "verified": 3
+      },
+      {
+        "die": "GB203",
+        "total": 1,
+        "verified": 1
+      }
+    ],
+    "cache": {
+      "hit": false,
+      "age_ms": 805
+    }
+  }
+}
