@@ -43,3 +43,19 @@ for (const selected of ['e'.repeat(40), 'f'.repeat(40)])
     assert.equal(r.workflow_sha, 'a'.repeat(40));
     assert.equal(r.calls.find((x) => x.url.endsWith('/rent')).request.tested_sha, selected);
   });
+for (const selected of [[], {}])
+  test('round dispatch rejects non-string selected SHA ' + JSON.stringify(selected), () => {
+    const p = spawnSync(
+      'python3',
+      [
+        '-I',
+        'ci/vast-broker/test/round3_main_fixture.py',
+        JSON.stringify({ manual: true, selected_sha: selected }),
+      ],
+      { encoding: 'utf8', timeout: 5000 },
+    );
+    assert.equal(p.status, 0, p.stderr);
+    const r = JSON.parse(p.stdout);
+    assert.equal(r.status, 1);
+    assert.equal(r.calls.length, 0);
+  });
