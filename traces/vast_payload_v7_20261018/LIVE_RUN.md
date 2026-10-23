@@ -62,3 +62,7 @@ Cargo-path and failure-hardware fixes; full host CUDA, merge bar and fat CUDA re
 exact-channel guard integration; observed survival past the old grace deadline; hosted OIDC
 and billed Cloudflare CPU. Deferred format pass 2, Worker README restructure and review lows
 remain deferred. No Worker deployment or production renting enablement occurred.
+
+[MEASURED: 2026-10-23, runs 39895761923 and 39895766836; hosted_ci.json] Dedicated hosted
+box-script CI passes all tests and all four mutation harnesses on f5dfacda3. This verifies
+the GPU-free checks on GitHub; it does not replace fresh VM acceptance of the fixes.

@@ -48,3 +48,8 @@ fat CUDA results remain unverified. Hosted OIDC, billed Cloudflare CPU, survival
 grace deadline and S4's exact-channel guard remain gaps. Format pass 2, Worker README restructure
 and review lows remain deferred. [Live report](LIVE_RUN.md), [startup fix](PROVIDER_ENV.md),
 [diagnostic exception](DIAGNOSTIC_LOGS.md), [final log](public_log_final.txt).
+
+[MEASURED: 2026-10-23, runs 39895761923 and 39895766836; hosted_ci.json] The new hosted
+box-script job passes on code/workflow revision f5dfacda3 for both push and PR events: all 198
+tests and all four mutation harnesses, including the 60 canonical mutations. The general Rust
+workflow is separate and was still running when this evidence was captured.
