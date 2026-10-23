@@ -1,0 +1,53 @@
+[
+  {
+    "mutant": "repository-id",
+    "count": 2,
+    "killers": [
+      "identity fail closed repository_id undefined",
+      "identity fail closed repository_id 98765"
+    ]
+  },
+  {
+    "mutant": "repository-owner-id",
+    "count": 2,
+    "killers": [
+      "identity fail closed repository_owner_id undefined",
+      "identity fail closed repository_owner_id 43"
+    ]
+  },
+  {
+    "mutant": "environment-subject",
+    "count": 2,
+    "killers": [
+      "identity fail closed sub undefined",
+      "identity fail closed sub repo:reindertpelsma/kayfabe:pull_request"
+    ]
+  },
+  {
+    "mutant": "job-workflow-ref",
+    "count": 2,
+    "killers": [
+      "identity fail closed job_workflow_ref undefined",
+      "identity fail closed job_workflow_ref reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/evil"
+    ]
+  },
+  {
+    "mutant": "control-per-IP",
+    "count": 5,
+    "killers": [
+      "control per-IP budget /status/123-1",
+      "control per-IP budget /logs/123-1?cursor=0",
+      "control per-IP budget /stop/123-1",
+      "owner cleanup bypasses exhausted control budget /stop/123-1",
+      "owner cleanup bypasses exhausted control budget /stop-all"
+    ]
+  },
+  {
+    "mutant": "control-global",
+    "count": 2,
+    "killers": [
+      "control global budget /status/123-1",
+      "control global budget /logs/123-1?cursor=0"
+    ]
+  }
+]

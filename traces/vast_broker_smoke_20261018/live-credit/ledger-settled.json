@@ -1,0 +1,14 @@
+{
+  "key": "1792673075630-1",
+  "id": "57212118",
+  "price": 0.6000000000000001,
+  "started": 1792673389616,
+  "ended": 1792673501041,
+  "ttl": 600000,
+  "closed": "STOPPED",
+  "verdict": "UNAVAILABLE",
+  "reportCount": 1,
+  "reportBytes": 0,
+  "elapsed_seconds": 111.425,
+  "estimated_compute_storage_usd": 0.018570833333333335
+}

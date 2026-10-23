@@ -1,0 +1,24 @@
+{
+  "classification": "CODE READ",
+  "legacy_replaced": {
+    "workflow API prefix": "runner-API-prefix",
+    "derived hostname masks": "runner-hostname-masks",
+    "encoded audience mask": "runner-audience-mask",
+    "run idempotence": "run-idempotence",
+    "SHA verdict cache": "nonce-cache (fresh nonce refuses cached PASS)",
+    "terminal client completion": "runner-terminal-grace and client tests",
+    "cached PR display grant": "nonce-cache; cross-run grants are no longer permitted"
+  },
+  "v4_replaced": {
+    "public-summary-guard": "exact BASE bootstrap guard plus runner-scrub/runner-local-redaction",
+    "workflow-fail-grace": "runner-terminal-grace",
+    "workflow-cursor": "runner-cursor-race and runner-log-hash",
+    "stale-status-cursor": "runner-cursor-race"
+  },
+  "current_anchor_counts": {
+    "legacy": 94,
+    "v4": 28,
+    "round3": 38
+  },
+  "legacy_v4_campaign_repeated": false
+}

@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-22",
+  "source_revision": "1fc0e9233",
+  "runs": [
+    {
+      "phase": "PASS",
+      "live_provider": true,
+      "create_to_absence_s": 6.76,
+      "result_to_absence_s": null,
+      "result_received": false,
+      "structured_verdict": "FAIL",
+      "api_id_and_label_absent": true,
+      "estimated_usd": 0.00027541289506135164,
+      "planted_clean": true,
+      "log_bytes": 0,
+      "unauthenticated_result_status": 401,
+      "run": "round2-early-status",
+      "controller_cleanup": {
+        "children_stopped": true,
+        "live_absence_unresolved": false,
+        "independent_reaper_retained": false
+      }
+    },
+    {
+      "phase": "PASS",
+      "live_provider": true,
+      "create_to_absence_s": 231.192,
+      "result_to_absence_s": null,
+      "result_received": false,
+      "structured_verdict": "FAIL",
+      "api_id_and_label_absent": true,
+      "estimated_usd": 0.017553475620570008,
+      "planted_clean": true,
+      "log_bytes": 0,
+      "unauthenticated_result_status": 401,
+      "run": "round2-kvm-launch",
+      "controller_cleanup": {
+        "children_stopped": true,
+        "live_absence_unresolved": false,
+        "independent_reaper_retained": false
+      }
+    }
+  ],
+  "kvm_diagnostic": "provider libvirt domain not found; no callback observed"
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "mutant": "configured-base",
+    "count": 2,
+    "killers": [
+      "target event honors configured exact BASE stable",
+      "target event honors configured exact BASE integration/owner-approved"
+    ]
+  },
+  {
+    "mutant": "configured-workflow",
+    "count": 2,
+    "killers": [
+      "target event honors configured exact BASE stable",
+      "target event honors configured exact BASE integration/owner-approved"
+    ]
+  }
+]

@@ -1,0 +1,4 @@
+Run: v5-policy-checkpoint-20261022
+Node baseline: tests=901 pass=901 fail=0 cancelled=0 skipped=0
+Focused mutations: cases=56 minimum_named_killers=2
+No GPU use or provider creation.

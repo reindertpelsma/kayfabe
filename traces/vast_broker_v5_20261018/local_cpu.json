@@ -1,0 +1,310 @@
+{
+  "run": "v5-readonly-20261022-availability-1-cpu",
+  "method": "Native V8 CPU sampling; 100us requested interval; idle/root/program samples excluded; program reported separately as unclassified; local estimate, not Cloudflare billed CPU",
+  "rows": [
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 31.191,
+      "program_unknown_ms": 1.418,
+      "wall_ms": 702.6812150000005,
+      "samples": 38
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 12.197,
+      "program_unknown_ms": 1.294,
+      "wall_ms": 30.485388999997667,
+      "samples": 27
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 3.631,
+      "program_unknown_ms": 14.695,
+      "wall_ms": 24.22490000000107,
+      "samples": 12
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 13.67,
+      "program_unknown_ms": 0,
+      "wall_ms": 20.571070000001782,
+      "samples": 18
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 4.278,
+      "program_unknown_ms": 0.172,
+      "wall_ms": 21.234796999997343,
+      "samples": 21
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 16.471,
+      "program_unknown_ms": 0.18,
+      "wall_ms": 22.937431999998807,
+      "samples": 21
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 20.34,
+      "program_unknown_ms": 1.781,
+      "wall_ms": 25.933694999999716,
+      "samples": 19
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 8.512,
+      "program_unknown_ms": 6.176,
+      "wall_ms": 28.070347000000766,
+      "samples": 25
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 12.236,
+      "program_unknown_ms": 6.888,
+      "wall_ms": 27.245218000000023,
+      "samples": 14
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 13.069,
+      "program_unknown_ms": 1.603,
+      "wall_ms": 27.70379899999898,
+      "samples": 28
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 5.656,
+      "program_unknown_ms": 0.507,
+      "wall_ms": 24.50713899999755,
+      "samples": 25
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 11.827,
+      "program_unknown_ms": 0,
+      "wall_ms": 23.592482000000018,
+      "samples": 18
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 9.68,
+      "program_unknown_ms": 0,
+      "wall_ms": 21.11076300000059,
+      "samples": 14
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 14.01,
+      "program_unknown_ms": 0.696,
+      "wall_ms": 20.038680999998178,
+      "samples": 20
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 24.232,
+      "program_unknown_ms": 0.176,
+      "wall_ms": 30.924122000000352,
+      "samples": 21
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 18.85,
+      "program_unknown_ms": 0,
+      "wall_ms": 28.99279799999931,
+      "samples": 20
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 9.315,
+      "program_unknown_ms": 0.584,
+      "wall_ms": 18.80973400000221,
+      "samples": 27
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 7.878,
+      "program_unknown_ms": 0.169,
+      "wall_ms": 24.386261999999988,
+      "samples": 31
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 8.322,
+      "program_unknown_ms": 6.114,
+      "wall_ms": 19.755981000002066,
+      "samples": 24
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 9.631,
+      "program_unknown_ms": 1.845,
+      "wall_ms": 18.86004899999898,
+      "samples": 23
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 8.404,
+      "program_unknown_ms": 0.877,
+      "wall_ms": 20.33826500000214,
+      "samples": 17
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 9.281,
+      "program_unknown_ms": 0.179,
+      "wall_ms": 18.913308999999572,
+      "samples": 22
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 13.929,
+      "program_unknown_ms": 0.531,
+      "wall_ms": 19.55355200000122,
+      "samples": 21
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 12.847,
+      "program_unknown_ms": 0.166,
+      "wall_ms": 19.220385000000533,
+      "samples": 23
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 2.304,
+      "program_unknown_ms": 0.922,
+      "wall_ms": 18.93359799999962,
+      "samples": 14
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 10.404,
+      "program_unknown_ms": 0.661,
+      "wall_ms": 16.284254999998666,
+      "samples": 17
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 9.661,
+      "program_unknown_ms": 0.521,
+      "wall_ms": 19.02865600000223,
+      "samples": 11
+    },
+    {
+      "route": "/rent",
+      "status": 503,
+      "cpu_sample_ms": 23.2,
+      "program_unknown_ms": 3.342,
+      "wall_ms": 33.23264500000005,
+      "samples": 27
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 6.554,
+      "program_unknown_ms": 0,
+      "wall_ms": 20.697628000001714,
+      "samples": 15
+    },
+    {
+      "route": "/availability",
+      "status": 200,
+      "cpu_sample_ms": 5.787,
+      "program_unknown_ms": 0,
+      "wall_ms": 25.63519599999927,
+      "samples": 10
+    },
+    {
+      "route": "/rent",
+      "status": 429,
+      "cpu_sample_ms": 0,
+      "program_unknown_ms": 0,
+      "wall_ms": 15.002467999998771,
+      "samples": 1
+    },
+    {
+      "route": "/availability",
+      "status": 429,
+      "cpu_sample_ms": 5.567,
+      "program_unknown_ms": 0,
+      "wall_ms": 15.907487999997102,
+      "samples": 3
+    },
+    {
+      "route": "/availability",
+      "status": 429,
+      "cpu_sample_ms": 6.544,
+      "program_unknown_ms": 0,
+      "wall_ms": 12.448393999999098,
+      "samples": 6
+    },
+    {
+      "route": "/rent",
+      "status": 429,
+      "cpu_sample_ms": 1.71,
+      "program_unknown_ms": 0,
+      "wall_ms": 11.356676000003063,
+      "samples": 5
+    },
+    {
+      "route": "/availability",
+      "status": 429,
+      "cpu_sample_ms": 4.859,
+      "program_unknown_ms": 3.039,
+      "wall_ms": 9.69457699999839,
+      "samples": 5
+    },
+    {
+      "route": "/availability",
+      "status": 429,
+      "cpu_sample_ms": 5.483,
+      "program_unknown_ms": 0,
+      "wall_ms": 10.06474199999866,
+      "samples": 4
+    },
+    {
+      "route": "/rent",
+      "status": 429,
+      "cpu_sample_ms": 7.19,
+      "program_unknown_ms": 0,
+      "wall_ms": 16.109717999999702,
+      "samples": 6
+    },
+    {
+      "route": "/availability",
+      "status": 429,
+      "cpu_sample_ms": 0.918,
+      "program_unknown_ms": 4.179,
+      "wall_ms": 12.93695200000002,
+      "samples": 6
+    }
+  ]
+}

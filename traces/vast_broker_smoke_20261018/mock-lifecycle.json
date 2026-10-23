@@ -1,0 +1,61 @@
+[
+  {
+    "path": "/rent",
+    "status": 200,
+    "bytes": 176,
+    "body": "{\"run\":\"1792671510122-1\",\"id\":\"900\",\"sha\":\"833a1a8657685775261cfecbaba16a60929ba71d\",\"pr\":7,\"state\":\"RUNNING\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "path": "/report/1792671510122-1",
+    "status": 200,
+    "bytes": 20,
+    "body": "{\"state\":\"ACCEPTED\"}"
+  },
+  {
+    "path": "/report/1792671510122-1",
+    "status": 200,
+    "bytes": 20,
+    "body": "{\"state\":\"ACCEPTED\"}"
+  },
+  {
+    "path": "/status/1792671510122-1",
+    "status": 200,
+    "bytes": 252,
+    "body": "{\"run\":\"1792671510122-1\",\"id\":\"900\",\"sha\":\"833a1a8657685775261cfecbaba16a60929ba71d\",\"pr\":7,\"state\":\"RUNNING\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"[box] Native SQLite smoke progress\\n[box] : :error: :hostile synthetic log\\n\",\"bytes_dropped\":0}"
+  },
+  {
+    "sqlite_restart_verified": true,
+    "id": "900"
+  },
+  {
+    "path": "/__smoke/expire",
+    "status": 200,
+    "bytes": 23,
+    "body": "expired synthetic clock"
+  },
+  {
+    "path": "/cdn-cgi/local/scheduled",
+    "status": 200,
+    "bytes": 2,
+    "body": "ok"
+  },
+  {
+    "native_ttl_verified": true,
+    "closed": "TTL",
+    "verdict": "FAIL",
+    "mock_provider_absent": true,
+    "note": "Fake clock exceeds OIDC fixture expiry; inspect persisted ledger for terminal state."
+  },
+  {
+    "path": "/report/1792671510122-1",
+    "status": 401,
+    "bytes": 90,
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "path": "/stop/1792671510122-1",
+    "status": 200,
+    "bytes": 245,
+    "body": "{\"run\":\"1792671510122-1\",\"id\":\"900\",\"sha\":\"833a1a8657685775261cfecbaba16a60929ba71d\",\"pr\":7,\"state\":\"STOPPED\",\"verdict\":\"FAIL\",\"log_tail_sanitised\":\"[box] Native SQLite smoke progress\\n[box] : :error: :hostile synthetic log\\n\",\"bytes_dropped\":0}"
+  }
+]

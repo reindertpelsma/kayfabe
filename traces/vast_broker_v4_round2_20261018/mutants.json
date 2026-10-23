@@ -1,0 +1,68 @@
+{
+  "source_revision": "88a3dbbc4",
+  "new_behavior_mutants": [
+    {
+      "name": "SSH onstart launch",
+      "count": 3,
+      "examples": [
+        "fixed create request never returns upstream credentials",
+        "provider launch uses SSH with fixed image and onstart, inheriting account keys",
+        "admitted rent uses SSH onstart without Worker-managed SSH credentials"
+      ]
+    },
+    {
+      "name": "pending provider status",
+      "count": 4,
+      "examples": [
+        "new provider missing actual_status survives status and cron only to provision bound",
+        "new provider missing actual_status refuses report without killing or accepting cur_state",
+        "new provider null actual_status survives status and cron only to provision bound"
+      ]
+    },
+    {
+      "name": "resolved launch preflight",
+      "count": 2,
+      "examples": [
+        "local preflight reports eligible offer after SSH ruling {\"verified\":true}",
+        "local preflight reports eligible offer after SSH ruling {\"verification\":\"verified\"}"
+      ]
+    },
+    {
+      "name": "accept-unready-tunnel-URL",
+      "count": 2,
+      "examples": [
+        "live tunnel parser refuses API timeout",
+        "live tunnel parser refuses unregistered URL"
+      ]
+    },
+    {
+      "name": "duplicate-provider-probe-per-callback",
+      "count": 2,
+      "examples": [
+        "live report ingress reuses timestamped provider sample without API probe",
+        "live kill ingress reuses timestamped provider sample without API probe"
+      ]
+    }
+  ],
+  "additional_existing_mutants_rechecked": [
+    {
+      "name": "one live instance",
+      "count": 6,
+      "examples": [
+        "one-live blocks another run",
+        "one-live survives restart",
+        "superseding push destroys old instance and returns BUSY false"
+      ]
+    },
+    {
+      "name": "live label ownership",
+      "count": 4,
+      "examples": [
+        "changed label prevents deletion",
+        "changed label prevents status log access",
+        "absence does not accept malformed or foreign {\"id\":900,\"label\":\"foreign\"}"
+      ]
+    }
+  ],
+  "full_previous_campaign": "128 cases at d9a0ccd266f2444623a6f251157cfc194085ed17; not rerun wholesale in round2"
+}

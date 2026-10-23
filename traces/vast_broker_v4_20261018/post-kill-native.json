@@ -1,0 +1,23 @@
+{
+  "mode": "NATIVE_WORKER_MOCK_PROVIDER",
+  "poll_after_cleanup": [
+    {
+      "scenario": "pass-kill",
+      "state": "COMPLETE",
+      "verdict": "PASS",
+      "cleanup_pending": false
+    },
+    {
+      "scenario": "pass-cron",
+      "state": "COMPLETE",
+      "verdict": "PASS",
+      "cleanup_pending": false
+    },
+    {
+      "scenario": "fail-cron",
+      "state": "COMPLETE",
+      "verdict": "FAIL",
+      "cleanup_pending": false
+    }
+  ]
+}

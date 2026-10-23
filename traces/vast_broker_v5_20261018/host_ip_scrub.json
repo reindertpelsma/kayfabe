@@ -1,0 +1,10 @@
+[
+  {
+    "path": "traces/vast_broker_smoke_20261018/live-credit/allowed-ip.json",
+    "last_commit_before_scrub": "7adac8909c7311f12182de82e780cf5938152cdf"
+  },
+  {
+    "path": "traces/vast_broker_smoke_20261018/live-credit/preflight.json",
+    "last_commit_before_scrub": "7adac8909c7311f12182de82e780cf5938152cdf"
+  }
+]

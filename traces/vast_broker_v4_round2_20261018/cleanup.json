@@ -1,0 +1,15 @@
+{
+  "run": "round2-final",
+  "all_six_owned_ids_and_exact_labels_verified_absent": true,
+  "controller_processes_stopped": true,
+  "independent_reapers_stopped": true,
+  "tunnel_and_exact_ip_allowlist_removed": true,
+  "firewall_rules_added": 0,
+  "host_locks_taken": 0,
+  "cargo_target_dirs_created": 0,
+  "private_runtime_and_credentials_removed": true,
+  "wrangler_install_removed": true,
+  "ignored_generated_dirs_removed": true,
+  "own_global_wrangler_logs_removed": 8,
+  "account_key_absent_from_own_global_wrangler_logs": true
+}

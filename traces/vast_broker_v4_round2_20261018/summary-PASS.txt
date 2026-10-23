@@ -1,0 +1,43 @@
+### UNTRUSTED output of the rented box
+
+| Field | Value |
+| --- | --- |
+| State | COMPLETE |
+| Verdict | PASS |
+| Summary | Box reported a structured result |
+| Tested commit | 19e4335719bb1ea31f09fdcdedfad6fdd1333534 |
+| GPU model | unknown |
+| Create to result seconds | 20.934 |
+| Estimated cost USD | 0.002145 |
+| Dropped log bytes | 99972 |
+
+Log tail (UNTRUSTED output of the rented box):
+
+```text
+[box] Suite starting
+[box] TINY_TEST_START
+[box] NVIDIA GeForce RTX 5060
+[box] Filesystem      Size  Used Avail Use% Mounted on
+[box] overlay         120G   23M  120G   1% /
+[box] Bearer [redacted]
+[box] eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJwbGFudGVkIn0.[redacted]
+[box] red
+[box] : :error: :x
+[box] # #[group]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] [redacted]
+[box] TINY_TEST_EXIT 0
+[box] Suite [redacted]plete; sender omitted 0 raw bytes beyond its bounded transport allowance.
+
+```

@@ -1,0 +1,104 @@
+[
+  {
+    "mutant": "country-rank",
+    "count": 4,
+    "killers": [
+      "country ranks qualifying US before CA",
+      "country ranks qualifying CA before GB",
+      "country order is configurable false",
+      "country order is configurable true"
+    ]
+  },
+  {
+    "mutant": "country-config-order",
+    "count": 2,
+    "killers": [
+      "country order is configurable false",
+      "country order is configurable true"
+    ]
+  },
+  {
+    "mutant": "country-config-validation",
+    "count": 2,
+    "killers": [
+      "country config fails closed [\"us\"]",
+      "country config fails closed [\"US\",\"US\"]"
+    ]
+  },
+  {
+    "mutant": "country-hard-filter",
+    "count": 23,
+    "killers": [
+      "country ranks qualifying CA before GB",
+      "country order is configurable false",
+      "country order is configurable true",
+      "qualifying non-US fallback CA",
+      "qualifying non-US fallback GB",
+      "US never bypasses required verified",
+      "US never bypasses required reliability",
+      "US never bypasses required cpu_cores_effective",
+      "US never bypasses required inet_down",
+      "US never bypasses required disk_bw",
+      "US never bypasses required vms_enabled",
+      "US never bypasses required dlperf",
+      "US never bypasses required dph_total",
+      "US never bypasses required driver_version",
+      "chosen country is structured metadata CA",
+      "runner refuses hostile country \"https://attacker.invalid\"",
+      "runner refuses hostile country \"US\\\\n::error::x\"",
+      "unknown location remains eligible undefined",
+      "unknown location remains eligible {\"country\":\"US\"}",
+      "unknown location remains eligible \"Region, us\"",
+      "unknown location remains eligible \"Region, USA\"",
+      "country preference never narrows provider query [\"US\",\"CA\"]",
+      "country preference never narrows provider query [\"CA\",\"US\"]"
+    ]
+  },
+  {
+    "mutant": "country-quality-first",
+    "count": 9,
+    "killers": [
+      "US never bypasses required verified",
+      "US never bypasses required reliability",
+      "US never bypasses required cpu_cores_effective",
+      "US never bypasses required inet_down",
+      "US never bypasses required disk_bw",
+      "US never bypasses required vms_enabled",
+      "US never bypasses required dlperf",
+      "US never bypasses required dph_total",
+      "US never bypasses required driver_version"
+    ]
+  },
+  {
+    "mutant": "country-normalization",
+    "count": 2,
+    "killers": [
+      "unknown location remains eligible \"Region, us\"",
+      "unknown location remains eligible \"Region, USA\""
+    ]
+  },
+  {
+    "mutant": "country-ledger",
+    "count": 2,
+    "killers": [
+      "chosen country is structured metadata US",
+      "chosen country is structured metadata CA"
+    ]
+  },
+  {
+    "mutant": "country-runner",
+    "count": 2,
+    "killers": [
+      "runner refuses hostile country \"https://attacker.invalid\"",
+      "runner refuses hostile country \"US\\\\n::error::x\""
+    ]
+  },
+  {
+    "mutant": "country-provider-query",
+    "count": 2,
+    "killers": [
+      "country preference never narrows provider query [\"US\",\"CA\"]",
+      "country preference never narrows provider query [\"CA\",\"US\"]"
+    ]
+  }
+]

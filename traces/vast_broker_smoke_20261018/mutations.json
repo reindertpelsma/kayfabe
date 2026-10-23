@@ -1,0 +1,124 @@
+{
+  "run": "v3-local-20261022",
+  "date": "2026-10-22",
+  "source_commit": "68b45f739",
+  "mutants": [
+    {
+      "mutant": "empty-stream-regression",
+      "killers": [
+        "native empty streaming POST accepts /rent",
+        "native empty streaming POST accepts /stop-all",
+        "native empty POST bad bearer is unauthorized /stop-all",
+        "native empty POST bad bearer is unauthorized /stop/123-1"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "accept-nonempty",
+      "killers": [
+        "streaming nonempty POST still refuses x",
+        "streaming nonempty POST still refuses {}"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "local-off",
+      "killers": [
+        "loopback signed identity routes JWKS and GitHub true",
+        "loopback signed identity routes JWKS and GitHub false",
+        "test issuer must be strict loopback origin https://evil.example",
+        "test issuer must be strict loopback origin http://127.0.0.1.evil.example:18788",
+        "test issuer must be strict loopback origin http://user:password@127.0.0.1:18788",
+        "test issuer must be strict loopback origin http://127.0.0.1:18788/path",
+        "local trust requires exact local issuer https://token.actions.githubusercontent.com"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "remove-optin",
+      "killers": [
+        "local identity requires explicit flag undefined",
+        "local identity requires explicit flag false"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "remove-caller-gate",
+      "killers": [
+        "public request cannot enable local identity https://broker.example",
+        "public request cannot enable local identity https://worker.workers.dev"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "issuer-not-exact",
+      "killers": [
+        "local identity requires explicit flag undefined",
+        "local identity requires explicit flag false",
+        "public request cannot enable local identity https://broker.example",
+        "public request cannot enable local identity https://worker.workers.dev",
+        "local trust requires exact local issuer https://evil.example",
+        "local trust requires exact local issuer https://token.actions.githubusercontent.com"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "issuer-origin-guard",
+      "killers": [
+        "test issuer must be strict loopback origin https://evil.example",
+        "test issuer must be strict loopback origin http://127.0.0.1.evil.example:18788",
+        "test issuer must be strict loopback origin http://user:password@127.0.0.1:18788",
+        "test issuer must be strict loopback origin http://127.0.0.1:18788/path"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "unsupported-redirect",
+      "killers": [
+        "native fetch uses supported manual redirects offers",
+        "native fetch uses supported manual redirects balance",
+        "native fetch uses supported manual redirects instance"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "accept-redirect",
+      "killers": [
+        "manual redirect is rejected without follow 301",
+        "manual redirect is rejected without follow 302",
+        "manual redirect is rejected without follow 307",
+        "manual redirect is rejected without follow 308"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "remove-canonical-slash",
+      "count": 5,
+      "killers": [
+        "Vast uses canonical slash endpoint /api/v0/users/current",
+        "Vast uses canonical slash endpoint /api/v1/instances?limit=2",
+        "Vast uses canonical slash endpoint /api/v0/instances/900",
+        "Vast uses canonical slash endpoint /api/v0/asks/5",
+        "Vast uses canonical slash endpoint /api/v0/bundles"
+      ]
+    },
+    {
+      "mutant": "reject-native-null-absence",
+      "count": 2,
+      "killers": [
+        "provider HTTP 200 null instance is absent",
+        "destroy already absent provider instance is idempotent"
+      ]
+    },
+    {
+      "mutant": "restore-fetch-receiver",
+      "count": 4,
+      "killers": [
+        "GitHub native fetch has no receiver undefined",
+        "GitHub native fetch has no receiver mock-job-token",
+        "GitHub public fallback native fetch has no receiver 401",
+        "GitHub public fallback native fetch has no receiver 403"
+      ]
+    }
+  ]
+}

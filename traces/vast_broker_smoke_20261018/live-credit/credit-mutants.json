@@ -1,0 +1,52 @@
+[
+  {
+    "mutant": "legacy-balance",
+    "killers": [
+      "prepaid credit admits with zero legacy balance 39.5",
+      "prepaid credit admits with zero legacy balance 9",
+      "prepaid credit must cover reserve plus TTL 3",
+      "prepaid credit must cover reserve plus TTL 8",
+      "prepaid credit must cover reserve plus TTL 8.49",
+      "missing or malformed prepaid credit fails closed undefined",
+      "missing or malformed prepaid credit fails closed null",
+      "missing or malformed prepaid credit fails closed \"39.5\"",
+      "missing or malformed prepaid credit fails closed -1",
+      "missing or malformed prepaid credit fails closed false",
+      "missing or malformed prepaid credit fails closed {}",
+      "missing or malformed prepaid credit fails closed []"
+    ],
+    "count": 12
+  },
+  {
+    "mutant": "fallback-balance",
+    "killers": [
+      "missing or malformed prepaid credit fails closed undefined",
+      "missing or malformed prepaid credit fails closed null"
+    ],
+    "count": 2
+  },
+  {
+    "mutant": "remove-credit-guard",
+    "killers": [
+      "prepaid credit must cover reserve plus TTL 3",
+      "prepaid credit must cover reserve plus TTL 8",
+      "prepaid credit must cover reserve plus TTL 8.49",
+      "missing or malformed prepaid credit fails closed undefined",
+      "missing or malformed prepaid credit fails closed null",
+      "missing or malformed prepaid credit fails closed \"39.5\"",
+      "missing or malformed prepaid credit fails closed -1",
+      "missing or malformed prepaid credit fails closed false",
+      "missing or malformed prepaid credit fails closed {}",
+      "missing or malformed prepaid credit fails closed []"
+    ],
+    "count": 10
+  },
+  {
+    "mutant": "omit-reserved-cost",
+    "killers": [
+      "prepaid credit must cover reserve plus TTL 8",
+      "prepaid credit must cover reserve plus TTL 8.49"
+    ],
+    "count": 2
+  }
+]

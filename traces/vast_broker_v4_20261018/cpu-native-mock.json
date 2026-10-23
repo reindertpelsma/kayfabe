@@ -1,0 +1,499 @@
+{
+  "scope": "OS task schedstat sum for own native workerd processes, including local proxy/runtime; NOT Cloudflare billed CPU",
+  "rows": [
+    {
+      "route": "unknown",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 2.605,
+          "wall_ms": 4.633,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.555,
+          "wall_ms": 4.436,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.84,
+          "wall_ms": 4.313,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.283,
+          "wall_ms": 4.143,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.27,
+          "wall_ms": 4.154,
+          "status": 404,
+          "response_bytes": 9
+        }
+      ],
+      "cpu_min_ms": 2.27,
+      "cpu_max_ms": 2.84
+    },
+    {
+      "route": "missing-prefix",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 2.468,
+          "wall_ms": 4.722,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.486,
+          "wall_ms": 4.524,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.53,
+          "wall_ms": 4.605,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.5,
+          "wall_ms": 7.483,
+          "status": 404,
+          "response_bytes": 9
+        },
+        {
+          "cpu_ms": 2.408,
+          "wall_ms": 4.294,
+          "status": 404,
+          "response_bytes": 9
+        }
+      ],
+      "cpu_min_ms": 2.408,
+      "cpu_max_ms": 2.53
+    },
+    {
+      "route": "status-missing",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.488,
+          "wall_ms": 6.562,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.343,
+          "wall_ms": 6.342,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 5.227,
+          "wall_ms": 14.635,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.358,
+          "wall_ms": 7.542,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.643,
+          "wall_ms": 16.826,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.343,
+      "cpu_max_ms": 5.227
+    },
+    {
+      "route": "status-bad",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.435,
+          "wall_ms": 7.14,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.421,
+          "wall_ms": 8.17,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.347,
+          "wall_ms": 6.699,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.636,
+          "wall_ms": 6.781,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.239,
+          "wall_ms": 6.335,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.239,
+      "cpu_max_ms": 4.347
+    },
+    {
+      "route": "logs-bad",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 4.367,
+          "wall_ms": 7.588,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.343,
+          "wall_ms": 6.706,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.617,
+          "wall_ms": 6.748,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.418,
+          "wall_ms": 7.27,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.557,
+          "wall_ms": 7.635,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.343,
+      "cpu_max_ms": 4.617
+    },
+    {
+      "route": "report-bad",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 5.27,
+          "wall_ms": 7.635,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.536,
+          "wall_ms": 7.408,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.933,
+          "wall_ms": 7.206,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.023,
+          "wall_ms": 7.321,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.555,
+          "wall_ms": 6.498,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.555,
+      "cpu_max_ms": 5.27
+    },
+    {
+      "route": "kill-bad",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 4.558,
+          "wall_ms": 12.945,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.577,
+          "wall_ms": 7.081,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.672,
+          "wall_ms": 7.201,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.682,
+          "wall_ms": 7.129,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 5.203,
+          "wall_ms": 8.496,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.577,
+      "cpu_max_ms": 5.203
+    },
+    {
+      "route": "stop-bad",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.649,
+          "wall_ms": 7.111,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.508,
+          "wall_ms": 6.634,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.579,
+          "wall_ms": 6.997,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.306,
+          "wall_ms": 7.541,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.482,
+          "wall_ms": 8.144,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.508,
+      "cpu_max_ms": 4.482
+    },
+    {
+      "route": "stop-all-bad",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.484,
+          "wall_ms": 6.808,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.696,
+          "wall_ms": 7.09,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.43,
+          "wall_ms": 6.978,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 4.115,
+          "wall_ms": 7.341,
+          "status": 401,
+          "response_bytes": 90
+        },
+        {
+          "cpu_ms": 3.796,
+          "wall_ms": 7.277,
+          "status": 401,
+          "response_bytes": 90
+        }
+      ],
+      "cpu_min_ms": 3.43,
+      "cpu_max_ms": 4.115
+    },
+    {
+      "route": "stop-all-owner",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.704,
+          "wall_ms": 6.836,
+          "status": 200,
+          "response_bytes": 19
+        },
+        {
+          "cpu_ms": 3.779,
+          "wall_ms": 6.999,
+          "status": 200,
+          "response_bytes": 19
+        },
+        {
+          "cpu_ms": 3.653,
+          "wall_ms": 6.827,
+          "status": 200,
+          "response_bytes": 19
+        },
+        {
+          "cpu_ms": 3.626,
+          "wall_ms": 6.623,
+          "status": 200,
+          "response_bytes": 19
+        },
+        {
+          "cpu_ms": 3.658,
+          "wall_ms": 6.621,
+          "status": 200,
+          "response_bytes": 19
+        }
+      ],
+      "cpu_min_ms": 3.626,
+      "cpu_max_ms": 3.779
+    },
+    {
+      "route": "scheduled",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.284,
+          "wall_ms": 12.818,
+          "status": 200,
+          "response_bytes": 2
+        },
+        {
+          "cpu_ms": 3.906,
+          "wall_ms": 7.171,
+          "status": 200,
+          "response_bytes": 2
+        },
+        {
+          "cpu_ms": 3.983,
+          "wall_ms": 8.096,
+          "status": 200,
+          "response_bytes": 2
+        },
+        {
+          "cpu_ms": 3.256,
+          "wall_ms": 6.148,
+          "status": 200,
+          "response_bytes": 2
+        },
+        {
+          "cpu_ms": 3.455,
+          "wall_ms": 6.576,
+          "status": 200,
+          "response_bytes": 2
+        }
+      ],
+      "cpu_min_ms": 3.256,
+      "cpu_max_ms": 3.983
+    },
+    {
+      "route": "status-valid",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.777,
+          "wall_ms": 7.816,
+          "status": 200,
+          "response_bytes": 785
+        },
+        {
+          "cpu_ms": 4.608,
+          "wall_ms": 7.327,
+          "status": 200,
+          "response_bytes": 785
+        },
+        {
+          "cpu_ms": 3.838,
+          "wall_ms": 6.976,
+          "status": 200,
+          "response_bytes": 785
+        },
+        {
+          "cpu_ms": 3.706,
+          "wall_ms": 6.646,
+          "status": 200,
+          "response_bytes": 785
+        },
+        {
+          "cpu_ms": 3.754,
+          "wall_ms": 6.864,
+          "status": 200,
+          "response_bytes": 785
+        }
+      ],
+      "cpu_min_ms": 3.706,
+      "cpu_max_ms": 4.608
+    },
+    {
+      "route": "logs-valid",
+      "n": 5,
+      "samples": [
+        {
+          "cpu_ms": 3.794,
+          "wall_ms": 7.167,
+          "status": 200,
+          "response_bytes": 291
+        },
+        {
+          "cpu_ms": 4.004,
+          "wall_ms": 16.446,
+          "status": 200,
+          "response_bytes": 291
+        },
+        {
+          "cpu_ms": 4.043,
+          "wall_ms": 7.168,
+          "status": 200,
+          "response_bytes": 291
+        },
+        {
+          "cpu_ms": 4.022,
+          "wall_ms": 9.627,
+          "status": 200,
+          "response_bytes": 291
+        },
+        {
+          "cpu_ms": 4.32,
+          "wall_ms": 8.638,
+          "status": 200,
+          "response_bytes": 291
+        }
+      ],
+      "cpu_min_ms": 3.794,
+      "cpu_max_ms": 4.32
+    }
+  ]
+}

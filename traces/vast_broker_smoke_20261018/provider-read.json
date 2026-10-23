@@ -1,0 +1,66 @@
+[
+  {
+    "endpoint": "offer",
+    "status": 503,
+    "response": {
+      "error": "UNAVAILABLE",
+      "message": "UNAVAILABLE",
+      "calls": [
+        {
+          "path": "/api/v0/bundles",
+          "status": 200,
+          "redirect": false,
+          "ms": 495
+        }
+      ]
+    }
+  },
+  {
+    "endpoint": "balance",
+    "status": 503,
+    "response": {
+      "error": "UNAVAILABLE",
+      "message": "UNAVAILABLE",
+      "calls": [
+        {
+          "path": "/api/v0/users/current",
+          "status": 301,
+          "redirect": true,
+          "ms": 112
+        }
+      ]
+    }
+  },
+  {
+    "endpoint": "list",
+    "status": 503,
+    "response": {
+      "error": "UNAVAILABLE",
+      "message": "UNAVAILABLE",
+      "calls": [
+        {
+          "path": "/api/v1/instances",
+          "status": 301,
+          "redirect": true,
+          "ms": 109
+        }
+      ]
+    }
+  },
+  {
+    "endpoint": "absent",
+    "status": 503,
+    "response": {
+      "error": "UNAVAILABLE",
+      "message": "UNAVAILABLE",
+      "calls": [
+        {
+          "path": "/api/v0/instances/999999999999999",
+          "status": 301,
+          "redirect": true,
+          "ms": 112
+        }
+      ]
+    }
+  }
+]

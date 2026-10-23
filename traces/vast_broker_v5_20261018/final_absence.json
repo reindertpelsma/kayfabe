@@ -1,0 +1,31 @@
+{
+  "run": "v5-final-absence-20261023",
+  "ids_checked": 6,
+  "all_absent": true,
+  "observations": [
+    {
+      "exact_id_absent": true,
+      "http": 200
+    },
+    {
+      "exact_id_absent": true,
+      "http": 200
+    },
+    {
+      "exact_id_absent": true,
+      "http": 200
+    },
+    {
+      "exact_id_absent": true,
+      "http": 200
+    },
+    {
+      "exact_id_absent": true,
+      "http": 200
+    },
+    {
+      "exact_id_absent": true,
+      "http": 200
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "mode": "REAL_READ_ONLY",
+  "offers_returned": 0,
+  "eligible_offers": 0,
+  "hourly_cap_usd": 0.5,
+  "cheapest_eligible_usd_hour": null,
+  "prepaid_credit_field_present": true,
+  "reserve_plus_one_21min_run_met": true,
+  "rentals_created": 0,
+  "estimated_new_spend_usd": 0,
+  "state": "UNAVAILABLE"
+}

@@ -1,0 +1,158 @@
+{
+  "classification": "MEASURED",
+  "runs": [
+    {
+      "commit": "43ebfece2",
+      "tests": 19,
+      "pass": 0,
+      "fail": 19,
+      "failures": [
+        "R3 hostile Worker: valid",
+        "R3 hostile Worker: controls",
+        "R3 hostile Worker: commands",
+        "R3 hostile Worker: caps",
+        "R3 hostile Worker: invalid-utf8",
+        "R3 hostile Worker: extra",
+        "R3 hostile Worker: duplicate",
+        "R3 hostile Worker: wrong-sha",
+        "R3 hostile Worker: wrong-nonce",
+        "R3 hostile Worker: bad-state",
+        "R3 hostile Worker: bad-verdict",
+        "R3 hostile Worker: wrong-hash",
+        "R3 hostile Worker: redirect",
+        "R3 hostile Worker: timeout",
+        "R3 hostile Worker: html",
+        "R3 hostile Worker: huge",
+        "R3 hostile Worker: wrong-run",
+        "R3 hostile Worker: wrong-version",
+        "R3 hostile Worker: display-only"
+      ]
+    },
+    {
+      "commit": "71510bc9b",
+      "tests": 21,
+      "pass": 19,
+      "fail": 2,
+      "failures": [
+        "R3 hostile Worker: framing-bytes",
+        "R3 hostile Worker: framing-lines"
+      ]
+    },
+    {
+      "commit": "abfbdc198",
+      "tests": 8,
+      "pass": 0,
+      "fail": 8,
+      "failures": [
+        "R3 rent binds caller nonce through status false",
+        "R3 rent binds caller nonce through status true",
+        "R3 missing rent nonce refuses before create",
+        "R3 rent crosschecks caller tested_sha",
+        "R3 rent crosschecks caller pr_number",
+        "R3 same run cannot replace runner nonce",
+        "R3 final structured binding hashes exact fetched chunks \"ordinary log\\\\n\"",
+        "R3 final structured binding hashes exact fetched chunks \"\u00e9 raw UTF8\\\\n\""
+      ]
+    },
+    {
+      "commit": "9579dd6e2",
+      "tests": 10,
+      "pass": 6,
+      "fail": 4,
+      "failures": [
+        "R3 public ingress preserves bounded nonce rent body 180",
+        "R3 public ingress preserves bounded nonce rent body 700",
+        "R3 final structured binding hashes exact fetched chunks \"ordinary log\\\\n\"",
+        "R3 final structured binding hashes exact fetched chunks \"\u00e9 raw UTF8\\\\n\""
+      ]
+    },
+    {
+      "commit": "32f46ea54",
+      "tests": 6,
+      "pass": 0,
+      "fail": 6,
+      "failures": [
+        "R3 workflow executes only base code via pull_request_target",
+        "R3 Worker job is OIDC-only with empty inherited environment",
+        "R3 target-event admission crosschecks run and exact PR false",
+        "R3 target-event admission crosschecks run and exact PR true",
+        "R3 non-base workflow cannot mint accepted admission refs/pull/7/merge",
+        "R3 non-base workflow cannot mint accepted admission refs/heads/evil"
+      ]
+    },
+    {
+      "commit": "454113292",
+      "tests": 12,
+      "pass": 0,
+      "fail": 12,
+      "failures": [
+        "R3 release same-SHA provenance gate: valid",
+        "R3 release same-SHA provenance gate: wrong-sha",
+        "R3 release same-SHA provenance gate: wrong-status",
+        "R3 release same-SHA provenance gate: wrong-creator",
+        "R3 release same-SHA provenance gate: wrong-url",
+        "R3 release same-SHA provenance gate: wrong-workflow",
+        "R3 release same-SHA provenance gate: wrong-event",
+        "R3 release same-SHA provenance gate: wrong-run-sha",
+        "R3 release same-SHA provenance gate: wrong-conclusion",
+        "R3 release same-SHA provenance gate: wrong-repo",
+        "R3 final binaries built on GitHub without artifact inputs",
+        "R3 bundle manifest pins exact emitted Worker bytes"
+      ]
+    },
+    {
+      "commit": "d4e4370c2",
+      "tests": 4,
+      "pass": 0,
+      "fail": 4,
+      "failures": [
+        "R3 summary locally redacts reflected endpoint origin",
+        "R3 summary locally redacts reflected endpoint path",
+        "R3 drops complete C1 terminal sequence osc",
+        "R3 drops complete C1 terminal sequence dcs"
+      ]
+    },
+    {
+      "commit": "87f68e2d3",
+      "tests": 2,
+      "pass": 0,
+      "fail": 2,
+      "failures": [
+        "R3 public runner summary retains bounded GPU",
+        "R3 public runner summary retains bounded timing/cost"
+      ]
+    },
+    {
+      "commit": "48b94e8ac",
+      "tests": 6,
+      "pass": 0,
+      "fail": 6,
+      "failures": [
+        "R3 local diagnostic client checks rent binding nonce",
+        "R3 local diagnostic client checks rent binding sha",
+        "R3 diagnostic preflight retains eight-dollar reserve 6",
+        "R3 diagnostic preflight retains eight-dollar reserve 8.1",
+        "R3 local test identity includes BASE claim workflow_ref",
+        "R3 local test identity includes BASE claim workflow_sha"
+      ]
+    },
+    {
+      "commit": "cd2d7891f",
+      "scope": "Two cache-denial probes added; full pre-fix protocol log includes both failures. This is not used as a clean whole-suite baseline.",
+      "failures": [
+        "R3 a new run nonce cannot inherit cached PASS false",
+        "R3 a new run nonce cannot inherit cached PASS true"
+      ]
+    },
+    {
+      "commit": "e26491ce1",
+      "tests": 2,
+      "pass": 0,
+      "fail": 2,
+      "failures": [
+        "R3 drop marker excludes synthetic newline 1",
+        "R3 drop marker excludes synthetic newline 40"
+      ]
+    }
+  ]
+}

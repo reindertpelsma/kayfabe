@@ -1,0 +1,602 @@
+[
+  {
+    "route": "unknown",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 2.517,
+    "cpu_max_ms": 4.111,
+    "samples": [
+      {
+        "cpu_ms": 4.111,
+        "wall_ms": 9.398,
+        "status": 404,
+        "bytes": 9
+      },
+      {
+        "cpu_ms": 3.404,
+        "wall_ms": 5.628,
+        "status": 404,
+        "bytes": 9
+      },
+      {
+        "cpu_ms": 2.693,
+        "wall_ms": 4.63,
+        "status": 404,
+        "bytes": 9
+      },
+      {
+        "cpu_ms": 3.366,
+        "wall_ms": 5.195,
+        "status": 404,
+        "bytes": 9
+      },
+      {
+        "cpu_ms": 2.517,
+        "wall_ms": 4.434,
+        "status": 404,
+        "bytes": 9
+      }
+    ],
+    "body": "Not found"
+  },
+  {
+    "route": "rent-disabled",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 3.656,
+    "cpu_max_ms": 5.483,
+    "samples": [
+      {
+        "cpu_ms": 5.483,
+        "wall_ms": 9.584,
+        "status": 503,
+        "bytes": 94
+      },
+      {
+        "cpu_ms": 3.832,
+        "wall_ms": 8.266,
+        "status": 503,
+        "bytes": 94
+      },
+      {
+        "cpu_ms": 3.723,
+        "wall_ms": 7.323,
+        "status": 503,
+        "bytes": 94
+      },
+      {
+        "cpu_ms": 3.93,
+        "wall_ms": 8.398,
+        "status": 503,
+        "bytes": 94
+      },
+      {
+        "cpu_ms": 3.656,
+        "wall_ms": 7.138,
+        "status": 503,
+        "bytes": 94
+      }
+    ],
+    "body": "{\"state\":\"RENTING_DISABLED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "status-missing",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 4.857,
+    "cpu_max_ms": 5.809,
+    "samples": [
+      {
+        "cpu_ms": 5.111,
+        "wall_ms": 16.539,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.809,
+        "wall_ms": 11.101,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 4.963,
+        "wall_ms": 8.094,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 4.857,
+        "wall_ms": 11.395,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.391,
+        "wall_ms": 19.221,
+        "status": 401,
+        "bytes": 90
+      }
+    ],
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "status-bad",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 5.112,
+    "cpu_max_ms": 6.887,
+    "samples": [
+      {
+        "cpu_ms": 6.887,
+        "wall_ms": 10.829,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 6.29,
+        "wall_ms": 10.798,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.158,
+        "wall_ms": 10.599,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.551,
+        "wall_ms": 18.038,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.112,
+        "wall_ms": 10.692,
+        "status": 401,
+        "bytes": 90
+      }
+    ],
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "status-local-jwt",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 4.244,
+    "cpu_max_ms": 7.939,
+    "samples": [
+      {
+        "cpu_ms": 6.921,
+        "wall_ms": 14.093,
+        "status": 404,
+        "bytes": 87
+      },
+      {
+        "cpu_ms": 7.939,
+        "wall_ms": 11.904,
+        "status": 404,
+        "bytes": 87
+      },
+      {
+        "cpu_ms": 5.672,
+        "wall_ms": 9.684,
+        "status": 404,
+        "bytes": 87
+      },
+      {
+        "cpu_ms": 5.275,
+        "wall_ms": 8.719,
+        "status": 404,
+        "bytes": 87
+      },
+      {
+        "cpu_ms": 4.244,
+        "wall_ms": 8.203,
+        "status": 404,
+        "bytes": 87
+      }
+    ],
+    "body": "{\"state\":\"NOT_FOUND\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "stop-bad",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 4.51,
+    "cpu_max_ms": 6.525,
+    "samples": [
+      {
+        "cpu_ms": 6.525,
+        "wall_ms": 13.978,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.249,
+        "wall_ms": 13.271,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.104,
+        "wall_ms": 9.472,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 4.547,
+        "wall_ms": 7.315,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 4.51,
+        "wall_ms": 7.32,
+        "status": 401,
+        "bytes": 90
+      }
+    ],
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "report-bad",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 4.876,
+    "cpu_max_ms": 6.925,
+    "samples": [
+      {
+        "cpu_ms": 6.857,
+        "wall_ms": 13.713,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.476,
+        "wall_ms": 10.336,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 6.432,
+        "wall_ms": 11.898,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 6.925,
+        "wall_ms": 11.086,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 4.876,
+        "wall_ms": 8.632,
+        "status": 401,
+        "bytes": 90
+      }
+    ],
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "stop-all-bad",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 5.913,
+    "cpu_max_ms": 7.226,
+    "samples": [
+      {
+        "cpu_ms": 6.849,
+        "wall_ms": 13.594,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 7.143,
+        "wall_ms": 12.986,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 6.156,
+        "wall_ms": 15.229,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 5.913,
+        "wall_ms": 10.94,
+        "status": 401,
+        "bytes": 90
+      },
+      {
+        "cpu_ms": 7.226,
+        "wall_ms": 20.512,
+        "status": 401,
+        "bytes": 90
+      }
+    ],
+    "body": "{\"state\":\"UNAUTHORIZED\",\"verdict\":\"UNAVAILABLE\",\"log_tail_sanitised\":\"\",\"bytes_dropped\":0}"
+  },
+  {
+    "route": "stop-all-owner",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 4.575,
+    "cpu_max_ms": 6.798,
+    "samples": [
+      {
+        "cpu_ms": 6.798,
+        "wall_ms": 10.87,
+        "status": 200,
+        "bytes": 19
+      },
+      {
+        "cpu_ms": 5.979,
+        "wall_ms": 12.363,
+        "status": 200,
+        "bytes": 19
+      },
+      {
+        "cpu_ms": 5.12,
+        "wall_ms": 8.582,
+        "status": 200,
+        "bytes": 19
+      },
+      {
+        "cpu_ms": 4.575,
+        "wall_ms": 9.011,
+        "status": 200,
+        "bytes": 19
+      },
+      {
+        "cpu_ms": 5.257,
+        "wall_ms": 14.052,
+        "status": 200,
+        "bytes": 19
+      }
+    ],
+    "body": "{\"state\":\"STOPPED\"}"
+  },
+  {
+    "route": "scheduled",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 4.709,
+    "cpu_max_ms": 6.819,
+    "samples": [
+      {
+        "cpu_ms": 6.293,
+        "wall_ms": 25.947,
+        "status": 200,
+        "bytes": 2
+      },
+      {
+        "cpu_ms": 6.819,
+        "wall_ms": 25.036,
+        "status": 200,
+        "bytes": 2
+      },
+      {
+        "cpu_ms": 5.446,
+        "wall_ms": 18.061,
+        "status": 200,
+        "bytes": 2
+      },
+      {
+        "cpu_ms": 6.016,
+        "wall_ms": 21.82,
+        "status": 200,
+        "bytes": 2
+      },
+      {
+        "cpu_ms": 4.709,
+        "wall_ms": 8.251,
+        "status": 200,
+        "bytes": 2
+      }
+    ],
+    "body": "ok"
+  },
+  {
+    "route": "local-authorization",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 9.987,
+    "cpu_max_ms": 13.798,
+    "samples": [
+      {
+        "cpu_ms": 13.798,
+        "wall_ms": 24.913,
+        "status": 200,
+        "bytes": 97
+      },
+      {
+        "cpu_ms": 10.606,
+        "wall_ms": 21.315,
+        "status": 200,
+        "bytes": 97
+      },
+      {
+        "cpu_ms": 10.283,
+        "wall_ms": 27.593,
+        "status": 200,
+        "bytes": 97
+      },
+      {
+        "cpu_ms": 10.872,
+        "wall_ms": 34.376,
+        "status": 200,
+        "bytes": 97
+      },
+      {
+        "cpu_ms": 9.987,
+        "wall_ms": 20.713,
+        "status": 200,
+        "bytes": 97
+      }
+    ],
+    "body": "{\"result\":{\"authorized\":true,\"pr\":7,\"sha\":\"833a1a8657685775261cfecbaba16a60929ba71d\"},\"calls\":[]}"
+  },
+  {
+    "route": "real-offer",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 6.809,
+    "cpu_max_ms": 9.648,
+    "samples": [
+      {
+        "cpu_ms": 9.648,
+        "wall_ms": 184.799,
+        "status": 200,
+        "bytes": 2009
+      },
+      {
+        "cpu_ms": 6.851,
+        "wall_ms": 191.935,
+        "status": 200,
+        "bytes": 2009
+      },
+      {
+        "cpu_ms": 7.814,
+        "wall_ms": 205.16,
+        "status": 200,
+        "bytes": 2009
+      },
+      {
+        "cpu_ms": 6.809,
+        "wall_ms": 197.493,
+        "status": 200,
+        "bytes": 2009
+      },
+      {
+        "cpu_ms": 7.033,
+        "wall_ms": 182.73,
+        "status": 200,
+        "bytes": 2009
+      }
+    ],
+    "body": "{\"result\":{\"id\":48289329,\"gpu_name\":\"RTX 4090\",\"dph_total\":0.9222222222222223,\"verification\":\"verified\",\"vms_enabled\":true,\"keys\":[\"id\",\"ask_contract_id\",\"bundle_id\",\"bundled_results\",\"bw_nvlink\",\"compute_cap\",\"cpu_arch\",\"cpu_cores\",\"cpu_cores_effective\",\"cpu_ghz\",\"cpu_name\",\"cpu_ram\",\"credit_discount_max\",\"cuda_max_good\",\"direct_port_count\",\"disk_bw\",\"disk_name\",\"disk_space\",\"dlperf\",\"dlperf_per_dphtotal\",\"dph_base\",\"dph_total\",\"driver_version\",\"driver_vers\",\"duration\",\"end_date\",\"external\",\"flops_per_dphtotal\",\"geolocation\",\"geolocode\",\"gpu_arch\",\"gpu_display_active\",\"gpu_frac\",\"gpu_ids\",\"gpu_lanes\",\"gpu_mem_bw\",\"gpu_name\",\"gpu_ram\",\"gpu_total_ram\",\"gpu_max_power\",\"gpu_max_temp\",\"has_avx\",\"host_id\",\"hosting_type\",\"hostname\",\"inet_down\",\"inet_down_cost\",\"inet_up\",\"inet_up_cost\",\"is_bid\",\"logo\",\"machine_id\",\"min_bid\",\"mobo_name\",\"num_gpus\",\"os_version\",\"pci_gen\",\"pcie_bw\",\"public_ipaddr\",\"reliability\",\"reliability_mult\",\"rentable\",\"rented\",\"score\",\"start_date\",\"static_ip\",\"storage_cost\",\"storage_total_cost\",\"total_flops\",\"verification\",\"vericode\",\"vram_costperhour\",\"webpage\",\"vms_enabled\",\"is_vm_deverified\",\"resource_type\",\"cluster_id\",\"avail_vol_ask_id\",\"avail_vol_dph\",\"avail_vol_size\",\"nw_disk_min_bw\",\"nw_disk_max_bw\",\"nw_disk_avg_bw\",\"rn\",\"dph_total_adj\",\"reliability2\",\"discount_rate\",\"discounted_hourly\",\"discounted_dph_total\",\"search\",\"instance\",\"time_remaining\",\"time_remaining_isbid\",\"internet_up_cost_per_tb\",\"internet_down_cost_per_tb\"]},\"calls\":[{\"path\":\"/api/v0/bundles/\",\"status\":200,\"redirect\":false,\"ms\":168,\"bytes\":8332,\"keys\":[\"offers\",\"truncated\"],\"count\":3,\"samples\":[{\"id\":48289329,\"gpu_name\":\"RTX 4090\",\"verification\":\"verified\",\"vms_enabled\":true,\"rentable\":true,\"rented\":false,\"num_gpus\":1,\"reliability\":0.9972025,\"disk_space\":307,\"dph_total\":0.9222222222222223},{\"id\":51282522,\"gpu_name\":\"RTX 4090\",\"verification\":\"verified\",\"vms_enabled\":true,\"rentable\":true,\"rented\":false,\"num_gpus\":1,\"reliability\":0.9937184,\"disk_space\":1625,\"dph_total\":1.3239986666666665}]}]}"
+  },
+  {
+    "route": "real-balance",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 6.024,
+    "cpu_max_ms": 8.206,
+    "samples": [
+      {
+        "cpu_ms": 6.847,
+        "wall_ms": 155.914,
+        "status": 200,
+        "bytes": 139
+      },
+      {
+        "cpu_ms": 8.206,
+        "wall_ms": 168.04,
+        "status": 200,
+        "bytes": 139
+      },
+      {
+        "cpu_ms": 6.818,
+        "wall_ms": 141.348,
+        "status": 200,
+        "bytes": 139
+      },
+      {
+        "cpu_ms": 6.654,
+        "wall_ms": 158.795,
+        "status": 200,
+        "bytes": 139
+      },
+      {
+        "cpu_ms": 6.024,
+        "wall_ms": 156.268,
+        "status": 200,
+        "bytes": 139
+      }
+    ],
+    "body": "{\"result\":{\"balance_type\":\"number\",\"reserve_met\":false},\"calls\":[{\"path\":\"/api/v0/users/current/\",\"status\":200,\"redirect\":false,\"ms\":146}]}"
+  },
+  {
+    "route": "real-list",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 5.319,
+    "cpu_max_ms": 7.561,
+    "samples": [
+      {
+        "cpu_ms": 7.561,
+        "wall_ms": 145.757,
+        "status": 200,
+        "bytes": 236
+      },
+      {
+        "cpu_ms": 6.607,
+        "wall_ms": 143.304,
+        "status": 200,
+        "bytes": 236
+      },
+      {
+        "cpu_ms": 5.319,
+        "wall_ms": 130.073,
+        "status": 200,
+        "bytes": 236
+      },
+      {
+        "cpu_ms": 6.427,
+        "wall_ms": 136.799,
+        "status": 200,
+        "bytes": 236
+      },
+      {
+        "cpu_ms": 6.209,
+        "wall_ms": 134.19,
+        "status": 200,
+        "bytes": 236
+      }
+    ],
+    "body": "{\"result\":{\"keys\":[\"success\",\"total_instances\",\"label_counts\",\"instances_found\",\"instances\",\"next_token\"],\"instances_type\":\"array\",\"count\":0,\"success\":true},\"calls\":[{\"path\":\"/api/v1/instances/\",\"status\":200,\"redirect\":false,\"ms\":127}]}"
+  },
+  {
+    "route": "real-absent",
+    "n": 5,
+    "cpu_scope": "sum /proc task schedstat over own session workerd processes; includes local proxy/observability/native runtime, not Cloudflare billed CPU",
+    "cpu_min_ms": 6.553,
+    "cpu_max_ms": 7.991,
+    "samples": [
+      {
+        "cpu_ms": 6.553,
+        "wall_ms": 175.927,
+        "status": 200,
+        "bytes": 186
+      },
+      {
+        "cpu_ms": 7.269,
+        "wall_ms": 183.6,
+        "status": 200,
+        "bytes": 186
+      },
+      {
+        "cpu_ms": 7.16,
+        "wall_ms": 170.513,
+        "status": 200,
+        "bytes": 186
+      },
+      {
+        "cpu_ms": 7.991,
+        "wall_ms": 183.409,
+        "status": 200,
+        "bytes": 186
+      },
+      {
+        "cpu_ms": 7.987,
+        "wall_ms": 187.206,
+        "status": 200,
+        "bytes": 186
+      }
+    ],
+    "body": "{\"result\":{\"absent\":true},\"calls\":[{\"path\":\"/api/v0/instances/999999999999999/\",\"status\":200,\"redirect\":false,\"ms\":168,\"keys\":[\"instances\"],\"instance_type\":\"null\",\"instance_keys\":null}]}"
+  }
+]

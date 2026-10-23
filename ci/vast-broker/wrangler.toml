@@ -1,0 +1,40 @@
+name = "kayfabe-vast-broker"
+main = "dist/worker.js"
+no_bundle = true
+compatibility_date = "2026-10-21"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "BrokerLedger"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BrokerLedger"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Numeric owner policy defaults are defined once in defaults.json.
+RENTING_ENABLED = "false"
+# Owner assertion of the exact emitted module; see deployment.json and trace doc.
+DEPLOYED_BUNDLE_SHA256 = "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+OWNER_GITHUB_ID = "REPLACE_ME"
+REPOSITORY = "reindertpelsma/kayfabe"
+REPOSITORY_GITHUB_ID = "1311106387"
+OIDC_SUB = "repo:reindertpelsma/kayfabe:environment:gpu-vast"
+CHECK_JOB_WORKFLOW_REFS = '["reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master"]'
+SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-sweep.yml@refs/heads/master"
+APPROVAL_MODE = "owner_push_or_review"
+RENT_DRAFTS = "false"
+ALLOWED_BASE_BRANCHES = '["master"]'
+PATH_SKIP_PATTERNS = '["**/*.md","docs/**","traces/**","archive/**","LICENSE*",".github/ISSUE_TEMPLATE/**"]'
+
+# Secret bindings: WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
+# Optional secret BROKER_PATH_PREFIX: one random base64url segment, 32-128 chars.
+# RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
+# GitHub bearer remains request-only, never a binding.
+# No Cloudflare or Vast secret belongs in GitHub Actions.
+
+# Optional PREFERRED_COUNTRIES JSON overrides defaults.json; eligibility always comes first.

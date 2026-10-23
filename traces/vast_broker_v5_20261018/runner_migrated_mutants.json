@@ -1,0 +1,323 @@
+[
+  {
+    "mutant": "runner-scrub",
+    "count": 3,
+    "killers": [
+      "R3 hostile Worker: controls",
+      "R3 hostile Worker: commands",
+      "R3 hostile Worker: caps"
+    ]
+  },
+  {
+    "mutant": "runner-schema",
+    "count": 4,
+    "killers": [
+      "R3 hostile Worker: extra",
+      "R3 hostile Worker: extra-object",
+      "R3 hostile Worker: duplicate",
+      "R3 hostile Worker: duplicate-sha"
+    ]
+  },
+  {
+    "mutant": "runner-binding",
+    "count": 3,
+    "killers": [
+      "R3 hostile Worker: wrong-sha",
+      "R3 hostile Worker: wrong-nonce",
+      "R3 hostile Worker: wrong-run"
+    ]
+  },
+  {
+    "mutant": "runner-log-hash",
+    "count": 2,
+    "killers": [
+      "R3 hostile Worker: wrong-hash",
+      "R3 hostile Worker: wrong-page-hash"
+    ]
+  },
+  {
+    "mutant": "runner-version",
+    "count": 2,
+    "killers": [
+      "R3 hostile Worker: wrong-version",
+      "R3 hostile Worker: wrong-worker-version"
+    ]
+  },
+  {
+    "mutant": "runner-redirect",
+    "count": 2,
+    "killers": [
+      "R3 hostile Worker: redirect",
+      "R3 hostile Worker: redirect-307"
+    ]
+  },
+  {
+    "mutant": "runner-deadline",
+    "count": 2,
+    "killers": [
+      "R3 hostile Worker: transport-header-timeout",
+      "R3 hostile Worker: transport-body-timeout"
+    ]
+  },
+  {
+    "mutant": "runner-display-budget",
+    "count": 2,
+    "killers": [
+      "R3 hostile Worker: framing-bytes",
+      "R3 hostile Worker: framing-lines"
+    ]
+  },
+  {
+    "mutant": "nonce-response",
+    "count": 4,
+    "killers": [
+      "R3 rent binds caller nonce through status false",
+      "R3 rent binds caller nonce through status true",
+      "R3 final structured binding hashes exact fetched chunks \"ordinary log\\\\n\"",
+      "R3 final structured binding hashes exact fetched chunks \"\u00e9 raw UTF8\\\\n\""
+    ]
+  },
+  {
+    "mutant": "rent-head-binding",
+    "count": 2,
+    "killers": [
+      "R3 rent crosschecks caller tested_sha",
+      "R3 rent crosschecks caller pr_number"
+    ]
+  },
+  {
+    "mutant": "box-result-binding",
+    "count": 2,
+    "killers": [
+      "R3 box result must echo runner_nonce",
+      "R3 box result must echo sha"
+    ]
+  },
+  {
+    "mutant": "log-chain",
+    "count": 4,
+    "killers": [
+      "R3 rent binds caller nonce through status false",
+      "R3 rent binds caller nonce through status true",
+      "R3 final structured binding hashes exact fetched chunks \"ordinary log\\\\n\"",
+      "R3 final structured binding hashes exact fetched chunks \"\u00e9 raw UTF8\\\\n\""
+    ]
+  },
+  {
+    "mutant": "nonce-ingress",
+    "count": 2,
+    "killers": [
+      "R3 public ingress preserves bounded nonce rent body 180",
+      "R3 public ingress preserves bounded nonce rent body 700"
+    ]
+  },
+  {
+    "mutant": "nonce-cache",
+    "count": 2,
+    "killers": [
+      "R3 a new run nonce cannot inherit cached PASS false",
+      "R3 a new run nonce cannot inherit cached PASS true"
+    ]
+  },
+  {
+    "mutant": "runner-drop-count",
+    "count": 2,
+    "killers": [
+      "R3 drop marker excludes synthetic newline 1",
+      "R3 drop marker excludes synthetic newline 40"
+    ]
+  },
+  {
+    "mutant": "runner-API-prefix",
+    "count": 2,
+    "killers": [
+      "secret API base includes prefix and audience uses canonical origin \"\"",
+      "secret API base includes prefix and audience uses canonical origin \"/\""
+    ]
+  },
+  {
+    "mutant": "runner-hostname-masks",
+    "count": 2,
+    "killers": [
+      "derived masks exist before first Worker request 0",
+      "derived masks exist before first Worker request 47"
+    ]
+  },
+  {
+    "mutant": "runner-audience-mask",
+    "count": 2,
+    "killers": [
+      "derived masks exist before first Worker request 0",
+      "derived masks exist before first Worker request 47"
+    ]
+  },
+  {
+    "mutant": "run-idempotence",
+    "count": 7,
+    "killers": [
+      "run attempt idempotence before destroy",
+      "run attempt idempotence after restart",
+      "run attempt idempotence after destroy",
+      "ambiguous creation reconciles exact prior intent without second create",
+      "ambiguous absent instance never triggers a second creation",
+      "reconciliation never adopts labelled foreign instance with wrong script",
+      "reconciliation cannot adopt a changed image"
+    ]
+  },
+  {
+    "mutant": "runner-terminal-grace",
+    "count": 4,
+    "killers": [
+      "terminal FAIL preserves inspection grace",
+      "terminal UNAVAILABLE preserves inspection grace",
+      "cursor log appears once live and once in final bounded group PASS",
+      "cursor log appears once live and once in final bounded group FAIL"
+    ]
+  },
+  {
+    "mutant": "runner-fresh-nonce",
+    "count": 2,
+    "killers": [
+      "R3 fresh runner CSPRNG nonce for each invocation 0",
+      "R3 fresh runner CSPRNG nonce for each invocation 47"
+    ]
+  },
+  {
+    "mutant": "diagnostic-binding",
+    "count": 2,
+    "killers": [
+      "R3 local diagnostic client checks rent binding nonce",
+      "R3 local diagnostic client checks rent binding sha"
+    ]
+  },
+  {
+    "mutant": "diagnostic-reserve",
+    "count": 2,
+    "killers": [
+      "R3 diagnostic preflight retains eight-dollar reserve 6",
+      "R3 diagnostic preflight retains eight-dollar reserve 8.1"
+    ]
+  },
+  {
+    "mutant": "diagnostic-BASE-claims",
+    "count": 2,
+    "killers": [
+      "R3 local test identity includes BASE claim workflow_ref",
+      "R3 local test identity includes BASE claim workflow_sha"
+    ]
+  },
+  {
+    "mutant": "runner-summary-fields",
+    "count": 2,
+    "killers": [
+      "R3 public runner summary retains bounded GPU",
+      "R3 public runner summary retains bounded timing/cost"
+    ]
+  },
+  {
+    "mutant": "target-base-binding",
+    "count": 2,
+    "killers": [
+      "R3 target-event refuses mismatched workflow-sha",
+      "R3 target-event refuses mismatched run-sha"
+    ]
+  },
+  {
+    "mutant": "target-PR-membership",
+    "count": 2,
+    "killers": [
+      "R3 target-event refuses mismatched member-sha",
+      "R3 target-event refuses mismatched member-pr"
+    ]
+  },
+  {
+    "mutant": "runner-local-redaction",
+    "count": 2,
+    "killers": [
+      "R3 summary locally redacts reflected endpoint origin",
+      "R3 summary locally redacts reflected endpoint path"
+    ]
+  },
+  {
+    "mutant": "runner-C1-sequences",
+    "count": 2,
+    "killers": [
+      "R3 drops complete C1 terminal sequence osc",
+      "R3 drops complete C1 terminal sequence dcs"
+    ]
+  },
+  {
+    "mutant": "runner-isolated-env",
+    "count": 2,
+    "killers": [
+      "R3 actual bootstrap isolates BASE controller 0",
+      "R3 actual bootstrap isolates BASE controller 47"
+    ]
+  },
+  {
+    "mutant": "runner-shell-tracing",
+    "count": 2,
+    "killers": [
+      "R3 actual bootstrap isolates BASE controller 0",
+      "R3 actual bootstrap isolates BASE controller 47"
+    ]
+  },
+  {
+    "mutant": "base-trigger",
+    "count": 3,
+    "killers": [
+      "actual repository has safe workflow boundaries",
+      "poll job permits exactly OIDC",
+      "workflow mutation fixture is valid before adding a forbidden consumer"
+    ]
+  },
+  {
+    "mutant": "OIDC-workflow-ref",
+    "count": 2,
+    "killers": [
+      "R3 non-base workflow cannot mint accepted admission refs/pull/7/merge",
+      "R3 non-base workflow cannot mint accepted admission refs/heads/evil"
+    ]
+  },
+  {
+    "mutant": "release-same-SHA",
+    "count": 2,
+    "killers": [
+      "R3 release same-SHA provenance gate: wrong-sha",
+      "R3 release same-SHA provenance gate: wrong-run-sha"
+    ]
+  },
+  {
+    "mutant": "release-origin",
+    "count": 3,
+    "killers": [
+      "R3 release same-SHA provenance gate: wrong-creator",
+      "R3 release same-SHA provenance gate: wrong-workflow",
+      "R3 release same-SHA provenance gate: wrong-repo"
+    ]
+  },
+  {
+    "mutant": "release-conclusion",
+    "count": 2,
+    "killers": [
+      "R3 release same-SHA provenance gate: wrong-status",
+      "R3 release same-SHA provenance gate: wrong-conclusion"
+    ]
+  },
+  {
+    "mutant": "bundle-manifest",
+    "count": 2,
+    "killers": [
+      "R3 bundle manifest pins exact emitted Worker bytes",
+      "R3 generated manifest can be independently checked with sha256sum"
+    ]
+  },
+  {
+    "mutant": "runner-cursor-race",
+    "count": 2,
+    "killers": [
+      "R3 hostile Worker: cursor-race-pass",
+      "R3 hostile Worker: cursor-race-fail"
+    ]
+  }
+]

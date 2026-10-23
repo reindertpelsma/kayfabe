@@ -1,0 +1,11 @@
+MEASURED: 2026-10-22 run v3-local-20261022 source commit 68b45f739. Baseline 376/376; final npm test summary below.
+1..514
+# tests 514
+# suites 0
+# pass 514
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 26049.24098
+Bundle syntax check passed; generated worker.js size 43110 bytes.

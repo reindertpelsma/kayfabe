@@ -1,0 +1,34 @@
+{
+  "source_revision": "88a3dbbc4",
+  "before": {
+    "pass": 626,
+    "fail": 0
+  },
+  "expected_red": [
+    {
+      "commit": "27ffe000c",
+      "new_failures": 2
+    },
+    {
+      "commit": "e08e62fdc",
+      "new_failures": 4
+    },
+    {
+      "commit": "430cdb661",
+      "new_failures": 2
+    },
+    {
+      "commit": "129aff6ba",
+      "new_failures": 2
+    },
+    {
+      "commit": "e27162815",
+      "new_failures": 2
+    }
+  ],
+  "after": {
+    "pass": 638,
+    "fail": 0,
+    "skipped": 0
+  }
+}

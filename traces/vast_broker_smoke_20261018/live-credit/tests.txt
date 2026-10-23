@@ -1,0 +1,12 @@
+MEASURED: 2026-10-22 run v3-live-credit-20261022; EXPECTED RED d51212cd0: 12/12 failed; fix 520c63c5c: 12/12 passed.
+MEASURED: 2026-10-22 run v3-live-credit-20261022 full baseline 514/514; after credit fix 526/526; after latest V1 merges 537/537 (zero failures/skips). Final runtime source matches live source e2e1b3c46053ff00af5a0be28702b8ba961bfcb4.
+1..537
+# tests 537
+# suites 0
+# pass 537
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11920.097506
+Bundle syntax check passed, 43198 bytes.
