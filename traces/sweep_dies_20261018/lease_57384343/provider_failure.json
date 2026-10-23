@@ -1,0 +1,22 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57384343,
+  "utc": "2026-10-23T14:50:19.759256+00:00",
+  "source": "b66adb6e76eac5258c4c1425cbccea0890d2c3d0",
+  "result": "PROVIDER_SSH_READINESS_INCONCLUSIVE",
+  "actual_die": "UNVERIFIED",
+  "advertised_gpu": "RTX3090",
+  "provider_state": "running",
+  "ssh_route": "provider relay advertised; no container ports map",
+  "readiness_budget_seconds": 480,
+  "keyscan_attempts": 2,
+  "host_key_lines": 0,
+  "authenticated_ssh": false,
+  "kvm_verified": false,
+  "uploaded_payloads": 0,
+  "native_tests": 0,
+  "driver_rpcs": 0,
+  "windows_attempts": 0,
+  "guard_prearmed": true,
+  "rule": "No host key accepted, no pin bypass, no readiness deadline reset. Exact-ID teardown before one provider replacement for still-unrun Windows retry."
+}

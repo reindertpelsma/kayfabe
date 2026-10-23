@@ -1,3 +1,9 @@
+STATUS: PARTIAL,2026-10-23; provider failure before authenticated SSH.
+
+MEASURED (lease57384343, `provider_failure.json`): advertised RTX3090/GA102 candidate, provider state running, relay endpoint present, no host key on two scans inside original480s budget. Actual die/KVM/native/Windows all unverified;0 authenticated SSH,0 uploads,0 driver RPC. This is not a driver failure or a consumed Windows ON attempt.
+
+CODE READ: own reaper remains armed, exact-ID teardown/API absence follows this pushed receipt; timer cancelled only afterward. One provider replacement will use another machine, preserve budget/price/KVM/disk/country/key guards, and perform the sole requested Windows retry. No blind repeated rental loop.
+
 MEASURED LIVE Round4 (lease57384343, `lease_57384343/START.json`): GA102 candidate RTX3090, sourceb66adb6e7, quote0.196667USD/h, prearmed guard1483306, fixed expiry17:31:30Z. Native/Windows/hold/apps pending; no driver outcome yet. INFERRED (same receipt): reserved1.090556USD against stop2.50/cap3, credit before28.804882USD, reserve5 untouched.
 
 S4 — PARTIAL, 2026-10-23
