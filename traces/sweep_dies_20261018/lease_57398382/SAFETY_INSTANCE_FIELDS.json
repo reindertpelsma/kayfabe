@@ -1,0 +1,13 @@
+{
+  "id": 57398382,
+  "label": "codex-S4-round4-r4_ga106",
+  "machine_id": 22775,
+  "gpu_name": "RTX 3060",
+  "start_date": 1792774039.4456065,
+  "actual_status": "loading",
+  "cur_state": "stopped",
+  "dph_total": 0.13333333333333336,
+  "disk_space": 180.0,
+  "ask_contract_id": null,
+  "rentable": true
+}

@@ -1,0 +1,7 @@
+{
+  "intent": "codex-S4-round4-r4_ga106",
+  "pid": 1596919,
+  "deadline_epoch": 1792779438.186489,
+  "armed_utc": "2026-10-23T16:47:18.652425+00:00",
+  "state": "ARMED_BEFORE_CREATE"
+}
