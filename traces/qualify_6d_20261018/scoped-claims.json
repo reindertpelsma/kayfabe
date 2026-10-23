@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "084ffae21516f280654c8ad92d874c5cd12f5aaf",
+  "head": "8d86e787b8fcb04c5ccdbd64dfcc01242254febe",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/qualify_6d_20261018/README.md",
@@ -44,9 +44,16 @@
     "traces/qualify_6d_20261018/r1/parser-control.json",
     "traces/qualify_6d_20261018/r1/plan.md",
     "traces/qualify_6d_20261018/r1/sa02-positive-census.json",
+    "traces/qualify_6d_20261018/r1/sa02-probe/encoder-green.txt",
+    "traces/qualify_6d_20261018/r1/sa02-probe/encoder-mutant.txt",
     "traces/qualify_6d_20261018/r1/sa02-probe/encoder-red.json",
     "traces/qualify_6d_20261018/r1/sa02-probe/encoder-red.txt",
+    "traces/qualify_6d_20261018/r1/sa02-probe/encoder-restored.txt",
     "traces/qualify_6d_20261018/r1/sa02-probe/encoder-tests.rs",
+    "traces/qualify_6d_20261018/r1/sa02-probe/helper-root-input.patch",
+    "traces/qualify_6d_20261018/r1/sa02-probe/kf-sa02-probe.rs",
+    "traces/qualify_6d_20261018/r1/sa02-probe/plan.md",
+    "traces/qualify_6d_20261018/r1/sa02-probe/software-controls.json",
     "traces/qualify_6d_20261018/r1/smoke-4606.json",
     "traces/qualify_6d_20261018/r1/stage1-ci.json",
     "traces/qualify_6d_20261018/r1/stage2-hardware.json",
@@ -58,5 +65,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T01:10:15.019943+00:00"
+  "time": "2026-10-23T01:31:46.488571+00:00"
 }

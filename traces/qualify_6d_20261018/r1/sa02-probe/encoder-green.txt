@@ -1,0 +1,6 @@
+running 3 tests
+test q4_probe_tests::q4_probe_chosen_client_is_carried_in_root_params ... ok
+test q4_probe_tests::q4_probe_full_ioctl_layout_keeps_os_pointer_clear ... ok
+test q4_probe_tests::q4_probe_userspace_pid_is_carried_independently ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.00s

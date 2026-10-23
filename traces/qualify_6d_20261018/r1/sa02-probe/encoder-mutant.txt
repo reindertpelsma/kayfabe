@@ -1,0 +1,30 @@
+running 3 tests
+test q4_probe_tests::q4_probe_full_ioctl_layout_keeps_os_pointer_clear ... ok
+test q4_probe_tests::q4_probe_chosen_client_is_carried_in_root_params ... FAILED
+test q4_probe_tests::q4_probe_userspace_pid_is_carried_independently ... FAILED
+
+failures:
+
+---- q4_probe_tests::q4_probe_chosen_client_is_carried_in_root_params stdout ----
+
+thread 'q4_probe_tests::q4_probe_chosen_client_is_carried_in_root_params' (890727) panicked at crates/kf-host/src/lib.rs:367:9:
+assertion `left == right` failed
+  left: 0
+ right: 3252683008
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- q4_probe_tests::q4_probe_userspace_pid_is_carried_independently stdout ----
+
+thread 'q4_probe_tests::q4_probe_userspace_pid_is_carried_independently' (890729) panicked at crates/kf-host/src/lib.rs:376:9:
+assertion `left == right` failed
+  left: 0
+ right: 1234
+
+
+failures:
+    q4_probe_tests::q4_probe_chosen_client_is_carried_in_root_params
+    q4_probe_tests::q4_probe_userspace_pid_is_carried_independently
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-host --lib`

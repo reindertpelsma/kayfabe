@@ -1,0 +1,89 @@
+--- candidate-reference/crates/kf-host/src/lib.rs
++++ separate-guest-input-helper/crates/kf-host/src/lib.rs
+@@ -340,0 +341,52 @@
++// Q4 TEST HELPER ONLY: encode the public root-allocation request, not a product change.
++fn q4_probe_root_params(
++    v: kf_abi::DriverVersion,
++    client: u32,
++    pid: u32,
++) -> Result<Vec<u8>, RmError> {
++    let l = kf_abi::matrix::Resolved::of(&kf_abi::generated::matrix::NV0000_ALLOC_PARAMETERS, v)
++        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
++    let mut p = vec![0; l.size()];
++    // Q4_FIELDS_BEGIN
++    for (name, value) in [("hClient", client), ("processID", pid)] {
++        let at = l
++            .need(name)
++            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?
++            .off();
++        p[at..at + 4].copy_from_slice(&value.to_le_bytes());
++    }
++    // Q4_FIELDS_END
++    Ok(p)
++}
++#[cfg(test)]
++mod q4_probe_tests {
++    use super::*;
++    fn v() -> kf_abi::DriverVersion {
++        kf_abi::DriverVersion::parse("595.84").unwrap()
++    }
++    #[test]
++    fn q4_probe_chosen_client_is_carried_in_root_params() {
++        let p = q4_probe_root_params(v(), 0xc1e0_0100, 1234).unwrap();
++        let facts = kf_abi::versions::table_for(v())
++            .unwrap()
++            .decode_client_alloc_facts(&p)
++            .unwrap();
++        assert_eq!(facts.h_client, 0xc1e0_0100);
++    }
++    #[test]
++    fn q4_probe_userspace_pid_is_carried_independently() {
++        let p = q4_probe_root_params(v(), 0xc1e0_0100, 1234).unwrap();
++        let facts = kf_abi::versions::table_for(v())
++            .unwrap()
++            .decode_client_alloc_facts(&p)
++            .unwrap();
++        assert_eq!(facts.process_id, 1234);
++    }
++    #[test]
++    fn q4_probe_full_ioctl_layout_keeps_os_pointer_clear() {
++        let p = q4_probe_root_params(v(), 0xc1e0_0100, 1234).unwrap();
++        assert_eq!(p.len(), 120);
++        assert!(p[8..].iter().all(|b| *b == 0));
++    }
++}
++
+@@ -342 +394 @@
+-    fn allocate_root(ctl: &CharDevice) -> Result<Self, RmError> {
++    fn allocate_root(ctl: &CharDevice, v: kf_abi::DriverVersion) -> Result<Self, RmError> {
+@@ -343,0 +396,8 @@
++        let selected = match std::env::var("Q4_PROBE_CLIENT").as_deref() {
++            Ok("auto") => 0,
++            Ok("c1e00100") => 0xc1e0_0100,
++            _ => return Err(RmError::Other(ABI_ENCODE_FAILED)),
++        };
++        let mut root_params = q4_probe_root_params(v, selected, std::process::id())?;
++        let root_size =
++            u32::try_from(root_params.len()).map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+@@ -351 +411 @@
+-            params_size: 0,
++            params_size: root_size,
+@@ -358 +418 @@
+-        let mut patches: Vec<Indirect<'_>> = Vec::new();
++        let mut patches = vec![Indirect::new(16, &mut root_params)];
+@@ -362,0 +423,9 @@
++        eprintln!(
++            "Q4_ROOT_REQUEST requested={selected:#010x} actual={:#010x} pid={}",
++            out.h_object_new,
++            std::process::id()
++        );
++        if selected != 0 && out.h_object_new != selected {
++            eprintln!("Q4_ROOT_NOT_SELECTED");
++            return Err(RmError::Other(ABI_ENCODE_FAILED));
++        }
+@@ -560 +629,4 @@
+-        let client = rung("R4 NV01_ROOT_CLIENT", OwnClient::allocate_root(&ctl))?;
++        let client = rung(
++            "R4 NV01_ROOT_CLIENT",
++            OwnClient::allocate_root(&ctl, abi.version()),
++        )?;

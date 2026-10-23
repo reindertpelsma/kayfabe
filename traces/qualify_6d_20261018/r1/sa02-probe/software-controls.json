@@ -1,0 +1,61 @@
+{
+  "classification": "MEASURED",
+  "evidence": "sa02-probe/software-controls.json",
+  "candidate_product": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "scope": "Separate guest-input test-helper build; candidate source and QEMU binary unchanged",
+  "steps": [
+    {
+      "step": "sa02-probe-green.log",
+      "exit": 0,
+      "test_summaries": [
+        [
+          "3",
+          "0"
+        ]
+      ]
+    },
+    {
+      "step": "sa02-probe-mutant.log",
+      "exit": 101,
+      "test_summaries": [
+        [
+          "1",
+          "2"
+        ]
+      ]
+    },
+    {
+      "step": "sa02-probe-restored.log",
+      "exit": 0,
+      "test_summaries": [
+        [
+          "3",
+          "0"
+        ]
+      ]
+    },
+    {
+      "step": "sa02-probe-build.log",
+      "exit": 101,
+      "test_summaries": []
+    },
+    {
+      "step": "build2_missing_public_PTX_assets",
+      "exit": 101
+    },
+    {
+      "step": "build3",
+      "exit": 0
+    }
+  ],
+  "passed": true,
+  "mutation_killed_tests": 2,
+  "guard_control": {
+    "exit": 2,
+    "result": "Q4_PROBE_ERROR GUEST_GUARD_REQUIRED",
+    "no_GPU_open_attempted": true
+  },
+  "binary_sha256": "907072b8f674290e034997461c1a5128805edf63e418680072d8f9c07d042d8f",
+  "host_source_sha256": "84dc3674bdec2f3e8b504a38ea11200bf006f20045ffdbccfb822dc4ecd439ff",
+  "probe_source_sha256": "a1c1fd02c93082500fefd17bc3ab34cdaed614bd2099626e2ade0f846ebb569e"
+}
