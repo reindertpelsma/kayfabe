@@ -1,0 +1,18 @@
+[package]
+name = "kf-precomp-tier3"
+version = "0.1.0"
+edition = "2024"
+license = "ISC"
+
+[workspace]
+
+[dependencies]
+kf-arch = { path = "../../../../crates/kf-arch" }
+kf-chip = { path = "../../../../crates/kf-chip" }
+kf-disp = { path = "../../../../crates/kf-disp" }
+kf-host = { path = "../../../../crates/kf-host" }
+kf-linux-raw = { path = "../../../../crates/kf-linux-raw" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
