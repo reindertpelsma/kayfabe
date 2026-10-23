@@ -1046,6 +1046,19 @@ class Onstart(Tmp):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(b.hits("kill")[0]["access"], tuple(ACCESS.values()))
 
+    # Owner ruling 2026-10-24 item 7: no log line or report echoes the run token, the Access
+    # pair or the secret broker path, on a passing run and on a failing one.
+    def test_no_log_line_or_report_echoes_box_secrets(self):
+        for payload in (self.OK_PAYLOAD, self.OK_PAYLOAD + "exit 3\n"):
+            b = self.broker()
+            root = self.tree(payload)
+            proc = self.onstart(root, b, env_extra=ACCESS)
+            self.assertIn(proc.returncode, (0, 3), proc.stdout + proc.stderr)
+            seen = proc.stdout + proc.stderr + b.texts() + json.dumps(b.accepted)
+            seen += (self.ws / "kf-ci-output.log").read_text()
+            for value in (TOKEN, PREFIX, *ACCESS.values()):
+                self.assertNotIn(value, seen)
+
     def test_payload_still_gets_its_own_inputs(self):
         dump = self.payload_env()
         self.assertIn("KF_SHA=" + SHA, dump)
