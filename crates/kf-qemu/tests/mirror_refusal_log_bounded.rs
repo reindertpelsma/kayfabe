@@ -32,5 +32,8 @@ fn every_mirror_refusal_line_passes_the_log_budget() {
             );
         }
     }
-    assert!(seen >= 1, "the refusal line moved: this guard must follow it, not pass vacuously");
+    assert!(
+        seen >= 1,
+        "the refusal line moved: this guard must follow it, not pass vacuously"
+    );
 }

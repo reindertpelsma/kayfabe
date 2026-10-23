@@ -611,46 +611,46 @@ impl Birth {
         }
         let mut explicit_born = None;
         let native = if let Some(crate::tsgmirror::Plan::Explicit(p)) = &plan {
-            crate::tsgmirror::birth_explicit(
-                me.rm,
-                p,
-                spec,
-                (!shadow_default).then_some(native_id),
-            )
-            .map(|b| {
-                explicit_born = Some(b);
-                b.chan
-            })
-            .map_err(|f| {
-                me.mirror_stats.unwind_failed.fetch_add(u64::from(f.unwind_failed), Ordering::Relaxed);
-                format!("explicit birth failed at the {} step: {} (unwind steps failed: {})", f.step, f.err, f.unwind_failed)
-            })
+            crate::tsgmirror::birth_explicit(me.rm, p, spec, (!shadow_default).then_some(native_id))
+                .map(|b| {
+                    explicit_born = Some(b);
+                    b.chan
+                })
+                .map_err(|f| {
+                    me.mirror_stats
+                        .unwind_failed
+                        .fetch_add(u64::from(f.unwind_failed), Ordering::Relaxed);
+                    format!(
+                        "explicit birth failed at the {} step: {} (unwind steps failed: {})",
+                        f.step, f.err, f.unwind_failed
+                    )
+                })
         } else {
             match (join, shadow_default) {
-            (Some(tsg), true) => me.rm.birth_member(
-                tsg,
-                a.engine_type.unwrap_or(0),
-                spec,
-                false,
-                kf_host::channel::PhysicalCeBelt::Deny,
-            ),
-            (None, true) => {
-                me.rm
-                    .birth_channel(self.mirror.space, a.engine_type.unwrap_or(0), spec)
-            }
-            (Some(tsg), false) => me.rm.birth_user_ring_member(
-                tsg,
-                a.engine_type.unwrap_or(0),
-                spec,
-                false,
-                native_id,
-            ),
-            (None, false) => me.rm.birth_user_ring_channel(
-                self.mirror.space,
-                a.engine_type.unwrap_or(0),
-                spec,
-                native_id,
-            ),
+                (Some(tsg), true) => me.rm.birth_member(
+                    tsg,
+                    a.engine_type.unwrap_or(0),
+                    spec,
+                    false,
+                    kf_host::channel::PhysicalCeBelt::Deny,
+                ),
+                (None, true) => {
+                    me.rm
+                        .birth_channel(self.mirror.space, a.engine_type.unwrap_or(0), spec)
+                }
+                (Some(tsg), false) => me.rm.birth_user_ring_member(
+                    tsg,
+                    a.engine_type.unwrap_or(0),
+                    spec,
+                    false,
+                    native_id,
+                ),
+                (None, false) => me.rm.birth_user_ring_channel(
+                    self.mirror.space,
+                    a.engine_type.unwrap_or(0),
+                    spec,
+                    native_id,
+                ),
             }
             .map_err(|e| format!("{e:?}"))
         };
@@ -697,7 +697,9 @@ impl Birth {
             Err("USER_RING_BIRTH_ORPHANED".into())
         } else if crate::tsgmirror::skip_late_schedule(explicit_born.as_ref()) {
             // a joiner of a standing explicit host TSG: a member of a scheduled TSG runs unscheduled (probes 60-66, 90)
-            me.mirror_stats.latejoin_skipped.fetch_add(1, Ordering::Relaxed);
+            me.mirror_stats
+                .latejoin_skipped
+                .fetch_add(1, Ordering::Relaxed);
             Ok(())
         } else {
             crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan)

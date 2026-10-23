@@ -5967,8 +5967,19 @@ impl ChanPlane {
         // last member of a guest ctxshare, then the host TSG of the last member of the guest TSG
         // (`crate::tsgmirror::free_rest`). A legacy group is the base: nothing but the TSG on the last member.
         let rel = self.groups.lock().map_or(
-            crate::tsgmirror::Release { free_ctx: None, free_group: true },
-            |mut m| m.release(client, guest_tsg, ctx_share, chan.tsg, user_record.is_some()),
+            crate::tsgmirror::Release {
+                free_ctx: None,
+                free_group: true,
+            },
+            |mut m| {
+                m.release(
+                    client,
+                    guest_tsg,
+                    ctx_share,
+                    chan.tsg,
+                    user_record.is_some(),
+                )
+            },
         );
         if rel.free_ctx.is_some() {
             self.mirror_stats.ctx_freed.fetch_add(1, Ordering::Relaxed);
@@ -6057,7 +6068,9 @@ impl ChanPlane {
         if let Ok(mut m) = self.groups.lock() {
             m.commit_legacy(key, chan.tsg, engine);
         }
-        if group_new && crate::tsgmirror::log_ok(&crate::tsgmirror::BIRTH_LINES, crate::tsgmirror::LOG_MAX) {
+        if group_new
+            && crate::tsgmirror::log_ok(&crate::tsgmirror::BIRTH_LINES, crate::tsgmirror::LOG_MAX)
+        {
             eprintln!(
                 "kf3: TSG-MIRROR BIRTH {:#x}:{:#x} mode=LEGACY host_tsg={:#x} engine={engine:#x} shard={:#x} first_chan_flags={:#x} ctxShare={:#x}{}",
                 a.client,
@@ -6066,7 +6079,11 @@ impl ChanPlane {
                 key.2,
                 a.flags,
                 a.ctx_share,
-                if crate::tsgmirror::enabled() { "" } else { " [KF3_TSG_MIRROR=0]" }
+                if crate::tsgmirror::enabled() {
+                    ""
+                } else {
+                    " [KF3_TSG_MIRROR=0]"
+                }
             );
         }
     }
@@ -6089,7 +6106,9 @@ impl ChanPlane {
             self.mirror_stats.ctx_created.fetch_add(1, o);
         }
         let tsg = a.tsg.unwrap_or(0);
-        if born.group_new && crate::tsgmirror::log_ok(&crate::tsgmirror::BIRTH_LINES, crate::tsgmirror::LOG_MAX) {
+        if born.group_new
+            && crate::tsgmirror::log_ok(&crate::tsgmirror::BIRTH_LINES, crate::tsgmirror::LOG_MAX)
+        {
             eprintln!(
                 "kf3: TSG-MIRROR BIRTH {:#x}:{tsg:#x} mode=EXPLICIT host_tsg={:#x} engine={:#x} first_ctx={:#x} kind={:?} ctx_flags={:#x?} ctx_subctxId={:#x?} first_chan_flags={:#x} host_rq1={}",
                 a.client,
@@ -6103,10 +6122,19 @@ impl ChanPlane {
                 plan.rq1
             );
         }
-        if born.ctx_new && crate::tsgmirror::log_ok(&crate::tsgmirror::CTX_LINES, crate::tsgmirror::LOG_MAX) {
+        if born.ctx_new
+            && crate::tsgmirror::log_ok(&crate::tsgmirror::CTX_LINES, crate::tsgmirror::LOG_MAX)
+        {
             eprintln!(
                 "kf3: TSG-MIRROR CTX {:#x}:{tsg:#x} guest_ctx={:#x} kind={:?} host_ctx={:#x} host_veid={:x?} space={:#x} chan_flags={:#x} host_rq1={}",
-                a.client, plan.ctx_share, plan.kind, born.ctx_host, born.veid, plan.space, a.flags, plan.rq1
+                a.client,
+                plan.ctx_share,
+                plan.kind,
+                born.ctx_host,
+                born.veid,
+                plan.space,
+                a.flags,
+                plan.rq1
             );
         }
     }
@@ -6131,7 +6159,8 @@ impl ChanPlane {
                 .map(|c| (c, None))
                 .map_err(host_err),
             Some(crate::tsgmirror::Plan::Legacy { key, join }) => {
-                let c = kf_chan::passthrough::birth_twin_in(self.rm, space, g, join).map_err(host_err)?;
+                let c = kf_chan::passthrough::birth_twin_in(self.rm, space, g, join)
+                    .map_err(host_err)?;
                 self.mirror_commit_legacy(a, key, c, engine, join.is_none());
                 Ok((c, None))
             }

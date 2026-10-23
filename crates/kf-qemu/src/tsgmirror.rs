@@ -841,7 +841,10 @@ mod tests {
     #[test]
     fn the_refusal_line_budget_is_bounded() {
         let allowed = (0..LOG_MAX * 4).filter(|_| refused_line_ok()).count();
-        assert!(allowed <= LOG_MAX as usize, "{allowed} refusal lines allowed, budget is {LOG_MAX}");
+        assert!(
+            allowed <= LOG_MAX as usize,
+            "{allowed} refusal lines allowed, budget is {LOG_MAX}"
+        );
         assert!(!refused_line_ok(), "the budget stays shut once spent");
     }
 

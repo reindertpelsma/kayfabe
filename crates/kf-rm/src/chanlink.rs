@@ -1317,7 +1317,11 @@ impl ChannelPolicy {
                         },
                         c.subctx_id,
                         c.h_vaspace,
-                        if n + 1 == CTXSHARE_FACTS_LINES { " [last CTXSHARE-FACTS line, the rest are suppressed]" } else { "" }
+                        if n + 1 == CTXSHARE_FACTS_LINES {
+                            " [last CTXSHARE-FACTS line, the rest are suppressed]"
+                        } else {
+                            ""
+                        }
                     );
                 }
                 return None;
@@ -4313,7 +4317,8 @@ mod tests {
 
     /// A `KEPLER_CHANNEL_GROUP_A` alloc of `client:handle` under `device` (hVASpace, engineType).
     fn tsg_alloc(client: u32, device: u32, handle: u32, vas: u32, engine: u32) -> RpcCommand {
-        let mut params = [0u8; kf_abi::generated::classes::NvChannelGroupAllocationParameters::SIZE];
+        let mut params =
+            [0u8; kf_abi::generated::classes::NvChannelGroupAllocationParameters::SIZE];
         kf_abi::generated::classes::NvChannelGroupAllocationParameters {
             h_object_error: 0,
             h_object_ecc_error: 0,
@@ -4348,7 +4353,14 @@ mod tests {
     }
 
     /// A `FERMI_CONTEXT_SHARE_A` alloc under the TSG `tsg`.
-    fn ctxshare_alloc(client: u32, tsg: u32, handle: u32, vas: u32, flags: u32, subctx: u32) -> RpcCommand {
+    fn ctxshare_alloc(
+        client: u32,
+        tsg: u32,
+        handle: u32,
+        vas: u32,
+        flags: u32,
+        subctx: u32,
+    ) -> RpcCommand {
         let mut params = [0u8; 12];
         kf_abi::generated::classes::NvCtxshareAllocationParameters {
             h_va_space: vas,
@@ -4430,7 +4442,14 @@ mod tests {
         let (c, dev, tsg) = (0xc1d0_0013u32, 0xff03_0000u32, 0xff0e_0000u32);
         let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
         let _ = link.respond(&ctxshare_alloc(c, tsg, 0xff0e_0200, 0x5000_0001, 1, 0x3f));
-        let _ = link.respond(&ctxshare_alloc(c, tsg, 0xff0e_0201, 0x5000_0002, 0x8000_0000, 0));
+        let _ = link.respond(&ctxshare_alloc(
+            c,
+            tsg,
+            0xff0e_0201,
+            0x5000_0002,
+            0x8000_0000,
+            0,
+        ));
         let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0001, 0xff0e_0200, 0x30));
         let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0002, 0xff0e_0201, 0x20));
         let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0003, 0, 0x20)); // legacy
@@ -4439,15 +4458,29 @@ mod tests {
         assert_eq!(got.len(), 4, "{got:x?}");
         assert_eq!(
             got[0].2,
-            Some(CtxShareFacts { parent: tsg, h_vaspace: 0x5000_0001, flags: 1, subctx_id: 0x3f })
+            Some(CtxShareFacts {
+                parent: tsg,
+                h_vaspace: 0x5000_0001,
+                flags: 1,
+                subctx_id: 0x3f
+            })
         );
         assert_eq!(
             got[1].2,
-            Some(CtxShareFacts { parent: tsg, h_vaspace: 0x5000_0002, flags: 0x8000_0000, subctx_id: 0 }),
+            Some(CtxShareFacts {
+                parent: tsg,
+                h_vaspace: 0x5000_0002,
+                flags: 0x8000_0000,
+                subctx_id: 0
+            }),
             "a hostile flag word is carried as written"
         );
         assert_eq!(got[2].2, None, "no ctxshare named");
-        assert_eq!((got[3].1, got[3].2), (0xff0e_0999, None), "an unseen ctxshare is None, not invented");
+        assert_eq!(
+            (got[3].1, got[3].2),
+            (0xff0e_0999, None),
+            "an unseen ctxshare is None, not invented"
+        );
     }
 
     /// A ctxshare the guest freed is forgotten: a channel naming its handle afterwards sees `None`.
@@ -4464,7 +4497,12 @@ mod tests {
             ChanAnswer::Done
         });
         let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
-        let (c, dev, tsg, ctx) = (0xc1d0_0013u32, 0xff03_0000u32, 0xff0e_0000u32, 0xff0e_0200u32);
+        let (c, dev, tsg, ctx) = (
+            0xc1d0_0013u32,
+            0xff03_0000u32,
+            0xff0e_0000u32,
+            0xff0e_0200u32,
+        );
         let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
         let _ = link.respond(&ctxshare_alloc(c, tsg, ctx, 0x5000_0001, 1, 0));
         let _ = link.respond(&tsg_channel_alloc(c, tsg, 0xff04_0001, ctx, 0x30));
@@ -4490,7 +4528,12 @@ mod tests {
             ChanAnswer::Done
         });
         let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
-        let (c, dev, tsg, ctx) = (0xc1d0_0013u32, 0xff03_0000u32, 0xff0e_0000u32, 0xff0e_0200u32);
+        let (c, dev, tsg, ctx) = (
+            0xc1d0_0013u32,
+            0xff03_0000u32,
+            0xff0e_0000u32,
+            0xff0e_0200u32,
+        );
         let _ = link.respond(&tsg_alloc(c, dev, tsg, 0, 1));
         let _ = link.respond(&ctxshare_alloc(c, tsg, ctx, 0x5000_0001, 1, 0));
         let _ = link.respond(&free_cmd(c, dev, tsg));

@@ -31,7 +31,9 @@ fn no_realize_or_prewarm_path_births_a_host_channel() {
         }
         let text = std::fs::read_to_string(&p).unwrap();
         assert!(
-            !text.lines().any(|l| !l.trim_start().starts_with("//") && l.contains("birth_explicit")),
+            !text
+                .lines()
+                .any(|l| !l.trim_start().starts_with("//") && l.contains("birth_explicit")),
             "{} calls birth_explicit: only the guest-driven act files may",
             p.display()
         );
