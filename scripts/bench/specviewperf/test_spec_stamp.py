@@ -206,6 +206,14 @@ class Checker(unittest.TestCase):
                       fields=['workload', 'fps', 'range'])
             self.assertTrue(any('unlabelled' in p for p in s.check_text(text, 'md')), cell)
 
+    def test_dotted_versions_are_not_scores(self):
+        text = md(rows=[{'workload': 'a', 'version': '1.0.6', 'fps': 1.5}],
+                  fields=['workload', 'version', 'fps'])
+        self.assertEqual(s.check_text(text, 'md'), [])
+        text = md(rows=[{'workload': 'a', 'version': '1.0', 'fps': 1.5}],
+                  fields=['workload', 'version', 'fps'])
+        self.assertTrue(any('unlabelled' in p for p in s.check_text(text, 'md')))
+
     def test_names_and_dates_are_not_numbers(self):
         text = md(rows=[{'workload': 'creo-03', 'run': 'result_2026-10-22', 'fps': 1.5}],
                   fields=['workload', 'run', 'fps'])

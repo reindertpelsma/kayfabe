@@ -67,7 +67,8 @@ class StampedCliTests(unittest.TestCase):
                 'files': [{'path': 'result_one/run-log.txt',
                            'text': '[Workload:blender-01] Completed'},
                           {'path': 'result_one/blender-01/stdout.log', 'text': XML}],
-                'scores': [{'run': 'result_one', 'workload': 'blender-01', 'composite': 61.61}]}
+                'scores': [{'run': 'result_one', 'workload': 'blender-01', 'composite': 61.61,
+                            'version': '1.0.1'}]}
         with tempfile.TemporaryDirectory() as tmp:
             tmp = pathlib.Path(tmp)
             export = tmp / 'export.json'
