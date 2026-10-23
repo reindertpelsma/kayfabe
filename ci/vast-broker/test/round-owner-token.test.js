@@ -72,13 +72,34 @@ for (const encoded of [false, true])
   test('round blob redirect cannot embed Worker credential ' + encoded, async () => {
     const { mintBlob } = await import('../src/blobs.js');
     const sentinel = 'worker/read+credential=';
-    const env = { GITHUB_API_TOKEN: sentinel, BLOB_REPO: 'owner/store',
-      BLOB_ALLOWED_TAG_PREFIXES: '["allowed-"]' };
-    const ledger = { get:async()=>0, put:async()=>{}, save:async()=>{} };
-    const fetcher = async url => url.includes('/tags/')
-      ? Response.json({assets:[{id:1,name:'asset',size:1}]})
-      : new Response(null,{status:302,headers:{Location:
-        'https://release-assets.githubusercontent.com/asset?credential=' +
-        (encoded ? encodeURIComponent(sentinel) : sentinel)}});
-    await assert.rejects(mintBlob(fetcher,env,ledger,{},'allowed-v1','asset',1800000000000));
+    const env = {
+      GITHUB_API_TOKEN: sentinel,
+      BLOB_REPO: 'owner/store',
+      BLOB_ALLOWED_TAG_PREFIXES: '["allowed-"]',
+    };
+    const ledger = { get: async () => 0, put: async () => {}, save: async () => {} };
+    const fetcher = async (url) =>
+      url.includes('/tags/')
+        ? Response.json({ assets: [{ id: 1, name: 'asset', size: 1 }] })
+        : new Response(null, {
+            status: 302,
+            headers: {
+              Location:
+                'https://release-assets.githubusercontent.com/asset?credential=' +
+                (encoded ? encodeURIComponent(sentinel) : sentinel),
+            },
+          });
+    await assert.rejects(mintBlob(fetcher, env, ledger, {}, 'allowed-v1', 'asset', 1800000000000));
+  });
+for (const path of ['/status/123-1', '/stop/123-1'])
+  test('round changed create label emits a fixed ownership event ' + path, async () => {
+    const h = await setup();
+    await h.call();
+    h.cloud.instances.get('900').label = 'untrusted-label-must-not-be-logged';
+    const lines = [], original = console.log;
+    console.log = line => lines.push(String(line));
+    try { assert.equal((await h.call(path)).status,200); }
+    finally { console.log = original; }
+    assert.ok(lines.includes('{"event":"OWNERSHIP_MISMATCH"}'));
+    assert.ok(!lines.join('').includes('untrusted-label-must-not-be-logged'));
   });
