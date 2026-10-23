@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { setup, clock, nonce, callbackToken } from './helpers.js';
 // FALSIFIER H2: infrastructure status faults destroy paid work or polling bypasses fact caching.
-for (const failure of ['BUSY', 'RATE_LIMITED', 'UNAVAILABLE', 'exhausted']) {
+for (const failure of [
+  'BUSY',
+  'RATE_LIMITED',
+  'UNAVAILABLE',
+  'exhausted',
+  'exhausted-rate',
+  'malformed-503',
+  'malformed-403',
+]) {
   test('round runner retries status without destructive cleanup ' + failure, () => {
     const r = spawnSync('python3', ['ci/vast-broker/test/round_runner_fixture.py', failure], {
       encoding: 'utf8',
@@ -27,15 +35,15 @@ for (const profile of ['pr', 'branch']) {
     assert.equal((await h.call('/rent', { claims })).status, 200);
     await h.report({ seq: 1, kind: 'progress', text: 'running' });
     const before = h.cloud.calls.filter((x) => x.url.includes('api.github.com')).length;
-    for (let i = 0; i < 60; i++) {
-      h.time.value = clock + i * 60000;
+    for (let i = 0; i < 180; i++) {
+      h.time.value = clock + i * 20000;
       const r = await h.storage.get('record:123-1');
       r.lastPostAt = h.time.value;
       await h.storage.put('record:123-1', r);
       assert.equal((await h.call('/status/123-1', { claims })).status, 200);
     }
     const after = h.cloud.calls.filter((x) => x.url.includes('api.github.com')).length;
-    assert.ok(after - before <= (profile === 'pr' ? 60 : 30), String(after - before));
+    assert.ok(after - before <= (profile === 'pr' ? 120 : 60), String(after - before));
   });
 }
 // FALSIFIER: quota exhaustion still buys upstream inspections; full logs discard control state.

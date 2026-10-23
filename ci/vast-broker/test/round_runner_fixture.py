@@ -37,8 +37,12 @@ def client(route, method="GET", body=None):
         data = base
     elif route.startswith("/status/"):
         reads += 1
-        if reads <= 2 or case == "exhausted":
-            state = "UNAVAILABLE" if case == "exhausted" else case
+        if case.startswith("malformed-") and reads <= 2:
+            return m.Reply(int(case.rsplit("-",1)[1]), {"content-type":"text/html"},
+                           b"private upstream diagnostics must never be echoed")
+        if reads <= 2 or case.startswith("exhausted"):
+            state = ("RATE_LIMITED" if case == "exhausted-rate" else "UNAVAILABLE") \
+                if case.startswith("exhausted") else case
             code = {"BUSY": 409, "RATE_LIMITED": 429, "UNAVAILABLE": 503}[state]
             data = {"state": state, "verdict": "UNAVAILABLE", "log_tail_sanitised": "",
                     "bytes_dropped": 0}
@@ -52,4 +56,4 @@ def client(route, method="GET", body=None):
 result = m.Runner(ctx, manifest, client, emit=lambda _: None, summary=io.StringIO()).execute()
 assert not any(x.startswith("/stop/") for x in calls), calls
 assert reads >= 3, reads
-assert result["verdict"] == ("UNAVAILABLE" if case == "exhausted" else "PASS"), result
+assert result["verdict"] == ("UNAVAILABLE" if case.startswith("exhausted") else "PASS"), result
