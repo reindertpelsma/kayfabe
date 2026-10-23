@@ -184,7 +184,7 @@ class Broker:
 
 def good_env(url):
     return {
-        "KF_PROTOCOL": "5",
+        "KF_PROTOCOL": "6",
         "KF_BROKER_URL": url,
         "KF_RUN_ID": RUN,
         "KF_RUN_TOKEN": TOKEN,
@@ -263,7 +263,7 @@ class EnvValidation(Tmp):
     def test_malformed_values_are_rejected(self):
         m = load()
         bad = {
-            "KF_PROTOCOL": ["3", "", "5.0", "05"],
+            "KF_PROTOCOL": ["3", "", "5", "6.0", "06"],
             "KF_BROKER_URL": ["http://h.example/p", "https://h.example/p/", "https://h/p?x=1"]
             + ["https://u:p@h.example/p", "ftp://h/p", "https://h/p#f", "https://h/ p", "h/p"],
             "KF_RUN_ID": ["0-1", "12", "1-2-3", "a-b"],

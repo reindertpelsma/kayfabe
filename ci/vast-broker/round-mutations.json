@@ -1033,6 +1033,71 @@
       "tests": [
         "round-owner-config.test.js"
       ]
+    },
+    {
+      "name": "V6-skip-check",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "    await github.boxProtocol(target.sha);\n",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-box-protocol.test.js"
+      ]
+    },
+    {
+      "name": "V6-any-protocol",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409); // MUTANT box-protocol",
+          "if (declared === undefined) refuse('NOT_ELIGIBLE', 409);"
+        ]
+      ],
+      "tests": [
+        "round-box-protocol.test.js"
+      ]
+    },
+    {
+      "name": "V6-default-branch",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "DEFAULTS.reporterPath + '?ref=' + sha",
+          "DEFAULTS.reporterPath"
+        ]
+      ],
+      "tests": [
+        "round-box-protocol.test.js"
+      ]
+    },
+    {
+      "name": "V6-unanchored-marker",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "/^BOX_PROTOCOL = \"([0-9]{1,4})\"$/m",
+          "/BOX_PROTOCOL = \"([0-9]{1,4})\"/"
+        ]
+      ],
+      "tests": [
+        "round-box-protocol.test.js"
+      ]
+    },
+    {
+      "name": "V6-reporter-line",
+      "file": "../../scripts/ci/vast_report.py",
+      "patches": [
+        [
+          "BOX_PROTOCOL = \"6\"",
+          "BOX_PROTOCOL = \"5\""
+        ]
+      ],
+      "tests": [
+        "round-box-protocol.test.js"
+      ]
     }
   ]
 }

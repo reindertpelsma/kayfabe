@@ -17,6 +17,7 @@ for (const [name, patch] of [
   ['older', (h) => (h.cloud.reporterText = 'BOX_PROTOCOL = "5"\nPROTOCOLS = {"4", "5"}\n')],
   ['newer', (h) => (h.cloud.reporterText = 'BOX_PROTOCOL = "99"\n')],
   ['indented', (h) => (h.cloud.reporterText = '    ' + marker + '\n')],
+  ['commented', (h) => (h.cloud.reporterText = '# ' + marker + '\n')],
   ['absent-file', (h) => (h.cloud.reporterStatus = 404)],
   ['not-base64', (h) => (h.cloud.reporterEncoding = 'none')],
 ])

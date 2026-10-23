@@ -8,7 +8,7 @@ export const repoRoot = new URL('../../../scripts/ci/', import.meta.url);
 export const repoSource = (name) => readFileSync(new URL(name, repoRoot), 'utf8');
 export function boxEnv(patch = {}) {
   return {
-    KF_PROTOCOL: '5',
+    KF_PROTOCOL: '6',
     KF_BROKER_URL: 'https://broker.example',
     KF_RUN_ID: '123-1',
     KF_RUN_TOKEN:

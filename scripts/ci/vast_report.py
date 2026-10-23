@@ -31,7 +31,10 @@ import time
 import urllib.error
 import urllib.request
 
-PROTOCOLS = {"4", "5"}
+# The Worker reads this exact line at the tested commit before renting (V6); bump it, and
+# DEFAULTS.boxProtocol, together whenever the box-facing contract changes.
+BOX_PROTOCOL = "6"
+PROTOCOLS = {BOX_PROTOCOL}
 RESULT_PATH = "/workspace/kf-result.json"
 LINE_MARK = b"...[line truncated, %d bytes dropped]"
 UNKNOWN_HW = {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
