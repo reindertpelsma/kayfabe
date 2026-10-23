@@ -130,13 +130,6 @@ for (const path of ['/rent', '/status/123-1'])
     assert.equal(response.status, 200);
     assert.ok(!Object.hasOwn(body, 'manual_deadline_at'));
   });
-for (const name of ['KF_ACCESS_ID', 'KF_ACCESS_SECRET'])
-  test('simplify Worker never injects box Access credentials ' + name, async () => {
-    const h = await setup({ BOX_ACCESS_ID: 'box-id.access', BOX_ACCESS_SECRET: 's'.repeat(64) });
-    assert.equal((await h.call()).status, 200);
-    const create = h.cloud.calls.find((x) => x.url.includes('/asks/')).body;
-    assert.ok(!Object.hasOwn(create.env, name));
-  });
 for (const patch of [
   { ACCESS_AUD: 'only-one-variable' },
   {

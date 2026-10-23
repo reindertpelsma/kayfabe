@@ -41,4 +41,5 @@ SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-swee
 
 # Authorization: signed OIDC identity + pinned master workflow + run triggering_actor ==
 # OWNER_GITHUB_ID + tested sha == run head_sha. When to run is decided by the workflow YAML.
-# Cloudflare Access, if used, is a dashboard-only front door; the Worker reads no Access var.
+# Cloudflare Access is a dashboard-only front door; the Worker verifies no Access header.
+# Optional secrets BOX_ACCESS_ID/BOX_ACCESS_SECRET: box service-token pair, passed through.

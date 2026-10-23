@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { probe } from './repo-onstart.js';
-for (const protocol of ['6'])
+for (const protocol of ['7'])
   test('repo environment root-only protocol ' + protocol, () => {
     const r = probe(
       `
@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory() as d:
     );
     assert.equal(r.status, 0, r.stderr);
   });
-for (const protocol of ['3', '4', '5', '7'])
+for (const protocol of ['3', '4', '5', '6'])
   test('repo environment refuses unsupported protocol ' + protocol, () => {
     const r = probe("assert any(p.startswith('KF_PROTOCOL:') for p in m.validate_env(env))", {
       KF_PROTOCOL: protocol,

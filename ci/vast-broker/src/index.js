@@ -73,6 +73,8 @@ export function createService({
     env.VAST_API_KEY,
     env.RUN_TOKEN_SECRET,
     env.OWNER_STOP_TOKEN,
+    env.BOX_ACCESS_ID,
+    env.BOX_ACCESS_SECRET,
     ...endpointSecrets(env),
   ].filter(Boolean);
   // Newly created real provider rows can omit/null actual_status. This grants
@@ -833,6 +835,10 @@ export function createService({
         KF_HEARTBEAT_SECONDS: cfg.heartbeat / 1000,
         KF_GRACE_PASS: cfg.passGrace / 1000,
         KF_GRACE_FAIL: cfg.failGrace / 1000,
+        // Pass-through for the hostname-wide Access policy; the Worker never verifies Access.
+        ...(env.BOX_ACCESS_ID && env.BOX_ACCESS_SECRET
+          ? { KF_ACCESS_ID: env.BOX_ACCESS_ID, KF_ACCESS_SECRET: env.BOX_ACCESS_SECRET }
+          : {}),
       };
       r.id = await vast.create(offer, r, script, environment);
       r.idSource = 'create';

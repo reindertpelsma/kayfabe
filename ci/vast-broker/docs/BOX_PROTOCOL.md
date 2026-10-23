@@ -1,12 +1,12 @@
 # Box interface
 
-CODE READ: box protocol 6; the repo reporter declares `BOX_PROTOCOL = "6"` and accepts only
+CODE READ: box protocol 7; the repo reporter declares `BOX_PROTOCOL = "7"` and accepts only
 that value. Before renting, the Worker reads `scripts/ci/vast_report.py` at the exact tested SHA
 and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. Runner response protocol remains 4. The bootstrap clones the public repository, fetches and checks out the exact approved SHA, verifies HEAD, and execs the configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the checkout.
 
 | Variable | Format |
 | --- | --- |
-| KF_PROTOCOL | Decimal protocol, currently 6 |
+| KF_PROTOCOL | Decimal protocol, currently 7 |
 | KF_BROKER_URL | HTTPS origin plus required secret path, no trailing slash |
 | KF_RUN_ID / KF_RUN_TOKEN | Positive run-attempt / this run's HMAC capability |
 | KF_NONCE / KF_SHA / KF_RUNNER_NONCE | 32 / 40 / 64 lowercase hex |
@@ -16,6 +16,13 @@ and refuses (`NOT_ELIGIBLE`) unless that line names the Worker's protocol. Runne
 | KF_HEARTBEAT_SECONDS | Interval in seconds |
 | KF_GRACE_FAIL | Required grace ceiling in seconds |
 | KF_GRACE_PASS | Optional grace ceiling in seconds |
+| KF_ACCESS_ID / KF_ACCESS_SECRET | Optional Cloudflare Access service-token pair; both or none |
+
+Protocol 7 (2026-10-23): the box sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` on every
+broker request when the Worker injected the pair (Worker secrets `BOX_ACCESS_ID` /
+`BOX_ACCESS_SECRET`, both set). The Worker passes the pair through only; Cloudflare Access
+checks it at the edge, and the Worker never reads Access headers or JWTs. The payload never
+sees the pair (it is removed from the payload environment like the run token).
 
 CODE READ: Vast create `env` is a JSON object mapping variable names to string values; values use a restricted shell-safe alphabet. Repo scripts write the environment to root-only `/run/kf-ci/env`. No Vast key, owner stop token, signing secret or private-repository token reaches a box. Its operator can inspect its own scoped capability.
 

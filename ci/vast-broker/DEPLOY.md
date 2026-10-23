@@ -44,7 +44,8 @@ ignored if still configured):
 - retired: Worker `PATH_SKIP_PATTERNS` (path policy is YAML-only), PR lookups and PR authority;
 - retired: the dispatch `sha` input, sweep `tested_sha` and owner branch-copy workflow authority;
 - retired: MANUAL state, `/hold` box route, owner `/stop-timer` route and `MANUAL_CEILING_MINUTES`;
-- retired: the Worker Access JWT switch, `ACCESS_*` vars and `BOX_ACCESS_*` box injection.
+- retired: the Worker Access JWT switch and `ACCESS_*` vars (the box Access pair pass-through
+  returned on 2026-10-23 21:45; see *Cloudflare Access* below).
 
 Owner `stop`, `stop-all` and the box `kf-box-kill` switch remain.
 
@@ -77,8 +78,8 @@ node ci/vast-broker/deploy.mjs /path/outside/checkout/broker.vars
 
 The helper refuses before running wrangler when: the file is inside the checkout (realpath, so a
 symlink is followed); a line is not `KEY=VALUE`; a key repeats; a key is not a listed public var
-(secret names, `ALLOW_TEST_ISSUER`, `TEST_ISSUER`); a key is a retired `ACCESS_*` or
-`BOX_ACCESS_*` var (so an old Access vars file is refused); `OWNER_GITHUB_ID` is missing,
+(secret names, `ALLOW_TEST_ISSUER`, `TEST_ISSUER`); a key is a retired `ACCESS_*` var or a
+`BOX_ACCESS_*` secret (so an old Access vars file is refused); `OWNER_GITHUB_ID` is missing,
 non-numeric or differs from `wrangler.toml`; `dist/worker.js` does not match `deployment.json`
 and `DEPLOYED_BUNDLE_SHA256`; or the wrangler at the pinned path is not 4.152.0. It then passes
 one `--var KEY:VALUE` per entry and redacts every value from wrangler's output; refusals name a
@@ -148,15 +149,21 @@ copies, so widening it buys nothing and exposes the environment secrets to branc
 
 ## Cloudflare Access is dashboard-only
 
-[CODE READ: src/index.js; owner ruling 19:10] Access, if used, is a dashboard-only front door:
-one hostname-wide policy with two service tokens. The Worker reads no Access header or var.
+[CODE READ: src/index.js; owner rulings 19:10 and 21:45] Access is a dashboard-only front door:
+one hostname-wide policy on the workers.dev hostname with two service tokens. The Worker never
+reads or verifies an Access header, JWT or var; Cloudflare checks the token at the edge.
 
-**Warning (open owner decision).** Boxes no longer receive an Access credential (the
-`BOX_ACCESS_*` injection and the box-side header helper were removed). A hostname-wide policy that
-demands a service token on box routes therefore blocks every `report`, `kill` and `blob-url`
-callback: each rental would bill until `BOOT_TIMEOUT` (40 minutes) and FAIL. Before renting with
-Access on, either exempt the box routes in the dashboard (they carry their own per-run HMAC) or
-restore a box credential path. The runner still sends token A when configured.
+- Runner (token A): GitHub environment secrets `VAST_BROKER_ACCESS_ID` /
+  `VAST_BROKER_ACCESS_SECRET`; the runner sends `CF-Access-Client-Id` / `CF-Access-Client-Secret`
+  only when both are set.
+- Boxes (token B): optional Worker secrets `BOX_ACCESS_ID` / `BOX_ACCESS_SECRET`
+  (`wrangler secret put`). Only when both are set, the Worker injects them as
+  `KF_ACCESS_ID` / `KF_ACCESS_SECRET` next to the run token; the reporter, `kf-box-kill` and
+  `kf-box-blob-url` then send the two headers (box protocol 7). The pair is masked like every
+  other Worker secret and is never in a response, log or error body; the payload never sees it.
+
+With the hostname-wide policy live, set the box pair BEFORE enabling renting: without it every
+box callback is blocked at the edge and each rental bills until `BOOT_TIMEOUT` and FAILs.
 
 ## Vast key scope
 
@@ -224,14 +231,14 @@ start_date/labels can still prevent deletion. Keep the prepaid balance small.
 
 ## Rollout
 
-[CODE READ: docs/BOX_PROTOCOL.md, src/github.js, scripts/ci/vast_report.py] Box protocol is 6.
+[CODE READ: docs/BOX_PROTOCOL.md, src/github.js, scripts/ci/vast_report.py] Box protocol is 7.
 Before any Vast call the Worker reads `scripts/ci/vast_report.py` at the exact tested sha and
-refuses `NOT_ELIGIBLE` unless it contains the line `BOX_PROTOCOL = "6"` (V6), so commits from
+refuses `NOT_ELIGIBLE` unless it contains the line `BOX_PROTOCOL = "7"` (V6), so commits from
 before this round cannot burn a boot window. v1 run capabilities are rejected; disable admission
 and drain existing rentals before upgrading, and keep the ledger namespace.
 
 [INFERRED: unexercised infrastructure] Deploy with renting off first, deploy the reaper and confirm
 its schedule, verify owner stop and bundle metadata, then do hosted acceptance: OIDC claims, the
-V2 instance-row check, the Access/box-route decision above and one watched rental. The payload
+V2 instance-row check, the box Access pair (set before renting) and one watched rental. The payload
 script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental today posts
 `payload_missing` and FAILs. Mocks prove no hosted, provider or hardware behaviour.

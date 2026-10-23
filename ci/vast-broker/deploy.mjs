@@ -13,7 +13,8 @@ const checkout = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const wrangler = process.env.WRANGLER ?? '/tmp/kf-vast-wrangler/node_modules/.bin/wrangler';
 export const WRANGLER_VERSION = '4.152.0';
 // Public, non-secret vars a deploy may set. Everything else is refused: secrets belong in
-// `wrangler secret put`, and Cloudflare Access is dashboard-only (the Worker reads no ACCESS_*).
+// `wrangler secret put`, and Cloudflare Access is dashboard-only (the Worker reads no ACCESS_*;
+// the box pair BOX_ACCESS_ID/BOX_ACCESS_SECRET is a secret it only passes through).
 export const ALLOWED = new Set([
   'OWNER_GITHUB_ID',
   'RENTING_ENABLED',
@@ -43,8 +44,9 @@ export function parseVars(text) {
     if (!match) fail('line ' + (index + 1) + ' is not KEY=VALUE (no spaces, printable ASCII)');
     const [, key, value] = match;
     if (vars.has(key)) fail('duplicate key ' + key);
-    if (/^(?:BOX_)?ACCESS_/.test(key))
+    if (/^ACCESS_/.test(key))
       fail(key + ' is retired: Cloudflare Access is configured in the dashboard only');
+    if (/^BOX_ACCESS_/.test(key)) fail(key + ' is a secret: use wrangler secret put');
     if (!ALLOWED.has(key))
       fail(key + ' is not an allowed public var (secrets: wrangler secret put)');
     vars.set(key, value);
