@@ -8,7 +8,7 @@ from pathlib import Path
 
 MAX_RESPONSE = 262144
 # Status protocol: bump with defaults.json statusProtocol whenever the status shape changes.
-STATUS_PROTOCOL = 5
+STATUS_PROTOCOL = 6
 MAX_LOG = 4194304
 STATES = {
     "NONE",

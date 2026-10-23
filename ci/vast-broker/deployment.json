@@ -1,5 +1,5 @@
 {
-  "protocol_version": 5,
+  "protocol_version": 6,
   "worker_version": "v5",
-  "bundle_sha256": "9af752da29a3a1eeaa033d82647aad1f70f0bcaa75685be0fbf5a93a7a9220d2"
+  "bundle_sha256": "982056f9c5be09c1c05ff0bff48809222bf63decb318037f4fb9b1a70ef084f2"
 }

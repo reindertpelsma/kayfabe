@@ -21,7 +21,7 @@ for (const path of ['/rent', '/stop-all'])
     const r = await h.service.fetch(
       new Request(env.WORKER_URL + path, {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + token, 'X-KF-Protocol': '5' },
+        headers: { Authorization: 'Bearer ' + token, 'X-KF-Protocol': '6' },
         body,
         duplex: 'half',
       }),
@@ -52,7 +52,7 @@ for (const body of ['x', '{}'])
     const r = await h.service.fetch(
       new Request(env.WORKER_URL + '/rent', {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + (await jwt()), 'X-KF-Protocol': '5' },
+        headers: { Authorization: 'Bearer ' + (await jwt()), 'X-KF-Protocol': '6' },
         body,
         duplex: 'half',
       }),
@@ -95,7 +95,7 @@ async function localCall({
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + (await jwt({ iss: claimsIssuer })),
-        'X-KF-Protocol': '5',
+        'X-KF-Protocol': '6',
       },
       body: JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' }),
     }),

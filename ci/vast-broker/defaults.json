@@ -190,7 +190,7 @@
   "onstartPath": "scripts/ci/vast_onstart.sh",
   "reporterPath": "scripts/ci/vast_report.py",
   "boxProtocol": 7,
-  "statusProtocol": 5,
+  "statusProtocol": 6,
   "controlIpPerMinute": 60,
   "controlGlobalPerMinute": 600,
   "controlMaxIps": 4096,

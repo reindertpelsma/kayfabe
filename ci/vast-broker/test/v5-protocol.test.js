@@ -34,7 +34,7 @@ for (const verdict of ['PASS', 'FAIL'])
     });
     assert.equal(r.status, 200);
     const d = await (await h.call('/status/123-1')).json();
-    assert.equal(d.protocol_version, 5);
+    assert.equal(d.protocol_version, 6);
     assert.equal(d.worker_version, 'v5');
     assert.deepEqual(d.suites, table);
     assert.equal(d.driver_version, hardware.driver_version);

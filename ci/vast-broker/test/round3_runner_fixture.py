@@ -13,7 +13,7 @@ extra_status = scope["extra_status"]
 availability = scope["availability"]
 case = sys.argv[1]
 ctx = {"sha": "a" * 40, "run": "123-1", "nonce": "f" * 64}
-manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
 if case.startswith("transport-"):
     import time
 

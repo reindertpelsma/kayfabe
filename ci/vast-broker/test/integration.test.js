@@ -50,7 +50,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
     const r = await service.fetch(
       new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/rent', {
         method: 'POST',
-        headers: { authorization, 'X-KF-Protocol': '5' },
+        headers: { authorization, 'X-KF-Protocol': '6' },
         body: JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' }),
       }),
     );
@@ -67,7 +67,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
     assert.equal((await report({ seq: 1, kind: 'log', text: '::error::fake' })).status, 200);
     let response = await service.fetch(
       new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/status/123-1', {
-        headers: { authorization, 'X-KF-Protocol': '5' },
+        headers: { authorization, 'X-KF-Protocol': '6' },
       }),
     );
     assert.equal((await response.json()).verdict, 'UNAVAILABLE');
@@ -83,7 +83,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
     );
     response = await service.fetch(
       new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/status/123-1', {
-        headers: { authorization, 'X-KF-Protocol': '5' },
+        headers: { authorization, 'X-KF-Protocol': '6' },
       }),
     );
     const result = await response.json();
@@ -93,7 +93,7 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
     await service.fetch(
       new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/stop/123-1', {
         method: 'POST',
-        headers: { authorization, 'X-KF-Protocol': '5' },
+        headers: { authorization, 'X-KF-Protocol': '6' },
       }),
     );
     assert.deepEqual(cloud.deletes, ['900']);

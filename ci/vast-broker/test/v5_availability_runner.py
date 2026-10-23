@@ -17,7 +17,7 @@ ctx = {
     "profile": "check",
     "preferences": ["AD104"],
 }
-manifest = {"protocol_version": 5, "worker_version": "v5", "bundle_sha256": "b" * 64}
+manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
 a = scope["availability"]()
 a["offers"] = [
     {

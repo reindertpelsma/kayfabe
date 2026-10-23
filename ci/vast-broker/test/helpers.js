@@ -406,7 +406,7 @@ export async function setup(overrides = {}) {
         method = path.startsWith('/status') ? 'GET' : 'POST',
         token,
         ghToken = null,
-        protocol = '5',
+        protocol = '6',
       } = {},
     ) {
       if (path === '/rent' && body === undefined)

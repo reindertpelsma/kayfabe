@@ -15,7 +15,7 @@ class Stop(Exception):
 
 
 def request(url, method="GET", token=None, body=None, gh=None):
-    headers = {"X-KF-Protocol": "5"}
+    headers = {"X-KF-Protocol": "6"}
     if token:
         headers["Authorization"] = "Bearer " + token
     if gh:
