@@ -1961,6 +1961,8 @@ impl Pump {
                     "kf3: USER_RING_POINTER_MARKERS_LATCHED_OFF {:#x}:{:#x} mode={mode:?} relayed={relayed} put_abs={put_abs} — first packet open at a GP_PUT boundary in this VM: Pointer-mode markers are switched OFF for every channel (performance fallback: bounded spin and the counted backstop; no entry is lost or duplicated). Anchored windows stay.",
                     key.0, key.1
                 ),
+                // stub of the in-run line: printed once the pump wiring lands
+                Notice::ScanLong { .. } => {}
                 Notice::Bound { to, scan_entries } => {
                     // once per relay (the machine queues it once); counted VM-wide by the turn
                     eprintln!(
@@ -3929,6 +3931,7 @@ mod tests {
         let pump = pump.split("#[cfg(test)]").next().unwrap();
         assert_eq!(pump.matches("user_log::lifecycle_line(").count(), 1);
         assert_eq!(pump.matches("user_log::bound_line(").count(), 1);
+        assert_eq!(pump.matches("user_log::scan_long_line(").count(), 1);
         assert_eq!(pump.matches("fn report_final(").count(), 1);
         assert!(
             !pump.contains("USER_RING_LIFECYCLE {:x?} mode="),

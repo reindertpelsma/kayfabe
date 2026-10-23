@@ -478,6 +478,10 @@ impl MarkerLatch {
     }
 }
 
+/// The Scan-entry counts at which a channel still in Scan says so, once each (`USER_RING_SCAN_LONG`): at most three
+/// lines per channel for its whole life, whatever it does.
+pub const SCAN_LONG_THRESHOLDS: [u64; 3] = [100_000, 1_000_000, 10_000_000];
+
 /// How many `USER_RING_PUT_BOUNDARY_OPEN` notices a channel reports outside a Window (inside a Window every one is).
 pub const OPEN_NOTICES: u64 = 8;
 /// The most notices a machine keeps between two [`Lifecycle::take_notices`] calls (one turn produces at most three).
@@ -524,6 +528,14 @@ pub enum Notice {
         /// Where the channel went: `Pointer`, or `Window` (a registration was already live).
         to: Mode,
         /// Entries forwarded in Scan before the bind.
+        scan_entries: u64,
+    },
+    /// `USER_RING_SCAN_LONG`: the channel is still in Scan and its Scan entries reached a threshold of
+    /// [`SCAN_LONG_THRESHOLDS`] (once per threshold per channel).
+    ScanLong {
+        /// The threshold crossed.
+        threshold: u64,
+        /// Entries forwarded in Scan so far.
         scan_entries: u64,
     },
     /// `USER_RING_WINDOW_FRESH`: a Window started after Pointer mode.
@@ -658,6 +670,8 @@ pub struct Lifecycle {
     bound: Option<Bound>,
     /// The first Pointer/Window switch of this channel was handed out by [`Lifecycle::take_first_switch`].
     switch_noted: bool,
+    /// How many of [`SCAN_LONG_THRESHOLDS`] have been noticed.
+    scan_long_done: usize,
     notices: Vec<Notice>,
     #[cfg(feature = "lifecycle-mutants")]
     mutant: Option<Mutant>,
@@ -718,6 +732,7 @@ impl Lifecycle {
             open_notices: 0,
             bound: None,
             switch_noted: false,
+            scan_long_done: 0,
             notices: Vec::new(),
             #[cfg(feature = "lifecycle-mutants")]
             mutant: Mutant::from_env(),

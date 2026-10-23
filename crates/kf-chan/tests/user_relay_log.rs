@@ -2,7 +2,7 @@
 //! flood of synthetic relays. GPU-free; the pump only prints what `kf_chan::user_log` returns.
 
 use kf_chan::user_lifecycle::{Bound, Lifecycle, LifecycleStats, Mode, Notice, Obs, Plan};
-use kf_chan::user_log::{At, RelayIdent, bound_line, lifecycle_line};
+use kf_chan::user_log::{At, RelayIdent, bound_line, lifecycle_line, scan_long_line};
 use kf_chip::classes::Kind;
 
 const SW: u8 = 1 << 6;
@@ -294,4 +294,94 @@ fn the_exit_pass_runs_once_per_device() {
     assert!(st.begin_exit());
     assert!(!st.begin_exit());
     assert!(!st.begin_exit());
+}
+
+fn scan_long_notices(l: &mut Lifecycle) -> Vec<(u64, u64)> {
+    l.take_notices()
+        .into_iter()
+        .filter_map(|n| match n {
+            Notice::ScanLong {
+                threshold,
+                scan_entries,
+            } => Some((threshold, scan_entries)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_scan_long_line_is_one_key_value_line() {
+    assert_eq!(
+        scan_long_line((0xc1d0_00bf, 5), 100_000, 100_000, &ident()),
+        "kf3: USER_RING_SCAN_LONG (c1d000bf, 5) threshold=100000 scan_entries=100000 pid=0x3b8 \
+         classes=Compute+ThreeD engine=0x1"
+    );
+}
+
+#[test]
+fn a_relay_still_in_scan_says_so_once_at_each_of_three_thresholds() {
+    let mut l = Lifecycle::new();
+    let mut seen = Vec::new();
+    for i in 0..10_500_000u64 {
+        l.forwarded(i, 0x1000);
+        if i % 1_000_000 == 0 || i == 99_999 || i == 9_999_999 {
+            seen.extend(scan_long_notices(&mut l));
+        }
+    }
+    seen.extend(scan_long_notices(&mut l));
+    assert_eq!(
+        seen,
+        vec![
+            (100_000, 100_000),
+            (1_000_000, 1_000_000),
+            (10_000_000, 10_000_000)
+        ],
+        "one notice per threshold, none per entry"
+    );
+}
+
+#[test]
+fn a_relay_that_binds_before_a_threshold_never_says_scan_long() {
+    let mut l = run(50, true, 300_000);
+    for i in 0..300_000u64 {
+        l.forwarded(1_000_000 + i, 0);
+    }
+    assert!(scan_long_notices(&mut l).is_empty());
+}
+
+/// The coordinator's flood: 2,000 relays at 20 and at 20,000 entries print an exact, equal number of lines, and the
+/// relays that do cross the thresholds print exactly their thresholds.
+#[test]
+fn the_scan_long_flood_prints_an_exact_bounded_number_of_lines() {
+    fn lines(relays: u64, entries: u64) -> u64 {
+        let mut n = 0u64;
+        for r in 0..relays {
+            let mut l = Lifecycle::new();
+            for i in 0..entries {
+                l.forwarded(i, 0);
+            }
+            for (t, e) in scan_long_notices(&mut l) {
+                let line = scan_long_line((r as u32, 1), t, e, &ident());
+                assert!(!line.is_empty() && line.len() < 512 && !line.contains('\n'));
+                n += 1;
+            }
+        }
+        n
+    }
+    assert_eq!(lines(2_000, 20), 0);
+    assert_eq!(
+        lines(2_000, 20_000),
+        0,
+        "below the first threshold: nothing, whatever the count"
+    );
+    assert_eq!(
+        lines(100, 1_000_000),
+        200,
+        "two thresholds per relay, exactly"
+    );
+    assert_eq!(
+        lines(50, 1_000_001),
+        100,
+        "the entry after a threshold adds nothing"
+    );
 }

@@ -141,3 +141,15 @@ pub fn bound_line(key: (u32, u32), b: &Bound, ident: &RelayIdent) -> String {
         ident.fields()
     )
 }
+
+/// The bounded in-run `USER_RING_SCAN_LONG` line (from [`crate::user_lifecycle::Notice::ScanLong`]).
+#[must_use]
+pub fn scan_long_line(
+    key: (u32, u32),
+    threshold: u64,
+    scan_entries: u64,
+    ident: &RelayIdent,
+) -> String {
+    let _ = (key, threshold, scan_entries, ident);
+    String::new()
+}
