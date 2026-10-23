@@ -154,7 +154,7 @@ sys.path.insert(0,'/root/sweep2/guard/blackwell');import phase_xid_guard as G
 import json
 from pathlib import Path
 allowed=json.loads(Path('/root/prov/native_receipt.json').read_text())['approved_native_xid_lines']
-assert len(allowed)==5 and G.N.xid_lines(G.N.kernel_snapshot())==allowed,'new Xid during PRECOMP read is fatal'
+assert len(allowed)==5 and tuple(G.N.xid_lines(G.N.kernel_snapshot()))==tuple(allowed),'new Xid during PRECOMP read is fatal'
 POST_PRECOMP
 bash /root/sweep2/start_secondary.sh
 bash /root/sweep2/build_b1.sh &
