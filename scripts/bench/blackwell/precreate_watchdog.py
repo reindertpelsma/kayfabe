@@ -55,6 +55,7 @@ def watch(plan, *, ledger, ready, now, pause, status, destroy):
                 credit = current["credit"]
                 if type(credit) not in (float, int) or not math.isfinite(credit):
                     raise ValueError("invalid account credit")
+                remaining = B.remaining(plan, now())
                 if remaining <= 0:
                     return retire("fixed deadline")
                 if rate > plan["rate_bound"] or rate > B.MAX_RATE:
