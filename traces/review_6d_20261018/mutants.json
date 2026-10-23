@@ -1,0 +1,73 @@
+[
+  {
+    "mutant": "M1-guest-selected-c8-tier",
+    "distinct_assertion_killers": 4,
+    "tests": [
+      "a_guest_c8b5_object_does_not_select_the_birth_tier",
+      "a_guest_c9b5_object_does_not_select_the_birth_tier",
+      "birth_logging_and_wiring_use_another_host_ce_class",
+      "every_family_selects_and_binds_each_host_advertised_ce_class"
+    ]
+  },
+  {
+    "mutant": "M2-counter-disabled",
+    "distinct_assertion_killers": 5,
+    "tests": [
+      "an_explicit_bind_in_a_later_segment_preserves_the_prior_seed_count",
+      "ring_reports_a_seeded_launch_on_another_host_tier",
+      "ring_reports_the_seeded_launch_at_the_historical_multi_entry_position",
+      "seeded_launch_counter_observes_each_unbound_launch",
+      "seeded_launch_counter_observes_the_first_unbound_launch"
+    ]
+  },
+  {
+    "mutant": "M2-ignore-explicit-bind",
+    "distinct_assertion_killers": 2,
+    "tests": [
+      "an_explicit_bind_in_a_later_segment_preserves_the_prior_seed_count",
+      "an_explicit_host_bind_does_not_count_as_a_seeded_launch"
+    ]
+  },
+  {
+    "mutant": "M2-birth-seed-hidden",
+    "distinct_assertion_killers": 3,
+    "tests": [
+      "a_guest_c8b5_object_does_not_select_the_birth_tier",
+      "a_guest_c9b5_object_does_not_select_the_birth_tier",
+      "birth_logging_and_wiring_use_another_host_ce_class"
+    ]
+  },
+  {
+    "mutant": "L1-native-guessed-class",
+    "distinct_assertion_killers": 3,
+    "tests": [
+      "birth_tests::dedicated_copy_c5_uses_its_host_class",
+      "birth_tests::dedicated_copy_c8_uses_its_host_class",
+      "birth_tests::hardware_seed_input_uses_another_hosts_seed_without_a_bind"
+    ]
+  },
+  {
+    "mutant": "M2-repro-input-explicit-bind",
+    "distinct_assertion_killers": 2,
+    "tests": [
+      "birth_tests::hardware_seed_input_has_no_guest_set_object",
+      "birth_tests::hardware_seed_input_uses_another_hosts_seed_without_a_bind"
+    ]
+  },
+  {
+    "mutant": "L2-remove-allocated-class-pin",
+    "distinct_assertion_killers": 2,
+    "tests": [
+      "ampere_advertises_classes_but_the_ring_owns_one_selected_object",
+      "blackwell_advertises_classes_but_the_ring_owns_one_selected_object"
+    ]
+  },
+  {
+    "mutant": "M2-count-refused-launch",
+    "distinct_assertion_killers": 2,
+    "tests": [
+      "a_refused_launch_does_not_count_as_seeded_work",
+      "another_refused_launch_does_not_count_as_seeded_work"
+    ]
+  }
+]

@@ -28,6 +28,8 @@
 //!   (the VA-manager thread's role), and a released ring revokes its gate;
 //! - everything is released (channel, ring object, mapping, CPU view).
 //!
+//! `--ce-seed-only` runs just the dedicated-copy missing-bind input, using the common owned
+//! store/T-space setup. It prints the host class and checks the engine-written semaphore.
 //! It does NOT check the guest-vector relay (no VMM here); that is the Windows run's evidence.
 
 use kf_abi::submit::{fifo, gp_entry, method_header_inc};
@@ -127,6 +129,89 @@ const RUN31_CE: [u32; 7] = [
     0x2001_a000,
     0x0000_0001,
 ];
+
+fn decoder_config(engine: u32, host_ce: u32, gr_tier: bool) -> GrConfig {
+    let mut config = kf_chan::tmode::birth_decoder_config(engine, 0, host_ce, gr_tier);
+    config.inert_sw_subch = true;
+    config
+}
+
+/// Synthetic version of Energy's CE semaphore: subchannel 4, no guest SET_OBJECT.
+fn seeded_release(payload: u32) -> Vec<u32> {
+    let va = VA_CHAN + SEM_CE;
+    let mut words = m(4, 0x240, &[(va >> 32) as u32, va as u32, payload]);
+    words.extend(m(4, 0x300, &[0x4c]));
+    words
+}
+
+/// Focused hardware input: no GR object or earlier graphics test is needed.
+fn run_seed_only(
+    l: &mut Checks,
+    rm: &HostRm,
+    space: kf_host::VaSpace,
+    walk: &WalkKernel,
+    win: kf_chan::tspace_unsafe::TWindows,
+    region_base: u64,
+) -> Result<(), String> {
+    let engine = (0..10u32)
+        .filter_map(kf_abi::submit::engine_type_copy)
+        .find(|&et| rm.ce_is_grce(et) == Ok(false))
+        .ok_or("no dedicated copy engine")?;
+    let guest = Guest {
+        walk,
+        va: VA_CHAN,
+        off: CHAN2,
+        gp_get_cpu_stores: Cell::new(0),
+    };
+    let words = seeded_release(P2);
+    stage(walk, CHAN2, VA_CHAN, &[&words])?;
+    let host = HostRing::on_engine_layout(
+        rm,
+        space,
+        engine,
+        Some(region_base),
+        kf_chan::host::TSPACE_LAYOUT,
+    )?;
+    let class = host.ce_class();
+    let mut ring = TranslatedRing::new_tmode(VA_CHAN + GPFIFO, ENTRIES, 0);
+    ring.set_gr(decoder_config(engine, class, false));
+    println!("CE_SEED_INPUT engine={engine:#x} ce_seed={class:#x} guest_set_object=absent");
+    let mut channel = TranslatedChannel::new(ring, host, 2);
+    channel.set_tspace(win, false);
+    let done = kf_chan::completions::Completions::open(rm, 64)?;
+    put(walk, CHAN2, 1)?;
+    let started = std::time::Instant::now();
+    while channel.last_gp_get() != Some(1) && started.elapsed() < std::time::Duration::from_secs(3)
+    {
+        channel
+            .pump(
+                rm,
+                &done,
+                &mut Mem(&guest),
+                &mut Userd(&guest),
+                &mut NoSplit,
+                is_ce,
+                &NoWindow,
+            )
+            .map_err(|e| format!("seeded CE pump: {e:?}"))?;
+        std::thread::yield_now();
+    }
+    let semaphore = word(walk, CHAN2 + SEM_CE)?;
+    let launches = channel.seeded_launches();
+    l.check(
+        "dedicated_ce_without_guest_set_object_completed_on_engine",
+        semaphore == P2 && channel.last_gp_get() == Some(1) && launches == 1,
+        format!("ce_seed={class:#x} seeded_launches={launches} semaphore={semaphore:#x}"),
+    );
+    let freed = rm.free_channel(channel.host().channel());
+    let released = channel.release_host(rm);
+    l.check(
+        "seeded_ce_resources_released",
+        freed.is_ok() && released.as_ref().is_some_and(|s| !s.contains("REFUSED")),
+        format!("{freed:?} {released:?}"),
+    );
+    Ok(())
+}
 
 fn main() {
     let mut l = Checks::default();
@@ -361,6 +446,10 @@ fn run(l: &mut Checks) -> Result<(), String> {
         format!("fb={fb_base:#x}+{STORE_BYTES:#x} ram={ram_base:#x}+{RAM_BYTES:#x} rings={region_base:#x}"),
     );
 
+    if std::env::args().any(|arg| arg == "--ce-seed-only") {
+        return run_seed_only(l, &rm, space, &walk, win, region_base);
+    }
+
     // ── the GR channel ───────────────────────────────────────────────────────────────────────
     let g = Guest {
         walk: &walk,
@@ -418,12 +507,11 @@ fn run(l: &mut Checks) -> Result<(), String> {
         .fb(CHAN + USERD + kf_abi::submit::USERD_GP_GET, 4)
         .ok_or("USERD GP_GET outside the store window")?;
     let mut ring = TranslatedRing::new_tmode(VA_CHAN + GPFIFO, ENTRIES, 0);
-    ring.set_gr(GrConfig {
-        tier: true,
-        inert_sw_subch: true,
-        deferred_api: false,
-        video: 0,
-    });
+    ring.set_gr(decoder_config(
+        kf_abi::submit::ENGINE_TYPE_GRAPHICS,
+        host.ce_class(),
+        true,
+    ));
     let mut chan = TranslatedChannel::new(ring, host, 1);
     chan.set_tspace(win, false);
     chan.set_gpu_gp_get(gp_get_at)?;
@@ -556,7 +644,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let mut c0 = RUN31_CE.to_vec();
     c0.extend(release(P2));
     let c1 = m(5, 0x0100, &[0]);
-    stage(&walk, CHAN2, VA_CHAN, &[&c0, &c1])?;
+    let seed = seeded_release(P2 ^ 1);
+    stage(&walk, CHAN2, VA_CHAN, &[&seed, &c0, &c1])?;
     let host2 = HostRing::on_engine_layout(
         &rm,
         space,
@@ -565,14 +654,28 @@ fn run(l: &mut Checks) -> Result<(), String> {
         kf_chan::host::TSPACE_LAYOUT,
     )?;
     let mut ring2 = TranslatedRing::new_tmode(VA_CHAN + GPFIFO, ENTRIES, 0);
-    ring2.set_gr(GrConfig {
-        tier: false,
-        inert_sw_subch: true,
-        deferred_api: false,
-        video: 0,
-    });
+    ring2.set_gr(decoder_config(host_ce, host2.ce_class(), false));
+    let seed_class = host2.ce_class();
+    println!("CE_SEED_INPUT engine={host_ce:#x} ce_seed={seed_class:#x} guest_set_object=absent");
     let mut chan2 = TranslatedChannel::new(ring2, host2, 2);
     chan2.set_tspace(win, false);
+    put(&walk, CHAN2, 1)?;
+    let seeded_at = std::time::Instant::now();
+    while chan2.last_gp_get() != Some(1) && seeded_at.elapsed() < std::time::Duration::from_secs(3)
+    {
+        pump(&mut chan2, &g2).map_err(|e| format!("seeded CE pump: {e:?}"))?;
+        std::thread::yield_now();
+    }
+    let seeded_sem = word(&walk, CHAN2 + SEM_CE)?;
+    l.check(
+        "dedicated_ce_without_guest_set_object_completed_on_engine",
+        seeded_sem == P2 ^ 1 && chan2.last_gp_get() == Some(1) && chan2.seeded_launches() == 1,
+        format!(
+            "ce_seed={seed_class:#x} seeded_launches={} sem={seeded_sem:#x} gp_get={:?}",
+            chan2.seeded_launches(),
+            chan2.last_gp_get()
+        ),
+    );
     // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`): the wake path a CE ring's completion takes in kf3.
     // kf3's worker parks on the session fd, which carries FIFO_EVENT_MTHD and the host CE's own
     // non-stall notifier (`ChanPlane::new`, `Completions::also`); each is measured on its own fd
@@ -590,7 +693,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         .map_err(|e| format!("ce arm: {e:?}"))?;
     let idle35_ce = ready_within(done.event_fd(), 200)?;
     let idle_ce = ready_within(ce_fd.as_fd(), 200)?;
-    put(&walk, CHAN2, 1)?;
+    put(&walk, CHAN2, 2)?;
     let t1 = std::time::Instant::now();
     let mut st2 = pump(&mut chan2, &g2).map_err(|e| format!("ce pump: {e:?}"))?;
     let woke35_ce = ready_within(done.event_fd(), 1000)?;
@@ -601,7 +704,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
             "host CE{lce}: before doorbell: fifo_event_mthd={idle35_ce} ce={idle_ce}; after: fifo_event_mthd={woke35_ce} ce={woke_ce}"
         ),
     );
-    while !(st2 == Pumped::Caught && chan2.last_gp_get() == Some(1))
+    while !(st2 == Pumped::Caught && chan2.last_gp_get() == Some(2))
         && t1.elapsed() < std::time::Duration::from_secs(3)
     {
         let _ = ready_within(done.event_fd(), 100)?;
@@ -610,7 +713,10 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let sem2 = word(&walk, CHAN2 + SEM_CE)?;
     l.check(
         "ce_inert_bind_completes_on_engine",
-        sem2 == P2 && chan2.last_gp_get() == Some(1) && chan2.gr_counts().1 == 1,
+        sem2 == P2
+            && chan2.last_gp_get() == Some(2)
+            && chan2.gr_counts().1 == 1
+            && chan2.seeded_launches() == 1,
         format!(
             "sem={sem2:#x} want={P2:#x} gp_get={:?} inert_binds={}",
             chan2.last_gp_get(),
@@ -626,14 +732,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
             "before: fifo_event_mthd={idle35_ce} ce={idle_ce}; after: fifo_event_mthd={woke35_ce} ce={woke_ce}"
         ),
     );
-    put(&walk, CHAN2, 2)?;
+    put(&walk, CHAN2, 3)?;
     let r2 = pump(&mut chan2, &g2);
     l.check(
         "inert_subchannel_method_refused_by_name",
         matches!(
             r2,
             Err(kf_chan::host::ChanError::Ring(RingRefusal::Rewrite {
-                gp: 1,
+                gp: 2,
                 why: Refusal::InertSubchannelMethod {
                     subch: 5,
                     method: 0x100,
@@ -711,4 +817,60 @@ fn run(l: &mut Checks) -> Result<(), String> {
         freed.join(" | "),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod birth_tests {
+    use super::*;
+    fn check(engine: u32, ce: u32, tier: bool, expected_ce: u32) {
+        let cfg = decoder_config(engine, ce, tier);
+        assert_eq!(cfg.ce, expected_ce);
+        assert_eq!(cfg.tier, tier);
+        assert!(cfg.inert_sw_subch);
+        assert!(!cfg.deferred_api);
+        assert_eq!(cfg.video, 0);
+    }
+    #[test]
+    fn graphics_c5_keeps_explicit_grce_binding() {
+        check(1, 0xc5b5, true, 0);
+    }
+    #[test]
+    fn graphics_c7_keeps_explicit_grce_binding() {
+        check(1, 0xc7b5, true, 0);
+    }
+    #[test]
+    fn graphics_c8_keeps_explicit_grce_binding() {
+        check(1, 0xc8b5, true, 0);
+    }
+    #[test]
+    fn dedicated_copy_c5_uses_its_host_class() {
+        check(0xb, 0xc5b5, false, 0xc5b5);
+    }
+    #[test]
+    fn dedicated_copy_c7_uses_its_host_class() {
+        check(0xb, 0xc7b5, false, 0xc7b5);
+    }
+    #[test]
+    fn dedicated_copy_c8_uses_its_host_class() {
+        check(0xb, 0xc8b5, false, 0xc8b5);
+    }
+    fn check_seed_input(class: u32) {
+        let words = seeded_release(P2);
+        let mut st = kf_chan::tmode::TState::default();
+        st.gr = decoder_config(0xb, class, false);
+        st.tier = kf_chan::ttables::Tier::of_ce_class(st.gr.ce);
+        let ir =
+            kf_chan::tmode::decode(&words, kf_chip::is_any_dma_copy_class, &mut st, None).unwrap();
+        assert!(matches!(&ir[..], [kf_chan::tmode::Ir::Launch(l)]
+            if Some(l.tier) == kf_chan::ttables::Tier::of_ce_class(class)
+                && l.sema.unwrap().va == VA_CHAN + SEM_CE));
+    }
+    #[test]
+    fn hardware_seed_input_has_no_guest_set_object() {
+        check_seed_input(0xc7b5);
+    }
+    #[test]
+    fn hardware_seed_input_uses_another_hosts_seed_without_a_bind() {
+        check_seed_input(0xc8b5);
+    }
 }

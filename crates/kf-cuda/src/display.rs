@@ -68,6 +68,9 @@ pub struct ColorLut {
     pub src: u64,
     /// Interpolate between entries instead of selecting the lower entry.
     pub interpolate: bool,
+    /// `*_LUT_CONTROL_MIRROR`: sample the table's negative side as the odd extension
+    /// (`lut(-x) = -lut(x)`). Read by the output kernel only; a snapshot's bytes do not depend on it.
+    pub mirror: bool,
     /// Worker-authored identity of the armed binding. A new UPDATE/free/reallocation
     /// changes it even if the guest reuses the same store address.
     pub token: u64,
@@ -162,6 +165,8 @@ pub struct ColorFixture<'a> {
     pub size: (u32, u32),
     /// Exercise fractional output indices.
     pub interpolate: bool,
+    /// Arm the output table MIRRORED (its negative side is the odd extension).
+    pub output_mirror: bool,
     /// Mutate the synthetic input source after its snapshot was consumed, then
     /// compose again to check retention. Never modifies guest memory.
     pub mutate_input: Option<&'a [u8]>,
@@ -1255,6 +1260,9 @@ impl DisplayGpu {
                 .to_vec(),
             matrix.iter().flat_map(|v| v.to_le_bytes()).collect(),
             lut.map_or(0, |v| v.entries).to_le_bytes().to_vec(),
+            u32::from(lut.is_some_and(|v| v.mirror))
+                .to_le_bytes()
+                .to_vec(),
         ];
         self.cu
             .launch_args(self.stream, f, h, 256, 0, &mut args, what)?;
@@ -1635,12 +1643,14 @@ impl DisplayGpu {
                 entries: (input.len() / 8 - 4) as u32,
                 src: surface.len() as u64,
                 interpolate: false,
+                mirror: false,
                 token: 1,
             });
             let tone_lut = fixture.tone.map(|t| ColorLut {
                 entries: (t.table.len() / 8 - 4) as u32,
                 src: tone_src,
                 interpolate: true,
+                mirror: false,
                 token: 4,
             });
             self.color_pipeline_layer(
@@ -1666,6 +1676,7 @@ impl DisplayGpu {
                         entries: (tone.table.len() / 8 - 4) as u32,
                         src: tone_src,
                         interpolate: true,
+                        mirror: false,
                         token: if tone.rearm { 5 } else { 4 },
                     }),
                     Some(tone.pipeline),
@@ -1685,6 +1696,7 @@ impl DisplayGpu {
                         entries: (input.len() / 8 - 4) as u32,
                         src: surface.len() as u64,
                         interpolate: false,
+                        mirror: false,
                         token: if fixture.rearm { 3 } else { 1 },
                     }),
                     w,
@@ -1698,6 +1710,7 @@ impl DisplayGpu {
                     entries: (output.len() / 8 - 4) as u32,
                     src: (surface.len() + input.len()) as u64,
                     interpolate: fixture.interpolate,
+                    mirror: fixture.output_mirror,
                     token: 2,
                 }),
                 matrix,
@@ -1908,6 +1921,8 @@ mod tests {
                 ".u64 .ptr .align 1",
                 ".u32",
                 ".align 4 .b8",
+                ".u32",
+                // the mirrored-table flag: odd extension of the OLUT for a negative input
                 ".u32"
             ]
         );
@@ -1915,6 +1930,52 @@ mod tests {
             ptx.contains("kf_color_output_param_5[48]"),
             "twelve encoded matrix coefficients"
         );
+    }
+
+    /// The output kernel's frame is B8G8R8A8 in memory (red in bits 16..24 of a little-endian word:
+    /// bytes B, G, R, A). Hardware run 2026-10-22 read the first `color_mirror` case as RGB and
+    /// reported a swap that was the example's, not the kernel's; every hardware comparison
+    /// swizzles with this layout. The CPU oracle (`kf_disp::color::model`) returns logical R, G, B.
+    #[test]
+    fn the_output_kernel_packs_bgra_bytes() {
+        let src: String = include_str!("../../../cuda/display/kf_color.cu")
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert!(
+            src.contains(
+                "U packed = 0xff000000u;"
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect::<String>()
+                    .as_str()
+            )
+        );
+        assert!(src.contains("packed|=q<<(16-8*c);"));
+        // component c = 0 is red -> bits 16..24 -> byte 2; blue (c = 2) -> byte 0
+        let bytes = (0xff00_0000_u32 | (10 << 16) | (20 << 8) | 30).to_le_bytes();
+        assert_eq!(bytes, [30, 20, 10, 255]);
+    }
+
+    /// The output kernel's last parameter is the mirror flag, and the launch fills it from the
+    /// table the worker resolved (a GPU-free pin of the launch text, as `snapshot_key` pins the
+    /// snapshot key: the kernel itself runs only on a GPU, `examples/color_mirror.rs`).
+    #[test]
+    fn the_output_launch_passes_the_tables_mirror_flag_last() {
+        let source: String = include_str!("display.rs")
+            .split("pub fn color_output(")
+            .nth(1)
+            .unwrap()
+            .split("pub fn color_verdict(")
+            .next()
+            .unwrap()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert!(source.contains(
+            "lut.map_or(0,|v|v.entries).to_le_bytes().to_vec(),\
+             u32::from(lut.is_some_and(|v|v.mirror)).to_le_bytes().to_vec(),];"
+        ));
     }
 
     /// ⊘ The compose launch passes EIGHTEEN by-value parameters (two u64, twelve u32, four s32) in

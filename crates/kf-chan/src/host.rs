@@ -589,6 +589,13 @@ impl HostRing {
         self.chan
     }
 
+    /// Host RM's class used to allocate this ring's CE object. Video rings use
+    /// their video object instead; the birth decoder configuration excludes them.
+    #[must_use]
+    pub fn ce_class(&self) -> u32 {
+        self.ce_class
+    }
+
     /// ★ OWNER_RULINGS §U.2: this ring's gate (a handle the VA-manager thread may hold).
     #[must_use]
     pub fn gate(&self) -> Gate {
@@ -1380,6 +1387,12 @@ impl TranslatedChannel {
     /// channel is freed. See [`HostRing::release`].
     pub fn release_host(&mut self, rm: &kf_host::HostRm) -> Option<String> {
         self.host.release(rm)
+    }
+
+    /// Successful launches decoded using the birth seed, before an explicit CE bind.
+    #[must_use]
+    pub fn seeded_launches(&self) -> u64 {
+        self.ring.seeded_launches()
     }
 
     /// `(GR-tier methods re-authored, inert software-subchannel binds)` (T-mode only).

@@ -64,6 +64,7 @@ fn st(tier: bool, inert: bool) -> TState {
             inert_sw_subch: inert,
             deferred_api: false,
             video: 0,
+            ce: 0,
         },
         ..TState::default()
     }

@@ -51,6 +51,7 @@ fn main() -> Result<(), String> {
         matrix: &matrix,
         size: (8, 1),
         interpolate: false,
+        output_mirror: false,
         mutate_input: None,
         rearm: false,
         tone: None,

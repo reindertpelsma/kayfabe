@@ -314,6 +314,10 @@ pub struct SwCall {
 pub struct TState {
     /// The bound CE class's tier.
     pub tier: Option<Tier>,
+    /// Successful CE launches decoded from the birth seed before any explicit CE bind.
+    /// A decoded launch is not proof of submission or GPU completion.
+    pub seeded_launches: u64,
+    ce_explicit_bind: bool,
     /// Subchannels bound to `GP100_UVM_SW`.
     pub sw_subch: u8,
     off_in: u64,
@@ -388,6 +392,31 @@ pub struct GrConfig {
     /// Subchannels 0-4 then reach that engine: its methods are decoded against the class's
     /// derived table instead of the copy engine's.
     pub video: u32,
+    /// The host-allocated CE object's class on a dedicated copy-engine ring (0 = none).
+    /// This is a host fact, never the class of a guest EngineObject or SET_OBJECT.
+    pub ce: u32,
+}
+
+/// Decoder configuration for a Translated birth, from its runlist and host objects.
+/// Graphics needs an explicit CE bind; video uses its own tier. The caller supplies
+/// the CE class of the object it already allocated on the host channel.
+#[must_use]
+pub fn birth_decoder_config(
+    engine: u32,
+    video_class: u32,
+    host_ce_class: u32,
+    gr_tier: bool,
+) -> GrConfig {
+    GrConfig {
+        tier: gr_tier,
+        video: video_class,
+        ce: if kf_abi::submit::copy_index_of_engine_type(engine).is_some() && video_class == 0 {
+            host_ce_class
+        } else {
+            0
+        },
+        ..GrConfig::default()
+    }
 }
 
 #[cfg(test)]
@@ -626,7 +655,11 @@ fn one(
         }
         CeMethod::Launch => {
             let l = decode_launch(tier, v)?;
-            out.push(Ir::Launch(Box::new(ce_launch(st, tier, sub, l)?)));
+            let launch = ce_launch(st, tier, sub, l)?;
+            if !st.ce_explicit_bind && Tier::of_ce_class(st.gr.ce) == Some(tier) {
+                st.seeded_launches = st.seeded_launches.saturating_add(1);
+            }
+            out.push(Ir::Launch(Box::new(launch)));
         }
     }
     Ok(())
@@ -807,6 +840,13 @@ fn host(
                     what: "SET_OBJECT beyond NVCLASS (15:0)",
                 });
             }
+            if st.gr.ce != 0 && st.gr.video == 0 && class != st.gr.ce && (sub <= 4 || is_ce(class))
+            {
+                // The host object fixes this dedicated ring's tier. In particular,
+                // a CE bind on a software subchannel must not widen the global tier.
+                // Existing software-object binds on 5-7 keep their separate path.
+                return Err(Refusal::ForeignClass { subch: sub, class });
+            }
             if st.gr.tier && crate::grtables::GrClass::of_class(class).is_some() {
                 // ★ GR tier: a graphics object on a GR hardware subchannel. Subchannel 4 is the
                 // GR runlist's fixed copy-engine subchannel (`NVA06F_SUBCHANNEL_COPY_ENGINE`,
@@ -862,6 +902,7 @@ fn host(
                 let tier =
                     Tier::of_ce_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
                 st.tier = Some(tier);
+                st.ce_explicit_bind = true;
                 // ★ Authored: the class alone, `ENGINE` zero.
                 words_ir(out, &[(sub, 0, class)]);
             } else if class == GP100_UVM_SW {

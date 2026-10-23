@@ -687,6 +687,44 @@ pub struct EngineEvent {
     pub owed_late: std::sync::atomic::AtomicBool,
 }
 
+/// Host-owned objects consulted by the Translated birth wiring.
+/// Production implements this only for the ring whose objects were allocated by HostRm.
+pub trait HostRingFacts {
+    /// The class of this ring's allocated CE object.
+    fn ce_class(&self) -> u32;
+    /// This ring's allocated video object, if any: (handle, class, engine).
+    fn video_context(&self) -> Option<(u32, u32, u32)>;
+}
+impl HostRingFacts for kf_chan::host::HostRing {
+    fn ce_class(&self) -> u32 {
+        self.ce_class()
+    }
+    fn video_context(&self) -> Option<(u32, u32, u32)> {
+        self.video_context()
+    }
+}
+
+/// The actual ChanPlane decoder wiring, independent of allocation and guest object statements.
+#[must_use]
+pub fn translated_decoder_config(
+    engine: u32,
+    host: &impl HostRingFacts,
+    gr_tier: bool,
+) -> kf_chan::tmode::GrConfig {
+    kf_chan::tmode::birth_decoder_config(
+        engine,
+        host.video_context().map_or(0, |(_, class, _)| class),
+        host.ce_class(),
+        gr_tier,
+    )
+}
+
+/// The seed field included in every Translated birth line, including an absent seed.
+#[must_use]
+pub fn ce_seed_log(config: kf_chan::tmode::GrConfig) -> String {
+    format!("ce_seed={:#x}", config.ce)
+}
+
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
 /// unique across them, so this needs no family argument (the rewriter takes a plain `fn`).
 fn is_any_ce_class(c: u32) -> bool {
@@ -7186,15 +7224,11 @@ impl ChanPlane {
                 } else {
                     None
                 };
-                // ★ 2026-10-14: a kernel video ring decodes subchannels 0-4 against the class of
-                // the video object its host channel holds (`kf_chan::vtables`), never as CE work.
-                let video_class = host.video_context().map_or(0, |(_, class, _)| class);
-                let gr_cfg = kf_chan::tmode::GrConfig {
-                    tier: gr_tier,
-                    inert_sw_subch: sw_subch_inert(),
-                    deferred_api: deferred_api_trigger(),
-                    video: video_class,
-                };
+                // Both video and dedicated-copy tiers come from the allocated host objects.
+                // No guest EngineObject class is an input to this wiring.
+                let mut gr_cfg = translated_decoder_config(engine, &host, gr_tier);
+                gr_cfg.inert_sw_subch = sw_subch_inert();
+                gr_cfg.deferred_api = deferred_api_trigger();
                 let mut chan = {
                     let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);
                     ring.set_gr(gr_cfg);
@@ -7280,8 +7314,14 @@ impl ChanPlane {
                 // ★ The kernel channels' doorbells (CeUtils, UVM) take the fast path too: only the
                 // transport changes — the drainer stamps RUNG and wakes a worker, as the trap did.
                 let fast = me.fast_register(idx, runlist, chid);
+                let seed_log = ce_seed_log(gr_cfg);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B gr_tier={gr_tier} gp_get_by_engine={} sw_subch_inert={} scheduled_at_birth={} {fast}",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in \
+                    {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} \
+                    kernel_by={} ring_va={ring_va:#x} \
+                    userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B \
+                    {seed_log} gr_tier={gr_tier} gp_get_by_engine={} sw_subch_inert={} \
+                    scheduled_at_birth={} {fast}",
                     a.client,
                     a.handle,
                     a.gpfifo_va,
@@ -7700,7 +7740,10 @@ impl ChanPlane {
             );
         }
         eprintln!(
-            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?} inca=[{}] gr_tier={} gr[methods={} inert_binds={} objects={:x?}] gp_get_by_engine={:?}",
+            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} \
+            splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} \
+            privilege={:?} dead={:?} inca=[{}] seeded_launches={} gr_tier={} gr[methods={} \
+            inert_binds={} objects={:x?}] gp_get_by_engine={:?}",
             g.guest_idx,
             g.chan.counts().0,
             g.chan.counts().1,
@@ -7712,6 +7755,7 @@ impl ChanPlane {
             g.privilege,
             g.dead,
             g.chan.inca().line(),
+            g.chan.seeded_launches(),
             g.gr_tier,
             g.chan.gr_counts().0,
             g.chan.gr_counts().1,
