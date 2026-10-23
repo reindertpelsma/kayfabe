@@ -84,6 +84,13 @@ function jobsIn(text) {
   });
 }
 function endpointBoundary(filename, text, jobs) {
+  const accessAlias = /\bCF_ACCESS_CLIENT_(?:ID|SECRET)\b/;
+  const secretBindings = {
+    WORKER_URL: 'VAST_BROKER_URL',
+    WORKER_PATH: 'VAST_BROKER_PATH',
+    CF_ACCESS_CLIENT_ID: 'VAST_BROKER_ACCESS_ID',
+    CF_ACCESS_CLIENT_SECRET: 'VAST_BROKER_ACCESS_SECRET',
+  };
   const errors = [],
     fail = (reason) => errors.push('Broker endpoint ' + reason);
   if (/^[ \t]*['"]?secrets['"]?[ \t]*:[ \t]*[^#\s]/m.test(text))
@@ -117,17 +124,13 @@ function endpointBoundary(filename, text, jobs) {
       for (const line of step.split('\n')) {
         if (/^        env:\s*$/.test(line)) environment = true;
         else if (/^        \S/.test(line)) environment = false;
-        const match =
-          /^          (WORKER_URL|WORKER_PATH): \$\{\{ secrets\.(VAST_BROKER_URL|VAST_BROKER_PATH) \}\}$/.exec(
-            line,
-          );
+        const match = /^          ([A-Z_]+): \$\{\{ secrets\.([A-Z_]+) \}\}$/.exec(line);
         if (
           environment &&
           steps.length === 1 &&
           /^        id: broker\s*$/m.test(step) &&
           match &&
-          ((match[1] === 'WORKER_URL' && match[2] === 'VAST_BROKER_URL') ||
-            (match[1] === 'WORKER_PATH' && match[2] === 'VAST_BROKER_PATH'))
+          secretBindings[match[1]] === match[2]
         ) {
           found.add(match[1]);
           continue;
@@ -174,7 +177,7 @@ function endpointBoundary(filename, text, jobs) {
     remaining = text.replace(primary.body, sanitised);
     outside = text.replace(primary.body, '');
   }
-  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))
+  if (/VAST_BROKER_(?:URL|PATH|ACCESS_ID|ACCESS_SECRET)/.test(remaining))
     fail('secret reference outside approved step env'); // MUTANT secret-reference
   if (/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(outside))
     fail('aliases outside broker step'); // MUTANT secret-alias

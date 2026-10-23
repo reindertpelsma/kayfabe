@@ -39,6 +39,8 @@ jobs:
         env:
           WORKER_URL: ${{ secrets.VAST_BROKER_URL }}
           WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.VAST_BROKER_ACCESS_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.VAST_BROKER_ACCESS_SECRET }}
         run: |
           set +x
           set -euo pipefail
@@ -54,6 +56,8 @@ jobs:
           done
           env -i PATH=/usr/bin:/bin HOME="$temporary" \
             WORKER_URL="$WORKER_URL" WORKER_PATH="${WORKER_PATH:-}" \
+            CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}" \
+            CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}" \
             GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \
             GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_SHA="$GITHUB_SHA" \
             GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" GITHUB_REF="$GITHUB_REF" \
