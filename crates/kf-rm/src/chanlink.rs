@@ -976,7 +976,7 @@ impl ChannelPolicy {
     }
 
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
-        eprintln!("kf-rm: channel plane REFUSED ({status:#x}): {why}");
+        kf_gsp::guest_log!("kf-rm: channel plane REFUSED ({status:#x}): {why}");
         Reply {
             rpc_result_private: None,
             rpc_result: status,
@@ -1004,7 +1004,7 @@ impl ChannelPolicy {
                 // real cause of p5a's "internal clients are not marked by the pid sentinel".
                 self.kernel_clients.insert(h.client);
             }
-            eprintln!(
+            kf_gsp::guest_log!(
                 "kf-rm: chanlink: client {:#x} root: kernel={} internal={}",
                 h.client,
                 self.kernel_clients.contains(&h.client),
@@ -1215,7 +1215,7 @@ impl ChannelPolicy {
                         )
                     })
                 };
-                eprintln!(
+                kf_gsp::guest_log!(
                     "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x}) VAS-FACTS index={:x?} flags={:x?} bigPageSize={:x?} vaBase(lo32)={:x?} vaSize(lo32)={:x?}",
                     h.client,
                     h.handle,
@@ -1242,13 +1242,17 @@ impl ChannelPolicy {
                     (vf("flags"), v64("vaBase"), v64("vaSize"))
                 {
                     match vas_declaration(flags, base, size) {
-                        Ok(d) => eprintln!(
+                        Ok(d) => kf_gsp::guest_log!(
                             "kf-rm: chanlink: VAS-DECL {:#x}:{:#x} vaBase={base:#x} vaSize={size:#x} end={:x?} shared_management={}",
-                            h.client, h.handle, d.end, d.shared_management
+                            h.client,
+                            h.handle,
+                            d.end,
+                            d.shared_management
                         ),
-                        Err(why) => eprintln!(
+                        Err(why) => kf_gsp::guest_log!(
                             "kf-rm: chanlink: VAS-DECL {:#x}:{:#x} REFUSED (named, logged only): {why:?}",
-                            h.client, h.handle
+                            h.client,
+                            h.handle
                         ),
                     }
                 }
@@ -1440,7 +1444,7 @@ impl ChannelPolicy {
                 path,
             )
         };
-        eprintln!(
+        kf_gsp::guest_log!(
             "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={} hObjectError={:x?} hObjectBuffer={:x?} gpFifoOffset={:#x} gpFifoEntries={} hUserdMemory0={:x?} userd={:x?} hPhysChannelGroup={:x?} subDeviceId={:x?}",
             st.client,
             st.handle,
@@ -1543,7 +1547,7 @@ impl ChannelPolicy {
             .and_then(|e| cmd.payload.get(h.params_at..e))
         else {
             if matches!(h.cmd, PROMOTE_CTX | EVICT_CTX) {
-                eprintln!(
+                kf_gsp::guest_log!(
                     "kf-rm: chanlink: control {:#010x} declares {} params bytes, {} arrived (rpc flags {:#x}) — not carried",
                     h.cmd,
                     h.params_size,
@@ -1762,9 +1766,12 @@ impl ChannelPolicy {
                 }
             }
             PROMOTE_CTX => {
-                eprintln!(
+                kf_gsp::guest_log!(
                     "kf-rm: chanlink: GPU_PROMOTE_CTX on {:#x}:{:#x} params={} rpc_flags={:#x}",
-                    h.client, h.object, h.params_size, h.rmapi_rpc_flags
+                    h.client,
+                    h.object,
+                    h.params_size,
+                    h.rmapi_rpc_flags
                 );
                 // ★ The capability gate this control's decoder would have applied (it is admitted).
                 if !self
@@ -1773,7 +1780,7 @@ impl ChannelPolicy {
                     .control(kf_arch::ids::ControlCmd(h.cmd))
                     .is_permitted()
                 {
-                    eprintln!(
+                    kf_gsp::guest_log!(
                         "kf-rm: chanlink: GPU_PROMOTE_CTX not permitted by this boundary's allowlist"
                     );
                     return None;
@@ -1788,7 +1795,7 @@ impl ChannelPolicy {
                     {
                         let (engine_type, chan_client, object, va, size) =
                             self.abi.decode_falcon_promote(params).ok()?;
-                        eprintln!(
+                        kf_gsp::guest_log!(
                             "kf-rm: chanlink: falcon ctx promote {chan_client:#x}:{object:#x} engine {engine_type:#x} guest ctx buffer VA {va:#x}+{size:#x}"
                         );
                         let st = ChanStatement::PromoteCtx {
@@ -2135,9 +2142,10 @@ impl ChannelPolicy {
             ));
         }
         self.vas_under.insert(device, vas);
-        eprintln!(
+        kf_gsp::guest_log!(
             "kf-rm: chanlink: Device {:#x}:{:#x} default VA space set to {vas:#x} (SET_DEFAULT_VASPACE)",
-            h.client, h.object
+            h.client,
+            h.object
         );
         Some(Reply {
             rpc_result_private: None,
@@ -2175,9 +2183,11 @@ impl ChannelPolicy {
             ));
         };
         if p.property != layout.engine_timeslice_us {
-            eprintln!(
+            kf_gsp::guest_log!(
                 "kf-rm: chanlink: SET_CHANNEL_PROPERTIES {:#x}:{:#x} property {:#x} is not served (only ENGINETIMESLICEINMICROSECONDS)",
-                h.client, p.channel, p.property
+                h.client,
+                p.channel,
+                p.property
             );
             return None;
         }

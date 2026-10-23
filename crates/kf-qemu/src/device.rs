@@ -4112,7 +4112,7 @@ impl HostOps for Device {
                     self.note_pm_suspend(&mut g.fsm);
                 }
             }
-            Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
+            Err(e) => kf_gsp::guest_log!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
@@ -4124,7 +4124,7 @@ impl HostOps for Device {
                     }
                 }
                 Err(e) => {
-                    eprintln!("kf3: GSP command service REFUSED: {e:?}");
+                    kf_gsp::guest_log!("kf3: GSP command service REFUSED: {e:?}");
                     break;
                 }
             }
