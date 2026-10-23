@@ -47,6 +47,11 @@ from the [reviewed lock](setup-cache.lock.json), then delegates to the existing 
 and merge bar. [Cache design and timing table](../../docs/design/VAST_SETUP_CACHE_20261023.md).
 
 CODE READ: dependency setup waits for the reporter's first accepted progress acknowledgement
-through the internal KF_BROKER_READY_FD pipe. This prevents private blob fetches racing Vast's
-created-to-running transition. The pipe carries no token; existing deadlines and terminal auth
-refusals remain in force. Ordinary payloads retain the offline log path.
+through the internal KF_BROKER_READY_FD pipe. The pipe carries no token; reporter auth
+refusals remain terminal. Ordinary payloads retain the offline log path.
+The Worker serves blob URLs only once Vast reports running. The box helper retries failed GETs,
+including 401 during created, with curl's exponential backoff (8 retries, 20 s per attempt),
+under a 299 s hard deadline. The Worker's running-state requirement is unchanged.
+
+CODE READ: host APT runs in the existing guarded provisioners; cache restore prepares files only.
+The test runtime is Ubuntu 22.04 with GNU coreutils (`setup-test.Dockerfile`), matching the box.

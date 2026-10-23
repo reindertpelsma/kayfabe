@@ -1,4 +1,5 @@
 """Owner-approved blob GET retries: the provider can still report created during onstart."""
+
 import json
 import os
 from pathlib import Path
@@ -19,19 +20,25 @@ class BlobRetry(unittest.TestCase):
     def run_helper(self, root, url, path=None, timeout=8):
         envfile = root / "env"
         envfile.write_text(
-            'export KF_BROKER_URL=' + json.dumps(url) + '\n'
-            'export KF_RUN_ID=' + json.dumps(box.RUN) + '\n'
-            'export KF_RUN_TOKEN=' + json.dumps(box.TOKEN) + '\n'
+            "export KF_BROKER_URL=" + json.dumps(url) + "\n"
+            "export KF_RUN_ID=" + json.dumps(box.RUN) + "\n"
+            "export KF_RUN_TOKEN=" + json.dumps(box.TOKEN) + "\n"
         )
-        env = box.base_env({
-            "KF_CI_ENV_FILE": str(envfile), "KF_TIMEOUT_ARGS": str(root / "timeout-args"),
-        })
+        env = box.base_env(
+            {
+                "KF_CI_ENV_FILE": str(envfile),
+                "KF_TIMEOUT_ARGS": str(root / "timeout-args"),
+            }
+        )
         if path:
             env["PATH"] = str(path) + ":" + env["PATH"]
         started = time.monotonic()
         process = subprocess.Popen(
             ["sh", str(HERE / "kf-box-blob-url"), "setup-cache-test", "debs.tar.gz"],
-            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
         )
         try:
             out, err = process.communicate(timeout=timeout)
@@ -47,13 +54,18 @@ class BlobRetry(unittest.TestCase):
             broker = box.Broker()
             calls = []
             todo = list(statuses)
-            result = {"name": "debs.tar.gz", "size": 4,
-                      "url": "https://release-assets.githubusercontent.com/dummy"}
+            result = {
+                "name": "debs.tar.gz",
+                "size": 4,
+                "url": "https://release-assets.githubusercontent.com/dummy",
+            }
 
             def handle(path, headers, body, method="POST"):
                 self.assertEqual(method, "GET")
                 self.assertEqual(headers.get("Authorization"), "Bearer " + box.TOKEN)
-                self.assertTrue(path.endswith("/blob-url/" + box.RUN + "/setup-cache-test/debs.tar.gz"))
+                self.assertTrue(
+                    path.endswith("/blob-url/" + box.RUN + "/setup-cache-test/debs.tar.gz")
+                )
                 calls.append(time.monotonic())
                 code = todo.pop(0) if todo else 200
                 return code, result if code == 200 else {"state": "UNAUTHORIZED"}, {}
@@ -84,7 +96,7 @@ class BlobRetry(unittest.TestCase):
         path = root / "timeout"
         path.write_text(
             '#!/bin/sh\nprintf "%s\\n" "$@" > "$KF_TIMEOUT_ARGS"\n'
-            'signal=$1; shift\nrequested=$1; shift\n'
+            "signal=$1; shift\nrequested=$1; shift\n"
             'exec /usr/bin/timeout "$signal" 0.15s "$@"\n'
         )
         path.chmod(0o700)

@@ -576,6 +576,20 @@ def killers_of(case):
     return case[5]
 
 
+def failed_names(text):
+    """Python 3.10 uses Class; newer unittest also includes Class.method."""
+    pattern = (
+        r"^(?:FAIL|ERROR): (?P<method>\w+) \(test_vast_box\.(?P<cls>\w+)"
+        r"(?:\.(?P<inner>\w+))?\)"
+        r"(?: (?:\([^\r\n]*\)|\[[^\r\n]*\]))*$"
+    )
+    return {
+        match["cls"] + "." + match["method"]
+        for match in re.finditer(pattern, text, re.M)
+        if match["inner"] is None or match["inner"] == match["method"]
+    }
+
+
 def run_tests(directory, tests, timeout=600):
     env = dict(os.environ, KF_CI_SCRIPTS_DIR=str(directory))
     names = ["test_vast_box." + t for t in tests] or ["test_vast_box"]
@@ -588,8 +602,7 @@ def run_tests(directory, tests, timeout=600):
         timeout=timeout,
     )
     text = proc.stdout + proc.stderr
-    failed = set(re.findall(r"^(?:FAIL|ERROR): (\w+) \(test_vast_box\.(\w+)\.", text, re.M))
-    return proc.returncode, {c + "." + t for t, c in failed}, text
+    return proc.returncode, failed_names(text), text
 
 
 def run_case(case, root):

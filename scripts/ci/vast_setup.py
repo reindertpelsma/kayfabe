@@ -300,10 +300,8 @@ def restore(root, cache=CACHE_ROOT):
     (cache / "lists/partial").mkdir(parents=True)
     cache.chmod(0o755)
     (cache / "sources.list").write_text("deb [trusted=yes] file:" + str(cache / "debs") + " ./\n")
-    if apt(cache, ["update", "-qq"]) or apt(
-        cache, ["install", "-y", "-qq", "--no-install-recommends", *package_names(root)]
-    ):
-        raise CacheRefused("local package cache install failed")
+    # Existing provision scripts mask unattended-upgrade timers and guard the dpkg lock.
+    # They install through the cache-only apt shim; restoration never bypasses that order.
     configure_vendor(cache / "vendor", Path.home() / ".cargo")
     metrics = {
         "seconds": round(time.time() - started, 3),

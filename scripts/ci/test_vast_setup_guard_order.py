@@ -1,4 +1,5 @@
 """Restoring dependency files must not bypass the existing host APT safety guard."""
+
 import io
 import json
 from pathlib import Path
@@ -18,8 +19,10 @@ class GuardOrder(unittest.TestCase):
             (root / "scripts/ci").mkdir(parents=True)
             lock = {
                 "tag": "setup-cache-test",
-                "assets": [{"kind": k, "name": k + ".tar.gz", "size": 4, "sha256": "0" * 64}
-                           for k in ["debs", "vendor"]],
+                "assets": [
+                    {"kind": k, "name": k + ".tar.gz", "size": 4, "sha256": "0" * 64}
+                    for k in ["debs", "vendor"]
+                ],
             }
             (root / "scripts/ci/setup-cache.lock.json").write_text(json.dumps(lock))
             operations = []
@@ -34,15 +37,25 @@ class GuardOrder(unittest.TestCase):
                 operations.append(args[0])
                 return 0
 
-            with patch.object(setup, "validate_lock"), patch.object(setup, "wait_for_ready"), patch.object(
-                setup, "policy_digest", return_value="policy"
-            ), patch.object(setup, "package_names", return_value=["python3"]), patch.object(
+            with patch.object(setup, "validate_lock"), patch.object(
+                setup, "wait_for_ready"
+            ), patch.object(setup, "policy_digest", return_value="policy"), patch.object(
+                setup, "package_names", return_value=["python3"]
+            ), patch.object(
                 setup.subprocess, "check_output", return_value=b"{}"
-            ), patch.object(setup, "download_asset", side_effect=download), patch.object(
+            ), patch.object(
+                setup, "download_asset", side_effect=download
+            ), patch.object(
                 setup, "unpack_checked", side_effect=extract
-            ), patch.object(setup, "configure_vendor"), patch.object(
+            ), patch.object(
+                setup, "configure_vendor"
+            ), patch.object(
                 setup, "apt", side_effect=apt
-            ), patch.object(setup.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run, redirect_stdout(io.StringIO()):
+            ), patch.object(
+                setup.subprocess, "run", return_value=SimpleNamespace(returncode=0)
+            ) as run, redirect_stdout(
+                io.StringIO()
+            ):
                 setup.restore(root, root / "cache")
                 for call in run.call_args_list:
                     command = call.args[0]
