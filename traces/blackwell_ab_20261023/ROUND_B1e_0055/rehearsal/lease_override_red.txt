@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_lease_override (unittest.loader._FailedTest.test_lease_override)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_lease_override
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1e_0055/rehearsal/test_lease_override.py", line 20, in <module>
+    import lease_override as LO  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'lease_override'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

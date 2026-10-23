@@ -1,0 +1,34 @@
+{
+  "utc": "2026-10-23T21:55:48.151641+00:00",
+  "operator": "Claude (B1b); BW3 harness unchanged except rehearsal receipt",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "falsifiers_recorded_before_run": {
+    "native_fuzz": "ALIAS_REVOKED in >=2 of 3 valid pinned crowd runs (9 workers on 3 cores) => native finding on this die/driver; root cause not claimed. 0-1 of 3 => not repeatable at n=3. Unpinned 9-worker control recorded once. 8-core deviation: any result is recorded separately from lease 57388945 (larger box) and is not the same finding.",
+    "windows_B_hold": "Guest TDR (event 4101/153) or bugcheck (event 41/1001, GUEST_PANICKED, minidump) within 10 min after the admitted exact Xid32 pair refutes single-channel CE fault containment/survival for this die.",
+    "admission": "Only exact owned-QEMU Xid32 channels 0x14/0x1000000b intr 00200000, max 8 per arm, OBSERVATION mode; anything else stops the run."
+  },
+  "budget": {
+    "cap_usd": 2.5,
+    "stop_usd": 2.0,
+    "reserve_usd": 8,
+    "max_rate_usd_h": 2.5,
+    "leases": 1,
+    "box_limit_h": 3
+  },
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
+  "round": "B1e_0055 (controller 00:55 grant, 8-core deviation)",
+  "pinned_offer": 57427095,
+  "cpu_floor_override": 8,
+  "lease_ceiling": "3 h (override), cost stop still binds",
+  "provider_retry": "one, different machine, same stop/cap, only after pre-SSH provider failure; NOTE the pin admits only offer 57427095, so a retry needs a new grant naming its offer"
+}

@@ -1,0 +1,10 @@
+test_china_and_hong_kong_rejected (test_denied_countries.DeniedCountries.test_china_and_hong_kong_rejected) ... ok
+test_macau_rejected (test_denied_countries.DeniedCountries.test_macau_rejected) ... ok
+test_missing_country_rejected (test_denied_countries.DeniedCountries.test_missing_country_rejected) ... ok
+test_named_candidates_kept (test_denied_countries.DeniedCountries.test_named_candidates_kept) ... ok
+test_owner_denied_countries_rejected (test_denied_countries.DeniedCountries.test_owner_denied_countries_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.041s
+
+OK

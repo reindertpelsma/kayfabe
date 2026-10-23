@@ -1,0 +1,16 @@
+{
+  "armed_utc": "2026-10-23T21:56:18.073638+00:00",
+  "deadline_utc": "2026-10-24T00:56:18.073638+00:00",
+  "seconds": 10800,
+  "quoted_rate": 0.2947222222222222,
+  "rate_bound": 0.3947222222222222,
+  "reservation_usd": 1.6841666666666666,
+  "credit_after_reservation": 26.407589771293946,
+  "stop_usd": 2.0,
+  "cap_usd": 2.5,
+  "reserve_usd": 8.0,
+  "leases_authorized": 1,
+  "state": "ARMED",
+  "pid": 2059471,
+  "starttime": 245816575
+}

@@ -1,0 +1,37 @@
+.F..F
+======================================================================
+FAIL: test_macau_rejected (test_denied_countries.DeniedCountries.test_macau_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1e_0055/rehearsal/test_denied_countries.py", line 50, in test_macau_rejected
+    self.assertEqual(keep([offer("Macau, MO"), offer(", MO")]), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'geolocation': 'Macau, MO'}, {'geolocation': ', MO'}] != []
+
+First list contains 2 additional elements.
+First extra element 0:
+{'geolocation': 'Macau, MO'}
+
+- [{'geolocation': 'Macau, MO'}, {'geolocation': ', MO'}]
++ []
+
+======================================================================
+FAIL: test_owner_denied_countries_rejected (test_denied_countries.DeniedCountries.test_owner_denied_countries_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1e_0055/rehearsal/test_denied_countries.py", line 41, in test_owner_denied_countries_rejected
+    self.assertEqual(keep([offer(geo)]), [], geo)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'geolocation': ', MO'}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'geolocation': ', MO'}
+
+- [{'geolocation': ', MO'}]
++ [] : , MO
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.050s
+
+FAILED (failures=2)
