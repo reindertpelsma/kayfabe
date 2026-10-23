@@ -1,0 +1,69 @@
+{
+  "round": "B1_1830",
+  "host_verification": "UNVERIFIED-HOST",
+  "utc": "2026-10-23T14:37:49.108948+00:00",
+  "owner_instructions": "controller18:30 ROUND_B1.md",
+  "status": "WAITING FOR REQUIRED Xid32 ADMISSION CLARIFICATION; no rental",
+  "leases_authorized": 1,
+  "leases_created": [],
+  "leases_destroyed": [],
+  "market_queries": 0,
+  "round_cost_usd": 0,
+  "stop_usd": 2.5,
+  "cap_usd": 3,
+  "reserve_usd": 8,
+  "credit_observed_usd": 28.80488248586039,
+  "cached_media_pins_verified": 4,
+  "old_own_ids_active": [],
+  "tests_baseline": 255,
+  "tests_after": 292,
+  "new_budget_tests": 18,
+  "red_tests_before_fix": 14,
+  "budget_mutants": 10,
+  "budget_mutant_min_killers": 2,
+  "last_closed_lease": 57366202,
+  "prior_Xid32_lines": [
+    "2026-10-23T12:53:25.234267+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=154806, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+    "2026-10-23T12:53:25.249250+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=154806, name=qemu-system-x86, channel 0x1000000b intr 00200000"
+  ],
+  "required_fields_absent": [
+    "VA",
+    "fault type",
+    "HUBCLIENT/CE client"
+  ],
+  "native_Xid31_rule": "already enforces source/PID/device/channel/VA/fault/access and CE family for COPY reads",
+  "observation_Xid32_rule": "old high-pair class0x0e0000xx; prior0x1000000b stays fatal until scoped clarification",
+  "matrix": [
+    {
+      "arm": "B",
+      "die": "UNASSIGNED",
+      "OS": "Windows11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+      "flags": "existing p19 flags, planned single enable",
+      "verdict": "UNRUN",
+      "evidence": "no current lease"
+    },
+    {
+      "arm": "B1",
+      "die": "UNASSIGNED",
+      "OS": "Windows11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+      "flags": "existing p19 flags, planned single enable",
+      "verdict": "UNRUN",
+      "evidence": "no current lease"
+    }
+  ],
+  "falsifier": "guest reaches TDR or bugcheck in10min after admitted exact pair => survival/containment refuted for actual die",
+  "no_rule_expanded": true,
+  "precreate_watchdog": "implemented and tested; not launched or integrated into rental until Xid clarification",
+  "new_watchdog_tests": 19,
+  "watchdog_expected_red": 12,
+  "watchdog_mutants": 10,
+  "watchdog_mutant_min_killers": 2,
+  "slow_query_red_regressions": 2,
+  "code_head": "ccdb9c82206982c3f56bf8549d60ec46a2d424dd",
+  "guard_rules_modified": false,
+  "owner_instructions_sha256": "b3cb978464a79b3ef826a889e77550e889cd8fa420db3d767ff46116b28b2758"
+}

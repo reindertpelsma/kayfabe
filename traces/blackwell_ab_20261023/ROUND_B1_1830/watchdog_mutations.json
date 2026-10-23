@@ -1,0 +1,103 @@
+{
+  "mutants": [
+    {
+      "mutant": "ready_after_ledger",
+      "test_killers": 2,
+      "killers": [
+        "test_ready_is_also_first_when_contract_publication_is_immediate (watch_tests.PrecreateWatchdog.test_ready_is_also_first_when_contract_publication_is_immediate)",
+        "test_ready_is_published_before_first_empty_ledger_read (watch_tests.PrecreateWatchdog.test_ready_is_published_before_first_empty_ledger_read)"
+      ]
+    },
+    {
+      "mutant": "provider_call_before_binding",
+      "test_killers": 5,
+      "killers": [
+        "test_no_allocation_before_expiry_means_no_provider_mutation (watch_tests.PrecreateWatchdog.test_no_allocation_before_expiry_means_no_provider_mutation)",
+        "test_no_provider_query_or_destroy_before_a_contract_is_bound (watch_tests.PrecreateWatchdog.test_no_provider_query_or_destroy_before_a_contract_is_bound)",
+        "test_ready_is_also_first_when_contract_publication_is_immediate (watch_tests.PrecreateWatchdog.test_ready_is_also_first_when_contract_publication_is_immediate)",
+        "test_ready_is_published_before_first_empty_ledger_read (watch_tests.PrecreateWatchdog.test_ready_is_published_before_first_empty_ledger_read)",
+        "test_slow_query_at_last_poll_does_not_add_another_poll_interval (watch_tests.PrecreateWatchdog.test_slow_query_at_last_poll_does_not_add_another_poll_interval)"
+      ]
+    },
+    {
+      "mutant": "fixed_deadline_changed",
+      "test_killers": 2,
+      "killers": [
+        "test_long_readiness_still_uses_the_original_deadline (watch_tests.PrecreateWatchdog.test_long_readiness_still_uses_the_original_deadline)",
+        "test_readiness_delay_does_not_extend_the_precreate_deadline (watch_tests.PrecreateWatchdog.test_readiness_delay_does_not_extend_the_precreate_deadline)"
+      ]
+    },
+    {
+      "mutant": "slow_query_recheck_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_provider_response_crossing_deadline_triggers_immediate_teardown (watch_tests.PrecreateWatchdog.test_provider_response_crossing_deadline_triggers_immediate_teardown)",
+        "test_slow_query_at_last_poll_does_not_add_another_poll_interval (watch_tests.PrecreateWatchdog.test_slow_query_at_last_poll_does_not_add_another_poll_interval)"
+      ]
+    },
+    {
+      "mutant": "rate_bound_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_rate_above_owner_maximum_is_also_fatal (watch_tests.PrecreateWatchdog.test_rate_above_owner_maximum_is_also_fatal)",
+        "test_rate_beyond_reserved_bound_stops_immediately (watch_tests.PrecreateWatchdog.test_rate_beyond_reserved_bound_stops_immediately)"
+      ]
+    },
+    {
+      "mutant": "reserve_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_credit_below_reserve_stops_immediately (watch_tests.PrecreateWatchdog.test_credit_below_reserve_stops_immediately)",
+        "test_zero_credit_is_a_reserve_stop_not_an_idle_wait (watch_tests.PrecreateWatchdog.test_zero_credit_is_a_reserve_stop_not_an_idle_wait)"
+      ]
+    },
+    {
+      "mutant": "destroys_another_id",
+      "test_killers": 17,
+      "killers": [
+        "test_absence_is_queried_after_destroy_before_completion (watch_tests.PrecreateWatchdog.test_absence_is_queried_after_destroy_before_completion)",
+        "test_closed_ledger_at_reserve_boundary_still_requires_api_absence (watch_tests.PrecreateWatchdog.test_closed_ledger_at_reserve_boundary_still_requires_api_absence)",
+        "test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id (watch_tests.PrecreateWatchdog.test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id)",
+        "test_credit_below_reserve_stops_immediately (watch_tests.PrecreateWatchdog.test_credit_below_reserve_stops_immediately)",
+        "test_destroy_acknowledgement_without_absence_is_retried (watch_tests.PrecreateWatchdog.test_destroy_acknowledgement_without_absence_is_retried)",
+        "test_destroy_is_by_the_one_exact_owned_id (watch_tests.PrecreateWatchdog.test_destroy_is_by_the_one_exact_owned_id)",
+        "test_long_readiness_still_uses_the_original_deadline (watch_tests.PrecreateWatchdog.test_long_readiness_still_uses_the_original_deadline)",
+        "test_multiple_still_present_receipts_never_claim_early_absence (watch_tests.PrecreateWatchdog.test_multiple_still_present_receipts_never_claim_early_absence)",
+        "test_no_provider_query_or_destroy_before_a_contract_is_bound (watch_tests.PrecreateWatchdog.test_no_provider_query_or_destroy_before_a_contract_is_bound)",
+        "test_provider_response_crossing_deadline_triggers_immediate_teardown (watch_tests.PrecreateWatchdog.test_provider_response_crossing_deadline_triggers_immediate_teardown)",
+        "test_rate_above_owner_maximum_is_also_fatal (watch_tests.PrecreateWatchdog.test_rate_above_owner_maximum_is_also_fatal)",
+        "test_rate_beyond_reserved_bound_stops_immediately (watch_tests.PrecreateWatchdog.test_rate_beyond_reserved_bound_stops_immediately)",
+        "test_readiness_delay_does_not_extend_the_precreate_deadline (watch_tests.PrecreateWatchdog.test_readiness_delay_does_not_extend_the_precreate_deadline)",
+        "test_ready_is_also_first_when_contract_publication_is_immediate (watch_tests.PrecreateWatchdog.test_ready_is_also_first_when_contract_publication_is_immediate)",
+        "test_ready_is_published_before_first_empty_ledger_read (watch_tests.PrecreateWatchdog.test_ready_is_published_before_first_empty_ledger_read)",
+        "test_slow_query_at_last_poll_does_not_add_another_poll_interval (watch_tests.PrecreateWatchdog.test_slow_query_at_last_poll_does_not_add_another_poll_interval)",
+        "test_zero_credit_is_a_reserve_stop_not_an_idle_wait (watch_tests.PrecreateWatchdog.test_zero_credit_is_a_reserve_stop_not_an_idle_wait)"
+      ]
+    },
+    {
+      "mutant": "destroy_ack_is_absence",
+      "test_killers": 2,
+      "killers": [
+        "test_destroy_acknowledgement_without_absence_is_retried (watch_tests.PrecreateWatchdog.test_destroy_acknowledgement_without_absence_is_retried)",
+        "test_multiple_still_present_receipts_never_claim_early_absence (watch_tests.PrecreateWatchdog.test_multiple_still_present_receipts_never_claim_early_absence)"
+      ]
+    },
+    {
+      "mutant": "closed_row_hides_live_id",
+      "test_killers": 2,
+      "killers": [
+        "test_closed_ledger_at_reserve_boundary_still_requires_api_absence (watch_tests.PrecreateWatchdog.test_closed_ledger_at_reserve_boundary_still_requires_api_absence)",
+        "test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id (watch_tests.PrecreateWatchdog.test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id)"
+      ]
+    },
+    {
+      "mutant": "teardown_retry_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_destroy_acknowledgement_without_absence_is_retried (watch_tests.PrecreateWatchdog.test_destroy_acknowledgement_without_absence_is_retried)",
+        "test_multiple_still_present_receipts_never_claim_early_absence (watch_tests.PrecreateWatchdog.test_multiple_still_present_receipts_never_claim_early_absence)"
+      ]
+    }
+  ],
+  "host_verification": "UNVERIFIED-HOST"
+}

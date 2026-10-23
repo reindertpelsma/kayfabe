@@ -1,0 +1,132 @@
+UNVERIFIED-HOST
+FFFFFFFFFFFFFF
+======================================================================
+FAIL: test_cheap_lease_retains_150_minute_ceiling (test_round_budget.RoundBudget.test_cheap_lease_retains_150_minute_ceiling)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_delay_after_create_cannot_restart_original_deadline (test_round_budget.RoundBudget.test_delay_after_create_cannot_restart_original_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_every_accepted_rate_keeps_stop_and_hard_cap (test_round_budget.RoundBudget.test_every_accepted_rate_keeps_stop_and_hard_cap)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_expired_deadline_never_gains_time (test_round_budget.RoundBudget.test_expired_deadline_never_gains_time)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_high_rate_shortens_cost_deadline_before_stop (test_round_budget.RoundBudget.test_high_rate_shortens_cost_deadline_before_stop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_invalid_credit_never_creates_a_plan (test_round_budget.RoundBudget.test_invalid_credit_never_creates_a_plan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_invalid_rate_never_creates_a_plan (test_round_budget.RoundBudget.test_invalid_rate_never_creates_a_plan)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_naive_arm_time_is_refused (test_round_budget.RoundBudget.test_naive_arm_time_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_rate_bound_also_covers_fifteen_percent (test_round_budget.RoundBudget.test_rate_bound_also_covers_fifteen_percent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_rate_bound_includes_at_least_ten_cents_per_hour (test_round_budget.RoundBudget.test_rate_bound_includes_at_least_ten_cents_per_hour)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_reservation_includes_fifty_cent_nonruntime_margin (test_round_budget.RoundBudget.test_reservation_includes_fifty_cent_nonruntime_margin)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_reserve_boundary_passes_only_when_exposure_is_covered (test_round_budget.RoundBudget.test_reserve_boundary_passes_only_when_exposure_is_covered)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_reserve_is_checked_before_any_allocation (test_round_budget.RoundBudget.test_reserve_is_checked_before_any_allocation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+======================================================================
+FAIL: test_teardown_has_one_minute_before_cost_stop (test_round_budget.RoundBudget.test_teardown_has_one_minute_before_cost_stop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_round_budget.py", line 21, in setUp
+    self.assertIsNotNone(B, "round cost planner not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : round cost planner not implemented
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.006s
+
+FAILED (failures=14)
