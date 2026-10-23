@@ -1,0 +1,89 @@
+{
+  "round": "B1d_0015",
+  "operator": "Claude",
+  "grant": "controller 00:15 one lease + one provider retry",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "status": "NO RENTAL: no qualifying offer in the fresh snapshot (harness exit 75); named offers fail harness filters",
+  "stale_cache_deleted": "/workspace/bw3-round-b1c-run/single_market_B1c_1.json",
+  "market_utc": "2026-10-23T21:48:00.587034+00:00",
+  "market_offers": 4,
+  "offers": [
+    {
+      "id": 56602875,
+      "machine": 147483,
+      "gpu": "RTX 5060",
+      "dph": 0.33564814814814814,
+      "excluded_because": "is_vm_deverified=True"
+    },
+    {
+      "id": 43994882,
+      "machine": 69146,
+      "gpu": "RTX 5090",
+      "dph": 0.38805555555555554,
+      "excluded_because": "known-bad (B1b provider_boot_timeout)"
+    },
+    {
+      "id": 57376523,
+      "machine": 43459,
+      "gpu": "RTX 5090",
+      "dph": 0.6013888888888889,
+      "excluded_because": "is_vm_deverified=True"
+    },
+    {
+      "id": 42143434,
+      "machine": 52992,
+      "gpu": "RTX 5090",
+      "dph": 0.6416666666666667,
+      "excluded_because": "is_vm_deverified=True"
+    }
+  ],
+  "named_offers": "named_offer_diagnostic.json",
+  "leases_created": [],
+  "leases_destroyed": [],
+  "timers_armed": 0,
+  "spend_usd": 0.0,
+  "matrix": [
+    {
+      "arm": "Native raw + fuzz 3 pinned / 1 unpinned",
+      "die": "none (no lease)",
+      "verdict": "UNRUN",
+      "evidence": "preflight.txt, market.json, named_offer_diagnostic.json"
+    },
+    {
+      "arm": "B",
+      "die": "none (no lease)",
+      "verdict": "UNRUN",
+      "evidence": "preflight.txt, market.json, named_offer_diagnostic.json"
+    },
+    {
+      "arm": "B1",
+      "die": "none (no lease)",
+      "verdict": "UNRUN",
+      "evidence": "preflight.txt, market.json, named_offer_diagnostic.json"
+    }
+  ],
+  "xid32_list": [],
+  "tdr_verdict": "UNRUN",
+  "alias_revoked_repeats": "UNRUN (n=0)",
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK"
+  ],
+  "denied_countries_edit": {
+    "ruling": "owner 00:30",
+    "test": "rehearsal/test_denied_countries.py",
+    "red": "2/4 failed before edit (denied_countries_red.txt)",
+    "green": "4/4 (denied_countries_green.txt)",
+    "mutants": {
+      "drop_HK": 2,
+      "drop_CN": 2
+    },
+    "recheck": "preflight_cn_hk.txt exit 75 on the same snapshot"
+  }
+}

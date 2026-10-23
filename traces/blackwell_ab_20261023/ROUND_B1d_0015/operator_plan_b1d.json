@@ -1,0 +1,29 @@
+{
+  "utc": "2026-10-23T21:47:51.353652+00:00",
+  "operator": "Claude (B1b); BW3 harness unchanged except rehearsal receipt",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "falsifiers_recorded_before_run": {
+    "native_fuzz": "ALIAS_REVOKED in >=2 of 3 valid pinned crowd runs (9 workers on 3 cores) => native finding on this die/driver; root cause not claimed. 0-1 of 3 => not repeatable at n=3. Unpinned 9-worker control recorded once.",
+    "windows_B_hold": "Guest TDR (event 4101/153) or bugcheck (event 41/1001, GUEST_PANICKED, minidump) within 10 min after the admitted exact Xid32 pair refutes single-channel CE fault containment/survival for this die.",
+    "admission": "Only exact owned-QEMU Xid32 channels 0x14/0x1000000b intr 00200000, max 8 per arm, OBSERVATION mode; anything else stops the run."
+  },
+  "budget": {
+    "cap_usd": 2.5,
+    "stop_usd": 2.0,
+    "reserve_usd": 8,
+    "max_rate_usd_h": 2.5,
+    "leases": 1,
+    "box_limit_h": 3
+  },
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY"
+  ],
+  "round": "B1d_0015 (controller 00:15 grant)",
+  "preference": "controller: (a) RTX 5060 Ti m99805 GB206, fallback (b) RTX PRO 5000 m45777; harness filters decide; 69146 excluded",
+  "provider_retry": "one, different machine, same stop/cap, only after a pre-SSH provider failure"
+}
