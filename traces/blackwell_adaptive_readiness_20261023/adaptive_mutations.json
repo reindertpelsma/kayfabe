@@ -35,19 +35,31 @@
   },
   {
     "mutant": "ignore_stage_budget",
-    "killers": 3,
+    "killers": 5,
     "cases": [
       "test_readiness.AdaptiveReadiness.test_deadline_does_not_restart_after_a_query",
       "test_readiness.AdaptiveReadiness.test_late_success_does_not_become_readiness",
-      "test_readiness.AdaptiveReadiness.test_timeout_uses_remaining_stage_budget"
+      "test_readiness.AdaptiveReadiness.test_short_remaining_budget_also_reserves_a_retry",
+      "test_readiness.AdaptiveReadiness.test_timeout_uses_remaining_stage_budget",
+      "test_readiness.AdaptiveReadiness.test_verify_query_reserves_time_for_its_one_retry"
     ]
   },
   {
     "mutant": "initial_retry_removed",
-    "killers": 2,
+    "killers": 4,
     "cases": [
       "test_readiness.AdaptiveReadiness.test_first_missing_query_is_retried_once",
-      "test_readiness.AdaptiveReadiness.test_second_missing_query_stops"
+      "test_readiness.AdaptiveReadiness.test_second_missing_query_stops",
+      "test_readiness.AdaptiveReadiness.test_short_remaining_budget_also_reserves_a_retry",
+      "test_readiness.AdaptiveReadiness.test_verify_query_reserves_time_for_its_one_retry"
+    ]
+  },
+  {
+    "mutant": "retry_reserve_removed",
+    "killers": 2,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_short_remaining_budget_also_reserves_a_retry",
+      "test_readiness.AdaptiveReadiness.test_verify_query_reserves_time_for_its_one_retry"
     ]
   },
   {
