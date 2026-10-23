@@ -96,7 +96,7 @@ symlink is followed); a line is not `KEY=VALUE`; a key repeats; a key is not a l
 non-numeric or differs from `wrangler.toml`; `deployment.json` and `DEPLOYED_BUNDLE_SHA256`
 differ; the wrangler at the pinned path is not 4.152.0; or the module wrangler emits for
 `--dry-run --outdir <temp>` does not hash to `deployment.json`. It then uploads exactly that
-verified file (`wrangler deploy --no-bundle <temp>/index.js`, so wrangler does not bundle twice)
+hash-checked file (`wrangler deploy --no-bundle <temp>/index.js`, so wrangler does not bundle twice)
 with one `--var KEY:VALUE` per entry, runs wrangler with `WRANGLER_SEND_METRICS=false`, and
 redacts every value from wrangler's output; refusals name a key or line number, never a value.
 `WRANGLER=<path>` selects another binary of the same version (tests use a fake).

@@ -4,7 +4,7 @@
 
 [CODE READ: src/oidc.js, src/tokens.js, package-lock.json, deploy.mjs; branch
 claude/vast-broker-jose-20261023] Owner decisions 19:35/19:45 and the 21:45 addendum:
-- GitHub OIDC is verified by jose 6.2.13 (`jwtVerify` + `createRemoteJWKSet`): RS256 only,
+- GitHub OIDC tokens are checked by jose 6.2.13 (`jwtVerify` + `createRemoteJWKSet`): RS256 only,
   issuer, audience, required `iat`/`nbf`/`exp`, `iat` at most 600 s old, 30 s clock tolerance,
   JWKS cached 1 h with a 60 s unknown-kid cooldown. Repository/workflow claims, the run read
   (`triggering_actor == OWNER_GITHUB_ID`, tested sha == run head) are unchanged.
@@ -15,7 +15,7 @@ claude/vast-broker-jose-20261023] Owner decisions 19:35/19:45 and the 21:45 adde
 - wrangler bundles `src/index.js` from the committed lockfile (jose, wrangler 4.152.0, esbuild
   0.28.2; install with `npm ci --ignore-scripts`). `deployment.json` pins the SHA-256 of
   wrangler's emitted module; `deploy.mjs` re-bundles, refuses a mismatch and uploads exactly the
-  verified file. The project linker `bundle.js` and the mutation tooling are deleted.
+  hash-checked file. The project linker `bundle.js` and the mutation tooling are deleted.
 - Status protocol 5 (runner sends `X-KF-Protocol: 5`; each side refuses the other version);
   box protocol 7 (JWT run token, optional Cloudflare Access pair `KF_ACCESS_ID` /
   `KF_ACCESS_SECRET` passed through from Worker secrets `BOX_ACCESS_ID` / `BOX_ACCESS_SECRET`).
