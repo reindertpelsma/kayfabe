@@ -1,0 +1,90 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "run": "ampere_s4",
+  "rpc_rows": 3856,
+  "causal_rpc": "NOT ESTABLISHED; these are observer times",
+  "events": [
+    {
+      "event_utc": "2026-10-23T01:46:08.1838086+00:00",
+      "rpc_before": {
+        "ordinal": 3273,
+        "observed_utc": "2026-10-23T01:46:08.089397+00:00",
+        "observer_monotonic_ns": 4137943919541,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20800aff",
+        "trace_result": "none",
+        "file_offset_after": 1351359
+      },
+      "rpc_after": {
+        "ordinal": 3274,
+        "observed_utc": "2026-10-23T01:46:08.190332+00:00",
+        "observer_monotonic_ns": 4138044882787,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1351495
+      }
+    },
+    {
+      "event_utc": "2026-10-23T01:46:12.1289843+00:00",
+      "rpc_before": {
+        "ordinal": 3806,
+        "observed_utc": "2026-10-23T01:46:12.092525+00:00",
+        "observer_monotonic_ns": 4141947050280,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20808159",
+        "trace_result": "0x0",
+        "file_offset_after": 1465103
+      },
+      "rpc_after": {
+        "ordinal": 3807,
+        "observed_utc": "2026-10-23T01:46:12.193325+00:00",
+        "observer_monotonic_ns": 4142047865584,
+        "function": 103,
+        "kind": "RmAlloc",
+        "sequence": 0,
+        "selector": "0x0000",
+        "trace_result": "0x0",
+        "file_offset_after": 1465303
+      }
+    },
+    {
+      "event_utc": "2026-10-23T01:46:42.4027681+00:00",
+      "rpc_before": {
+        "ordinal": 3855,
+        "observed_utc": "2026-10-23T01:46:35.472539+00:00",
+        "observer_monotonic_ns": 4165327065640,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x2080b201",
+        "trace_result": "none",
+        "file_offset_after": 1537351
+      },
+      "rpc_after": null
+    },
+    {
+      "event_utc": "2026-10-23T01:54:12.657889+00:00",
+      "rpc_before": {
+        "ordinal": 3855,
+        "observed_utc": "2026-10-23T01:46:35.472539+00:00",
+        "observer_monotonic_ns": 4165327065640,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x2080b201",
+        "trace_result": "none",
+        "file_offset_after": 1537351
+      },
+      "rpc_after": null
+    }
+  ]
+}

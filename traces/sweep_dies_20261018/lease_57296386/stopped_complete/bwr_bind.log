@@ -1,0 +1,51 @@
+
+BIND_START source=ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7 2026-10-23T01:31:11+00:00 (bind only, no enable; not a measured init arm)
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/sweep-win-57296386/secureboot/kf-gop.ac21aef9.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-23T01:31:12Z] KF_GOP_SIGNED /workspace/sweep-win-57296386/secureboot/kf-gop.ac21aef9.signed.efi sha256=b6ca5d4d6a16160d4df1d77e7a445f9792a910d6e25ad2f12cca26ab8be29b20 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+READINESS_STAGE seconds=3600.0
+[2026-10-23T01:31:12Z] detached: tag=bw580_bind, log logs/bw580_bind_run.log (stdout logs/bw580_bind_run.out)
+KF_SSH_UP
+{"pid": 100563, "exe": "/workspace/bench/kf3-bins/ac21aef9/qemu-system-x86_64", "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57296386/secureboot/kf-gop.ac21aef9.signed.efi,id=kf0,guest-driver=580.65.06"}
+[2026-10-23T01:32:08Z] START nv-extract
+[2026-10-23T01:32:46Z] NV_EXTRACTED /workspace/sweep-win-57296386/cache/nv580.88/Display.Driver (2.6G)
+[2026-10-23T01:32:46Z] EXIT nv-extract rc=0
+[2026-10-23T01:33:14Z] START nv-copy
+[2026-10-23T01:34:16Z] EXIT nv-copy rc=0
+  [2026-10-23T01:34:22Z] START gsp-on
+  GSP_ON device PCI\VEN_10DE&DEV_2204&SUBSYS_147D10DE&REV_A1\3&11583659&0&30 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable:
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2204&SUBSYS_147D10DE&REV_A1\3&11583659&0&30
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable:
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver:
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2204&SUBSYS_147D10DE&REV_A1\3&11583659&0&30
+  GSP_ON add-driver:
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+  [2026-10-23T01:37:50Z] EXIT gsp-on rc=0
+{"Name":"NVIDIA GeForce RTX 3090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":22,"PNPDeviceID":"PCI\\VEN_10DE\u0026DEV_2204\u0026SUBSYS_147D10DE\u0026REV_A1\\3\u002611583659\u00260\u002630"}
+COLD580_BIND version=32.0.15.8088 inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 problem=CM_PROB_DISABLED
+COLD580_GSP_BEFORE class=1
+COLD580_GSP_READBACK path=HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 value=1
+COLD580_GSP_READBACK path=HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm value=1
+COLD580_READY=1; cold QEMU required; this is not a suite PASS
+{"CrashDumpEnabled":3,"AutoReboot":1,"Overwrite":1,"LogEvent":1,"MinidumpDir":"C:\\WINDOWS\\Minidump"}
+PAGEFILE C:\pagefile.sys 8192
+CRASHDUMP_READY=1 (small memory dump, effective from the next boot)
+[2026-10-23T01:38:42Z] stopping kfwin (pid 100563)
+[2026-10-23T01:39:04Z] stopped
+
+BIND_STOPPED_READY 2026-10-23T01:39:44+00:00
+BIND_EXIT rc=0 2026-10-23T01:39:44+00:00

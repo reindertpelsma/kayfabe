@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/readiness.py", line 258, in <module>
+    sys.exit(main())
+  File "/root/kayfabe/scripts/bench/windows/readiness.py", line 245, in main
+    result = runner(lambda limit: bounded_command(command, limit), profile=profile,
+  File "/root/kayfabe/scripts/bench/windows/readiness.py", line 117, in run_query
+    return SHARED.first_query(fetch, budget, nominal * profile['scale'])
+  File "/root/kayfabe/scripts/bench/blackwell/readiness.py", line 44, in first_query
+    text = fetch(budget.timeout(requested))
+  File "/root/kayfabe/scripts/bench/windows/readiness.py", line 112, in fetch
+    raise CommandFailed('read-only command failed: ' + str(result.returncode))
+__main__.CommandFailed: read-only command failed: 1

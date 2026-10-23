@@ -1,0 +1,73 @@
+40	strand_diagnostic	kf3: PROGRESS_STRAND diagnostic on (threshold 1000 ms)
+837	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+879	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+883	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+905	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+943	engine_or_refusal	kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+947	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+972	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+979	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1015	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1021	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1027	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1031	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1037	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1092	engine_or_refusal	kf3: act birth translated: chan 0xc1e00007:0xbaba0045 BORN Translated: token 0x1 -> host 0x28 in VasKey(13970166077300801602) gpfifo=0x0x32 userd=Some(Framebuffer { base: 8315666432, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (9428 us, off the GSP lock)
+1132	channel_census	kf3: chan token 0x1 (host 0x28) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=0 last_put=None gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=true gr[methods=0 inert_binds=0 objects=[(902d, cafe0029), (a140, cafe002a), (c797, cafe002b), (c7c0, cafe0028)]] gp_get_by_engine=(true, 0)
+1198	engine_or_refusal	kf3: mem t=289.163s REFUSED VasKey(13970166078463016970) root 0x1efba4000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+1205	engine_or_refusal	kf3: mem t=289.172s REFUSED VasKey(13970166078463016970) root 0x1efba4000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+1208	engine_or_refusal	kf3: mem t=289.174s REFUSED VasKey(13970166078463016970) root 0x1efba4000: 1 run(s) not applied: leaf 0x30fc00000+0x10400000 names store 0x1efc00000, inside the firmware carve-out at 0x1efbe0000 — a twin maps no kayfabe memory (§Q)
+1218	engine_or_refusal	kf3: act birth translated: chan 0xc1e00008:0x2 BORN Translated: token 0x801 -> host 0x10028 in VasKey(13970166078463016970) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8313962496, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (4088 us, off the GSP lock)
+1225	engine_or_refusal	kf3: chan 0xc1e00008:0x2 BIND engine=0xb (host 0x10028)
+1245	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1254	engine_or_refusal	kf3: GSP REFUSED fn76/0x20809064=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1260	engine_or_refusal	kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1264	engine_or_refusal	kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1316	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1320	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1326	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1349	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1354	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1360	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1382	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1402	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1407	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1411	engine_or_refusal	kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1415	engine_or_refusal	kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1424	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1453	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1460	engine_or_refusal	kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1503	engine_or_refusal	kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1533	engine_or_refusal	kf3: GSP REFUSED fn76/0x0073011d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1575	engine_or_refusal	kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1579	engine_or_refusal	kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1614	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1958	engine_or_refusal	kf3: GSP REFUSED fn76/0x00730288=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1995	engine_or_refusal	kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+1999	engine_or_refusal	kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2049	engine_or_refusal	kf3: act birth translated: chan 0xc1d00013:0xff040000 BORN Translated: token 0x802 -> host 0x10029 in VasKey(13965662457344034928) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 10629517312, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00100000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (4586 us, off the GSP lock)
+2119	engine_or_refusal	kf3: act birth translated: chan 0xc1d00015:0xff040001 BORN Translated: token 0x3 -> host 0x2a in VasKey(13965662457344034928) gpfifo=0x120276000x8192 userd=Some(Sysmem { base: 10629517824, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00200000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (11039 us, off the GSP lock)
+2286	engine_or_refusal	kf3: act birth translated: chan 0xc1d00016:0xff040002 BORN Translated: token 0x804 -> host 0x1002b in VasKey(13965662457344034928) gpfifo=0x120560000x16384 userd=Some(Sysmem { base: 10629518336, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00300000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (4642 us, off the GSP lock)
+2350	engine_or_refusal	kf3: act birth translated: chan 0xc1d00018:0xff040003 BORN Translated: token 0x1805 -> host 0x3002c in VasKey(13965662457344034928) gpfifo=0x12058b000x2048 userd=Some(Sysmem { base: 10629518848, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00400000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (7076 us, off the GSP lock)
+2407	engine_or_refusal	kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965662457344034928) gpfifo=0x120592000x2048 userd=Some(Sysmem { base: 10629519360, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (4748 us, off the GSP lock)
+2455	engine_or_refusal	kf3: act birth translated: chan 0xc1d0001a:0xff040005 BORN Translated: token 0x2007 -> host 0x6002e in VasKey(13965662457344034928) gpfifo=0x120599000x2048 userd=Some(Sysmem { base: 10629519872, size: 512 }) engine=0x1b tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00600000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (6826 us, off the GSP lock)
+2507	engine_or_refusal	kf3: act birth translated: chan 0xc1d0001b:0xff040006 BORN Translated: token 0x2008 -> host 0x6002f in VasKey(13965662457344034928) gpfifo=0x1205a1000x2048 userd=Some(Sysmem { base: 10629520384, size: 512 }) engine=0x1b tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00700000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (5547 us, off the GSP lock)
+2565	engine_or_refusal	kf3: act birth translated: chan 0xc1d0001c:0xff040007 BORN Translated: token 0x2809 -> host 0x70030 in VasKey(13965662457344034928) gpfifo=0x1205a9000x2048 userd=Some(Sysmem { base: 10629520896, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00800000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (6238 us, off the GSP lock)
+2617	engine_or_refusal	kf3: act birth translated: chan 0xc1d0001d:0xff040008 BORN Translated: token 0x200a -> host 0x60031 in VasKey(13965662457344034928) gpfifo=0x1205b1000x2048 userd=Some(Sysmem { base: 10628186112, size: 512 }) engine=0x1b tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00900000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (5170 us, off the GSP lock)
+2810	engine_or_refusal	kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2814	engine_or_refusal	kf3: GSP REFUSED fn76/0x007302a2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2818	engine_or_refusal	kf3: GSP REFUSED fn76/0x007302a6=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2826	engine_or_refusal	kf3: GSP REFUSED fn76/0x00730128=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2901	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+2993	engine_or_refusal	kf3: act birth translated: chan 0xc1d00020:0xff040009 BORN Translated: token 0x80b -> host 0x10032 in VasKey(13965662577603119184) gpfifo=0x1200c4000x4096 userd=Some(Sysmem { base: 10628096000, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00a00000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (4483 us, off the GSP lock)
+3016	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+3128	engine_or_refusal	kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+3192	engine_or_refusal	kf3: act birth translated: chan 0xc1d00025:0xff04000a BORN Translated: token 0x80c -> host 0x10033 in VasKey(13965662594782988368) gpfifo=0x200c4000x16384 userd=Some(Sysmem { base: 10627768320, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00b00000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false scheduled_at_birth=true fast=off (3766 us, off the GSP lock)
+3290	engine_or_refusal	kf3: act birth translated: chan 0xc1d00028:0xff04000b BORN Translated: token 0xd -> host 0x34 in VasKey(13965662594782988368) gpfifo=0x200ef000x16384 userd=Some(Sysmem { base: 10627768832, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00c00000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (9433 us, off the GSP lock)
+10194	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+10216	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+10221	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+10232	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+10239	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+10246	engine_or_refusal	kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+10527	engine_or_refusal	kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status

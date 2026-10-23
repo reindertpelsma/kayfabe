@@ -1,0 +1,15 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57296386,
+  "utc": "2026-10-23T02:03:15.358138+00:00",
+  "owned_pid": 102721,
+  "starttime": "382419",
+  "host_xid_unchanged": true,
+  "qmp_status": "running",
+  "reason": "arm wrapper terminated graceful stop before QMP quit fallback",
+  "quit_rc": 0,
+  "quit_stdout": "{}\n",
+  "quit_stderr": "",
+  "owned_exe_absent": true,
+  "end_utc": "2026-10-23T02:03:15.455431+00:00"
+}

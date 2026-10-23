@@ -1,17 +1,17 @@
-ADAPTIVE GA102 — LIVE 2026-10-23
+ADAPTIVE GA102 — PARTIAL, 2026-10-23; supersedes earlier LIVE entries.
 
-1. MEASURED (2026-10-23, `START.json`): lease57296386, RTX3090 candidate,$0.223333/h; auto170min armed first, deadline03:20:59Z; sourceac21aef93.
-2. MEASURED (2026-10-23, `initial_inventory.txt`): pinned SSH, KVM present,23 CPUs,50367MiB RAM,175G disk/167G initially free.
-3. MEASURED (2026-10-23, `native_gates/sweep_host_die.log`): RM arch0x170/impl2 confirmsGA102 on595.91.07.
-4. MEASURED (2026-10-23, `native_gates/sweep_host_preflight.log`): host preflight SOUND; native driver open and device nodes usable.
-5. MEASURED (2026-10-23, `native_gates/sweep_gates.log`): gates9/9+gate10PASS, USER12/12,0refused at00:51:28Z.
-6. MEASURED (2026-10-23, `deployment_receipt.json`): controller1837 running, source frozenac21aef93,35-file archive/extracted allocation exporter hash verified.
-7. MEASURED (2026-10-23, `parallel_transfer.log`, `appdisk_receipt.json`): pinned6.8GB app image complete140.121s/eight streams/fullSHA; NVRTC remote pin also verified.
-8. MEASURED (2026-10-23, `native_gates/sweep_windows_media.log`): all four original Windows media pins pass; media helper exited0 at00:48:47Z.
-9. CODE READ (2026-10-23, `harness_recipe/`): raw30/30,CUDA4/4,GRtierPASS at01:00:09Z, n1/spreadN/A; exact five-source-fault baseline frozen (`native_complete/`). generic install boot exited0 at01:28:30Z; verification boot recorded48s/OSquery15.4196s/factor8 (`baseline_calibration/box_readiness.json`); baseline checks and bind pending.
-10. CODE READ (2026-10-23, commitac21aef93): common Windows adapter reuses SW2 policy4ede56ac7; measured4–10x factor, ceilings, persisted stage and export reserve; side effects single attempt.
-11. MEASURED (2026-10-23, `../adaptive/green.log`, `../adaptive/sw2_shared_green.log`): adaptive57/57 and shared21/21 pass; prior desktop70/70 pass.
-12. MEASURED (2026-10-23, `../adaptive/mutants.json`): ten mutants killed15/6/10/6/9/2/2/3/3/2; source restored; no Rust change/added lint site, fresh clippy not run.
-13. CODE READ (2026-10-23): 580.88 bindPASS/Code22, both GSPkeys1; parent sealed/stopped01:39:44Z (`bind_complete/`). Cold ON child reachedSSH with exactsource/flags; enable/desktop/apps/Unigine/600s hold pending.
-14. INFERRED (2026-10-23, `START.json`): conservative prior$6.722848 plus full new allowance$1.632778=$8.355626<12; Round3 exposure$4.552008<8; reserve$5 untouched.
-15. CODE READ (2026-10-23): only own lease57296386 active; preserve bounded evidence before exact-id teardown/API absence, then Turing if a compliant offer is available.
+1. MEASURED (lease57296386, `START.json`): RTX3090/GA102, host595.91.07 OPEN, sourceac21aef93; quote$0.223333/h, auto170min armed first.
+2. MEASURED (lease57296386, `native_complete/`): native raw30/30,CUDA4/4,GRtier,gates9+10,USER12/12 PASS; n1,spreadN/A.
+3. MEASURED (lease57296386, `stopped_complete/s4_manual_stop_receipt.json`): final host journal matches exact frozen five native controls; no extra Xid.
+4. MEASURED (lease57296386, `baseline_calibration/box_readiness.json`): stdVGA verification boot48s, actual OS query15.4196s, once-per-box factor8.
+5. MEASURED (lease57296386, `bind_complete/bwr_bind.log`): adaptive SSH reply55.35s; signed580.88/32.0.15.8088, Code22, both GSPkeys1; frozen parent sealed01:39:44Z.
+6. MEASURED (lease57296386, `stopped_complete/arm_ampere_s4_enable.txt`): single ON enable reached actual PnP/CIM Code0/OK at01:46:12.1289843Z.
+7. MEASURED (lease57296386, `stopped_complete/arm_ampere_s4_diag_min_readiness.json`): next readonly actual-state query timed out twice240s,01:46:12.636–01:54:12.657Z; READINESS_INCONCLUSIVE.
+8. MEASURED (lease57296386, `stopped_complete/s4_shell_pulse.txt`): plain shell pulse replied after21.36s; diagnostic timeout alone does not establish driver failure.
+9. MEASURED (lease57296386, `stopped_complete/arm_ampere_s4_live_events.txt`): WATCHDOG file timestamp01:46:08.1838086Z; two WER LiveKernelEvent193/815 records at01:46:42Z; reason unresolved.
+10. CODE READ (2026-10-23, [Microsoft 0x193 documentation](https://learn.microsoft.com/windows-hardware/drivers/debugger/bug-check-0x193--video-dxgkrnl-livedump)): 0x193 identifies a graphics live dump; public reason815 semantics not established. No dump binary inspected.
+11. MEASURED (lease57296386, `stopped_complete/s4_event_correlation.json`):3856 RPC rows; dump timestamp bracketed by observer ordinals3273/3274, last3855 at01:46:35.472539Z; causal RPC UNKNOWN.
+12. MEASURED (lease57296386, `stopped_complete/arm_ampere_s4.log`): desktop/apps/Unigine/600s hold NOTRUN; no acceptance pass and no revised app oracle.
+13. MEASURED (lease57296386, `stopped_complete/s4_manual_stop_receipt.json`): wrapper interrupted graceful stop; documented direct QMP quit succeeded02:03:15Z, owned QEMU exe absent.
+14. CODE READ (2026-10-23): shared adaptive proof57/57+SW2policy21/21, existing desktop70/70 pass; ten mutants each>=2killers; Rust changes0/added lint sites0, fresh clippy not run.
+15. CODE READ (2026-10-23): publish this evidence before exact-ID teardown/API absence, then Turing; remaining total budget is sufficient, no owner approval needed.

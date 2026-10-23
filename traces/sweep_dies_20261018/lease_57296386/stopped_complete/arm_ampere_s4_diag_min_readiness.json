@@ -1,0 +1,25 @@
+{
+  "started_utc": "2026-10-23T01:46:12.636084+00:00",
+  "box_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "scale": 8,
+  "profile_sha256": "632136f8d143c834e020b90bf46367cdd23bb4e9d183cdf76591ea7bca68f006",
+  "mode": "query",
+  "attempts": [
+    {
+      "attempt": 1,
+      "timeout_seconds": 240.0,
+      "returncode": 124,
+      "remaining_seconds": 3001.519258532001
+    },
+    {
+      "attempt": 2,
+      "timeout_seconds": 239.99514137900042,
+      "returncode": 124,
+      "remaining_seconds": 2761.502570421
+    }
+  ],
+  "result": "READINESS_INCONCLUSIVE",
+  "reason": "two transient readiness failures; no state evidence",
+  "finished_utc": "2026-10-23T01:54:12.657889+00:00"
+}

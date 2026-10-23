@@ -1,0 +1,25 @@
+READINESS_STAGE seconds=3600.0
+
+/workspace/sweep-win-57296386/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=ampere_s4 source=ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7 profile=on 2026-10-23T01:40:53+00:00
+[2026-10-23T01:40:53Z] detached: tag=ampere_s4, log logs/ampere_s4_run.log (stdout logs/ampere_s4_run.out)
+KF_SSH_UP
+{"pid": 102721, "exe": "/workspace/bench/kf3-bins/ac21aef9/qemu-system-x86_64", "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/sweep-win-57296386/secureboot/kf-gop.ac21aef9.signed.efi,id=kf0,guest-driver=580.65.06"}
+APPDISK_GUEST_COPY_DONE 2026-10-23T01:44:36+00:00
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-23T01:45:38.7681995Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2204&SUBSYS_147D10DE&REV_A1\3&11583659&0&30
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 3090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 3090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-23T01:46:12.1289843Z; device status is verdict, not this command rc
+PRE_CLEANUP_START rc=75 2026-10-23T01:54:12+00:00
+{"rpcs": 3856, "unload_ordinals": [], "teardown_start_ordinal": null, "last_nonfree_before_teardown": []}
+[2026-10-23T01:54:28Z] stopping kfwin (pid 102721)
+OWN_VM_STILL_ALIVE_STOP
+/workspace/sweep-win-57296386/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=ampere_s4 rc=15 2026-10-23T02:01:12+00:00

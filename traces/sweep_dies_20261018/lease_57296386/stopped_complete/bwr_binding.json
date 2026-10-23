@@ -1,0 +1,6 @@
+{
+  "Name": "NVIDIA GeForce RTX 3090",
+  "DriverVersion": "32.0.15.8088",
+  "ConfigManagerErrorCode": 22,
+  "PNPDeviceID": "PCI\\VEN_10DE&DEV_2204&SUBSYS_147D10DE&REV_A1\\3&11583659&0&30"
+}

@@ -1,0 +1,18 @@
+{
+  "started_utc": "2026-10-23T01:45:23.874386+00:00",
+  "box_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "scale": 8,
+  "profile_sha256": "632136f8d143c834e020b90bf46367cdd23bb4e9d183cdf76591ea7bca68f006",
+  "mode": "once",
+  "attempts": [
+    {
+      "attempt": 1,
+      "timeout_seconds": 900.0,
+      "returncode": 0,
+      "remaining_seconds": 3241.634872105001
+    }
+  ],
+  "result": "ACTUAL_REPLY",
+  "finished_utc": "2026-10-23T01:46:12.525398+00:00"
+}

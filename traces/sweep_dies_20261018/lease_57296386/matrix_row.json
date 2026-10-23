@@ -1,0 +1,21 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57296386,
+  "die": "GA102",
+  "gpu": "RTX 3090",
+  "host_driver": "595.91.07 OPEN",
+  "guest_driver": "580.88 / 32.0.15.8088",
+  "rev": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "flags": "harness_recipe/p19.flags; process receipt in stopped_complete",
+  "native": "PASS: raw30/30 CUDA4/4 GR gates9+10 USER12/12",
+  "bind": "PASS: real Code22 sealed parent",
+  "on": "PASS: real Code0 at2026-10-23T01:46:12.1289843Z",
+  "desktop": "NOT ESTABLISHED",
+  "apps": "NOTRUN",
+  "unigine": "NOTRUN",
+  "hold": "NOTRUN",
+  "verdict": "PARTIAL / READINESS_INCONCLUSIVE with unresolved graphics LiveKernelEvent193/815",
+  "first_failure": "diag_min readonly actual-state query two240s attempts; start01:46:12.636Z/end01:54:12.657Z",
+  "first_anomaly": "WATCHDOG timestamp01:46:08.1838086Z, WER1001 at01:46:42.4027681Z; causal RPC not established",
+  "evidence": "stopped_complete/; s4_event_correlation.json"
+}

@@ -1,0 +1,8 @@
+{
+  "class": "INFERRED",
+  "utc": "2026-10-23T01:52:42.213814+00:00",
+  "lease_id": 57296386,
+  "hypothesis": "the blocked post-enable diagnostic is a CIM inventory stall while a simple owned guest shell can still reply",
+  "falsifier": "the authored UTC/process pulse also fails its measured deadline, or the VM exits or a new unmatched host Xid appears",
+  "scope": "read-only observation; cannot advance state or stand in for required driver/health proof"
+}
