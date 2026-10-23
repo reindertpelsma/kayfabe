@@ -1,0 +1,39 @@
+{
+  "classification": "MEASURED",
+  "evidence": "stage-verdict-controls.json",
+  "expected_red_commit": "9772b2ae9",
+  "red_tests": 8,
+  "red_behavioral_failures": 5,
+  "green_passed": 8,
+  "green_failed": 0,
+  "mutants": [
+    {
+      "mutant": "ignore-proxy-verdict",
+      "distinct_test_killers": [
+        "FAIL: test_incomplete_proxy_is_not_a_whole_run_pass (test_stage_verdict.StageVerdictControls.test_incomplete_proxy_is_not_a_whole_run_pass)",
+        "FAIL: test_live_failed_proxy_is_not_a_whole_run_pass (test_stage_verdict.StageVerdictControls.test_live_failed_proxy_is_not_a_whole_run_pass)",
+        "FAIL: test_missing_proxy_stage_refuses (test_stage_verdict.StageVerdictControls.test_missing_proxy_stage_refuses)",
+        "FAIL: test_only_eleven_primary_phases_refuses (test_stage_verdict.StageVerdictControls.test_only_eleven_primary_phases_refuses)",
+        "FAIL: test_zero_primary_phases_refuses (test_stage_verdict.StageVerdictControls.test_zero_primary_phases_refuses)"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "ignore-phase-completion",
+      "distinct_test_killers": [
+        "FAIL: test_only_eleven_primary_phases_refuses (test_stage_verdict.StageVerdictControls.test_only_eleven_primary_phases_refuses)",
+        "FAIL: test_zero_primary_phases_refuses (test_stage_verdict.StageVerdictControls.test_zero_primary_phases_refuses)"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "ignore-outer-restoration",
+      "distinct_test_killers": [
+        "FAIL: test_failed_outer_run_refuses (test_stage_verdict.StageVerdictControls.test_failed_outer_run_refuses)",
+        "FAIL: test_unrestored_host_refuses (test_stage_verdict.StageVerdictControls.test_unrestored_host_refuses)"
+      ],
+      "exit": 1
+    }
+  ],
+  "scope": "Evidence/report predicate only. Original host runner results remain unchanged; run4643 outerPASS plus proxyFAIL is classified PARTIAL, never a clean whole-run PASS."
+}

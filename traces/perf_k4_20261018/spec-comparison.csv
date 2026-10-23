@@ -1,0 +1,6 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Diagnostic runs4642/4649 kayfabe714ec29d3 and4648/4643 VFIO; RTX4070; Win11 driver580.88/Linux595.91.07;12GiB guest RAM,8vCPU;FullHD;9216MiB kayfabe store/test broker60Hz/1920x1080 virtual desktop versus12282MiB VFIO/physical primary3840x2160,virtual8640x2160;200ms NVML/query and1s memory observers, Linux dmon1s;two completed primary boots per arm;4643 optional post-collection display control failed, saved mode restored;three whole-run passes only.
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
+workload,4642 composite,4648 composite,4649 composite,4643 composite,kayfabe mean composite,kayfabe min composite,kayfabe max composite,VFIO mean composite,VFIO min composite,VFIO max composite,"ratio kayfabe mean/VFIO mean -- (nc) research comparison, not a SPEC-ranked result"
+catia-07,51.55 (nc),64.02 (nc),51.49 (nc),64.06 (nc),51.52 (nc),51.49 (nc),51.55 (nc),64.04 (nc),64.02 (nc),64.06 (nc),0.8045 (nc)
+creo-04,73.6 (nc),106.83 (nc),70.18 (nc),107.42 (nc),71.89 (nc),70.18 (nc),73.6 (nc),107.125 (nc),106.83 (nc),107.42 (nc),0.67109 (nc)

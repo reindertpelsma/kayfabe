@@ -1,0 +1,67 @@
+{
+  "classification": "MEASURED",
+  "evidence": "k4-host-return.json",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "time": "2026-10-23T10:11:05.109404+00:00",
+  "health_exit": 0,
+  "health": {
+    "classification": "MEASURED",
+    "evidence": "final-health.json",
+    "time": "2026-10-23T12:08:29.015705+02:00",
+    "nvidia_smi_before": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 525 MiB",
+      "stderr": ""
+    },
+    "cuda_before": 0,
+    "cuda_after": 0,
+    "nvidia_smi_after": {
+      "exit": 0,
+      "stdout": "NVIDIA GeForce RTX 4070, 595.91.07, 37, 525 MiB",
+      "stderr": ""
+    },
+    "gdm": {
+      "exit": 0,
+      "stdout": "active",
+      "stderr": ""
+    },
+    "nvidia_bound": true,
+    "automatic_login": {
+      "configured": true,
+      "enabled": true,
+      "user_present": true
+    },
+    "display_before": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "gdm_restart_for_display": false,
+    "display_after": {
+      "monitor_count": 2,
+      "logical_monitor_count": 2
+    },
+    "ubuntu_logged_in": true
+  },
+  "source_head": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "live_owned_workers": [],
+  "host_target_deleted": true,
+  "new_host_xids": 0,
+  "xid_guard": {
+    "method": "Existing unchanged lane epoch.read_xids + zero_delta, same as every K4 launch/teardown; all Xid records for whole boot, never a tail or per-code exception",
+    "full_sequence_equal": true,
+    "baseline_count": 548,
+    "observed_count": 548,
+    "sequence_sha256": "0374339c5c7786bf23d2ce0fd472d72c191274742418ed5de6adce560a1f6fae"
+  },
+  "preserved_secondary_reader_refusal": {
+    "source": "host-return-k4.py -> native_xid_guard.kernel_snapshot",
+    "error": "GuardRefused: kernel journal byte bound exceeded",
+    "bound_bytes": 16777216,
+    "status": "REFUSED_RETAINED; no success claimed for that full-journal reader; no limit enlarged or record dropped",
+    "resolution": "Required Xid contract independently verified by unchanged lane Xid-only reader under the same16MiB bound. Non-Xid kernel text is outside the Xid sequence contract."
+  },
+  "watchdog_cleanup_receipts": [],
+  "new_vm_work_after_yield": "FORBIDDEN_UNTIL_CONTROLLER_RETURNS_HOST",
+  "receipt_scope": "Typed copy of final host receipt; ambiguous legacy metadata field omitted, raw private receipt SHA256 retained. Necessary GPU restoration checks are timestamped in health; no GPU/VM measurements followed the failed control.",
+  "raw_receipt_sha256": "b4b2102e391c31f757f0c7cbf1fa7054f89cc1b902b863a7f0e04dc43190e56a"
+}

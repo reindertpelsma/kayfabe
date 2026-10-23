@@ -1,0 +1,17 @@
+{
+  "classification": "MEASURED",
+  "evidence": "host-yield.json",
+  "round": "Q4 K4",
+  "time": "2026-10-23T10:11:36.816606+00:00",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "state": "HOST_YIELDED",
+  "health_receipt": "round-6d/r1/k4-host-return.json",
+  "lease_released": true,
+  "quiet_absent": true,
+  "remaining_in_plan": [
+    "CPU-only analysis/plots and final evidence/report push",
+    "Future only after explicit host return: matched-desktop-geometry CATIA/Creo experiment",
+    "Candidate correctness remains HOLD: independent M3 review, VMM CE missing-bind positive witness and outstanding full qualification"
+  ],
+  "instruction": "No Q4 GPU/VM work after this marker until explicit controller host return."
+}

@@ -1,87 +1,17 @@
-# Q4 K4 GPU-side attribution
+# Q4 K4 GPU attribution — PARTIAL
 
-STATUS: RESEARCH IN PROGRESS, 2026-10-23. Candidate correctness remains PARTIAL/HOLD.
+MEASURED 2026-10-23, [cohort.json](cohort.json): exact candidate `714ec29d3`, two completed primary boots per arm for CATIA/Creo: kayfabe 4642/4649 and VFIO 4648/4643. All 76 viewperf processes exited 0; primary event/boot/Budget/poison/Xid guards stayed clear and all hosts restored. Three whole diagnostic runs pass. Native 4643 failed an additional display-mode verification after the main measurements; it is **not a whole-run PASS**.
 
-CODE READ ROUND_K4.md / plan.json: explicit host return for a four-hour
-investigation, deadline11:00:58UTC and restore cutoff10:45:58UTC. G1–G5
-falsifiers precede the runs. Exact candidate714ec29d3, no product optimization.
+MEASURED 2026-10-23, [analysis-gate-failure.json](analysis-gate-failure.json): the original outer runner reported PASS despite proxy FAIL. The independent clean-cohort builder rejected it and remains refusing. [cohort.json](cohort.json) is an explicitly PARTIAL inventory of observations collected before that failure. Original results are retained. Do not reuse the host runner's outer verdict as a whole-run gate; [stage-verdict-controls.json](stage-verdict-controls.json) proves the defect and validates the stricter report predicate.
 
-MEASURED 2026-10-23, first-clean-pair.json: kayfabe4642 and VFIO4648 completed
-CATIA/Creo and12 own proxy phases each, with successful sampler export,
-normal shutdown/restore and zero153/4101/reboot/Budget/new Xid. The original second
-kayfabe run4645 finished both viewsets, then failed the proxy installer at
-the OS argv byte limit and restored cleanly. Its FAIL remains excluded.
-Replacement4649 and native4643 are running; final comparisons await them.
+MEASURED 2026-10-23, [proxy-results.json](proxy-results.json): all 60 primary/windowed phases completed, 720 pixel checks passed. The windowed n = 1/arm comparison removes the primary near-60-call/s contrast: kayfabe 3570 versus VFIO 3208 mean Present-call iterations/s. These are generated D3D11 loop metrics, not displayed fps or a CATIA/Creo replay. The failed native fullscreen-coverage control produced no proxy metric; saved mode restoration was verified. Its falsifier remains untested.
 
-MEASURED 2026-10-23, frame-backing-4642b.json: the own broker retained an
-8294400-byte frame exported by udmabuf. CODE READ at714ec29d3,
-crates/kf-qemu/src/broker.rs::BrokerSeat::frame: this rung pins a memfd mapping
-for D2H and wraps those host pages in udmabuf. A dma-buf accepted by the broker
-does not establish GPU-resident backing. The initial directory-only process
-filter found no broker and remains inconclusive in frame-backing-4642.json.
+INFERRED 2026-10-23, [analysis.md](analysis.md): no single GPU-side cause is established. Lower kayfabe SM clocks, active throttling and persistent link downtraining are not observed; traffic directions/budgets differ. ONE next experiment is matched-desktop CATIA/Creo, after repairing and validating the failed mode oracle in a later host lease. No product optimization was implemented; candidate correctness remains HOLD, including prior M3/CE witness/outstanding qualification.
 
-INFERRED windowed-proxy-plan.json: the primary proxy's borderless window
-fills the virtual1920x1080 desktop but only part of the physical desktop.
-An additional1280x720 visible-window control, with occlusion/status logging,
-is predeclared for the second pair only. The original12 phases remain intact.
-The generated D3D11 grid is a proxy; CATIA/Creo use OpenGL.
+MEASURED 2026-10-23, [analysis](analysis.md), [physical plot](physical-telemetry.png) and [proxy plot](present-proxy.png): boot means/ranges and G1–G5 outcomes. SPEC numbers appear only in the stamped [table](spec-comparison.md) and [CSV](spec-comparison.csv), with `(nc)`, release, full configuration and disclaimer. [Stamp source](spec-stamp-source.json) pins the owner tool. Raw vendor exports remain private under each own host run directory listed in cohort.json.
 
-MEASURED 2026-10-23, analysis-controls.json / clock-envelope-controls.json:
-17+10 GPU-free evidence-integrity tests pass. Four original mutants and two
-clock-envelope mutants each lose at least two assertions. Expected red
-24aa08d53 /6985bf181 were missing new APIs/imports with zero behavioral
-assertions executed, not evidence of production runtime defects.
+MEASURED 2026-10-23, [analysis-controls.json](analysis-controls.json), [clock-envelope-controls.json](clock-envelope-controls.json), [transport-controls.json](transport-controls.json), [stage-verdict-controls.json](stage-verdict-controls.json): 38 GPU-free tests pass, 12 Python mutants each lose at least two tests; each primary boot passes 6 Windows identity checks with 3 mutants losing 2 checks each. The report-gate EXPECTED RED has 5 behavioral failures; earlier missing-API reds have zero behavioral executions. [Excluded attempts](excluded-attempts.json) retain all earlier failures.
 
-MEASURED 2026-10-23, identity-controls-4642.json: canonical creation/image
-identity from held process handles passes six positive/negative checks;
-starttime/image/old-array mutants lose two assertions each. The original
-array wrapper failed two positive assertions. The earlier4646 decoded
-control passed once, then repeat4647 failed positive image-identity checks;
-that original failure is retained in identity-controls-4647-original-failure.json.
-All field matches remain strict, and no own control child remains.
+MEASURED 2026-10-23, [host-yield.json](host-yield.json) / [restore receipt](k4-host-return.json): yielded 10:11:36 UTC, before 11:00:58 UTC deadline; NVIDIA bound, fresh cuInit 0, GDM/Ubuntu/autologin/two monitors, no own workers, dedicated Cargo targets absent, lease released and quiet absent. A separate full-journal reader hit its 16 MiB bound and remains refused; the unchanged lane Xid-only reader under the same bound independently verified all 548 historical records, unchanged. No GPU/VM work follows yield until explicit host return.
 
-MEASURED 2026-10-23, native-progress-control-4648.json: the native supervisor
-received an agent signature field before benchmarking, with an empty
-pre-workload signature. Only subsequent real vendor-log changes establish
-progress. The prior4646 controller lacked its per-run agent environment and
-hit the unchanged900s watchdog after viewsets/proxy completed during export;
-its original failed result remains excluded from the clean repetitions.
-
-MEASURED 2026-10-23, aux4644-recovery.json: the earlier kayfabe viewsets
-completed but sampler identity/export failed. Raw artifacts were recovered
-read-only from its stopped overlay. Auxiliary4646 essential sampler files
-were likewise extracted read-only and matched source SHA256s; a recursive
-folder copy failed on other files, so no complete-folder recovery is claimed.
-Neither auxiliary run is counted as a clean repetition.
-
-CODE READ controls/clock_envelope.py: the first fixed-offset analysis model
-failed its3s uncertainty check for4642; that failure is retained. The
-conservative analysis accepts a physical sample only for every offset in the
-full observed host/guest response-bracket union, plus vendor-boundary exclusion.
-This removes more edge data. Final cohort statistics use the same maximum
-exclusion margin across all four clean boots; no workload timer changes.
-
-MEASURED 2026-10-23, host-preflight.json: CUDA0, NVIDIA bound,
-GDM/Ubuntu/autologin and two monitors before VM work; idle link Gen1x16,
-capability Gen4x16. Prelaunch4640 never created a VM; its missing staged
-receipt failure remains in prelaunch-4640.json.
-
-MEASURED 2026-10-23, transport-controls.json: three script-transport tests pass;
-three mutants each fail two tests. EXPECTED RED f29d3e7cd was a missing
-new API/import, with zero behavioral assertions. The212922-byte installer
-is supplied via stdin to the same agent queue, preserving exact UTF-8 and
-newlines. This fixes the mechanical argv limit without changing a timer or
-a guard. No product source or production behavior changed.
-
-MEASURED 2026-10-23, windowed-kayfabe-4649.json: the visible1280x720
-client, with unchanged1920x1080 render buffer, completes3434–3644
-Present-call loop iterations/s, zero occluded/other status. The primary
-borderless near60 result is geometry-sensitive; it does not establish a
-general kayfabe Present-throughput cap. Native windowed match remains pending.
-
-INFERRED fullscreen-coverage-plan.json: predeclared additional native4643
-control runs after all headline viewsets and proxy phases. It temporarily
-sets the primary guest display to1920x1080, repeats the SAME primary proxy
-three times, then verifies the exact saved mode was restored. Native
-thousands of calls/s in that setup falsifies display-coverage-only explanation.
-No viewset score or candidate product behavior is changed by this control.
+CODE READ 2026-10-23, [plan](plan.json): native physical NVML/query at 200 ms provides the requested fields; continuous native dmon was not captured, only its support probe. True OpenGL no-present, physical TSG/preemption and broker new-content tails remain unverified. Hypotheses/falsifiers were declared before measurement in plan.json, proxy-plan.json, windowed-proxy-plan.json and fullscreen-coverage-plan.json.

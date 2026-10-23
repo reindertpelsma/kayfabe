@@ -1,0 +1,35 @@
+{
+  "classification": "MEASURED",
+  "evidence": "main-phase-exit-receipts.json",
+  "scope": "Actual owned child exit records for primary/windowed phases only; does not override original proxyFAIL or whole-run rejection in4643",
+  "runs": [
+    {
+      "run": 4642,
+      "primary_and_windowed_phase_exit_count": 12,
+      "nonzero_exits": 0,
+      "last_phase_end_guest_UTC": "2026-10-23T06:51:27.4499599Z",
+      "optional_mode_control": "NOT_REQUESTED"
+    },
+    {
+      "run": 4648,
+      "primary_and_windowed_phase_exit_count": 12,
+      "nonzero_exits": 0,
+      "last_phase_end_guest_UTC": "2026-10-23T07:07:16.3739363Z",
+      "optional_mode_control": "NOT_REQUESTED"
+    },
+    {
+      "run": 4649,
+      "primary_and_windowed_phase_exit_count": 18,
+      "nonzero_exits": 0,
+      "last_phase_end_guest_UTC": "2026-10-23T07:50:13.1292514Z",
+      "optional_mode_control": "NOT_REQUESTED"
+    },
+    {
+      "run": 4643,
+      "primary_and_windowed_phase_exit_count": 18,
+      "nonzero_exits": 0,
+      "last_phase_end_guest_UTC": "2026-10-23T08:06:41.1199654Z",
+      "optional_mode_control": "FAIL_APPLIED_MODE_VERIFICATION_AFTER_THESE_PHASES"
+    }
+  ]
+}

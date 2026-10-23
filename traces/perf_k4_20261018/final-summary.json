@@ -1,0 +1,36 @@
+{
+  "classification": "MEASURED",
+  "evidence": "final-summary.json",
+  "round": "Q4 K4",
+  "status": "PARTIAL",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "start": "2026-10-23T07:00:58+00:00",
+  "deadline": "2026-10-23T11:00:58+00:00",
+  "host_yield": "2026-10-23T10:11:36.816606+00:00",
+  "measurements": "Two primary measurement boots/arm,three whole diagnostic passes;4643 optional post-collection mode verification failed and strict gate rejects original outer PASS",
+  "primary_runs": [
+    4642,
+    4648,
+    4649,
+    4643
+  ],
+  "primary_viewperf_processes_exit_zero": 76,
+  "primary_proxy_phases": 60,
+  "pixel_checks": 720,
+  "python_tests_green": 38,
+  "python_mutants": 12,
+  "Windows_identity_checks_per_boot": 6,
+  "Windows_identity_mutants": 3,
+  "mutant_minimum_distinct_test_killers": 2,
+  "product_optimization": false,
+  "correctness_verdict": "HOLD unchanged",
+  "one_next_experiment": "After mode-oracle validation in later returned host lease, matched one-display1920x1080 CATIA/Creo two boots/arm; falsifier in analysis.md",
+  "unverified": [
+    "True OpenGL same-viewset no-present",
+    "Physical TSG/preemption",
+    "Full matched-desktop control,blocked before measurement",
+    "Continuous native dmon stream;NVML/query200ms covers requested physical fields",
+    "Broker new-content tails"
+  ],
+  "cleanup": "Host restored/yielded,quiet absent,lock released,no own workers,dedicated Cargo targets absent;no GPU/VM work after yield"
+}

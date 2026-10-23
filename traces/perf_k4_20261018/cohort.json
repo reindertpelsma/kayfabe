@@ -1,0 +1,3374 @@
+{
+  "classification": "MEASURED",
+  "evidence": "cohort.json",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "measurement_runs": [
+    4642,
+    4648,
+    4649,
+    4643
+  ],
+  "status": "PARTIAL",
+  "scope": "Primary observations precede failed optional mode control in4643. Three whole diagnostic boots pass;4643 is not a whole-run PASS.",
+  "common_boundary_margin_seconds": 3.601275086402893,
+  "replication": "Two independent fresh boots per arm; polls and within-boot proxy phases are correlated. No inferential confidence intervals from n2.",
+  "runs": [
+    {
+      "classification": "MEASURED",
+      "evidence": "telemetry-4642.json",
+      "run": 4642,
+      "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "arm": "kayfabe",
+      "physical_location": "host",
+      "auxiliary": false,
+      "scope": "Diagnostic profiling; driver rolling windows are correlated, boot is replication unit; no vendor score fields",
+      "clock_alignment": {
+        "guest_capture": "2026-10-23T08:51:58.8575127+02:00",
+        "host_minus_guest_seconds_used": 7200.531561255455,
+        "offset_uncertainty_s": 2.601275086402893,
+        "observed_envelope": [
+          7197.930286169052,
+          7203.132836341858
+        ],
+        "original_fixed3_model": {
+          "status": "FAIL_RETAINED",
+          "point_offset": 7201.216292142868,
+          "worst_distance_from_point": 3.286005973815918
+        },
+        "anchors": 43,
+        "margin_per_subtest_seconds": 3.601275086402893,
+        "minimum_certified_margin": 3.601275086402893,
+        "method": "Vendor local timestamps use the captured explicit guest timezone. Every physical sample must remain inside the subtest for ALL offsets in the complete observed request/response bracket union plus1s vendor-boundary exclusion. Offset center is only a coordinate origin, not a constant-clock claim. Final cohort comparisons require the same maximum margin across all four clean boots; broader uncertainty removes more data. VFIO physical and guest memory share guest epoch. Between observed brackets, stock guest clock continuity remains a measurement assumption; harness makes no clock changes."
+      },
+      "whole_session_NVAPI": {
+        "supported_samples": 98,
+        "evicted_count_delta": 0,
+        "evicted_bytes_delta": 0,
+        "promoted_count_delta": 2,
+        "promoted_bytes_delta": 131072,
+        "meaning": "Adapter-reported counters, whole observer session including boot/setup/proxy. No assertion that all OS paging mechanisms are covered."
+      },
+      "rows": [
+        {
+          "workload": "catia-07",
+          "completed_subtests": 6,
+          "interior_seconds": 182.78469896316528,
+          "physical_samples": 913,
+          "samples_per_second": 4.994947636092819,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 913,
+              "mean": 74.5553121577218,
+              "min": 2.0,
+              "max": 100.0,
+              "median": 95.0
+            },
+            "util_mem": {
+              "n": 913,
+              "mean": 21.059145673603506,
+              "min": 2.0,
+              "max": 100.0,
+              "median": 12.0
+            },
+            "clock_sm_mhz": {
+              "n": 913,
+              "mean": 2853.9430449069005,
+              "min": 2490.0,
+              "max": 2880.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 913,
+              "mean": 10251.0,
+              "min": 10251.0,
+              "max": 10251.0,
+              "median": 10251.0
+            },
+            "pstate": {
+              "n": 913,
+              "mean": 2.0,
+              "min": 2.0,
+              "max": 2.0,
+              "median": 2.0
+            },
+            "power_mw": {
+              "n": 913,
+              "mean": 104639.29901423877,
+              "min": 39536.0,
+              "max": 156019.0,
+              "median": 99188.0
+            },
+            "power_limit_mw": {
+              "n": 913,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 913,
+              "mean": 46.55859802847755,
+              "min": 37.0,
+              "max": 54.0,
+              "median": 47.0
+            },
+            "pcie_gen": {
+              "n": 913,
+              "mean": 4.0,
+              "min": 4.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 913,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 913,
+              "mean": 248409.36582694415,
+              "min": 390.0,
+              "max": 1931298.0,
+              "median": 142919.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 913,
+              "mean": 278692.41621029575,
+              "min": 1171.0,
+              "max": 2942187.0,
+              "median": 182128.0
+            },
+            "fb_used_bytes": {
+              "n": 913,
+              "mean": 10999271957.870756,
+              "min": 10991763456.0,
+              "max": 11022958592.0,
+              "median": 10999955456.0
+            },
+            "bar1_used_bytes": {
+              "n": 913,
+              "mean": 10572182962.050383,
+              "min": 10562830336.0,
+              "max": 10596057088.0,
+              "median": 10573119488.0
+            },
+            "enc_util": {
+              "n": 913,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 913,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 913,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 913
+            },
+            "util_mem": {
+              "0": 913
+            },
+            "clock_sm_mhz": {
+              "0": 913
+            },
+            "clock_mem_mhz": {
+              "0": 913
+            },
+            "pstate": {
+              "0": 913
+            },
+            "power_mw": {
+              "0": 913
+            },
+            "power_limit_mw": {
+              "0": 913
+            },
+            "temp_c": {
+              "0": 913
+            },
+            "pcie_gen": {
+              "0": 913
+            },
+            "pcie_width": {
+              "0": 913
+            },
+            "pcie_rx_kb_s": {
+              "0": 913
+            },
+            "pcie_tx_kb_s": {
+              "0": 913
+            },
+            "fb_used_bytes": {
+              "0": 913
+            },
+            "bar1_used_bytes": {
+              "0": 913
+            },
+            "enc_util": {
+              "0": 913
+            },
+            "dec_util": {
+              "0": 913
+            },
+            "pcie_replays": {
+              "0": 913
+            }
+          },
+          "throttle_masks": {
+            "0": 913
+          },
+          "link_gen_width_counts": {
+            "4x16": 913
+          },
+          "query_duration_ms": {
+            "n": 913,
+            "mean": 41.73165388828039,
+            "min": 41,
+            "max": 48,
+            "median": 42
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 181,
+                "mean": 8381642749.480663,
+                "min": 1641796396,
+                "max": 8492544000,
+                "median": 8492544000
+              },
+              "1": {
+                "n": 181,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429
+              }
+            },
+            "NVAPI_supported_samples": 18,
+            "NVAPI_available_bytes": {
+              "n": 18,
+              "mean": 7068142250.666667,
+              "min": 4110548992,
+              "max": 8332169216,
+              "median": 7138191360.0
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 18,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0.0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 18,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1.0
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 8409985024.0,
+              "adapter_shared": 252993536.0,
+              "adapter_committed": 10232913920.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "Copy": {
+                "n": 397,
+                "mean": 12.729723173803526,
+                "min": 0.0014,
+                "max": 99.0478,
+                "median": 0.2401
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        },
+        {
+          "workload": "creo-04",
+          "completed_subtests": 13,
+          "interior_seconds": 281.3668477535248,
+          "physical_samples": 1407,
+          "samples_per_second": 5.000589128512117,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 1407,
+              "mean": 62.069651741293534,
+              "min": 2.0,
+              "max": 100.0,
+              "median": 64.0
+            },
+            "util_mem": {
+              "n": 1407,
+              "mean": 16.12864250177683,
+              "min": 2.0,
+              "max": 54.0,
+              "median": 13.0
+            },
+            "clock_sm_mhz": {
+              "n": 1407,
+              "mean": 2813.0383795309167,
+              "min": 2490.0,
+              "max": 2880.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 1407,
+              "mean": 10251.0,
+              "min": 10251.0,
+              "max": 10251.0,
+              "median": 10251.0
+            },
+            "pstate": {
+              "n": 1407,
+              "mean": 2.0,
+              "min": 2.0,
+              "max": 2.0,
+              "median": 2.0
+            },
+            "power_mw": {
+              "n": 1407,
+              "mean": 81428.01563610519,
+              "min": 38458.0,
+              "max": 141410.0,
+              "median": 79254.0
+            },
+            "power_limit_mw": {
+              "n": 1407,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 1407,
+              "mean": 42.704335465529496,
+              "min": 36.0,
+              "max": 49.0,
+              "median": 42.0
+            },
+            "pcie_gen": {
+              "n": 1407,
+              "mean": 4.0,
+              "min": 4.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 1407,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 1407,
+              "mean": 485416.49680170574,
+              "min": 1318.0,
+              "max": 2236083.0,
+              "median": 403271.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 1407,
+              "mean": 304719.5799573561,
+              "min": 1171.0,
+              "max": 1152929.0,
+              "median": 227880.0
+            },
+            "fb_used_bytes": {
+              "n": 1407,
+              "mean": 10998609848.676617,
+              "min": 10992943104.0,
+              "max": 11003822080.0,
+              "median": 10998448128.0
+            },
+            "bar1_used_bytes": {
+              "n": 1407,
+              "mean": 10571180656.443497,
+              "min": 10564009984.0,
+              "max": 10575872000.0,
+              "median": 10571612160.0
+            },
+            "enc_util": {
+              "n": 1407,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 1407,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 1407,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 1407
+            },
+            "util_mem": {
+              "0": 1407
+            },
+            "clock_sm_mhz": {
+              "0": 1407
+            },
+            "clock_mem_mhz": {
+              "0": 1407
+            },
+            "pstate": {
+              "0": 1407
+            },
+            "power_mw": {
+              "0": 1407
+            },
+            "power_limit_mw": {
+              "0": 1407
+            },
+            "temp_c": {
+              "0": 1407
+            },
+            "pcie_gen": {
+              "0": 1407
+            },
+            "pcie_width": {
+              "0": 1407
+            },
+            "pcie_rx_kb_s": {
+              "0": 1407
+            },
+            "pcie_tx_kb_s": {
+              "0": 1407
+            },
+            "fb_used_bytes": {
+              "0": 1407
+            },
+            "bar1_used_bytes": {
+              "0": 1407
+            },
+            "enc_util": {
+              "0": 1407
+            },
+            "dec_util": {
+              "0": 1407
+            },
+            "pcie_replays": {
+              "0": 1407
+            }
+          },
+          "throttle_masks": {
+            "0": 1407
+          },
+          "link_gen_width_counts": {
+            "4x16": 1407
+          },
+          "query_duration_ms": {
+            "n": 1407,
+            "mean": 41.533759772565745,
+            "min": 41,
+            "max": 45,
+            "median": 42
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 275,
+                "mean": 8492544000,
+                "min": 8492544000,
+                "max": 8492544000,
+                "median": 8492544000
+              },
+              "1": {
+                "n": 275,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429
+              }
+            },
+            "NVAPI_supported_samples": 25,
+            "NVAPI_available_bytes": {
+              "n": 25,
+              "mean": 6899214745.6,
+              "min": 6192984064,
+              "max": 8093659136,
+              "median": 6925807616
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 25,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 25,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 3112984576.0,
+              "adapter_shared": 429678592.0,
+              "adapter_committed": 3563446272.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "Copy": {
+                "n": 623,
+                "mean": 15.468002728731943,
+                "min": 0.0012,
+                "max": 100.0,
+                "median": 0.2048
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        }
+      ],
+      "whole_run_pass": true,
+      "raw_outer_verdict": "PASS",
+      "raw_proxy_verdict": "PASS",
+      "viewperf_process_exit_count": 19,
+      "guards": {
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": [],
+        "counters": {
+          "pointer_large_entries": 9112,
+          "pointer_entry_max_bytes": 1043244,
+          "refused_scan_budget": 0,
+          "poisoned": 0
+        },
+        "outer_reported_verdict": "PASS",
+        "restored": true,
+        "new_host_xids": 0,
+        "telemetry_exit": 0,
+        "controller_exit": 0
+      },
+      "host_load": {
+        "vm": {
+          "classification": "MEASURED",
+          "evidence": "load-before-vm.json",
+          "stage": "K4-4642",
+          "time": "2026-10-23T08:34:16.951904+00:00",
+          "uptime": "10:34:16 up 13 days, 14:55,  1 user,  load average: 0.08, 0.08, 0.30",
+          "load_average": [
+            0.0771484375,
+            0.08251953125,
+            0.29638671875
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "spec": {
+          "classification": "MEASURED",
+          "evidence": "load-before-spec.json",
+          "stage": "SPEC-4642-K4-KF1-clean",
+          "time": "2026-10-23T08:35:28.232958+00:00",
+          "uptime": "10:35:28 up 13 days, 14:56,  1 user,  load average: 1.59, 0.65, 0.49",
+          "load_average": [
+            1.58837890625,
+            0.6513671875,
+            0.4853515625
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        }
+      },
+      "identity_controls": {
+        "expected_red_positive_assertion_failures": 2,
+        "identity_source": "GetProcessTimes + QueryFullProcessImageNameW on the process handle; creation stored as exact decimal string",
+        "mutants": [
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-starttime"
+          },
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-image"
+          },
+          {
+            "name": "old-array-wrapper",
+            "distinct_positive_assertion_killers": 2
+          }
+        ],
+        "green_failed": 0,
+        "original_stop_output": "COLLECTOR_PID_IDENTITY_CHANGED",
+        "green_assertions": 6,
+        "kind": "sampler_identity_controls",
+        "live_own_children": [],
+        "shape": {
+          "direct_first_pid_is_array": false,
+          "decoded_start_type": "System.String",
+          "old_first_pid_is_array": true,
+          "direct_count": 2,
+          "old_outer_count": 1
+        },
+        "verdict": "PASS",
+        "classification": "MEASURED",
+        "correct_stop_output": "[{\"stopped\":true,\"pid\":14320,\"name\":\"base-0\",\"errors\":\"\"},{\"stopped\":true,\"pid\":13192,\"name\":\"base-1\",\"errors\":\"\"}]\r\n"
+      },
+      "raw_sha256": {
+        "guest-nvml.csv": "c1968252de1733e8973f3df7a5810e3cf52f4b1f66193af6304c1b260118550b",
+        "guest-memory.jsonl": "51c99f1dfcb50451aed1110b00cbafeea8e3ba9443441f3c1a162c41a1ae6a66",
+        "export.json": "0ee3160213fa8e144bc8c67642547ed995181f80954f6784a3dc21a5bef44dde",
+        "proxy-export.json": "5c16e1c1164ea4400ecd1d4d85efc663abba72c0f36e36c14e384aaedfffa30b",
+        "host-nvml.csv": "ee5c25662eca500f02f479419d58eec71e0c02ffff18ec4410a3f4e04df9746a"
+      },
+      "raw_evidence_directory": "/data/codex-Q4/round-6d/r1/energy-bisect/4642",
+      "proxy_phase_count": 12
+    },
+    {
+      "classification": "MEASURED",
+      "evidence": "telemetry-4648.json",
+      "run": 4648,
+      "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "arm": "VFIO",
+      "physical_location": "guest",
+      "auxiliary": false,
+      "scope": "Diagnostic profiling; driver rolling windows are correlated, boot is replication unit; no vendor score fields",
+      "clock_alignment": {
+        "guest_capture": "2026-10-23T09:07:54.8114324+02:00",
+        "host_minus_guest_seconds_used": 0.0,
+        "offset_uncertainty_s": 0.0,
+        "observed_envelope": [
+          0.0,
+          0.0
+        ],
+        "original_fixed3_model": {
+          "status": "PASS",
+          "point_offset": 0,
+          "worst_distance_from_point": 0
+        },
+        "anchors": 36,
+        "margin_per_subtest_seconds": 3.601275086402893,
+        "minimum_certified_margin": 3.0,
+        "method": "Vendor local timestamps use the captured explicit guest timezone. Every physical sample must remain inside the subtest for ALL offsets in the complete observed request/response bracket union plus1s vendor-boundary exclusion. Offset center is only a coordinate origin, not a constant-clock claim. Final cohort comparisons require the same maximum margin across all four clean boots; broader uncertainty removes more data. VFIO physical and guest memory share guest epoch. Between observed brackets, stock guest clock continuity remains a measurement assumption; harness makes no clock changes."
+      },
+      "whole_session_NVAPI": {
+        "supported_samples": 85,
+        "evicted_count_delta": 0,
+        "evicted_bytes_delta": 0,
+        "promoted_count_delta": 2,
+        "promoted_bytes_delta": 131072,
+        "meaning": "Adapter-reported counters, whole observer session including boot/setup/proxy. No assertion that all OS paging mechanisms are covered."
+      },
+      "rows": [
+        {
+          "workload": "catia-07",
+          "completed_subtests": 6,
+          "interior_seconds": 125.78469896316528,
+          "physical_samples": 604,
+          "samples_per_second": 4.801855909174414,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 604,
+              "mean": 91.8112582781457,
+              "min": 0.0,
+              "max": 100.0,
+              "median": 100.0
+            },
+            "util_mem": {
+              "n": 604,
+              "mean": 15.966887417218542,
+              "min": 1.0,
+              "max": 34.0,
+              "median": 14.0
+            },
+            "clock_sm_mhz": {
+              "n": 604,
+              "mean": 2845.6539735099336,
+              "min": 540.0,
+              "max": 2865.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 604,
+              "mean": 10473.682119205298,
+              "min": 5001.0,
+              "max": 10501.0,
+              "median": 10501.0
+            },
+            "pstate": {
+              "n": 604,
+              "mean": 0.014900662251655629,
+              "min": 0.0,
+              "max": 3.0,
+              "median": 0.0
+            },
+            "power_mw": {
+              "n": 604,
+              "mean": 127994.50331125828,
+              "min": 32320.0,
+              "max": 157305.0,
+              "median": 139056.0
+            },
+            "power_limit_mw": {
+              "n": 604,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 604,
+              "mean": 52.920529801324506,
+              "min": 45.0,
+              "max": 58.0,
+              "median": 53.0
+            },
+            "pcie_gen": {
+              "n": 604,
+              "mean": 4.0,
+              "min": 4.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 604,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 604,
+              "mean": 527325.9933774834,
+              "min": 300.0,
+              "max": 4127700.0,
+              "median": 479950.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 604,
+              "mean": 55690.894039735096,
+              "min": 350.0,
+              "max": 393100.0,
+              "median": 55925.0
+            },
+            "fb_used_bytes": {
+              "n": 604,
+              "mean": 2849907128.794702,
+              "min": 1836658688.0,
+              "max": 5377728512.0,
+              "median": 2958516224.0
+            },
+            "bar1_used_bytes": {
+              "n": 604,
+              "mean": 17150902272.0,
+              "min": 17150902272.0,
+              "max": 17150902272.0,
+              "median": 17150902272.0
+            },
+            "enc_util": {
+              "n": 604,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 604,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 604,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 604
+            },
+            "util_mem": {
+              "0": 604
+            },
+            "clock_sm_mhz": {
+              "0": 604
+            },
+            "clock_mem_mhz": {
+              "0": 604
+            },
+            "pstate": {
+              "0": 604
+            },
+            "power_mw": {
+              "0": 604
+            },
+            "power_limit_mw": {
+              "0": 604
+            },
+            "temp_c": {
+              "0": 604
+            },
+            "pcie_gen": {
+              "0": 604
+            },
+            "pcie_width": {
+              "0": 604
+            },
+            "pcie_rx_kb_s": {
+              "0": 604
+            },
+            "pcie_tx_kb_s": {
+              "0": 604
+            },
+            "fb_used_bytes": {
+              "0": 604
+            },
+            "bar1_used_bytes": {
+              "0": 604
+            },
+            "enc_util": {
+              "0": 604
+            },
+            "dec_util": {
+              "0": 604
+            },
+            "pcie_replays": {
+              "0": 604
+            }
+          },
+          "throttle_masks": {
+            "0": 598,
+            "1": 6
+          },
+          "link_gen_width_counts": {
+            "4x16": 604
+          },
+          "query_duration_ms": {
+            "n": 604,
+            "mean": 66.39403973509934,
+            "min": 56,
+            "max": 112,
+            "median": 66.0
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 123,
+                "mean": 11528044544,
+                "min": 11528044544,
+                "max": 11528044544,
+                "median": 11528044544
+              },
+              "1": {
+                "n": 123,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429
+              }
+            },
+            "NVAPI_supported_samples": 13,
+            "NVAPI_available_bytes": {
+              "n": 13,
+              "mean": 10082153393.23077,
+              "min": 8946933760,
+              "max": 11041951744,
+              "median": 9920094208
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 13,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 13,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 3524792320.0,
+              "adapter_shared": 273158144.0,
+              "adapter_committed": 4802375680.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "3D": {
+                "n": 308,
+                "mean": 20.75220616883117,
+                "min": 0.001,
+                "max": 93.8477,
+                "median": 0.3036
+              },
+              "Copy": {
+                "n": 269,
+                "mean": 1.2219509293680297,
+                "min": 0.0007,
+                "max": 32.9176,
+                "median": 0.0085
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        },
+        {
+          "workload": "creo-04",
+          "completed_subtests": 13,
+          "interior_seconds": 213.36684775352478,
+          "physical_samples": 1023,
+          "samples_per_second": 4.794559280276475,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 1023,
+              "mean": 59.489736070381234,
+              "min": 0.0,
+              "max": 100.0,
+              "median": 56.0
+            },
+            "util_mem": {
+              "n": 1023,
+              "mean": 20.914956011730204,
+              "min": 0.0,
+              "max": 76.0,
+              "median": 19.0
+            },
+            "clock_sm_mhz": {
+              "n": 1023,
+              "mean": 2470.410557184751,
+              "min": 240.0,
+              "max": 2880.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 1023,
+              "mean": 9265.228739002932,
+              "min": 405.0,
+              "max": 10501.0,
+              "median": 10501.0
+            },
+            "pstate": {
+              "n": 1023,
+              "mean": 0.6793743890518084,
+              "min": 0.0,
+              "max": 8.0,
+              "median": 0.0
+            },
+            "power_mw": {
+              "n": 1023,
+              "mean": 91685.82600195504,
+              "min": 20329.0,
+              "max": 143265.0,
+              "median": 99446.0
+            },
+            "power_limit_mw": {
+              "n": 1023,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 1023,
+              "mean": 46.47800586510264,
+              "min": 39.0,
+              "max": 53.0,
+              "median": 47.0
+            },
+            "pcie_gen": {
+              "n": 1023,
+              "mean": 3.897360703812317,
+              "min": 1.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 1023,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 1023,
+              "mean": 1272174.046920821,
+              "min": 300.0,
+              "max": 2930750.0,
+              "median": 1086100.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 1023,
+              "mean": 200926.63734115346,
+              "min": 350.0,
+              "max": 1162250.0,
+              "median": 156200.0
+            },
+            "fb_used_bytes": {
+              "n": 1023,
+              "mean": 3096456195.0029325,
+              "min": 1552363520.0,
+              "max": 3784368128.0,
+              "median": 3034767360.0
+            },
+            "bar1_used_bytes": {
+              "n": 1023,
+              "mean": 17150902272.0,
+              "min": 17150902272.0,
+              "max": 17150902272.0,
+              "median": 17150902272.0
+            },
+            "enc_util": {
+              "n": 1023,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 1023,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 1023,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 1023
+            },
+            "util_mem": {
+              "0": 1023
+            },
+            "clock_sm_mhz": {
+              "0": 1023
+            },
+            "clock_mem_mhz": {
+              "0": 1023
+            },
+            "pstate": {
+              "0": 1023
+            },
+            "power_mw": {
+              "0": 1023
+            },
+            "power_limit_mw": {
+              "0": 1023
+            },
+            "temp_c": {
+              "0": 1023
+            },
+            "pcie_gen": {
+              "0": 1023
+            },
+            "pcie_width": {
+              "0": 1023
+            },
+            "pcie_rx_kb_s": {
+              "0": 1023
+            },
+            "pcie_tx_kb_s": {
+              "0": 1023
+            },
+            "fb_used_bytes": {
+              "0": 1023
+            },
+            "bar1_used_bytes": {
+              "0": 1023
+            },
+            "enc_util": {
+              "0": 1023
+            },
+            "dec_util": {
+              "0": 1023
+            },
+            "pcie_replays": {
+              "0": 1023
+            }
+          },
+          "throttle_masks": {
+            "1": 308,
+            "0": 715
+          },
+          "link_gen_width_counts": {
+            "2x16": 42,
+            "1x16": 7,
+            "4x16": 974
+          },
+          "query_duration_ms": {
+            "n": 1023,
+            "mean": 66.01564027370479,
+            "min": 53,
+            "max": 108,
+            "median": 66
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 211,
+                "mean": 11528044544,
+                "min": 11528044544,
+                "max": 11528044544,
+                "median": 11528044544
+              },
+              "1": {
+                "n": 211,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429
+              }
+            },
+            "NVAPI_supported_samples": 19,
+            "NVAPI_available_bytes": {
+              "n": 19,
+              "mean": 9697636567.578947,
+              "min": 9133563904,
+              "max": 10896830464,
+              "median": 9550077952
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 19,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 19,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 3241762816.0,
+              "adapter_shared": 137818112.0,
+              "adapter_committed": 3521265664.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "3D": {
+                "n": 555,
+                "mean": 12.78440018018018,
+                "min": 0.0011,
+                "max": 65.2679,
+                "median": 0.2133
+              },
+              "Copy": {
+                "n": 531,
+                "mean": 1.0553649717514124,
+                "min": 0.0005,
+                "max": 17.5507,
+                "median": 0.0128
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        }
+      ],
+      "whole_run_pass": true,
+      "raw_outer_verdict": "PASS",
+      "raw_proxy_verdict": "PASS",
+      "viewperf_process_exit_count": 19,
+      "guards": {
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": [],
+        "counters": {
+          "pointer_large_entries": 0,
+          "pointer_entry_max_bytes": 0,
+          "refused_scan_budget": 0,
+          "poisoned": 0
+        },
+        "outer_reported_verdict": "PASS",
+        "restored": true,
+        "new_host_xids": 0,
+        "telemetry_exit": 0,
+        "controller_exit": 0
+      },
+      "host_load": {
+        "vm": {
+          "classification": "MEASURED",
+          "evidence": "load-before-vm.json",
+          "stage": "K4-VFIO-4648",
+          "time": "2026-10-23T08:52:21.346661+00:00",
+          "uptime": "10:52:21 up 13 days, 15:13,  2 users,  load average: 3.22, 2.60, 1.90",
+          "load_average": [
+            3.21728515625,
+            2.60302734375,
+            1.90185546875
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "spec": {
+          "classification": "MEASURED",
+          "evidence": "load-before-spec.json",
+          "stage": "SPEC-4648-K4-VFIO1-clean",
+          "time": "2026-10-23T08:53:38.095851+00:00",
+          "uptime": "10:53:38 up 13 days, 15:14,  1 user,  load average: 3.07, 2.78, 2.03",
+          "load_average": [
+            3.06640625,
+            2.78076171875,
+            2.02734375
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        }
+      },
+      "identity_controls": {
+        "expected_red_positive_assertion_failures": 2,
+        "identity_source": "GetProcessTimes + QueryFullProcessImageNameW on the process handle; creation stored as exact decimal string",
+        "mutants": [
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-starttime"
+          },
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-image"
+          },
+          {
+            "name": "old-array-wrapper",
+            "distinct_positive_assertion_killers": 2
+          }
+        ],
+        "green_failed": 0,
+        "original_stop_output": "COLLECTOR_PID_IDENTITY_CHANGED",
+        "green_assertions": 6,
+        "kind": "sampler_identity_controls",
+        "live_own_children": [],
+        "shape": {
+          "direct_first_pid_is_array": false,
+          "decoded_start_type": "System.String",
+          "old_first_pid_is_array": true,
+          "direct_count": 2,
+          "old_outer_count": 1
+        },
+        "verdict": "PASS",
+        "classification": "MEASURED",
+        "correct_stop_output": "[{\"stopped\":true,\"pid\":15964,\"name\":\"base-0\",\"errors\":\"\"},{\"stopped\":true,\"pid\":16016,\"name\":\"base-1\",\"errors\":\"\"}]\r\n"
+      },
+      "raw_sha256": {
+        "guest-nvml.csv": "aaea2dd6810cdc4089351628ce261a76fa619194449e8de3c35766755e3ae5ee",
+        "guest-memory.jsonl": "abf492868b6494c85e779a55ba193ba4467414f918064a43f876b183676b9677",
+        "export.json": "cb9cb97eb85a5f9654fa9ea08fae3591143c5613ce595c6bfc7dfd0a2a0a747a",
+        "proxy-export.json": "17241483f27ba1cce56a204b0f5b5b4db6238219604c4a1a6ca20076bc71e2a9"
+      },
+      "raw_evidence_directory": "/data/codex-Q4/round-6d/r1/energy-bisect/4648",
+      "proxy_phase_count": 12
+    },
+    {
+      "classification": "MEASURED",
+      "evidence": "telemetry-4649.json",
+      "run": 4649,
+      "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "arm": "kayfabe",
+      "physical_location": "host",
+      "auxiliary": false,
+      "scope": "Diagnostic profiling; driver rolling windows are correlated, boot is replication unit; no vendor score fields",
+      "clock_alignment": {
+        "guest_capture": "2026-10-23T09:50:49.9830918+02:00",
+        "host_minus_guest_seconds_used": 7200.027343511581,
+        "offset_uncertainty_s": 2.5168912410736084,
+        "observed_envelope": [
+          7197.510452270508,
+          7202.544234752655
+        ],
+        "original_fixed3_model": {
+          "status": "PASS",
+          "point_offset": 7200.454825520515,
+          "worst_distance_from_point": 2.9443732500076294
+        },
+        "anchors": 43,
+        "margin_per_subtest_seconds": 3.601275086402893,
+        "minimum_certified_margin": 3.5168912410736084,
+        "method": "Vendor local timestamps use the captured explicit guest timezone. Every physical sample must remain inside the subtest for ALL offsets in the complete observed request/response bracket union plus1s vendor-boundary exclusion. Offset center is only a coordinate origin, not a constant-clock claim. Final cohort comparisons require the same maximum margin across all four clean boots; broader uncertainty removes more data. VFIO physical and guest memory share guest epoch. Between observed brackets, stock guest clock continuity remains a measurement assumption; harness makes no clock changes."
+      },
+      "whole_session_NVAPI": {
+        "supported_samples": 100,
+        "evicted_count_delta": 0,
+        "evicted_bytes_delta": 0,
+        "promoted_count_delta": 2,
+        "promoted_bytes_delta": 131072,
+        "meaning": "Adapter-reported counters, whole observer session including boot/setup/proxy. No assertion that all OS paging mechanisms are covered."
+      },
+      "rows": [
+        {
+          "workload": "catia-07",
+          "completed_subtests": 6,
+          "interior_seconds": 177.78469896316528,
+          "physical_samples": 888,
+          "samples_per_second": 4.994805543889816,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 888,
+              "mean": 77.87387387387388,
+              "min": 2.0,
+              "max": 100.0,
+              "median": 98.0
+            },
+            "util_mem": {
+              "n": 888,
+              "mean": 22.605855855855857,
+              "min": 2.0,
+              "max": 100.0,
+              "median": 14.0
+            },
+            "clock_sm_mhz": {
+              "n": 888,
+              "mean": 2854.814189189189,
+              "min": 2490.0,
+              "max": 2880.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 888,
+              "mean": 10251.0,
+              "min": 10251.0,
+              "max": 10251.0,
+              "median": 10251.0
+            },
+            "pstate": {
+              "n": 888,
+              "mean": 2.0,
+              "min": 2.0,
+              "max": 2.0,
+              "median": 2.0
+            },
+            "power_mw": {
+              "n": 888,
+              "mean": 108303.04391891892,
+              "min": 39729.0,
+              "max": 158162.0,
+              "median": 104075.0
+            },
+            "power_limit_mw": {
+              "n": 888,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 888,
+              "mean": 48.11486486486486,
+              "min": 39.0,
+              "max": 54.0,
+              "median": 49.0
+            },
+            "pcie_gen": {
+              "n": 888,
+              "mean": 4.0,
+              "min": 4.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 888,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 888,
+              "mean": 246703.50225225225,
+              "min": 390.0,
+              "max": 993652.0,
+              "median": 140307.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 888,
+              "mean": 266568.89864864864,
+              "min": 1171.0,
+              "max": 1093066.0,
+              "median": 154199.0
+            },
+            "fb_used_bytes": {
+              "n": 888,
+              "mean": 10998995737.36937,
+              "min": 10991697920.0,
+              "max": 11023220736.0,
+              "median": 10999693312.0
+            },
+            "bar1_used_bytes": {
+              "n": 888,
+              "mean": 10571928326.918919,
+              "min": 10562764800.0,
+              "max": 10596384768.0,
+              "median": 10572857344.0
+            },
+            "enc_util": {
+              "n": 888,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 888,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 888,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 888
+            },
+            "util_mem": {
+              "0": 888
+            },
+            "clock_sm_mhz": {
+              "0": 888
+            },
+            "clock_mem_mhz": {
+              "0": 888
+            },
+            "pstate": {
+              "0": 888
+            },
+            "power_mw": {
+              "0": 888
+            },
+            "power_limit_mw": {
+              "0": 888
+            },
+            "temp_c": {
+              "0": 888
+            },
+            "pcie_gen": {
+              "0": 888
+            },
+            "pcie_width": {
+              "0": 888
+            },
+            "pcie_rx_kb_s": {
+              "0": 888
+            },
+            "pcie_tx_kb_s": {
+              "0": 888
+            },
+            "fb_used_bytes": {
+              "0": 888
+            },
+            "bar1_used_bytes": {
+              "0": 888
+            },
+            "enc_util": {
+              "0": 888
+            },
+            "dec_util": {
+              "0": 888
+            },
+            "pcie_replays": {
+              "0": 888
+            }
+          },
+          "throttle_masks": {
+            "0": 888
+          },
+          "link_gen_width_counts": {
+            "4x16": 888
+          },
+          "query_duration_ms": {
+            "n": 888,
+            "mean": 41.78716216216216,
+            "min": 41,
+            "max": 96,
+            "median": 42.0
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 176,
+                "mean": 8414713492.863636,
+                "min": 1641853740,
+                "max": 8492544000,
+                "median": 8492544000.0
+              },
+              "1": {
+                "n": 176,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429.0
+              }
+            },
+            "NVAPI_supported_samples": 18,
+            "NVAPI_available_bytes": {
+              "n": 18,
+              "mean": 6833793479.111111,
+              "min": 1582006272,
+              "max": 8341344256,
+              "median": 6830616576.0
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 18,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0.0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 18,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1.0
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 8641404928.0,
+              "adapter_shared": 239616000.0,
+              "adapter_committed": 10163503104.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "Copy": {
+                "n": 381,
+                "mean": 12.82683622047244,
+                "min": 0.0008,
+                "max": 98.4333,
+                "median": 0.2503
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        },
+        {
+          "workload": "creo-04",
+          "completed_subtests": 13,
+          "interior_seconds": 288.3668477535248,
+          "physical_samples": 1441,
+          "samples_per_second": 4.997107022620239,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 1441,
+              "mean": 63.49340735600278,
+              "min": 2.0,
+              "max": 100.0,
+              "median": 65.0
+            },
+            "util_mem": {
+              "n": 1441,
+              "mean": 16.883414295628036,
+              "min": 2.0,
+              "max": 51.0,
+              "median": 15.0
+            },
+            "clock_sm_mhz": {
+              "n": 1441,
+              "mean": 2807.2796668979877,
+              "min": 2490.0,
+              "max": 2880.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 1441,
+              "mean": 10251.0,
+              "min": 10251.0,
+              "max": 10251.0,
+              "median": 10251.0
+            },
+            "pstate": {
+              "n": 1441,
+              "mean": 2.0,
+              "min": 2.0,
+              "max": 2.0,
+              "median": 2.0
+            },
+            "power_mw": {
+              "n": 1441,
+              "mean": 82794.3414295628,
+              "min": 38296.0,
+              "max": 138520.0,
+              "median": 80805.0
+            },
+            "power_limit_mw": {
+              "n": 1441,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 1441,
+              "mean": 42.97501734906315,
+              "min": 36.0,
+              "max": 49.0,
+              "median": 42.0
+            },
+            "pcie_gen": {
+              "n": 1441,
+              "mean": 4.0,
+              "min": 4.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 1441,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 1441,
+              "mean": 477241.5281054823,
+              "min": 390.0,
+              "max": 1790332.0,
+              "median": 420605.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 1441,
+              "mean": 312124.7015961138,
+              "min": 1171.0,
+              "max": 1329980.0,
+              "median": 338476.0
+            },
+            "fb_used_bytes": {
+              "n": 1441,
+              "mean": 10998833248.643997,
+              "min": 10992680960.0,
+              "max": 11003756544.0,
+              "median": 10999431168.0
+            },
+            "bar1_used_bytes": {
+              "n": 1441,
+              "mean": 10571464624.410826,
+              "min": 10563747840.0,
+              "max": 10576003072.0,
+              "median": 10572595200.0
+            },
+            "enc_util": {
+              "n": 1441,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 1441,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 1441,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 1441
+            },
+            "util_mem": {
+              "0": 1441
+            },
+            "clock_sm_mhz": {
+              "0": 1441
+            },
+            "clock_mem_mhz": {
+              "0": 1441
+            },
+            "pstate": {
+              "0": 1441
+            },
+            "power_mw": {
+              "0": 1441
+            },
+            "power_limit_mw": {
+              "0": 1441
+            },
+            "temp_c": {
+              "0": 1441
+            },
+            "pcie_gen": {
+              "0": 1441
+            },
+            "pcie_width": {
+              "0": 1441
+            },
+            "pcie_rx_kb_s": {
+              "0": 1441
+            },
+            "pcie_tx_kb_s": {
+              "0": 1441
+            },
+            "fb_used_bytes": {
+              "0": 1441
+            },
+            "bar1_used_bytes": {
+              "0": 1441
+            },
+            "enc_util": {
+              "0": 1441
+            },
+            "dec_util": {
+              "0": 1441
+            },
+            "pcie_replays": {
+              "0": 1441
+            }
+          },
+          "throttle_masks": {
+            "0": 1441
+          },
+          "link_gen_width_counts": {
+            "4x16": 1441
+          },
+          "query_duration_ms": {
+            "n": 1441,
+            "mean": 41.55863983344899,
+            "min": 41,
+            "max": 52,
+            "median": 42
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 282,
+                "mean": 8492544000,
+                "min": 8492544000,
+                "max": 8492544000,
+                "median": 8492544000.0
+              },
+              "1": {
+                "n": 282,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429.0
+              }
+            },
+            "NVAPI_supported_samples": 30,
+            "NVAPI_available_bytes": {
+              "n": 30,
+              "mean": 6950834722.133333,
+              "min": 6202093568,
+              "max": 8448102400,
+              "median": 6635823104.0
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 30,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0.0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 30,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1.0
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 3148128256.0,
+              "adapter_shared": 404942848.0,
+              "adapter_committed": 3594330112.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "Copy": {
+                "n": 617,
+                "mean": 16.45086677471637,
+                "min": 0.0019,
+                "max": 100.0,
+                "median": 0.1966
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        }
+      ],
+      "whole_run_pass": true,
+      "raw_outer_verdict": "PASS",
+      "raw_proxy_verdict": "PASS",
+      "viewperf_process_exit_count": 19,
+      "guards": {
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": [],
+        "counters": {
+          "pointer_large_entries": 9112,
+          "pointer_entry_max_bytes": 1043244,
+          "refused_scan_budget": 0,
+          "poisoned": 0
+        },
+        "outer_reported_verdict": "PASS",
+        "restored": true,
+        "new_host_xids": 0,
+        "telemetry_exit": 0,
+        "controller_exit": 0
+      },
+      "host_load": {
+        "vm": {
+          "classification": "MEASURED",
+          "evidence": "load-before-vm.json",
+          "stage": "K4-4649",
+          "time": "2026-10-23T09:32:49.945052+00:00",
+          "uptime": "11:32:49 up 13 days, 15:54,  2 users,  load average: 0.08, 0.60, 1.45",
+          "load_average": [
+            0.080078125,
+            0.59619140625,
+            1.45458984375
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "spec": {
+          "classification": "MEASURED",
+          "evidence": "load-before-spec.json",
+          "stage": "SPEC-4649-K4-KF2-clean-transport-repeat",
+          "time": "2026-10-23T09:33:59.245788+00:00",
+          "uptime": "11:33:59 up 13 days, 15:55,  2 users,  load average: 1.72, 1.08, 1.56",
+          "load_average": [
+            1.72021484375,
+            1.07666015625,
+            1.56396484375
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        }
+      },
+      "identity_controls": {
+        "expected_red_positive_assertion_failures": 2,
+        "identity_source": "GetProcessTimes + QueryFullProcessImageNameW on the process handle; creation stored as exact decimal string",
+        "mutants": [
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-starttime"
+          },
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-image"
+          },
+          {
+            "name": "old-array-wrapper",
+            "distinct_positive_assertion_killers": 2
+          }
+        ],
+        "green_failed": 0,
+        "original_stop_output": "COLLECTOR_PID_IDENTITY_CHANGED",
+        "green_assertions": 6,
+        "kind": "sampler_identity_controls",
+        "live_own_children": [],
+        "shape": {
+          "direct_first_pid_is_array": false,
+          "decoded_start_type": "System.String",
+          "old_first_pid_is_array": true,
+          "direct_count": 2,
+          "old_outer_count": 1
+        },
+        "verdict": "PASS",
+        "classification": "MEASURED",
+        "correct_stop_output": "[{\"stopped\":true,\"pid\":14048,\"name\":\"base-0\",\"errors\":\"\"},{\"stopped\":true,\"pid\":14224,\"name\":\"base-1\",\"errors\":\"\"}]\r\n"
+      },
+      "raw_sha256": {
+        "guest-nvml.csv": "d04167e7eb08e72a45e217f0d1e2f9d3bc3763a3a2432e510bedb28593dd0a75",
+        "guest-memory.jsonl": "fe131a013eaac82f0e3d1016c3c073cfb8df4ecd52972ccc3f4e4fe6faaa3d0e",
+        "export.json": "0cfcee402902d5e07d56a75c4e6423ae06a8926b969668872927904727365a4d",
+        "proxy-export.json": "da8663ec752e04b9c399c4c78f179fca120c23bdab1da0521d3206d7f1b8c44e",
+        "host-nvml.csv": "bb5a0f27ab87028ddf3c44a401040083820ac54130e63d76b930fc270e74d726"
+      },
+      "raw_evidence_directory": "/data/codex-Q4/round-6d/r1/energy-bisect/4649",
+      "proxy_phase_count": 18
+    },
+    {
+      "classification": "MEASURED",
+      "evidence": "telemetry-4643.json",
+      "run": 4643,
+      "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "arm": "VFIO",
+      "physical_location": "guest",
+      "auxiliary": false,
+      "scope": "Diagnostic profiling; driver rolling windows are correlated, boot is replication unit; no vendor score fields",
+      "clock_alignment": {
+        "guest_capture": "2026-10-23T10:07:22.6372798+02:00",
+        "host_minus_guest_seconds_used": 0.0,
+        "offset_uncertainty_s": 0.0,
+        "observed_envelope": [
+          0.0,
+          0.0
+        ],
+        "original_fixed3_model": {
+          "status": "PASS",
+          "point_offset": 0,
+          "worst_distance_from_point": 0
+        },
+        "anchors": 36,
+        "margin_per_subtest_seconds": 3.601275086402893,
+        "minimum_certified_margin": 3.0,
+        "method": "Vendor local timestamps use the captured explicit guest timezone. Every physical sample must remain inside the subtest for ALL offsets in the complete observed request/response bracket union plus1s vendor-boundary exclusion. Offset center is only a coordinate origin, not a constant-clock claim. Final cohort comparisons require the same maximum margin across all four clean boots; broader uncertainty removes more data. VFIO physical and guest memory share guest epoch. Between observed brackets, stock guest clock continuity remains a measurement assumption; harness makes no clock changes."
+      },
+      "whole_session_NVAPI": {
+        "supported_samples": 87,
+        "evicted_count_delta": 0,
+        "evicted_bytes_delta": 0,
+        "promoted_count_delta": 2,
+        "promoted_bytes_delta": 131072,
+        "meaning": "Adapter-reported counters, whole observer session including boot/setup/proxy. No assertion that all OS paging mechanisms are covered."
+      },
+      "rows": [
+        {
+          "workload": "catia-07",
+          "completed_subtests": 6,
+          "interior_seconds": 127.78469896316528,
+          "physical_samples": 612,
+          "samples_per_second": 4.789305800817457,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 612,
+              "mean": 90.02614379084967,
+              "min": 0.0,
+              "max": 100.0,
+              "median": 100.0
+            },
+            "util_mem": {
+              "n": 612,
+              "mean": 15.4640522875817,
+              "min": 0.0,
+              "max": 33.0,
+              "median": 14.0
+            },
+            "clock_sm_mhz": {
+              "n": 612,
+              "mean": 2847.0833333333335,
+              "min": 660.0,
+              "max": 2865.0,
+              "median": 2850.0
+            },
+            "clock_mem_mhz": {
+              "n": 612,
+              "mean": 10474.039215686274,
+              "min": 5001.0,
+              "max": 10501.0,
+              "median": 10501.0
+            },
+            "pstate": {
+              "n": 612,
+              "mean": 0.014705882352941176,
+              "min": 0.0,
+              "max": 3.0,
+              "median": 0.0
+            },
+            "power_mw": {
+              "n": 612,
+              "mean": 127202.24673202615,
+              "min": 35607.0,
+              "max": 156841.0,
+              "median": 136602.0
+            },
+            "power_limit_mw": {
+              "n": 612,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 612,
+              "mean": 52.8937908496732,
+              "min": 45.0,
+              "max": 58.0,
+              "median": 53.0
+            },
+            "pcie_gen": {
+              "n": 612,
+              "mean": 4.0,
+              "min": 4.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 612,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 612,
+              "mean": 508414.0522875817,
+              "min": 300.0,
+              "max": 2349000.0,
+              "median": 418225.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 612,
+              "mean": 58448.529411764706,
+              "min": 350.0,
+              "max": 2406700.0,
+              "median": 40950.0
+            },
+            "fb_used_bytes": {
+              "n": 612,
+              "mean": 2835605242.980392,
+              "min": 1820012544.0,
+              "max": 7651856384.0,
+              "median": 2945736704.0
+            },
+            "bar1_used_bytes": {
+              "n": 612,
+              "mean": 17150902272.0,
+              "min": 17150902272.0,
+              "max": 17150902272.0,
+              "median": 17150902272.0
+            },
+            "enc_util": {
+              "n": 612,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 612,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 612,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 612
+            },
+            "util_mem": {
+              "0": 612
+            },
+            "clock_sm_mhz": {
+              "0": 612
+            },
+            "clock_mem_mhz": {
+              "0": 612
+            },
+            "pstate": {
+              "0": 612
+            },
+            "power_mw": {
+              "0": 612
+            },
+            "power_limit_mw": {
+              "0": 612
+            },
+            "temp_c": {
+              "0": 612
+            },
+            "pcie_gen": {
+              "0": 612
+            },
+            "pcie_width": {
+              "0": 612
+            },
+            "pcie_rx_kb_s": {
+              "0": 612
+            },
+            "pcie_tx_kb_s": {
+              "0": 612
+            },
+            "fb_used_bytes": {
+              "0": 612
+            },
+            "bar1_used_bytes": {
+              "0": 612
+            },
+            "enc_util": {
+              "0": 612
+            },
+            "dec_util": {
+              "0": 612
+            },
+            "pcie_replays": {
+              "0": 612
+            }
+          },
+          "throttle_masks": {
+            "0": 608,
+            "1": 4
+          },
+          "link_gen_width_counts": {
+            "4x16": 612
+          },
+          "query_duration_ms": {
+            "n": 612,
+            "mean": 66.7483660130719,
+            "min": 53,
+            "max": 111,
+            "median": 66.0
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 127,
+                "mean": 11528044544,
+                "min": 11528044544,
+                "max": 11528044544,
+                "median": 11528044544
+              },
+              "1": {
+                "n": 127,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429
+              }
+            },
+            "NVAPI_supported_samples": 12,
+            "NVAPI_available_bytes": {
+              "n": 12,
+              "mean": 10026706261.333334,
+              "min": 9120473088,
+              "max": 11058532352,
+              "median": 9796288512.0
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 12,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0.0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 12,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1.0
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 4629843968.0,
+              "adapter_shared": 234635264.0,
+              "adapter_committed": 5960499200.0
+            },
+            "PDH_invalid_rows": 0,
+            "observed_nonzero_engine_rows": {
+              "3D": {
+                "n": 325,
+                "mean": 19.815696615384617,
+                "min": 0.0009,
+                "max": 96.1735,
+                "median": 0.2199
+              },
+              "Copy": {
+                "n": 277,
+                "mean": 1.291451263537906,
+                "min": 0.0007,
+                "max": 40.4,
+                "median": 0.0085
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        },
+        {
+          "workload": "creo-04",
+          "completed_subtests": 13,
+          "interior_seconds": 214.36684775352478,
+          "physical_samples": 1025,
+          "samples_per_second": 4.781522939491683,
+          "physical_metrics": {
+            "util_gpu": {
+              "n": 1025,
+              "mean": 58.974634146341465,
+              "min": 0.0,
+              "max": 100.0,
+              "median": 59.0
+            },
+            "util_mem": {
+              "n": 1025,
+              "mean": 20.942439024390243,
+              "min": 0.0,
+              "max": 67.0,
+              "median": 19.0
+            },
+            "clock_sm_mhz": {
+              "n": 1025,
+              "mean": 2453.151219512195,
+              "min": 210.0,
+              "max": 2880.0,
+              "median": 2865.0
+            },
+            "clock_mem_mhz": {
+              "n": 1025,
+              "mean": 9198.021463414634,
+              "min": 405.0,
+              "max": 10501.0,
+              "median": 10501.0
+            },
+            "pstate": {
+              "n": 1025,
+              "mean": 0.7121951219512195,
+              "min": 0.0,
+              "max": 8.0,
+              "median": 0.0
+            },
+            "power_mw": {
+              "n": 1025,
+              "mean": 91496.84780487805,
+              "min": 21584.0,
+              "max": 145034.0,
+              "median": 99416.0
+            },
+            "power_limit_mw": {
+              "n": 1025,
+              "mean": 200000.0,
+              "min": 200000.0,
+              "max": 200000.0,
+              "median": 200000.0
+            },
+            "temp_c": {
+              "n": 1025,
+              "mean": 46.50536585365854,
+              "min": 39.0,
+              "max": 52.0,
+              "median": 47.0
+            },
+            "pcie_gen": {
+              "n": 1025,
+              "mean": 3.890731707317073,
+              "min": 1.0,
+              "max": 4.0,
+              "median": 4.0
+            },
+            "pcie_width": {
+              "n": 1025,
+              "mean": 16.0,
+              "min": 16.0,
+              "max": 16.0,
+              "median": 16.0
+            },
+            "pcie_rx_kb_s": {
+              "n": 1025,
+              "mean": 1276885.0731707318,
+              "min": 300.0,
+              "max": 3860600.0,
+              "median": 1086200.0
+            },
+            "pcie_tx_kb_s": {
+              "n": 1025,
+              "mean": 198840.48780487804,
+              "min": 350.0,
+              "max": 973000.0,
+              "median": 158250.0
+            },
+            "fb_used_bytes": {
+              "n": 1025,
+              "mean": 3091326242.7160974,
+              "min": 1505136640.0,
+              "max": 3767721984.0,
+              "median": 3018121216.0
+            },
+            "bar1_used_bytes": {
+              "n": 1025,
+              "mean": 17150902272.0,
+              "min": 17150902272.0,
+              "max": 17150902272.0,
+              "median": 17150902272.0
+            },
+            "enc_util": {
+              "n": 1025,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "dec_util": {
+              "n": 1025,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            },
+            "pcie_replays": {
+              "n": 1025,
+              "mean": 0.0,
+              "min": 0.0,
+              "max": 0.0,
+              "median": 0.0
+            }
+          },
+          "physical_status_codes": {
+            "util_gpu": {
+              "0": 1025
+            },
+            "util_mem": {
+              "0": 1025
+            },
+            "clock_sm_mhz": {
+              "0": 1025
+            },
+            "clock_mem_mhz": {
+              "0": 1025
+            },
+            "pstate": {
+              "0": 1025
+            },
+            "power_mw": {
+              "0": 1025
+            },
+            "power_limit_mw": {
+              "0": 1025
+            },
+            "temp_c": {
+              "0": 1025
+            },
+            "pcie_gen": {
+              "0": 1025
+            },
+            "pcie_width": {
+              "0": 1025
+            },
+            "pcie_rx_kb_s": {
+              "0": 1025
+            },
+            "pcie_tx_kb_s": {
+              "0": 1025
+            },
+            "fb_used_bytes": {
+              "0": 1025
+            },
+            "bar1_used_bytes": {
+              "0": 1025
+            },
+            "enc_util": {
+              "0": 1025
+            },
+            "dec_util": {
+              "0": 1025
+            },
+            "pcie_replays": {
+              "0": 1025
+            }
+          },
+          "throttle_masks": {
+            "1": 324,
+            "0": 701
+          },
+          "link_gen_width_counts": {
+            "2x16": 47,
+            "1x16": 6,
+            "4x16": 972
+          },
+          "query_duration_ms": {
+            "n": 1025,
+            "mean": 66.1590243902439,
+            "min": 54,
+            "max": 110,
+            "median": 66
+          },
+          "guest_memory": {
+            "observer_DXGI_budget_bytes": {
+              "0": {
+                "n": 211,
+                "mean": 11528044544,
+                "min": 11528044544,
+                "max": 11528044544,
+                "median": 11528044544
+              },
+              "1": {
+                "n": 211,
+                "mean": 5848692429,
+                "min": 5848692429,
+                "max": 5848692429,
+                "median": 5848692429
+              }
+            },
+            "NVAPI_supported_samples": 23,
+            "NVAPI_available_bytes": {
+              "n": 23,
+              "mean": 9778407513.043478,
+              "min": 9129041920,
+              "max": 11213316096,
+              "median": 9860489216
+            },
+            "NVAPI_evicted_count_range": {
+              "n": 23,
+              "mean": 0,
+              "min": 0,
+              "max": 0,
+              "median": 0
+            },
+            "NVAPI_promoted_count_range": {
+              "n": 23,
+              "mean": 1,
+              "min": 1,
+              "max": 1,
+              "median": 1
+            },
+            "PDH_adapter_peak_bytes": {
+              "adapter_dedicated": 3225047040.0,
+              "adapter_shared": 139980800.0,
+              "adapter_committed": 3524272128.0
+            },
+            "PDH_invalid_rows": 29,
+            "observed_nonzero_engine_rows": {
+              "3D": {
+                "n": 554,
+                "mean": 12.726679602888087,
+                "min": 0.0009,
+                "max": 66.6556,
+                "median": 0.2221
+              },
+              "Copy": {
+                "n": 528,
+                "mean": 1.0900229166666666,
+                "min": 0.0004,
+                "max": 16.0165,
+                "median": 0.0112
+              }
+            },
+            "limits": "DXGI observer budget is not the viewperf process usage. PDH collector omits zero rows; absent engine types/instances are not asserted idle. Per-engine rows can overlap across processes and are not summed into physical SM occupancy."
+          }
+        }
+      ],
+      "whole_run_pass": false,
+      "raw_outer_verdict": "PASS",
+      "raw_proxy_verdict": "FAIL",
+      "viewperf_process_exit_count": 19,
+      "guards": {
+        "guest153": 0,
+        "guest4101": 0,
+        "boot_unchanged": true,
+        "budget_refusals": 0,
+        "viewperf_nonzero_exits": [],
+        "counters": {
+          "pointer_large_entries": 0,
+          "pointer_entry_max_bytes": 0,
+          "refused_scan_budget": 0,
+          "poisoned": 0
+        },
+        "outer_reported_verdict": "PASS",
+        "restored": true,
+        "new_host_xids": 0,
+        "telemetry_exit": 0,
+        "controller_exit": 0
+      },
+      "host_load": {
+        "vm": {
+          "classification": "MEASURED",
+          "evidence": "load-before-vm.json",
+          "stage": "K4-VFIO-4643",
+          "time": "2026-10-23T09:51:16.187416+00:00",
+          "uptime": "11:51:16 up 13 days, 16:12,  3 users,  load average: 2.01, 2.48, 2.29",
+          "load_average": [
+            2.00927734375,
+            2.48193359375,
+            2.29150390625
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        },
+        "spec": {
+          "classification": "MEASURED",
+          "evidence": "load-before-spec.json",
+          "stage": "SPEC-4643-K4-VFIO2-clean",
+          "time": "2026-10-23T09:52:40.012989+00:00",
+          "uptime": "11:52:40 up 13 days, 16:13,  1 user,  load average: 2.56, 2.65, 2.37",
+          "load_average": [
+            2.564453125,
+            2.6455078125,
+            2.369140625
+          ],
+          "logical_cpus": 24,
+          "host_quiet": true
+        }
+      },
+      "identity_controls": {
+        "expected_red_positive_assertion_failures": 2,
+        "identity_source": "GetProcessTimes + QueryFullProcessImageNameW on the process handle; creation stored as exact decimal string",
+        "mutants": [
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-starttime"
+          },
+          {
+            "distinct_negative_assertion_killers": 2,
+            "name": "skip-image"
+          },
+          {
+            "name": "old-array-wrapper",
+            "distinct_positive_assertion_killers": 2
+          }
+        ],
+        "green_failed": 0,
+        "original_stop_output": "COLLECTOR_PID_IDENTITY_CHANGED",
+        "green_assertions": 6,
+        "kind": "sampler_identity_controls",
+        "live_own_children": [],
+        "shape": {
+          "direct_first_pid_is_array": false,
+          "decoded_start_type": "System.String",
+          "old_first_pid_is_array": true,
+          "direct_count": 2,
+          "old_outer_count": 1
+        },
+        "verdict": "PASS",
+        "classification": "MEASURED",
+        "correct_stop_output": "[{\"stopped\":true,\"pid\":15740,\"name\":\"base-0\",\"errors\":\"\"},{\"stopped\":true,\"pid\":15860,\"name\":\"base-1\",\"errors\":\"\"}]\r\n"
+      },
+      "raw_sha256": {
+        "guest-nvml.csv": "85b886771cf08a9b3421bd8a25f1902510bc3a3e75dfc52dc626fa5eec30ba95",
+        "guest-memory.jsonl": "57e1b2667ef3c7664666b288f87707cbdbcded2c03ec44f08da8291a85e06aff",
+        "export.json": "b26ce6f5f3fc5e52cd1409281084a5840de4843afa5be5b1c0b23e6c421cd7d9",
+        "proxy-export.json": "3bbe9d01ff52c4f4aeea729170543c467c9e14a92601e5658f63ccd2b8dfbcd1"
+      },
+      "raw_evidence_directory": "/data/codex-Q4/round-6d/r1/energy-bisect/4643",
+      "fullscreen_coverage_control": {
+        "records": [
+          "MODE_CONTROL before_width=3840 before_height=2160 frequency=60 bits=32 orientation=0",
+          "MODE_CONTROL test_rc=0",
+          "MODE_CONTROL changed_rc=0 changed_verified=0 active_frequency=60",
+          "MODE_CONTROL restore_rc=0 snapshot_equal=1 primary_width=3840 primary_height=2160"
+        ],
+        "proxy_phases": 0,
+        "verdict": "FAIL_APPLIED_MODE_VERIFICATION",
+        "saved_mode_restored": true,
+        "scope": "Blocked before child proxy measurement. No metric substituted. Original failure retained; no more hardware work."
+      },
+      "proxy_phase_count": 18
+    }
+  ],
+  "whole_run_pass_count": 3,
+  "aggregate": [
+    {
+      "workload": "catia-07",
+      "arm": "kayfabe",
+      "boot_n": 2,
+      "scope": "Completed primary measurements;4643 optional post-collection control failed, whole result not qualified",
+      "physical_metrics": {
+        "util_gpu": {
+          "boot_means": [
+            74.5553121577218,
+            77.87387387387388
+          ],
+          "mean": 76.21459301579785,
+          "min": 74.5553121577218,
+          "max": 77.87387387387388
+        },
+        "util_mem": {
+          "boot_means": [
+            21.059145673603506,
+            22.605855855855857
+          ],
+          "mean": 21.83250076472968,
+          "min": 21.059145673603506,
+          "max": 22.605855855855857
+        },
+        "clock_sm_mhz": {
+          "boot_means": [
+            2853.9430449069005,
+            2854.814189189189
+          ],
+          "mean": 2854.378617048045,
+          "min": 2853.9430449069005,
+          "max": 2854.814189189189
+        },
+        "clock_mem_mhz": {
+          "boot_means": [
+            10251.0,
+            10251.0
+          ],
+          "mean": 10251.0,
+          "min": 10251.0,
+          "max": 10251.0
+        },
+        "pstate": {
+          "boot_means": [
+            2.0,
+            2.0
+          ],
+          "mean": 2.0,
+          "min": 2.0,
+          "max": 2.0
+        },
+        "power_mw": {
+          "boot_means": [
+            104639.29901423877,
+            108303.04391891892
+          ],
+          "mean": 106471.17146657885,
+          "min": 104639.29901423877,
+          "max": 108303.04391891892
+        },
+        "power_limit_mw": {
+          "boot_means": [
+            200000.0,
+            200000.0
+          ],
+          "mean": 200000.0,
+          "min": 200000.0,
+          "max": 200000.0
+        },
+        "temp_c": {
+          "boot_means": [
+            46.55859802847755,
+            48.11486486486486
+          ],
+          "mean": 47.33673144667121,
+          "min": 46.55859802847755,
+          "max": 48.11486486486486
+        },
+        "pcie_gen": {
+          "boot_means": [
+            4.0,
+            4.0
+          ],
+          "mean": 4.0,
+          "min": 4.0,
+          "max": 4.0
+        },
+        "pcie_width": {
+          "boot_means": [
+            16.0,
+            16.0
+          ],
+          "mean": 16.0,
+          "min": 16.0,
+          "max": 16.0
+        },
+        "pcie_rx_kb_s": {
+          "boot_means": [
+            248409.36582694415,
+            246703.50225225225
+          ],
+          "mean": 247556.4340395982,
+          "min": 246703.50225225225,
+          "max": 248409.36582694415
+        },
+        "pcie_tx_kb_s": {
+          "boot_means": [
+            278692.41621029575,
+            266568.89864864864
+          ],
+          "mean": 272630.6574294722,
+          "min": 266568.89864864864,
+          "max": 278692.41621029575
+        },
+        "fb_used_bytes": {
+          "boot_means": [
+            10999271957.870756,
+            10998995737.36937
+          ],
+          "mean": 10999133847.620064,
+          "min": 10998995737.36937,
+          "max": 10999271957.870756
+        },
+        "bar1_used_bytes": {
+          "boot_means": [
+            10572182962.050383,
+            10571928326.918919
+          ],
+          "mean": 10572055644.48465,
+          "min": 10571928326.918919,
+          "max": 10572182962.050383
+        },
+        "enc_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "dec_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "pcie_replays": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "PDH_adapter_peak_bytes": {
+        "adapter_dedicated": {
+          "boot_peaks": [
+            8409985024.0,
+            8641404928.0
+          ],
+          "min": 8409985024.0,
+          "max": 8641404928.0
+        },
+        "adapter_shared": {
+          "boot_peaks": [
+            252993536.0,
+            239616000.0
+          ],
+          "min": 239616000.0,
+          "max": 252993536.0
+        },
+        "adapter_committed": {
+          "boot_peaks": [
+            10232913920.0,
+            10163503104.0
+          ],
+          "min": 10163503104.0,
+          "max": 10232913920.0
+        }
+      },
+      "observer_local_budget_mean_bytes": {
+        "boot_means": [
+          8381642749.480663,
+          8414713492.863636
+        ],
+        "min": 8381642749.480663,
+        "max": 8414713492.863636
+      }
+    },
+    {
+      "workload": "catia-07",
+      "arm": "VFIO",
+      "boot_n": 2,
+      "scope": "Completed primary measurements;4643 optional post-collection control failed, whole result not qualified",
+      "physical_metrics": {
+        "util_gpu": {
+          "boot_means": [
+            91.8112582781457,
+            90.02614379084967
+          ],
+          "mean": 90.91870103449769,
+          "min": 90.02614379084967,
+          "max": 91.8112582781457
+        },
+        "util_mem": {
+          "boot_means": [
+            15.966887417218542,
+            15.4640522875817
+          ],
+          "mean": 15.71546985240012,
+          "min": 15.4640522875817,
+          "max": 15.966887417218542
+        },
+        "clock_sm_mhz": {
+          "boot_means": [
+            2845.6539735099336,
+            2847.0833333333335
+          ],
+          "mean": 2846.3686534216336,
+          "min": 2845.6539735099336,
+          "max": 2847.0833333333335
+        },
+        "clock_mem_mhz": {
+          "boot_means": [
+            10473.682119205298,
+            10474.039215686274
+          ],
+          "mean": 10473.860667445786,
+          "min": 10473.682119205298,
+          "max": 10474.039215686274
+        },
+        "pstate": {
+          "boot_means": [
+            0.014900662251655629,
+            0.014705882352941176
+          ],
+          "mean": 0.014803272302298403,
+          "min": 0.014705882352941176,
+          "max": 0.014900662251655629
+        },
+        "power_mw": {
+          "boot_means": [
+            127994.50331125828,
+            127202.24673202615
+          ],
+          "mean": 127598.37502164222,
+          "min": 127202.24673202615,
+          "max": 127994.50331125828
+        },
+        "power_limit_mw": {
+          "boot_means": [
+            200000.0,
+            200000.0
+          ],
+          "mean": 200000.0,
+          "min": 200000.0,
+          "max": 200000.0
+        },
+        "temp_c": {
+          "boot_means": [
+            52.920529801324506,
+            52.8937908496732
+          ],
+          "mean": 52.90716032549885,
+          "min": 52.8937908496732,
+          "max": 52.920529801324506
+        },
+        "pcie_gen": {
+          "boot_means": [
+            4.0,
+            4.0
+          ],
+          "mean": 4.0,
+          "min": 4.0,
+          "max": 4.0
+        },
+        "pcie_width": {
+          "boot_means": [
+            16.0,
+            16.0
+          ],
+          "mean": 16.0,
+          "min": 16.0,
+          "max": 16.0
+        },
+        "pcie_rx_kb_s": {
+          "boot_means": [
+            527325.9933774834,
+            508414.0522875817
+          ],
+          "mean": 517870.0228325326,
+          "min": 508414.0522875817,
+          "max": 527325.9933774834
+        },
+        "pcie_tx_kb_s": {
+          "boot_means": [
+            55690.894039735096,
+            58448.529411764706
+          ],
+          "mean": 57069.711725749905,
+          "min": 55690.894039735096,
+          "max": 58448.529411764706
+        },
+        "fb_used_bytes": {
+          "boot_means": [
+            2849907128.794702,
+            2835605242.980392
+          ],
+          "mean": 2842756185.887547,
+          "min": 2835605242.980392,
+          "max": 2849907128.794702
+        },
+        "bar1_used_bytes": {
+          "boot_means": [
+            17150902272.0,
+            17150902272.0
+          ],
+          "mean": 17150902272.0,
+          "min": 17150902272.0,
+          "max": 17150902272.0
+        },
+        "enc_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "dec_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "pcie_replays": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "PDH_adapter_peak_bytes": {
+        "adapter_dedicated": {
+          "boot_peaks": [
+            3524792320.0,
+            4629843968.0
+          ],
+          "min": 3524792320.0,
+          "max": 4629843968.0
+        },
+        "adapter_shared": {
+          "boot_peaks": [
+            273158144.0,
+            234635264.0
+          ],
+          "min": 234635264.0,
+          "max": 273158144.0
+        },
+        "adapter_committed": {
+          "boot_peaks": [
+            4802375680.0,
+            5960499200.0
+          ],
+          "min": 4802375680.0,
+          "max": 5960499200.0
+        }
+      },
+      "observer_local_budget_mean_bytes": {
+        "boot_means": [
+          11528044544,
+          11528044544
+        ],
+        "min": 11528044544,
+        "max": 11528044544
+      }
+    },
+    {
+      "workload": "creo-04",
+      "arm": "kayfabe",
+      "boot_n": 2,
+      "scope": "Completed primary measurements;4643 optional post-collection control failed, whole result not qualified",
+      "physical_metrics": {
+        "util_gpu": {
+          "boot_means": [
+            62.069651741293534,
+            63.49340735600278
+          ],
+          "mean": 62.78152954864815,
+          "min": 62.069651741293534,
+          "max": 63.49340735600278
+        },
+        "util_mem": {
+          "boot_means": [
+            16.12864250177683,
+            16.883414295628036
+          ],
+          "mean": 16.506028398702433,
+          "min": 16.12864250177683,
+          "max": 16.883414295628036
+        },
+        "clock_sm_mhz": {
+          "boot_means": [
+            2813.0383795309167,
+            2807.2796668979877
+          ],
+          "mean": 2810.159023214452,
+          "min": 2807.2796668979877,
+          "max": 2813.0383795309167
+        },
+        "clock_mem_mhz": {
+          "boot_means": [
+            10251.0,
+            10251.0
+          ],
+          "mean": 10251.0,
+          "min": 10251.0,
+          "max": 10251.0
+        },
+        "pstate": {
+          "boot_means": [
+            2.0,
+            2.0
+          ],
+          "mean": 2.0,
+          "min": 2.0,
+          "max": 2.0
+        },
+        "power_mw": {
+          "boot_means": [
+            81428.01563610519,
+            82794.3414295628
+          ],
+          "mean": 82111.17853283399,
+          "min": 81428.01563610519,
+          "max": 82794.3414295628
+        },
+        "power_limit_mw": {
+          "boot_means": [
+            200000.0,
+            200000.0
+          ],
+          "mean": 200000.0,
+          "min": 200000.0,
+          "max": 200000.0
+        },
+        "temp_c": {
+          "boot_means": [
+            42.704335465529496,
+            42.97501734906315
+          ],
+          "mean": 42.839676407296324,
+          "min": 42.704335465529496,
+          "max": 42.97501734906315
+        },
+        "pcie_gen": {
+          "boot_means": [
+            4.0,
+            4.0
+          ],
+          "mean": 4.0,
+          "min": 4.0,
+          "max": 4.0
+        },
+        "pcie_width": {
+          "boot_means": [
+            16.0,
+            16.0
+          ],
+          "mean": 16.0,
+          "min": 16.0,
+          "max": 16.0
+        },
+        "pcie_rx_kb_s": {
+          "boot_means": [
+            485416.49680170574,
+            477241.5281054823
+          ],
+          "mean": 481329.012453594,
+          "min": 477241.5281054823,
+          "max": 485416.49680170574
+        },
+        "pcie_tx_kb_s": {
+          "boot_means": [
+            304719.5799573561,
+            312124.7015961138
+          ],
+          "mean": 308422.1407767349,
+          "min": 304719.5799573561,
+          "max": 312124.7015961138
+        },
+        "fb_used_bytes": {
+          "boot_means": [
+            10998609848.676617,
+            10998833248.643997
+          ],
+          "mean": 10998721548.660307,
+          "min": 10998609848.676617,
+          "max": 10998833248.643997
+        },
+        "bar1_used_bytes": {
+          "boot_means": [
+            10571180656.443497,
+            10571464624.410826
+          ],
+          "mean": 10571322640.427162,
+          "min": 10571180656.443497,
+          "max": 10571464624.410826
+        },
+        "enc_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "dec_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "pcie_replays": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "PDH_adapter_peak_bytes": {
+        "adapter_dedicated": {
+          "boot_peaks": [
+            3112984576.0,
+            3148128256.0
+          ],
+          "min": 3112984576.0,
+          "max": 3148128256.0
+        },
+        "adapter_shared": {
+          "boot_peaks": [
+            429678592.0,
+            404942848.0
+          ],
+          "min": 404942848.0,
+          "max": 429678592.0
+        },
+        "adapter_committed": {
+          "boot_peaks": [
+            3563446272.0,
+            3594330112.0
+          ],
+          "min": 3563446272.0,
+          "max": 3594330112.0
+        }
+      },
+      "observer_local_budget_mean_bytes": {
+        "boot_means": [
+          8492544000,
+          8492544000
+        ],
+        "min": 8492544000,
+        "max": 8492544000
+      }
+    },
+    {
+      "workload": "creo-04",
+      "arm": "VFIO",
+      "boot_n": 2,
+      "scope": "Completed primary measurements;4643 optional post-collection control failed, whole result not qualified",
+      "physical_metrics": {
+        "util_gpu": {
+          "boot_means": [
+            59.489736070381234,
+            58.974634146341465
+          ],
+          "mean": 59.23218510836135,
+          "min": 58.974634146341465,
+          "max": 59.489736070381234
+        },
+        "util_mem": {
+          "boot_means": [
+            20.914956011730204,
+            20.942439024390243
+          ],
+          "mean": 20.928697518060225,
+          "min": 20.914956011730204,
+          "max": 20.942439024390243
+        },
+        "clock_sm_mhz": {
+          "boot_means": [
+            2470.410557184751,
+            2453.151219512195
+          ],
+          "mean": 2461.780888348473,
+          "min": 2453.151219512195,
+          "max": 2470.410557184751
+        },
+        "clock_mem_mhz": {
+          "boot_means": [
+            9265.228739002932,
+            9198.021463414634
+          ],
+          "mean": 9231.625101208783,
+          "min": 9198.021463414634,
+          "max": 9265.228739002932
+        },
+        "pstate": {
+          "boot_means": [
+            0.6793743890518084,
+            0.7121951219512195
+          ],
+          "mean": 0.695784755501514,
+          "min": 0.6793743890518084,
+          "max": 0.7121951219512195
+        },
+        "power_mw": {
+          "boot_means": [
+            91685.82600195504,
+            91496.84780487805
+          ],
+          "mean": 91591.33690341655,
+          "min": 91496.84780487805,
+          "max": 91685.82600195504
+        },
+        "power_limit_mw": {
+          "boot_means": [
+            200000.0,
+            200000.0
+          ],
+          "mean": 200000.0,
+          "min": 200000.0,
+          "max": 200000.0
+        },
+        "temp_c": {
+          "boot_means": [
+            46.47800586510264,
+            46.50536585365854
+          ],
+          "mean": 46.49168585938059,
+          "min": 46.47800586510264,
+          "max": 46.50536585365854
+        },
+        "pcie_gen": {
+          "boot_means": [
+            3.897360703812317,
+            3.890731707317073
+          ],
+          "mean": 3.894046205564695,
+          "min": 3.890731707317073,
+          "max": 3.897360703812317
+        },
+        "pcie_width": {
+          "boot_means": [
+            16.0,
+            16.0
+          ],
+          "mean": 16.0,
+          "min": 16.0,
+          "max": 16.0
+        },
+        "pcie_rx_kb_s": {
+          "boot_means": [
+            1272174.046920821,
+            1276885.0731707318
+          ],
+          "mean": 1274529.5600457764,
+          "min": 1272174.046920821,
+          "max": 1276885.0731707318
+        },
+        "pcie_tx_kb_s": {
+          "boot_means": [
+            200926.63734115346,
+            198840.48780487804
+          ],
+          "mean": 199883.56257301575,
+          "min": 198840.48780487804,
+          "max": 200926.63734115346
+        },
+        "fb_used_bytes": {
+          "boot_means": [
+            3096456195.0029325,
+            3091326242.7160974
+          ],
+          "mean": 3093891218.859515,
+          "min": 3091326242.7160974,
+          "max": 3096456195.0029325
+        },
+        "bar1_used_bytes": {
+          "boot_means": [
+            17150902272.0,
+            17150902272.0
+          ],
+          "mean": 17150902272.0,
+          "min": 17150902272.0,
+          "max": 17150902272.0
+        },
+        "enc_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "dec_util": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "pcie_replays": {
+          "boot_means": [
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "PDH_adapter_peak_bytes": {
+        "adapter_dedicated": {
+          "boot_peaks": [
+            3241762816.0,
+            3225047040.0
+          ],
+          "min": 3225047040.0,
+          "max": 3241762816.0
+        },
+        "adapter_shared": {
+          "boot_peaks": [
+            137818112.0,
+            139980800.0
+          ],
+          "min": 137818112.0,
+          "max": 139980800.0
+        },
+        "adapter_committed": {
+          "boot_peaks": [
+            3521265664.0,
+            3524272128.0
+          ],
+          "min": 3521265664.0,
+          "max": 3524272128.0
+        }
+      },
+      "observer_local_budget_mean_bytes": {
+        "boot_means": [
+          11528044544,
+          11528044544
+        ],
+        "min": 11528044544,
+        "max": 11528044544
+      }
+    }
+  ]
+}

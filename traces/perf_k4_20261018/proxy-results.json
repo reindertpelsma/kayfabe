@@ -1,0 +1,2412 @@
+{
+  "classification": "MEASURED",
+  "evidence": "proxy-results.json",
+  "candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "status": "PARTIAL",
+  "whole_run_limitation": "4643 failed its additional display-mode control after all original primary/windowed phases. Original aggregate proxy FAIL is retained.",
+  "metric": "Completed render / Present-call loop iterations per second, not displayed new-content fps. Timestamp interval includes CPU/queue gaps, not active SM kernel duration.",
+  "primary_visibility_limit": "Primary windows have unequal desktop coverage; primary did not log Present success-status/occlusion.",
+  "windowed_limit": "Additional n1 boot/arm, same1280x720 client with1920x1080 render target; no claim to replay CATIA/Creo OpenGL.",
+  "phases": [
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "3000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "12952",
+        "batches": "1619",
+        "wall_s": "3.000297500",
+        "context_timestamp_s": "2.760807648",
+        "disjoint_batches": "0",
+        "fps": "4316.905240",
+        "start_epoch_ms": "1792738246943",
+        "end_epoch_ms": "1792738249944",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "3000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.078860200",
+        "context_timestamp_s": "2.639102848",
+        "disjoint_batches": "0",
+        "fps": "62.360740",
+        "start_epoch_ms": "1792738250327",
+        "end_epoch_ms": "1792738253407",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "3000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "13032",
+        "batches": "1629",
+        "wall_s": "3.000645200",
+        "context_timestamp_s": "2.768256096",
+        "disjoint_batches": "0",
+        "fps": "4343.065951",
+        "start_epoch_ms": "1792738257217",
+        "end_epoch_ms": "1792738260218",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "3000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "184",
+        "batches": "23",
+        "wall_s": "3.025546800",
+        "context_timestamp_s": "2.728691232",
+        "disjoint_batches": "0",
+        "fps": "60.815453",
+        "start_epoch_ms": "1792738253815",
+        "end_epoch_ms": "1792738256841",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "3000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "13128",
+        "batches": "1641",
+        "wall_s": "3.001327600",
+        "context_timestamp_s": "2.766047264",
+        "disjoint_batches": "0",
+        "fps": "4374.064331",
+        "start_epoch_ms": "1792738260576",
+        "end_epoch_ms": "1792738263578",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "3000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "200",
+        "batches": "25",
+        "wall_s": "3.014719900",
+        "context_timestamp_s": "2.594857728",
+        "disjoint_batches": "0",
+        "fps": "66.341155",
+        "start_epoch_ms": "1792738263946",
+        "end_epoch_ms": "1792738266961",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "300000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "6096",
+        "batches": "762",
+        "wall_s": "3.003121100",
+        "context_timestamp_s": "2.734692928",
+        "disjoint_batches": "0",
+        "fps": "2029.888172",
+        "start_epoch_ms": "1792738267348",
+        "end_epoch_ms": "1792738270352",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "300000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "184",
+        "batches": "23",
+        "wall_s": "3.023390100",
+        "context_timestamp_s": "2.593219040",
+        "disjoint_batches": "0",
+        "fps": "60.858835",
+        "start_epoch_ms": "1792738270732",
+        "end_epoch_ms": "1792738273755",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "300000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "6088",
+        "batches": "761",
+        "wall_s": "3.002160400",
+        "context_timestamp_s": "2.727880512",
+        "disjoint_batches": "0",
+        "fps": "2027.872994",
+        "start_epoch_ms": "1792738277573",
+        "end_epoch_ms": "1792738280576",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "300000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.034117700",
+        "context_timestamp_s": "2.738394624",
+        "disjoint_batches": "0",
+        "fps": "63.280340",
+        "start_epoch_ms": "1792738274155",
+        "end_epoch_ms": "1792738277190",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "300000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "6408",
+        "batches": "801",
+        "wall_s": "3.000432400",
+        "context_timestamp_s": "2.844707072",
+        "disjoint_batches": "0",
+        "fps": "2135.692176",
+        "start_epoch_ms": "1792738280937",
+        "end_epoch_ms": "1792738283938",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4642,
+      "arm": "kayfabe",
+      "file": "300000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.077719100",
+        "context_timestamp_s": "2.639867456",
+        "disjoint_batches": "0",
+        "fps": "62.383861",
+        "start_epoch_ms": "1792738284299",
+        "end_epoch_ms": "1792738287377",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "3000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11496",
+        "batches": "1437",
+        "wall_s": "3.000382100",
+        "context_timestamp_s": "2.917871488",
+        "disjoint_batches": "0",
+        "fps": "3831.511993",
+        "start_epoch_ms": "1792739197844",
+        "end_epoch_ms": "1792739200845",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "3000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "9624",
+        "batches": "1203",
+        "wall_s": "3.000778300",
+        "context_timestamp_s": "2.938347680",
+        "disjoint_batches": "0",
+        "fps": "3207.167954",
+        "start_epoch_ms": "1792739201069",
+        "end_epoch_ms": "1792739204070",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "3000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11552",
+        "batches": "1444",
+        "wall_s": "3.000829200",
+        "context_timestamp_s": "2.911373472",
+        "disjoint_batches": "0",
+        "fps": "3849.602636",
+        "start_epoch_ms": "1792739207515",
+        "end_epoch_ms": "1792739210516",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "3000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "9776",
+        "batches": "1222",
+        "wall_s": "3.001857200",
+        "context_timestamp_s": "2.933903520",
+        "disjoint_batches": "0",
+        "fps": "3256.650583",
+        "start_epoch_ms": "1792739204298",
+        "end_epoch_ms": "1792739207301",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "3000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11664",
+        "batches": "1458",
+        "wall_s": "3.000831800",
+        "context_timestamp_s": "2.925078400",
+        "disjoint_batches": "0",
+        "fps": "3886.922286",
+        "start_epoch_ms": "1792739210718",
+        "end_epoch_ms": "1792739213720",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "3000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "9904",
+        "batches": "1238",
+        "wall_s": "3.002446400",
+        "context_timestamp_s": "2.939520672",
+        "disjoint_batches": "0",
+        "fps": "3298.643400",
+        "start_epoch_ms": "1792739213945",
+        "end_epoch_ms": "1792739216947",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "300000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "4192",
+        "batches": "524",
+        "wall_s": "3.002188600",
+        "context_timestamp_s": "2.961514144",
+        "disjoint_batches": "0",
+        "fps": "1396.314675",
+        "start_epoch_ms": "1792739217156",
+        "end_epoch_ms": "1792739220158",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "300000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "3840",
+        "batches": "480",
+        "wall_s": "3.000142600",
+        "context_timestamp_s": "2.963314976",
+        "disjoint_batches": "0",
+        "fps": "1279.939160",
+        "start_epoch_ms": "1792739220374",
+        "end_epoch_ms": "1792739223375",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "300000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "4184",
+        "batches": "523",
+        "wall_s": "3.005121400",
+        "context_timestamp_s": "2.961218784",
+        "disjoint_batches": "0",
+        "fps": "1392.289842",
+        "start_epoch_ms": "1792739226828",
+        "end_epoch_ms": "1792739229833",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "300000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "3912",
+        "batches": "489",
+        "wall_s": "3.004162800",
+        "context_timestamp_s": "2.968006208",
+        "disjoint_batches": "0",
+        "fps": "1302.193077",
+        "start_epoch_ms": "1792739223605",
+        "end_epoch_ms": "1792739226609",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "300000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "4208",
+        "batches": "526",
+        "wall_s": "3.004597000",
+        "context_timestamp_s": "2.962076128",
+        "disjoint_batches": "0",
+        "fps": "1400.520602",
+        "start_epoch_ms": "1792739230086",
+        "end_epoch_ms": "1792739233092",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4648,
+      "arm": "VFIO",
+      "file": "300000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "3880",
+        "batches": "485",
+        "wall_s": "3.005273200",
+        "context_timestamp_s": "2.968820320",
+        "disjoint_batches": "0",
+        "fps": "1291.063987",
+        "start_epoch_ms": "1792739233324",
+        "end_epoch_ms": "1792739236330",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "3000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "12992",
+        "batches": "1624",
+        "wall_s": "3.000322500",
+        "context_timestamp_s": "2.753786240",
+        "disjoint_batches": "0",
+        "fps": "4330.201170",
+        "start_epoch_ms": "1792741751811",
+        "end_epoch_ms": "1792741754812",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "3000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.074516600",
+        "context_timestamp_s": "2.633230944",
+        "disjoint_batches": "0",
+        "fps": "62.448842",
+        "start_epoch_ms": "1792741755202",
+        "end_epoch_ms": "1792741758277",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "3000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "12968",
+        "batches": "1621",
+        "wall_s": "3.000640600",
+        "context_timestamp_s": "2.759419200",
+        "disjoint_batches": "0",
+        "fps": "4321.743830",
+        "start_epoch_ms": "1792741762116",
+        "end_epoch_ms": "1792741765118",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "3000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "184",
+        "batches": "23",
+        "wall_s": "3.054695600",
+        "context_timestamp_s": "2.634833632",
+        "disjoint_batches": "0",
+        "fps": "60.235134",
+        "start_epoch_ms": "1792741758670",
+        "end_epoch_ms": "1792741761725",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "3000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "13144",
+        "batches": "1643",
+        "wall_s": "3.001200800",
+        "context_timestamp_s": "2.774779392",
+        "disjoint_batches": "0",
+        "fps": "4379.580333",
+        "start_epoch_ms": "1792741765465",
+        "end_epoch_ms": "1792741768467",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "3000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.079238100",
+        "context_timestamp_s": "2.779150592",
+        "disjoint_batches": "0",
+        "fps": "62.353087",
+        "start_epoch_ms": "1792741768840",
+        "end_epoch_ms": "1792741771919",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "300000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "6312",
+        "batches": "789",
+        "wall_s": "3.003021900",
+        "context_timestamp_s": "2.831814816",
+        "disjoint_batches": "0",
+        "fps": "2101.882773",
+        "start_epoch_ms": "1792741772300",
+        "end_epoch_ms": "1792741775304",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "300000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.131314000",
+        "context_timestamp_s": "2.840827072",
+        "disjoint_batches": "0",
+        "fps": "61.316112",
+        "start_epoch_ms": "1792741775683",
+        "end_epoch_ms": "1792741778815",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "300000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "6336",
+        "batches": "792",
+        "wall_s": "3.001447100",
+        "context_timestamp_s": "2.843276416",
+        "disjoint_batches": "0",
+        "fps": "2110.981733",
+        "start_epoch_ms": "1792741782687",
+        "end_epoch_ms": "1792741785689",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "300000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.095552000",
+        "context_timestamp_s": "2.663161376",
+        "disjoint_batches": "0",
+        "fps": "62.024479",
+        "start_epoch_ms": "1792741779214",
+        "end_epoch_ms": "1792741782310",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "300000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "6392",
+        "batches": "799",
+        "wall_s": "3.001001700",
+        "context_timestamp_s": "2.843657728",
+        "disjoint_batches": "0",
+        "fps": "2129.955475",
+        "start_epoch_ms": "1792741786041",
+        "end_epoch_ms": "1792741789043",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "300000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "192",
+        "batches": "24",
+        "wall_s": "3.076204500",
+        "context_timestamp_s": "2.635897280",
+        "disjoint_batches": "0",
+        "fps": "62.414576",
+        "start_epoch_ms": "1792741789408",
+        "end_epoch_ms": "1792741792485",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "windowed-3000-0-offscreen.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "12696",
+        "batches": "1587",
+        "wall_s": "3.001086900",
+        "context_timestamp_s": "2.695834784",
+        "disjoint_batches": "0",
+        "fps": "4230.467302",
+        "start_epoch_ms": "1792741793156",
+        "end_epoch_ms": "1792741796158",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "windowed-3000-0-present.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10936",
+        "batches": "1367",
+        "wall_s": "3.001231200",
+        "context_timestamp_s": "2.861539104",
+        "disjoint_batches": "0",
+        "fps": "3643.837902",
+        "start_epoch_ms": "1792741796537",
+        "end_epoch_ms": "1792741799539",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      },
+      "window": {
+        "client_width": "1280",
+        "client_height": "720",
+        "visible": "1",
+        "iconic": "0",
+        "foreground": "1",
+        "cloak_hr": "0",
+        "cloaked": "0"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "windowed-3000-1-offscreen.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "13112",
+        "batches": "1639",
+        "wall_s": "3.000731700",
+        "context_timestamp_s": "2.768220384",
+        "disjoint_batches": "0",
+        "fps": "4369.600921",
+        "start_epoch_ms": "1792741803306",
+        "end_epoch_ms": "1792741806308",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "windowed-3000-1-present.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10304",
+        "batches": "1288",
+        "wall_s": "3.000837800",
+        "context_timestamp_s": "2.682390336",
+        "disjoint_batches": "0",
+        "fps": "3433.707747",
+        "start_epoch_ms": "1792741799929",
+        "end_epoch_ms": "1792741802930",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      },
+      "window": {
+        "client_width": "1280",
+        "client_height": "720",
+        "visible": "1",
+        "iconic": "0",
+        "foreground": "1",
+        "cloak_hr": "0",
+        "cloaked": "0"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "windowed-3000-2-offscreen.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "13128",
+        "batches": "1641",
+        "wall_s": "3.000671200",
+        "context_timestamp_s": "2.771014432",
+        "disjoint_batches": "0",
+        "fps": "4375.021162",
+        "start_epoch_ms": "1792741806666",
+        "end_epoch_ms": "1792741809667",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4649,
+      "arm": "kayfabe",
+      "file": "windowed-3000-2-present.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10904",
+        "batches": "1363",
+        "wall_s": "3.001612400",
+        "context_timestamp_s": "2.862719936",
+        "disjoint_batches": "0",
+        "fps": "3632.714204",
+        "start_epoch_ms": "1792741810055",
+        "end_epoch_ms": "1792741813057",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "1920",
+        "primary_height": "1080",
+        "virtual_width": "1920",
+        "virtual_height": "1080",
+        "session": "1"
+      },
+      "window": {
+        "client_width": "1280",
+        "client_height": "720",
+        "visible": "1",
+        "iconic": "0",
+        "foreground": "1",
+        "cloak_hr": "0",
+        "cloaked": "0"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "3000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11576",
+        "batches": "1447",
+        "wall_s": "3.001468200",
+        "context_timestamp_s": "2.917232768",
+        "disjoint_batches": "0",
+        "fps": "3856.779159",
+        "start_epoch_ms": "1792742740774",
+        "end_epoch_ms": "1792742743776",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "3000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10016",
+        "batches": "1252",
+        "wall_s": "3.001928500",
+        "context_timestamp_s": "2.935908928",
+        "disjoint_batches": "0",
+        "fps": "3336.521839",
+        "start_epoch_ms": "1792742743994",
+        "end_epoch_ms": "1792742746996",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "3000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11448",
+        "batches": "1431",
+        "wall_s": "3.000136800",
+        "context_timestamp_s": "2.883011136",
+        "disjoint_batches": "0",
+        "fps": "3815.825998",
+        "start_epoch_ms": "1792742750451",
+        "end_epoch_ms": "1792742753452",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "3000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10160",
+        "batches": "1270",
+        "wall_s": "3.001427600",
+        "context_timestamp_s": "2.934202816",
+        "disjoint_batches": "0",
+        "fps": "3385.055831",
+        "start_epoch_ms": "1792742747233",
+        "end_epoch_ms": "1792742750234",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "3000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11640",
+        "batches": "1455",
+        "wall_s": "3.001778400",
+        "context_timestamp_s": "2.916625888",
+        "disjoint_batches": "0",
+        "fps": "3877.701299",
+        "start_epoch_ms": "1792742753654",
+        "end_epoch_ms": "1792742756656",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "3000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10016",
+        "batches": "1252",
+        "wall_s": "3.001084400",
+        "context_timestamp_s": "2.923606592",
+        "disjoint_batches": "0",
+        "fps": "3337.460286",
+        "start_epoch_ms": "1792742756875",
+        "end_epoch_ms": "1792742759877",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "300000-0-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "4184",
+        "batches": "523",
+        "wall_s": "3.003803000",
+        "context_timestamp_s": "2.959498112",
+        "disjoint_batches": "0",
+        "fps": "1392.900933",
+        "start_epoch_ms": "1792742760113",
+        "end_epoch_ms": "1792742763118",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "300000-0-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "3864",
+        "batches": "483",
+        "wall_s": "3.001854400",
+        "context_timestamp_s": "2.962092384",
+        "disjoint_batches": "0",
+        "fps": "1287.204336",
+        "start_epoch_ms": "1792742763338",
+        "end_epoch_ms": "1792742766340",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "300000-1-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "4192",
+        "batches": "524",
+        "wall_s": "3.004256800",
+        "context_timestamp_s": "2.966332896",
+        "disjoint_batches": "0",
+        "fps": "1395.353420",
+        "start_epoch_ms": "1792742769821",
+        "end_epoch_ms": "1792742772826",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "300000-1-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "3920",
+        "batches": "490",
+        "wall_s": "3.002667000",
+        "context_timestamp_s": "2.965122336",
+        "disjoint_batches": "0",
+        "fps": "1305.506072",
+        "start_epoch_ms": "1792742766608",
+        "end_epoch_ms": "1792742769611",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "300000-2-offscreen.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "4192",
+        "batches": "524",
+        "wall_s": "3.004564600",
+        "context_timestamp_s": "2.950848512",
+        "disjoint_batches": "0",
+        "fps": "1395.210474",
+        "start_epoch_ms": "1792742773031",
+        "end_epoch_ms": "1792742776036",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "300000-2-present.txt",
+      "variant": "primary",
+      "result": {
+        "mode": "present",
+        "vertices": "300000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "3880",
+        "batches": "485",
+        "wall_s": "3.005359400",
+        "context_timestamp_s": "2.953601216",
+        "disjoint_batches": "0",
+        "fps": "1291.026957",
+        "start_epoch_ms": "1792742776270",
+        "end_epoch_ms": "1792742779276",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "windowed-3000-0-offscreen.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11576",
+        "batches": "1447",
+        "wall_s": "3.001315800",
+        "context_timestamp_s": "2.932581888",
+        "disjoint_batches": "0",
+        "fps": "3856.974997",
+        "start_epoch_ms": "1792742781896",
+        "end_epoch_ms": "1792742784897",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "windowed-3000-0-present.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "10024",
+        "batches": "1253",
+        "wall_s": "3.000093900",
+        "context_timestamp_s": "2.935101024",
+        "disjoint_batches": "0",
+        "fps": "3341.228753",
+        "start_epoch_ms": "1792742785125",
+        "end_epoch_ms": "1792742788125",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      },
+      "window": {
+        "client_width": "1280",
+        "client_height": "720",
+        "visible": "1",
+        "iconic": "0",
+        "foreground": "1",
+        "cloak_hr": "0",
+        "cloaked": "0"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "windowed-3000-1-offscreen.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11432",
+        "batches": "1429",
+        "wall_s": "3.002037600",
+        "context_timestamp_s": "2.887633792",
+        "disjoint_batches": "0",
+        "fps": "3808.080219",
+        "start_epoch_ms": "1792742791571",
+        "end_epoch_ms": "1792742794574",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "windowed-3000-1-present.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "9840",
+        "batches": "1230",
+        "wall_s": "3.000026500",
+        "context_timestamp_s": "2.936201280",
+        "disjoint_batches": "0",
+        "fps": "3279.971027",
+        "start_epoch_ms": "1792742788352",
+        "end_epoch_ms": "1792742791352",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      },
+      "window": {
+        "client_width": "1280",
+        "client_height": "720",
+        "visible": "1",
+        "iconic": "0",
+        "foreground": "1",
+        "cloak_hr": "0",
+        "cloaked": "0"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "windowed-3000-2-offscreen.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "offscreen",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "11480",
+        "batches": "1435",
+        "wall_s": "3.001446300",
+        "context_timestamp_s": "2.886072192",
+        "disjoint_batches": "0",
+        "fps": "3824.822720",
+        "start_epoch_ms": "1792742794782",
+        "end_epoch_ms": "1792742797784",
+        "tearing": "0",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "1"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    },
+    {
+      "run": 4643,
+      "arm": "VFIO",
+      "file": "windowed-3000-2-present.txt",
+      "variant": "windowed",
+      "result": {
+        "mode": "present",
+        "vertices": "3000",
+        "draws_per_frame": "16",
+        "batch_frames": "8",
+        "frames": "9008",
+        "batches": "1126",
+        "wall_s": "3.000272700",
+        "context_timestamp_s": "2.921830208",
+        "disjoint_batches": "0",
+        "fps": "3002.393749",
+        "start_epoch_ms": "1792742798074",
+        "end_epoch_ms": "1792742801075",
+        "tearing": "1",
+        "real_pixels": "1",
+        "device_reason": "0x00000000",
+        "width": "1920",
+        "height": "1080",
+        "no_present_calls": "0"
+      },
+      "pixel_checks": 12,
+      "display": {
+        "primary_width": "3840",
+        "primary_height": "2160",
+        "virtual_width": "8640",
+        "virtual_height": "2160",
+        "session": "1"
+      },
+      "window": {
+        "client_width": "1280",
+        "client_height": "720",
+        "visible": "1",
+        "iconic": "0",
+        "foreground": "1",
+        "cloak_hr": "0",
+        "cloaked": "0"
+      },
+      "present_status": {
+        "occluded": "0",
+        "other_nonzero_status": "0"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "variant": "primary",
+      "arm": "kayfabe",
+      "vertices": 3000,
+      "mode": "offscreen",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4642": 4344.678507333333,
+        "4649": 4343.8417776666665
+      },
+      "mean": 4344.260142499999,
+      "boot_mean_range": [
+        4343.8417776666665,
+        4344.678507333333
+      ],
+      "phase_range": [
+        4316.90524,
+        4379.580333
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "kayfabe",
+      "vertices": 3000,
+      "mode": "present",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4642": 63.17244933333333,
+        "4649": 61.679021
+      },
+      "mean": 62.42573516666667,
+      "boot_mean_range": [
+        61.679021,
+        63.17244933333333
+      ],
+      "phase_range": [
+        60.235134,
+        66.341155
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "kayfabe",
+      "vertices": 300000,
+      "mode": "offscreen",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4642": 2064.4844473333333,
+        "4649": 2114.273327
+      },
+      "mean": 2089.3788871666666,
+      "boot_mean_range": [
+        2064.4844473333333,
+        2114.273327
+      ],
+      "phase_range": [
+        2027.872994,
+        2135.692176
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "kayfabe",
+      "vertices": 300000,
+      "mode": "present",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4642": 62.174345333333335,
+        "4649": 61.918389
+      },
+      "mean": 62.04636716666667,
+      "boot_mean_range": [
+        61.918389,
+        62.174345333333335
+      ],
+      "phase_range": [
+        60.858835,
+        63.28034
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "VFIO",
+      "vertices": 3000,
+      "mode": "offscreen",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4648": 3856.012305,
+        "4643": 3850.102152
+      },
+      "mean": 3853.0572285,
+      "boot_mean_range": [
+        3850.102152,
+        3856.012305
+      ],
+      "phase_range": [
+        3815.825998,
+        3886.922286
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "VFIO",
+      "vertices": 3000,
+      "mode": "present",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4648": 3254.153979,
+        "4643": 3353.012652
+      },
+      "mean": 3303.5833155,
+      "boot_mean_range": [
+        3254.153979,
+        3353.012652
+      ],
+      "phase_range": [
+        3207.167954,
+        3385.055831
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "VFIO",
+      "vertices": 300000,
+      "mode": "offscreen",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4648": 1396.3750396666667,
+        "4643": 1394.4882756666666
+      },
+      "mean": 1395.4316576666665,
+      "boot_mean_range": [
+        1394.4882756666666,
+        1396.3750396666667
+      ],
+      "phase_range": [
+        1392.289842,
+        1400.520602
+      ]
+    },
+    {
+      "variant": "primary",
+      "arm": "VFIO",
+      "vertices": 300000,
+      "mode": "present",
+      "boot_n": 2,
+      "phase_n": 6,
+      "boot_means": {
+        "4648": 1291.065408,
+        "4643": 1294.5791216666667
+      },
+      "mean": 1292.8222648333333,
+      "boot_mean_range": [
+        1291.065408,
+        1294.5791216666667
+      ],
+      "phase_range": [
+        1279.93916,
+        1305.506072
+      ]
+    },
+    {
+      "variant": "windowed",
+      "arm": "kayfabe",
+      "vertices": 3000,
+      "mode": "offscreen",
+      "boot_n": 1,
+      "phase_n": 3,
+      "boot_means": {
+        "4649": 4325.029795
+      },
+      "mean": 4325.029795,
+      "boot_mean_range": [
+        4325.029795,
+        4325.029795
+      ],
+      "phase_range": [
+        4230.467302,
+        4375.021162
+      ]
+    },
+    {
+      "variant": "windowed",
+      "arm": "kayfabe",
+      "vertices": 3000,
+      "mode": "present",
+      "boot_n": 1,
+      "phase_n": 3,
+      "boot_means": {
+        "4649": 3570.086617666667
+      },
+      "mean": 3570.086617666667,
+      "boot_mean_range": [
+        3570.086617666667,
+        3570.086617666667
+      ],
+      "phase_range": [
+        3433.707747,
+        3643.837902
+      ]
+    },
+    {
+      "variant": "windowed",
+      "arm": "VFIO",
+      "vertices": 3000,
+      "mode": "offscreen",
+      "boot_n": 1,
+      "phase_n": 3,
+      "boot_means": {
+        "4643": 3829.959312
+      },
+      "mean": 3829.959312,
+      "boot_mean_range": [
+        3829.959312,
+        3829.959312
+      ],
+      "phase_range": [
+        3808.080219,
+        3856.974997
+      ]
+    },
+    {
+      "variant": "windowed",
+      "arm": "VFIO",
+      "vertices": 3000,
+      "mode": "present",
+      "boot_n": 1,
+      "phase_n": 3,
+      "boot_means": {
+        "4643": 3207.8645096666664
+      },
+      "mean": 3207.8645096666664,
+      "boot_mean_range": [
+        3207.8645096666664,
+        3207.8645096666664
+      ],
+      "phase_range": [
+        3002.393749,
+        3341.228753
+      ]
+    }
+  ],
+  "windowed_qualified_falsifier": {
+    "offscreen_arm_ratio": 1.129262595936424,
+    "present_arm_ratio": 1.11291689749005,
+    "relative_change_fraction": 0.014474665596109215,
+    "predeclared_threshold_fraction": 0.1,
+    "met_for_this_proxy_only": true,
+    "scope": "n1 boot/arm,correlated3s repeats,not a SPEC score ratio or OpenGL conclusion"
+  }
+}

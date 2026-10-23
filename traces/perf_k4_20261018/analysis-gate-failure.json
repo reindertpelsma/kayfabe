@@ -1,0 +1,14 @@
+{
+  "classification": "MEASURED",
+  "evidence": "analysis-gate-failure.json",
+  "run": 4643,
+  "original_analysis": "controls/assemble_cohort.py refused at strict proxyPASS assertion",
+  "error": "AssertionError: res[proxy][verdict] == PASS",
+  "failed_control": "MODE_CONTROL_FAILED_4",
+  "preserved_log": "/data/codex-Q4/round-6d/r1/energy-bisect/4643/proxy-export.json",
+  "original_host_outer_verdict": "PASS",
+  "actual_proxy_verdict": "FAIL",
+  "whole_run_pass": false,
+  "hardware_followup": "STOPPED; no more experiments, host restored and yielded",
+  "next_artifact": "cohort.json is explicitly a PARTIAL observation ledger. Original clean-cohort builder remains refusing; no four-clean-run claim."
+}

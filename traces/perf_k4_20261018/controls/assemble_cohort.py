@@ -16,6 +16,7 @@ for n in IDS:
  final=json.loads((S/'status-final.json').read_text());assert final['currentBoot']==final['initialBoot']
  exits=[json.loads(line) for line in final['process_exit_log'].splitlines() if line.strip()];viewperf=[x for x in exits if x['name'].lower()=='viewperf.exe'];assert len(viewperf)==19 and all(x['exit']==0 for x in viewperf)
  j['viewperf_process_exit_count']=len(viewperf)
+ assert res['sample']['counters']['poisoned']==0 and res['sample']['counters']['refused_scan_budget']==0
  assert res['host_stop']['new_host_xids']==0 and res['sample']['guest153']==0 and res['sample']['guest4101']==0 and res['sample']['boot_unchanged'] and res['sample']['budget_refusals']==0 and not res['sample']['viewperf_nonzero_exits']
  j['guards']={k:res['sample'][k] for k in ('guest153','guest4101','boot_unchanged','budget_refusals','viewperf_nonzero_exits','counters')};j['guards'].update(verdict=res['verdict'],restored=True,new_host_xids=0,telemetry_exit=0,controller_exit=res['controller_exit'])
  j['host_load']={k:json.loads((S/f'load-before-{k}.json').read_text()) for k in ('vm','spec')}

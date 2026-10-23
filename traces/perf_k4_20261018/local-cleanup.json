@@ -1,0 +1,9 @@
+{
+  "classification": "MEASURED",
+  "evidence": "local-cleanup.json",
+  "time": "2026-10-23T10:22:08.356823+00:00",
+  "own_build_recovery_workers": [],
+  "dedicated_Cargo_target_absent": true,
+  "K4_Cargo_builds": 0,
+  "host_health_and_workers": "Recorded in k4-host-return.json before host-yield.json; no host GPU/VM queries after yield"
+}
