@@ -14,11 +14,7 @@ for (const path of ['/rent', '/availability?profile=check'])
   });
 for (const repo of ['reindertpelsma/kayfabe', 'example/project'])
   test('tiny onstart golden template ' + repo, () => {
-    const s = onstart(sha, nonce, 180, repo, {
-      url: env.WORKER_URL,
-      run: '123-1',
-      token: 'v2.123.1.1800030000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
-    });
+    const s = onstart(sha, repo);
     assert.equal(
       s,
       `#!/bin/bash\nset -eu\ngit clone --filter=blob:none --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit fetch --depth=1 origin ${sha}\ngit checkout --detach ${sha}\n[ "$(git rev-parse HEAD)" = '${sha}' ]\nexec bash scripts/ci/vast_onstart.sh\n`,
