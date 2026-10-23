@@ -1,0 +1,13 @@
+{
+  "base_unique_diagnostics": 360,
+  "after_unique_diagnostics": 360,
+  "added": [],
+  "removed": [],
+  "method": "union of complete isolated RM/display checks and full qemu checks; deduplicate exact diagnostic+package+primary-source-anchor, retain inherited errors",
+  "exit_codes": {
+    "base_clippy": 101,
+    "base_isolated_clippy": 0,
+    "after_clippy": 101,
+    "after_isolated_clippy": 0
+  }
+}

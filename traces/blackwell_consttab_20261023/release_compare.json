@@ -1,0 +1,32 @@
+{
+  "base": {
+    "kf_disp": {
+      "ok": 324,
+      "ignored": 5
+    },
+    "kf_qemu": {
+      "ok": 417
+    },
+    "kf_rm": {
+      "ok": 812
+    }
+  },
+  "after": {
+    "kf_disp": {
+      "ok": 324,
+      "ignored": 5
+    },
+    "kf_qemu": {
+      "ok": 419
+    },
+    "kf_rm": {
+      "ok": 849
+    }
+  },
+  "dropped_cases": [],
+  "changed_old_verdicts": {},
+  "base_case_count": 1558,
+  "after_case_count": 1597,
+  "final_restored_source_release_exit": 0,
+  "source": "48b027267a0e05c9ffdb4a049d34f4d719fd1837"
+}

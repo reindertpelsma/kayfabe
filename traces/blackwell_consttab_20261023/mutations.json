@@ -1,0 +1,197 @@
+[
+  {
+    "name": "drop_precomp_table",
+    "returncode": 101,
+    "killers": [
+      "every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count",
+      "gb202_every_word_matches_its_measurement",
+      "gb202_every_word_retains_its_measured_source_and_evidence",
+      "gb202_independent_public_field_decode_matches_all_measurements",
+      "gb206_every_word_matches_its_measurement",
+      "gb206_every_word_retains_its_measured_source_and_evidence",
+      "gb206_independent_public_field_decode_matches_all_measurements"
+    ],
+    "killing_test_count": 7,
+    "compile_only_failure": false,
+    "free_bytes_before": 26133139456,
+    "utc": "2026-10-23T04:18:13.511387+00:00"
+  },
+  {
+    "name": "wrong_gb202_fvlut_value",
+    "returncode": 101,
+    "killers": [
+      "gb202_every_word_matches_its_measurement",
+      "gb202_independent_public_field_decode_matches_all_measurements"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26133168128,
+    "utc": "2026-10-23T04:18:24.969516+00:00"
+  },
+  {
+    "name": "wrong_measurement_date",
+    "returncode": 101,
+    "killers": [
+      "gb202_every_word_retains_its_measured_source_and_evidence",
+      "gb206_every_word_retains_its_measured_source_and_evidence"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26133020672,
+    "utc": "2026-10-23T04:18:36.229368+00:00"
+  },
+  {
+    "name": "missing_word_each_die",
+    "returncode": 101,
+    "killers": [
+      "every_measured_die_has_exactly_48_published_rows_and_the_measured_zero_count",
+      "gb202_every_word_matches_its_measurement",
+      "gb202_every_word_retains_its_measured_source_and_evidence",
+      "gb202_independent_public_field_decode_matches_all_measurements",
+      "gb206_every_word_matches_its_measurement",
+      "gb206_every_word_retains_its_measured_source_and_evidence",
+      "gb206_independent_public_field_decode_matches_all_measurements"
+    ],
+    "killing_test_count": 7,
+    "compile_only_failure": false,
+    "free_bytes_before": 26132983808,
+    "utc": "2026-10-23T04:18:47.786685+00:00"
+  },
+  {
+    "name": "bypass_table_serving",
+    "returncode": 101,
+    "killers": [
+      "gb202_bad_word_extent_refuses",
+      "gb202_missing_first_word_refuses",
+      "gb202_provenance",
+      "gb202_real_display_page",
+      "gb202_wrong_host_branch_refuses",
+      "gb202_zero_is_complete",
+      "gb203_ada_donor_refuses_even_with_fabricated_rows",
+      "gb203_empty_inheritance_reason_refuses",
+      "gb203_exact_precedes_inherited",
+      "gb203_explicit_inheritance",
+      "gb203_partial_is_not_patched",
+      "gb205_ampere_donor_refuses_even_with_fabricated_rows",
+      "gb205_empty_inheritance_reason_refuses",
+      "gb205_exact_precedes_inherited",
+      "gb205_explicit_inheritance",
+      "gb205_partial_is_not_patched",
+      "gb206_bad_word_extent_refuses",
+      "gb206_missing_last_word_refuses",
+      "gb206_provenance",
+      "gb206_real_display_page",
+      "gb206_wrong_host_branch_refuses",
+      "gb206_zero_is_complete",
+      "gb207_explicit_inheritance"
+    ],
+    "killing_test_count": 23,
+    "compile_only_failure": false,
+    "free_bytes_before": 26132922368,
+    "utc": "2026-10-23T04:18:58.594205+00:00"
+  },
+  {
+    "name": "donor_before_exact_row",
+    "returncode": 101,
+    "killers": [
+      "gb203_exact_precedes_inherited",
+      "gb203_partial_is_not_patched",
+      "gb205_exact_precedes_inherited",
+      "gb205_partial_is_not_patched"
+    ],
+    "killing_test_count": 4,
+    "compile_only_failure": false,
+    "free_bytes_before": 26133049344,
+    "utc": "2026-10-23T04:19:10.407158+00:00"
+  },
+  {
+    "name": "ignore_row_source_and_extent",
+    "returncode": 101,
+    "killers": [
+      "gb202_bad_word_extent_refuses",
+      "gb202_provenance",
+      "gb203_explicit_inheritance",
+      "gb205_explicit_inheritance",
+      "gb206_bad_word_extent_refuses",
+      "gb206_provenance",
+      "gb207_explicit_inheritance"
+    ],
+    "killing_test_count": 7,
+    "compile_only_failure": false,
+    "free_bytes_before": 26132811776,
+    "utc": "2026-10-23T04:19:25.373669+00:00"
+  },
+  {
+    "name": "ignore_actual_host_branch",
+    "returncode": 101,
+    "killers": [
+      "gb202_wrong_host_branch_refuses",
+      "gb206_wrong_host_branch_refuses"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26132353024,
+    "utc": "2026-10-23T04:19:36.841874+00:00"
+  },
+  {
+    "name": "inherit_without_reason",
+    "returncode": 101,
+    "killers": [
+      "gb203_empty_inheritance_reason_refuses",
+      "gb205_empty_inheritance_reason_refuses"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26132074496,
+    "utc": "2026-10-23T04:19:47.396392+00:00"
+  },
+  {
+    "name": "inherit_across_display_ip",
+    "returncode": 101,
+    "killers": [
+      "gb203_ada_donor_refuses_even_with_fabricated_rows",
+      "gb205_ampere_donor_refuses_even_with_fabricated_rows"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26132021248,
+    "utc": "2026-10-23T04:19:58.054363+00:00"
+  },
+  {
+    "name": "drop_explicit_zero_words",
+    "returncode": 101,
+    "killers": [
+      "gb202_zero_is_complete",
+      "gb206_zero_is_complete"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26131996672,
+    "utc": "2026-10-23T04:20:09.024846+00:00"
+  },
+  {
+    "name": "lose_inherited_coverage_label",
+    "returncode": 101,
+    "killers": [
+      "gb203_explicit_inheritance",
+      "gb205_explicit_inheritance",
+      "gb207_explicit_inheritance"
+    ],
+    "killing_test_count": 3,
+    "compile_only_failure": false,
+    "free_bytes_before": 26120458240,
+    "utc": "2026-10-23T04:20:19.536451+00:00"
+  },
+  {
+    "name": "qemu_keeps_only_derived_page",
+    "returncode": 101,
+    "killers": [
+      "gb202_qemu_constructor_uses_host595_table_for_guest580",
+      "gb206_qemu_constructor_uses_host595_table_for_guest580"
+    ],
+    "killing_test_count": 2,
+    "compile_only_failure": false,
+    "free_bytes_before": 26120388608,
+    "utc": "2026-10-23T04:20:48.923003+00:00"
+  }
+]

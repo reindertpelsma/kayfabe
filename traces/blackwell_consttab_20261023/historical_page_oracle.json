@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-23",
+  "classification": "CODE READ; historical capture is an oracle only, never a source",
+  "measured_input": "traces/blackwell_windows_resume_20261023/lease_metadata/precomp_tier3.txt",
+  "historical_native_sha256": "6f9d39cff8daf9681d19e2560c919094dbc07ed59616b6a13497ee466efb6287",
+  "historical_page_B_sha256": "0a3a9116c07b5bae5123c44c4c808eb4c50c0abcd7e8aa20c6a73a3207ab89c2",
+  "compared_words": 48,
+  "native_missing_offsets": [],
+  "native_mismatches": [],
+  "page_B_mismatches": [],
+  "outside_precomp_compared": false,
+  "product_data_source": "new privileged public READ32/GLOBAL measurement, not historical capture"
+}

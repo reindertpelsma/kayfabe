@@ -1,0 +1,6 @@
+{
+  "crates/kf-rm/src/consttab.rs": "6f65798a254e81a92796b7986f892f6622d26952e2926569d74086aafc7a8207",
+  "crates/kf-rm/data/precomp_measured.tsv": "4eab5e0d7377bb977fd7e7fedcd4972cbba4a94059016b2506a767893324c19e",
+  "crates/kf-rm/src/precomp.rs": "96ca9509b9ff9053d060975974d4851517e89a7609a7668965d4de9abf0ee0f3",
+  "crates/kf-qemu/src/display.rs": "6e9bd12849c8db4b77f3ead254fe98aa24783c82cfb74a2bd34bdee27d274aa8"
+}

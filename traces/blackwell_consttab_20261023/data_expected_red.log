@@ -1,0 +1,23 @@
+running 6 tests
+test gb206_every_word_matches_its_measurement ... FAILED
+test gb206_every_word_retains_its_measured_source_and_evidence ... FAILED
+test gb202_every_word_retains_its_measured_source_and_evidence ... FAILED
+test gb202_every_word_matches_its_measurement ... FAILED
+test physical_rows_are_scoped_to_the_measured_host_branch ... ok
+test the_generic_table_never_silently_borrows_a_measured_die ... ok
+failures:
+---- gb206_every_word_matches_its_measurement stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb206_every_word_retains_its_measured_source_and_evidence stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb202_every_word_retains_its_measured_source_and_evidence stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+---- gb202_every_word_matches_its_measurement stdout ----
+called `Result::unwrap()` on an `Err` value: UnknownKey("display.precomp.0xca73.0x0780")
+failures:
+    gb202_every_word_matches_its_measurement
+    gb202_every_word_retains_its_measured_source_and_evidence
+    gb206_every_word_matches_its_measurement
+    gb206_every_word_retains_its_measured_source_and_evidence
+test result: FAILED. 2 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p kf-rm --test precomp_consttab_data`

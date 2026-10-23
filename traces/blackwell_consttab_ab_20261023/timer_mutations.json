@@ -1,0 +1,67 @@
+[
+  {
+    "name": "foreign_or_closed_id_allowed",
+    "returncode": 1,
+    "killers": [
+      "test_closed_id_cannot_arm_a_fresh_timer",
+      "test_empty_owned_ledger_refuses",
+      "test_unknown_id_refuses_before_any_sleep_or_api"
+    ],
+    "killing_test_count": 3
+  },
+  {
+    "name": "duration_limit_removed",
+    "returncode": 1,
+    "killers": [
+      "test_over_170_minutes_refuses",
+      "test_zero_delay_refuses"
+    ],
+    "killing_test_count": 2
+  },
+  {
+    "name": "timer_not_ready",
+    "returncode": 1,
+    "killers": [
+      "test_170_minute_timer_announces_ready_before_sleep",
+      "test_shorter_budget_timer_also_announces_ready"
+    ],
+    "killing_test_count": 2
+  },
+  {
+    "name": "api_exception_not_retried",
+    "returncode": 1,
+    "killers": [
+      "test_transient_api_failure_retries",
+      "test_transient_invalid_json_retries"
+    ],
+    "killing_test_count": 2
+  },
+  {
+    "name": "foreign_instances_block_absence",
+    "returncode": 1,
+    "killers": [
+      "test_another_lane_instance_does_not_block_own_absence",
+      "test_many_foreign_instances_are_never_destroyed"
+    ],
+    "killing_test_count": 2
+  },
+  {
+    "name": "wrong_timer_delay",
+    "returncode": 1,
+    "killers": [
+      "test_170_minute_timer_announces_ready_before_sleep",
+      "test_shorter_budget_timer_also_announces_ready"
+    ],
+    "killing_test_count": 2
+  },
+  {
+    "name": "no_bounded_retries",
+    "returncode": 1,
+    "killers": [
+      "test_live_own_id_retries_until_exact_absence",
+      "test_transient_api_failure_retries",
+      "test_transient_invalid_json_retries"
+    ],
+    "killing_test_count": 3
+  }
+]
