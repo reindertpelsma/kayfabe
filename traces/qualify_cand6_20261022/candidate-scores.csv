@@ -1,3 +1,6 @@
+# Release: SPECviewperf 15.x (patch level not recorded)
+# Configuration: Windows guest (owner image) in a QEMU/KVM VM, Full HD, one iteration; kayfabe kf3 virtual GPU, candidate 6 (afe00b3c) versus baseline 89fc8a222; VFIO physical-GPU reference arm copied from the vfio-ref results; 8 GiB virtual VRAM versus 12 GiB native, as stated in comparison.md
+# (nc) = non-compliant: run in a virtualised configuration, not an official SPEC result and not submission-compliant; SPEC and SPECviewperf are trademarks of the Standard Performance Evaluation Corporation, https://www.spec.org
 arm,run,workload,composite,reported_composite,workload_status,source,version
-candidate,result_2026-10-22-06-22-00,blender-01,36.03,36.03,Completed,result.json,1.0.1
-candidate,result_2026-10-22-06-22-00,catia-07,50.53,50.53,Completed,result.json,1.0.6
+candidate,result_2026-10-22-06-22-00,blender-01,36.03 (nc),36.03 (nc),Completed,result.json,1.0.1
+candidate,result_2026-10-22-06-22-00,catia-07,50.53 (nc),50.53 (nc),Completed,result.json,1.0.6
