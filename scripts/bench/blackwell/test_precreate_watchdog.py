@@ -20,7 +20,9 @@ OWN = 12345678
 
 
 class PrecreateWatchdog(unittest.TestCase):
-    def run_case(self, *, delay=0, rate=0.4, credit=28.8, absent=False, close=False):
+    def run_case(
+        self, *, delay=0, rate=0.4, credit=28.8, absent=False, close=False, absence_after=1
+    ):
         self.assertIsNotNone(W, "precreate watchdog not implemented")
         events = []
         clock = [NOW]
@@ -35,9 +37,10 @@ class PrecreateWatchdog(unittest.TestCase):
 
         def status(iid):
             events.append(("status", iid))
+            destroyed = sum(e == ("destroy", iid) for e in events)
             return {
                 "id": iid,
-                "absent": absent or any(e == ("destroy", iid) for e in events),
+                "absent": absent or destroyed >= absence_after,
                 "rate": rate,
                 "credit": credit,
             }
@@ -58,6 +61,11 @@ class PrecreateWatchdog(unittest.TestCase):
         self.assertEqual(events[0][0], "ready")
         self.assertEqual(events[1][0], "ledger")
 
+    def test_ready_is_also_first_when_contract_publication_is_immediate(self):
+        result, events, end = self.run_case()
+        self.assertEqual(events[0][0], "ready")
+        self.assertEqual(events[1][0], "ledger")
+
     def test_no_provider_query_or_destroy_before_a_contract_is_bound(self):
         result, events, end = self.run_case(delay=40)
         bound = next(i for i, e in enumerate(events) if e[0] == "status")
@@ -68,6 +76,10 @@ class PrecreateWatchdog(unittest.TestCase):
         self.assertEqual(end, NOW + dt.timedelta(seconds=9000))
         self.assertEqual(result["reason"], "fixed deadline")
 
+    def test_long_readiness_still_uses_the_original_deadline(self):
+        result, events, end = self.run_case(delay=1200)
+        self.assertEqual(end, NOW + dt.timedelta(seconds=9000))
+
     def test_destroy_is_by_the_one_exact_owned_id(self):
         result, events, end = self.run_case()
         self.assertEqual([e for e in events if e[0] == "destroy"], [("destroy", OWN)])
@@ -75,6 +87,16 @@ class PrecreateWatchdog(unittest.TestCase):
     def test_absence_is_queried_after_destroy_before_completion(self):
         result, events, end = self.run_case()
         self.assertEqual(events[-2:], [("destroy", OWN), ("status", OWN)])
+        self.assertTrue(result["absence_verified"])
+
+    def test_destroy_acknowledgement_without_absence_is_retried(self):
+        result, events, end = self.run_case(absence_after=2)
+        self.assertEqual(sum(e[0] == "destroy" for e in events), 2)
+        self.assertTrue(result["absence_verified"])
+
+    def test_multiple_still_present_receipts_never_claim_early_absence(self):
+        result, events, end = self.run_case(absence_after=3)
+        self.assertEqual(sum(e[0] == "destroy" for e in events), 3)
         self.assertTrue(result["absence_verified"])
 
     def test_rate_beyond_reserved_bound_stops_immediately(self):
@@ -104,6 +126,11 @@ class PrecreateWatchdog(unittest.TestCase):
 
     def test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id(self):
         result, events, end = self.run_case(close=True)
+        self.assertEqual(end, NOW)
+        self.assertIn(("destroy", OWN), events)
+
+    def test_closed_ledger_at_reserve_boundary_still_requires_api_absence(self):
+        result, events, end = self.run_case(close=True, credit=8)
         self.assertEqual(end, NOW)
         self.assertIn(("destroy", OWN), events)
 
