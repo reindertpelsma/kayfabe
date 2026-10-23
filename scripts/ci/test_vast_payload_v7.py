@@ -281,6 +281,7 @@ class V7Tests(unittest.TestCase):
         kvm=True,
         legacy_client=None,
         initial_hardware=None,
+        required_profile=None,
     ):
         from types import SimpleNamespace
 
@@ -309,6 +310,8 @@ class V7Tests(unittest.TestCase):
             original_bounded_text = self.m.bounded_text
 
             def runner(command, deadline, output, progress):
+                if required_profile:
+                    self.assertEqual(os.environ.get("KF_PROVISION_PROFILE"), required_profile)
                 self.assertEqual(
                     os.environ["BASH_ENV"], str(repo / "scripts/ci/vast_payload_hooks.sh")
                 )
@@ -362,7 +365,11 @@ class V7Tests(unittest.TestCase):
             ), patch.object(
                 self.m.execute_stages, "__defaults__", (runner,)
             ), patch.dict(
-                os.environ, {"KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + 10000)}
+                os.environ,
+                {
+                    "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + 10000),
+                    "KF_PROVISION_PROFILE": "full",
+                },
             ), patch(
                 "sys.argv", ["vast_payload.py", SHA, "a" * 32]
             ):
@@ -401,6 +408,16 @@ class V7Tests(unittest.TestCase):
         rc, result, _ = self._main_fixture(failure="provision", initial_hardware=initial)
         self.assertEqual(rc, 1)
         self.assertEqual(result["hardware"]["compute_cap"], 860)
+
+    def test_payload_forces_minimal_profile_for_all_stages(self):
+        rc, result, _ = self._main_fixture(required_profile="ci")
+        self.assertEqual(rc, 0)
+        self.assertEqual(result["verdict"], "PASS")
+
+    def test_minimal_profile_also_applies_before_failed_provision(self):
+        rc, result, _ = self._main_fixture(failure="provision", required_profile="ci")
+        self.assertEqual(rc, 1)
+        self.assertEqual(result["verdict"], "FAIL")
 
     def test_whole_adapter_timeout_keeps_merge_prefix(self):
         rc, result, calls = self._main_fixture(failure="merge_bar")
