@@ -49,6 +49,17 @@ class SetupBuild(unittest.TestCase):
         self.assertEqual(rows[0]["size"], 8)
         self.assertEqual(rows[0]["control"]["Package"], "foo")
 
+    def test_epoch_does_not_become_a_percent_encoded_repository_filename(self):
+        text = URI.replace(" foo_1.2_amd64.deb 8", " foo_1%3a1.2_amd64.deb 8")
+        rows = self.plan(text, lambda x: x.update(Version="1:1.2"))
+        self.assertEqual(rows[0]["name"], "foo_1.2_amd64.deb")
+
+    def test_another_epoch_uses_the_upstream_filename(self):
+        text = URI.replace(" foo_1.2_amd64.deb 8", " foo_2%3a1.2_amd64.deb 8")
+        rows = self.plan(text, lambda x: x.update(Version="2:1.2"))
+        self.assertNotIn("%", rows[0]["name"])
+        self.assertNotIn(":", rows[0]["name"])
+
     def test_md5_field_is_never_the_authority(self):
         with self.assertRaises(CacheRefused):
             self.plan(change=lambda x: x.pop("SHA256"))
