@@ -1,0 +1,9 @@
+{
+  "class": "MEASURED",
+  "utc": "2026-10-23T00:38:11.231262+00:00",
+  "lease_id": 57296386,
+  "cur_state": "running",
+  "actual_status": "created",
+  "keyscan_rc": 0,
+  "key_lines": 3
+}
