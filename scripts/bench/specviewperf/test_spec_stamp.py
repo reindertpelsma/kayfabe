@@ -196,6 +196,16 @@ class Checker(unittest.TestCase):
         text = md().replace(RELEASE, 'a benchmark')
         self.assertTrue(any('release' in p for p in s.check_text(text, 'md')))
 
+    def test_a_unit_before_the_suffix_is_still_labelled(self):
+        for cell in ('1.64% (nc)', '0.58x (nc)'):
+            text = md(rows=[{'workload': 'a', 'fps': 1.5, 'range': cell}],
+                      fields=['workload', 'fps', 'range'])
+            self.assertEqual(s.check_text(text, 'md'), [], cell)
+        for cell in ('1.64%', '0.58x', '1.64% nc', '0.58 x (nc)'):
+            text = md(rows=[{'workload': 'a', 'fps': 1.5, 'range': cell}],
+                      fields=['workload', 'fps', 'range'])
+            self.assertTrue(any('unlabelled' in p for p in s.check_text(text, 'md')), cell)
+
     def test_names_and_dates_are_not_numbers(self):
         text = md(rows=[{'workload': 'creo-03', 'run': 'result_2026-10-22', 'fps': 1.5}],
                   fields=['workload', 'run', 'fps'])
