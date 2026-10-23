@@ -1,0 +1,49 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "files": {
+    "rent.txt": {
+      "original_sha256": "3dce21d09fa258f0fcf92510a2a0a207b05639337a57d749031a2c4a2693c323",
+      "original_bytes": 1759
+    },
+    "readiness.txt": {
+      "original_sha256": "6af186374a8a0f41b57aa27e9041594a5a1c25f3164c608f3a3e6f9e3d226a4a",
+      "original_bytes": 1477
+    },
+    "destroy.txt": {
+      "original_sha256": "eb32177cf6b76de3152b12fd96872e9e8eabb5d6fcf29730571314f09911d45e",
+      "original_bytes": 2145
+    },
+    "pin_receipt.jsonl": {
+      "original_sha256": "7baaaeef4a8194288159249f95b72aa88ad59ba32b69fb7c002726441eccd30d",
+      "original_bytes": 578
+    },
+    "operator_result.txt": {
+      "original_sha256": "f629741023ac0791ba6135856a16d684f51c72e8cf665061228bdaf916b9bca6",
+      "original_bytes": 123
+    },
+    "post_destroy_console_check.json": {
+      "original_sha256": "f7acd30f4724d5c3418f2e8d32a2054ad6780469210d4622b4c56cfb4cc18b98",
+      "original_bytes": 311
+    },
+    "retry_state.json": {
+      "original_sha256": "f1254bfb4e1d95ca10ab31969afa2fbd65f73453d0177ad1865f97e869d72a84",
+      "original_bytes": 89
+    },
+    "known_bad_machines.json": {
+      "original_sha256": "361f78c1043b6a69f57198895c8196223c2831fa74841833ca4d3dd30e3da410",
+      "original_bytes": 474
+    },
+    "matching_rule_expected_red.txt": {
+      "original_sha256": "ca2a376704eae80a2a27f17e83b91b749b46a8c8ad9901dfc92a0b410b07b323",
+      "original_bytes": 6704
+    },
+    "tests.txt": {
+      "original_sha256": "a078f1d23923991250f2c8630d3f4aa65fa0291ec9789c0716535abecafdca21",
+      "original_bytes": 1273
+    },
+    "pin_mutations.json": {
+      "original_sha256": "94edac29daf3b51b877911bae3d937501e6c9fc97d114f520d705332d6a5612f",
+      "original_bytes": 4483
+    }
+  }
+}

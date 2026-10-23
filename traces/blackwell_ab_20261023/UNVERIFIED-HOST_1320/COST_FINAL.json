@@ -1,0 +1,14 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "prior_phase_usd": 5.200540477629074,
+  "lease_id": 57363603,
+  "observed_dph_total": 0.4386666666666667,
+  "hours_until_api_absence": 0.09885253416666667,
+  "runtime_estimate_usd": 0.04336331165444445,
+  "phase_runtime_estimate_usd": 5.243903789283519,
+  "stop_usd": 7.5,
+  "cap_usd": 8,
+  "reserve_usd": 5,
+  "credit_after_observed": 29.7470660391607,
+  "billing": "runtime estimate; account credit can lag"
+}

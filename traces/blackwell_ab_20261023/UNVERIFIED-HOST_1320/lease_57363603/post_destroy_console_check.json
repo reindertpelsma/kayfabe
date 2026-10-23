@@ -1,0 +1,10 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57363603,
+  "utc": "2026-10-23T11:26:51.784583+00:00",
+  "console_retrieval_after_api_absence": true,
+  "returncode": 0,
+  "stdout_bytes": 59,
+  "console_sha256": "1cf0ffcab0fc07daf5fb8567815d4043b4069047a0ed7e274b736d307e1225b5",
+  "pin_context": []
+}

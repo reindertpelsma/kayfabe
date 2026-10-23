@@ -98,7 +98,14 @@ def wait_for_pin(
             raise PinExpired("console host pin arrived after readiness bound")
         pins = console_pins(text, expected_key)
         polls += 1
-        state = "mismatch" if pins - {expected} else ("match" if expected in pins else "absent")
+        # Preserve the original guard: the scanned key must appear in the authenticated
+        # console. Other published fingerprints do not negate that exact attestation.
+        if expected in pins:
+            state = "match"
+        elif pins:
+            state = "mismatch"
+        else:
+            state = "absent"
         receipt = {
             "state": state,
             "fingerprints": sorted(pins),

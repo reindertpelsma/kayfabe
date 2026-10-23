@@ -1,0 +1,33 @@
+{
+  "scope": "Owner11:05 Windows ON per-arm bounded Xid32 observation; B48b then measured+B1 if clean build; no apps or default/native policy change",
+  "B_source": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "B1_source": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+  "B1_parents": [
+    "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+    "c130aa98ac2b922202282cd793f2a6d64be1f091"
+  ],
+  "native_guard_source": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
+  "max_records_per_arm": 8,
+  "lease_minutes": 150,
+  "goal": "10-minute post-Code0 survival or guestTDR/0x116; public channel/RPC/event/header evidence",
+  "owner_authority": "controller13:20 unverified-host sweep",
+  "die_preference": [
+    "GB205",
+    "GB203",
+    "GB206",
+    "GB207"
+  ],
+  "gb202_market_queries_this_authority": 0,
+  "page_policy": "GB202/GB206 exact rows; GB203/GB205/GB207 explicit GB202 donor and reason at host595 branch",
+  "falsifier": "On inherited die: B 0x50 or refusal of Code0 is an inheritance finding, never a GB202 result",
+  "actual_lease": null,
+  "expected_die": null,
+  "expected_donor": null,
+  "provider_exception_used": false,
+  "deadline_utc": "2026-10-23T13:10:25.278347+00:00",
+  "attempt_state": "not_created",
+  "actual_die_driver_page_verified": false,
+  "ssh_identity_guard_refusal": true,
+  "native_guest_work_started": false,
+  "host_verification": "UNVERIFIED-HOST"
+}

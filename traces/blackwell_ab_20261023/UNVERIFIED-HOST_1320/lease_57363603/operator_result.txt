@@ -1,0 +1,3 @@
+UNVERIFIED-HOST controller13:20
+OWN_REPLACEMENT_CREATED 57363603 retry 1
+startup guard refusal; destroyed own id, no retry
