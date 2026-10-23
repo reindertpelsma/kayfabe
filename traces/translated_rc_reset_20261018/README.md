@@ -1,3 +1,39 @@
+**STATUS: RESEARCH, 2026-10-23 — final GPU-free bar green; Linux GPU acceptance pending.**
+
+MEASURED final source `9ca3aaada7cdfa98b230c6881612d2d6e040812b`, 2026-10-23:
+22 kf-* crates, **4020 passed, 0 failed, 22 ignored, 236 targets**. Clippy:
+278→277 diagnostic identities, added=0/errors=0. Claims: 3924→3924, added=0;
+inherited recorded-debt discrepancy unchanged. Python: **63 passed/0 failed**.
+All **15 mutants** (six Rust, nine Python) have at least two killers. Exact
+commands, input hashes, counts and scope are in `control-final.json`; build-farm
+claims separately cite BF_HEAD `1c78c481e783b6f2b44a86ed5027a14e5ed7c779`.
+This result supersedes the in-progress and stopped checkpoints below.
+
+MEASURED cleanup, 2026-10-23: the dev target and guest C build tree were deleted
+using find-delete semantics. No owned workload or resource lock remains. The
+controller's build-farm lane cache is retained: cleanup returned BF_REFUSED/75
+during Q4's quiet window after bounded retries. The quiet flag was never changed.
+Hardware GPU-control runs remain n=0; full driver/probe linking against the chosen
+guest kernel and native/OFF/ON boots are the remaining acceptance procedure.
+
+**STATUS: RESEARCH, 2026-10-23 — final guest-control qualification; hardware n=0.**
+
+MEASURED follow-up, 2026-10-23: source
+`9ca3aaada7cdfa98b230c6881612d2d6e040812b` additionally requires bystander
+GPU progress after the victim channel and its TSG are destroyed, and a supported
+asynchronous copy engine (`grce=false`). EXPECTED RED commits `9b0a9140d` and
+`5f18f946d` precede those fixes. Python suite: 63 passed/0 failed. Nine Python
+mutants have at least two killers; `control-python-mutations.json` records the
+current killers and supersedes the seven-mutant counts below. The updated C
+probe compiles against the pinned public types and dev headers 7.0.0-38. Actual
+post-teardown hardware isolation remains unmeasured.
+
+CODE READ input equivalence, 2026-10-23: Rust/Cargo files are identical between
+final source `9ca3aaada` and BF_HEAD `1c78c481e`; the six Rust mutation results
+below therefore apply to unchanged Rust inputs. The full suite and Clippy were
+also rerun successfully at final source using the dev box and required cargo flock.
+Build-farm cleanup currently respects BF_REFUSED/exit75 during Q4's quiet window.
+
 **STATUS: RESEARCH, 2026-10-23 — build-farm validation supersedes the cargo-lock stop; hardware n=0.**
 
 MEASURED build-farm resume, 2026-10-23: the controller authorized CPU builds of
@@ -7,7 +43,8 @@ were killed by at least two tests, with 21/21 tests green before and after the
 mutation run and source restored after each mutation. Exact killers, source/mutant SHA256 values, command and
 compiler version are in `control-rust-mutations.json`. The deliberately mutated
 source is derived by the pushed runner from that BF_HEAD; it is not represented
-as an unmodified-head test. No GPU or VM was used for these build-farm checks. The six Rust variants and
+as an unmodified-head test. No GPU error-control arm or OS guest boot was run. Existing KVM-gated CPU unit
+tests are part of the crate suite. The six Rust variants and
 seven earlier Python variants total 13 mutants, each with at least two killers.
 
 MEASURED build-farm Clippy, 2026-10-23, same BF_HEAD: kf-chan/kf-qemu/kf-harness,

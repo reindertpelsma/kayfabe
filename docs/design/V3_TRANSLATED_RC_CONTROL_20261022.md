@@ -39,7 +39,10 @@ its invalid pushbuffer alone does not exercise B1. The guest userspace owner
 therefore loads a small kernel harness through `finit_module`. Its two channels
 are allocated through the public kernel interface in separate TSGs. The owning
 loader receives EIO only after the harness checks the victim's real error record,
-the real guest RM notification handshake, and post-error bystander progress.
+the real guest RM notification handshake, and bystander progress both after the
+error and after destruction of the victim channel and its TSG. It selects the
+first supported COPY0..9 engine with the public `grce` capability false, matching
+the native rig's asynchronous-CE qualification.
 This tests a userspace-owned **harness**; it does not establish arbitrary CUDA
 process recovery or Windows TDR behavior. The frozen `kayfabe-rm-ladder` is untouched.
 
@@ -147,15 +150,47 @@ guard. Reject files over 2 MiB. Record the end time immediately after the proces
 exits. Each manifest interval must be at most 180 s. The wrapper metadata is the
 source of its PID/start time; record `/proc` start ticks for audit.
 
+CODE READ capture helpers, 2026-10-23: define these in `run-controls.sh` before
+the arm commands. They write only inside that arm's directory; `rc_capture_end`
+receives JSON `null` for native mode or the frozen native detail as a JSON string
+for OFF/ON. The end time is recorded immediately after the process exits.
+
+```bash
+set -euo pipefail
+rc_capture_begin() {
+  rc_dir=$1 rc_run=$2 rc_mode=$3
+  test ! -e "$rc_dir/process.json"
+  rc_cursor=$(journalctl -k -b -n 0 --show-cursor --no-pager | sed -n 's/^-- cursor: //p')
+  test -n "$rc_cursor"
+  printf '%s\n' "$rc_cursor" >"$rc_dir/journal.cursor"
+}
+rc_capture_end() {
+  rc_end_ns=$(date +%s%N)
+  journalctl -k -b --after-cursor="$rc_cursor" -o json --no-pager >"$rc_dir/journal.jsonl"
+  python3 - "$rc_dir" "$rc_run" "$rc_mode" "$SOURCE" "$PCI" "$rc_end_ns" "$1" <<'PY_CAPTURE'
+import json, pathlib, sys
+folder, run, mode, source, pci, end, detail = sys.argv[1:]
+folder = pathlib.Path(folder)
+meta = json.loads((folder/'process.json').read_text())
+manifest = dict(run=run, mode=mode, source=source, pid=meta['pid'], pci=pci,
+                start_ns=meta['start_ns'], end_ns=int(end), detail=json.loads(detail))
+with (folder/'manifest.json').open('x') as stream:
+    json.dump(manifest, stream, sort_keys=True)
+PY_CAPTURE
+}
+```
+
 ```bash
 # INSIDE the held global reservation. PCI is independently recorded, no function.
 : "${PCI:?}"                    # e.g. lower-case domain:bus:device
 mkdir "$OUT/native"
 export KF_RC_META="$OUT/native/process.json"
 export KF_RC_EXEC="$CARGO_TARGET_DIR/release/kf-rc-native"
-# Save CURSOR here, before starting the process.
-"$OUT/identity-exec.py" native-rc-1 >"$OUT/native/native.log" 2>&1
-# Save end_ns and the unfiltered cursor-based journal to native/journal.jsonl.
+# Snapshot before launch, then record the interval end and unfiltered journal.
+rc_capture_begin "$OUT/native" native-rc-1 native
+rc_status=0
+timeout --signal=TERM 120 "$OUT/identity-exec.py" native-rc-1 >"$OUT/native/native.log" 2>&1 || rc_status=$?
+rc_capture_end null
 # Guest capture is empty for native characterization.
 : >"$OUT/native/guest.log"
 ```
@@ -167,23 +202,21 @@ with that arm's own wrapper metadata, run name and `mode`. Freeze `detail` to th
 native result **before** either guest run. Save native verdict and manifest as
 immutable inputs; never derive an allowed suffix from the ON fault.
 
-```python
-# Example executed with paths/values from the operator's capture script.
-import json
-meta = json.load(open(process_json))
-manifest = dict(run=run, mode=mode, source=source, pid=meta['pid'], pci=pci,
-                start_ns=meta['start_ns'], end_ns=end_ns, detail=detail)
-with open(manifest_json, 'x') as f:
-    json.dump(manifest, f, sort_keys=True)
-```
-
 ```bash
 python3 "$REPO/scripts/fastguest/translated_rc_guard.py" \
   --manifest "$OUT/native/manifest.json" --qemu "$OUT/native/native.log" \
   --guest "$OUT/native/guest.log" --journal "$OUT/native/journal.jsonl" \
   >"$OUT/native/verdict.json"
-# Require NATIVE_ONLY (never guest PASS), one Xid32, actual private RC record
-# and event, and a native bystander fence after the error. Freeze its detail.
+test "$rc_status" -eq 0
+# Require NATIVE_ONLY, then freeze its exact detail before either guest run.
+DETAIL_JSON=$(python3 - "$OUT/native/verdict.json" "$SOURCE" <<'PY_FREEZE'
+import json, sys
+v = json.load(open(sys.argv[1]))
+assert v["verdict"] == "NATIVE_ONLY" and v["source"] == sys.argv[2]
+print(json.dumps(v["detail"]))
+PY_FREEZE
+)
+readonly DETAIL_JSON
 ```
 
 CODE READ native refusal policy, 2026-10-23: the native rig prints its marker
@@ -206,13 +239,16 @@ export BENCH_DIR="$DIR" KF_FASTGUEST_DIR="$OUT/fastguest"
 export QEMU_BIN="$OUT/identity-exec.py" KF_LOCK="$OUT/fastguest-inner.lock"
 export KF_PROBE=sem-release KF_ARMS="$mode,$run"
 export KF_APPEND="loglevel=7 "  # include the probe's pr_info records on serial
-# Save CURSOR here. Existing fastguest failure gates remain enabled.
-bash "$REPO/scripts/fastguest/run_fast_guest.sh" "$run" 120 >"$DIR/runner.log" 2>&1
-# Save end_ns, unfiltered journal.jsonl, and manifest.json with frozen detail.
+# Existing fastguest failure gates remain enabled.
+rc_capture_begin "$DIR" "$run" "$mode"
+rc_status=0
+bash "$REPO/scripts/fastguest/run_fast_guest.sh" "$run" 120 >"$DIR/runner.log" 2>&1 || rc_status=$?
+rc_capture_end "$DETAIL_JSON"
 python3 "$REPO/scripts/fastguest/translated_rc_guard.py" \
   --manifest "$DIR/manifest.json" --qemu "$DIR/fast_${run}_qemu.log" \
   --guest "$DIR/fast_${run}_serial.log" --journal "$DIR/journal.jsonl" \
   >"$DIR/verdict.json"
+test "$rc_status" -eq 0
 ```
 
 CODE READ acceptance, 2026-10-23: require both fastguest's successful exit/DONE
@@ -222,8 +258,10 @@ guest health. ON requires exactly one marker, submission, host observation and
 RC posting for the uniquely born Translated twin; the actual guest notifier
 must have nonzero timestamp, code32, guest engine, statusffff and GP_GET=0; the
 actual guest RC event must match chid/engine/code/scope and occur once; the owning
-loader must receive EIO. Both bystander steps, post-fault guest health and clean
-exit are mandatory. The host Xid must match PCI, PID, host chid, code32, frozen
+loader must receive EIO. All three bystander stages (before the fault, after the error, and after victim
+channel/TSG destruction), post-fault guest health and clean exit are mandatory.
+The guest birth record must also attest `async_ce=1`, derived from public copy
+engine capabilities; an absent/non-asynchronous qualification fails. The host Xid must match PCI, PID, host chid, code32, frozen
 interrupt suffix and marker interval exactly. **Any additional Xid fails.**
 FAULT_MARK is an intentional exact-match control, never a general Xid32 allowlist.
 
@@ -235,6 +273,18 @@ with adjusted timers. Confirm all owned processes exited and release the outer
 lock. Clean owned build targets with `cargo clean --target-dir` semantics or
 `find "$CARGO_TARGET_DIR" -mindepth 1 -delete`; no shared-directory deletion.
 
+MEASURED follow-up, 2026-10-23, source `9ca3aaada7cdfa98b230c6881612d2d6e040812b`:
+EXPECTED RED commits `9b0a9140d` and `5f18f946d` precede the stricter post-teardown
+bystander and asynchronous-CE requirements. The final capture/patch suite passes
+63/63. Nine Python mutants each have at least two killers, including removal of
+each new requirement (two killers each). The updated guest probe compiles as a C
+object against dev kernel headers 7.0.0-38 using the pinned public ABI. This is
+not a linked module or hardware run. The final Rust bar completed on this source
+under the dev-box cargo flock after the build farm entered a quiet window:
+4020 passed, 0 failed, 22 ignored across 236 targets; Clippy added=0/errors=0
+(278→277 diagnostic identities), claims added=0. The final counts, exact commands
+and input hashes are in `control-final.json` in the evidence directory.
+
 MEASURED GPU-free validation, 2026-10-23: at build-farm **BF_HEAD
 `1c78c481e783b6f2b44a86ed5027a14e5ed7c779`**, the 22 kf-* crates passed
 4020 tests, failed 0 and ignored 22 across 236 targets. Optional-feature Clippy
@@ -242,7 +292,7 @@ for kf-chan/kf-qemu/kf-harness, all targets, completed with 277 warning identiti
 versus the earlier 278, added=0/errors=0. All six Rust fault-arm mutants had at
 least two killers, and the restored code passed 21/21 tests before/after the run.
 The seven guard/observer mutants also had at least two killers; Python tests:
-59/59. Commands, exact mutation killers and diagnostic comparisons are in
+59/59 at that checkpoint. Commands, exact mutation killers and diagnostic comparisons are in
 [`traces/translated_rc_reset_20261018/`](../../traces/translated_rc_reset_20261018/).
 The build-farm result supersedes the earlier dev-box cargo-lock stop.
 
@@ -253,8 +303,8 @@ intended source revision. The cargo command arrays in `control-build-farm.json`
 reproduce the full suite and Clippy. The farm supplies nice 15, eight jobs and its
 own lane target; it is an authorized exception to dev-box cargo settings. Respect
 BF_REFUSED/exit75 while the host quiet flag exists; wait for the next window or
-use the documented dev-box flock, never remove that flag. No GPU or VM is used by
-these checks. Example (BF_HOST is the controller-provided SSH destination):
+use the documented dev-box flock, never remove that flag. Existing KVM-gated CPU unit tests are included; these commands do not run the
+GPU fault-control arm or boot its Linux OS guest. Example (BF_HOST is the controller-provided SSH destination):
 
 ```bash
 ssh "${BF_HOST:?}" /data/build-farm/bf b1 codex/translated-rc-reset-20261022 \

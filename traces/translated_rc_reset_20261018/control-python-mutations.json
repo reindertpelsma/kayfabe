@@ -2,7 +2,8 @@
   "date": "2026-10-23",
   "kind": "GPU-free synthetic evidence gate and guest patch mutations",
   "hardware_runs": 0,
-  "source": "a1d3d61f068424eccb8a24a277fbe89b872a8d91",
+  "source": "9ca3aaada7cdfa98b230c6881612d2d6e040812b",
+  "tests_passed_after_restoration": 63,
   "mutants": [
     {
       "mutant": "notifier-values-ignored",
@@ -50,10 +51,12 @@
     {
       "mutant": "bystander-proof-ignored",
       "killers": [
+        "test_bystander_after_teardown_must_progress",
+        "test_bystander_after_victim_teardown_required",
         "test_bystander_did_not_progress_rejected",
         "test_bystander_missing_rejected"
       ],
-      "killed": 2,
+      "killed": 4,
       "exit_code": 1
     },
     {
@@ -70,6 +73,24 @@
       "killers": [
         "test_guest_handshake_is_not_an_unconditional_entry_notification",
         "test_guest_handshake_occurs_after_success"
+      ],
+      "killed": 2,
+      "exit_code": 1
+    },
+    {
+      "mutant": "post-teardown-proof-ignored",
+      "killers": [
+        "test_bystander_after_teardown_must_progress",
+        "test_bystander_after_victim_teardown_required"
+      ],
+      "killed": 2,
+      "exit_code": 1
+    },
+    {
+      "mutant": "async-engine-proof-ignored",
+      "killers": [
+        "test_guest_engine_must_be_qualified_async",
+        "test_missing_async_engine_qualification_rejected"
       ],
       "killed": 2,
       "exit_code": 1
