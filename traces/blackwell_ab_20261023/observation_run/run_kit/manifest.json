@@ -9,5 +9,15 @@
   "native_guard_source": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
   "max_records_per_arm": 8,
   "lease_minutes": 150,
-  "goal": "10-minute post-Code0 survival or guestTDR/0x116; public channel/RPC/event/header evidence"
+  "goal": "10-minute post-Code0 survival or guestTDR/0x116; public channel/RPC/event/header evidence",
+  "owner_authority": "2026-10-23 12:20 CEST any verified RTX50 die",
+  "die_preference": [
+    "GB205",
+    "GB203",
+    "GB206",
+    "GB207"
+  ],
+  "gb202_market_queries_this_authority": 0,
+  "page_policy": "GB202/GB206 exact rows; GB203/GB205/GB207 explicit GB202 donor and reason at host595 branch",
+  "falsifier": "On inherited die: B 0x50 or refusal of Code0 is an inheritance finding, never a GB202 result"
 }

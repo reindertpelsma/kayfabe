@@ -1,46 +1,20 @@
 {
-  "utc": "2026-10-23T10:00:07.127516+00:00",
+  "utc": "2026-10-23T10:15:24.215186+00:00",
   "credit_usd": 29.757424765660858,
   "offers": [
     {
-      "id": 43994880,
-      "machine_id": 69146,
-      "gpu_name": "RTX 5090",
-      "candidate_die": "GB202",
-      "verification": "deverified",
-      "dph_total": 0.38805555555555554,
-      "cpu_cores_effective": 32.0,
-      "cpu_ram": 64468,
-      "reliability": 0.9960254,
-      "inet_down": 1374.8,
-      "disk_space": 331.125
-    },
-    {
-      "id": 42143434,
-      "machine_id": 52992,
-      "gpu_name": "RTX 5090",
-      "candidate_die": "GB202",
-      "verification": "deverified",
-      "dph_total": 0.6416666666666667,
-      "cpu_cores_effective": 16.0,
-      "cpu_ram": 63940,
-      "reliability": 0.9899797,
-      "inet_down": 887.4,
-      "disk_space": 1417.8
-    },
-    {
-      "id": 55429765,
-      "machine_id": 152912,
-      "gpu_name": "RTX 5090",
-      "candidate_die": "GB202",
-      "verification": "unverified",
-      "dph_total": 0.6680555555555555,
+      "id": 57344521,
+      "machine_id": 150531,
+      "gpu_name": "RTX 5070 Ti",
+      "candidate_die": "GB203",
+      "verification": "verified",
+      "dph_total": 0.2689814814814815,
       "cpu_cores_effective": 24.0,
-      "cpu_ram": 64473,
-      "reliability": 0.9894479,
-      "inet_down": 949.1,
-      "disk_space": 373.125
+      "cpu_ram": 64072,
+      "reliability": 0.964338,
+      "inet_down": 726.7,
+      "disk_space": 571.0
     }
   ],
-  "authority": "owner11:05 one verified GB202 observation lease; fixed150minutes"
+  "authority": "owner12:20 verified RTX50 observation; prefer GB205/GB203/GB206, GB207 last; no new GB202 poll"
 }

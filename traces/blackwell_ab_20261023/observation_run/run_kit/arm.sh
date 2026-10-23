@@ -43,7 +43,7 @@ cleanup(){
  fi
  [ -z "$jpid" ] || kill -TERM "$jpid" 2>/dev/null
 if [ "$launched" = 1 ]; then
- python3 -I /root/sweep2/keyline_times.py "$QLOG" "/root/prov/arms/$run/rpc_timing.jsonl" "/root/prov/arms/$run/keylines.jsonl" PROBE-DUMP "chan token" "BORN " "GSP REFUSED fn76/0x906f0102" GUEST_PANICKED RC_TRIGGERED "kf3: GSP" UNLOADING || echo KEYLINES_FAILED
+ python3 -I /root/sweep2/keyline_times.py "$QLOG" "/root/prov/arms/$run/rpc_timing.jsonl" "/root/prov/arms/$run/keylines.jsonl" PROBE-DUMP "PRECOMP source=T3" "chan token" "BORN " "GSP REFUSED fn76/0x906f0102" GUEST_PANICKED RC_TRIGGERED "kf3: GSP" UNLOADING || echo KEYLINES_FAILED
  if [ -e /root/prov/XID_STOP ]; then rc=7; fi
  python3 - <<'PHASE_END'
 import json

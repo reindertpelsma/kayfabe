@@ -1,3 +1,17 @@
+# Owner 12:20 RTX50 expansion: provider-policy refusal
+
+MEASURED: `traces/blackwell_ab_20261023/observation_run/rtx50_rental_refusal.json` records the 2026-10-23 attempt: one verified RTX 5070 Ti offer 57344521 / machine 150531 (advertised GB203), excluded by the unchanged known-bad machine list after own lease 57296911 failed with provider_host_error. No other queried verified candidate met the existing requirements. Six approved non-GB202 SKUs were queried once; GB202 was not queried. No creation request, timer, retry reservation or spend occurred. All sixteen historical own ids are API-absent. Phase runtime remains 5.148077591179074 USD.
+
+CODE READ: owner 12:20 broadens die eligibility, preserving provider-retry policy. `run_kit/operator_ops.py` now prefers GB205, GB203, GB206 and GB207 last. The exclusion was preserved; no eligibility, safety, budget or timeout check was waived. `run_kit/arm.sh` adds the existing T3 provenance line to its finite public keyline selectors. Default guards and the per-arm observation protocol are unchanged.
+
+CODE READ: `expected_page_policy.json`, derived at commit 48b027267, records each anticipated row scope. GB202 and GB206 have their own 48-word pages at host branch 595; GB203/GB205/GB207 use GB202 with the explicit provisional DISPv0502/CA layout reason and agreement of 328 decoded fields. These are expected source selections. No host die, driver or page actually served was established in this attempt.
+
+FALSIFIERS BEFORE LIVE: a future inherited-die B reaching 0x50 or refusing Code 0 is an inheritance finding for that actual die, never a GB202 result. After admitted Xid 32, guest 0x116/TDR or exit falsifies survival; no admitted Xid leaves fault survival untested. B1 remains conditional on a clean build. These hardware outcomes are all unrun.
+
+MEASURED on 2026-10-23: `rtx50_config_green.txt` records 228 passing GPU-free tests after the configuration and keyline selector edits; AST and shell syntax checks pass. The earlier 26 mutation results remain attached to the unchanged observer/projection/protocol implementation. Publication checks occur after live work; no live experiment existed here.
+
+--- Earlier preparation and GB202-only availability checkpoint ---
+
 # BW3 Windows observation preparation, 2026-10-23
 
 CODE READ: owner 11:05 authorizes one additional GB202 lease with the same phase budget (prior runtime 5.148077591179074 USD, stop 7.5, cap 8, reserve 5) and a 150-minute destruction timer armed before SSH or work. Provider replacements are restricted to pre-SSH failures under PR110. No lease has been created for this observation attempt.

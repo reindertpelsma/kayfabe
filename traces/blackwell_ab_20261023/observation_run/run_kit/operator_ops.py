@@ -1,4 +1,5 @@
 import json, subprocess, sys, datetime, os, time, re, base64, hashlib, ipaddress
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 D = Path("/workspace/bw3-observe-run")
@@ -139,9 +140,17 @@ if mode in ("preflight", "rent"):
     live = api(["show", "instances"])
     assert may_rent(live, owned), "another own lane lease is active"
     credit = float(api(["show", "user"])["credit"])
-    skus = {"RTX_5090": "GB202"}
+    skus = {
+        "RTX_5070": "GB205",
+        "RTX_5080": "GB203",
+        "RTX_5070_Ti": "GB203",
+        "RTX_5060_Ti": "GB206",
+        "RTX_5060": "GB206",
+        "RTX_5050": "GB207",
+    }
     offers = []
-    for sku, die in reversed(list(skus.items())):
+    def search_candidate(item):
+        sku, die = item
         found = api(
             [
                 "search",
@@ -155,7 +164,10 @@ if mode in ("preflight", "rent"):
         )
         for x in found:
             x["candidate_die"] = die
-        offers.extend(found)
+        return found
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for found in pool.map(search_candidate, skus.items()):
+            offers.extend(found)
     safe = [
         {
             k: x.get(k)
@@ -183,7 +195,7 @@ if mode in ("preflight", "rent"):
                 "utc": now().isoformat(),
                 "credit_usd": credit,
                 "offers": safe,
-                "authority": "owner11:05 one verified GB202 observation lease; fixed150minutes",
+                "authority": "owner12:20 verified RTX50 observation; prefer GB205/GB203/GB206, GB207 last; no new GB202 poll",
             },
             indent=2,
         )
@@ -220,7 +232,7 @@ if mode in ("preflight", "rent"):
     offer = min(
         eligible,
         key=lambda x: (
-            ["GB202", "GB203", "GB205"].index(x["candidate_die"]),
+            ["GB205", "GB203", "GB206", "GB202", "GB207"].index(x["candidate_die"]),
             float(x["dph_total"]),
         ),
     )
@@ -305,7 +317,7 @@ if mode in ("preflight", "rent"):
         "product_head": source,
         "measured_candidate": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
         "destroyed": False,
-        "authority": "owner11:05 per-arm Windows ON Xid32 observation: one GB202 lease; B48b then optional measured-page+B1; max8 exact owned-pair records, other faults/errors/health fatal; phase8 stop7.5 reserve5; fixed150-minute timer",
+        "authority": "owner12:20 per-arm Windows ON Xid32 observation: one verified RTX50 lease; measured GB202/GB206 pages, explicit GB202-to-GB203/205/207 inheritance; B48b then optional measured-page+B1; max8 exact owned-pair records, other faults/errors/health fatal; phase8 stop7.5 reserve5; fixed150-minute timer",
     }
     rows.append(row)
     save(rows)

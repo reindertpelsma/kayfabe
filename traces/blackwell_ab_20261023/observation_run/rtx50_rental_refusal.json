@@ -1,0 +1,63 @@
+{
+  "utc": "2026-10-23T10:16:43.665477+00:00",
+  "authority": "owner12:20 verified RTX50 expansion",
+  "gb202_market_queries": 0,
+  "searched_skus": [
+    "RTX_5070",
+    "RTX_5080",
+    "RTX_5070_Ti",
+    "RTX_5060_Ti",
+    "RTX_5060",
+    "RTX_5050"
+  ],
+  "die_preference": [
+    "GB205",
+    "GB203",
+    "GB206",
+    "GB207"
+  ],
+  "candidate": {
+    "id": 57344521,
+    "machine_id": 150531,
+    "gpu_name": "RTX 5070 Ti",
+    "candidate_die": "GB203",
+    "verification": "verified",
+    "dph_total": 0.2689814814814815,
+    "cpu_cores_effective": 24.0,
+    "cpu_ram": 64072,
+    "reliability": 0.964338,
+    "inet_down": 726.7,
+    "disk_space": 571.0
+  },
+  "refusal": "no verified different-machine offers after known-bad exclusion",
+  "excluded_machine_id": 150531,
+  "previous_own_failure_lease": 57296911,
+  "failure_reason": "provider_host_error",
+  "new_lease_created": false,
+  "timers_started": 0,
+  "retries_used": 0,
+  "known_own_ids_api_absent": true,
+  "known_own_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340,
+    57296911,
+    57302449,
+    57310491,
+    57324106,
+    57340681
+  ],
+  "new_runtime_spend_usd": 0,
+  "phase_runtime_usd": 5.148077591179074,
+  "default_native_phase_guard_changes": false,
+  "observation_protocol_changes": false,
+  "runtime_die_or_page_serving_verified": false
+}
