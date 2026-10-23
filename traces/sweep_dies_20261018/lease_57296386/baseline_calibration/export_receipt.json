@@ -1,0 +1,25 @@
+{
+  "kind": "MEASURED",
+  "lease_id": 57296386,
+  "source": "ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7",
+  "utc": "2026-10-23T01:30:18.557798+00:00",
+  "files": {
+    "s4_controller.log": {
+      "bytes": 2312,
+      "sha256": "720e804ead6a02352fd09caeb83e9b04d2cfd53146a46b3a5e9bd3ad737b64b9"
+    },
+    "box_readiness.json": {
+      "bytes": 249,
+      "sha256": "4fee8b7df54e33fa03009e02050729959e14b86f1a13bedcbc864b03b0ddf18f"
+    },
+    "sweep_windows_install.log": {
+      "bytes": 4311,
+      "sha256": "7db957500050a037b555e8eae7cfa70cf4e3f1ce1f9ee75410b1f318f817273e"
+    },
+    "native_xid_watch.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "bounds": "Text only; at most 128 KiB per file, first 80 and last 300 lines when larger. Supervisor tokens omitted. Raw large logs remain on rental until teardown."
+}

@@ -1,6 +1,8 @@
 # S4 adaptive Windows readiness
 
-STATUS: LIVE, 2026-10-23; GPU-free proof green, new hardware run pending.
+STATUS: LIVE, 2026-10-23; GPU-free proof green; measured box calibration recorded, bind/ON pending.
+
+MEASURED (2026-10-23, lease57296386, `traces/sweep_dies_20261018/lease_57296386/baseline_calibration/box_readiness.json`): standard-VGA verification boot48s, successful OS CIM roundtrip15.419614402s, one query attempt, factor8. One-box calibration is a bench observation, not a per-die constant or a driver outcome.
 
 CODE READ (2026-10-23, owner02:20 instruction): the earlier GA102 bind banner timeout is an inconclusive readiness result, not driver evidence. The owner authorizes measured4–10x bench deadlines, absolute ceilings, stage budgets and one retry for the first transient read-only SSH/banner/query failure. Product timers, guest TDR policy, GPU fault admission, single-enable ordering and app oracles are unchanged.
 

@@ -1,3 +1,5 @@
+MEASURED LIVE UPDATE (2026-10-23, lease57296386, `lease_57296386/baseline_calibration/box_readiness.json`): nativePASS; generic Windows first installation boot exited0; verification boot48s and one OS CIM query15.4196s produced factor8. Baseline verification/bind/ON/apps/hold are still pending; no new driver verdict.
+
 STATUS: LIVE — adaptive readiness resume, 2026-10-23.
 
 CODE READ (2026-10-23, owner02:20 instruction): earlier GA102 bind readiness timeout is inconclusive about the driver. Shared SW2 policy4ede56ac7 is reused by scripts/bench/windows/readiness.py; GPU-free scaling/retry/ceiling/reserve proofs are green. New GA102 lease follows publication; no lease is active during this proof. See docs/design/S4_ADAPTIVE_READINESS_20261023.md and adaptive/ evidence.

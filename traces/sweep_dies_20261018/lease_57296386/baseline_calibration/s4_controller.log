@@ -1,0 +1,16 @@
+S4_START source=ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7 2026-10-23T00:41:33+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7 -> FETCH_HEAD
+HEAD is now at ac21aef93 bench: reuse SW2 4ede56ac7 readiness policy for measured S4 bind budgets [skip ci]
+NVIDIA GeForce RTX 3090, 595.91.07, 24576 MiB
+VERDICT=SOUND
+PROBE_START pid=77370 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x170 impl=0x2 die=GA102
+PROBE_END admin_run=false
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=ac21aef93cc7a8bb1149fecd98f8404e6b7e20d7 2026-10-23T00:58:52+00:00
+GR_TIER_VERDICT=PASS
+{"approved_native_xid_lines": ["2026-10-23T00:59:01.231056+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91193, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-23T00:59:04.287638+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91193, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-23T00:59:07.297667+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91193, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-23T00:59:10.355644+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91193, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ", "2026-10-23T00:59:14.470655+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91229, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"], "count": 5, "rule": "owner decision1: source-matched controls only; all later changes fatal"}
+LINUX_SUITE_SKIPPED optional arm after current family native gates/raw/CUDA/GR; preserve Windows observation budget; no new Linux claim
