@@ -1,4 +1,10 @@
 import { webcrypto, createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+// The tested commit's reporter, served by the mock contents API (V6 protocol marker).
+export const reporterSource = readFileSync(
+  new URL('../../../scripts/ci/vast_report.py', import.meta.url),
+  'utf8',
+);
 export const clock = 1800000000000;
 export const sha = 'a'.repeat(40);
 export const nonce = 'b'.repeat(32);
@@ -144,6 +150,9 @@ export class MockCloud {
   reviews = [];
   reviewPages = null;
   files = [{ filename: 'crates/kf-core/src/lib.rs', status: 'modified' }];
+  reporterText = reporterSource;
+  reporterStatus = 200;
+  reporterEncoding = 'base64';
   filePages = null;
   filesError = 0;
   offer = {
@@ -184,6 +193,17 @@ export class MockCloud {
     if (u.hostname === 'token.actions.githubusercontent.com') return Response.json({ keys: [jwk] });
     if (u.hostname === 'api.github.com') {
       if (this.githubError) return new Response('PRIVATE-UPSTREAM', { status: this.githubError });
+      if (/\/contents\/scripts\/ci\/vast_report\.py$/.test(u.pathname)) {
+        if (this.reporterStatus !== 200) return new Response('{}', { status: this.reporterStatus });
+        const content = Buffer.from(this.reporterText).toString('base64');
+        return Response.json({
+          type: 'file',
+          path: 'scripts/ci/vast_report.py',
+          size: Buffer.byteLength(this.reporterText),
+          encoding: this.reporterEncoding,
+          content: content.replace(/(.{60})/g, '$1\n'),
+        });
+      }
       if (/\/actions\/runs\/\d+$/.test(u.pathname)) return Response.json(this.run);
       if (/\/commits\/[a-f0-9]+$/.test(u.pathname))
         return Response.json({ sha: this.run.head_sha });
