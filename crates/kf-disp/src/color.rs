@@ -1162,7 +1162,7 @@ mod tests {
     /// re-arm OCSC0 with SIGNED coefficients while Windows' mirrored OLUT stays armed; the console
     /// refused the program ("mirrored OLUT behind a signed matrix") on every frame and froze at 0
     /// fps. The program Windows arms (run 99's measured words) with a hue or saturation matrix in
-    /// OCSC0 must be renderable, in every family row that has the C77D core.
+    /// OCSC0 must be renderable in both supported driver-version tables tested below.
     #[test]
     fn hue_and_vibrance_behind_the_windows_mirrored_olut_are_rendered_not_refused() {
         use super::model::fixture::{hue, saturation};

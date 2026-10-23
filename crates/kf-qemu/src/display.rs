@@ -118,7 +118,7 @@ fn armed_defaults_on() -> bool {
 /// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
 /// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
 /// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
-/// flag changes and why it is exact.
+/// flag's scope; MIRROR uses an inferred odd extension for negative inputs.
 fn color_experiments() -> kf_disp::color::Experiments {
     static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
     *X.get_or_init(|| {
@@ -129,7 +129,8 @@ fn color_experiments() -> kf_disp::color::Experiments {
         };
         if x.lut_mirror {
             eprintln!(
-                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it"
+                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — \
+                 DIRECT ILUT/OLUT MIRROR; negative inputs use an inferred odd extension"
             );
         }
         if x.ilut_offset_256 {
