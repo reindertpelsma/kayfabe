@@ -1,0 +1,13 @@
+{
+  "arm": "on_observe_b",
+  "pid": 154806,
+  "starttime": 384087,
+  "exe": "/workspace/bench/kf3-bins/48b02726/qemu-system-x86_64",
+  "pci": "0000:00:07",
+  "mode": "windows-on-xid32-observation-v1",
+  "profile": "on",
+  "lease_id": 57366202,
+  "enable_count": 1,
+  "armed_utc": "2026-10-23T12:52:36.856029+00:00",
+  "host_verification": "UNVERIFIED-HOST"
+}

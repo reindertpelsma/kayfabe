@@ -1,0 +1,30 @@
+{
+  "utc": "2026-10-23T12:54:19.598257+00:00",
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "saved_text_only": true,
+  "projection_rc": 0,
+  "projection_stdout": "",
+  "projection_stderr": "",
+  "qemu_exists": false,
+  "gpu_queries_after_fatal": 0,
+  "guest_boots_after_fatal": 0,
+  "logs": {
+    "on_observe_b_run.log": {
+      "source_sha256": "4cdf4daa179afa49f114e3d882c7bada1195f7be93c535f3f169c60240cfd3e1",
+      "text": "[2026-10-23T12:50:28Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)\n[2026-10-23T12:50:28Z] WINVM_RUN_START tag=on_observe_b repo_rev=9ff51a6e kf3=on qemu=/workspace/bench/kf3-bins/48b02726/qemu-system-x86_64 host_driver=595.91.07 overlay=on_observe_b arm=B guest_driver=580.65.06 gop_efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi sha256(gop_efi)=fb8c68e665e698aa\n[2026-10-23T12:50:28Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06\n[2026-10-23T12:50:28Z] QEMU_START tag=on_observe_b boot=1 pid=154806 log=logs/on_observe_b_b1_qemu.log\n[2026-10-23T12:53:29Z] WINVM_BOOT_END boot=1 rc=137 reason=none kf3_lines=10157 host_xid=2\n[2026-10-23T12:53:29Z] WINVM_RUN_END tag=on_observe_b boots=1 reason=none\n"
+    },
+    "on_observe_b_b1_qmp_events.jsonl": {
+      "source_sha256": "f66188d28b5a6ee4c7290f6e9acfd92e7ecbb3904392e3758a66fb56810bcbaf",
+      "text": "{\"event\": \"KF_LOGGER_ATTACHED\", \"timestamp\": {\"seconds\": 1792759829}}\n{\"timestamp\": {\"seconds\": 1792759836, \"microseconds\": 785903}, \"event\": \"RTC_CHANGE\", \"data\": {\"offset\": 0, \"qom-path\": \"/machine/unattached/device[10]/rtc\"}}\n{\"timestamp\": {\"seconds\": 1792759837, \"microseconds\": 627011}, \"event\": \"RTC_CHANGE\", \"data\": {\"offset\": 0, \"qom-path\": \"/machine/unattached/device[10]/rtc\"}}\n{\"timestamp\": {\"seconds\": 1792759856, \"microseconds\": 272318}, \"event\": \"NIC_RX_FILTER_CHANGED\", \"data\": {\"path\": \"/machine/peripheral-anon/device[1]/virtio-backend\"}}\n"
+    },
+    "phase.json": {
+      "source_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "text": "{}\n"
+    },
+    "secondary_receipt.json.accepted.json": {
+      "source_sha256": "f56ffd8b3c675692d3c4db05c10845f97afa1d6ccbd09bd2c8634e44ce4fc4b6",
+      "text": "{\"approved_native_xid_lines\": [\"2026-10-23T12:07:26.360540+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92903, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-23T12:07:29.395271+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92903, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-23T12:07:32.406280+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92903, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-23T12:07:35.474263+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92903, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\", \"2026-10-23T12:07:40.079281+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=92958, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE\"], \"phase\": [\"on_observe_b\", 154806], \"observations\": {\"on_observe_b\": []}, \"health\": {\"cuInit\": 0, \"cuDeviceGetCount\": 0, \"devices\": 1}, \"observed_utc\": \"2026-10-23T12:53:25.076957+00:00\", \"mode\": \"windows-on-xid32-observation-v1\", \"record_limit_per_arm\": 8}\n"
+    }
+  }
+}

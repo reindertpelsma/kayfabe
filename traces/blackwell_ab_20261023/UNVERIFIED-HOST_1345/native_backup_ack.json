@@ -1,0 +1,12 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "utc": "2026-10-23T12:10:56.121348+00:00",
+  "backup_export_receipt_sha256": "da0cad1f301305e268967d898b40427fe6cb591519ef64645984166519eca731",
+  "raw": 30,
+  "cuda": 4,
+  "gr_check_lines": 15,
+  "native_xids": 5,
+  "ack_stdout": "{\"utc\": \"2026-10-23T12:10:55.990578+00:00\", \"backup_kind\": \"bounded text exported to operator workspace before live B\", \"publication_deferred_until_live_complete\": true, \"local_export_receipt_sha256\": \"da0cad1f301305e268967d898b40427fe6cb591519ef64645984166519eca731\", \"raw\": 30, \"cuda\": 4, \"gr\": 15, \"native_faults\": 5, \"exact_ordered_fault_match\": true}\n",
+  "publication_deferred_until_after_live": true
+}

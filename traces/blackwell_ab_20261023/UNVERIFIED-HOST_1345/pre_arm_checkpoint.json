@@ -1,0 +1,15 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "utc": "2026-10-23T12:39:25.238820+00:00",
+  "rule_sources_checked": 71,
+  "changed_rule_sources": [],
+  "B_source": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "B_build_exit": 0,
+  "B1_source": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+  "B1_tests_passed": 1959,
+  "B1_tests_ignored": 4,
+  "B1_build_exit": 0,
+  "windows_install": "in progress; two guest-reset QMP events, no reported panic",
+  "native_backup_ack": true
+}

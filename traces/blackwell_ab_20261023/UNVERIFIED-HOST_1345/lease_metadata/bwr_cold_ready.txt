@@ -1,0 +1,6 @@
+UNVERIFIED-HOST
+COLD580_BIND version=32.0.15.8088 inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 problem=CM_PROB_DISABLED
+COLD580_GSP_BEFORE class=1
+COLD580_GSP_READBACK path=HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 value=1
+COLD580_GSP_READBACK path=HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm value=1
+COLD580_READY=1; cold QEMU required; this is not a suite PASS

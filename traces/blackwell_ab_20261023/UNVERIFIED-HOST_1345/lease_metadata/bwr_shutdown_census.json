@@ -1,0 +1,8 @@
+{
+  "rereads": 0,
+  "elapsed_seconds": 0.0840885759998855,
+  "verdict": "CLEAN",
+  "pid": 147259,
+  "rule": "owned exit<=60s; initial+3fresh reads5s apart; no new Xid",
+  "host_verification": "UNVERIFIED-HOST"
+}
