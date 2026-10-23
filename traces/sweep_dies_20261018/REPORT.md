@@ -20,7 +20,7 @@ CODE READ: lane S4, branch `codex/sweep-dies-20261022`, worktree S4; requested a
 
 CODE READ (production identity): crates treefeda030ab2b0dd7a9aad43bcd163d9ea7afe0842 and QEMU treefa8938d9c1a4b2caeaeb6f15a7daf96ed1e2f190 equal rev170054339. Harness-only changes; no audit-fix merges or product timer/guest TDR/app-oracle changes. Rust changes0, added Rust lint sites0; fresh clippy NOTRUN.
 
-MEASURED (named proof logs below): counts are individual suite executions; overlapping/historical runs are not summed.
+CODE READ (2026-10-23): each row below cites its individual suite execution; overlapping/historical runs are not summed.
 
 | Proof | Before → after | Mutant kills per variant | Evidence |
 |---|---|---|---|
@@ -32,7 +32,9 @@ MEASURED (named proof logs below): counts are individual suite executions; overl
 | Checked image transport |EXPECTED RED →16/16 |2,2,2,2,2|`round3/chunks_*`|
 | Run-kit allocation metadata export |5RED →5/5 |3,2,2|`round3/alloc_export_*`|
 
-CODE READ: cleanup tests-only EXPECTED RED1c37eaf98 precedes fix5124411b7; the real shell cleanup is exercised with owned CPU-only fixtures. The added fallback uses the same owned PID/socket and keeps final exit verification. Source restored after mutation; no cases dropped. MEASURED (`adaptive/publication_receipt.json`, publication checks): claims introduced on S4 changed files0; inherited branch attribution debt is scoped out by explicit owner ruling, no debt entries added.
+CODE READ: cleanup tests-only EXPECTED RED1c37eaf98 precedes fix5124411b7; the real shell cleanup is exercised with owned CPU-only fixtures. The added fallback uses the same owned PID/socket and keeps final exit verification. Source restored after mutation; no cases dropped.
+
+MEASURED (2026-10-23, `adaptive/publication_receipt.json`): claims introduced on S4 changed files0 at the recorded publication; inherited branch attribution debt is scoped out by explicit owner ruling, no debt entries added.
 
 AD102 — PARTIAL, prior2026-10-22 run
 
