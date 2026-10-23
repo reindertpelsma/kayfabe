@@ -1,0 +1,20 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "utc": "2026-10-23T21:31:16.956828+00:00",
+  "reason": "provider_boot_timeout",
+  "machine_id": 69146,
+  "status": {
+    "id": 57425378,
+    "actual_status": null,
+    "intended_status": "running",
+    "status_msg": null,
+    "cur_state": "running",
+    "dph_total": 0.43666666666666665
+  },
+  "elapsed_seconds": 1202.153117,
+  "adaptive_boot_seconds": 1200,
+  "first_pinned_banner_seconds": null,
+  "console_stage_started_elapsed": null,
+  "console_factor": null,
+  "console_deadline_since_create": null
+}

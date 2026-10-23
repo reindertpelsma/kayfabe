@@ -1,0 +1,96 @@
+{
+  "round": "B1b_1815",
+  "operator": "Claude (BW3 harness, head 48b986f21 + run_kit)",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "status": "CLOSED: provider_boot_timeout before SSH; native repeats and Windows arms UNRUN",
+  "leases_authorized": 1,
+  "leases_created": [
+    57425378
+  ],
+  "leases_destroyed": [
+    57425378
+  ],
+  "market_queries": 1,
+  "market_offers": 5,
+  "market_offers_qualifying": 2,
+  "market_dies_seen": [
+    "GB202"
+  ],
+  "selected": {
+    "offer": 43994882,
+    "machine": 69146,
+    "gpu": "RTX 5090",
+    "die_advertised": "GB202",
+    "provider_verification": "deverified",
+    "geolocation": ", CN",
+    "quote_dph": 0.38805555555555554,
+    "observed_dph": 0.43666666666666665
+  },
+  "precreate_watchdog_armed_utc": "2026-10-23T21:11:12.475389+00:00",
+  "created_utc": "2026-10-23T21:11:14.803689+00:00",
+  "deadline_utc": "2026-10-23T23:41:12.475389+00:00",
+  "readiness": {
+    "polls": 58,
+    "actual_status_all": null,
+    "elapsed_seconds": 1202.153117,
+    "limit_seconds": 1200,
+    "reason": "provider_boot_timeout",
+    "ssh_reached": false
+  },
+  "absence_verified_utc": "2026-10-23T21:31:20.164581+00:00",
+  "timers_cancelled_after_absence": true,
+  "runtime_cost_estimate_usd": 0.14620581650925926,
+  "credit_before_usd": 28.110303624960693,
+  "credit_after_observed_usd": 28.094038661260697,
+  "stop_usd": 2.0,
+  "cap_usd": 2.5,
+  "reserve_usd": 8,
+  "native_fuzz": {
+    "pinned_runs": 0,
+    "unpinned_controls": 0,
+    "alias_revoked_recurrences": null,
+    "native_finding": null,
+    "verdict": "UNRUN"
+  },
+  "matrix": [
+    {
+      "arm": "Native raw + fuzz repeats",
+      "die": "GB202 advertised",
+      "OS": "Ubuntu22.04 planned",
+      "driver": "595.91.07 open planned",
+      "rev": "6e3fd3fd6",
+      "flags": "native suite; 3 pinned crowd + 1 crowd-free",
+      "verdict": "UNRUN",
+      "evidence": "lease_57425378/provider_failure_57425378.json"
+    },
+    {
+      "arm": "B",
+      "die": "GB202 advertised",
+      "OS": "Windows11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "48b027267",
+      "flags": "p19, one enable planned",
+      "verdict": "UNRUN",
+      "evidence": "lease_57425378/provider_failure_57425378.json"
+    },
+    {
+      "arm": "B1",
+      "die": "GB202 advertised",
+      "OS": "Windows11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "cb80cbd29",
+      "flags": "p19, one enable planned",
+      "verdict": "UNRUN",
+      "evidence": "lease_57425378/provider_failure_57425378.json"
+    }
+  ],
+  "xid32_list": [],
+  "admitted_count": {
+    "B": 0,
+    "B1": 0
+  },
+  "tdr_verdict": "UNRUN",
+  "falsifiers": "operator_plan_b1b.json (recorded before create); not exercised"
+}
