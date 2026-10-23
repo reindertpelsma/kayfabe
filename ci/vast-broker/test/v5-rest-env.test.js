@@ -23,7 +23,8 @@ test('Vast REST environment round-trips into the canonical PR104 reporter', asyn
   const code = `import importlib.util,json,sys
 s=importlib.util.spec_from_file_location('report',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 e=json.loads(sys.stdin.read());assert type(e) is dict;assert m.validate_env(e)==[]
-assert e['KF_PROTOCOL']=='7' and e['KF_RUNNER_NONCE'] and e['KF_SOFT_DEADLINE'] and e['KF_HEARTBEAT_SECONDS'] and e['KF_GRACE_FAIL']
+assert e['KF_PROTOCOL']=='7' and e['KF_RUNNER_NONCE'] and e['KF_SOFT_DEADLINE']
+assert e['KF_HEARTBEAT_SECONDS'] and e['KF_GRACE_FAIL']
 `;
   const r = spawnSync(
     'python3',

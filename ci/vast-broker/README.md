@@ -1,5 +1,27 @@
 # Vast broker (stage 1)
 
+## Jose round (2026-10-23, current; supersedes the statements tagged below)
+
+[CODE READ: src/oidc.js, src/tokens.js, package-lock.json, deploy.mjs; branch
+claude/vast-broker-jose-20261023] Owner decisions 19:35/19:45 and the 21:45 addendum:
+- GitHub OIDC is verified by jose 6.2.13 (`jwtVerify` + `createRemoteJWKSet`): RS256 only,
+  issuer, audience, required `iat`/`nbf`/`exp`, `iat` at most 600 s old, 30 s clock tolerance,
+  JWKS cached 1 h with a 60 s unknown-kid cooldown. Repository/workflow claims, the run read
+  (`triggering_actor == OWNER_GITHUB_ID`, tested sha == run head) are unchanged.
+- Run tokens are jose HS256 JWTs (`RUN_TOKEN_SECRET`): claims `run`, `attempt`, `sha`, `nonce`,
+  `exp` = the hard limit; algorithms pinned to HS256; every claim is bound to the ledger record.
+- Owner-token and path-prefix comparisons use the platform's `timingSafeEqual`
+  (`crypto.subtle.timingSafeEqual` on Workers, `node:crypto` in tests) behind one seam.
+- wrangler bundles `src/index.js` from the committed lockfile (jose, wrangler 4.152.0, esbuild
+  0.28.2; install with `npm ci --ignore-scripts`). `deployment.json` pins the SHA-256 of
+  wrangler's emitted module; `deploy.mjs` re-bundles, refuses a mismatch and uploads exactly the
+  verified file. The project linker `bundle.js` and the mutation tooling are deleted.
+- Status protocol 5 (runner sends `X-KF-Protocol: 5`; each side refuses the other version);
+  box protocol 7 (JWT run token, optional Cloudflare Access pair `KF_ACCESS_ID` /
+  `KF_ACCESS_SECRET` passed through from Worker secrets `BOX_ACCESS_ID` / `BOX_ACCESS_SECRET`).
+Below, any mention of `npm run bundle`, `dist/worker.js`, `npm run mutants`, mutation campaigns,
+"zero npm dependencies", HMAC/v1/v2 run capabilities or HMAC-based comparison is historical.
+
 
 ## V5 lifecycle and shipped policy (2026-10-23)
 
@@ -123,10 +145,12 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 authority is report/kill/blob-url.
 [CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold/blob-url (SUPERSEDED 2026-10-23: hold removed); private release locator scope and limits are specified in [the box interface](docs/BOX_PROTOCOL.md). The Worker never proxies asset bytes. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
 
+[SUPERSEDED 2026-10-23 jose round: wrangler bundles src/; see the top section and DEPLOY.md]
 [CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx --yes wrangler@4.152.0 deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
 [CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
+[SUPERSEDED 2026-10-23 jose round: one runtime dependency, jose, pinned by package-lock.json]
 [CODE READ] Plain ES-module JavaScript, zero npm dependencies, Node >=22. This is an **untrusted GPU tripwire**, never release provenance. The Worker alone holds the owner's dedicated Vast key. No deployment or rental is performed by tests. Binding defaults refuse spending until configured. The complete threat model, API contracts, billing risks and deferred merge queue are in [the design](../../docs/design/V3_CI_VAST_GPU_20261021.md).
 
 [CODE READ: 2026-10-22 smoke-live.py, live/] Round 2's real controller is `python3 smoke-live.py --runtime <private-new-directory> --wrangler <temporary-install>/node_modules/.bin/wrangler`. It uses real Vast API calls and local fake GitHub/JWKS identity, a private any-NVIDIA model overlay, and a tiny deterministic workload under the production reporting sender. It starts an independent exact-label reaper before every create, drives rent/status/cursor logs, and invokes the real local scheduled handler once per minute without a fake clock. PASS runs the shipped kill CLI inside the box after 30 seconds; FAIL waits for result grace. `--docker-smoke` additionally selects a local Ubuntu Docker image with vm=false, as authorized for round 2; that result cannot establish the shipped KVM image/workload's validity. No overlay is deployed. The callback tunnel accepts only report/kill from the provider's exact public_ipaddr. On exit, exact-ID and exact-label absence precede reaper cancellation; all controller children stop. Runtime files contain credentials and must remain private and be deleted after sanitized evidence is retained.
@@ -138,6 +162,7 @@ and path policy are removed from the Worker; it authorizes signed identity + pin
 triggering_actor == owner + sha == run head, and the YAML decides when to run.
 [CODE READ] Automatic PR events use default `owner_push_or_review`: numeric GitHub event actor/triggering-actor identity is the owner, or an owner review approves exactly that PR head SHA. Commit author text has no authority. An owner push also vouches for earlier commits on that branch. Drafts refuse by default. Push storms do not queue rentals: superseded work is destroyed and the newer request returns BUSY. `review_or_author`, `review_only`, `owner_push` and `actor_only` are explicit alternatives. Automatic PRs require an API-checked master base (ALLOWED_BASE_BRANCHES) and a non-draft head. The Worker excludes only a complete all-skipped PR file list using PATH_SKIP_PATTERNS; unknown/truncated lists run, and API errors fail. ci/vast-broker always runs. NOT_NEEDED is an explicit successful job/status. The BASE workflow permits owner dispatch on master only. A repeat request within the same runner nonce is idempotent; a fresh run cannot inherit another run's cached PASS. Rerun the owner's dispatch after the minimum gap to request another rental.
 
+[SUPERSEDED 2026-10-23 jose round: `npm ci --ignore-scripts` first; no linker or mutants]
 [MEASURED: 2026-10-22 local Node test/bundle commands] Run `npm test` (or `node --test ci/vast-broker/test` from the repo root), `npm run bundle`, and `npm run mutants` from this directory. No npm install is needed. The fixed-source linker writes ignored `dist/worker.js`, checks syntax and preserves the entrypoint exports. Tests use generated RSA keys, fake JWKS, mocked GitHub/Vast, an in-memory Durable Object adapter and a local HTTP server.
 
 [MEASURED: 2026-10-22 format bundle run, traces/vast_broker_v5_20261018/FORMAT.md]
@@ -188,6 +213,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 
 [INFERRED from source: src/policy.js, arithmetic estimate] The 20-minute hard TTL plus one minute of cron reserves 0.175 USD at 0.50 USD/hour. The workload must fit this shorter allowance; the previous 150-minute default is superseded. Cron/API outages can leave a box billing 12 USD/day or 360 USD/30 days at that rate, plus other fees; there is no proven finite maximum with automatic account funding. Keep modest prepaid credit and disable automatic top-up only after confirming Vast debt rules. Stopped instances still bill storage; an on-box timeout bounds honest work, **not** the upstream bill. Grace/box-kill/stop/provisioning/TTL destroy and ledger accounting are the actual cleanup paths.
 
+[SUPERSEDED 2026-10-23 jose round: the bearer is a jose HS256 JWT run token]
 [CODE READ: Amendment 3/3b] The box posts progress/log/result JSON to POST /report/<run> with a derived per-run HMAC bearer. It receives no account key, HMAC signing secret or owner-stop secret; it knows its own callback endpoint and run bearer. The Worker bounds raw input to 64 KiB, transport input to 4 MiB and attempts to 2000 per rental, with a 20/10-second rate limit; validates shallow schema/sequence/nonce; neutralises every :: and ##[ delimiter, prefixes all output lines and retains a bounded sanitised tail. Only a structured result decides verdict. Report retries consume caps; identical latest sequences are idempotent. The fixed sender limits ordinary sends to 600 attempts and 900000 logical bytes, reserves final-result allowance, retries the same body with curl only to the Worker origin, and keeps full raw output in /workspace/kf-ci-output.log on the box. Guest root can still lie or connect elsewhere; this script is not an egress sandbox.
 
 [CODE READ: Amendment 3/3b] Callback tokens work only while the ledger is open and Vast confirms the recorded instance running. A positive liveness check is cached for at most three seconds; provider errors close the run. Result revokes reporting immediately but preserves the limited kill capability during inspection grace; stop and TTL revoke all live authority. GET /status/<run> uses same-run OIDC and returns log_tail_sanitised/bytes_dropped. POST /stop/<run> accepts same-run OIDC or the owner bearer; POST /stop-all accepts only OWNER_STOP_TOKEN. Stop revokes before deletion, touches only owned ledger IDs/labels, and is idempotent; cron retries failed cleanup. Vast logs are an optional diagnostic fallback, not implemented or required for verdicts. Merge-group support remains deferred.
@@ -196,6 +222,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 
 [SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] "Approval gates" now means the run
 triggering_actor check.
+[SUPERSEDED IN PART 2026-10-23 jose round: the prefix compare uses the platform timingSafeEqual]
 [CODE READ: owner endpoint-secrecy request] With BROKER_PATH_PREFIX set, all public routes become /<prefix>/rent, /<prefix>/status/<run>, /<prefix>/report/<run>, /<prefix>/stop/<run> and /<prefix>/stop-all. Missing/wrong prefixes and unknown routes return a generic 404; prefix comparison uses native constant-time HMAC verification. Cron stays private and does not require the public prefix. The create environment includes the callback prefix; the Vast operator can read it. URL secrecy reduces scanning/DoS noise and is not authentication: OIDC plus approval gates protect admission and the run HMAC protects reports. Do not put real origins or prefixes in committed configuration.
 
 [CODE READ: workflow/guard] Endpoint secrets are step-scoped. The broker disables shell tracing, masks canonical origin, host/derived labels, prefix and encoded audience before requests, and suppresses raw transport/parser errors. Known endpoint components are also redacted from stored box text. No endpoint goes into outputs, summaries, artifacts, names or status descriptions. workflow-guard.js rejects secret/alias access elsewhere, unsupported secret-object access/inheritance and scalar forwarding (including aliases/quoted keys), endpoint aliases in metadata, endpoint outputs/printing and unsupported broker run syntax. This static guard supports a bounded workflow subset; workflow protection/review remains necessary against deliberate arbitrary shell obfuscation. The box already knows the endpoint and can disclose it elsewhere, so locator secrecy is never relied on for authorisation.
@@ -236,6 +263,7 @@ triggering_actor check.
 
 [CODE READ: 2026-10-22 post-result kill regression] After the box calls kf-box-kill with a recorded result, status remains COMPLETE with that structured verdict even if CI's first poll arrives after destruction. A kill before any result remains FAIL/STOPPED. Owner stop remains an explicit STOPPED action.
 
+[SUPERSEDED 2026-10-23 jose round: the mutation tooling is deleted]
 [CODE READ: 2026-10-22 mutation verification] `npm run mutants` executes the 96 legacy cases and the 32 V4 cases sequentially, with named failures required for every patch and restoration in finally. `npm run mutants:v4` runs the focused V4 cases using Python 3's standard library. Preflight anchors with `MUTANT_PREFLIGHT=1 node mutants.js` and `python3 v4-mutants.py --preflight`. The repaired workflow fixture has a positive control so unrelated guard failures cannot mask dependency checks; token and UTF-8 probes exercise boundaries the generic scrubber cannot hide.
 
 [CODE READ: 2026-10-22 log pagination] Log pages may advance past a status snapshot when a report arrives concurrently. The workflow accepts a strictly advancing bounded cursor and prints that page once, then resumes from the newer cursor. A structured result remains independent of the text. The cost estimate is elapsed-rate accounting at the poll, with final grace included only once settled; the ledger reserves the future allowance separately.
@@ -244,6 +272,7 @@ triggering_actor check.
 
 [CODE READ: runner.py, release-build.yml] `pull_request_target` selects the master-base workflow; fork heads refuse before any Worker request. The controller and deployment manifest are fetched at that trusted base SHA, with no PR checkout/cache/artifact input, and Python runs with `-I` in a scrubbed environment. Structured schemas reject extra/duplicate keys, invalid UTF-8, out-of-range values and incorrect bindings. Each log chunk is hashed before local filtering; all displayed text uses the runner's allow-list, caps, redactions and fresh stop-commands frame. Only local enums and verified=0/1 enter outputs; status writers are independent. Hosted target-event claims/run membership remain an unverified fail-closed contract until this base workflow is present on master and separately exercised.
 
+[SUPERSEDED 2026-10-23 jose round: these campaign scripts are deleted]
 [CODE READ: round3-mutants.py, mutants.js, v4-mutants.py] `python3 round3-mutants.py` runs the current hostile-runner/protocol/isolation/release campaign; `npm run mutants` runs legacy, V4 and Round 3 sequentially. Seven legacy inline-client/cache-grant probes and four V4 inline-shell probes were replaced explicitly; the migration map is in the [Round 3 evidence](../../traces/vast_broker_v4_round3_20261018/README.md). Old V4 excerpts and their renderer fixtures are historical and are not the production runner. Local smoke helpers have been migrated to the bound protocol; they were not rerun live for Round 3. Release workflow execution/build/attestation and artifact distribution remain unverified; no binary publication is configured.
 
 ## V5 protocol checkpoint and remaining live evidence
@@ -267,6 +296,7 @@ compare stored absolute deadlines before accepting a late request, so overdue
 cron cannot let a post revive an expired boot, heartbeat, grace or manual ceiling.
 MANUAL after a result remains terminal for CI and retains the box for the owner.
 
+[SUPERSEDED 2026-10-23 jose round: historical; the mutation tooling is deleted]
 [MEASURED: 2026-10-22 protocol_tests.txt and v5_mutants.json in traces/vast_broker_v5_20261018]
 The local baseline passes 964 tests; 69 focused V5 mutation cases each have at
 least two named killers. Migrated V4 and runner campaigns pass 28 and 38 cases,
@@ -287,6 +317,8 @@ deferred.
 
 [SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] The Worker Access switch and box
 Access tokens are removed; Access is dashboard-only.
+[SUPERSEDED IN PART 2026-10-23 jose round: run tokens are HS256 JWTs ending at the hard limit;
+the box Access pair is passed through again (21:45)]
 [CODE READ: src/tokens.js, src/access.js, ../vast-reaper/worker.js] v2 callback capabilities bind run, attempt, nonce, tested SHA and short hard-limit expiry, with MAC/expiry checked before the ledger. Closed/ended rentals refuse before queue entry; ended kill receipts bypass it. Bounded queues and runner infrastructure retries preserve cleanup availability. The independent reaper and per-GB/contract guards reduce paid-run exposure; they do not prove a hard bill ceiling. The optional hostname-wide Access application uses distinct A/B service tokens and a Worker-side signed-assertion route allow-list. Secret URL/prefix knowledge remains a noise defense, not authentication. See [deployment and rotation](DEPLOY.md) and [the round design](../../docs/design/V3_CI_VAST_FIXES_20261023.md). No live deployment or rental was performed in this round.
 
 [SUPERSEDED 2026-10-23, owner rulings 19:10/19:25; see DEPLOY.md] Owner branch-copy authority,

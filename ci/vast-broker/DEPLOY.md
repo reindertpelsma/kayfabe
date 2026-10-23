@@ -142,7 +142,8 @@ signing/owner secrets accept 32-256 characters and the prefix 32-128. Raw padded
 CONFIG_SECRET_FORMAT:<name> without the value; other callers receive a generic refusal. URL and
 prefix secrecy reduce scanning noise; OIDC, the run read, live-ledger checks and the per-run
 HS256 JWT run token (jose; signed with RUN_TOKEN_SECRET, expires at the hard limit) are the
-authentication. Owner-token and prefix comparisons use the platform's `timingSafeEqual`. A Vast operator can read its KF_* env and callback URL; the box holds only
+authentication. Owner-token and prefix comparisons use the platform's `timingSafeEqual`.
+A Vast operator can read its KF_* env and callback URL; the box holds only
 its own limited capability.
 
 [CODE READ: src/github.js, src/blobs.js, src/index.js] Optional Worker secret GITHUB_API_TOKEN is
