@@ -68,7 +68,7 @@ export class Github {
         );
     } catch {}
     const declared = /^BOX_PROTOCOL = "([0-9]{1,4})"$/m.exec(text)?.[1];
-    if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409); // MUTANT box-protocol
+    if (declared !== String(DEFAULTS.boxProtocol)) refuse('NOT_ELIGIBLE', 409);
   }
   async run(id, missing = false, lifecycle = false) {
     return this.get('actions/runs/' + id, missing, lifecycle);
@@ -97,7 +97,7 @@ export class Github {
       !hexSha(r.head_sha) ||
       typeof r.head_branch !== 'string' ||
       !r.head_branch ||
-      String(r.triggering_actor?.id) !== cfg.owner || // MUTANT trigger-owner
+      String(r.triggering_actor?.id) !== cfg.owner ||
       (c.event_name !== 'pull_request_target' && c.sha !== r.head_sha)
     )
       refuse('UNAUTHORIZED', 401);

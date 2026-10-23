@@ -4,7 +4,7 @@ The Worker's tiny onstart clones the repo, checks out `KF_SHA`, execs `scripts/c
 Per-run data is `KF_*` environment variables. Files: `vast_onstart.sh` (tools, env check, root-only
 env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_report.py` (stdlib:
 `check-env [--write F]`, `daemon --log L --done D --result R`); `kf-box-kill`, `kf-box-blob-url`;
-`test_vast_box.py`, `vast_box_mutants.py`. There is no hold helper or login hook (owner ruling
+`test_vast_box.py`. There is no hold helper or login hook (owner ruling
 2026-10-23 19:10). The box sends the Worker-injected Cloudflare Access pair (`KF_ACCESS_ID`,
 `KF_ACCESS_SECRET`) as `CF-Access-Client-Id`/`-Secret` on every broker call when both are set
 (owner ruling 2026-10-23 21:45); the payload never sees it.

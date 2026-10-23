@@ -25,7 +25,7 @@ export function configuration(env) {
     return n;
   };
   // Named (never echoed): without the owner id no rental starts and no cleanup can authorize.
-  if (!numericId(env.OWNER_GITHUB_ID)) refuse('CONFIG_VAR:OWNER_GITHUB_ID', 503); // MUTANT owner
+  if (!numericId(env.OWNER_GITHUB_ID)) refuse('CONFIG_VAR:OWNER_GITHUB_ID', 503);
   if (!/^[-\w.]+\/[-\w.]+$/.test(env.REPOSITORY || '')) refuse();
   let u;
   try {
