@@ -1,0 +1,344 @@
+{
+  "cases": [
+    {
+      "name": "repository",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "c.repository !== cfg.repo ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "workflow-path",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "path !== cfg.repo + '/.github/workflows/gpu-vast.yml'",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "ref-tags",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "!ref.startsWith('refs/heads/')",
+          "!(ref.startsWith('refs/heads/') || ref.startsWith('refs/tags/'))"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "ref-pull",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "!ref.startsWith('refs/heads/')",
+          "!(ref.startsWith('refs/heads/') || ref.startsWith('refs/pull/'))"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "owner-actor",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "if (!ownerActor)",
+          "if (false)"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "API-actor",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "String(run.actor?.id) === cfg.owner",
+          "true"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "triggering-actor",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "String(run.triggering_actor?.id) !== cfg.owner",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "fork",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "run.head_repository?.full_name !== cfg.repo",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "run-repository",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "run.repository?.full_name !== cfg.repo",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "run-attempt",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "String(run.id) !== c.run_id || String(run.run_attempt) !== c.run_attempt",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "SHA-event",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "run.event !== c.event_name || run.head_sha !== c.sha",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "branch",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "return ref.split('/').slice(2).join('/') === run.head_branch;",
+          "return true;"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "job-ref",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "c.job_workflow_ref !== c.workflow_ref ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "profile-pin",
+      "file": "src/workflow-authority.js",
+      "patches": [
+        [
+          "if (c.workflow_ref === check) return profile !== 'sweep';",
+          "if (c.workflow_ref === check) return true;"
+        ]
+      ],
+      "tests": [
+        "round-authorization.test.js"
+      ]
+    },
+    {
+      "name": "push-support",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "!['pull_request_target', 'workflow_dispatch', 'push'].includes(c.event_name)",
+          "!['pull_request_target', 'workflow_dispatch'].includes(c.event_name)"
+        ]
+      ],
+      "tests": [
+        "round-push.test.js"
+      ]
+    },
+    {
+      "name": "live-run",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "r.status !== 'in_progress' ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-push.test.js"
+      ]
+    },
+    {
+      "name": "dispatch-branch-proof",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "if (selected !== c.sha && !(await this.reachable(selected))) refuse('UNAUTHORIZED', 401);",
+          "void selected;"
+        ]
+      ],
+      "tests": [
+        "round-push.test.js"
+      ]
+    },
+    {
+      "name": "bounded-proof-work",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "if (heads.size < 16)",
+          "if (true)"
+        ]
+      ],
+      "tests": [
+        "round-push.test.js"
+      ]
+    },
+    {
+      "name": "runner-push",
+      "file": "runner.py",
+      "patches": [
+        [
+          "event_name not in {\"pull_request_target\", \"workflow_dispatch\", \"push\"}",
+          "event_name not in {\"pull_request_target\", \"workflow_dispatch\"}"
+        ]
+      ],
+      "tests": [
+        "round-workflow-policy.test.js"
+      ]
+    },
+    {
+      "name": "runner-selected-SHA",
+      "file": "runner.py",
+      "patches": [
+        [
+          "selected = event.get(\"inputs\", {}).get(\"sha\", \"\")",
+          "selected = \"\""
+        ]
+      ],
+      "tests": [
+        "round-workflow-policy.test.js"
+      ]
+    },
+    {
+      "name": "runner-SHA-type",
+      "file": "runner.py",
+      "patches": [
+        [
+          "if not isinstance(selected, str):",
+          "if False:"
+        ]
+      ],
+      "tests": [
+        "round-workflow-policy.test.js"
+      ]
+    },
+    {
+      "name": "YAML-selected-context",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "github.event.inputs.sha",
+          "github.sha"
+        ]
+      ],
+      "tests": [
+        "round-workflow-policy.test.js"
+      ],
+      "replace_all": true
+    },
+    {
+      "name": "YAML-push-branches",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "  push:\n    branches: [master]",
+          "  push:\n    branches: [feature/owner]"
+        ]
+      ],
+      "tests": [
+        "round-workflow-policy.test.js"
+      ]
+    },
+    {
+      "name": "workflow-explicit-exclusion-success",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "\"$POLICY_RUN\" = 0 && \"$GPU_RESULT\" = skipped",
+          "\"$POLICY_RUN\" = disabled && \"$GPU_RESULT\" = skipped"
+        ]
+      ],
+      "tests": [
+        "client.test.js"
+      ]
+    },
+    {
+      "name": "workflow-policy-dependency",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "\"$POLICY_RESULT\" = success &&",
+          "true &&"
+        ]
+      ],
+      "tests": [
+        "client.test.js"
+      ],
+      "replace_all": true
+    },
+    {
+      "name": "workflow-policy-BASE-source",
+      "file": "../../.github/workflows/gpu-vast.yml",
+      "patches": [
+        [
+          "\"$source_origin/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\"",
+          "\"$source_origin/reindertpelsma/kayfabe/$TARGET_SHA/ci/vast-broker/$file\""
+        ]
+      ],
+      "tests": [
+        "round-policy-bootstrap.test.js"
+      ]
+    }
+  ]
+}

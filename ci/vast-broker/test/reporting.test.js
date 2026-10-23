@@ -83,8 +83,14 @@ for (const changed of ['expired', 'stopped', 'gone', 'exited', 'api-error', 'lab
       h.cloud.instances.get('900').actual_status = changed;
     if (changed === 'gone') h.cloud.instances.delete('900');
     if (changed === 'api-error') h.cloud.vastError = 500;
-    if (changed === 'label') h.cloud.instances.get('900').label = 'owner-dev';
+    if (changed === 'label') {
+      const r = await record(h);
+      r.idSource = 'reconcile';
+      await h.storage.put('record:123-1', r);
+      h.cloud.instances.get('900').label = 'owner-dev';
+    }
     assert.equal((await h.report(log(), { token })).status, 401);
+    if (changed === 'expired') await h.service.sweep();
     assert.ok((await record(h)).closed);
     assert.equal((await h.report(log(2), { token })).status, 401);
     assert.ok(h.cloud.instances.has('777'));

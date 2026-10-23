@@ -11,6 +11,8 @@ async function client(
   pending = false,
   forcedResult,
   verified,
+  policyResult = 'success',
+  policyRun = '1',
 ) {
   const p = spawnSync(
     'python3',
@@ -64,6 +66,8 @@ with open(os.environ['STATUS_LOG'],'a') as f:f.write(json.dumps(body)+'\\n')
       GITHUB_RUN_ID: '123',
       STATUS_LOG: join(directory, 'statuses'),
       PENDING_RESULT: 'success',
+      POLICY_RESULT: policyResult,
+      POLICY_RUN: policyRun,
       GPU_RESULT: forcedResult ?? (controller.status === 0 ? 'success' : 'failure'),
       BROKER_STATE: fields.state,
       BROKER_VERDICT: fields.verdict,
@@ -151,6 +155,20 @@ for (const verdict of ['PASS', 'FAIL'])
 for (const verified of ['0', 'true'])
   test('final status rejects unverified PASS ' + verified, async () => {
     const r = await client('GRACE', 'PASS', 200, false, undefined, verified);
+    assert.equal(r.status, 1);
+    assert.notEqual(r.statuses.at(-1).state, 'success');
+  });
+
+for (const verdict of ['PASS', 'UNAVAILABLE'])
+  test('trusted path policy explicitly succeeds without a GPU job ' + verdict, async () => {
+    const r = await client('GRACE', verdict, 200, false, 'skipped', '0', 'success', '0');
+    assert.equal(r.status, 0);
+    assert.equal(r.statuses.at(-1).state, 'success');
+    assert.match(r.statuses.at(-1).description, /NOT_NEEDED/);
+  });
+for (const result of ['failure', 'skipped'])
+  test('failed path policy never permits a skipped GPU job ' + result, async () => {
+    const r = await client('GRACE', 'PASS', 200, false, 'skipped', '1', result, '0');
     assert.equal(r.status, 1);
     assert.notEqual(r.statuses.at(-1).state, 'success');
   });

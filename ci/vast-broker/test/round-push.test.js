@@ -176,3 +176,67 @@ for (const mode of ['owner_push_or_review', 'review_only'])
     assert.equal(r.status, 200);
     assert.equal((await r.json()).pr, null);
   });
+for (const reason of ['unreachable', 'diverged', 'merge-base', 'bad-branch'])
+  test('round dispatch refuses unproven reachability ' + reason, async () => {
+    const h = await setup(),
+      selected = 'e'.repeat(40),
+      head = 'f'.repeat(40);
+    Object.assign(h.cloud.run, {
+      event: 'workflow_dispatch',
+      head_branch: 'master',
+      head_repository: { full_name: repo },
+      pull_requests: [],
+    });
+    h.cloud.prs = [];
+    const base = h.cloud.fetch;
+    h.cloud.fetch = async (url, init) => {
+      if (String(url).endsWith('/commits/' + selected)) return Response.json({ sha: selected });
+      if (String(url).includes('/branches?'))
+        return Response.json(
+          reason === 'unreachable'
+            ? []
+            : [{ name: 'selected', commit: { sha: reason === 'bad-branch' ? 'bad' : head } }],
+        );
+      if (String(url).includes('/compare/'))
+        return Response.json({
+          status: reason === 'diverged' ? 'diverged' : 'ahead',
+          ahead_by: 1,
+          behind_by: 0,
+          base_commit: { sha: selected },
+          merge_base_commit: { sha: 'd'.repeat(40) },
+        });
+      return base(url, init);
+    };
+    h.restart();
+    const r = await h.call('/rent', {
+      claims: { event_name: 'workflow_dispatch', ref: 'refs/heads/master' },
+      body: { runner_nonce: 'f'.repeat(64), tested_sha: selected, pr_number: null },
+    });
+    assert.notEqual(r.status, 200);
+    assert.equal(h.cloud.creates, 0);
+  });
+for (const repeated of [false, true])
+  test('round reachability API work is bounded ' + repeated, async () => {
+    const { Github } = await import('../src/github.js');
+    let comparisons = 0,
+      lists = 0;
+    const client = new Github(
+      async (url) => {
+        if (url.includes('/branches?')) {
+          const page = lists++;
+          return Response.json(
+            Array.from({ length: 100 }, (_, i) => ({
+              name: 'branch-' + i,
+              commit: { sha: ((repeated ? 0 : page * 100) + i + 1).toString(16).padStart(40, '0') },
+            })),
+          );
+        }
+        comparisons++;
+        return Response.json({ status: 'diverged' });
+      },
+      { repo },
+    );
+    assert.equal(await client.reachable('e'.repeat(40)), false);
+    assert.ok(lists <= 5);
+    assert.ok(comparisons <= 16);
+  });

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, repo, sha } from './helpers.js';
-// FALSIFIER: configured exact BASE workflow identities pass stateless auth but
+// FALSIFIER: owner-authorized own branch workflows pass stateless auth but
 // a stale master literal in the independent GitHub-facts check rejects them.
 for (const base of ['stable', 'integration/owner-approved'])
-  test('target event honors configured exact BASE ' + base, async () => {
+  test('target event honors owner-authorized branch BASE ' + base, async () => {
     const h = await setup({ ALLOWED_BASE_BRANCHES: JSON.stringify([base]) });
     h.cloud.run.event = 'pull_request_target';
     h.cloud.run.head_sha = 'd'.repeat(40);

@@ -38,6 +38,8 @@ export class Vast {
       num_gpus: { eq: 1 },
       disk_space: { gte: 120 },
       allocated_storage: 120,
+      inet_up_cost: { lte: this.cfg.maxInet },
+      inet_down_cost: { lte: this.cfg.maxInet },
       order: [['dph_total', 'asc']],
     };
     const result = await this.api('/api/v0/bundles', 'POST', q);
@@ -122,9 +124,10 @@ export class Vast {
       !i ||
       String(i.id) !== record.id ||
       !record.label.startsWith('kf-ci-') ||
-      i.label !== record.label
+      (record.idSource !== 'create' && i.label !== record.label)
     )
       refuse('OWNERSHIP_MISMATCH', 409);
+    if (i.label !== record.label) console.log(JSON.stringify({ event: 'OWNERSHIP_MISMATCH' }));
     return i;
   }
   async bootLog(record) {

@@ -11,6 +11,7 @@ const route = '/blob-url/123-1/dummy-blobs-20261022/blob-a.txt',
 async function harness(mode = 'ok', extra = {}) {
   const h = await setup({
     BLOB_REPO: 'owner/private-store',
+    BLOB_ALLOWED_TAG_PREFIXES: '["dummy-blobs-"]',
     BLOB_GITHUB_TOKEN: 'mock-blob-read-secret',
     ...extra,
   });

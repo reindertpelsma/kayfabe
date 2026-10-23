@@ -189,7 +189,8 @@ for (const bad of ["';$(id)", 'bad/path', 'p'.repeat(129), 'short'])
         url: env.WORKER_URL,
         path: bad,
         run: '123-1',
-        token: 'v1.123.1.1800009000.' + 'A'.repeat(43),
+        token:
+          'v2.123.1.1800009000.' + 'b'.repeat(32) + '.' + 'a'.repeat(40) + '.' + 'A'.repeat(43),
       }),
     ),
   );

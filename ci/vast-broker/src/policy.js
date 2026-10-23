@@ -125,8 +125,18 @@ export function configuration(env) {
     new Set(preferredCountries).size !== preferredCountries.length
   )
     refuse();
+  const deniedCountries = list('DENIED_COUNTRIES', DEFAULTS.deniedCountries);
+  if (
+    !deniedCountries.every((x) => /^[A-Z]{2}$/.test(x)) ||
+    new Set(deniedCountries).size !== deniedCountries.length ||
+    !['true', 'false'].includes(env.ALLOW_UNKNOWN_COUNTRY ?? 'true')
+  )
+    refuse();
   const cfg = {
     preferredCountries,
+    deniedCountries,
+    allowUnknownCountry: (env.ALLOW_UNKNOWN_COUNTRY ?? 'true') === 'true',
+    maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.maxInetUsdPerGb, 1),
     repositoryId: env.REPOSITORY_GITHUB_ID,
     checkWorkflows,
     sweepWorkflow,
@@ -448,6 +458,8 @@ export function offerRejections(
   if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');
   if (!price) reasons.push('PRICE_FIELDS');
   else if (
+    offer.inet_up_cost > cfg.maxInet ||
+    offer.inet_down_cost > cfg.maxInet ||
     price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||
     price.total >
       ((profile === 'check' ? cfg.price : cfg.sweepPrice) * (cfg.hard + cfg.cronPeriod)) / 3600000

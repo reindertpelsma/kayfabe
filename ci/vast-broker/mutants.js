@@ -270,7 +270,11 @@ const mutations = [
       "latest?.state==='APPROVED'",
     ),
   ],
-  ['draft refusal', 'src/github.js', replace('if(p.draft===true&&!cfg.drafts)', 'if(false)')],
+  [
+    'draft refusal',
+    '../../.github/workflows/gpu-vast.yml',
+    replace('if(p.draft===true&&!cfg.drafts)', 'if(false)'),
+  ],
   [
     'OIDC claims',
     'src/oidc.js',
@@ -382,10 +386,14 @@ const mutations = [
   ],
   [
     'automatic base allowlist',
-    'src/github.js',
+    '../../.github/workflows/gpu-vast.yml',
     (s) => s.replaceAll('!cfg.bases.includes', 'false&&!cfg.bases.includes'),
   ],
-  ['docs-only exclusion result', 'src/index.js', replace('if(target.notNeeded)', 'if(false)')],
+  [
+    'docs-only exclusion result',
+    'trigger-policy.mjs',
+    replace('if(target.notNeeded)', 'if(false)'),
+  ],
   ['unknown file-list skip', 'src/github.js', (s) => s.replaceAll('return false;', 'return true;')],
   ['canonical path validation', 'src/policy.js', dropLine("path.startsWith('ci/vast-broker/')")],
   [
@@ -443,17 +451,24 @@ if (process.env.MUTANT_PREFLIGHT) {
 const workerTests = (await readdir(new URL('test/', base)))
   .filter((x) => x.endsWith('.test.js') && !x.endsWith('client.test.js'))
   .map((x) => 'ci/vast-broker/test/' + x);
-const baseline = spawnSync(process.execPath, ['--test', ...workerTests], {
+// Recorded witnesses keep each mutation attributed to its own affected behavior.
+// The complete unmutated suite runs before the campaign; >=2 named killers still apply.
+const witnesses = JSON.parse(await readFile(new URL('legacy-witnesses.json', base), 'utf8'));
+const baseline = spawnSync(process.execPath, ['--test', 'ci/vast-broker/test'], {
   cwd: root,
   encoding: 'utf8',
   maxBuffer: 8 * 1024 * 1024,
   timeout: 60000,
 });
 if (baseline.status !== 0) throw Error('Baseline is not green; refusing mutation attribution.');
-const results = [];
+const results =
+  process.env.MUTANT_RESUME && process.env.MUTANT_RESULTS_FILE
+    ? JSON.parse(await readFile(process.env.MUTANT_RESULTS_FILE, 'utf8'))
+    : [];
 for (const [name, path, mutate] of mutations.filter(
   (m) => !process.env.MUTANT_FILTER || m[0].includes(process.env.MUTANT_FILTER),
 )) {
+  if (results.some((row) => row.name === name)) continue;
   const url = new URL(path, base),
     original = await readFile(url, 'utf8');
   try {
@@ -489,13 +504,32 @@ for (const [name, path, mutate] of mutations.filter(
       throw Error(
         'Invalid mutant syntax: ' + name + ' ' + syntaxChecks.map((x) => x.stderr).join(''),
       );
-    const r = spawnSync(
-      process.execPath,
-      ['--test', ...(path.endsWith('.yml') ? ['ci/vast-broker/test'] : workerTests)],
-      { cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 60000 },
-    );
-    const output = r.stdout + r.stderr,
+    const witness = witnesses[name];
+    if (!witness || !witness.files.length) throw Error('Missing witness selector: ' + name);
+    const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const testArgs = witness.names.length
+      ? ['--test-name-pattern=^(?:' + witness.names.map(escape).join('|') + ')$']
+      : [];
+    let r = spawnSync(process.execPath, ['--test', ...testArgs, ...witness.files], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 8 * 1024 * 1024,
+      timeout: 60000,
+    });
+    let output = r.stdout + r.stderr;
+    let killed = [...output.matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1]);
+    if (r.status === 0 || killed.length < 2) {
+      // Historical witness names can move when an owner supersedes a protocol.
+      // Broaden to the complete suite; the two-killer threshold never changes.
+      r = spawnSync(process.execPath, ['--test', 'ci/vast-broker/test'], {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 8 * 1024 * 1024,
+        timeout: 60000,
+      });
+      output = r.stdout + r.stderr;
       killed = [...output.matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1]);
+    }
     if (r.status === 0 || killed.length < 2)
       throw Error(
         name +
@@ -521,9 +555,17 @@ if (process.env.MUTANT_FILTER) {
   process.exit(0);
 }
 const text =
-  '# Recorded manual mutation checks\n\n[MEASURED: 2026-10-22 endpoint secrecy plus Amendment 3/3b mutation campaign] ' +
+  '# Recorded manual mutation checks\n\n' +
+  '[MEASURED: 2026-10-23 offline V1 security-fixes mutation campaign] ' +
   process.version +
-  '; explicit patches in `../mutants.js`. Every source file restored in finally; syntax checked before tests. Worker mutations run all source-facing test files explicitly in parallel; workflow mutations also run shell-client fixtures. Those fixtures read YAML only and never import Worker source. No live APIs or GPU. Each mutant requires >=2 named failing tests.\n\n| Mutation | Tests killed | Example killers |\n| --- | ---: | --- |\n' +
+  '; explicit patches in `../mutants.js`. Every source file restored in f' +
+  'inally; syntax checked before tests. Full unmutated suite is green bef' +
+  'ore mutation attribution; legacy-witnesses.json selects recorded behav' +
+  'ior witnesses (at least two failures per mutant), including shell-clie' +
+  'nt fixtures for workflow mutations. Those fixtures read YAML only and ' +
+  'never import Worker source. No live APIs or GPU. Each mutant requires ' +
+  '>=2 named failing tests.\n\n| Mutation | Tests killed | Example killer' +
+  's |\n| --- | ---: | --- |\n' +
   results
     .map((r) => '| ' + r.name + ' | ' + r.count + ' | ' + r.examples.join('; ') + ' |')
     .join('\n') +

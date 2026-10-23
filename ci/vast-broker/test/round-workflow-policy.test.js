@@ -11,7 +11,11 @@ for (const item of ['push', 'sha-input', 'concurrency'])
     const text = await workflow();
     if (item === 'push') assert.match(text, /  push:\n    branches: \[master\]/);
     if (item === 'sha-input') assert.match(text, /workflow_dispatch:\n    inputs:\n      sha:/);
-    if (item === 'concurrency') assert.match(text, /group:[\s\S]*?github\.event\.inputs\.sha/);
+    if (item === 'concurrency')
+      assert.match(
+        text.split('concurrency:')[1].split('\nenv:')[0],
+        /group:[\s\S]*?github\.event\.inputs\.sha/,
+      );
     assert.doesNotMatch(text, /  workflow_run:/);
   });
 for (const access of [false, true])
@@ -59,3 +63,17 @@ for (const selected of [[], {}])
     assert.equal(r.status, 1);
     assert.equal(r.calls.length, 0);
   });
+test('round YAML target SHA includes the manual selection', async () => {
+  const text = await workflow();
+  const environment = text.split('\nenv:\n')[1].split('\njobs:\n')[0];
+  assert.match(environment, /TARGET_SHA:[\s\S]*github\.event\.inputs\.sha/);
+});
+test('round YAML excludes unintended automatic push branches', async () => {
+  const text = await workflow();
+  const block = text.split('  push:\n')[1].split('  pull_request_target:')[0];
+  const branches = /branches: \[([^\]]+)\]/
+    .exec(block)[1]
+    .split(',')
+    .map((x) => x.trim());
+  assert.ok(branches.every((x) => x === 'master'));
+});

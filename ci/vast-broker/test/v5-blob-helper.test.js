@@ -10,7 +10,7 @@ for (const prefix of ['', 'x'.repeat(32)])
     assert.equal(r.status, 0, r.stderr);
     assert.ok(r.args.includes(base + '/blob-url/123-1/dummy-blobs-20261022/blob-a.txt'));
     assert.ok(r.args.includes('=https'));
-    assert.ok(r.stdin.includes('Authorization: Bearer v1.123.1.'));
+    assert.ok(r.stdin.includes('Authorization: Bearer v2.123.1.'));
     assert.ok(!r.args.join(' ').includes('v1.'));
     assert.ok(!r.args.includes('--location'));
     assert.match(repoSource('vast_onstart.sh'), /install -m 700 "\$here\/kf-box-blob-url"/);

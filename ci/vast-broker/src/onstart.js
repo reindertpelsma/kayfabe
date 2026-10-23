@@ -2,6 +2,7 @@
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
 import {hexSha} from './policy.js';
+import { tokenFields } from './tokens.js';
 // prettier-ignore
 import {validPathPrefix} from './routes.js';
 export function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {
@@ -31,13 +32,8 @@ export function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', ca
   } catch {
     throw Error('Invalid callback origin');
   }
-  if (
-    !/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run) ||
-    !/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(
-      callback.token,
-    ) ||
-    callback.token.split('.').slice(1, 3).join('-') !== callback.run
-  )
+  const fields = tokenFields(callback.token);
+  if (!fields || fields.key !== callback.run || fields.sha !== sha || fields.nonce !== nonce)
     throw Error('Invalid callback capability');
   const prefix = callback.path ?? '';
   if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');

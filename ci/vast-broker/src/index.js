@@ -7,13 +7,18 @@ import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 // prettier-ignore
 import {readReportBody,parseReport} from './reports.js';
 // prettier-ignore
-import {routePath,notFound,endpointSecrets} from './routes.js';
+import {routePath,notFound,endpointSecrets,routeKind,secretFormatError} from './routes.js';
 // prettier-ignore
 import {OidcVerifier} from './oidc.js';
 // prettier-ignore
+import {AccessPolicy} from './access.js';
+// prettier-ignore
 import {Github} from './github.js';
 // prettier-ignore
-import {mintBlob} from './blobs.js';
+import {allowedWorkflowRef} from './workflow-authority.js';
+// prettier-ignore
+import {mintBlob,checkBlobBudget} from './blobs.js';
+import { offerPrice } from './policy.js';
 // prettier-ignore
 import {Vast} from './vast.js';
 // prettier-ignore
@@ -24,30 +29,45 @@ import {Ledger} from './ledger.js';
 import {onstart} from './onstart.js';
 // prettier-ignore
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
+function boxAccessEnvironment(env) {
+  const id = env.BOX_ACCESS_ID,
+    secret = env.BOX_ACCESS_SECRET;
+  if (!id && !secret) return {};
+  if (!/^[A-Za-z0-9_.-]{1,256}$/.test(id ?? '') || !/^[A-Za-z0-9_.-]{32,256}$/.test(secret ?? ''))
+    refuse('CONFIG_ACCESS', 503);
+  return { KF_ACCESS_ID: id, KF_ACCESS_SECRET: secret };
+}
 function checkedIdentity(c, cfg) {
   if (
     c.repository !== cfg.repo ||
     c.repository_id !== cfg.repositoryId ||
     c.repository_owner_id !== cfg.owner ||
     c.sub !== cfg.oidcSubject ||
-    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.job_workflow_ref) ||
+    typeof c.workflow_ref !== 'string' ||
+    c.workflow_ref.length > 2048 ||
     c.job_workflow_ref !== c.workflow_ref ||
     !numericId(c.actor_id) ||
     !numericId(c.run_id) ||
     !numericId(c.run_attempt) ||
     !hexSha(c.sha) ||
-    !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||
-    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.workflow_ref) ||
+    !['pull_request_target', 'workflow_dispatch', 'push'].includes(c.event_name) ||
+    (c.event_name === 'push' && (c.actor_id !== cfg.owner || c.workflow_sha !== c.sha)) ||
     (c.repository_owner_id !== undefined && c.repository_owner_id !== cfg.owner) ||
-    (c.event_name === 'pull_request' && !/^refs\/pull\/[1-9][0-9]*\/merge$/.test(c.ref ?? '')) ||
     (c.event_name === 'pull_request_target' &&
-      (!cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||
-        c.workflow_sha !== c.sha ||
-        !c.workflow_ref.endsWith('@' + c.ref))) ||
-    (c.event_name === 'workflow_dispatch' &&
+      (c.workflow_sha !== c.sha || !c.workflow_ref.endsWith('@' + c.ref))) ||
+    (['workflow_dispatch', 'push'].includes(c.event_name) &&
       (typeof c.ref !== 'string' || !c.ref.startsWith('refs/heads/')))
   )
     refuse('UNAUTHORIZED', 401);
+  return c;
+}
+async function verifiedIdentity(c, cfg, github) {
+  checkedIdentity(c, cfg);
+  if (allowedWorkflowRef(c, cfg)) return c;
+  const prefix = cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/';
+  if (c.actor_id !== cfg.owner || !c.workflow_ref.startsWith(prefix)) refuse('UNAUTHORIZED', 401);
+  const run = await github.run(c.run_id, false, true);
+  if (!allowedWorkflowRef(c, cfg, run)) refuse('UNAUTHORIZED', 401);
   return c;
 }
 export function createService({
@@ -59,7 +79,7 @@ export function createService({
 } = {}) {
   const ledger = new Ledger(storage),
     verifier = new OidcVerifier(fetcher, now),
-    tokens = new RunTokens(env.RUN_TOKEN_SECRET),
+    tokens = new RunTokens(env.RUN_TOKEN_SECRET, now),
     githubCache = new Map(),
     offers = new OfferBook(now);
   let busy = false,
@@ -74,6 +94,9 @@ export function createService({
     });
   const secrets = [
     env.BLOB_GITHUB_TOKEN,
+    env.GITHUB_API_TOKEN,
+    env.BOX_ACCESS_ID,
+    env.BOX_ACCESS_SECRET,
     env.VAST_API_KEY,
     env.RUN_TOKEN_SECRET,
     env.OWNER_STOP_TOKEN,
@@ -159,6 +182,7 @@ export function createService({
       bytes = new TextEncoder().encode(text).length;
     if ((r.fullBytes ?? 0) + bytes > cfg.reportBytes) {
       r.fullBytesDropped = (r.fullBytesDropped ?? 0) + bytes;
+      await ledger.save(r);
       return;
     }
     await ledger.appendLog(r, text);
@@ -202,7 +226,10 @@ export function createService({
           await clearFailedSha(record);
           return record;
         }
-      } else delete record.noContractAt;
+      } else {
+        delete record.noContractAt;
+        record.idSource = 'reconcile';
+      }
       await ledger.save(record);
     }
     return record;
@@ -220,6 +247,47 @@ export function createService({
     record.liveCheckedAt = null;
     await ledger.save(record);
     if (record.ended === null) await cleanup(record, vast);
+  }
+  async function checkContract(record, instance, vast, cfg) {
+    const price = instance && offerPrice(instance, cfg);
+    const cap = record.profile === 'sweep' ? cfg.sweepPrice : cfg.price;
+    if (
+      !price ||
+      instance.inet_up_cost > cfg.maxInet ||
+      instance.inet_down_cost > cfg.maxInet ||
+      price.effective > cap
+    ) {
+      await close(record, vast, 'CONTRACT_PRICE', 'UNAVAILABLE');
+      refuse('UNAVAILABLE', 503);
+    }
+    // Retain the highest observed components: a later decrease cannot erase past liability.
+    const computeStorage = Math.max(record.computeStoragePrice ?? 0, price.computeStorage);
+    const bandwidth = Math.max(record.bandwidthCost ?? 0, price.bandwidth);
+    if (computeStorage !== record.computeStoragePrice || bandwidth !== record.bandwidthCost) {
+      const ttl = record.billingTtl ?? record.ttl + cfg.cronPeriod;
+      const total = (computeStorage * ttl) / 3600000 + bandwidth;
+      try {
+        const credit = await vast.credit();
+        if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + total)
+          refuse('UNAVAILABLE_BUDGET', 409);
+        await ledger.budgets(cfg, now(), total, record.key);
+      } catch {
+        await close(record, vast, 'CONTRACT_BUDGET', 'UNAVAILABLE');
+        refuse('UNAVAILABLE_BUDGET', 409);
+      }
+      record.computeStoragePrice = computeStorage;
+      record.bandwidthCost = bandwidth;
+      record.price = computeStorage + bandwidth / (cfg.hard / 3600000);
+      await ledger.save(record);
+      await ledger.put('cost:' + record.key, {
+        profile: record.profile ?? 'check',
+        started: record.started,
+        ended: null,
+        ttl,
+        price: computeStorage,
+        bandwidthCost: bandwidth,
+      });
+    }
   }
   async function update(record, vast, github, cfg) {
     cfg.profile = record.profile ?? 'check';
@@ -297,6 +365,7 @@ export function createService({
       await ledger.settle(record, now());
       return;
     }
+    await checkContract(record, instance, vast, cfg);
     const providerState = [
       'running',
       'created',
@@ -350,12 +419,12 @@ export function createService({
     // Manual ownership and post-result inspection outlive the workflow job.
     if (record.phase === 'MANUAL' && record.manualOwnerConfirmed) return;
     if (record.phase !== 'MANUAL' && record.resultAt !== undefined) return;
-    const current = record.pr === null ? null : await github.pr(record.pr);
+    const current = record.pr === null ? null : await github.pr(record.pr, true);
     if (current && (current.head?.sha !== record.sha || current.state !== 'open')) {
       await close(record, vast, 'SUPERSEDED');
       return;
     }
-    const run = await github.run(record.run, true);
+    const run = await github.run(record.run, true, true);
     if (run === null || run.status === 'completed') await close(record, vast, 'RUN_GONE');
   }
   async function hold(request, key, bearer, cfg, vast) {
@@ -429,8 +498,11 @@ export function createService({
       ? (localVerifier ??= new OidcVerifier(fetcher, now, cfg.testIdentity))
       : verifier;
     const c = await selected.verify(bearer, cfg.audience);
-    checkedIdentity(c, cfg);
-    return c;
+    return verifiedIdentity(
+      c,
+      cfg,
+      new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: githubCache, now }),
+    );
   }
   async function rate(r, cfg) {
     const window = Math.floor(now() / 10000);
@@ -633,6 +705,7 @@ export function createService({
       clocks(r, cfg);
       await rejectExpiredCallback(r, cfg, vast);
       await readBounded(request, 0);
+      await checkBlobBudget(env, ledger, r, blob[2], blob[3], now());
       await rate(r, cfg);
       const instance = await vast.inspect(r);
       if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);
@@ -720,7 +793,7 @@ export function createService({
         refuse('BAD_REQUEST', 400);
       }
     }
-    const token = request.headers.get('X-GH-Token');
+    const token = env.GITHUB_API_TOKEN;
     if (token && (token.length > 1024 || !/^[\x21-\x7e]+$/.test(token))) refuse();
     const github = new Github(fetcher, cfg, token, { cache: githubCache, now });
     if (match) {
@@ -750,8 +823,12 @@ export function createService({
         c.workflow_ref !== cfg.sweepWorkflow)
     )
       refuse('UNAUTHORIZED', 401);
-    if (profile === 'check' && !cfg.checkWorkflows.includes(c.workflow_ref))
-      refuse('UNAUTHORIZED', 401);
+    if (profile === 'check') {
+      const run = allowedWorkflowRef(c, cfg, undefined, 'check')
+        ? undefined
+        : await github.run(c.run_id, false, true);
+      if (!allowedWorkflowRef(c, cfg, run, 'check')) refuse('UNAUTHORIZED', 401);
+    }
     cfg.profile = profile;
     if (path === '/availability') {
       const run = await github.run(c.run_id),
@@ -774,27 +851,12 @@ export function createService({
     const target = await github.authorize(c, rentRequest);
     if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)
       refuse('BINDING_MISMATCH', 409);
-    if (target.notNeeded)
-      return json({
-        ...expose({
-          ...target,
-          key,
-          id: null,
-          started: now(),
-          ended: now(),
-          ttl: 0,
-          grace: 0,
-          price: 0,
-          verdict: 'PASS',
-          resultAt: now(),
-          runnerNonce: rentRequest.runner_nonce,
-        }),
-        state: 'NOT_NEEDED',
-      });
     const prior = await ledger.granted(key);
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);
       await recover(prior, vast);
+      if (prior.id && prior.ended === null)
+        await checkContract(prior, await vast.inspect(prior), vast, cfg);
       return json(expose(prior, key, target.pr));
     }
     const active = await ledger.active();
@@ -814,6 +876,7 @@ export function createService({
     if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.
     if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
+    const boxAccess = boxAccessEnvironment(env);
     const chosen = await offers.select(
         await offers.evaluate(vast, cfg, ledger, profile),
         cfg,
@@ -871,7 +934,7 @@ export function createService({
         grace: cfg.grace,
         gpu: offer.gpu_name,
         reportExpiry: Math.floor(
-          (started + Math.max(cfg.hard, cfg.manualCeiling) + cfg.cronPeriod) / 1000,
+          (started + cfg.hard + Math.max(cfg.passGrace, cfg.failGrace) + cfg.cronPeriod) / 1000,
         ),
         price: offer.pricing.effective,
         id: null,
@@ -914,6 +977,7 @@ export function createService({
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
     try {
       const environment = {
+        ...boxAccess,
         KF_PROTOCOL: DEFAULTS.boxProtocol,
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
@@ -930,6 +994,9 @@ export function createService({
         KF_GRACE_FAIL: cfg.failGrace / 1000,
       };
       r.id = await vast.create(offer, r, script, environment);
+      r.idSource = 'create';
+      await ledger.save(r);
+      await checkContract(r, await vast.inspect(r), vast, cfg);
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'CREATE_REFUSED') {
         r.closed = 'GONE';
@@ -953,10 +1020,16 @@ export function createService({
   // Authentication may wait on JWKS, but never owns the ledger queue.
   let executing = false;
   const queue = [];
-  async function serial(priority, action) {
-    if (queue.length >= 32 && priority > 0) refuse('BUSY', 409);
+  async function serial(priority, action, key = '@cron') {
+    if (
+      key !== '@cron' &&
+      (queue.length >= 32 ||
+        queue.filter((x) => x.priority === priority).length >= 16 ||
+        queue.filter((x) => x.key === key).length >= 2)
+    )
+      refuse('BUSY', 409);
     return new Promise((resolve, reject) => {
-      queue.push({ priority, action, resolve, reject });
+      queue.push({ priority, key, action, resolve, reject });
       queue.sort((a, b) => a.priority - b.priority);
       drain();
     });
@@ -978,6 +1051,11 @@ export function createService({
     }
   }
   async function preauthenticate(request) {
+    if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
+      const cfg = configuration(env);
+      const c = await oidc(request.headers.get('Authorization')?.replace(/^Bearer /, ''), cfg);
+      if (c.actor_id === cfg.owner) refuse(secretFormatError(env), 503);
+    }
     const path = await routePath(request, env);
     if (path === null) return;
     const cfg = configuration(env);
@@ -1000,6 +1078,12 @@ export function createService({
     if (box) {
       const record = await ledger.get('record:' + box[2]);
       if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);
+      if (record.ended !== null || record.closed) {
+        if (box[1] === 'kill' && record.boxKilled && record.ended !== null)
+          return json({ state: 'NONE' });
+        refuse('UNAUTHORIZED', 401);
+      }
+      if (box[1] === 'report' && record.resultAt !== undefined) refuse('UNAUTHORIZED', 401);
       return;
     }
     if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
@@ -1014,7 +1098,8 @@ export function createService({
   return {
     async fetch(request) {
       try {
-        await preauthenticate(request);
+        const receipt = await preauthenticate(request);
+        if (receipt instanceof Response) return receipt;
         const path = await routePath(request, env);
         const renting = path === '/rent';
         if (renting && busy) refuse('BUSY', 409);
@@ -1026,7 +1111,8 @@ export function createService({
               : /^\/(?:report|hold)\//.test(path)
                 ? 1
                 : 2;
-          return await serial(priority, () => perform(request));
+          const key = /\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1] ?? path;
+          return await serial(priority, () => perform(request), key);
         } finally {
           if (renting) busy = false;
         }
@@ -1056,7 +1142,7 @@ export function createService({
               await update(
                 r,
                 new Vast(fetcher, cfg, env.VAST_API_KEY),
-                new Github(fetcher, cfg, null, { cache: githubCache, now }),
+                new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: githubCache, now }),
                 cfg,
               );
             } catch {
@@ -1124,7 +1210,12 @@ async function detachedUpload(request, path) {
 }
 export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
   const verifier = new OidcVerifier(fetcher, now),
-    local = new Map();
+    local = new Map(),
+    frontGithubCache = new Map();
+  const access = new AccessPolicy(fetcher, now);
+  let boxVerifier, boxSecret;
+  let boxWindow = -1;
+  const boxCounts = new Map();
   let controlWindow = -1,
     controlCount = 0;
   const controlIps = new Map();
@@ -1167,13 +1258,23 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
     )
       return;
     if (/^\/(?:report|kill|hold|blob-url)\//.test(path)) {
-      if (
-        !/^v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}$/.test(
-          bearer,
-        )
-      )
-        refuse('UNAUTHORIZED', 401);
-      return; // Record-bound MAC is checked before the ledger queue is entered.
+      if (boxSecret !== env.RUN_TOKEN_SECRET) {
+        boxSecret = env.RUN_TOKEN_SECRET;
+        boxVerifier = new RunTokens(boxSecret, now);
+      }
+      const fields = await boxVerifier.verifyStateless(bearer);
+      const key = /^\/[^/]+\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1];
+      if (!fields || fields.key !== key) refuse('UNAUTHORIZED', 401);
+      const window = Math.floor(now() / 60000);
+      if (boxWindow !== window) {
+        boxWindow = window;
+        boxCounts.clear();
+      }
+      const used = boxCounts.get(key) ?? 0;
+      if (used >= 300 || (!boxCounts.has(key) && boxCounts.size >= 1024))
+        refuse('RATE_LIMITED', 429);
+      boxCounts.set(key, used + 1);
+      return;
     }
     const identity = localIdentity(env, request.url);
     let selected = verifier;
@@ -1185,11 +1286,33 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
         local.set(identity.issuer, selected);
       }
     }
-    checkedIdentity(await selected.verify(bearer, cfg.audience), cfg);
+    await verifiedIdentity(
+      await selected.verify(bearer, cfg.audience),
+      cfg,
+      new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: frontGithubCache, now }),
+    );
   }
   return {
     async fetch(request, env) {
       let path;
+      try {
+        await access.authorize(request, env);
+        if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
+          const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
+          const cfg = configuration(env);
+          const c = await verifiedIdentity(
+            await verifier.verify(bearer, env.WORKER_URL),
+            cfg,
+            new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: frontGithubCache, now }),
+          );
+          if (c.actor_id === env.OWNER_GITHUB_ID) refuse(secretFormatError(env), 503);
+        }
+      } catch (error) {
+        return Response.json(
+          { state: error instanceof BrokerError ? error.state : 'UNAVAILABLE' },
+          { status: error instanceof BrokerError ? error.status : 503 },
+        );
+      }
       try {
         path = await routePath(request, env);
       } catch (error) {
@@ -1198,13 +1321,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
           { status: error.status ?? 503 },
         );
       }
-      if (
-        path === null ||
-        !/^\/(?:rent|availability|stop-all|blob-url\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}|(?:report|kill|hold|stop-timer|status|stop|logs)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
-          path,
-        )
-      )
-        return notFound();
+      if (path === null || !routeKind(path)) return notFound();
       let buffered;
       try {
         await (authorize ?? frontAuthorize)(request, env, path);

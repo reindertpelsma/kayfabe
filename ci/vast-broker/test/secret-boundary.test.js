@@ -115,8 +115,12 @@ for (const output of ['url', 'path'])
   test('broker job output cannot carry endpoint ' + output, () =>
     rejected(
       safe.replace(
-        '    outputs:\n',
-        '    outputs:\n      ' + output + ': ${{ steps.broker.outputs.' + output + ' }}\n',
+        '    outputs:\n      state:',
+        '    outputs:\n      ' +
+          output +
+          ': ${{ steps.broker.outputs.' +
+          output +
+          ' }}\n      state:',
       ),
     ),
   );

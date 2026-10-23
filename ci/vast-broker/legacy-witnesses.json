@@ -1,0 +1,886 @@
+{
+  "inherited endpoint secrets": {
+    "names": [
+      "unapproved reusable job cannot inherit endpoint secrets run",
+      "unapproved reusable job cannot inherit endpoint secrets utility",
+      "unsupported scalar forwarding is rejected \"secrets: &all inherit\""
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-forwarding.test.js"
+    ]
+  },
+  "endpoint aliases in step metadata": {
+    "names": [
+      "broker step name cannot reference endpoint alias WORKER_URL",
+      "broker step name cannot reference endpoint alias WORKER_PATH"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-forwarding.test.js"
+    ]
+  },
+  "optional prefix admission": {
+    "names": [
+      "wrong or encoded prefix fails before auth wrong-xx",
+      "wrong or encoded prefix fails before auth short",
+      "wrong or encoded prefix fails before auth unit-pat"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "native constant-time prefix comparison": {
+    "names": [
+      "prefix compares through native crypto 0",
+      "prefix compares through native crypto 42"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "public prefix gate": {
+    "names": [
+      "public routing rejects without forwarding /rent",
+      "public routing rejects without forwarding /stop-all",
+      "public routing forwards a correctly prefixed request unchanged"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "ledger service prefix gate": {
+    "names": [
+      "unprefixed endpoint has generic 404 /rent",
+      "unprefixed endpoint has generic 404 /status/123-1",
+      "unprefixed endpoint has generic 404 /report/123-1"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "prefix charset and bounds": {
+    "names": [
+      "invalid prefix config fails closed 5",
+      "invalid prefix config fails closed 129",
+      "onstart rejects prefix interpolation 7"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "fixed callback prefix": {
+    "names": [
+      "actual fixed Python sender backs up hostile output and reports exit status 0",
+      "actual fixed Python sender backs up hostile output and reports exit status 7",
+      "fixed callback URL includes the exact optional prefix"
+    ],
+    "files": [
+      "ci/vast-broker/test/callback-wiring.test.js",
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "endpoint text redaction": {
+    "names": [
+      "box log cannot reflect known endpoint component https://",
+      "box log cannot reflect known endpoint component broker.e",
+      "box log cannot reflect known endpoint component broker"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "Actions secret instead of variable": {
+    "names": [
+      "actual broker uses Actions secrets only inside its execution step",
+      "canonical broker step secret bindings pass the guard",
+      "explicit unrelated reusable secret mapping remains allowed"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js",
+      "ci/vast-broker/test/secret-forwarding.test.js"
+    ]
+  },
+  "secret context placement guard": {
+    "names": [
+      "another job cannot receive URL secret pending",
+      "another job cannot receive URL secret report",
+      "another job cannot receive URL secret run"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js"
+    ]
+  },
+  "secret object access guard": {
+    "names": [
+      "opaque secret object access fails toJSON(secrets)",
+      "opaque secret object access fails secrets[inputs.name]"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js"
+    ]
+  },
+  "secret alias logging guard": {
+    "names": [
+      "broker cannot echo endpoint alias WORKER_URL",
+      "broker cannot echo endpoint alias WORKER_PATH"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js"
+    ]
+  },
+  "secret job output guard": {
+    "names": [
+      "broker job output cannot carry endpoint url",
+      "broker job output cannot carry endpoint path"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js"
+    ]
+  },
+  "secret alias job isolation": {
+    "names": [
+      "endpoint alias cannot enter another job WORKER_URL",
+      "endpoint alias cannot enter another job WORKER_PATH"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js"
+    ]
+  },
+  "literal run and renderer enclosure": {
+    "names": [
+      "unsupported broker run style fails closed inline WORKER_URL",
+      "unsupported broker run style fails closed inline WORKER_PATH",
+      "unsupported broker run style fails closed folded WORKER_URL"
+    ],
+    "files": [
+      "ci/vast-broker/test/secret-boundary.test.js"
+    ]
+  },
+  "HMAC tag and commit binding": {
+    "names": [
+      "HMAC binds immutable ledger field sha",
+      "HMAC binds immutable ledger field label"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "closed ledger rejects reports": {
+    "names": [
+      "stop revokes even while Vast delete fails but GET stays live oidc",
+      "stop revokes even while Vast delete fails but GET stays live owner"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "actual Vast liveness": {
+    "names": [
+      "report closes and rejects non-live rental stopped",
+      "report closes and rejects non-live rental gone",
+      "report closes and rejects non-live rental exited"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "liveness cache expiration": {
+    "names": [
+      "positive liveness cache expires in seconds and fails closed exited",
+      "positive liveness cache expires in seconds and fails closed api-error"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "report count cap": {
+    "names": [
+      "report count cap survives retries and restart false",
+      "report count cap survives retries and restart true"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "cumulative report byte cap": {
+    "names": [
+      "per-run input byte cap is persistent false",
+      "per-run input byte cap is persistent true"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "streamed request byte cap": {
+    "names": [
+      "streaming body limit rejects bytes before parse 65537",
+      "streaming body limit rejects bytes before parse 131072"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "report rate cap": {
+    "names": [
+      "per-run rate cap counts authenticated retries false",
+      "per-run rate cap counts authenticated retries true",
+      "V4 kill shares report rate limiter and cannot extend grace"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js",
+      "ci/vast-broker/test/v4-lifecycle.test.js"
+    ]
+  },
+  "preparse JSON depth gate": {
+    "names": [
+      "depth rejected before native JSON parser array",
+      "depth rejected before native JSON parser object"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "strict report schema": {
+    "names": [
+      "strict report schema rejects {\"seq\":\"1\",\"kind\":\"log\",\"text\":\"x\"}",
+      "strict report schema rejects {\"seq\":1.5,\"kind\":\"log\",\"text\":\"x\"}",
+      "strict report schema rejects {\"seq\":0,\"kind\":\"log\",\"text\":\"x\"}"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "strict result schema": {
+    "names": [
+      "strict report schema rejects {\"seq\":1,\"kind\":\"result\",\"result\":{\"nonce\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"verdict\":\"SUCCESS\"}}",
+      "strict report schema rejects {\"seq\":1,\"kind\":\"result\",\"result\":{\"nonce\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"verdict\":\"PASS\",\"extra\":true}}"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "report sequence immutability": {
+    "names": [
+      "same seq identical payload is idempotent and gaps are allowed",
+      "changed duplicate or older seq cannot overwrite 1",
+      "changed duplicate or older seq cannot overwrite 2"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "structured result nonce": {
+    "names": [
+      "structured result rejects a different valid nonce c",
+      "structured result rejects a different valid nonce d"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "free text cannot decide verdict": {
+    "names": [
+      "free text cannot set verdict KF_RESULT bbbbbbbbbb",
+      "free text cannot set verdict {\"seq\":2,\"kind\":\"res",
+      "free text cannot set verdict ::set-output name=ve"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "structured result owned cleanup": {
+    "names": [
+      "structured PASS result destroys at grace expiry",
+      "structured FAIL result destroys at grace expiry",
+      "local HTTP integration: owner rent to authenticated reports to automatic destroy"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js",
+      "ci/vast-broker/test/integration.test.js"
+    ]
+  },
+  "native owner secret comparison": {
+    "names": [
+      "foreign run cannot destroy ledger instance",
+      "native empty POST bad bearer is unauthorized /stop-all",
+      "native empty POST bad bearer is unauthorized /stop/123-1"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js",
+      "ci/vast-broker/test/local-smoke.test.js"
+    ]
+  },
+  "owner-only stop-all": {
+    "names": [
+      "native empty POST bad bearer is unauthorized /stop-all",
+      "box token has no stop capability stop-all",
+      "OIDC cannot call owner stop-all"
+    ],
+    "files": [
+      "ci/vast-broker/test/local-smoke.test.js",
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "OIDC run-scoped status and stop": {
+    "names": [
+      "foreign run cannot read ledger instance",
+      "foreign run cannot destroy ledger instance",
+      "wrong stop auth cannot touch a run {\"claims\":{\"run_id\":\"124\"}}"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js",
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "ledger-only owner stop": {
+    "names": [
+      "never inspect/delete unrecorded id 777",
+      "never inspect/delete unrecorded id 888",
+      "owner stop never adopts unrecorded labelled instance 888-1"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js",
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "stop-all cannot adopt account entries": {
+    "names": [
+      "correct prefix reaches protected stop-all",
+      "owner stop-all destroys ledger instances only and remains idempotent",
+      "stop-all handles every open ledger record and no foreign account entries"
+    ],
+    "files": [
+      "ci/vast-broker/test/path-prefix.test.js",
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "revocation precedes failed delete": {
+    "names": [
+      "report closes and rejects non-live rental expired",
+      "report closes and rejects non-live rental stopped",
+      "report closes and rejects non-live rental gone"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "all log lines prefixed": {
+    "names": [
+      "local HTTP integration: owner rent to authenticated reports to automatic destroy",
+      "sanitizer prefixes every command-like line ::error::hostile",
+      "sanitizer prefixes every command-like line ::set-output name=x::bad"
+    ],
+    "files": [
+      "ci/vast-broker/test/integration.test.js",
+      "ci/vast-broker/test/logs.test.js"
+    ]
+  },
+  "embedded command delimiters": {
+    "names": [
+      "local HTTP integration: owner rent to authenticated reports to automatic destroy",
+      "sanitizer prefixes every command-like line ::error::hostile",
+      "sanitizer prefixes every command-like line ::set-output name=x::bad"
+    ],
+    "files": [
+      "ci/vast-broker/test/integration.test.js",
+      "ci/vast-broker/test/logs.test.js"
+    ]
+  },
+  "per-line UTF8 byte cap": {
+    "names": [
+      "tail line/count/bytes are capped with dropped-byte accounting",
+      "multibyte display line is capped by UTF8 bytes 233",
+      "multibyte display line is capped by UTF8 bytes 128512"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js",
+      "ci/vast-broker/test/v4-mutation-boundaries.test.js"
+    ]
+  },
+  "log line count cap": {
+    "names": [
+      "sanitizer bounds huge lines or line counts 5000",
+      "report tail keeps at most 200 short lines 501",
+      "report tail keeps at most 200 short lines 1000"
+    ],
+    "files": [
+      "ci/vast-broker/test/logs.test.js",
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "log tail byte cap": {
+    "names": [
+      "tail line/count/bytes are capped with dropped-byte accounting",
+      "V4 bounded log cap counts dropped rendered bytes",
+      "V4 smaller full log cap bounds prefix expansion"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js",
+      "ci/vast-broker/test/v4-public-log.test.js"
+    ]
+  },
+  "orphan index cannot block cleanup": {
+    "names": [
+      "incomplete open index cannot block known owned cleanup cron",
+      "incomplete open index cannot block known owned cleanup stop-all"
+    ],
+    "files": [
+      "ci/vast-broker/test/reporting.test.js"
+    ]
+  },
+  "kill switch": {
+    "names": [
+      "kill switch refuses rental false",
+      "kill switch refuses rental FALSE"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "owner numeric identity": {
+    "names": [
+      "run API must bind triggering_actor",
+      "nonowner push cannot spoof approval with owner name",
+      "nonowner push cannot spoof approval with owner email"
+    ],
+    "files": [
+      "ci/vast-broker/test/auth.test.js"
+    ]
+  },
+  "review head SHA": {
+    "names": [
+      "review_only rejects old-head",
+      "review cannot authorize a nonowner push at a newer head"
+    ],
+    "files": [
+      "ci/vast-broker/test/auth.test.js"
+    ]
+  },
+  "draft refusal": {
+    "names": [
+      "draft owner push does not rent",
+      "draft review does not override default refusal"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "OIDC claims": {
+    "names": [
+      "unauthorized token cannot rent {\"aud\":\"wrong\"}",
+      "unauthorized token cannot rent {\"iss\":\"wrong\"}",
+      "unauthorized token cannot rent {\"exp\":1800000000}"
+    ],
+    "files": [
+      "ci/vast-broker/test/auth.test.js"
+    ]
+  },
+  "credit reserve": {
+    "names": [
+      "credit guard reserves headroom 0",
+      "credit guard reserves headroom 7.99",
+      "credit guard reserves headroom 8.01"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "daily rental count": {
+    "names": [
+      "budget prevents admission rentals",
+      "daily count remains across restart"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "daily spend": {
+    "names": [
+      "budget prevents admission daily",
+      "budget survives restart daily"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "rolling 30-day spend": {
+    "names": [
+      "budget prevents admission rolling",
+      "budget survives restart rolling",
+      "rolling cap counts a previous UTC day"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "one live instance": {
+    "names": [
+      "one-live blocks another run",
+      "one-live survives restart",
+      "superseding push destroys old instance and returns BUSY false"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "superseding push": {
+    "names": [
+      "superseding push destroys old instance and returns BUSY false",
+      "superseding push destroys old instance and returns BUSY true"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "same SHA minimum gap": {
+    "names": [
+      "force rerun still requires minimum SHA gap",
+      "force gap survives restart"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "live label ownership": {
+    "names": [
+      "reconciled changed label prevents deletion",
+      "reconciled changed label prevents status log access",
+      "absence does not accept malformed or foreign {\"id\":900,\"label\":\"foreign\"}"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js",
+      "ci/vast-broker/test/provider-absence.test.js"
+    ]
+  },
+  "ambiguous-create binding": {
+    "names": [
+      "reconciliation never adopts labelled foreign instance with wrong script",
+      "reconciliation cannot adopt a changed image"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "TTL destruction": {
+    "names": [
+      "V4 accepted callback ends provisioning deadline",
+      "V4 hard TTL survives restart with accepted progress and no result"
+    ],
+    "files": [
+      "ci/vast-broker/test/v4-lifecycle.test.js"
+    ]
+  },
+  "SHA/nonce shell validation": {
+    "names": [
+      "onstart rejects SHA injection \"$(id)\"",
+      "onstart rejects SHA injection \"`id`\"",
+      "onstart rejects SHA injection \"'\""
+    ],
+    "files": [
+      "ci/vast-broker/test/logs.test.js"
+    ]
+  },
+  "callback shell validation": {
+    "names": [
+      "onstart rejects callback interpolation run",
+      "onstart rejects callback interpolation token"
+    ],
+    "files": [
+      "ci/vast-broker/test/callback-wiring.test.js"
+    ]
+  },
+  "fixed offer admission": {
+    "names": [
+      "invalid/expensive offer 0.51",
+      "invalid/expensive offer -1",
+      "invalid/expensive offer null"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "documented verification representation": {
+    "names": [
+      "documented Vast verification string is accepted without boolean alias",
+      "complete documented display offer remains within fixed capability"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "documented model representation": {
+    "names": [
+      "documented display GPU names map to the fixed model allowlist",
+      "complete documented display offer remains within fixed capability"
+    ],
+    "files": [
+      "ci/vast-broker/test/broker.test.js"
+    ]
+  },
+  "documented offer pricing type": {
+    "names": [
+      "review_or_author accepts owner author",
+      "review mode accepts exact head approval by numeric owner",
+      "actor_only is explicitly selectable"
+    ],
+    "files": [
+      "ci/vast-broker/test/auth.test.js"
+    ]
+  },
+  "poll permissions guard": {
+    "names": [
+      "extra workflow permission fails actions: write",
+      "extra workflow permission fails contents: write",
+      "extra workflow permission fails packages: write"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "attestation dependency guard": {
+    "names": [
+      "direct attestation dependency is rejected",
+      "transitive release dependency is rejected"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "cold-box disk guard": {
+    "names": [
+      "cold-box disk preflight 22000000000",
+      "cold-box disk preflight 59999999999"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "must-fail control": {
+    "names": [
+      "box deliberate control exits failure on missing evidence",
+      "box harness accepts only a deliberately failed control"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "scheduled cleanup wiring": {
+    "names": [
+      "scheduled binding reaches Durable Object cleanup",
+      "bundled scheduled binding reaches Durable Object cleanup",
+      "scheduled cleanup works with a prefix and no public cron route"
+    ],
+    "files": [
+      "ci/vast-broker/test/integration.test.js",
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "Unicode format sanitizer": {
+    "names": [
+      "Unicode format control is removed before command prefix 8203",
+      "Unicode format control is removed before command prefix 8238"
+    ],
+    "files": [
+      "ci/vast-broker/test/logs.test.js"
+    ]
+  },
+  "unsupported job syntax": {
+    "names": [
+      "flow-style release dependency cannot be silently ignored",
+      "quoted release job cannot bypass structural parsing"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "public cron isolation": {
+    "names": [
+      "public request cannot invoke the internal cron route",
+      "bundled public request cannot invoke internal cron route",
+      "public routing rejects without forwarding /rent"
+    ],
+    "files": [
+      "ci/vast-broker/test/integration.test.js",
+      "ci/vast-broker/test/path-prefix.test.js"
+    ]
+  },
+  "automatic base allowlist": {
+    "names": [
+      "automatic non-master base is NOT_ELIGIBLE integration/candidate",
+      "automatic non-master base is NOT_ELIGIBLE another-pr",
+      "missing API base never trusts an OIDC base claim"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "docs-only exclusion result": {
+    "names": [
+      "complete exclusion list is NOT_NEEDED README.md",
+      "complete exclusion list is NOT_NEEDED docs/design.md,traces/evidence.txt,archive/old.rs,LICENSE-MIT,.github/ISSUE_TEMPLATE/bug.yml",
+      "complete exclusion list is NOT_NEEDED docs/guide.md,nested/notes.md"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "unknown file-list skip": {
+    "names": [
+      "incomplete or unknown file metadata runs empty",
+      "incomplete or unknown file metadata runs missing-count",
+      "incomplete or unknown file metadata runs truncated"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "canonical path validation": {
+    "names": [
+      "unlisted path runs despite adjacent docs ci/vast-broker/README.md",
+      "unlisted path runs despite adjacent docs ci/vast-broker/test/example.md",
+      "rename checks both paths docs/new.md from docs/../src/code.md"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "renamed previous path": {
+    "names": [
+      "rename checks both paths docs/new.md from src/code.rs",
+      "rename checks both paths docs/new.md from docs/../src/code.md"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "request bearer transport": {
+    "names": [
+      "Worker GitHub bearer used only for read-only GitHub calls /rent",
+      "Worker GitHub bearer used only for read-only GitHub calls /status/123-1",
+      "caller cannot replace Worker bearer and cron uses it"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "request bearer retention": {
+    "names": [
+      "Worker GitHub bearer used only for read-only GitHub calls /rent",
+      "caller cannot replace Worker bearer and cron uses it",
+      "request token absent from responses and ledger box output"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "public GitHub fallback": {
+    "names": [
+      "unusable read bearer falls back to authenticated public facts 401",
+      "unusable read bearer falls back to authenticated public facts 403",
+      "GitHub public fallback native fetch has no receiver 401"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js",
+      "ci/vast-broker/test/native-github.test.js"
+    ]
+  },
+  "owner branch without PR": {
+    "names": [
+      "owner dispatch permits branch without a PR owner-pr",
+      "owner dispatch permits branch without a PR integration/test"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "immutable API cache": {
+    "names": [
+      "static GitHub facts have a short token-free cache",
+      "static response cache works across request clients without retaining bearers"
+    ],
+    "files": [
+      "ci/vast-broker/test/eligibility.test.js"
+    ]
+  },
+  "mandatory status writer jobs": {
+    "names": [
+      "missing status writer job fails the guard pending",
+      "missing status writer job fails the guard report"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "token-shaped log redaction": {
+    "names": [
+      "short legacy token family redaction ghp_",
+      "short legacy token family redaction github_pat_"
+    ],
+    "files": [
+      "ci/vast-broker/test/v4-mutation-boundaries.test.js"
+    ]
+  },
+  "isolated writer permissions": {
+    "names": [
+      "status writer cannot gain content permission pending",
+      "status writer cannot gain content permission report"
+    ],
+    "files": [
+      "ci/vast-broker/test/workflow.test.js"
+    ]
+  },
+  "SSH onstart launch": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/ssh-launch.test.js"
+    ]
+  },
+  "pending provider status": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/provider-pending.test.js"
+    ]
+  },
+  "resolved launch preflight": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/smoke-preflight.test.js"
+    ]
+  },
+  "live tunnel readiness": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/live-tunnel.test.js"
+    ]
+  },
+  "live ingress duplicate probes": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/live-ingress.test.js"
+    ]
+  },
+  "shell tracing disabled": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/round3-bootstrap.test.js"
+    ]
+  },
+  "transport diagnostic suppression": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/secret-client.test.js"
+    ]
+  },
+  "outbound requested storage": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/broker.test.js",
+      "ci/vast-broker/test/callback-wiring.test.js"
+    ]
+  },
+  "distinct client refusal": {
+    "names": [],
+    "files": [
+      "ci/vast-broker/test/client.test.js"
+    ]
+  }
+}

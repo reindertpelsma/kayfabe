@@ -227,3 +227,33 @@ for (const prefixes of [undefined, '[]']) {
     assert.equal(calls, 0);
   });
 }
+for (const path of ['/rent', '/status/123-1'])
+  test('round pull_request fails at front before ledger ' + path, async () => {
+    let entries = 0;
+    const gateway = createGateway({
+      now: () => clock,
+      fetcher: async () => Response.json({ keys: [jwk] }),
+    });
+    const bindings = {
+      ...env,
+      BROKER_PATH_PREFIX: 'g'.repeat(32),
+      LEDGER: {
+        idFromName: () => 1,
+        get: () => ({
+          fetch: async () => {
+            entries++;
+            return Response.json({});
+          },
+        }),
+      },
+    };
+    const result = await gateway.fetch(
+      new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + path, {
+        method: path === '/rent' ? 'POST' : 'GET',
+        headers: { Authorization: 'Bearer ' + (await jwt({ event_name: 'pull_request' })) },
+      }),
+      bindings,
+    );
+    assert.equal(result.status, 401);
+    assert.equal(entries, 0);
+  });

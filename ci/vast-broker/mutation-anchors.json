@@ -31,14 +31,14 @@
   ],
   "legacy:inherited endpoint secrets": [
     [
-      "function endpointBoundary(filename, text, jobs) {\n  const errors = [],\n    fail = (reason) => errors.push('Broker endpoint ' + reason);\n  if (/^[ \\t]*['\"]?secrets['\"]?[ \\t]*:[ \\t]*[^#\\s]/m.test(text))\n    fail('secret forwarding requires explicit block mappings'); // MUTANT secret-inherit\n  const primary = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename)\n    ? jobs.find((x) => x.id === 'gpu')\n    : null;\n",
-      "function endpointBoundary(filename, text, jobs) {\n  const errors = [],\n    fail = (reason) => errors.push('Broker endpoint ' + reason);\n  const primary = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename)\n    ? jobs.find((x) => x.id === 'gpu')\n    : null;\n"
+      "    fail('secret forwarding requires explicit block mappings'); // MUTANT secret-inherit\n",
+      "    {} // MUTANT secret-inherit\n"
     ]
   ],
   "legacy:endpoint aliases in step metadata": [
     [
-      "      }\n      if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))\n        fail('requires two step-env secret bindings'); // MUTANT secret-binding\n      if (\n        /\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\\b/.test(\n          kept.join('\\n').split(/^        run:/m)[0],\n        )\n      )\n        fail('aliases cannot enter step metadata'); // MUTANT secret-metadata\n      const run = step.split(/^        run: \\|\\s*$/m)[1] || '';\n      const approvedRenderer =\n        run\n",
-      "      }\n      if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))\n        fail('requires two step-env secret bindings'); // MUTANT secret-binding\n      const run = step.split(/^        run: \\|\\s*$/m)[1] || '';\n      const approvedRenderer =\n        run\n"
+      "        fail('aliases cannot enter step metadata'); // MUTANT secret-metadata\n",
+      "        {} // MUTANT secret-metadata\n"
     ]
   ],
   "legacy:optional prefix admission": [
@@ -85,14 +85,18 @@
   ],
   "legacy:Actions secret instead of variable": [
     [
-      "        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 205\n        env:\n          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n",
-      "        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 205\n        env:\n          WORKER_URL: ${{ vars.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ vars.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n"
+      "${{ secrets.VAST_BROKER_URL }}",
+      "${{ vars.VAST_BROKER_URL }}"
+    ],
+    [
+      "${{ secrets.VAST_BROKER_PATH }}",
+      "${{ vars.VAST_BROKER_PATH }}"
     ]
   ],
   "legacy:shell tracing disabled": [
     [
-      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n",
-      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n"
+      "        run: |\n          set +x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]",
+      "        run: |\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]"
     ]
   ],
   "legacy:transport diagnostic suppression": [
@@ -103,14 +107,14 @@
   ],
   "legacy:secret context placement guard": [
     [
-      "    remaining = text.replace(primary.body, sanitised);\n    outside = text.replace(primary.body, '');\n  }\n  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))\n    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n",
-      "    remaining = text.replace(primary.body, sanitised);\n    outside = text.replace(primary.body, '');\n  }\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n"
+      "    fail('secret reference outside approved step env'); // MUTANT secret-reference\n",
+      "    {} // MUTANT secret-reference\n"
     ]
   ],
   "legacy:secret object access guard": [
     [
-      "    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n  return errors;\n}\nexport function checkWorkflows(workflows) {\n",
-      "    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  return errors;\n}\nexport function checkWorkflows(workflows) {\n"
+      "    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n",
+      "    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) {} // MUTANT secret-object\n"
     ]
   ],
   "legacy:secret alias logging guard": [
@@ -121,14 +125,14 @@
   ],
   "legacy:secret job output guard": [
     [
-      "    if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(header))\n      fail('secrets cannot enter job env or outputs');\n    const output = header.split('    outputs:\\n')[1]?.split(/^    \\S/m)[0];\n    if (\n      output &&\n      output.trim() !==\n        'state: ${{ steps.broker.outputs.state }}\\n      verdict: ${{ steps.broker.outputs.verdict }}\\n      verified: ${{ steps.broker.outputs.verified }}'\n    )\n      fail('job outputs must be fixed state and verdict'); // MUTANT secret-output\n    let sanitised = header;\n    for (const step of steps) {\n      if (!/^        run: \\|[ \\t]*$/m.test(step)) fail('requires literal broker run syntax'); // MUTANT secret-run-style\n",
-      "    if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(header))\n      fail('secrets cannot enter job env or outputs');\n    const output = header.split('    outputs:\\n')[1]?.split(/^    \\S/m)[0];\n    let sanitised = header;\n    for (const step of steps) {\n      if (!/^        run: \\|[ \\t]*$/m.test(step)) fail('requires literal broker run syntax'); // MUTANT secret-run-style\n"
+      "      fail('job outputs must be fixed state and verdict'); // MUTANT secret-output\n",
+      "      {} // MUTANT secret-output\n"
     ]
   ],
   "legacy:secret alias job isolation": [
     [
-      "  }\n  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))\n    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  if (/\\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\\b/.test(outside))\n    fail('aliases outside broker step'); // MUTANT secret-alias\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n  return errors;\n",
-      "  }\n  if (/VAST_BROKER_(?:URL|PATH)/.test(remaining))\n    fail('secret reference outside approved step env'); // MUTANT secret-reference\n  for (const expression of text.match(/\\$\\{\\{[\\s\\S]*?\\}\\}/g) || [])\n    if (/\\bsecrets\\b(?!\\s*\\.)/.test(expression)) fail('opaque secret context is unsupported'); // MUTANT secret-object\n  return errors;\n"
+      "    fail('aliases outside broker step'); // MUTANT secret-alias\n",
+      "    {} // MUTANT secret-alias\n"
     ]
   ],
   "legacy:literal run and renderer enclosure": [
@@ -143,14 +147,18 @@
   ],
   "legacy:HMAC tag and commit binding": [
     [
-      "        (x) => x.charCodeAt(0),\n      );\n      if (bytes.length !== 32 || tag64(bytes) !== parts[4]) return false;\n      return await crypto.subtle.verify(\n        'HMAC',\n        await this.cryptoKey(),\n        bytes,\n        tokenEncoder.encode(this.message(r, Number(parts[3]))),\n      );\n    } catch {\n      return false;\n    }\n",
-      "        (x) => x.charCodeAt(0),\n      );\n      if (bytes.length !== 32 || tag64(bytes) !== parts[4]) return false;\n      return true;\n    } catch {\n      return false;\n    }\n"
+      "      if (\n        !(await crypto.subtle.verify(",
+      "      if (false &&\n        !(await crypto.subtle.verify("
     ]
   ],
   "legacy:closed ledger rejects reports": [
     [
       "      !r ||\n      r.key !== key ||\n      r.ended !== null ||\n      r.closed ||\n      r.resultAt !== undefined\n    )\n      refuse('UNAUTHORIZED', 401); // MUTANT report-ledger\n",
       "      !r ||\n      r.key !== key ||\n      r.ended !== null ||\n      false ||\n      r.resultAt !== undefined\n    )\n      refuse('UNAUTHORIZED', 401); // MUTANT report-ledger\n"
+    ],
+    [
+      "if (record.ended !== null || record.closed) {",
+      "if (false) {"
     ]
   ],
   "legacy:actual Vast liveness": [
@@ -343,14 +351,14 @@
   ],
   "legacy:draft refusal": [
     [
-      "      refuse();\n    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n    for (let page = 1; page <= 5; page++) {\n      const list = await this.get(`pulls/${p.number}/reviews?per_page=100&page=${page}`);\n",
-      "      refuse();\n    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (false) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n    for (let page = 1; page <= 5; page++) {\n      const list = await this.get(`pulls/${p.number}/reviews?per_page=100&page=${page}`);\n"
+      "!github.event.pull_request.draft",
+      "true"
     ]
   ],
   "legacy:OIDC claims": [
     [
-      "    if (\n      c.iss !== this.issuer ||\n      c.aud !== audience ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      typeof c.nbf !== 'number' ||\n      !Number.isFinite(c.nbf) ||\n      c.nbf > seconds\n    )\n      refuse('UNAUTHORIZED', 401);",
-      "    if (false) refuse('UNAUTHORIZED', 401);"
+      "    if (\n      !Number.isSafeInteger(c.iat) ||\n      c.iat > seconds + 60 ||\n      seconds - c.iat > this.maxAge ||\n      c.exp <= c.iat ||\n      c.exp - c.iat > this.maxLifetime ||\n      c.iss !== this.issuer ||\n      (c.aud !== audience && !allowedArray) ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      ((this.requireNbf || c.nbf !== undefined) &&\n        (typeof c.nbf !== 'number' || !Number.isFinite(c.nbf) || c.nbf > seconds))\n    )\n      refuse('UNAUTHORIZED', 401);\n",
+      "    if (false) refuse('UNAUTHORIZED',401);\n"
     ]
   ],
   "legacy:credit reserve": [
@@ -391,14 +399,14 @@
   ],
   "legacy:same SHA minimum gap": [
     [
-      "    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.\n    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n        await offers.evaluate(vast, cfg, ledger, profile),\n",
-      "    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n        await offers.evaluate(vast, cfg, ledger, profile),\n"
+      "    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n",
+      ""
     ]
   ],
   "legacy:live label ownership": [
     [
-      "    if (response === null) return null;\n    const i = response.instances;\n    if (i === null) return null;\n    if (\n      !i ||\n      String(i.id) !== record.id ||\n      !record.label.startsWith('kf-ci-') ||\n      i.label !== record.label\n    )\n      refuse('OWNERSHIP_MISMATCH', 409);\n    return i;\n  }\n",
-      "    if (response === null) return null;\n    const i = response.instances;\n    if (i === null) return null;\n    if (!i || String(i.id) !== record.id || !record.label.startsWith('kf-ci-') || false)\n      refuse('OWNERSHIP_MISMATCH', 409);\n    return i;\n  }\n"
+      "(record.idSource !== 'create' && i.label !== record.label)",
+      "false"
     ]
   ],
   "legacy:ambiguous-create binding": [
@@ -417,12 +425,16 @@
     [
       "// prettier-ignore\nimport {validPathPrefix} from './routes.js';\nexport function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {\n  if (\n    !hexSha(sha) ||\n    typeof nonce !== 'string' ||\n    !/^[0-9a-f]{32}$/.test(nonce) ||\n    !Number.isInteger(minutes) ||\n    minutes < 1 ||\n    minutes > DEFAULTS.maxMinutes ||\n    !/^[-\\w.]+\\/[-\\w.]+$/.test(repo)\n  )\n    throw Error('Invalid fixed onstart inputs');\n  let origin;\n  try {\n    const u = new URL(callback.url);\n",
       "// prettier-ignore\nimport {validPathPrefix} from './routes.js';\nexport function onstart(sha, nonce, minutes, repo = 'reindertpelsma/kayfabe', callback) {\n  let origin;\n  try {\n    const u = new URL(callback.url);\n"
+    ],
+    [
+      "fields.key !== callback.run || fields.sha !== sha || fields.nonce !== nonce",
+      "fields.key !== callback.run"
     ]
   ],
   "legacy:callback shell validation": [
     [
-      "  } catch {\n    throw Error('Invalid callback origin');\n  }\n  if (\n    !/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(callback.run) ||\n    !/^v1\\.[1-9][0-9]{0,19}\\.[1-9][0-9]{0,19}\\.[1-9][0-9]{0,12}\\.[A-Za-z0-9_-]{43}$/.test(\n      callback.token,\n    ) ||\n    callback.token.split('.').slice(1, 3).join('-') !== callback.run\n  )\n    throw Error('Invalid callback capability');\n  const prefix = callback.path ?? '';\n  if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');\n  const grace = callback.graceMinutes ?? DEFAULTS.failGraceMinutes;\n",
-      "  } catch {\n    throw Error('Invalid callback origin');\n  }\n  const prefix = callback.path ?? '';\n  if (prefix !== '' && !validPathPrefix(prefix)) throw Error('Invalid callback prefix');\n  const grace = callback.graceMinutes ?? DEFAULTS.failGraceMinutes;\n"
+      "  if (!fields || fields.key !== callback.run || fields.sha !== sha || fields.nonce !== nonce)\n    throw Error('Invalid callback capability');\n",
+      ""
     ]
   ],
   "legacy:fixed offer admission": [
@@ -445,8 +457,8 @@
   ],
   "legacy:outbound requested storage": [
     [
-      "      rented: { eq: false },\n      num_gpus: { eq: 1 },\n      disk_space: { gte: 120 },\n      allocated_storage: 120,\n      order: [['dph_total', 'asc']],\n    };\n    const result = await this.api('/api/v0/bundles', 'POST', q);\n",
-      "      rented: { eq: false },\n      num_gpus: { eq: 1 },\n      disk_space: { gte: 120 },\n      allocated_storage: 8,\n      order: [['dph_total', 'asc']],\n    };\n    const result = await this.api('/api/v0/bundles', 'POST', q);\n"
+      "      allocated_storage: 120,",
+      "      allocated_storage: 8,"
     ]
   ],
   "legacy:documented offer pricing type": [
@@ -505,24 +517,20 @@
   ],
   "legacy:public cron isolation": [
     [
-      "      if (\n        path === null ||\n        !/^\\/(?:rent|availability|stop-all|blob-url\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\\/[A-Za-z0-9._-]{1,64}\\/[A-Za-z0-9._-]{1,100}|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n          path,\n        )\n      )\n        return notFound();",
+      "      if (path === null || !routeKind(path)) return notFound();",
       "      if (false) return notFound();"
     ]
   ],
   "legacy:automatic base allowlist": [
     [
-      "      p.base?.repo?.full_name !== cfg.repo\n    )\n      refuse();\n    if (automatic && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n",
-      "      p.base?.repo?.full_name !== cfg.repo\n    )\n      refuse();\n    if (automatic && false && !cfg.bases.includes(p.base.ref)) refuse('NOT_ELIGIBLE', 403); // MUTANT base\n    const target = { sha: p.head.sha, pr: p.number, branch: r.head_branch };\n    if (p.draft === true && !cfg.drafts) refuse('NEEDS_APPROVAL', 403);\n    let reviews = [];\n"
-    ],
-    [
-      "    const notNeeded = automatic && (await this.allSkipped(p));\n    const current = await this.pr(p.number);\n    if (current.head?.sha !== target.sha || current.state !== 'open') refuse();\n    if (automatic && !cfg.bases.includes(current.base?.ref)) refuse('NOT_ELIGIBLE', 403);\n    return { ...target, run: c.run_id, attempt: c.run_attempt, notNeeded };\n  }\n}\n",
-      "    const notNeeded = automatic && (await this.allSkipped(p));\n    const current = await this.pr(p.number);\n    if (current.head?.sha !== target.sha || current.state !== 'open') refuse();\n    if (automatic && false && !cfg.bases.includes(current.base?.ref)) refuse('NOT_ELIGIBLE', 403);\n    return { ...target, run: c.run_id, attempt: c.run_attempt, notNeeded };\n  }\n}\n"
+      "  push:\n    branches: [master]\n  pull_request_target:\n    branches: [master]",
+      "  push:\n    branches: [other]\n  pull_request_target:\n    branches: [other]"
     ]
   ],
   "legacy:docs-only exclusion result": [
     [
-      "    const target = await github.authorize(c, rentRequest);\n    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);\n    if (target.notNeeded)\n      return json({\n        ...expose({\n          ...target,\n",
-      "    const target = await github.authorize(c, rentRequest);\n    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);\n    if (false)\n      return json({\n        ...expose({\n          ...target,\n"
+      "if (!(await github.allSkipped(pr))) return true;",
+      "if (true) return true;"
     ]
   ],
   "legacy:unknown file-list skip": [
@@ -545,8 +553,8 @@
   ],
   "legacy:request bearer transport": [
     [
-      "        refuse('BAD_REQUEST', 400);\n      }\n    }\n    const token = request.headers.get('X-GH-Token');\n    if (token && (token.length > 1024 || !/^[\\x21-\\x7e]+$/.test(token))) refuse();\n    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });\n    if (match) {\n",
-      "        refuse('BAD_REQUEST', 400);\n      }\n    }\n    const token = null;\n    if (token && (token.length > 1024 || !/^[\\x21-\\x7e]+$/.test(token))) refuse();\n    const github = new Github(fetcher, cfg, token, { cache: githubCache, now });\n    if (match) {\n"
+      "    const token = env.GITHUB_API_TOKEN;",
+      "    const token = null;"
     ]
   ],
   "legacy:request bearer retention": [
@@ -563,14 +571,14 @@
   ],
   "legacy:owner branch without PR": [
     [
-      "      );\n      if (exact.length > 1) refuse();\n      p = exact[0];\n      if (!p)\n        return {\n          sha: r.head_sha,\n",
-      "      );\n      if (exact.length > 1) refuse();\n      p = exact[0];\n      if (!p) refuse();\n      if (!p)\n        return {\n          sha: r.head_sha,\n"
+      "      if (!p)\n        return {",
+      "      if (!p) refuse();\n      if (!p)\n        return {"
     ]
   ],
   "legacy:immutable API cache": [
     [
-      "    // Cache only immutable commit facts. Admission/run/review/file/head reads stay fresh.\n    const immutable = /^commits\\/[0-9a-f]{40}$/.test(path),\n      cached = this.cache.get(path);\n    if (immutable && cached && this.now() - cached.at < 5000) return structuredClone(cached.value);\n    if (!/^[A-Za-z0-9_/?=&.-]+$/.test(path) || path.includes('..') || path.startsWith('/'))\n      refuse();\n    const publicFallback = async (url, init) => {\n",
-      "    // Cache only immutable commit facts. Admission/run/review/file/head reads stay fresh.\n    const immutable = /^commits\\/[0-9a-f]{40}$/.test(path),\n      cached = this.cache.get(path);\n    if (false && immutable && cached && this.now() - cached.at < 5000)\n      return structuredClone(cached.value);\n    if (!/^[A-Za-z0-9_/?=&.-]+$/.test(path) || path.includes('..') || path.startsWith('/'))\n      refuse();\n    const publicFallback = async (url, init) => {\n"
+      "    if ((immutable || lifecycle) && cached && this.now() - cached.at < ttl)",
+      "    if (false && cached)"
     ]
   ],
   "legacy:mandatory status writer jobs": [
@@ -811,8 +819,12 @@
   ],
   "r3:runner-redirect": [
     [
-      "    def read(self, route, method=\"GET\", body=None):\n        reply = self.client(route, method, body)\n        if (\n            reply.status in {301, 302, 303, 307, 308}\n            or reply.headers.get(\"content-type\", \"\").split(\";\")[0].strip() != \"application/json\"\n        ):\n            raise Invalid()\n        return reply.status, strict_json(reply.body)\n\n    def show(self, text):\n        if self.displayed >= 65000 or self.display_lines >= 200:\n",
-      "    def read(self, route, method=\"GET\", body=None):\n        reply = self.client(route, method, body)\n        if (\n            False\n            or reply.headers.get(\"content-type\", \"\").split(\";\")[0].strip() != \"application/json\"\n        ):\n            raise Invalid()\n        return 200, strict_json(reply.body)\n\n    def show(self, text):\n        if self.displayed >= 65000 or self.display_lines >= 200:\n"
+      "reply.status in {301, 302, 303, 307, 308}",
+      "False"
+    ],
+    [
+      "return reply.status, strict_json(reply.body)",
+      "return 200, strict_json(reply.body)"
     ]
   ],
   "r3:runner-deadline": [
@@ -823,8 +835,16 @@
   ],
   "r3:runner-display-budget": [
     [
-      "        return reply.status, strict_json(reply.body)\n\n    def show(self, text):\n        if self.displayed >= 65000 or self.display_lines >= 200:\n            self.display_dropped += len(text.encode())\n            return\n        safe, dropped = scrub(\n            text,\n            max_bytes=max(0, 65000 - self.displayed - 256),\n            max_lines=max(0, 199 - self.display_lines),\n            redactions=self.ctx.get(\"redactions\", ()),\n        )\n        self.display_dropped += dropped\n        self.display_lines += len(safe.splitlines())\n",
-      "        return reply.status, strict_json(reply.body)\n\n    def show(self, text):\n        if False:\n            self.display_dropped += len(text.encode())\n            return\n        safe, dropped = scrub(\n            text, max_bytes=65536, max_lines=200, redactions=self.ctx.get(\"redactions\", ())\n        )\n        self.display_dropped += dropped\n        self.display_lines += len(safe.splitlines())\n"
+      "if self.displayed >= 65000 or self.display_lines >= 200:",
+      "if False:"
+    ],
+    [
+      "max_bytes=max(0, 65000 - self.displayed - 256)",
+      "max_bytes=65536"
+    ],
+    [
+      "max_lines=max(0, 199 - self.display_lines)",
+      "max_lines=200"
     ]
   ],
   "r3:nonce-response": [
@@ -835,8 +855,8 @@
   ],
   "r3:rent-head-binding": [
     [
-      "    )\n      refuse('BAD_REQUEST', 400);\n    const target = await github.authorize(c, rentRequest);\n    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);\n    if (target.notNeeded)\n      return json({\n        ...expose({\n",
-      "    )\n      refuse('BAD_REQUEST', 400);\n    const target = await github.authorize(c, rentRequest);\n    if (false) refuse('BINDING_MISMATCH', 409);\n    if (target.notNeeded)\n      return json({\n        ...expose({\n"
+      "    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)\n      refuse('BINDING_MISMATCH', 409);",
+      "    if (false) refuse('BINDING_MISMATCH', 409);"
     ]
   ],
   "r3:box-result-binding": [
@@ -859,8 +879,8 @@
   ],
   "r3:nonce-cache": [
     [
-      "    }\n    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.\n    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n",
-      "    }\n    const cached = await ledger.get('sha:' + target.sha),\n      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;\n    if (cached && !force) {\n      const r = await ledger.get('record:' + cached.key);\n      if (r?.verdict && r.ended !== null) {\n        await ledger.grant(key, r, target.pr);\n        return json(expose(r, key, target.pr));\n      }\n      refuse();\n    } // A fresh runner nonce may not inherit another run's result.\n    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap\n    if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();\n    const chosen = await offers.select(\n"
+      "    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409);",
+      "    if (cached && !force) {\n      const r = await ledger.get('record:' + cached.key);\n      if (r?.verdict && r.ended !== null) {\n        await ledger.grant(key, r, target.pr);\n        return json(expose(r, key, target.pr));\n      }\n      refuse();\n    }"
     ]
   ],
   "r3:runner-drop-count": [
@@ -871,8 +891,8 @@
   ],
   "r3:runner-API-prefix": [
     [
-      "            ctx[\"redactions\"].append(token)\n            print(\"::add-mask::\" + token, flush=True)\n            return https_request(\n                origin + (\"/\" + prefix if prefix else \"\") + route,\n                method,\n                {\"Authorization\": \"Bearer \" + token, \"Content-Type\": \"application/json\"},\n                None if body is None else json.dumps(body, separators=(\",\", \":\")).encode(),\n",
-      "            ctx[\"redactions\"].append(token)\n            print(\"::add-mask::\" + token, flush=True)\n            return https_request(\n                origin + route,\n                method,\n                {\"Authorization\": \"Bearer \" + token, \"Content-Type\": \"application/json\"},\n                None if body is None else json.dumps(body, separators=(\",\", \":\")).encode(),\n"
+      "origin + (\"/\" + prefix if prefix else \"\") + route,",
+      "origin + route,"
     ]
   ],
   "r3:runner-hostname-masks": [
@@ -889,8 +909,8 @@
   ],
   "r3:run-idempotence": [
     [
-      "        state: 'NOT_NEEDED',\n      });\n    const prior = await ledger.granted(key);\n    if (prior) {\n      if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);\n      await recover(prior, vast);\n      return json(expose(prior, key, target.pr));\n",
-      "        state: 'NOT_NEEDED',\n      });\n    const prior = await ledger.granted(key);\n    if (false) {\n      if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);\n      await recover(prior, vast);\n      return json(expose(prior, key, target.pr));\n"
+      "    const prior = await ledger.granted(key);\n    if (prior) {",
+      "    const prior = await ledger.granted(key);\n    if (false) {"
     ]
   ],
   "r3:runner-terminal-grace": [
@@ -935,8 +955,8 @@
   ],
   "r3:target-base-binding": [
     [
-      "    if (c.event_name === 'pull_request_target') {\n      if (\n        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||\n        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n        !cfg.checkWorkflows.includes(c.workflow_ref) ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n",
-      "    if (c.event_name === 'pull_request_target') {\n      if (\n        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||\n        !cfg.checkWorkflows.includes(c.workflow_ref) ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n"
+      "        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n",
+      ""
     ]
   ],
   "r3:target-PR-membership": [
@@ -959,34 +979,26 @@
   ],
   "r3:runner-isolated-env": [
     [
-      "              -o \"$temporary/$file\" \\\n              \"https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\" 2>/dev/null\n          done\n          env -i PATH=/usr/bin:/bin HOME=\"$temporary\" \\\n            WORKER_URL=\"$WORKER_URL\" WORKER_PATH=\"${WORKER_PATH:-}\" \\\n            GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" GITHUB_STEP_SUMMARY=\"$GITHUB_STEP_SUMMARY\" \\\n            GITHUB_EVENT_PATH=\"$GITHUB_EVENT_PATH\" GITHUB_SHA=\"$GITHUB_SHA\" \\\n",
-      "              -o \"$temporary/$file\" \\\n              \"https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file\" 2>/dev/null\n          done\n          env PATH=/usr/bin:/bin HOME=\"$temporary\" \\\n            WORKER_URL=\"$WORKER_URL\" WORKER_PATH=\"${WORKER_PATH:-}\" \\\n            GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" GITHUB_STEP_SUMMARY=\"$GITHUB_STEP_SUMMARY\" \\\n            GITHUB_EVENT_PATH=\"$GITHUB_EVENT_PATH\" GITHUB_SHA=\"$GITHUB_SHA\" \\\n"
+      "env -i PATH=/usr/bin:/bin HOME=\"$temporary\"",
+      "env PATH=/usr/bin:/bin HOME=\"$temporary\""
     ]
   ],
   "r3:runner-shell-tracing": [
     [
-      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set +x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n",
-      "          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n        run: |\n          set -x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]\n          [[ \"$GITHUB_SHA\" =~ ^[0-9a-f]{40}$ ]]\n"
+      "        run: |\n          set +x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]",
+      "        run: |\n          set -x\n          set -euo pipefail\n          [[ \"$GITHUB_REF\" = refs/heads/master ]]"
     ]
   ],
   "r3:base-trigger": [
     [
-      "name: Vast GPU\non:\n  pull_request_target:\n    branches: [master]\n    types: [opened, synchronize, reopened, ready_for_review]\n  workflow_dispatch:\n",
-      "name: Vast GPU\non:\n  pull_request:\n    branches: [master]\n    types: [opened, synchronize, reopened, ready_for_review]\n  workflow_dispatch:\n"
+      "  pull_request_target:\n",
+      "  pull_request:\n"
     ]
   ],
   "r3:OIDC-workflow-ref": [
     [
-      "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.job_workflow_ref) ||\n",
-      ""
-    ],
-    [
-      "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.workflow_ref) ||\n",
-      ""
-    ],
-    [
-      "    if (profile === 'check' && !cfg.checkWorkflows.includes(c.workflow_ref))\n      refuse('UNAUTHORIZED', 401);",
-      "    /* mutant omits profile workflow boundary */"
+      "if (allowedWorkflowRef(c, cfg)) return c;",
+      "if (true) return c;"
     ]
   ],
   "r3:release-same-SHA": [
@@ -1277,8 +1289,8 @@
   ],
   "v5:quality-driver": [
     [
-      "    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n",
-      "    reasons.push('PERFORMANCE');\n  if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');\n  if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');\n  if (false) reasons.push('DRIVER');\n  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n"
+      "if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');",
+      "if (false) reasons.push('DRIVER');"
     ]
   ],
   "v5:turing-class-floor": [
@@ -1295,12 +1307,12 @@
   ],
   "v5:effective-price-includes-network": [
     [
-      "  if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))\n    return null;\n  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;\n  const effective = computeStorage + bandwidth / (cfg.hard / 3600000);\n  return {\n    computeStorage,\n    bandwidth,\n",
-      "  if (Math.abs(offer.dph_total - computeStorage) > Math.max(1e-7, computeStorage * 1e-6))\n    return null;\n  const bandwidth = cfg.bandwidthDown * offer.inet_down_cost + cfg.bandwidthUp * offer.inet_up_cost;\n  const effective = computeStorage;\n  return {\n    computeStorage,\n    bandwidth,\n"
+      "const effective = computeStorage + bandwidth / (cfg.hard / 3600000);",
+      "const effective = computeStorage;"
     ],
     [
-      "  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n    price.total >\n      ((profile === 'check' ? cfg.price : cfg.sweepPrice) * (cfg.hard + cfg.cronPeriod)) / 3600000\n  )\n    reasons.push('PRICE');\n  return reasons;\n",
-      "  if (!price) reasons.push('PRICE_FIELDS');\n  else if (\n    price.effective > (profile === 'check' ? cfg.price : cfg.sweepPrice) ||\n    price.total > (profile === 'check' ? cfg.price : cfg.sweepPrice) * 1000\n  )\n    reasons.push('PRICE');\n  return reasons;\n"
+      "price.total >\n      ((profile === 'check' ? cfg.price : cfg.sweepPrice) * (cfg.hard + cfg.cronPeriod)) / 3600000",
+      "price.total > (profile === 'check' ? cfg.price : cfg.sweepPrice) * 1000"
     ]
   ],
   "v5:storage-consistency": [
@@ -1319,6 +1331,10 @@
     [
       "    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.sweepWorkflow)\n    )\n      refuse('UNAUTHORIZED', 401);\n",
       "    /* mutant omits profile owner gate */\n"
+    ],
+    [
+      "    cfg.profile = profile;",
+      "    cfg.profile = 'check'; // mutant drops the independent authorization context"
     ]
   ],
   "v5:preference-order-forced": [
@@ -1405,8 +1421,8 @@
   ],
   "v5:runner-V5-terminals": [
     [
-      "                    result[\"state\"] = data[\"state\"]\n                    break\n                self.pages(data[\"log_cursor\"])\n                if (\n                    data[\"state\"] == \"NOT_NEEDED\"\n                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n",
-      "                    result[\"state\"] = data[\"state\"]\n                    break\n                self.pages(data[\"log_cursor\"])\n                if data[\"state\"] == \"NOT_NEEDED\":\n                    if self.cursor != data[\"log_cursor\"] or self.hash != data[\"log_sha256\"]:\n                        raise Invalid()\n                    self.metadata = data\n"
+      "                if (\n                    data[\"state\"] == \"NOT_NEEDED\"\n                    or data[\"state\"] in {\"GRACE\", \"MANUAL\", \"NONE\"}\n                    and data[\"result_at\"] is not None\n                ):",
+      "                if data[\"state\"] == \"NOT_NEEDED\":"
     ]
   ],
   "v5:runner-availability-schema": [
@@ -1447,12 +1463,12 @@
   ],
   "v5:workflow-three-hour-horizon": [
     [
-      "    needs: pending\n    runs-on: ubuntu-latest\n    environment: gpu-vast\n    timeout-minutes: 210\n    permissions:\n      id-token: write\n    outputs:\n",
-      "    needs: pending\n    runs-on: ubuntu-latest\n    environment: gpu-vast\n    timeout-minutes: 25\n    permissions:\n      id-token: write\n    outputs:\n"
+      "    timeout-minutes: 210\n",
+      "    timeout-minutes: 25\n"
     ],
     [
-      "      - name: Fetch BASE controller and request bounded test\n        id: broker\n        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 205\n        env:\n          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n",
-      "      - name: Fetch BASE controller and request bounded test\n        id: broker\n        shell: bash --noprofile --norc -eo pipefail {0}\n        timeout-minutes: 22\n        env:\n          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n"
+      "        timeout-minutes: 205\n",
+      "        timeout-minutes: 22\n"
     ]
   ],
   "v5:callback-expiry-before-cron": [

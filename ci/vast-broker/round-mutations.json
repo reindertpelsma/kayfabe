@@ -1,0 +1,1034 @@
+{
+  "generated": "Explicit hand-authored round mutations; no credentials.",
+  "cases": [
+    {
+      "name": "front-MAC",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "const fields = await boxVerifier.verifyStateless(bearer);",
+          "const fields = boxVerifier.fields(bearer);"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "front-expiry",
+      "file": "src/tokens.js",
+      "patches": [
+        [
+          "fields.reportExpiry * 1000 <= this.now()",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "nonce-MAC",
+      "file": "src/tokens.js",
+      "patches": [
+        [
+          ", expiry, r.nonce].join('|')",
+          ", expiry].join('|')"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "short-token-life",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "started + cfg.hard + Math.max(cfg.passGrace, cfg.failGrace)",
+          "started + cfg.manualCeiling + Math.max(cfg.passGrace, cfg.failGrace)"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "closed-preauth",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "if (record.ended !== null || record.closed) {",
+          "if (false) {"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "ended-kill-receipt",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "if (receipt instanceof Response) return receipt;",
+          "void receipt;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "bounded-record-queue",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "key !== '@cron' &&",
+          "false &&"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "create-label-ownership",
+      "file": "src/vast.js",
+      "patches": [
+        [
+          "record.idSource !== 'create' && i.label !== record.label",
+          "i.label !== record.label"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "fixed-label-event",
+      "file": "src/vast.js",
+      "patches": [
+        [
+          "if (i.label !== record.label) console.log(JSON.stringify({ event: 'OWNERSHIP_MISMATCH' }));",
+          "void 0;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "per-GB-admission",
+      "file": "src/policy.js",
+      "patches": [
+        [
+          "offer.inet_up_cost > cfg.maxInet ||",
+          "false ||"
+        ],
+        [
+          "offer.inet_down_cost > cfg.maxInet ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "per-GB-provider-query",
+      "file": "src/vast.js",
+      "patches": [
+        [
+          "inet_up_cost: { lte: this.cfg.maxInet },",
+          "inet_up_cost: { lte: 1000 },"
+        ],
+        [
+          "inet_down_cost: { lte: this.cfg.maxInet },",
+          "inet_down_cost: { lte: 1000 },"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "contract-create-check",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "await checkContract(r, await vast.inspect(r), vast, cfg);",
+          "void r;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "contract-recovery-check",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "await checkContract(prior, await vast.inspect(prior), vast, cfg);",
+          "void prior;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "export-deny",
+      "file": "src/offers.js",
+      "patches": [
+        [
+          "cfg.deniedCountries.includes(country)",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "unknown-country",
+      "file": "src/offers.js",
+      "patches": [
+        [
+          "country === 'UNKNOWN' && !cfg.allowUnknownCountry",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "OIDC-issuance-bounds",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "      !Number.isSafeInteger(c.iat) ||\n      c.iat > seconds + 60 ||\n      seconds - c.iat > this.maxAge ||\n      c.exp <= c.iat ||\n      c.exp - c.iat > this.maxLifetime ||\n",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "blob-prefix-default-deny",
+      "file": "src/blobs.js",
+      "patches": [
+        [
+          "!prefixes.length ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "blob-quota-before-inspect",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "await checkBlobBudget(env, ledger, r, blob[2], blob[3], now());",
+          "void r;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "full-log-state-save",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "      await ledger.save(r);\n      return;\n    }\n    await ledger.appendLog",
+          "      return;\n    }\n    await ledger.appendLog"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "runner-status-retry",
+      "file": "runner.py",
+      "patches": [
+        [
+          "    def retry_read(self, route, method=\"GET\", body=None):\n        last = None",
+          "    def retry_read(self, route, method=\"GET\", body=None):\n        return self.read(route,method,body)\n        last = None"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "runner-infra-no-stop",
+      "file": "runner.py",
+      "patches": [
+        [
+          "if not terminal and not self.infrastructure_failure:",
+          "if not terminal:"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "GitHub-lifecycle-cache",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "if ((immutable || lifecycle) && cached && this.now() - cached.at < ttl)",
+          "if (false && cached)"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Worker-GitHub-authority",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "const token = env.GITHUB_API_TOKEN;",
+          "const token = null;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "caller-token-ignored",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "const token = env.GITHUB_API_TOKEN;",
+          "const token = request.headers.get('X-GH-Token') || env.GITHUB_API_TOKEN;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "merged-asset-token",
+      "file": "src/blobs.js",
+      "patches": [
+        [
+          "Authorization: 'Bearer ' + (env.GITHUB_API_TOKEN || env.BLOB_GITHUB_TOKEN),",
+          "Authorization: 'Bearer ' + env.BLOB_GITHUB_TOKEN,"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Worker-token-redaction",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "    env.GITHUB_API_TOKEN,",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "asset-redirect-credential-leak",
+      "file": "src/blobs.js",
+      "patches": [
+        [
+          "    if (\n      [env.GITHUB_API_TOKEN, env.BLOB_GITHUB_TOKEN].some(\n        (value) => value && (location.includes(value) || decoded.includes(value)),\n      )\n    )\n      refuse();\n",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "owner-config-name",
+      "file": "src/routes.js",
+      "patches": [
+        [
+          "return 'CONFIG_SECRET_FORMAT:' + name;",
+          "return 'UNAVAILABLE';"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "owner-config-value-log",
+      "file": "src/routes.js",
+      "patches": [
+        [
+          "export function secretFormatError(env) {",
+          "export function secretFormatError(env) {\n  console.log(JSON.stringify(env));"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-gateway-gate",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "await access.authorize(request, env);",
+          "void env;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-role-allowlist",
+      "file": "src/access.js",
+      "patches": [
+        [
+          "    if (\n      !kind ||\n      claims.common_name !==",
+          "    if (false && (\n      !kind ||\n      claims.common_name !=="
+        ],
+        [
+          "    )\n      refuse('FORBIDDEN', 403);",
+          "    ))\n      refuse('FORBIDDEN', 403);"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-partial-config",
+      "file": "src/access.js",
+      "patches": [
+        [
+          "accessVars.every((key) => !env[key])",
+          "accessVars.some((key) => !env[key])"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "runner-Access-headers",
+      "file": "runner.py",
+      "patches": [
+        [
+          "{**access, \"Authorization\": \"Bearer \" + token, \"Content-Type\": \"application/json\"}",
+          "{\"Authorization\": \"Bearer \" + token, \"Content-Type\": \"application/json\"}"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "box-reporter-Access-headers",
+      "file": "../../scripts/ci/vast_report.py",
+      "patches": [
+        [
+          "{**self.access, \"Content-Type\": \"application/json\",",
+          "{\"Content-Type\": \"application/json\","
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "box-shell-Access-headers",
+      "file": "../../scripts/ci/kf-access-headers.sh",
+      "patches": [
+        [
+          "kf_access_headers() {",
+          "kf_access_headers() {\n    return 0"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "box-Access-injection",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "        ...boxAccess,",
+          ""
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-A-secret-isolation",
+      "file": "workflow-guard.js",
+      "patches": [
+        [
+          "/VAST_BROKER_(?:URL|PATH|ACCESS_ID|ACCESS_SECRET)/",
+          "/VAST_BROKER_(?:URL|PATH)/"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "reaper-age",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "now() / 1000 - row.start_date > (hard + margin) * 60",
+          "true"
+        ]
+      ],
+      "tests": [
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "reaper-namespace",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "/^kf-ci-[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/",
+          "/./"
+        ]
+      ],
+      "tests": [
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "reaper-snapshot",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "        if (\n          !current ||\n          !overdue(current) ||\n          row.label !== current.label ||\n          row.start_date !== current.start_date\n        )\n          continue;\n",
+          "        if (!current || !overdue(row)) continue;\n"
+        ]
+      ],
+      "tests": [
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "reaper-public-control",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "    fetch() {\n      return new Response('Not found', { status: 404 });\n    },\n",
+          "    async fetch(_request,env) { await sweep(env); return new Response('Not found',{status:404}); },\n"
+        ]
+      ],
+      "tests": [
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "front-pull-request-deny",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "!['pull_request_target', 'workflow_dispatch', 'push'].includes(c.event_name)",
+          "!['pull_request_target', 'workflow_dispatch', 'push', 'pull_request'].includes(c.event_name)"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-signature",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "if (!(await verify())) refuse('UNAUTHORIZED', 401);",
+          "await verify();"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-audience",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "(c.aud !== audience && !allowedArray) ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-expiry",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "c.exp <= seconds ||",
+          "false ||"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Access-missing-assertion",
+      "file": "src/access.js",
+      "patches": [
+        [
+          "    const issuer = 'https://' + env.ACCESS_TEAM_DOMAIN;",
+          "    if (!request.headers.get('Cf-Access-Jwt-Assertion')) return;\n    const issuer = 'https://' + env.ACCESS_TEAM_DOMAIN;"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Worker-token-value-log",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "const token = env.GITHUB_API_TOKEN;",
+          "const token = env.GITHUB_API_TOKEN; console.log(token);"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "Worker-token-response-leak",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "Response.json(data, {",
+          "Response.json({...data,github_token:env.GITHUB_API_TOKEN}, {"
+        ]
+      ],
+      "tests": [
+        "round-fixes.test.js",
+        "round-lifecycle.test.js",
+        "round-access.test.js",
+        "round-access-policy.test.js",
+        "round-owner-token.test.js",
+        "round-boundaries.test.js"
+      ]
+    },
+    {
+      "name": "reaper-delete-only",
+      "file": "../vast-reaper/worker.js",
+      "patches": [
+        [
+          "'/api/v0/instances/' + row.id + '/', 'DELETE'",
+          "'/api/v0/instances/' + row.id + '/', 'PUT'"
+        ]
+      ],
+      "tests": [
+        "round-reaper.test.js"
+      ]
+    },
+    {
+      "name": "Access-key-by-kid",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "this.keys.get(h.kid)",
+          "this.keys.values().next().value"
+        ]
+      ],
+      "tests": [
+        "round-access-policy.test.js"
+      ]
+    },
+    {
+      "name": "Access-owner-config-route",
+      "file": "src/access.js",
+      "patches": [
+        [
+          "invalidPrefix && path.endsWith('/availability')",
+          "false"
+        ]
+      ],
+      "tests": [
+        "round-access-policy.test.js"
+      ]
+    },
+    {
+      "name": "contract-liability-retention",
+      "file": "src/index.js",
+      "patches": [
+        [
+          "Math.max(record.computeStoragePrice ?? 0, price.computeStorage)",
+          "price.computeStorage"
+        ],
+        [
+          "Math.max(record.bandwidthCost ?? 0, price.bandwidth)",
+          "price.bandwidth"
+        ]
+      ],
+      "tests": [
+        "round-lifecycle.test.js"
+      ]
+    },
+    {
+      "name": "YAML-authority-base",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "    const target = {",
+          "    if (p.base.ref !== 'master') refuse();\n    const target = {"
+        ]
+      ],
+      "tests": [
+        "round-trigger-policy.test.js"
+      ]
+    },
+    {
+      "name": "YAML-authority-draft",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "    const target = {",
+          "    if (p.draft) refuse();\n    const target = {"
+        ]
+      ],
+      "tests": [
+        "round-trigger-policy.test.js"
+      ]
+    },
+    {
+      "name": "YAML-authority-path",
+      "file": "src/github.js",
+      "patches": [
+        [
+          "    const target = {",
+          "    if (await this.allSkipped(p)) refuse();\n    const target = {"
+        ]
+      ],
+      "tests": [
+        "round-trigger-policy.test.js"
+      ]
+    },
+    {
+      "name": "workflow-path-race",
+      "file": "trigger-policy.mjs",
+      "patches": [
+        [
+          "return current.state !== 'open' || current.head?.sha !== pr.head.sha;",
+          "return false;"
+        ]
+      ],
+      "tests": [
+        "round-trigger-policy.test.js"
+      ]
+    },
+    {
+      "name": "Access-audience-array",
+      "file": "src/access.js",
+      "patches": [
+        [
+          "        allowAudienceArray: true,",
+          "        allowAudienceArray: false,"
+        ]
+      ],
+      "tests": [
+        "round-access-audience.test.js"
+      ]
+    },
+    {
+      "name": "Access-audience-membership",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "c.aud.includes(audience)",
+          "true"
+        ]
+      ],
+      "tests": [
+        "round-access-audience.test.js"
+      ]
+    },
+    {
+      "name": "Access-audience-type",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "c.aud.every(\n        (value) => typeof value === 'string' && value.length > 0 && value.length <= 256,\n      )",
+          "true"
+        ]
+      ],
+      "tests": [
+        "round-access-audience.test.js"
+      ]
+    },
+    {
+      "name": "Access-audience-size",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "c.aud.length <= 16",
+          "true"
+        ]
+      ],
+      "tests": [
+        "round-access-audience.test.js"
+      ]
+    },
+    {
+      "name": "GitHub-audience-scalar",
+      "file": "src/oidc.js",
+      "patches": [
+        [
+          "allowAudienceArray = false",
+          "allowAudienceArray = true"
+        ]
+      ],
+      "tests": [
+        "round-access-audience.test.js"
+      ]
+    }
+  ]
+}

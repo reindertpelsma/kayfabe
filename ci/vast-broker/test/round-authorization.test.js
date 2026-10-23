@@ -42,6 +42,7 @@ for (const branch of ['feature/owner', 'owner-unicode-é']) {
     'PR',
     'actor',
     'triggering',
+    'api-actor',
     'fork',
     'run-repo',
     'sha',
@@ -59,14 +60,22 @@ for (const branch of ['feature/owner', 'owner-unicode-é']) {
         c.workflow_ref = c.job_workflow_ref = repo + '/.github/workflows/evil.yml@' + c.ref;
       if (defect === 'tag')
         c.workflow_ref = c.job_workflow_ref =
-          repo + '/.github/workflows/gpu-vast.yml@refs/tags/release';
+          repo + '/.github/workflows/gpu-vast.yml@refs/tags/tag-' + branch.replaceAll('/', '-');
       if (defect === 'PR')
         c.workflow_ref = c.job_workflow_ref =
-          repo + '/.github/workflows/gpu-vast.yml@refs/pull/7/merge';
+          repo +
+          '/.github/workflows/gpu-vast.yml@refs/pull/' +
+          (branch.startsWith('feature') ? '7' : '8') +
+          '/merge';
+      if (defect === 'tag' || defect === 'PR') {
+        c.ref = c.workflow_ref.split('@')[1];
+        r.head_branch = c.ref.split('/').slice(2).join('/');
+      }
       if (defect === 'actor') {
         c.actor_id = '43';
         r.actor.id = 43;
       }
+      if (defect === 'api-actor') r.actor.id = 43;
       if (defect === 'triggering') r.triggering_actor.id = 43;
       if (defect === 'fork') r.head_repository.full_name = 'fork/project';
       if (defect === 'run-repo') r.repository.full_name = 'other/project';

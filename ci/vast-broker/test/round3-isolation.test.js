@@ -101,3 +101,39 @@ for (const authority of ['claims', 'GitHub-run'])
     assert.equal(h.cloud.creates, 0);
     assert.ok(h.cloud.calls.some((c) => c.url.includes('/actions/runs/123')));
   });
+import { createGateway } from '../src/index.js';
+import { env, clock, jwt, jwk, repo } from './helpers.js';
+// FALSIFIER: matched but unapproved job/workflow refs enter the ledger before API policy.
+for (const path of ['/rent', '/status/123-1'])
+  test('R3 front pins matched workflow identities ' + path, async () => {
+    let entries = 0;
+    const gateway = createGateway({
+      now: () => clock,
+      fetcher: async () => Response.json({ keys: [jwk] }),
+    });
+    const bindings = {
+      ...env,
+      BROKER_PATH_PREFIX: 'g'.repeat(32),
+      LEDGER: {
+        idFromName: () => 1,
+        get: () => ({
+          fetch: async () => {
+            entries++;
+            return Response.json({});
+          },
+        }),
+      },
+    };
+    const workflow_ref = repo + '/.github/workflows/evil.yml@refs/heads/master';
+    const response = await gateway.fetch(
+      new Request(env.WORKER_URL + '/' + 'g'.repeat(32) + path, {
+        method: path === '/rent' ? 'POST' : 'GET',
+        headers: {
+          Authorization: 'Bearer ' + (await jwt({ workflow_ref, job_workflow_ref: workflow_ref })),
+        },
+      }),
+      bindings,
+    );
+    assert.equal(response.status, 401);
+    assert.equal(entries, 0);
+  });

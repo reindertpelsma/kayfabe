@@ -220,7 +220,7 @@ for (const reason of ['done', 'a reason with spaces'])
     assert.equal(r.args.at(-1), 'https://broker.example/kill/123-1');
     assert.ok(r.args.includes(reason));
     assert.ok(!r.args.includes('-L'));
-    assert.ok(r.stdin.includes('Authorization: Bearer v1.123.1.'));
+    assert.ok(r.stdin.includes('Authorization: Bearer v2.123.1.'));
     assert.ok(!r.args.join(' ').includes('v1.123.1.'));
   });
 test('V4 hard TTL survives restart with accepted progress and no result', async () => {

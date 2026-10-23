@@ -10,6 +10,9 @@ if [ ! -r "$env_file" ]; then
 fi
 # shellcheck disable=SC1090
 . "$env_file"
+# shellcheck source=scripts/ci/kf-access-headers.sh
+. "$(dirname "$0")/kf-access-headers.sh"
+kf_access_validate || exit 2
 case ${KF_RUN_TOKEN:-} in
 '' | *[!A-Za-z0-9._-]*)
     echo "kf-box-kill: no usable run token" >&2
@@ -18,7 +21,8 @@ case ${KF_RUN_TOKEN:-} in
 esac
 reason=$(printf '%.200s' "${1:-box-request}" | tr -cd 'A-Za-z0-9 ._:,-')
 [ -n "$reason" ] || reason=box-request
-code=$(printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN" |
+code=$({ printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN";
+    kf_access_headers; } |
     curl --config - --silent --show-error --max-time 20 --max-redirs 0 --proto '=https' \
         --noproxy '*' --request POST --data-binary "$reason" --output /dev/null \
         --write-out '%{http_code}' "${KF_BROKER_URL:?}/kill/${KF_RUN_ID:?}") || exit 1
