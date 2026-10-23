@@ -129,6 +129,16 @@ for (const [name, vars, options] of [
   ['toml-hash-mismatch', 'OWNER_GITHUB_ID=229738317\n', { tomlHash: true }],
   ['wrangler-version', 'OWNER_GITHUB_ID=229738317\n', { version: '4.151.0' }],
   ['wrangler-patch', 'OWNER_GITHUB_ID=229738317\n', { version: 'wrangler 4.152.01' }],
+  // Review (f) 2026-10-24: WORKER_URL must be the bare https origin.
+  ['worker-url-slash', 'OWNER_GITHUB_ID=229738317\nWORKER_URL=https://secret-value-123.example/\n'],
+  ['worker-url-path', 'OWNER_GITHUB_ID=229738317\nWORKER_URL=https://secret-value-123.example/p\n'],
+  ['worker-url-http', 'OWNER_GITHUB_ID=229738317\nWORKER_URL=http://secret-value-123.example\n'],
+  [
+    'worker-url-query',
+    'OWNER_GITHUB_ID=229738317\nWORKER_URL=https://secret-value-123.example?a\n',
+  ],
+  ['worker-url-user', 'OWNER_GITHUB_ID=229738317\nWORKER_URL=https://u@secret-value-123.example\n'],
+  ['worker-url-junk', 'OWNER_GITHUB_ID=229738317\nWORKER_URL=secret-value-123\n'],
 ])
   test('round deploy helper refuses before any upload ' + name, async () => {
     const f = await fixture(options);
@@ -152,6 +162,24 @@ for (const [name, vars, options] of [
       await rm(f.root, { recursive: true });
     }
   });
+test('review f: a bare WORKER_URL is checked, then never uploaded as a var', async () => {
+  const f = await fixture();
+  try {
+    const r = await deploy(
+      f,
+      'OWNER_GITHUB_ID=' + OWNER + '\nWORKER_URL=https://quiet-value-123.workers.example\n',
+    );
+    assert.equal(r.status, 0, r.text);
+    const [upload] = uploads(r.calls);
+    assert.ok(upload, r.text);
+    assert.equal(upload.argv.join(' ').includes('WORKER_URL'), false);
+    assert.equal(upload.argv.join(' ').includes('quiet-value-123'), false);
+    assert.ok(!r.text.includes('quiet-value-123'), r.text);
+    assert.match(r.text, /WORKER_URL format checked/);
+  } finally {
+    await rm(f.root, { recursive: true });
+  }
+});
 for (const via of ['path', 'symlink'])
   test('round deploy helper refuses a vars file inside the checkout ' + via, async () => {
     const f = await fixture();
