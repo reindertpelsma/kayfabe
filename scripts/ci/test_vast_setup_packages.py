@@ -27,6 +27,12 @@ class PackagePolicy(unittest.TestCase):
     def test_ci_does_not_install_unused_openssl_headers(self):
         self.assertNotIn("libssl-dev", self.plan("ci"))
 
+    def test_ci_provisions_guest_ssh_and_key_generation(self):
+        self.assertIn("openssh-client", self.plan("ci"))
+
+    def test_manual_fresh_box_has_the_same_ssh_dependency(self):
+        self.assertIn("openssh-client", self.plan("full"))
+
     def test_ci_keeps_real_build_driver_and_initrd_dependencies(self):
         self.assertTrue(
             {
