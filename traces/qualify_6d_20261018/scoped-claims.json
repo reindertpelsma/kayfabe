@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "4a39ff8699a2914679e4db4baad0ab8b91e5f0b5",
+  "head": "dde3c486d82e9e8e1fd3b8dc9c956194e16fa0c5",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "traces/qualify_6d_20261018/README.md",
@@ -36,14 +36,18 @@
     "traces/qualify_6d_20261018/r1/ci-gate-excerpts.txt",
     "traces/qualify_6d_20261018/r1/ci-wait-context.json",
     "traces/qualify_6d_20261018/r1/cuda-helper-stage.json",
+    "traces/qualify_6d_20261018/r1/energy-four.json",
     "traces/qualify_6d_20261018/r1/heaven-4606.json",
     "traces/qualify_6d_20261018/r1/local-not-started.json",
     "traces/qualify_6d_20261018/r1/matrix-4606.json",
+    "traces/qualify_6d_20261018/r1/minecraft-4606.json",
     "traces/qualify_6d_20261018/r1/parser-control.json",
     "traces/qualify_6d_20261018/r1/plan.md",
     "traces/qualify_6d_20261018/r1/sa02-positive-census.json",
+    "traces/qualify_6d_20261018/r1/smoke-4606.json",
     "traces/qualify_6d_20261018/r1/stage1-ci.json",
     "traces/qualify_6d_20261018/r1/stage2-hardware.json",
+    "traces/qualify_6d_20261018/r1/steel-4606.json",
     "traces/qualify_6d_20261018/rustfmt.json",
     "traces/qualify_6d_20261018/scoped-claims.json",
     "traces/qualify_6d_20261018/stable-compile-excerpt.txt"
@@ -51,5 +55,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T00:35:31.004487+00:00"
+  "time": "2026-10-23T01:09:36.458520+00:00"
 }

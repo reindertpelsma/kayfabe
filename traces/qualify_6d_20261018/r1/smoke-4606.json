@@ -1,0 +1,164 @@
+{
+  "run": 4606,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "captured": "2026-10-23T00:45:31.439850+00:00",
+  "qemu_bytes": 12495589,
+  "qemu_sha256": "ba7b773cec3671825d3755e162954773b664d9387ad645e734f38d34e4a57e65",
+  "counter_maxima": {
+    "pointer_large_entries": 0,
+    "pointer_entry_max_bytes": 123640,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "observed_retirement_counter_sums": {
+    "pointer_large_entries": 0,
+    "pointer_entry_max_bytes": 2900076,
+    "refused_scan_budget": 0,
+    "poisoned": 0
+  },
+  "budget_diagnostic_count": 0,
+  "progress_strand_count": 0,
+  "progress_strand_end_count": 0,
+  "ring_refused_segments": 0,
+  "user_ring_refusal_lines": 0,
+  "no_ce_object_mentions": 0,
+  "broker": {
+    "stats_windows": 1582,
+    "duration_seconds_approx": 1582.802,
+    "feedbacks": 94790,
+    "new_content_presents": 51858,
+    "repeat_presents": 42932,
+    "discarded": 1,
+    "errors": [
+      {
+        "line": 82,
+        "diagnostic": "nvkvm-broker: ERROR: this display ADVERTISED XR24 modifier 0x0000000000000000 and then refused to import it (1920x1080, stride 7680).  Frames in that layout will be rejected rather than retried; the VMM is being told so it can send something else (shared memory), and the connection stays up."
+      },
+      {
+        "line": 1957,
+        "diagnostic": "nvkvm-broker: client detached: recv error (51879 attach, 51879 commit, 0 rejected; 1434 cursor, 0 cursor refused)"
+      }
+    ],
+    "new_content_fps_approx": 32.76341576520626,
+    "repeat_per_second_approx": 27.124049628443736,
+    "max_new_content_gap_us": 60020253,
+    "gaps_per_minute_approx": {
+      "cg33": 243.13843424509196,
+      "cg50": 146.13324976844862,
+      "cg100": 6.52008273934453
+    },
+    "one_percent_low": null,
+    "point_one_percent_low": null,
+    "quantile_limitation": "Stock master broker stats provide threshold counts and window maxima, not a raw new-content gap series. No percentile values inferred.",
+    "scope": "whole VM session; no-present intervals are not rendering performance scores"
+  },
+  "flags": {
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT": "1",
+    "KF3_KERNEL_GR_CE": "1",
+    "KF3_KERNEL_GR_WORK": "1",
+    "KF3_TRANSLATED_CE_RELAY": "1",
+    "KF3_DEFERRED_API": "1",
+    "KF3_PREEMPT_BIND_PROBE": "1",
+    "KF3_DISPLAY_IMP_ENABLE": "1",
+    "KF3_DISPLAY_CTRL_PROBE": "1",
+    "KF3_ZCULL_BIND_PROBE": "1",
+    "KF3_SW_RUNLIST_HOST_OWNED": "1",
+    "KF3_ASYNC_PREEMPT": "1",
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_SDR_COLOR": "1",
+    "KF3_DISPLAY_CAPS_PROBE": "1",
+    "KF3_DISPLAY_LUT_MIRROR": "1",
+    "KF3_DISPLAY_ILUT_OFFSET_256": "1",
+    "KF3_LIFECYCLE_COUNT": "1",
+    "KF3_LIFECYCLE_PERIOD_S": "5",
+    "KF3_DIAG_PROGRESS": "1000"
+  },
+  "process_controls": {
+    "classification": "MEASURED",
+    "passed": true,
+    "controls": [
+      {
+        "expected": 0,
+        "pid": 14612,
+        "actual": 0
+      },
+      {
+        "expected": 7,
+        "pid": 14412,
+        "actual": 7
+      },
+      {
+        "expected": 9,
+        "pid": 14876,
+        "actual": 9
+      }
+    ],
+    "observed": [
+      {
+        "time": "2026-10-22T22:19:19.5351256Z",
+        "pid": 14612,
+        "name": "cmd.exe",
+        "exit": 0
+      },
+      {
+        "time": "2026-10-22T22:19:19.5351257Z",
+        "pid": 14412,
+        "name": "cmd.exe",
+        "exit": 7
+      },
+      {
+        "time": "2026-10-22T22:19:20.5467900Z",
+        "pid": 14876,
+        "name": "cmd.exe",
+        "exit": 9
+      }
+    ]
+  },
+  "classification": "MEASURED",
+  "evidence": "smoke-4606.json",
+  "result_status": "PARTIAL",
+  "coverage": {
+    "matrix": "6/6 PASS",
+    "heaven": "PASS, n=1",
+    "minecraft": "PASS, n=1, 616.9s process/health plus observed world rendering",
+    "steel_nomad": "PASS, n=1, GUI green check",
+    "hue_digital_vibrance": "UNVERIFIED controls not exposed in available UI views",
+    "broker_hover_grab_input": "PENDING separate Linux broker lane"
+  },
+  "restoration": {
+    "classification": "MEASURED",
+    "time": "2026-10-23T02:45:09.968145+02:00",
+    "cuda": {
+      "before": 0,
+      "after": 0,
+      "reloaded": false
+    },
+    "gdm": "active",
+    "nvidia_bound": true,
+    "smi_exit": 0
+  },
+  "host_stop": {
+    "classification": "MEASURED",
+    "time": "2026-10-23T02:44:55.646580+02:00",
+    "new_host_xids": 0,
+    "rm_unloads_15min": 0,
+    "reason": "COMPLETE_REQUESTED",
+    "qemu_pid": 2332944
+  },
+  "launch": {
+    "ram_mb": "12288",
+    "vcpus": "8",
+    "device": {
+      "fb-mb": "8192",
+      "bar1-size": "8589934592",
+      "bar2-size": "33554432",
+      "display": "on",
+      "guest-driver": "580.65.06",
+      "gop": "on"
+    },
+    "actual_windows_driver": "580.88"
+  }
+}

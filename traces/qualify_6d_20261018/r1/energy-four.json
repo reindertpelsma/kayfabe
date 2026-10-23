@@ -1,0 +1,87 @@
+{
+  "classification": "MEASURED",
+  "evidence": "energy-four.json",
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "hypothesis": "CE-class-at-birth eliminates Energy failures with NoCeObject",
+  "falsifier_before_execution": "Any Energy failure with NoCeObject",
+  "requested_fresh_trials": 4,
+  "trials": [
+    {
+      "run": 4601,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T02:51:01.503923+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2339342
+      },
+      "result": "energy-bisect/4601/result.json",
+      "has_workload_sample": true
+    },
+    {
+      "run": 4602,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T02:55:59.105369+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2340172
+      },
+      "result": "energy-bisect/4602/result.json",
+      "has_workload_sample": true
+    },
+    {
+      "run": 4603,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T03:00:53.993643+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2340826
+      },
+      "result": "energy-bisect/4603/result.json",
+      "has_workload_sample": true
+    },
+    {
+      "run": 4604,
+      "exit": 0,
+      "verdict": "PASS",
+      "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+      "restored": true,
+      "no_ce_object_mentions": 0,
+      "host_stop": {
+        "classification": "MEASURED",
+        "time": "2026-10-23T03:05:56.894757+02:00",
+        "new_host_xids": 0,
+        "rm_unloads_15min": 0,
+        "reason": "COMPLETE_REQUESTED",
+        "qemu_pid": 2342674
+      },
+      "result": "energy-bisect/4604/result.json",
+      "has_workload_sample": true
+    }
+  ],
+  "verdict": "PASS",
+  "failures": 0,
+  "n": 4,
+  "no_ce_failure_trials": 0,
+  "end": "2026-10-23T01:06:08.239766+00:00"
+}

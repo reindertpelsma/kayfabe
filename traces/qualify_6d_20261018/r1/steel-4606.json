@@ -1,0 +1,44 @@
+{
+  "classification": "MEASURED",
+  "evidence": "steel-4606.json",
+  "run": 4606,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "status": "PASS",
+  "n": 1,
+  "score": 2398,
+  "graphics_fps": 23.98,
+  "api": "DX12",
+  "workload_version": "1.0",
+  "green_validation_check_visible": true,
+  "method": "Read from the 3DMark Demo GUI result after default Steel Nomad Run; no compare/upload button clicked",
+  "screenshot": "/data/codex-Q4/round-6d/r1/energy-bisect/4606/ui/steel-result-check.png",
+  "screenshot_sha256": "4d1aabd7d4f0849c4014ea40fc28d9f01e3a17205944d22c943f413ee4fb3a32",
+  "guest_events": [],
+  "host_new_xids": 0,
+  "load_before": {
+    "classification": "MEASURED",
+    "evidence": "load-before-steel.json",
+    "stage": "Steel-Nomad-GUI-default",
+    "time": "2026-10-23T00:40:47.354049+00:00",
+    "uptime": "02:40:47 up 13 days,  7:02,  5 users,  load average: 0.92, 1.79, 2.12",
+    "load_average": [
+      0.92333984375,
+      1.79443359375,
+      2.1220703125
+    ],
+    "logical_cpus": 24,
+    "host_quiet": true
+  },
+  "historical_reference": {
+    "classification": "CODE READ",
+    "source": "Owner-provided Q4 lane instructions, not new matched trials",
+    "kayfabe_score_range": [
+      2227,
+      2991
+    ],
+    "vfio_scores": [
+      3962,
+      3795
+    ]
+  }
+}

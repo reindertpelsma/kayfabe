@@ -1,0 +1,34 @@
+{
+  "classification": "MEASURED",
+  "evidence": "minecraft-4606.json",
+  "run": 4606,
+  "candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "verdict": "PASS",
+  "n": 1,
+  "process_observed_seconds": 616.9138180299196,
+  "samples": 30,
+  "guest_events": [],
+  "boot_unchanged": true,
+  "exit": {
+    "exit_code": 0,
+    "requested_stop": true,
+    "started": "2026-10-22T22:27:41.1794477Z",
+    "pid": 4152,
+    "classification": "MEASURED",
+    "forced_stop": false,
+    "ended": "2026-10-23T00:38:11.9759890+02:00"
+  },
+  "render_observation": {
+    "world": "Fresh single-player world created in the CoW guest",
+    "observed": "Terrain, animated water and HUD; debug view identifies NVIDIA GeForce RTX4070/PCIe/SSE2 and OpenGL3.3.0 NVIDIA580.88",
+    "scope": "Ten-minute process/health smoke includes menu and world creation; a full ten-minute world-only interval was not measured.",
+    "artifacts": {
+      "/data/codex-Q4/round-6d/r1/energy-bisect/4606/ui/minecraft-world-loading.png": {
+        "sha256": "af12e912fecdede9a64e03745147bf82fd1a5e539093c6921bf1bfbddc80181b"
+      },
+      "/data/codex-Q4/round-6d/r1/energy-bisect/4606/ui/minecraft-escape.png": {
+        "sha256": "03f570f77d376bae35714f33066c1de9c7434225b907c0ec736e2731d0c77258"
+      }
+    }
+  }
+}
