@@ -1,9 +1,9 @@
 import json, subprocess, sys, datetime, os, time, re, base64, hashlib, ipaddress
 from pathlib import Path
 
-D = Path("/workspace/codex/bw-provider-validation-20261023")
+D = Path("/workspace/codex/bw-windows-resume-20261023")
 W = Path("/workspace/bw-native-edge-wt")
-L = W / "traces/blackwell_provider_validation_20261023/owned_instances.json"
+L = W / "traces/blackwell_windows_resume_20261023/owned_instances.json"
 
 
 def api(args):
@@ -91,6 +91,7 @@ if mode in ("preflight", "rent"):
         57280677,
         57285340,
         57296911,
+        57302449,
     }
     owned.update(int(r["id"]) for r in rows)
     for topic in (
@@ -150,7 +151,7 @@ if mode in ("preflight", "rent"):
         for x in offers
     ]
     (
-        W / "traces/blackwell_provider_validation_20261023/market_all_rental_preflight.json"
+        W / "traces/blackwell_windows_resume_20261023/market_all_rental_preflight.json"
     ).write_text(
         json.dumps(
             {
@@ -181,12 +182,12 @@ if mode in ("preflight", "rent"):
     offer = min(
         offers,
         key=lambda x: (
-            ["GB203", "GB207", "GB206", "GB205", "GB202"].index(x["candidate_die"]),
+            ["GB203", "GB207", "GB202", "GB205", "GB206"].index(x["candidate_die"]),
             float(x["dph_total"]),
         ),
     )
     rate = float(offer["dph_total"])
-    runtime_spent = 1.0923235034287035 + sum(r.get("runtime_cost_estimate_usd", 0) for r in rows)
+    runtime_spent = 1.5192168444438887 + sum(r.get("runtime_cost_estimate_usd", 0) for r in rows)
     spent = runtime_spent
     rate_guard = max(rate * 1.15, rate + 0.10)
     minutes = (
@@ -228,6 +229,10 @@ if mode in ("preflight", "rent"):
         )
         sys.exit(0)
     source = subprocess.check_output(["git", "rev-parse", "6e3fd3fd6"], cwd=W, text=True).strip()
+    if rows:
+        assert P.can_replace(
+            rows[-1], P.load(D / "known_bad_machines.json", [])
+        ), "last cell was not a retired provider failure; no replacement"
     retry_index = P.reserve_retry(D / "stretch.json")
     result = api(
         [
@@ -242,7 +247,7 @@ if mode in ("preflight", "rent"):
             "--ssh",
             "--direct",
             "--label",
-            "codex-bw-adaptive-tier3-20261023",
+            "codex-bw-windows-resume-20261023",
         ]
     )
     assert result.get("success")
@@ -271,7 +276,7 @@ if mode in ("preflight", "rent"):
         "guard_rate": rate_guard,
         "product_head": source,
         "destroyed": False,
-        "authority": "owner03:15 provider-only retry grant; initial failed57296911, at most2 replacements/different machines; native then tier3 then adaptiveWindows; phase8 stop6 reserve5",
+        "authority": "owner04:45 checkpoint harness-bug resume approved; fresh Windows stretch, at most2 preSSH allocations different machines; native then adaptiveWindows, tier3 new die; phase8 stop6 reserve5",
     }
     rows.append(row)
     save(rows)

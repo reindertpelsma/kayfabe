@@ -8,7 +8,7 @@ import sys
 
 D = Path(__file__).resolve().parent
 W = Path("/workspace/bw-native-edge-wt")
-T = W / "traces/blackwell_provider_validation_20261023"
+T = W / "traces/blackwell_windows_resume_20261023"
 sys.path.insert(0, "/workspace/bw-provider-retry-wt/scripts/bench/blackwell")
 import provider_retry as P
 
