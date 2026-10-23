@@ -20,6 +20,10 @@ CHANNELS = frozenset((0x14, 0x1000000B))
 aware = old.aware
 
 
+def kernel_time(line):
+    return dt.datetime.strptime(line.split()[0], "%Y-%m-%dT%H:%M:%S.%f%z")
+
+
 def scope_enabled(phase, permit, authority, now):
     if not permit or permit.get("arm") != phase.get("arm"):
         return False
@@ -51,7 +55,7 @@ def judge_observation(lines, *, phase, permit, authority, now):
             raise Refused("Xid channel differs from the exact saved observation pair")
         if f"NVRM: Xid (PCI:{phase['pci']}):" not in line:
             raise Refused("observation fault belongs to another GPU")
-        stamp = aware(line.split()[0])
+        stamp = kernel_time(line)
         if not aware(permit["armed_utc"]) <= stamp <= now:
             raise Refused("fault timestamp is outside the enabled observation arm")
         records.append(
@@ -74,7 +78,7 @@ def judge_observation(lines, *, phase, permit, authority, now):
 def context(record, rows, dmesg):
     stamp = aware(record["timestamp_utc"])
     before, after = stamp - dt.timedelta(seconds=40), stamp + dt.timedelta(seconds=10)
-    kernel = [r["line"] for r in rows if before <= aware(r["line"].split()[0]) <= after]
+    kernel = [r["line"] for r in rows if before <= kernel_time(r["line"]) <= after]
     raw = record["line"].split("kernel: ", 1)[1]
     lines = dmesg.splitlines()
     anchors = [i for i, line in enumerate(lines) if raw in line]
