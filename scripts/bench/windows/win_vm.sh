@@ -469,8 +469,11 @@ shot_to() {  # FILE.png — the default graphic console (std VGA in install, kf3
 # ssh to the guest (key only; powershell is the guest's default shell)
 # ------------------------------------------------------------------------------------------------
 ssh_opts() {
+  local connect=${WINVM_SSH_CONNECT_TIMEOUT:-8}
+  [[ $connect =~ ^[0-9]+$ ]] && [ "$connect" -ge 1 ] && [ "$connect" -le 100 ] ||
+    die "WINVM_SSH_CONNECT_TIMEOUT must be 1..100 seconds"
   SSHO=(-i "$VM/secrets/ssh_ed25519" -o StrictHostKeyChecking=accept-new
-        -o "UserKnownHostsFile=$VM/run/known_hosts" -o ConnectTimeout=8 -o ServerAliveInterval=15
+        -o "UserKnownHostsFile=$VM/run/known_hosts" -o "ConnectTimeout=$connect" -o ServerAliveInterval=15
         -o ServerAliveCountMax=4 -o BatchMode=yes -o LogLevel=ERROR)
 }
 gssh() { ssh_opts; timeout "${SSH_TIMEOUT:-900}" ssh -n -p "$SSH_PORT" "${SSHO[@]}" "$WIN_USER@127.0.0.1" "$@"; }

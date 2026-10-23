@@ -104,23 +104,20 @@ OWN_PHASE
 mkdir -p "/root/prov/arms/$run"
 python3 -I /root/sweep2/rpc_timing.py "$QLOG" "/root/prov/arms/$run/rpc_timing.jsonl" "$owned_pid" >"/root/prov/arms/$run/rpc_timing_controller.log" 2>&1 &
 observer_pid=$!
-boot_wait=$SECONDS
-for i in $(seq 1 90); do
- [ -e "/proc/$owned_pid/exe" ] || { echo ARM_QEMU_EXITED_BEFORE_ENABLE_STOP; exit 20; }
- [ $((SECONDS-boot_wait)) -lt 450 ] || { echo ARM_SSH_READINESS_TIMEOUT_STOP; exit 21; }
- timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null 2>/dev/null | grep -q KF_SSH_UP && break
- sleep 5
-done
-timeout 20 bash "$W" ssh 'echo KF_SSH_UP' </dev/null | grep KF_SSH_UP
+readiness=/root/prov/readiness.json
+ready_tool=/root/sweep2/guard/blackwell/readiness.py
+python3 -E -s "$ready_tool" boot /root/prov/phase.json "$readiness" /root/sweep2/lease.json "$W"
+handshake_seconds=$(python3 -E -s "$ready_tool" value "$readiness" handshake)
+export WINVM_SSH_CONNECT_TIMEOUT=$(python3 -E -s "$ready_tool" value "$readiness" banner_query)
 python3 /root/sweep2/bind_receipt.py "arm_${run}" "$binary" "$profile"
 for f in verify_stage580.ps1 enable580_once.ps1 diag_min.ps1 init_state.ps1; do bash "$W" scp-to "/root/sweep2/probes/$f" "C:/kf/$f"; done
-timeout 120 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
+python3 -E -s "$ready_tool" run "$readiness" verify_stage -- bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
 grep '^STAGE580_READY=1 ' "/root/prov/arm_${run}_pre_enable.txt"
 if grep -aq 'kf-rm: rpc-trace' "$QLOG"; then echo PRECONDITION_REFUSED_GSP_WHILE_DISABLED; exit 7; fi
 init_ready="/root/prov/arms/$run/init_observer.ready.json"
-python3 -E -s /root/sweep2/guard/blackwell/init_observer.py /root/prov/phase.json "$run" "$init_ready" "/root/prov/arms/$run/early_code0.txt" -- timeout 10 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\init_state.ps1' </dev/null >"/root/prov/arms/$run/init_observer.log" 2>&1 &
+python3 -E -s /root/sweep2/guard/blackwell/init_observer.py --calibration "$readiness" /root/prov/phase.json "$run" "$init_ready" "/root/prov/arms/$run/early_code0.txt" -- bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\init_state.ps1' </dev/null >"/root/prov/arms/$run/init_observer.log" 2>&1 &
 init_observer_pid=$!
-for i in $(seq 1 20); do
+for i in $(seq 1 "$handshake_seconds"); do
  [ -f "$init_ready" ] && break
  kill -0 "$init_observer_pid" || { echo INIT_OBSERVER_FAILED_BEFORE_ENABLE; exit 22; }
  sleep 1

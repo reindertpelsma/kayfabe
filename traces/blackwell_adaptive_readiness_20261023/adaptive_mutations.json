@@ -1,0 +1,73 @@
+[
+  {
+    "mutant": "minimum_factor_removed",
+    "killers": 2,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_fast_box_still_gets_four_times_first_query",
+      "test_readiness.AdaptiveReadiness.test_nominal_box_gets_four_times_first_query"
+    ]
+  },
+  {
+    "mutant": "maximum_factor_removed",
+    "killers": 2,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_slow_box_factor_has_ten_times_ceiling",
+      "test_readiness.AdaptiveReadiness.test_slow_box_first_query_is_bounded"
+    ]
+  },
+  {
+    "mutant": "ignore_measured_latency",
+    "killers": 4,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_probe_latency_scales_banner_deadline",
+      "test_readiness.AdaptiveReadiness.test_probe_latency_scales_first_query",
+      "test_readiness.AdaptiveReadiness.test_slow_box_factor_has_ten_times_ceiling",
+      "test_readiness.AdaptiveReadiness.test_slow_box_first_query_is_bounded"
+    ]
+  },
+  {
+    "mutant": "ignore_total_budget",
+    "killers": 2,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_timeout_uses_remaining_total_budget",
+      "test_readiness.AdaptiveReadiness.test_total_exhaustion_stops_even_with_stage_time_left"
+    ]
+  },
+  {
+    "mutant": "ignore_stage_budget",
+    "killers": 5,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_deadline_does_not_restart_after_a_query",
+      "test_readiness.AdaptiveReadiness.test_late_success_does_not_become_readiness",
+      "test_readiness.AdaptiveReadiness.test_short_remaining_budget_also_reserves_a_retry",
+      "test_readiness.AdaptiveReadiness.test_timeout_uses_remaining_stage_budget",
+      "test_readiness.AdaptiveReadiness.test_verify_query_reserves_time_for_its_one_retry"
+    ]
+  },
+  {
+    "mutant": "initial_retry_removed",
+    "killers": 4,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_first_missing_query_is_retried_once",
+      "test_readiness.AdaptiveReadiness.test_second_missing_query_stops",
+      "test_readiness.AdaptiveReadiness.test_short_remaining_budget_also_reserves_a_retry",
+      "test_readiness.AdaptiveReadiness.test_verify_query_reserves_time_for_its_one_retry"
+    ]
+  },
+  {
+    "mutant": "retry_reserve_removed",
+    "killers": 2,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_short_remaining_budget_also_reserves_a_retry",
+      "test_readiness.AdaptiveReadiness.test_verify_query_reserves_time_for_its_one_retry"
+    ]
+  },
+  {
+    "mutant": "accept_foreign_calibration",
+    "killers": 2,
+    "cases": [
+      "test_readiness.AdaptiveReadiness.test_foreign_box_calibration_never_calls_a_new_probe",
+      "test_readiness.AdaptiveReadiness.test_other_box_cannot_reuse_the_calibration"
+    ]
+  }
+]
