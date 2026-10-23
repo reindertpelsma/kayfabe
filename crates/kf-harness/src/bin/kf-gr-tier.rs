@@ -28,6 +28,8 @@
 //!   (the VA-manager thread's role), and a released ring revokes its gate;
 //! - everything is released (channel, ring object, mapping, CPU view).
 //!
+//! `--ce-seed-only` runs just the dedicated-copy missing-bind input, using the common owned
+//! store/T-space setup. It prints the host class and checks the engine-written semaphore.
 //! It does NOT check the guest-vector relay (no VMM here); that is the Windows run's evidence.
 
 use kf_abi::submit::{fifo, gp_entry, method_header_inc};
@@ -140,6 +142,75 @@ fn seeded_release(payload: u32) -> Vec<u32> {
     let mut words = m(4, 0x240, &[(va >> 32) as u32, va as u32, payload]);
     words.extend(m(4, 0x300, &[0x4c]));
     words
+}
+
+/// Focused hardware input: no GR object or earlier graphics test is needed.
+fn run_seed_only(
+    l: &mut Checks,
+    rm: &HostRm,
+    space: kf_host::VaSpace,
+    walk: &WalkKernel,
+    win: kf_chan::tspace_unsafe::TWindows,
+    region_base: u64,
+) -> Result<(), String> {
+    let engine = (0..10u32)
+        .filter_map(kf_abi::submit::engine_type_copy)
+        .find(|&et| rm.ce_is_grce(et) == Ok(false))
+        .ok_or("no dedicated copy engine")?;
+    let guest = Guest {
+        walk,
+        va: VA_CHAN,
+        off: CHAN2,
+        gp_get_cpu_stores: Cell::new(0),
+    };
+    let words = seeded_release(P2);
+    stage(walk, CHAN2, VA_CHAN, &[&words])?;
+    let host = HostRing::on_engine_layout(
+        rm,
+        space,
+        engine,
+        Some(region_base),
+        kf_chan::host::TSPACE_LAYOUT,
+    )?;
+    let class = host.ce_class();
+    let mut ring = TranslatedRing::new_tmode(VA_CHAN + GPFIFO, ENTRIES, 0);
+    ring.set_gr(decoder_config(engine, class, false));
+    println!("CE_SEED_INPUT engine={engine:#x} ce_seed={class:#x} guest_set_object=absent");
+    let mut channel = TranslatedChannel::new(ring, host, 2);
+    channel.set_tspace(win, false);
+    let done = kf_chan::completions::Completions::open(rm, 64)?;
+    put(walk, CHAN2, 1)?;
+    let started = std::time::Instant::now();
+    while channel.last_gp_get() != Some(1) && started.elapsed() < std::time::Duration::from_secs(3)
+    {
+        channel
+            .pump(
+                rm,
+                &done,
+                &mut Mem(&guest),
+                &mut Userd(&guest),
+                &mut NoSplit,
+                is_ce,
+                &NoWindow,
+            )
+            .map_err(|e| format!("seeded CE pump: {e:?}"))?;
+        std::thread::yield_now();
+    }
+    let semaphore = word(walk, CHAN2 + SEM_CE)?;
+    let launches = channel.seeded_launches();
+    l.check(
+        "dedicated_ce_without_guest_set_object_completed_on_engine",
+        semaphore == P2 && channel.last_gp_get() == Some(1) && launches == 1,
+        format!("ce_seed={class:#x} seeded_launches={launches} semaphore={semaphore:#x}"),
+    );
+    let freed = rm.free_channel(channel.host().channel());
+    let released = channel.release_host(rm);
+    l.check(
+        "seeded_ce_resources_released",
+        freed.is_ok() && released.as_ref().is_some_and(|s| !s.contains("REFUSED")),
+        format!("{freed:?} {released:?}"),
+    );
+    Ok(())
 }
 
 fn main() {
@@ -374,6 +445,10 @@ fn run(l: &mut Checks) -> Result<(), String> {
         "tspace",
         format!("fb={fb_base:#x}+{STORE_BYTES:#x} ram={ram_base:#x}+{RAM_BYTES:#x} rings={region_base:#x}"),
     );
+
+    if std::env::args().any(|arg| arg == "--ce-seed-only") {
+        return run_seed_only(l, &rm, space, &walk, win, region_base);
+    }
 
     // ── the GR channel ───────────────────────────────────────────────────────────────────────
     let g = Guest {
