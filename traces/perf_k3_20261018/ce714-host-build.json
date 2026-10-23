@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-host-build.json",
+  "review_candidate": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "candidate_base": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "time": "2026-10-23T05:27:35.292882+00:00",
+  "archive_sha256": "a2d2e7e9c2c28cc8e5aaa8be0b222bd61a3ceebe3f50174cdfa8197ac4f9cb07",
+  "uptime": "07:27:35 up 13 days, 11:48,  4 users,  load average: 0.19, 0.13, 0.51",
+  "quiet_flag_absent_during_build": true,
+  "method": "Exact714ec29d3 release archive built on dev under Cargo flock, nice19/jobs2; unchanged C overlay relinked into owned QEMU with quiet flag absent; no GPU/VM run in this build step.",
+  "qemu_sha256": "ae2b346763fb4d4be291086d18d2c881a19282db90972009c4bb7f139b81c0ef",
+  "qemu_bytes": 95567992,
+  "overlay_source_hashes": {
+    "kf3.h": "80059b5a1c61161eded395104827b6b8824e6f8c36c0720d7c61326b50b0b955",
+    "kf3_guest_ram.h": "6a4f6cecffcabe979837bf8d630647891adeca3cd9e2c044027438b8881da248",
+    "kf3_gop.h": "d499ed57ddecf161bb6137fa4650ac500a7bad26c1df5e5a19b3d5e148556238",
+    "kf3.c": "ee95a9144cd559fb2773e99b1fe74e1b4424c73ccaff5b4860f6b6808acb13b2",
+    "meson.build": "a809bb613562b0852aa4ff73a21ab50844903771664861a9038b0bd493307573"
+  },
+  "tracked_source_clean": true
+}

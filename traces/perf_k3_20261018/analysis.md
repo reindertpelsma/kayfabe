@@ -96,3 +96,7 @@ worker-pickup timestamp was obtained. Those limits prevent a single-cause claim.
 
 MEASURED 2026-10-23, ci-instrument-final.json: exact instrument commit70f7fb591
 passed hosted stable, aarch64, broker and firmware; slow was skipped by policy.
+
+MEASURED 2026-10-23, [instrument-sanity-nc.md](instrument-sanity-nc.md):
+the diagnostic instrument-on/off comparison uses one boot per head; it is a
+sanity comparison, not an estimate of instrumentation overhead or repeat spread.

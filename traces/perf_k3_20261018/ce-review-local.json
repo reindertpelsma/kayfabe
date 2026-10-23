@@ -1,0 +1,37 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce-review-local.json",
+  "rev": "48431b8e0e0f0c8accac31efc7108e6dd53436d2",
+  "time": "2026-10-23T05:05:21.521694+00:00",
+  "steps": [
+    {
+      "name": "ce-review-tests",
+      "exit": 0,
+      "summaries": 38,
+      "passed": 1083,
+      "failed": 0,
+      "ignored": 4,
+      "log_sha256": "7804ba3411719763b16bf10187d0655485ee7b8f614739863bfca7c46907c002"
+    },
+    {
+      "name": "ce-review-harness-tests",
+      "exit": 0,
+      "summaries": 1,
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "110a18c71112de2a852cfa6d2ced4bd951c88e748cf006c93f23f1eca5103d13"
+    },
+    {
+      "name": "ce-review-build",
+      "exit": 0,
+      "summaries": 0,
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "log_sha256": "441150d84ddbaf8b32f4a144755aa93b4ac6ea92b943de1717e3c507ec97973e"
+    }
+  ],
+  "binary_sha256": "62ab5f7bc8d67dc4cbf8227aef8ce998b4a02fa685a4bd6ce0e63bba95bda2c4",
+  "exit": 0
+}

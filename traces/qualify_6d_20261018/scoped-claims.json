@@ -2,7 +2,7 @@
   "classification": "MEASURED",
   "evidence": "scoped-claims.json",
   "base": "70da04ffaebdee3b51e5eca6aa1eb3919e92e80d",
-  "head": "24a978a951c50bbf3d25687a4d8ca55a6fa08380",
+  "head": "0b61896be573af1b1efe1f1daf67ee5ace2b6f7f",
   "scope": "Owner-approved Q4-added/changed files only; evidence-only [skip ci]; inherited debt untouched",
   "files": [
     "crates/kf-chan/src/host.rs",
@@ -23,6 +23,11 @@
     "traces/perf_k3_20261018/analysis.md",
     "traces/perf_k3_20261018/baseline-telemetry.json",
     "traces/perf_k3_20261018/build.json",
+    "traces/perf_k3_20261018/ce-review-local.json",
+    "traces/perf_k3_20261018/ce714-build.json",
+    "traces/perf_k3_20261018/ce714-host-build.json",
+    "traces/perf_k3_20261018/ce714-linux-plan.json",
+    "traces/perf_k3_20261018/ce714-plan.json",
     "traces/perf_k3_20261018/ci-instrument-final.json",
     "traces/perf_k3_20261018/controls/observer-actual-crate.txt",
     "traces/perf_k3_20261018/controls/observer-green.txt",
@@ -38,6 +43,7 @@
     "traces/perf_k3_20261018/cpu-4622.json",
     "traces/perf_k3_20261018/health-after-profiles.json",
     "traces/perf_k3_20261018/host-xcursor-control.json",
+    "traces/perf_k3_20261018/instrument-sanity-nc.md",
     "traces/perf_k3_20261018/kick-accounting.json",
     "traces/perf_k3_20261018/kvm-4620-catia.json",
     "traces/perf_k3_20261018/kvm-4620-creo.json",
@@ -53,6 +59,7 @@
     "traces/perf_k3_20261018/master8.json",
     "traces/perf_k3_20261018/master9.json",
     "traces/perf_k3_20261018/plan.json",
+    "traces/perf_k3_20261018/process-audit-idle.json",
     "traces/perf_k3_20261018/profile-comparison-nc.md",
     "traces/perf_k3_20261018/profile-scores-nc.csv",
     "traces/perf_k3_20261018/queued-review-hardware.json",
@@ -171,5 +178,5 @@
   "new": 0,
   "sites": [],
   "inherited_ignored": 0,
-  "time": "2026-10-23T05:24:37.446508+00:00"
+  "time": "2026-10-23T05:38:32.503394+00:00"
 }

@@ -1,0 +1,31 @@
+{
+  "classification": "MEASURED",
+  "evidence": "ce714-build.json",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "time": "2026-10-23T05:26:04.306869+00:00",
+  "steps": [
+    {
+      "name": "ce714-native-tests",
+      "exit": 0,
+      "log_sha256": "cc7602b957e8a0f2a6c81c5d695a13f2b75724b1bd61ce527495cd7f8d826837"
+    },
+    {
+      "name": "ce714-qemu-build",
+      "exit": 0,
+      "log_sha256": "727b129f9f0e574ae6db3423b846bae7b8cdee480f29c03e9464fd96107a6dba"
+    },
+    {
+      "name": "ce714-native-build",
+      "exit": 0,
+      "log_sha256": "441150d84ddbaf8b32f4a144755aa93b4ac6ea92b943de1717e3c507ec97973e"
+    }
+  ],
+  "earlier_suite_revision": "48431b8e0e0f0c8accac31efc7108e6dd53436d2",
+  "earlier_suite": "ce-review-local.json:1083+8 passed,0 failed,4 existing ignores",
+  "source_equivalence": "git diff48431..714: only two documentation lines in kf-qemu display.rs; native kf-harness/kf-chan and other native dependencies unchanged. Whole exact-head hosted CI runs separately.",
+  "archive_sha256": "a2d2e7e9c2c28cc8e5aaa8be0b222bd61a3ceebe3f50174cdfa8197ac4f9cb07",
+  "binary_sha256": "62ab5f7bc8d67dc4cbf8227aef8ce998b4a02fa685a4bd6ce0e63bba95bda2c4",
+  "exit": 0,
+  "focused_native_tests_passed": 8,
+  "focused_native_tests_failed": 0
+}

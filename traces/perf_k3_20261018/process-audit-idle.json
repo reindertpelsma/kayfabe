@@ -1,0 +1,8 @@
+{
+  "classification": "MEASURED",
+  "evidence": "process-audit-k3.json",
+  "time": "2026-10-23T05:36:28.261708+00:00",
+  "owned_session_descendants": [],
+  "live_runtime_build_input_roles": [],
+  "quiet_flag_exists": false
+}

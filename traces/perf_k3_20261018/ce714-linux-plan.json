@@ -1,0 +1,9 @@
+{
+  "classification": "INFERRED",
+  "evidence": "ce714-linux-plan.json",
+  "rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "run": "CE714-linux-positive",
+  "hypothesis": "The existing approved positive --ce-client-guest-ram arm may exercise a seeded dedicated-copy KERNEL ring. FALSIFIER: no same-token nonzero ce_seed birth plus seeded_launches>0 and forwarded>0 at retirement; a passing raw client alone is not this mechanism witness.",
+  "method": "Unmodified frozen737306ee guest/runner contract, guest595.91.07, same180s budget,8192MiB store, no profiling flags, CI exact714 required green, zero new Xid. Collect ordinary client and hardware forwarding proof separately from mechanism coverage.",
+  "limits": "No guest input is invented or modified. If this arm binds explicitly or launches no seeded work, report NOT_EXERCISED rather than PASS for the missing-bind mechanism. Native --ce-seed-only is a separate supplied positive oracle."
+}
