@@ -22,7 +22,7 @@ test('onstart embeds constrained commit and callback nonce', async () => {
   const s = onstart(sha, nonce, 20, env.REPOSITORY, callback);
   assert.match(s, /git checkout --detach/);
   assert.match(s, /rev-parse HEAD/);
-  assert.match(s, /vast_payload.sh/);
+  assert.match(s, /vast_onstart.sh/);
   assert.doesNotMatch(s, /authorized_keys|ssh_key|API_KEY|KF_RESULT/);
 });
 for (const prefix of [

@@ -1,21 +1,20 @@
 # Vast broker (stage 1)
 
 
-## V5 lifecycle and shipped policy (2026-10-22; acceptance pending)
+## V5 lifecycle and shipped policy (2026-10-23)
 
 [CODE READ: defaults.json, src/defaults.js, src/policy.js] Numeric defaults live
 in `defaults.json`; JavaScript imports them through `src/defaults.js`, the bundle
 embeds that same file, and wrangler.toml has no numeric override. The owner-approved
 check cap is $1.00/hour, daily $6, rolling 30-day $30, prepaid reserve $8.
-Renting remains disabled in the committed configuration. Profiles and effective storage/network admission are implemented below. The V5 runner protocol is implemented; payload integration and live acceptance
-are still pending.
+Renting remains disabled in the committed configuration. The local non-VM A/B/C/D acceptance is complete; see [live evidence](../../traces/vast_broker_v5_20261018/LIVE.md). Full KVM/payload and hosted OIDC acceptance remain separate gaps.
 
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
 TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
 (3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.
 Empty logs count as heartbeats: the sender emits one within 10 minutes; 15 minutes
 without an authenticated post destroys the box. PASS retains 5 minutes of grace;
-FAIL retains 10. SSH login calls the per-run hold helper to enter MANUAL, suspending
+FAIL retains 10. After a recorded result, SSH login calls the per-run hold helper to enter MANUAL, suspending
 grace and heartbeat requirements while retaining the hard limit. Only the owner
 can remove that hard timer; admission checks the extended billing reservation.
 MANUAL still ends at the absolute ceiling, and cron writes a Worker-authored line.
@@ -31,6 +30,15 @@ provider billing bound during an outage.
 
 
 ## V5 profiles, forced admission and availability
+
+[CODE READ: defaults.json, src/offers.js, runner.py] `PREFERRED_COUNTRIES` is an
+ordered JSON list, default `["US","CA"]`. All forced eligibility checks and die
+preferences run first. Within the chosen class, country rank precedes effective
+price and offer ID. It never filters countries or relaxes a requirement; a
+qualifying non-US offer remains usable. The provider's `geolocation` suffix is
+used, and missing/odd location ranks last. Structured status records `country`;
+the runner independently validates and labels it untrusted. See
+[region evidence](../../traces/vast_broker_v5_20261018/COUNTRIES.md).
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js] `check` is the PR profile:
 configured measured classes GA106 first, then AD104, GA102 and AD102, capped at
@@ -108,9 +116,9 @@ reservation-only fallback, not a claim of provider-enforced transfer limits.
 | CI → Vast | Box output can inject logs/commands; a community box cannot supply an attested result. CI sees Vast only through the Worker, with no direct box connection and no executable/artifact input from Vast. |
 | Vast box → Worker, but not its network | The box trusts the Worker's fixed task/callback, uses **HTTPS only, no redirects**, and has a per-run token with no authority beyond report/kill/hold/blob-URL access for that run. Live authority dies with the box/run. The host operator can already see the box and its token; network interception must not add authority. |
 
-[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold; no blob-URL route is implemented. Blob-URL scope above is a policy ceiling, not an added capability. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
+[CODE READ: src/index.js, src/tokens.js, deployment.json] Current per-run authority is report/kill/hold/blob-url; private release locator scope and limits are specified in [the box interface](docs/BOX_PROTOCOL.md). The Worker never proxies asset bytes. Worker protocol/version and expected bundle hash are visible, but the deployed hash is an owner assertion, not remote deployment attestation.
 
-[CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx wrangler deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
+[CODE READ: 2026-10-22 Round 3, deployment.json] Build with `npm run bundle`; independently compare SHA256 of `dist/worker.js` with `dist/deployment.json`, committed `deployment.json` and public `DEPLOYED_BUNDLE_SHA256` before a separately authorized deployment. CLI deployment must upload those exact bundled bytes (use `npx --yes wrangler@4.152.0 deploy dist/worker.js --no-bundle`); dashboard/module upload uses the same file. The hash is a configuration assertion, avoiding a self-hash in the bundle. Any source update requires regenerating/reviewing the manifest and configuration together; mismatches refuse CI. This task performs no deployment and leaves renting disabled.
 
 [CODE READ: 2026-10-22 V4 round 2 owner instruction] **Stage only with RENTING_ENABLED=false.** The startup contract is SSH launch (`ssh_direct`) plus onstart; Vast injects keys already registered on the owner's account, and the Worker neither manages keys nor connects over SSH. Round 2 supersedes the earlier strict no-SSH STOP. The deployable source retains its KVM image/vm=true; the local tiny Docker/SSH flow is measured separately under [round 2 evidence](../../traces/vast_broker_v4_round2_20261018/README.md) and does not establish that KVM workload's validity. Those historical V4 shipped limits are superseded by the owner-approved V5 policy above. The local V4 round allowed $0.80/hour and any NVIDIA GPU.
 
@@ -129,20 +137,27 @@ The formatted checkpoint bundle is 103026 bytes, SHA256
 `1a06b7c87dd069240c4404503353b458d32e4d3ae64a680f35a5ac8f33d83eb8`.
 Prettier 3.6.2 and Black 25.1.0 use width 100; CI enforces both pinned versions.
 
+[CODE READ: 2026-10-23 owner V5_SECURITY and V5_ONSTART_AUTH instructions]
+**Security transition incomplete; keep renting disabled.** The working security
+checkpoint fixes cleanup starvation, failed-create recovery and bounded holds,
+but the mandatory prefix and tiny bootstrap/env transition remain red. Further
+claim/nonce/redaction/rate-limit hardening, blob route and live acceptance are
+pending; this is not a replacement renting-ready verdict.
+
+[MEASURED: 2026-10-23 security transition run, traces/vast_broker_v5_20261018/SECURITY_PROGRESS.md]
+The emitted security-work bundle is 110672 bytes, SHA256
+`2ab3856a7430129334fa430070419f83d1e2f920d55a3190aff7718f04aaf897`.
+The portable test entry now discovers every test, including unfinished owner
+contract regressions. A non-green baseline blocks mutation attribution.
+
 ## Deploy with the owner's credentials (9 steps)
 
 [CODE READ: 2026-10-22 wrangler.toml, defaults.json, deployment.json] This is the
 Worker code checkpoint. The owner deploys; this lane leaves renting disabled.
 
-1. From `ci/vast-broker`, run `npm test` and `npm run bundle`. Compare `sha256sum dist/worker.js` with `deployment.json`; upload those exact bytes.
-2. Set public vars: `OWNER_GITHUB_ID=229738317`, `REPOSITORY=reindertpelsma/kayfabe`, `APPROVAL_MODE=owner_push_or_review`, `RENT_DRAFTS=false`, `ALLOWED_BASE_BRANCHES=["master"]`, and initially `RENTING_ENABLED=false`. Retain `PATH_SKIP_PATTERNS` from wrangler.toml and set `DEPLOYED_BUNDLE_SHA256` to the emitted hash.
-3. Use the SQLite `BrokerLedger` Durable Object binding named `LEDGER`, initial migration `v1`, and cron `* * * * *` from wrangler.toml. Preserve this namespace across updates.
-4. Authenticate Cloudflare on the owner's machine, then upload with `npx wrangler deploy dist/worker.js --no-bundle`; alternatively use the module-upload/bootstrap recipe below. No Cloudflare credentials belong in GitHub.
-5. Set Worker secrets `WORKER_URL` (exact HTTPS origin, no path), `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN`. The last two are independent random base64url strings, at least 32 characters. Keep account/signing/owner secrets out of CI and Vast boxes.
-6. Optionally set Worker secret `BROKER_PATH_PREFIX` to one random base64url segment, 32–128 characters. GitHub environment `gpu-vast` receives only secret `VAST_BROKER_URL` equal to WORKER_URL and optional secret `VAST_BROKER_PATH` equal to that segment. The prefix is excluded from the OIDC audience. App/PAT credentials are unnecessary until the blob route is added.
-7. Keep numeric defaults in defaults.json: check effective cap $1/hour, daily $6, rolling $30, reserve $8; boot 40 minutes, hard 180, soft margin 10, heartbeat 10/15, PASS/FAIL grace 5/10. Sweep is owner-only, $2.50/hour and separate daily $8 with shared rolling/reserve. The explicit reservation includes storage, transfer allowance and a cron minute.
-8. The owner may stage this code with renting disabled while the separately authorized local live acceptance runs. Enable `RENTING_ENABLED=true` only when ready to accept bills. Put the protected BASE workflow/controller/manifest on master before requiring `gpu-vast`; hosted OIDC and Cloudflare billed CPU remain unverified. Unauthenticated GitHub read limits can cause a fail-closed refusal; no App/PAT is needed for public repository reads.
-9. To stop new rentals set `RENTING_ENABLED=false`; cron and cleanup remain active. Owner-token POST `/stop-all` destroys only ledger-owned instances. Preserve the ledger during key rotation; verify API absence before considering a bill settled.
+[CODE READ: DEPLOY.md] Worker secrets are `WORKER_URL`, `VAST_API_KEY`, `RUN_TOKEN_SECRET`, `OWNER_STOP_TOKEN` and `BROKER_PATH_PREFIX` (required with renting enabled).
+
+Follow the [nine-step owner deployment guide](DEPLOY.md), including the exact configured OIDC identities, required path secret, private blob credential and bundle hash. The [box environment contract](docs/BOX_PROTOCOL.md) is the stable Worker/repository interface.
 
 ## No-CLI namespace bootstrap
 
@@ -171,7 +186,7 @@ Configure variables, secrets, the public route and cron in the dashboard after b
 
 [CODE READ: sanitizer and stop implementation] Sanitisation removes command delimiters anywhere in the text because the legacy GitHub command parser scans inside lines. The visible prefix and the runner’s fresh stop-commands frame are additional boundaries. Missing ledger records produce a fixed diagnostic and never imply ownership; they do not block cleanup of other recorded instances. A failed delete keeps the token revoked and the billing reservation open.
 
-[CODE READ: owner endpoint-secrecy request] With BROKER_PATH_PREFIX set, all public routes become /<prefix>/rent, /<prefix>/status/<run>, /<prefix>/report/<run>, /<prefix>/stop/<run> and /<prefix>/stop-all. Missing/wrong prefixes and unknown routes return a generic 404; prefix comparison uses native constant-time HMAC verification. Cron stays private and does not require the public prefix. The onstart callback includes the prefix; the Vast operator can read it. URL secrecy reduces scanning/DoS noise and is not authentication: OIDC plus approval gates protect admission and the run HMAC protects reports. Do not put real origins or prefixes in committed configuration.
+[CODE READ: owner endpoint-secrecy request] With BROKER_PATH_PREFIX set, all public routes become /<prefix>/rent, /<prefix>/status/<run>, /<prefix>/report/<run>, /<prefix>/stop/<run> and /<prefix>/stop-all. Missing/wrong prefixes and unknown routes return a generic 404; prefix comparison uses native constant-time HMAC verification. Cron stays private and does not require the public prefix. The create environment includes the callback prefix; the Vast operator can read it. URL secrecy reduces scanning/DoS noise and is not authentication: OIDC plus approval gates protect admission and the run HMAC protects reports. Do not put real origins or prefixes in committed configuration.
 
 [CODE READ: workflow/guard] Endpoint secrets are step-scoped. The broker disables shell tracing, masks canonical origin, host/derived labels, prefix and encoded audience before requests, and suppresses raw transport/parser errors. Known endpoint components are also redacted from stored box text. No endpoint goes into outputs, summaries, artifacts, names or status descriptions. workflow-guard.js rejects secret/alias access elsewhere, unsupported secret-object access/inheritance and scalar forwarding (including aliases/quoted keys), endpoint aliases in metadata, endpoint outputs/printing and unsupported broker run syntax. This static guard supports a bounded workflow subset; workflow protection/review remains necessary against deliberate arbitrary shell obfuscation. The box already knows the endpoint and can disclose it elsewhere, so locator secrecy is never relied on for authorisation.
 

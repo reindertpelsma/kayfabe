@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker from '../src/index.js';
+import { createGateway } from '../src/index.js';
+// Component tests inject auth; v5-front-auth tests the real gateway.
+const worker = createGateway({ authorize: async () => {} });
 // FALSIFIER: an incomplete hostile upload enters the serialized DO handler,
 // or the forwarded request still owns a network-backed stream at response time.
 for (const route of ['report', 'kill'])

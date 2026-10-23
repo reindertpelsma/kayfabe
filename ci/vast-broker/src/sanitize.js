@@ -35,6 +35,7 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
       '[address]',
     )
     .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));
+  text = text.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]'); // MUTANT signed-url
   for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');
   text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters
   const lines = text.split('\n');

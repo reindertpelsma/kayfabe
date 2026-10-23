@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, env, callbackToken } from './helpers.js';
+import { setup, env, nonce, callbackToken } from './helpers.js';
 // FALSIFIER: owner timer removal revives an expired hard/absolute manual
 // deadline because cleanup cron has not yet consumed the stored timestamp.
 for (const restart of [false, true])
@@ -13,6 +13,7 @@ for (const restart of [false, true])
       });
       await h.call();
       await h.report({ seq: 1, kind: 'log', text: '' });
+      await h.report({ seq: 2, kind: 'result', result: { nonce, verdict: 'PASS' } });
       const token = callbackToken(await h.storage.get('record:123-1'));
       assert.equal((await h.call('/hold/123-1', { token, ghToken: null })).status, 200);
       if (ceiling)

@@ -240,5 +240,22 @@
       ]
     }
   ],
-  "bootFailureFreezeMs": 120000
+  "bootFailureFreezeMs": 120000,
+  "jwksCooldownMs": 60000,
+  "jwksCacheMs": 3600000,
+  "boxHoldMinutes": 30,
+  "onstartPath": "scripts/ci/vast_onstart.sh",
+  "boxProtocol": 5,
+  "controlIpPerMinute": 60,
+  "controlGlobalPerMinute": 600,
+  "controlMaxIps": 4096,
+  "checkWorkflowPath": ".github/workflows/gpu-vast.yml",
+  "sweepWorkflowPath": ".github/workflows/gpu-vast-sweep.yml",
+  "oidcEnvironment": "gpu-vast",
+  "blobRunMints": 8,
+  "blobDailyMints": 64,
+  "preferredCountries": [
+    "US",
+    "CA"
+  ]
 }

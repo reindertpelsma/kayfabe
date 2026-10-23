@@ -91,7 +91,7 @@ async function localCall({
     now: () => 1800000000000,
   });
   const r = await service.fetch(
-    new Request(origin + '/rent', {
+    new Request(origin + '/' + h.bindings.BROKER_PATH_PREFIX + '/rent', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + (await jwt({ iss: claimsIssuer })) },
       body: JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 }),

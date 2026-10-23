@@ -1,8 +1,8 @@
 {
   "legacy:SSH onstart launch": [
     [
-      "      image: IMAGE,\n      vm: true,\n      disk: 120,\n      runtype: 'ssh_direct',\n      onstart: script,\n      label: record.label,\n      target_state: 'running',\n",
-      "      image: IMAGE,\n      vm: true,\n      disk: 120,\n      runtype: 'args',\n      onstart: script,\n      label: record.label,\n      target_state: 'running',\n"
+      "      runtype: 'ssh_direct',",
+      "      runtype: 'args',"
     ]
   ],
   "legacy:pending provider status": [
@@ -43,20 +43,20 @@
   ],
   "legacy:optional prefix admission": [
     [
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n",
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n"
+      "  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');",
+      "  return '/' + parts.slice(2).join('/');"
     ]
   ],
   "legacy:native constant-time prefix comparison": [
     [
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n",
-      "  if (prefix === undefined || prefix === '') return path;\n  if (!validPathPrefix(prefix)) return null;\n  const parts = path.split('/');\n  if (prefix !== (parts[1] || '')) return null; // MUTANT prefix-match\n  return '/' + parts.slice(2).join('/');\n}\nexport function endpointSecrets(env) {\n"
+      "  if (!(await constantTimeEqual(prefix, parts[1] || ''))) return null; // MUTANT prefix-match",
+      "  if (prefix !== (parts[1] || '')) return null; // MUTANT prefix-match"
     ]
   ],
   "legacy:public prefix gate": [
     [
-      "}\nexport default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n",
-      "}\nexport default {\n  async fetch(request, env) {\n    const path = new URL(request.url).pathname;\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n"
+      "    const path = await routePath(request, env);\n    if (",
+      "    const path = new URL(request.url).pathname;\n    if ("
     ]
   ],
   "legacy:ledger service prefix gate": [
@@ -67,14 +67,14 @@
   ],
   "legacy:prefix charset and bounds": [
     [
-      "// prettier-ignore\nimport {constantTimeEqual} from './tokens.js';\nexport const validPathPrefix = (value) =>\n  typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);\nexport const notFound = () =>\n  new Response('Not found', {\n    status: 404,\n",
-      "// prettier-ignore\nimport {constantTimeEqual} from './tokens.js';\nexport const validPathPrefix = (value) =>\n  true || (typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value));\nexport const notFound = () =>\n  new Response('Not found', {\n    status: 404,\n"
+      "  typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value);",
+      "  true || (typeof value === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(value));"
     ]
   ],
   "legacy:fixed callback prefix": [
     [
-      "chmod 644 /etc/profile.d/kf-ci-hold.sh\npython3 - <<'KF_REPORT'\nimport json,math,os,re,select,subprocess,time\nurl='${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'\ntoken='${callback.token}'\nnonce='${nonce}'\nrunner_nonce='${callback.runnerNonce ?? ''}'\n",
-      "chmod 644 /etc/profile.d/kf-ci-hold.sh\npython3 - <<'KF_REPORT'\nimport json,math,os,re,select,subprocess,time\nurl='${origin}/report/${callback.run}'\ntoken='${callback.token}'\nnonce='${nonce}'\nrunner_nonce='${callback.runnerNonce ?? ''}'\n"
+      "self.url = \"%s/report/%s\" % (base, run)",
+      "self.url = \"https://broker.example/report/%s\" % run"
     ]
   ],
   "legacy:endpoint text redaction": [
@@ -283,8 +283,8 @@
   ],
   "legacy:embedded command delimiters": [
     [
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n",
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n"
+      "  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');",
+      "  const lines = text.split('\\n');"
     ]
   ],
   "legacy:per-line UTF8 byte cap": [
@@ -349,8 +349,8 @@
   ],
   "legacy:OIDC claims": [
     [
-      "      if (!(await verify())) refuse('UNAUTHORIZED', 401);\n    }\n    const seconds = this.now() / 1000;\n    if (\n      c.iss !== this.issuer ||\n      c.aud !== audience ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      typeof c.nbf !== 'number' ||\n      !Number.isFinite(c.nbf) ||\n      c.nbf > seconds\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n  }\n}\n",
-      "      if (!(await verify())) refuse('UNAUTHORIZED', 401);\n    }\n    const seconds = this.now() / 1000;\n    if (false) refuse('UNAUTHORIZED', 401);\n    return c;\n  }\n}\n"
+      "    if (\n      c.iss !== this.issuer ||\n      c.aud !== audience ||\n      typeof c.exp !== 'number' ||\n      !Number.isFinite(c.exp) ||\n      c.exp <= seconds ||\n      typeof c.nbf !== 'number' ||\n      !Number.isFinite(c.nbf) ||\n      c.nbf > seconds\n    )\n      refuse('UNAUTHORIZED', 401);",
+      "    if (false) refuse('UNAUTHORIZED', 401);"
     ]
   ],
   "legacy:credit reserve": [
@@ -403,8 +403,8 @@
   ],
   "legacy:ambiguous-create binding": [
     [
-      "    const matches = r.instances.filter((x) => x.label === record.label);\n    if (matches.length !== 1) refuse();\n    const candidate = matches[0];\n    if (\n      typeof candidate.onstart !== 'string' ||\n      (await sha256Hex(candidate.onstart)) !== record.scriptHash ||\n      candidate.image_uuid !== IMAGE ||\n      !Number.isSafeInteger(candidate.id) ||\n      candidate.id <= 0\n    )\n      refuse();\n    return String(candidate.id);\n  }\n  async inspect(record) {\n",
-      "    const matches = r.instances.filter((x) => x.label === record.label);\n    if (matches.length !== 1) refuse();\n    const candidate = matches[0];\n    return String(candidate.id);\n  }\n  async inspect(record) {\n"
+      "    if (\n      typeof candidate.onstart !== 'string' ||\n      (await sha256Hex(candidate.onstart)) !== record.scriptHash ||\n      candidate.image_uuid !== IMAGE ||\n      !Number.isSafeInteger(candidate.id) ||\n      candidate.id <= 0\n    )\n      refuse();\n    return String(candidate.id);",
+      "    return String(candidate.id);"
     ]
   ],
   "legacy:TTL destruction": [
@@ -505,8 +505,8 @@
   ],
   "legacy:public cron isolation": [
     [
-      "export default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (\n      path === null ||\n      !/^\\/(?:rent|availability|stop-all|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n        path,\n      )\n    )\n      return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n",
-      "export default {\n  async fetch(request, env) {\n    const path = await routePath(request, env);\n    if (false) return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n"
+      "      if (\n        path === null ||\n        !/^\\/(?:rent|availability|stop-all|blob-url\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\\/[A-Za-z0-9._-]{1,64}\\/[A-Za-z0-9._-]{1,100}|(?:report|kill|hold|stop-timer|status|stop|logs)\\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(\n          path,\n        )\n      )\n        return notFound();",
+      "      if (false) return notFound();"
     ]
   ],
   "legacy:automatic base allowlist": [
@@ -607,12 +607,16 @@
     [
       "  }\n  async function kill(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.key !== key || !(await tokens.verify(bearer, r)) || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    // An ended kill receipt is idempotent but grants no live authority or provider calls.\n    if (r.ended !== null) {\n      if (r.boxKilled) return json({ state: 'NONE' });\n",
       "  }\n  async function kill(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.key !== key || false || now() >= r.reportExpiry * 1000) refuse('UNAUTHORIZED', 401);\n    // An ended kill receipt is idempotent but grants no live authority or provider calls.\n    if (r.ended !== null) {\n      if (r.boxKilled) return json({ state: 'NONE' });\n"
+    ],
+    [
+      "      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);",
+      "      if (!record || (box[1] !== 'kill' && !(await tokens.verify(bearer, record)))) refuse('UNAUTHORIZED', 401);"
     ]
   ],
   "v4:kill-wrong-route": [
     [
-      "#!/bin/sh\nset -eu\n# Only this run's limited capability; neither account nor owner credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary \"\\${1:-box-request}\" '${origin}${prefix ? '/' + prefix : ''}/kill/${callback.run}'\nKF_KILL\nchmod 700 /usr/local/bin/kf-box-kill\ncat > /usr/local/bin/kf-box-hold <<'KF_HOLD'\n",
-      "#!/bin/sh\nset -eu\n# Only this run's limited capability; neither account nor owner credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary \"\\${1:-box-request}\" '${origin}${prefix ? '/' + prefix : ''}/report/${callback.run}'\nKF_KILL\nchmod 700 /usr/local/bin/kf-box-kill\ncat > /usr/local/bin/kf-box-hold <<'KF_HOLD'\n"
+      "/kill/${KF_RUN_ID:?}",
+      "/report/${KF_RUN_ID:?}"
     ]
   ],
   "v4:no-absence-verification": [
@@ -647,14 +651,14 @@
   ],
   "v4:address-scrub": [
     [
-      "    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n    .replace(\n      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n",
-      "    ); // MUTANT token-shape\n  text = text\n    .replace(/\\bBearer\\s+[^\\s]+/gi, 'Bearer [redacted]')\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n"
+      "    .replace(/\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b/g, '[address]')\n    .replace(\n      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));",
+      "    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));"
     ]
   ],
   "v4:opaque-token-scrub": [
     [
-      "      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n",
-      "      /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,\n      '[address]',\n    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => value);\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n"
+      "    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));",
+      "    .replace(/[A-Za-z0-9_-]+/g, (value) => value);"
     ]
   ],
   "v4:instance-scrub": [
@@ -695,26 +699,30 @@
   ],
   "v4:sender-discards-prefix": [
     [
-      "            data=os.read(child.stdout.fileno(),8192)\n            if not data: break\n            local.write(data);local.flush()\n            pending+=data\n        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n",
-      "            data=os.read(child.stdout.fileno(),8192)\n            if not data: break\n            local.write(data);local.flush()\n            pending=(pending+data)[-8192:]\n        current=time.monotonic()\n        if pending and current-last>=1:\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n"
+      "            self.text += text",
+      "            self.text = (self.text + text)[-8192:]"
     ]
   ],
   "v4:sender-repeats-tail": [
     [
-      "except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass\nif rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\n",
-      "except (ValueError,TypeError,KeyError,OSError,UnicodeError):pass\nif rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result',tail,result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\n"
+      "text = self.decoder.decode(self.capper.feed(data))",
+      "text = self.decoder.decode(self.capper.feed(data))\n        self.last_chunk = text"
+    ],
+    [
+      "                text = note",
+      "                text = note + getattr(self, \"last_chunk\", \"\")"
     ]
   ],
   "v4:unreleased-upload": [
     [
-      "          e instanceof BrokerError ? e.status : 503,\n        );\n      } finally {\n        await releaseUpload(request);\n        busy = false;\n      }\n    },\n",
-      "          e instanceof BrokerError ? e.status : 503,\n        );\n      } finally {\n        busy = false;\n      }\n    },\n"
+      "        await releaseUpload(request);",
+      "        /* mutant keeps rejected upload open */"
     ]
   ],
   "v4:direct-network-body": [
     [
-      "      return notFound();\n    let buffered;\n    try {\n      buffered = await detachedUpload(request, path);\n    } catch {\n      return Response.json(\n        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },\n",
-      "      return notFound();\n    let buffered;\n    try {\n      buffered = request;\n    } catch {\n      return Response.json(\n        { state: 'UNAVAILABLE', verdict: 'UNAVAILABLE', log_tail_sanitised: '', bytes_dropped: 0 },\n"
+      "      buffered = await detachedUpload(request, path);",
+      "      buffered = request;"
     ]
   ],
   "v4:unbounded-forward-body": [
@@ -737,8 +745,8 @@
   ],
   "v4:sender-ignores-grace-ack": [
     [
-      "if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=ack.get('grace_remaining_seconds') if isinstance(ack,dict) else None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\nraise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))\n",
-      "if rc==124 and not any(r['name']=='timeout' for r in result['suites']):result['suites'].append({'name':'timeout','pass':0,'fail':1,'skip':0})\nif runner_nonce:result['runner_nonce']=runner_nonce\nack=post('result','Suite complete; sender omitted '+str(omitted)+' raw bytes beyond its bounded transport allowance.',result)\nseconds=None\nremaining=str(math.ceil(seconds/60)) if type(seconds) is int and 0<=seconds<=${grace * 60} else 'unknown'\nprint('Use kf-box-kill [reason] to end this box early; configured maximum ${grace} minutes; Worker reports '+remaining+' minutes remaining (hard TTL included).')\nraise SystemExit(rc if rc else (0 if result['verdict']=='PASS' else 1))\n"
+      "    seconds = ack.get(\"grace_remaining_seconds\")",
+      "    seconds = None # mutant ignores ack"
     ]
   ],
   "v4:lose-result-after-box-kill": [
@@ -749,8 +757,8 @@
   ],
   "v4:overlapping-worker-delimiters": [
     [
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n",
-      "    )\n    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));\n  for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');\n  text = text.replaceAll('::', ': :').replaceAll('##[', '# #['); // MUTANT command-delimiters\n  const lines = text.split('\\n');\n  if (lines.at(-1) === '') lines.pop();\n  let retained = [],\n"
+      "  text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #['); // MUTANT command-delimiters",
+      "  text = text.replaceAll('::', ': :').replaceAll('##[', '# #['); // MUTANT command-delimiters"
     ]
   ],
   "v4:overlapping-renderer-delimiters": [
@@ -771,18 +779,18 @@
       "    def pairs(items):\n        result = {}\n        for key, value in items:\n            if False:\n                raise Invalid()\n            result[key] = value\n        return result\n"
     ],
     [
-      "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if (\n        not set(data) <= STATUS_KEYS\n        or data.get(\"state\") not in STATES\n        or data.get(\"verdict\") not in VERDICTS\n    ):\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n",
+      "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if (\n        not set(data) <= STATUS_KEYS | OPTIONAL_STATUS_KEYS\n        or data.get(\"state\") not in STATES\n        or data.get(\"verdict\") not in VERDICTS\n    ):\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n",
       "\n\ndef validate_status(data, ctx, manifest, http_status):\n    if False or data.get(\"state\") not in STATES or data.get(\"verdict\") not in VERDICTS:\n        raise Invalid()\n    for key in [\"log_tail_sanitised\", \"gpu_model\"]:\n        if key in data and (\n"
     ],
     [
-      "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n",
+      "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n",
       "        if \"selection\" in data:\n            validate_selection(data[\"selection\"])\n        return data\n    if False:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n"
     ]
   ],
   "r3:runner-binding": [
     [
-      "        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n        or data[\"sha\"] != ctx[\"sha\"]\n        or data[\"pr\"] != ctx[\"pr\"]\n        or type(data[\"pr\"]) not in {int, type(None)}\n    ):\n        raise Invalid()\n    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n",
-      "        return data\n    if set(data) != STATUS_KEYS:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n"
+      "        return data\n    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:\n        raise Invalid()\n    if (\n        data[\"run\"] != ctx[\"run\"]\n        or data[\"sha\"] != ctx[\"sha\"]\n        or data[\"pr\"] != ctx[\"pr\"]\n        or type(data[\"pr\"]) not in {int, type(None)}\n    ):\n        raise Invalid()\n    if data[\"runner_nonce\"] != ctx[\"nonce\"] or not hex_value(data[\"log_sha256\"], 64):\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n",
+      "        return data\n    if set(data) - OPTIONAL_STATUS_KEYS != STATUS_KEYS:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    if False:\n        raise Invalid()\n    for key in manifest:\n        if type(data[key]) is not type(manifest[key]) or data[key] != manifest[key]:\n"
     ]
   ],
   "r3:runner-log-hash": [
@@ -911,8 +919,12 @@
   ],
   "r3:diagnostic-BASE-claims": [
     [
-      "        actor_id: String(owner),\n        sha: 'd'.repeat(40),\n        ref: 'refs/heads/master',\n        workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        workflow_sha: 'd'.repeat(40),\n        run_id: selected.run,\n        run_attempt: '1',\n      };\n",
-      "        actor_id: String(owner),\n        sha: 'd'.repeat(40),\n        ref: 'refs/heads/master',\n        obsolete_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        obsolete_sha: 'd'.repeat(40),\n        run_id: selected.run,\n        run_attempt: '1',\n      };\n"
+      "        workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',",
+      "        obsolete_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',"
+    ],
+    [
+      "        workflow_sha: 'd'.repeat(40),",
+      "        obsolete_sha: 'd'.repeat(40),"
     ]
   ],
   "r3:runner-summary-fields": [
@@ -923,8 +935,8 @@
   ],
   "r3:target-base-binding": [
     [
-      "    if (c.event_name === 'pull_request_target') {\n      if (\n        c.ref !== 'refs/heads/master' ||\n        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n",
-      "    if (c.event_name === 'pull_request_target') {\n      if (\n        c.ref !== 'refs/heads/master' ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master' ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n"
+      "    if (c.event_name === 'pull_request_target') {\n      if (\n        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||\n        c.sha !== r.head_sha ||\n        c.workflow_sha !== r.head_sha ||\n        !cfg.checkWorkflows.includes(c.workflow_ref) ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n",
+      "    if (c.event_name === 'pull_request_target') {\n      if (\n        !cfg.bases.some((base) => c.ref === 'refs/heads/' + base) ||\n        !cfg.checkWorkflows.includes(c.workflow_ref) ||\n        !Number.isSafeInteger(hint?.pr_number)\n      )\n"
     ]
   ],
   "r3:target-PR-membership": [
@@ -965,12 +977,16 @@
   ],
   "r3:OIDC-workflow-ref": [
     [
-      "      !numericId(c.actor_id) ||\n      !numericId(c.run_id) ||\n      !numericId(c.run_attempt) ||\n      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name) ||\n      ![\n        cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master',\n        cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master',\n      ].includes(c.workflow_ref)\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n",
-      "      !numericId(c.actor_id) ||\n      !numericId(c.run_id) ||\n      !numericId(c.run_attempt) ||\n      !['pull_request', 'pull_request_target', 'workflow_dispatch'].includes(c.event_name)\n    )\n      refuse('UNAUTHORIZED', 401);\n    return c;\n"
+      "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.job_workflow_ref) ||\n",
+      ""
     ],
     [
-      "        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n    )\n      refuse('UNAUTHORIZED', 401);\n    cfg.profile = profile;\n    if (path === '/availability') {\n      const run = await github.run(c.run_id),\n",
-      "        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    /* mutant omits second workflow boundary */\n    cfg.profile = profile;\n    if (path === '/availability') {\n      const run = await github.run(c.run_id),\n"
+      "    ![...cfg.checkWorkflows, cfg.sweepWorkflow].includes(c.workflow_ref) ||\n",
+      ""
+    ],
+    [
+      "    if (profile === 'check' && !cfg.checkWorkflows.includes(c.workflow_ref))\n      refuse('UNAUTHORIZED', 401);",
+      "    /* mutant omits profile workflow boundary */"
     ]
   ],
   "r3:release-same-SHA": [
@@ -1083,8 +1099,8 @@
   ],
   "v5:boot-phase": [
     [
-      "    );\n    if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);\n    r.id = await vast.create(offer, r, script);\n    r.phase = 'BOOTING';\n    await ledger.save(r);\n    console.log(JSON.stringify({ event: 'rented' }));\n    return json(expose(r));\n",
-      "    );\n    if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);\n    r.id = await vast.create(offer, r, script);\n    r.phase = 'CREATING';\n    await ledger.save(r);\n    console.log(JSON.stringify({ event: 'rented' }));\n    return json(expose(r));\n"
+      "    r.phase = 'BOOTING';",
+      "    r.phase = 'CREATING';"
     ]
   ],
   "v5:immutable-clock": [
@@ -1125,14 +1141,18 @@
   ],
   "v5:hold-grace-and-heartbeat": [
     [
-      "      refuse('UNAUTHORIZED', 401);\n    const instance = await vast.inspect(r);\n    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);\n    r.phase = 'MANUAL';\n    r.manualAt ??= now();\n    r.resultDeadline = null;\n    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);\n    return json(expose(r));\n  }\n",
-      "      refuse('UNAUTHORIZED', 401);\n    const instance = await vast.inspect(r);\n    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);\n    r.manualAt ??= now();\n    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);\n    return json(expose(r));\n  }\n"
+      "    r.phase = 'MANUAL';\n    r.manualAt ??= now();\n    r.resultDeadline = null;",
+      "    r.manualAt ??= now();"
     ]
   ],
   "v5:hold-auth": [
     [
       "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (\n      !r ||\n      !(await tokens.verify(bearer, r)) ||\n      r.ended !== null ||\n      r.closed ||\n      now() >= r.reportExpiry * 1000\n    )\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n",
       "  }\n  async function hold(request, key, bearer, cfg, vast) {\n    const r = await ledger.get('record:' + key);\n    if (!r || r.ended !== null || r.closed || now() >= r.reportExpiry * 1000)\n      refuse('UNAUTHORIZED', 401);\n    clocks(r, cfg);\n    await rejectExpiredCallback(r, cfg, vast);\n"
+    ],
+    [
+      "      if (!record || !(await tokens.verify(bearer, record))) refuse('UNAUTHORIZED', 401);",
+      "      if (!record || (box[1] !== 'hold' && !(await tokens.verify(bearer, record)))) refuse('UNAUTHORIZED', 401);"
     ]
   ],
   "v5:owner-timer-auth": [
@@ -1143,14 +1163,14 @@
   ],
   "v5:timer-extension-liability": [
     [
-      "          3600000 +\n        (r.bandwidthCost ?? 0),\n      credit = await vast.credit();\n    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)\n      refuse('UNAVAILABLE_BUDGET', 409);\n    await ledger.budgets(cfg, now(), total, r.key);\n    r.hardDeadline = null;\n    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;\n    await ledger.put('cost:' + r.key, {\n",
-      "          3600000 +\n        (r.bandwidthCost ?? 0),\n      credit = await vast.credit();\n    /* mutant omits credit */\n    /* mutant omits extended budget */\n    r.hardDeadline = null;\n    r.billingTtl = r.manualDeadline + cfg.cronPeriod - r.started;\n    await ledger.put('cost:' + r.key, {\n"
+      "    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)\n      refuse('UNAVAILABLE_BUDGET', 409);\n    await ledger.budgets(cfg, now(), total, r.key);",
+      "    /* mutant omits credit */\n    /* mutant omits extended budget */"
     ]
   ],
   "v5:manual-cron-status": [
     [
-      "    if (record.ended !== null) return;\n    clocks(record, cfg);\n    await ledger.save(record);\n    if (record.phase === 'MANUAL')\n      await workerLine(\n        record,\n        'MANUAL hard_timer=' +\n          (record.hardDeadline === null ? 'removed' : 'active') +\n          ' ceiling_at=' +\n          record.manualDeadline,\n        cfg,\n      );\n    await recover(record, vast);\n    if (record.closed) {\n      await cleanup(record, vast);\n",
-      "    if (record.ended !== null) return;\n    clocks(record, cfg);\n    await ledger.save(record);\n    /* mutant drops MANUAL cron line */\n    await recover(record, vast);\n    if (record.closed) {\n      await cleanup(record, vast);\n"
+      "    if (record.phase === 'MANUAL')\n      await workerLine(\n        record,\n        'MANUAL hard_timer=' +\n          (record.hardDeadline === null ? 'removed' : 'active') +\n          ' ceiling_at=' +\n          record.manualDeadline,\n        cfg,\n      );",
+      "    /* mutant drops MANUAL cron line */"
     ]
   ],
   "v5:worker-tail-bounds": [
@@ -1161,32 +1181,32 @@
   ],
   "v5:creation-based-soft-deadline": [
     [
-      "        path: env.BROKER_PATH_PREFIX ?? '',\n        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,\n        runnerNonce: r.runnerNonce,\n        softDeadline: r.softDeadline,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n",
-      "        path: env.BROKER_PATH_PREFIX ?? '',\n        graceMinutes: Math.max(cfg.passGrace, cfg.failGrace) / 60000,\n        runnerNonce: r.runnerNonce,\n      });\n    r.scriptHash = await sha256Hex(script);\n    await ledger.reserve(r);\n"
+      "KF_SOFT_DEADLINE: Math.floor(r.softDeadline / 1000)",
+      "KF_SOFT_DEADLINE: Math.floor((now() + cfg.hard) / 1000)"
     ]
   ],
   "v5:hold-helper-scope": [
     [
-      "#!/bin/sh\nset -eu\n# This run only; cannot remove its hard limit or access account credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/${callback.run}'\nKF_HOLD\nchmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n",
-      "#!/bin/sh\nset -eu\n# This run only; cannot remove its hard limit or access account credentials.\nexec curl --silent --show-error --fail --max-time 20 --proto '=https' --request POST --header 'Authorization: Bearer ${callback.token}' --data-binary '' '${origin}${prefix ? '/' + prefix : ''}/hold/999-1'\nKF_HOLD\nchmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n"
+      "/hold/${KF_RUN_ID:?}",
+      "/hold/999-1"
     ]
   ],
   "v5:ssh-login-hold": [
     [
-      "chmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.\nif [ -n \"\\${SSH_CONNECTION:-}\" ]; then\n    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true\nfi\nKF_PROFILE\n",
-      "chmod 700 /usr/local/bin/kf-box-hold\ncat > /etc/profile.d/kf-ci-hold.sh <<'KF_PROFILE'\n# An authenticated SSH login takes MANUAL; ordinary non-login workloads do not.\nif false; then\n    /usr/local/bin/kf-box-hold >/dev/null 2>&1 || true\nfi\nKF_PROFILE\n"
+      "if [ -n \"${SSH_CONNECTION:-}\" ]",
+      "if false"
     ]
   ],
   "v5:heartbeat-after-cap": [
     [
-      "    if result is not None: payload['result']=result\n    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()\n    heartbeat_post=kind=='log' and text==''\n    if kind!='result' and not heartbeat_post and (attempted>=600 or sent+len(body)>900000):\n        omitted+=len((text or '').encode());return\n    seq+=1;sent+=len(body);attempted+=1\n    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.\n",
-      "    if result is not None: payload['result']=result\n    body=json.dumps(payload,separators=(',',':'),ensure_ascii=True).encode()\n    heartbeat_post=kind=='log' and text==''\n    if kind!='result' and (attempted>=600 or sent+len(body)>900000):\n        omitted+=len((text or '').encode());return\n    seq+=1;sent+=len(body);attempted+=1\n    # curl retries reuse this exact payload/sequence; no redirect or arbitrary URL.\n"
+      "if self.pending is None and self.clock() - self.last_ok >= self.heartbeat:",
+      "if False:"
     ]
   ],
   "v5:heartbeat-busy-branch": [
     [
-      "        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        if current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n    if pending: post('log',pending.decode('utf-8',errors='replace'))\nrc=child.wait()\n",
-      "        current=time.monotonic()\n        if pending and (len(pending)>=8192 or current-last>=1):\n            post('log',pending.decode('utf-8',errors='replace'));pending=b'';last=current\n        elif current-heartbeat>=${DEFAULTS.heartbeatMinutes * 60}:\n            post('log','');heartbeat=current\n    if pending: post('log',pending.decode('utf-8',errors='replace'))\nrc=child.wait()\n"
+      "        if self.pending is None and self.clock() - self.last_ok >= self.heartbeat:",
+      "        elif self.pending is None and self.clock() - self.last_ok >= self.heartbeat:"
     ]
   ],
   "v5:heartbeat-ten-minutes": [
@@ -1197,14 +1217,14 @@
   ],
   "v5:soft-expired-no-work": [
     [
-      "'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\nremaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}\nwork=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 124\\\\n'\nwork=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))\npost('progress','Suite starting')\nchild=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n",
-      "'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\nremaining=math.floor(soft_deadline/1000-time.time()) if soft_deadline is not None else ${minutes * 60 - DEFAULTS.softMarginMinutes * 60}\nwork=work.replace('__KF_SOFT_SECONDS__',str(max(1,remaining))) if remaining>0 else 'exit 0\\\\n'\nwork=work.replace('__KF_SOFT_DEADLINE_MS__',str(soft_deadline if soft_deadline is not None else math.floor(time.time()*1000+remaining*1000)))\npost('progress','Suite starting')\nchild=subprocess.Popen(['bash','-s'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)\n"
+      "elif [ \"$remaining\" -le 0 ]; then",
+      "elif false; then"
     ]
   ],
   "v5:shipped-numeric-overrides": [
     [
-      "[vars]\n# Numeric owner policy defaults are defined once in defaults.json.\nRENTING_ENABLED = \"false\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc.\nDEPLOYED_BUNDLE_SHA256 = \"c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f\"\nOWNER_GITHUB_ID = \"REPLACE_ME\"\n",
-      "[vars]\n# Numeric owner policy defaults are defined once in defaults.json.\nRENTING_ENABLED = \"false\"\nMAX_PRICE_USD_HOUR = \"0.5\"\nTTL_MINUTES = \"20\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc.\nDEPLOYED_BUNDLE_SHA256 = \"c139d8ee64d88de9032b602bff0a5e776c223aa23bb06a0d3c1748491a15e69f\"\nOWNER_GITHUB_ID = \"REPLACE_ME\"\n"
+      "# Owner assertion of the exact emitted module; see deployment.json and trace doc.",
+      "MAX_PRICE_USD_HOUR = \"0.5\"\nTTL_MINUTES = \"20\"\n# Owner assertion of the exact emitted module; see deployment.json and trace doc."
     ]
   ],
   "v5:mandatory-verification": [
@@ -1297,8 +1317,8 @@
   ],
   "v5:sweep-owner-only": [
     [
-      "    if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);\n    if (path === '/availability' && url.search !== '?profile=' + profile)\n      refuse('BAD_REQUEST', 400);\n    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master')\n    )\n      refuse('UNAUTHORIZED', 401);\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n",
-      "    if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);\n    if (path === '/availability' && url.search !== '?profile=' + profile)\n      refuse('BAD_REQUEST', 400);\n    /* mutant omits profile owner gate */\n    if (\n      profile === 'check' &&\n      c.workflow_ref !== cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/master'\n"
+      "    if (\n      profile === 'sweep' &&\n      (c.actor_id !== cfg.owner ||\n        c.event_name !== 'workflow_dispatch' ||\n        c.workflow_ref !== cfg.sweepWorkflow)\n    )\n      refuse('UNAUTHORIZED', 401);\n",
+      "    /* mutant omits profile owner gate */\n"
     ]
   ],
   "v5:preference-order-forced": [
@@ -1327,8 +1347,8 @@
   ],
   "v5:admission-rate-bound": [
     [
-      "        admissionWindow = window;\n        admissionCount = 0;\n      }\n      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);\n    }\n    const authorization = request.headers.get('Authorization');\n    if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);\n",
-      "        admissionWindow = window;\n        admissionCount = 0;\n      }\n      if (false) refuse('RATE_LIMIT', 429);\n    }\n    const authorization = request.headers.get('Authorization');\n    if (!authorization?.startsWith('Bearer ')) refuse('UNAUTHORIZED', 401);\n"
+      "      if (++admissionCount > DEFAULTS.admissionPerMinute) refuse('RATE_LIMIT', 429);",
+      "      if (false) refuse('RATE_LIMIT', 429);"
     ]
   ],
   "v5:separate-profile-daily": [
@@ -1397,14 +1417,14 @@
   ],
   "v5:sender-file-binding": [
     [
-      "    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)\n    if len(raw)>65536:raise ValueError('size')\n    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)\n    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or candidate['nonce']!=nonce or candidate['sha']!='${sha}' or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')\n    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n",
-      "    with open('/workspace/kf-ci-result.json','rb') as source:raw=source.read(65537)\n    if len(raw)>65536:raise ValueError('size')\n    candidate=json.loads(raw.decode('utf-8',errors='strict'),object_pairs_hook=unique)\n    if type(candidate) is not dict or set(candidate)!={'nonce','sha','verdict','suites','hardware'} or False or candidate['verdict'] not in {'PASS','FAIL','UNAVAILABLE'}:raise ValueError('binding')\n    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n"
+      "if any(key in doc and doc[key] != value for key, value in bound.items()):",
+      "if False:"
     ]
   ],
   "v5:approved-payload-path": [
     [
-      "git checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\nbash scripts/ci/vast_payload.sh '${sha}' '${nonce}'\nKF_TEST\n'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\n",
-      "git checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\nbash scripts/ci/vast_box_main.sh '${sha}' '${nonce}'\nKF_TEST\n'''\nsoft_deadline=${callback.softDeadline ?? 'None'}\n"
+      "payload=scripts/ci/vast_payload.sh",
+      "payload=scripts/ci/vast_box_main.sh"
     ]
   ],
   "v5:owner-sweep-selected-commit": [
@@ -1455,14 +1475,14 @@
   ],
   "v5:repo-defined-sender-suites": [
     [
-      "    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n    complete=all(r['fail']==0 and r['skip']==0 and r['pass']>0 for r in rows)\n    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:\n        candidate['verdict']='FAIL'\n        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})\n",
-      "    rows=candidate['suites'];hardware=candidate['hardware']\n    if type(rows) is not list or not 1<=len(rows)<=19 or any(type(r) is not dict or set(r)!={'name','pass','fail','skip'} or not isinstance(r['name'],str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,47}',r['name']) or any(type(r[k]) is not int or not 0<=r[k]<=10000000 for k in ['pass','fail','skip']) for r in rows) or len({r['name'] for r in rows})!=len(rows):raise ValueError('suites')\n    if type(hardware) is not dict or set(hardware)!={'gpu_name','compute_cap','driver_version'} or not isinstance(hardware['gpu_name'],str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,100}',hardware['gpu_name']) or type(hardware['compute_cap']) is not int or not 0<=hardware['compute_cap']<=2000 or not isinstance(hardware['driver_version'],str) or not re.fullmatch(r'unknown|[0-9]{3}\\\\.[0-9]{1,3}(?:\\\\.[0-9]{1,2})?',hardware['driver_version']):raise ValueError('hardware')\n    complete=len(rows)==9 and all(r['fail']==0 and r['skip']==0 and r['pass']>0 for r in rows)\n    if rc!=0 or candidate['verdict']!='PASS' or not complete or hardware['gpu_name']=='unknown' or hardware['driver_version']=='unknown' or hardware['compute_cap']<750:\n        candidate['verdict']='FAIL'\n        if not any(r['fail'] for r in rows):rows.append({'name':'timeout' if rc==124 else 'app_exit','pass':0,'fail':1,'skip':0})\n"
+      "complete = bool(rows) and all(",
+      "complete = len(rows) == 9 and all("
     ]
   ],
   "v5:exact-sha-shallow-fetch": [
     [
-      "git init /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit remote add origin https://github.com/${repo}.git\ngit fetch --depth=1 origin ${sha}\ngit checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\n",
-      "git init /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit remote add origin https://github.com/${repo}.git\ngit fetch origin ${sha}\ngit checkout --detach ${sha}\n[ \"$(git rev-parse HEAD)\" = '${sha}' ]\nexport KF_SOFT_DEADLINE_MS=__KF_SOFT_DEADLINE_MS__\n"
+      "git fetch --depth=1 origin ${sha}",
+      "git fetch origin ${sha}"
     ]
   ]
 }

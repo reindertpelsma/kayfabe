@@ -12,6 +12,7 @@ const files = [
   'reports',
   'oidc',
   'github',
+  'blobs',
   'vast',
   'ledger',
   'offers',

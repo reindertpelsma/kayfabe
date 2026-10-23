@@ -7,6 +7,7 @@ for (const retry of [false, true])
     const h = await setup({ HARD_RUNTIME_MINUTES: '180' });
     assert.equal((await h.call()).status, 200);
     await h.report({ seq: 1, kind: 'log', text: '' });
+    await h.report({ seq: 2, kind: 'result', result: { nonce, verdict: 'PASS' } });
     const r = await h.storage.get('record:123-1');
     assert.equal((await h.call('/hold/123-1', { token: callbackToken(r) })).status, 200);
     h.cloud.vastError = 503;

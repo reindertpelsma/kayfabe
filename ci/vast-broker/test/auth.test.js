@@ -78,18 +78,21 @@ test('JWKS cache avoids repeated requests', async () => {
   await v.verify(t, env.WORKER_URL);
   assert.equal(calls, 1);
 });
-test('unknown kid rotation refreshes keys', async () => {
+test('unknown kid rotation refreshes after cooldown', async () => {
   const { OidcVerifier } = await import('../src/oidc.js');
   let calls = 0;
+  let current = clock;
   const v = new OidcVerifier(
     async () => Response.json({ keys: [{ ...jwk, kid: ++calls === 1 ? 'test-key' : 'rotated' }] }),
-    () => clock,
+    () => current,
   );
   await v.verify(await jwt(), env.WORKER_URL);
+  await assert.rejects(v.verify(await jwt({}, { kid: 'rotated' }), env.WORKER_URL));
+  current += 60001;
   await v.verify(await jwt({}, { kid: 'rotated' }), env.WORKER_URL);
   assert.equal(calls, 2);
 });
-test('same-kid rotation verifies after refresh', async () => {
+test('same-kid rotation waits for scheduled key refresh', async () => {
   const { OidcVerifier } = await import('../src/oidc.js');
   const k = await webcrypto.subtle.generateKey(
     {
@@ -108,13 +111,19 @@ test('same-kid rotation verifies after refresh', async () => {
     use: 'sig',
   };
   let key = jwk;
+  let current = clock;
   const v = new OidcVerifier(
     async () => Response.json({ keys: [key] }),
-    () => clock,
+    () => current,
   );
   await v.verify(await jwt(), env.WORKER_URL);
   key = rotated;
-  await v.verify(await jwt({}, {}, k.privateKey), env.WORKER_URL);
+  await assert.rejects(v.verify(await jwt({}, {}, k.privateKey), env.WORKER_URL));
+  current += 3600001;
+  await v.verify(
+    await jwt({ exp: current / 1000 + 300, nbf: current / 1000 - 1 }, {}, k.privateKey),
+    env.WORKER_URL,
+  );
 });
 for (const change of [
   'actor',

@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, env, jwt, callbackToken, sha, nonce, sampleResult } from './helpers.js';
-import worker, { BrokerLedger } from '../src/index.js';
+import { createGateway, BrokerLedger } from '../src/index.js';
+// Component tests inject auth; v5-front-auth tests the real gateway.
+const worker = createGateway({ authorize: async () => {} });
 import { onstart } from '../src/onstart.js';
 const prefix = 'unit-path-only-' + 'p'.repeat(32);
 const request = async (
@@ -193,8 +195,9 @@ for (const bad of ["';$(id)", 'bad/path', 'p'.repeat(129), 'short'])
   );
 test('fixed callback URL includes the exact optional prefix', async () => {
   const h = await rent();
-  const script = h.cloud.calls.find((x) => x.url.endsWith('/asks/5/')).body.onstart;
-  assert.ok(script.includes(env.WORKER_URL + '/' + prefix + '/report/123-1'));
+  const body = h.cloud.calls.find((x) => x.url.endsWith('/asks/5/')).body;
+  const script = body.onstart;
+  assert.equal(body.env.KF_BROKER_URL, env.WORKER_URL + '/' + prefix);
   assert.doesNotMatch(script, /BROKER_PATH_PREFIX|OWNER_STOP_TOKEN|RUN_TOKEN_SECRET/);
 });
 for (const text of [
@@ -212,7 +215,8 @@ for (const text of [
     assert.ok(!data.log_tail_sanitised.includes(text), data.log_tail_sanitised);
   });
 for (const p of [undefined, ''])
-  test('unset optional prefix preserves original routes ' + String(p), async () => {
+  test('unset prefix refuses enabled renting ' + String(p), async () => {
     const h = await setup({ BROKER_PATH_PREFIX: p });
-    assert.equal((await h.call()).status, 200);
+    assert.equal((await h.call()).status, 503);
+    assert.equal(h.cloud.calls.length, 0);
   });
