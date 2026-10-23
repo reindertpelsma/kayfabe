@@ -19,6 +19,7 @@
 pub mod bar0;
 pub mod bar1mode;
 pub mod classes;
+pub mod die;
 pub mod display;
 pub mod falcon_gsp;
 pub mod fsp_gsp;
@@ -29,6 +30,7 @@ pub mod sked;
 pub mod usermode;
 
 pub use classes::{ClassSet, Kind, classes_for, is_any_dma_copy_class};
+pub use die::DieId;
 pub use host_classes::{DerivedHostClasses, HostLacksKind};
 pub use ptekind::{PTE_KIND_GENERIC, PTE_KIND_PITCH, uncompressed_pte_kind};
 
