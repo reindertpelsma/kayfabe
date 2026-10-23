@@ -46,4 +46,50 @@ class ResultTests(unittest.TestCase):
         self.assertEqual(rows_from_export(data,'kayfabe')[0]['run'],'result_x')
 
 
+class StampedCliTests(unittest.TestCase):
+    """The CLI never writes an unstamped table (owner decision 2026-10-23)."""
+    RELEASE = 'SPECviewperf 15.0.1'
+    CONFIG = 'host RTX 4070 Ti; VM guest Windows 11; kayfabe virtual GPU'
+
+    def run_cli(self, *extra):
+        import contextlib
+        import io
+        import json
+        import pathlib
+        import tempfile
+        import result_table
+        import spec_stamp
+        data = {'root': 'result_one',
+                'files': [{'path': 'result_one/run-log.txt',
+                           'text': '[Workload:blender-01] Completed'},
+                          {'path': 'result_one/blender-01/stdout.log', 'text': XML}],
+                'scores': [{'run': 'result_one', 'workload': 'blender-01', 'composite': 61.61}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            export = tmp / 'export.json'
+            export.write_text(json.dumps(data))
+            argv = [str(export), '--arm', 'vfio', '--output', str(tmp / 'fps.csv'),
+                    '--scores-output', str(tmp / 'scores.csv'), *extra]
+            with contextlib.redirect_stderr(io.StringIO()):
+                result_table.main(argv)
+            return ((tmp / 'fps.csv').read_text(), (tmp / 'scores.csv').read_text(), spec_stamp)
+
+    def test_release_and_configuration_are_mandatory(self):
+        for extra in ([], ['--release', self.RELEASE], ['--config', self.CONFIG]):
+            with self.assertRaises(SystemExit):
+                self.run_cli(*extra)
+
+    def test_guessed_release_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.run_cli('--release', '15', '--config', self.CONFIG)
+
+    def test_outputs_are_stamped_and_pass_the_checker(self):
+        fps, scores, spec_stamp = self.run_cli('--release', self.RELEASE, '--config', self.CONFIG)
+        self.assertIn('27.36 (nc)', fps)
+        self.assertIn('61.61 (nc)', scores)
+        self.assertEqual(spec_stamp.check_text(fps, 'csv'), [])
+        self.assertEqual(spec_stamp.check_text(scores, 'csv'), [])
+        self.assertIn(spec_stamp.DISCLAIMER, fps)
+
+
 if __name__=='__main__':unittest.main()
