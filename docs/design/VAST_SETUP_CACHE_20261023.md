@@ -1,5 +1,7 @@
 # Vast setup dependency cache — V8
 
+STATUS: LIVE, 2026-10-23.
+
 MEASURED on 2026-10-23, run `v7-kvm-20261023` (source `28084b96cebad2a853d72171f72f8d776946b8ba`): the saved timings below come from [V7 evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md); the destroyed box was not queried again. V8 used source commit ff29c4a83a1bd359352263e135573c8167c298b6; its [rental evidence](../../traces/vast_setup_v8_20261018/LIVE_RUN.md) records a fail-closed readiness race before package work.
 
 | Phase | V7 seconds | V8 seconds | Evidence / limit |
@@ -61,3 +63,26 @@ MEASURED on 2026-10-23, run `v8-fresh-kvm-20261023`, source commit 7e0fc2fcb8d8b
 | CUDA/merge/thin/fat suites | NOT RUN | First provision red stopped later stages |
 
 CODE READ: repo-side onstart now restores a missing/empty standard HOME from the current OS account, retaining explicit values. This post-lease fix has tests only; it was not applied to the immutable rented checkout. No kayfabe crate behavior, Worker rule or deadline changed.
+
+## Cloud-init replay before the next acceptance lease
+
+MEASURED on 2026-10-23, run `v8-cloud-init-replay-20261023`: two fresh Ubuntu 22.04 containers
+with external networking disabled drove the actual entry/cache/provision_box/provision_full,
+host driver, bench tree, CUDA ladder and merge-bar orchestration. The root non-login shell had
+no HOME, USER, LOGNAME or TTY; systemd was absent. KF values were only in /etc/environment.
+The replay uses explicit GPU/kernel/VM/compiler and deep suite fixtures; it is not a GPU verdict.
+Both scenarios passed their assertions: complete fixture PASS in 73.729 s; injected provisioning
+failure after the 575.51.03-to-580.159.04 swap in 55.325 s, with fresh hardware in the posted FAIL
+and no later CUDA stage. APT installed real reviewed packages offline. [Replay evidence](../../traces/vast_cloud_init_20261018/replay.json).
+
+CODE READ: the fresh-image replay exposed undeclared ssh-keygen/SSH-client dependencies.
+The shared required package set now includes openssh-client, and the skip-APT probe checks ssh,
+scp and ssh-keygen. Standalone EXPECTED RED commits 4238e09fd and c1b74a3d8 cover both the
+package declaration and the skipped-install defect. No Worker code/default/deadline changed.
+
+MEASURED on 2026-10-23, run `v8-cloudinit-cache-publish-20261023`: cache v2 contains 259 .deb
+packages / 159,395,796 raw bytes; its compressed .deb asset is 159,253,208 bytes. Vendor remains
+7,888,026 compressed bytes and both Cargo locks are unchanged. Both published assets were
+re-downloaded and hash checked, including with the Worker's read-only store credential in run
+`v8-cloudinit-cache-ro-20261023`. [Publication](../../traces/vast_cloud_init_20261018/cache_publication.json),
+[read-only check](../../traces/vast_cloud_init_20261018/cache_ro.json), [producer](../../traces/vast_cloud_init_20261018/cache_build.json).

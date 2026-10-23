@@ -37,10 +37,10 @@ class PackagePolicy(unittest.TestCase):
     def missing_ssh_tool_triggers_install(self, missing):
         source = PROVISION.read_text()
         policy = source[: source.index('echo "PROVISION_START')]
-        probe = source[source.index('NEED=""') : source.index('if ! command -v cargo')]
+        probe = source[source.index('NEED=""') : source.index("if ! command -v cargo")]
         with tempfile.TemporaryDirectory() as directory:
             trace = Path(directory) / "apt"
-            script = policy + '''
+            script = policy + """
 command() {
     if [ "$1" = -v ]; then
         [ "$2" != "$missing_tool" ] || return 1
@@ -51,10 +51,12 @@ ldd() { return 1; }
 wait_for_dpkg() { :; }
 apt-get() { printf '%s\\n' "$*" >> "$apt_trace"; }
 missing_tool=$1 apt_trace=$2 KF_PROVISION_PROFILE=ci
-'''
+"""
             process = subprocess.run(
                 ["bash", "-c", script + probe, "fixture", missing, str(trace)],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             self.assertEqual(process.returncode, 0, process.stderr)
             self.assertTrue(trace.is_file(), process.stdout)

@@ -1,0 +1,33 @@
+{
+  "run": "v8-cloud-init-gpu-free-20261023",
+  "tests": 325,
+  "result": "PASS",
+  "target": "Ubuntu22.04 Python3.10/GNU coreutils, network none",
+  "seconds": 68.046,
+  "replay_cases": 2,
+  "replay_scenarios": [
+    "pass",
+    "swap-failure"
+  ],
+  "noncanonical_mutants": 96,
+  "mutant_components": {
+    "payload": 29,
+    "provider_env": 8,
+    "diagnostic": 10,
+    "package_policy": 6,
+    "cache_helper_home": 43
+  },
+  "min_named_killers": 2,
+  "canonical": {
+    "mutants": 60,
+    "killed": 60,
+    "problems": 0
+  },
+  "source_files_sha256": {
+    "scripts/bench/provision_box.sh": "c4ccec7641ff83175dc8118ccde0a40f2f73e940e20bb5a4c685386afe78dd50",
+    "scripts/ci/setup-cache.lock.json": "5bfaf7426be5bc6f5b29cfc09657c67ee1a102e3047658001f7a4e023777b27a",
+    "scripts/ci/vast_onstart.sh": "09d4346d6b41e2cc0d5762557f4068255d0a86b2e18e74471222ecb594206b41",
+    "scripts/ci/vast_payload.py": "70a71fa593df5962980024008929211e5ec3c67c3816389efe13eea8f48f4b59",
+    "scripts/ci/cloud_init_replay.py": "0d59c040afb608007eca52e86125f76e49663d21376dbcbd98eb4e7c7f4219db"
+  }
+}

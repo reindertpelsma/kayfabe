@@ -19,7 +19,7 @@ die() { echo "provision_box: $*" >&2; exit 1; }
 kf_packages() {
   local profile=${1:?profile}
   local required=(build-essential pkg-config git curl python3 kmod pciutils cpio zstd
-                  psmisc busybox-static)
+                  psmisc busybox-static openssh-client)
   local optional=(clang lld libssl-dev)
   local bench=(ninja-build meson python3-venv python3-pip python3-tomli libglib2.0-dev
                libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage
@@ -202,7 +202,7 @@ fi
 NEED=""
 KF_PROVISION_PROFILE=${KF_PROVISION_PROFILE:-full}
 case "$KF_PROVISION_PROFILE" in ci|full) ;; *) die "unknown provisioning profile";; esac
-commands=(gcc g++ make pkg-config git curl python3 modprobe lspci cpio zstd fuser)
+commands=(gcc g++ make pkg-config git curl python3 modprobe lspci cpio zstd fuser ssh scp ssh-keygen)
 [ "$KF_PROVISION_PROFILE" != full ] || commands+=(clang lld)
 for b in "${commands[@]}"; do
   command -v "$b" >/dev/null 2>&1 || NEED="$NEED $b"

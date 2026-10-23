@@ -20,6 +20,14 @@ def changed(old, new):
 
 CASES = [
     (
+        "missing-ssh-tools-skip-the-apt-probe",
+        changed("fuser ssh scp ssh-keygen)", "fuser)"),
+    ),
+    (
+        "fresh-image-loses-guest-ssh-tools",
+        changed("busybox-static openssh-client)", "busybox-static)"),
+    ),
+    (
         "ci-installs-optional-stack",
         changed(
             "ci) printf '%s\\n' \"${required[@]}\"",
