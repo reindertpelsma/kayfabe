@@ -21,8 +21,8 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill", "kf-box-hold", "kf-ci-hold.sh"]
-R, E, K, D = "vast_report.py", "EnvValidation.", "KillAndHold.", "Daemon."
+FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill"]
+R, E, K, D = "vast_report.py", "EnvValidation.", "Kill.", "Daemon."
 RP, FR, ON = "Reporter.", "FinalResult.", "Onstart."
 V = "vast_onstart.sh"
 
@@ -96,14 +96,6 @@ CASES = [
         [ON + "test_env_file_is_root_only_and_helpers_are_installed"],
     ),
     (
-        "env-file",
-        "hold-hook-not-installed",
-        V,
-        'install -m 644 "$here/kf-ci-hold.sh" "$profile_dir/kf-ci-hold.sh"',
-        "true",
-        [ON + "test_env_file_is_root_only_and_helpers_are_installed"],
-    ),
-    (
         "sequence-idempotency",
         "retry-renumbers",
         R,
@@ -164,14 +156,6 @@ CASES = [
     ),
     (
         "token-scope",
-        "hold-follows-redirects",
-        "kf-box-hold",
-        "--max-time 20 --max-redirs 0",
-        "--location --max-time 20 --max-redirs 5",
-        [K + "test_hold_does_not_follow_redirects"],
-    ),
-    (
-        "token-scope",
         "kill-token-on-argv",
         "kf-box-kill",
         "curl --config - --silent",
@@ -220,14 +204,6 @@ CASES = [
         "'%.200s'",
         "'%.2000s'",
         [K + "test_kill_default_reason_and_bounded_sanitised_reason"],
-    ),
-    (
-        "kill-command",
-        "hold-wrong-method-body",
-        "kf-box-hold",
-        "--data-binary ''",
-        "--data-binary 'x'",
-        [K + "test_hold_request_shape"],
     ),
     (
         "heartbeat",
@@ -515,49 +491,6 @@ CASES = [
         'rm -f "$result" ',
         "true ",
         [ON + "test_stale_result_file_is_not_trusted"],
-    ),
-    (
-        "hold-hook",
-        "no-once-guard",
-        "kf-ci-hold.sh",
-        '[ -z "${KF_CI_HOLD_DONE:-}" ]',
-        "true",
-        [K + "test_login_hook_calls_hold_once_per_login"],
-    ),
-    (
-        "hold-hook",
-        "any-login",
-        "kf-ci-hold.sh",
-        '[ -n "${SSH_CONNECTION:-}" ] && ',
-        "",
-        [K + "test_login_hook_ignores_non_ssh_and_non_interactive_shells"],
-    ),
-    (
-        "hold-hook",
-        "non-interactive",
-        "kf-ci-hold.sh",
-        "*i*)\n",
-        "*)\n",
-        [K + "test_login_hook_ignores_non_ssh_and_non_interactive_shells"],
-    ),
-    (
-        "hold-hook",
-        "blocking-call",
-        "kf-ci-hold.sh",
-        "2>&1 &) \\\n",
-        "2>&1) \\\n",
-        [K + "test_login_hook_never_blocks_on_a_slow_broker"],
-    ),
-    (
-        "hold-hook",
-        "failure-aborts-login",
-        "kf-ci-hold.sh",
-        "2>&1 &) \\\n                >/dev/null 2>&1 || true",
-        "2>&1) \\\n                >/dev/null 2>&1 || exit 1",
-        [
-            K + "test_login_hook_tolerates_every_failure",
-            K + "test_login_hook_never_blocks_on_a_slow_broker",
-        ],
     ),
 ]
 

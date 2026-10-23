@@ -2,6 +2,7 @@
 """Trusted BASE-branch controller. Run with python3 -I; stdlib only.
 Worker text is display-only. No checkout, cache, binary/artifact input or upload.
 """
+
 import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, urllib.parse
 from pathlib import Path
 
@@ -13,7 +14,6 @@ STATES = {
     "BOOTING",
     "TESTING",
     "GRACE",
-    "MANUAL",
     "NOT_NEEDED",
     "NOT_ELIGIBLE",
     "NEEDS_APPROVAL",
@@ -338,7 +338,6 @@ STATUS_KEYS = {
     "boot_deadline_at",
     "hard_deadline_at",
     "soft_deadline_at",
-    "manual_deadline_at",
     "last_post_at",
     "result_deadline_at",
 }
@@ -436,16 +435,13 @@ def validate_status(data, ctx, manifest, http_status):
         "boot_deadline_at",
         "hard_deadline_at",
         "soft_deadline_at",
-        "manual_deadline_at",
         "last_post_at",
         "result_deadline_at",
     ]:
         if data[key] is not None and (not integer(data[key], data["started_at"], 4102444800000)):
             raise Invalid()
     if data["state"] != "NOT_NEEDED" and (
-        data["soft_deadline_at"] is None
-        or data["boot_deadline_at"] is None
-        or data["manual_deadline_at"] is None
+        data["soft_deadline_at"] is None or data["boot_deadline_at"] is None
     ):
         raise Invalid()
     if (
@@ -454,7 +450,7 @@ def validate_status(data, ctx, manifest, http_status):
         and data["soft_deadline_at"] >= data["hard_deadline_at"]
     ):
         raise Invalid()
-    if data["verdict"] == "PASS" and data["state"] not in {"GRACE", "MANUAL", "NONE", "NOT_NEEDED"}:
+    if data["verdict"] == "PASS" and data["state"] not in {"GRACE", "NONE", "NOT_NEEDED"}:
         raise Invalid()
     if data["state"] == "GRACE" and data["result_at"] is None:
         raise Invalid()
@@ -680,7 +676,7 @@ class Runner:
                 self.pages(data["log_cursor"])
                 if (
                     data["state"] == "NOT_NEEDED"
-                    or data["state"] in {"GRACE", "MANUAL", "NONE"}
+                    or data["state"] in {"GRACE", "NONE"}
                     and data["result_at"] is not None
                 ):
                     if self.cursor != data["log_cursor"] or self.hash != data["log_sha256"]:
@@ -690,7 +686,7 @@ class Runner:
                     result = {"state": data["state"], "verdict": data["verdict"], "verified": 1}
                     self.show(data["gpu_model"])
                     break
-                if data["state"] not in {"CREATING", "BOOTING", "TESTING", "MANUAL"}:
+                if data["state"] not in {"CREATING", "BOOTING", "TESTING"}:
                     break
                 time.sleep(20)
                 code, data = self.retry_read("/status/" + self.ctx["run"])
@@ -864,10 +860,18 @@ def main():
             else base
         )
         pr = event.get("number") if event_name == "pull_request_target" else None
+        profile = "sweep" if sys.argv[2:] == ["--profile", "sweep"] else "check"
+        if sys.argv[2:] and profile != "sweep":
+            raise Invalid()
+        # Check runs start only from pull_request_target or a push to master; the sweep is a
+        # dispatch of its own pinned workflow. The tested commit is always the run head.
         if (
             not hex_value(sha, 40)
             or not hex_value(base, 40)
-            or event_name not in {"pull_request_target", "workflow_dispatch", "push"}
+            or event_name
+            not in (
+                {"workflow_dispatch"} if profile == "sweep" else {"pull_request_target", "push"}
+            )
         ):
             raise Invalid()
         if event_name == "pull_request_target" and (
@@ -878,20 +882,6 @@ def main():
             raise Invalid()
         if event_name == "workflow_dispatch" and os.environ["GITHUB_REF"] != "refs/heads/master":
             raise Invalid()
-        if sys.argv[2:] == ["--profile", "sweep"]:
-            selected = event.get("inputs", {}).get("tested_sha", "")
-            if selected:
-                if not hex_value(selected, 40):
-                    raise Invalid()
-                sha = selected
-        if event_name == "workflow_dispatch" and sys.argv[2:] != ["--profile", "sweep"]:
-            selected = event.get("inputs", {}).get("sha", "")
-            if not isinstance(selected, str):
-                raise Invalid()
-            if selected:
-                if not hex_value(selected, 40):
-                    raise Invalid()
-                sha = selected
         run = os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]
         if (
             not re.fullmatch("[1-9][0-9]{0,19}-[1-9][0-9]{0,19}", run)
@@ -924,9 +914,6 @@ def main():
             + manifest["bundle_sha256"],
             flush=True,
         )
-        profile = "sweep" if sys.argv[2:] == ["--profile", "sweep"] else "check"
-        if sys.argv[2:] and profile != "sweep":
-            raise Invalid()
         preferences = event.get("inputs", {}).get(
             "preferences", "rotate" if profile == "sweep" else ""
         )

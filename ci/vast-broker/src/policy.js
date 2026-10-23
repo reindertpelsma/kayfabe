@@ -40,18 +40,6 @@ export function configuration(env) {
     u.pathname !== '/'
   )
     refuse();
-  const mode = env.APPROVAL_MODE ?? 'owner_push_or_review';
-  if (
-    ![
-      'owner_push_or_review',
-      'owner_push',
-      'review_or_author',
-      'review_only',
-      'actor_only',
-    ].includes(mode)
-  )
-    refuse();
-  if (!['true', 'false'].includes(env.RENT_DRAFTS ?? 'false')) refuse();
   const list = (name, fallback) => {
     let value;
     try {
@@ -73,25 +61,14 @@ export function configuration(env) {
       refuse();
     return value;
   };
-  const bases = list('ALLOWED_BASE_BRANCHES', ['master']),
-    patterns = list('PATH_SKIP_PATTERNS', [
-      '**/*.md',
-      'docs/**',
-      'traces/**',
-      'archive/**',
-      'LICENSE*',
-      '.github/ISSUE_TEMPLATE/**',
-    ]);
   if (!numericId(env.REPOSITORY_GITHUB_ID)) refuse();
   const checkWorkflows = (() => {
     try {
       return JSON.parse(
         env.CHECK_JOB_WORKFLOW_REFS ??
-          JSON.stringify(
-            bases.map(
-              (base) => env.REPOSITORY + '/' + DEFAULTS.checkWorkflowPath + '@refs/heads/' + base,
-            ),
-          ),
+          JSON.stringify([
+            env.REPOSITORY + '/' + DEFAULTS.checkWorkflowPath + '@refs/heads/master',
+          ]),
       );
     } catch {
       refuse();
@@ -146,13 +123,9 @@ export function configuration(env) {
     reportCount: number('MAX_REPORTS', DEFAULTS.reportCount, DEFAULTS.reportCount),
     reportBytes: number('MAX_REPORT_BYTES', DEFAULTS.reportBytes, DEFAULTS.reportBytes),
     reportRate: number('REPORT_RATE_LIMIT', DEFAULTS.reportRate, DEFAULTS.reportRate),
-    bases,
-    patterns,
     repo: env.REPOSITORY,
     owner: env.OWNER_GITHUB_ID,
     audience: env.WORKER_URL,
-    mode,
-    drafts: env.RENT_DRAFTS === 'true',
     reserve: number('CREDIT_RESERVE_USD', DEFAULTS.reserve),
     price: number('MAX_PRICE_USD_HOUR', DEFAULTS.price, 2),
     boot: number('BOOT_LIMIT_MINUTES', DEFAULTS.bootMinutes, DEFAULTS.maxMinutes) * 60000,
@@ -162,8 +135,6 @@ export function configuration(env) {
     heartbeatTimeout: DEFAULTS.heartbeatTimeoutMinutes * 60000,
     passGrace: number('PASS_GRACE_MINUTES', DEFAULTS.passGraceMinutes, DEFAULTS.maxMinutes) * 60000,
     failGrace: number('FAIL_GRACE_MINUTES', DEFAULTS.failGraceMinutes, DEFAULTS.maxMinutes) * 60000,
-    manualCeiling:
-      number('MANUAL_CEILING_MINUTES', DEFAULTS.manualCeilingMinutes, DEFAULTS.maxMinutes) * 60000,
     cronPeriod: DEFAULTS.cronPeriod,
     dailyCount: number('DAILY_RENTALS', DEFAULTS.dailyCount, 20),
     daily: number('DAILY_SPEND_USD', DEFAULTS.daily),
@@ -182,9 +153,7 @@ export function configuration(env) {
   )
     refuse();
   if (
-    ![cfg.boot, cfg.hard, cfg.passGrace, cfg.failGrace, cfg.manualCeiling].every((x) =>
-      Number.isInteger(x / 60000),
-    ) ||
+    ![cfg.boot, cfg.hard, cfg.passGrace, cfg.failGrace].every((x) => Number.isInteger(x / 60000)) ||
     cfg.hard <= cfg.softMargin
   )
     refuse();
@@ -469,52 +438,4 @@ export function offerRejections(
 }
 export function validOffer(offer, cfg, context) {
   return offerRejections(offer, cfg, context).length === 0;
-}
-
-// Exclusions apply only to canonical API paths. Unknown names are always relevant.
-export function skippedPath(path, patterns) {
-  if (
-    typeof path !== 'string' ||
-    !path ||
-    path.length > 4096 ||
-    !/^[A-Za-z0-9_ ./-]+$/.test(path) ||
-    path.split('/').some((x) => !x || x === '.' || x === '..') ||
-    path.startsWith('ci/vast-broker/')
-  )
-    return false;
-  return patterns.some((pattern) => {
-    let expression = '^';
-    for (let i = 0; i < pattern.length; i++) {
-      const char = pattern[i];
-      if (char === '*' && pattern[i + 1] === '*') {
-        i++;
-        if (pattern[i + 1] === '/') {
-          i++;
-          expression += '(?:.*/)?';
-        } else expression += '.*';
-      } else if (char === '*') expression += '[^/]*';
-      else if (char === '?') expression += '[^/]';
-      else expression += char === '.' ? '\\.' : char;
-    }
-    return new RegExp(expression + '$').test(path);
-  });
-}
-export function skippedFiles(files, count, patterns) {
-  if (
-    !Number.isSafeInteger(count) ||
-    count <= 0 ||
-    count >= 3000 ||
-    !Array.isArray(files) ||
-    files.length !== count ||
-    new Set(files.map((x) => x?.filename)).size !== count
-  )
-    return false;
-  return files.every(
-    (x) =>
-      x &&
-      ['added', 'modified', 'removed', 'renamed', 'copied', 'changed'].includes(x.status) &&
-      skippedPath(x.filename, patterns) &&
-      (!['renamed', 'copied'].includes(x.status) || typeof x.previous_filename === 'string') &&
-      (x.previous_filename === undefined || skippedPath(x.previous_filename, patterns)),
-  );
 }

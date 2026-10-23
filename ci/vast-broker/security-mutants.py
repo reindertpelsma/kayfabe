@@ -37,31 +37,6 @@ cases = [
     ),
     ("spaced-absence-settlement", "src/index.js", []),
     (
-        "hold-result-gate",
-        "src/index.js",
-        [
-            (
-                "if (r.resultAt === undefined) refuse('UNAUTHORIZED', 401);",
-                "/* mutant permits unfinished hold */",
-            )
-        ],
-    ),
-    (
-        "hold-window-cap",
-        "src/index.js",
-        [("r.manualDeadline = Math.min(", "r.manualDeadline = Math.max(")],
-    ),
-    (
-        "manual-cancellation",
-        "src/index.js",
-        [
-            (
-                "if (record.phase === 'MANUAL' && record.manualOwnerConfirmed) return;",
-                "if (record.phase === 'MANUAL') return;",
-            )
-        ],
-    ),
-    (
         "front-signature",
         "src/index.js",
         [
@@ -76,8 +51,8 @@ cases = [
         "src/index.js",
         [
             (
-                "  checkedIdentity(c, cfg);",
-                "  return c;",
+                "function verifiedIdentity(c, cfg) {\n  if (",
+                "function verifiedIdentity(c, cfg) {\n  return c;\n  if (",
             )
         ],
     ),
@@ -111,7 +86,6 @@ if not args.preflight:
                     "v5-security-critical.test.js",
                     "v5-create-recovery.test.js",
                     "v5-refused-retry.test.js",
-                    "v5-hold-security.test.js",
                     "v5-front-auth.test.js",
                     "v5-deploy-binding.test.js",
                 ]
@@ -166,7 +140,6 @@ for name, file, patches in cases:
                 str(B / "test/v5-security-critical.test.js"),
                 str(B / "test/v5-create-recovery.test.js"),
                 str(B / "test/v5-refused-retry.test.js"),
-                str(B / "test/v5-hold-security.test.js"),
                 str(B / "test/v5-front-auth.test.js"),
                 str(B / "test/v5-deploy-binding.test.js"),
             ],

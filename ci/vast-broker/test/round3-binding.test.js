@@ -64,14 +64,20 @@ test('R3 missing rent nonce refuses before create', async () => {
   assert.equal(response.status, 400);
   assert.equal(h.cloud.creates, 0);
 });
-for (const key of ['tested_sha', 'pr_number'])
-  test('R3 rent crosschecks caller ' + key, async () => {
+// The tested commit must be the run head; pr_number is an informational echo only.
+for (const tested of ['d'.repeat(40), 'e'.repeat(40)])
+  test('R3 rent crosschecks caller tested_sha ' + tested[0], async () => {
     const h = await setup();
-    const response = await h.call('/rent', {
-      body: { ...request, [key]: key === 'tested_sha' ? 'd'.repeat(40) : 8 },
-    });
-    assert.equal(response.status, 401);
+    const response = await h.call('/rent', { body: { ...request, tested_sha: tested } });
+    assert.equal(response.status, 409);
     assert.equal(h.cloud.creates, 0);
+  });
+for (const pr of [8, null])
+  test('R3 rent echoes caller pr_number without authority ' + pr, async () => {
+    const h = await setup();
+    const response = await h.call('/rent', { body: { ...request, pr_number: pr } });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).pr, pr);
   });
 test('R3 same run cannot replace runner nonce', async () => {
   const h = await setup();
@@ -157,15 +163,4 @@ for (const key of ['runner_nonce', 'sha'])
     });
     assert.equal(response.status, 400);
     assert.equal((await h.storage.get('record:123-1')).verdict, null);
-  });
-for (const pr of [8, 9])
-  test('R3 owner dispatch crosschecks PR caller context ' + pr, async () => {
-    const h = await setup();
-    h.cloud.run.event = 'workflow_dispatch';
-    const response = await h.call('/rent', {
-      claims: { event_name: 'workflow_dispatch', ref: 'refs/heads/owner-pr' },
-      body: { ...request, pr_number: pr },
-    });
-    assert.equal(response.status, 409);
-    assert.equal(h.cloud.creates, 0);
   });

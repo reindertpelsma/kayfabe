@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGateway } from '../src/index.js';
-import { setup, env, sha, repo, clock, callbackToken } from './helpers.js';
+import { OidcVerifier } from '../src/oidc.js';
+import { setup, env, sha, repo, clock, callbackToken, jwt, jwk } from './helpers.js';
 // FALSIFIER H-AUTH (owner 19:25): the Worker authorizes anything beyond signed identity,
 // the pinned workflow, triggering_actor == owner and requested sha == run head_sha.
 const base = 'd'.repeat(40);
@@ -159,6 +160,7 @@ for (const patch of [
     const response = await gateway.fetch(new Request(env.WORKER_URL + '/status/123-1'), {
       ...env,
       ...patch,
+      RENTING_ENABLED: 'false',
       LEDGER: {
         idFromName: () => 1,
         get: () => ({
@@ -183,4 +185,13 @@ for (const change of ['closed', 'moved'])
     await h.service.sweep();
     assert.deepEqual(pulls(h), []);
     assert.deepEqual(h.cloud.deletes, []);
+  });
+// The Access audience-array exception is gone; GitHub OIDC audience stays one exact string.
+for (const aud of [[env.WORKER_URL], ['other', env.WORKER_URL]])
+  test('round GitHub audience stays scalar ' + aud.length, async () => {
+    const verifier = new OidcVerifier(
+      async () => Response.json({ keys: [jwk] }),
+      () => clock,
+    );
+    await assert.rejects(verifier.verify(await jwt({ aud }), env.WORKER_URL));
   });

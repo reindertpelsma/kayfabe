@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, sha, env } from './helpers.js';
-// FALSIFIER: a master-based owner dispatch cannot approve an exact alternative
-// repo SHA for sweep, or a different identity can use the same route.
-for (const target of ['c'.repeat(40), 'e'.repeat(40)])
-  test('V5 owner sweep pins chosen commit ' + target[0], async () => {
+// FALSIFIER (owner 19:25): a sweep tests any commit other than its own run head.
+for (const target of [sha, 'e'.repeat(40)])
+  test('V5 owner sweep pins the run head commit ' + target[0], async () => {
     const h = await setup(),
       base = h.cloud.fetch;
     h.cloud.run.event = 'workflow_dispatch';
@@ -31,7 +30,8 @@ for (const target of ['c'.repeat(40), 'e'.repeat(40)])
         preferences: ['AD104'],
       },
     });
-    assert.equal(r.status, 200);
+    assert.equal(r.status, target === sha ? 200 : 409);
+    if (target !== sha) return assert.equal(h.cloud.creates, 0);
     assert.equal((await h.storage.get('record:123-1')).sha, target);
     assert.match(h.cloud.instances.get('900').onstart, new RegExp(target));
   });

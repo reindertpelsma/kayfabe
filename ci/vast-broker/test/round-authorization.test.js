@@ -2,96 +2,72 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { env, repo, sha } from './helpers.js';
 import { configuration } from '../src/policy.js';
+import { allowedWorkflowRef } from '../src/workflow-authority.js';
 const cfg = configuration(env);
-const base = (branch) => ({
+const check = repo + '/.github/workflows/gpu-vast.yml@refs/heads/master';
+const sweep = repo + '/.github/workflows/gpu-vast-sweep.yml@refs/heads/master';
+const claims = (workflow = check, event_name = 'push') => ({
   repository: repo,
   actor_id: '42',
   run_id: '123',
   run_attempt: '1',
-  event_name: 'push',
+  event_name,
   sha,
-  ref: 'refs/heads/' + branch,
-  workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/' + branch,
-  job_workflow_ref: repo + '/.github/workflows/gpu-vast.yml@refs/heads/' + branch,
+  ref: 'refs/heads/master',
+  workflow_ref: workflow,
+  job_workflow_ref: workflow,
 });
-const api = (branch) => ({
-  id: 123,
-  run_attempt: 1,
-  event: 'push',
-  actor: { id: 42 },
-  triggering_actor: { id: 42 },
-  repository: { full_name: repo },
-  head_repository: { full_name: repo },
-  head_sha: sha,
-  head_branch: branch,
-  status: 'in_progress',
-});
-async function allowed(c, r, profile = 'any') {
-  const { allowedWorkflowRef } = await import('../src/workflow-authority.js');
-  return allowedWorkflowRef(c, cfg, r, profile);
-}
-// FALSIFIER H11: the exception admits any nonowner/fork/unbound workflow/run identity.
-for (const branch of ['feature/owner', 'owner-unicode-é']) {
-  test('round pure workflow authority allows owner branch ' + branch, async () => {
-    assert.equal(await allowed(base(branch), api(branch)), true);
+// FALSIFIER H11 (owner 19:10/19:25): any workflow other than the two pinned master files, or
+// an event the file's YAML cannot start, passes the pure pin.
+for (const event of ['push', 'pull_request_target'])
+  test('round pure workflow authority keeps master check pin ' + event, () => {
+    assert.equal(allowedWorkflowRef(claims(check, event), cfg, 'check'), true);
+    assert.equal(allowedWorkflowRef(claims(check, event), cfg, 'any'), true);
+    assert.equal(allowedWorkflowRef(claims(check, event), cfg, 'sweep'), false);
   });
-  for (const defect of [
-    'repository',
-    'path',
-    'tag',
-    'PR',
-    'actor',
-    'triggering',
-    'api-actor',
-    'fork',
-    'run-repo',
-    'sha',
-    'run-id',
-    'attempt',
-    'event',
-    'job-ref',
-    'branch',
-  ])
-    test('round pure workflow authority rejects ' + defect + ' ' + branch, async () => {
-      const c = base(branch),
-        r = api(branch);
-      if (defect === 'repository') c.repository = 'other/project';
-      if (defect === 'path')
-        c.workflow_ref = c.job_workflow_ref = repo + '/.github/workflows/evil.yml@' + c.ref;
-      if (defect === 'tag')
-        c.workflow_ref = c.job_workflow_ref =
-          repo + '/.github/workflows/gpu-vast.yml@refs/tags/tag-' + branch.replaceAll('/', '-');
-      if (defect === 'PR')
-        c.workflow_ref = c.job_workflow_ref =
-          repo +
-          '/.github/workflows/gpu-vast.yml@refs/pull/' +
-          (branch.startsWith('feature') ? '7' : '8') +
-          '/merge';
-      if (defect === 'tag' || defect === 'PR') {
-        c.ref = c.workflow_ref.split('@')[1];
-        r.head_branch = c.ref.split('/').slice(2).join('/');
-      }
-      if (defect === 'actor') {
-        c.actor_id = '43';
-        r.actor.id = 43;
-      }
-      if (defect === 'api-actor') r.actor.id = 43;
-      if (defect === 'triggering') r.triggering_actor.id = 43;
-      if (defect === 'fork') r.head_repository.full_name = 'fork/project';
-      if (defect === 'run-repo') r.repository.full_name = 'other/project';
-      if (defect === 'sha') r.head_sha = 'd'.repeat(40);
-      if (defect === 'run-id') r.id = 124;
-      if (defect === 'attempt') r.run_attempt = 2;
-      if (defect === 'event') r.event = 'workflow_run';
-      if (defect === 'job-ref')
-        c.job_workflow_ref = repo + '/.github/workflows/gpu-vast.yml@refs/heads/master';
-      if (defect === 'branch') r.head_branch = 'other';
-      assert.equal(await allowed(c, r), false);
-    });
-}
 for (const actor of ['42', '43'])
-  test('round pure workflow authority keeps master pin ' + actor, async () => {
-    const c = { ...base('master'), actor_id: actor };
-    assert.equal(await allowed(c, undefined, 'check'), true);
-    assert.equal(await allowed(c, undefined, 'sweep'), false);
+  test('round pure workflow authority keeps master sweep pin ' + actor, () => {
+    const c = { ...claims(sweep, 'workflow_dispatch'), actor_id: actor };
+    assert.equal(allowedWorkflowRef(c, cfg, 'sweep'), true);
+    assert.equal(allowedWorkflowRef(c, cfg, 'check'), false);
+  });
+for (const defect of [
+  'repository',
+  'repository-sweep',
+  'path',
+  'branch',
+  'tag',
+  'PR',
+  'suffix',
+  'case',
+  'job-ref',
+  'job-ref-evil',
+  'check-dispatch',
+  'check-workflow_run',
+  'sweep-push',
+  'profile',
+])
+  test('round pure workflow authority rejects ' + defect, () => {
+    let c = claims(),
+      profile = 'any';
+    const ref = (value) => (c.workflow_ref = c.job_workflow_ref = value);
+    if (defect === 'repository') c.repository = 'other/project';
+    if (defect === 'repository-sweep') {
+      c = { ...claims(sweep, 'workflow_dispatch'), repository: 'other/project' };
+      profile = 'sweep';
+    }
+    if (defect === 'path') ref(repo + '/.github/workflows/evil.yml@refs/heads/master');
+    if (defect === 'branch') ref(repo + '/.github/workflows/gpu-vast.yml@refs/heads/feature');
+    if (defect === 'tag') ref(repo + '/.github/workflows/gpu-vast.yml@refs/tags/master');
+    if (defect === 'PR') ref(repo + '/.github/workflows/gpu-vast.yml@refs/pull/7/merge');
+    if (defect === 'suffix') ref(check + '.x');
+    if (defect === 'case') ref(check.replace('gpu-vast', 'GPU-vast'));
+    if (defect === 'job-ref') c.job_workflow_ref = sweep;
+    if (defect === 'job-ref-evil')
+      c.job_workflow_ref = repo + '/.github/workflows/evil.yml@refs/heads/master';
+    if (defect === 'check-dispatch') c = claims(check, 'workflow_dispatch');
+    if (defect === 'check-workflow_run') c = claims(check, 'workflow_run');
+    if (defect === 'sweep-push') c = claims(sweep, 'push');
+    if (defect === 'profile') profile = 'other';
+    assert.equal(allowedWorkflowRef(c, cfg, profile), false);
   });

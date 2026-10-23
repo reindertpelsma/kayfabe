@@ -11,8 +11,6 @@ import {routePath,notFound,endpointSecrets,routeKind,secretFormatError} from './
 // prettier-ignore
 import {OidcVerifier} from './oidc.js';
 // prettier-ignore
-import {AccessPolicy} from './access.js';
-// prettier-ignore
 import {Github} from './github.js';
 // prettier-ignore
 import {allowedWorkflowRef} from './workflow-authority.js';
@@ -29,45 +27,22 @@ import {Ledger} from './ledger.js';
 import {onstart} from './onstart.js';
 // prettier-ignore
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
-function boxAccessEnvironment(env) {
-  const id = env.BOX_ACCESS_ID,
-    secret = env.BOX_ACCESS_SECRET;
-  if (!id && !secret) return {};
-  if (!/^[A-Za-z0-9_.-]{1,256}$/.test(id ?? '') || !/^[A-Za-z0-9_.-]{32,256}$/.test(secret ?? ''))
-    refuse('CONFIG_ACCESS', 503);
-  return { KF_ACCESS_ID: id, KF_ACCESS_SECRET: secret };
-}
-function checkedIdentity(c, cfg) {
+// Signed facts only: repository, environment subject, master ref, run identity and a pinned
+// master workflow. Who triggered the run and which commit it tests come from one run lookup.
+function verifiedIdentity(c, cfg) {
   if (
     c.repository !== cfg.repo ||
     c.repository_id !== cfg.repositoryId ||
     c.repository_owner_id !== cfg.owner ||
     c.sub !== cfg.oidcSubject ||
-    typeof c.workflow_ref !== 'string' ||
-    c.workflow_ref.length > 2048 ||
-    c.job_workflow_ref !== c.workflow_ref ||
+    c.ref !== 'refs/heads/master' ||
     !numericId(c.actor_id) ||
     !numericId(c.run_id) ||
     !numericId(c.run_attempt) ||
     !hexSha(c.sha) ||
-    !['pull_request_target', 'workflow_dispatch', 'push'].includes(c.event_name) ||
-    (c.event_name === 'push' && (c.actor_id !== cfg.owner || c.workflow_sha !== c.sha)) ||
-    (c.repository_owner_id !== undefined && c.repository_owner_id !== cfg.owner) ||
-    (c.event_name === 'pull_request_target' &&
-      (c.workflow_sha !== c.sha || !c.workflow_ref.endsWith('@' + c.ref))) ||
-    (['workflow_dispatch', 'push'].includes(c.event_name) &&
-      (typeof c.ref !== 'string' || !c.ref.startsWith('refs/heads/')))
+    !allowedWorkflowRef(c, cfg)
   )
     refuse('UNAUTHORIZED', 401);
-  return c;
-}
-async function verifiedIdentity(c, cfg, github) {
-  checkedIdentity(c, cfg);
-  if (allowedWorkflowRef(c, cfg)) return c;
-  const prefix = cfg.repo + '/.github/workflows/gpu-vast.yml@refs/heads/';
-  if (c.actor_id !== cfg.owner || !c.workflow_ref.startsWith(prefix)) refuse('UNAUTHORIZED', 401);
-  const run = await github.run(c.run_id, false, true);
-  if (!allowedWorkflowRef(c, cfg, run)) refuse('UNAUTHORIZED', 401);
   return c;
 }
 export function createService({
@@ -95,8 +70,6 @@ export function createService({
   const secrets = [
     env.BLOB_GITHUB_TOKEN,
     env.GITHUB_API_TOKEN,
-    env.BOX_ACCESS_ID,
-    env.BOX_ACCESS_SECRET,
     env.VAST_API_KEY,
     env.RUN_TOKEN_SECRET,
     env.OWNER_STOP_TOKEN,
@@ -122,16 +95,14 @@ export function createService({
     r.bootDeadline ??= r.started + (r.provision ?? cfg.boot);
     if (r.hardDeadline === undefined) r.hardDeadline = r.started + (r.ttl ?? cfg.hard);
     r.softDeadline ??= r.started + (r.ttl ?? cfg.hard) - cfg.softMargin;
-    r.manualDeadline ??= r.started + cfg.manualCeiling;
     r.lastPostAt ??= r.firstReportAt ?? null;
     r.heartbeatTimeout ??= cfg.heartbeatTimeout;
-    if (r.resultAt !== undefined && r.phase !== 'MANUAL' && r.resultDeadline === undefined)
+    if (r.resultAt !== undefined && r.resultDeadline === undefined)
       r.resultDeadline = r.resultAt + (r.verdict === 'PASS' ? cfg.passGrace : cfg.failGrace);
   }
   function nextDeadline(r) {
     const values = [r.hardDeadline];
-    if (phase(r) === 'MANUAL') values.push(r.manualDeadline);
-    else if (r.resultAt !== undefined) values.push(r.resultDeadline);
+    if (r.resultAt !== undefined) values.push(r.resultDeadline);
     else if (r.firstReportAt === undefined) values.push(r.bootDeadline);
     else values.push(r.lastPostAt + r.heartbeatTimeout);
     return Math.min(...values.filter((x) => Number.isSafeInteger(x)));
@@ -170,7 +141,6 @@ export function createService({
     boot_deadline_at: r.bootDeadline ?? null,
     hard_deadline_at: r.hardDeadline ?? null,
     soft_deadline_at: r.softDeadline ?? null,
-    manual_deadline_at: r.manualDeadline ?? null,
     last_post_at: r.lastPostAt ?? null,
     result_deadline_at: r.resultDeadline ?? null,
     protocol_version: 4,
@@ -294,15 +264,6 @@ export function createService({
     if (record.ended !== null) return;
     clocks(record, cfg);
     await ledger.save(record);
-    if (record.phase === 'MANUAL')
-      await workerLine(
-        record,
-        'MANUAL hard_timer=' +
-          (record.hardDeadline === null ? 'removed' : 'active') +
-          ' ceiling_at=' +
-          record.manualDeadline,
-        cfg,
-      );
     await recover(record, vast);
     if (record.ended !== null || !record.id) return;
     if (record.closed) {
@@ -311,24 +272,10 @@ export function createService({
     }
     let reason;
     if (record.hardDeadline !== null && now() >= record.hardDeadline) reason = 'HARD_TIMEOUT';
-    else if (record.phase === 'MANUAL' && now() >= record.manualDeadline) reason = 'MANUAL_TIMEOUT';
-    else if (
-      record.phase !== 'MANUAL' &&
-      record.resultAt !== undefined &&
-      now() >= record.resultDeadline
-    )
-      reason = 'RESULT';
-    else if (
-      record.phase !== 'MANUAL' &&
-      record.firstReportAt === undefined &&
-      now() >= record.bootDeadline
-    )
+    else if (record.resultAt !== undefined && now() >= record.resultDeadline) reason = 'RESULT';
+    else if (record.firstReportAt === undefined && now() >= record.bootDeadline)
       reason = 'BOOT_TIMEOUT';
-    else if (
-      record.phase !== 'MANUAL' &&
-      record.lastPostAt !== null &&
-      now() - record.lastPostAt >= record.heartbeatTimeout
-    )
+    else if (record.lastPostAt !== null && now() - record.lastPostAt >= record.heartbeatTimeout)
       reason = 'HEARTBEAT_TIMEOUT';
     if (reason) {
       if (
@@ -416,93 +363,16 @@ export function createService({
     }
     record.liveCheckedAt = now();
     await ledger.save(record);
-    // Manual ownership and post-result inspection outlive the workflow job.
-    if (record.phase === 'MANUAL' && record.manualOwnerConfirmed) return;
-    if (record.phase !== 'MANUAL' && record.resultAt !== undefined) return;
-    const current = record.pr === null ? null : await github.pr(record.pr, true);
-    if (current && (current.head?.sha !== record.sha || current.state !== 'open')) {
-      await close(record, vast, 'SUPERSEDED');
-      return;
-    }
+    // Post-result inspection outlives the workflow job; before it, the run must be live.
+    if (record.resultAt !== undefined) return;
     const run = await github.run(record.run, true, true);
     if (run === null || run.status === 'completed') await close(record, vast, 'RUN_GONE');
-  }
-  async function hold(request, key, bearer, cfg, vast) {
-    const r = await ledger.get('record:' + key);
-    if (
-      !r ||
-      !(await tokens.verify(bearer, r)) ||
-      r.ended !== null ||
-      r.closed ||
-      now() >= r.reportExpiry * 1000
-    )
-      refuse('UNAUTHORIZED', 401);
-    clocks(r, cfg);
-    await rejectExpiredCallback(r, cfg, vast);
-    if (r.resultAt === undefined) refuse('UNAUTHORIZED', 401);
-    await readBounded(request, 0);
-    await rate(r, cfg);
-    if ((r.hardDeadline !== null && now() >= r.hardDeadline) || now() >= r.manualDeadline)
-      refuse('UNAUTHORIZED', 401);
-    const instance = await vast.inspect(r);
-    if (!instance || instance.actual_status !== 'running') refuse('UNAUTHORIZED', 401);
-    r.manualCeilingDeadline ??= r.manualDeadline;
-    r.manualDeadline = Math.min(
-      r.manualDeadline,
-      now() + DEFAULTS.boxHoldMinutes * 60000,
-      r.hardDeadline ?? Infinity,
-    );
-    r.phase = 'MANUAL';
-    r.manualAt ??= now();
-    r.resultDeadline = null;
-    await workerLine(r, 'MANUAL authenticated hold; grace and heartbeat suspended', cfg);
-    return json(expose(r));
-  }
-  async function stopTimer(key, cfg, vast) {
-    const r = await ledger.get('record:' + key);
-    if (!r || r.ended !== null || r.closed) refuse('NOT_FOUND', 404);
-    cfg.profile = r.profile ?? 'check';
-    clocks(r, cfg);
-    if (r.phase !== 'MANUAL') refuse('BAD_REQUEST', 400);
-    await rejectExpiredCallback(r, cfg, vast);
-    const ownerDeadline = r.manualCeilingDeadline ?? r.started + cfg.manualCeiling;
-    const total =
-      ((r.computeStoragePrice ?? r.price) * (ownerDeadline + cfg.cronPeriod - r.started)) /
-        3600000 +
-      (r.bandwidthCost ?? 0);
-    const remaining =
-        ((r.computeStoragePrice ?? r.price) * Math.max(0, ownerDeadline + cfg.cronPeriod - now())) /
-          3600000 +
-        (r.bandwidthCost ?? 0),
-      credit = await vast.credit();
-    if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + remaining)
-      refuse('UNAVAILABLE_BUDGET', 409);
-    await ledger.budgets(cfg, now(), total, r.key);
-    r.manualOwnerConfirmed = true;
-    r.manualDeadline = ownerDeadline;
-    r.hardDeadline = null;
-    r.billingTtl = ownerDeadline + cfg.cronPeriod - r.started;
-    await ledger.put('cost:' + r.key, {
-      profile: r.profile ?? 'check',
-      started: r.started,
-      ended: null,
-      price: r.computeStoragePrice ?? r.price,
-      bandwidthCost: r.bandwidthCost ?? 0,
-      ttl: r.billingTtl,
-    });
-    await workerLine(r, 'MANUAL owner removed hard timer; absolute ceiling remains', cfg);
-    return json(expose(r));
   }
   async function oidc(bearer, cfg) {
     const selected = cfg.testIdentity
       ? (localVerifier ??= new OidcVerifier(fetcher, now, cfg.testIdentity))
       : verifier;
-    const c = await selected.verify(bearer, cfg.audience);
-    return verifiedIdentity(
-      c,
-      cfg,
-      new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: githubCache, now }),
-    );
+    return verifiedIdentity(await selected.verify(bearer, cfg.audience), cfg);
   }
   async function rate(r, cfg) {
     const window = Math.floor(now() / 10000);
@@ -543,11 +413,7 @@ export function createService({
       refuse('UNAUTHORIZED', 401); // MUTANT report-ledger
     clocks(r, cfg);
     await rejectExpiredCallback(r, cfg, vast);
-    if (
-      now() >= r.reportExpiry * 1000 ||
-      (r.hardDeadline !== null && now() >= r.hardDeadline) ||
-      (r.phase === 'MANUAL' && now() >= r.manualDeadline)
-    ) {
+    if (now() >= r.reportExpiry * 1000 || (r.hardDeadline !== null && now() >= r.hardDeadline)) {
       try {
         await close(r, vast, 'TTL');
       } catch {}
@@ -614,7 +480,7 @@ export function createService({
       r.lastDigest = digest;
       r.firstReportAt ??= now();
       r.lastPostAt = now();
-      if (r.phase !== 'MANUAL' && r.phase !== 'GRACE') r.phase = 'TESTING';
+      if (r.phase !== 'GRACE') r.phase = 'TESTING';
       if (payload.kind === 'result') {
         r.result = {
           ...payload.result,
@@ -629,8 +495,8 @@ export function createService({
         r.resultAt = now();
         r.verdict = payload.result.verdict;
         r.grace = r.verdict === 'PASS' ? cfg.passGrace : cfg.failGrace;
-        r.resultDeadline = r.phase === 'MANUAL' ? null : r.resultAt + r.grace;
-        if (r.phase !== 'MANUAL') r.phase = 'GRACE';
+        r.resultDeadline = r.resultAt + r.grace;
+        r.phase = 'GRACE';
         r.liveCheckedAt = null;
       } // MUTANT structured-verdict
       else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)
@@ -675,10 +541,9 @@ export function createService({
       /^\/blob-url\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/([A-Za-z0-9._-]{1,64})\/([A-Za-z0-9._-]{1,100})$/.exec(
         path,
       );
-    const match =
-      /^\/(report|kill|hold|stop-timer|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
-        path,
-      );
+    const match = /^\/(report|kill|status|stop|logs)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(
+      path,
+    );
     if (
       !(blob && request.method === 'GET') &&
       !(path === '/availability' && request.method === 'GET') &&
@@ -713,7 +578,6 @@ export function createService({
     }
     if (match?.[1] === 'report') return report(request, match[2], bearer, cfg, vast);
     if (match?.[1] === 'kill') return kill(request, match[2], bearer, cfg, vast);
-    if (match?.[1] === 'hold') return hold(request, match[2], bearer, cfg, vast);
     let rentRequest;
     if (path !== '/rent' && request.body !== null) {
       try {
@@ -724,10 +588,6 @@ export function createService({
     }
     const owner =
       validSecret(env.OWNER_STOP_TOKEN) && (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer));
-    if (match?.[1] === 'stop-timer') {
-      if (!owner) refuse('UNAUTHORIZED', 401);
-      return stopTimer(match[2], cfg, vast);
-    }
     if (path === '/stop-all') {
       if (!owner) refuse('UNAUTHORIZED', 401); // MUTANT stop-auth
       const records = await ledger.openRecords();
@@ -808,32 +668,17 @@ export function createService({
       }
       if (match[1] === 'stop') await close(r, vast, 'STOPPED');
       else await update(r, vast, github, cfg);
-      const admittedPr = await ledger.get('run-pr:' + key);
-      return json(expose(r, key, admittedPr === undefined ? r.pr : admittedPr));
+      return json(expose(r, key));
     }
     const profile =
       path === '/availability' ? url.searchParams.get('profile') : (rentRequest.profile ?? 'check');
     if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);
     if (path === '/availability' && url.search !== '?profile=' + profile)
       refuse('BAD_REQUEST', 400);
-    if (
-      profile === 'sweep' &&
-      (c.actor_id !== cfg.owner ||
-        c.event_name !== 'workflow_dispatch' ||
-        c.workflow_ref !== cfg.sweepWorkflow)
-    )
-      refuse('UNAUTHORIZED', 401);
-    if (profile === 'check') {
-      const run = allowedWorkflowRef(c, cfg, undefined, 'check')
-        ? undefined
-        : await github.run(c.run_id, false, true);
-      if (!allowedWorkflowRef(c, cfg, run, 'check')) refuse('UNAUTHORIZED', 401);
-    }
+    if (!allowedWorkflowRef(c, cfg, profile)) refuse('UNAUTHORIZED', 401);
     cfg.profile = profile;
     if (path === '/availability') {
-      const run = await github.run(c.run_id),
-        member = run.pull_requests?.length === 1 ? run.pull_requests[0] : null;
-      await github.authorize(c, { pr_number: member?.number, tested_sha: member?.head?.sha });
+      await github.authorize(c);
       return json((await offers.evaluate(vast, cfg, ledger, profile)).view);
     }
     if (
@@ -848,35 +693,32 @@ export function createService({
         new Set(rentRequest.preferences).size !== rentRequest.preferences.length)
     )
       refuse('BAD_REQUEST', 400);
-    const target = await github.authorize(c, rentRequest);
-    if (rentRequest.tested_sha !== target.sha || rentRequest.pr_number !== target.pr)
-      refuse('BINDING_MISMATCH', 409);
+    // pr_number is the runner's informational label only; it never authorizes anything.
+    const target = {
+      ...(await github.authorize(c, rentRequest.tested_sha)),
+      pr: rentRequest.pr_number,
+    };
     const prior = await ledger.granted(key);
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);
       await recover(prior, vast);
       if (prior.id && prior.ended === null)
         await checkContract(prior, await vast.inspect(prior), vast, cfg);
-      return json(expose(prior, key, target.pr));
+      return json(expose(prior, key));
     }
     const active = await ledger.active();
     if (active && active.ended === null) {
-      if (
-        ((active.pr !== null && active.pr === target.pr) ||
-          (active.pr === null && target.pr === null && active.branch === target.branch)) &&
-        active.sha !== target.sha
-      ) {
+      if (active.branch === target.branch && active.sha !== target.sha) {
         await close(active, vast, 'SUPERSEDED');
         refuse('BUSY', 409);
       }
       refuse('UNAVAILABLE_BUDGET', 409);
     }
     const cached = await ledger.get('sha:' + target.sha),
-      force = c.event_name === 'workflow_dispatch' && Number(c.run_attempt) > 1;
+      force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
     if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.
     if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409); // MUTANT gap
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
-    const boxAccess = boxAccessEnvironment(env);
     const chosen = await offers.select(
         await offers.evaluate(vast, cfg, ledger, profile),
         cfg,
@@ -923,7 +765,6 @@ export function createService({
         bootDeadline: started + cfg.boot,
         hardDeadline: started + cfg.hard,
         softDeadline: started + cfg.hard - cfg.softMargin,
-        manualDeadline: started + cfg.manualCeiling,
         lastPostAt: null,
         heartbeatTimeout: cfg.heartbeatTimeout,
         started,
@@ -977,7 +818,6 @@ export function createService({
     if (profile === 'sweep') await ledger.put('rotation:lastDie', r.die);
     try {
       const environment = {
-        ...boxAccess,
         KF_PROTOCOL: DEFAULTS.boxProtocol,
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
@@ -1063,7 +903,7 @@ export function createService({
     if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
     const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
     if (!bearer) refuse('UNAUTHORIZED', 401);
-    if (['/stop-all'].includes(path) || /^\/(?:stop|stop-timer)\//.test(path)) {
+    if (path === '/stop-all' || /^\/stop\//.test(path)) {
       if (
         validSecret(env.OWNER_STOP_TOKEN) &&
         (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
@@ -1071,7 +911,7 @@ export function createService({
         return;
     }
     const box =
-      /^\/(report|kill|hold)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
+      /^\/(report|kill)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.exec(path) ??
       /^\/(blob-url)\/([1-9][0-9]{0,19}-[1-9][0-9]{0,19})\/[A-Za-z0-9._-]{1,64}\/[A-Za-z0-9._-]{1,100}$/.exec(
         path,
       );
@@ -1088,7 +928,7 @@ export function createService({
     }
     if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
     if (
-      !/^\/(?:rent|availability|stop-all|(?:status|logs|stop|stop-timer)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
+      !/^\/(?:rent|availability|stop-all|(?:status|logs|stop)\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19})$/.test(
         path,
       )
     )
@@ -1106,9 +946,9 @@ export function createService({
         if (renting) busy = true;
         try {
           const priority =
-            path === '/stop-all' || /^\/(?:stop|kill|stop-timer)\//.test(path)
+            path === '/stop-all' || /^\/(?:stop|kill)\//.test(path)
               ? 0
-              : /^\/(?:report|hold)\//.test(path)
+              : /^\/report\//.test(path)
                 ? 1
                 : 2;
           const key = /\/([1-9][0-9]*-[1-9][0-9]*)/.exec(path)?.[1] ?? path;
@@ -1210,9 +1050,7 @@ async function detachedUpload(request, path) {
 }
 export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
   const verifier = new OidcVerifier(fetcher, now),
-    local = new Map(),
-    frontGithubCache = new Map();
-  const access = new AccessPolicy(fetcher, now);
+    local = new Map();
   let boxVerifier, boxSecret;
   let boxWindow = -1;
   const boxCounts = new Map();
@@ -1252,12 +1090,12 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
     if (path === '/rent' && env.RENTING_ENABLED !== 'true') return;
     if (!bearer) refuse('UNAUTHORIZED', 401);
     if (
-      (path === '/stop-all' || /^\/(?:stop|stop-timer)\//.test(path)) &&
+      (path === '/stop-all' || /^\/stop\//.test(path)) &&
       validSecret(env.OWNER_STOP_TOKEN) &&
       (await constantTimeEqual(env.OWNER_STOP_TOKEN, bearer))
     )
       return;
-    if (/^\/(?:report|kill|hold|blob-url)\//.test(path)) {
+    if (/^\/(?:report|kill|blob-url)\//.test(path)) {
       if (boxSecret !== env.RUN_TOKEN_SECRET) {
         boxSecret = env.RUN_TOKEN_SECRET;
         boxVerifier = new RunTokens(boxSecret, now);
@@ -1286,25 +1124,16 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
         local.set(identity.issuer, selected);
       }
     }
-    await verifiedIdentity(
-      await selected.verify(bearer, cfg.audience),
-      cfg,
-      new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: frontGithubCache, now }),
-    );
+    verifiedIdentity(await selected.verify(bearer, cfg.audience), cfg);
   }
   return {
     async fetch(request, env) {
       let path;
       try {
-        await access.authorize(request, env);
         if (new URL(request.url).pathname.endsWith('/availability') && secretFormatError(env)) {
           const bearer = request.headers.get('Authorization')?.replace(/^Bearer /, '');
           const cfg = configuration(env);
-          const c = await verifiedIdentity(
-            await verifier.verify(bearer, env.WORKER_URL),
-            cfg,
-            new Github(fetcher, cfg, env.GITHUB_API_TOKEN, { cache: frontGithubCache, now }),
-          );
+          const c = verifiedIdentity(await verifier.verify(bearer, env.WORKER_URL), cfg);
           if (c.actor_id === env.OWNER_GITHUB_ID) refuse(secretFormatError(env), 503);
         }
       } catch (error) {

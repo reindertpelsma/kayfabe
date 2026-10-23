@@ -175,7 +175,10 @@ for (const kind of ['no-auth', 'non-owner', 'PR', 'fork'])
     const h = await harness();
     sweep(h);
     const claims = { ...sweepClaims };
-    if (kind === 'non-owner') claims.actor_id = '99';
+    if (kind === 'non-owner') {
+      claims.actor_id = '99';
+      h.cloud.run.triggering_actor = { id: 99 };
+    }
     if (kind === 'PR') {
       claims.event_name = 'pull_request';
       claims.ref = 'refs/pull/7/merge';
@@ -225,11 +228,13 @@ for (const cap of [1, 2.5])
     const o = { ...good, dph_base: 1.5, dph_total: 1.52 };
     const h = await harness([o]);
     sweep(h);
+    if (cap === 1) h.cloud.run.event = 'push';
     const r = await h.call('/rent', {
       claims:
         cap === 1
           ? {
               ...sweepClaims,
+              event_name: 'push',
               workflow_ref: env.REPOSITORY + '/.github/workflows/gpu-vast.yml@refs/heads/master',
             }
           : sweepClaims,

@@ -79,11 +79,12 @@ for (const fork of [true, false])
       assert.match(r.outputs, /state=NOT_ELIGIBLE/);
     } else assert.match(r.nonce, /^[0-9a-f]{64}$/);
   });
+// Check-profile dispatch is retired (owner 19:25): the runner refuses it on every ref.
 for (const ref of ['refs/heads/master', 'refs/heads/evil'])
-  test('real runner manual event is master-only ' + ref, () => {
+  test('real runner refuses check-profile manual event ' + ref, () => {
     const r = run({ manual: true, ref });
-    assert.equal(r.status, ref === 'refs/heads/master' ? 0 : 1);
-    if (ref !== 'refs/heads/master') assert.equal(r.calls.length, 0);
+    assert.equal(r.status, 1);
+    assert.equal(r.calls.length, 0);
   });
 for (const path of ['', prefix])
   test('R3 fresh runner CSPRNG nonce for each invocation ' + path.length, () => {

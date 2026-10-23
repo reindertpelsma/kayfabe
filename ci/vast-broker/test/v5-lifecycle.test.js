@@ -2,14 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, env, nonce, callbackToken, clock } from './helpers.js';
 import { configuration } from '../src/policy.js';
-// FALSIFIER: a restart/poll/hold moves an absolute deadline, heartbeat is lost,
-// grace is counted rather than timestamped, or a box capability removes billing limits.
+// FALSIFIER: a restart/poll moves an absolute deadline, heartbeat is lost, or grace is
+// counted rather than timestamped.
 const minute = 60000;
 const v5 = (overrides) =>
   setup({
     HARD_RUNTIME_MINUTES: '180',
     BOOT_LIMIT_MINUTES: '40',
-    MANUAL_CEILING_MINUTES: '480',
     PASS_GRACE_MINUTES: '5',
     FAIL_GRACE_MINUTES: '10',
     ...overrides,
@@ -22,14 +21,6 @@ async function rent(h) {
 }
 async function progress(h) {
   assert.equal((await h.report({ seq: 1, kind: 'log', text: '' })).status, 200);
-}
-async function hold(h, token) {
-  if (token === undefined && (await record(h)).resultAt === undefined) await finish(h, 'PASS');
-  const r = await record(h);
-  return h.call('/hold/123-1', {
-    token: token ?? callbackToken(r, h.bindings.RUN_TOKEN_SECRET),
-    ghToken: null,
-  });
 }
 async function finish(h, verdict) {
   assert.equal(
@@ -63,9 +54,8 @@ for (const label of ['money', 'clock'])
           c.heartbeatTimeout,
           c.passGrace,
           c.failGrace,
-          c.manualCeiling,
         ].map((x) => x / minute),
-        [40, 180, 10, 10, 15, 5, 10, 480],
+        [40, 180, 10, 10, 15, 5, 10],
       );
   });
 for (const restart of [false, true])
@@ -81,7 +71,6 @@ for (const restart of [false, true])
     assert.equal(r.bootDeadline, clock + 40 * minute);
     assert.equal(r.hardDeadline, clock + 180 * minute);
     assert.equal(r.softDeadline, clock + 170 * minute);
-    assert.equal(r.manualDeadline, clock + 480 * minute);
   });
 for (const restart of [false, true])
   test('V5 boot gets forty minutes before first callback ' + restart, async () => {
@@ -140,115 +129,6 @@ for (const verdict of ['PASS', 'FAIL'])
     const status = await (await h.call('/status/123-1')).json();
     assert.equal(status.state, 'NONE');
     assert.equal(status.verdict, verdict);
-  });
-for (const verdict of ['PASS', 'FAIL'])
-  test('V5 authenticated hold stops grace and heartbeat ' + verdict, async () => {
-    const h = await v5();
-    await rent(h);
-    await progress(h);
-    await finish(h, verdict);
-    assert.equal((await hold(h)).status, 200);
-    h.restart();
-    h.time.value += 20 * minute;
-    await h.service.sweep();
-    const r = await record(h);
-    assert.equal(r.phase, 'MANUAL');
-    assert.equal(r.ended, null);
-    assert.equal(r.resultDeadline, null);
-    assert.equal(r.hardDeadline, clock + 180 * minute);
-  });
-for (const restart of [false, true])
-  test('V5 repeated hold cannot extend hard or manual ceiling ' + restart, async () => {
-    const h = await v5({ HARD_RUNTIME_MINUTES: '20' });
-    await rent(h);
-    await progress(h);
-    assert.equal((await hold(h)).status, 200);
-    if (restart) h.restart();
-    h.time.value += 10 * minute;
-    assert.equal((await hold(h)).status, 200);
-    const r = await record(h);
-    assert.equal(r.manualDeadline, clock + 20 * minute);
-    assert.equal(r.hardDeadline, clock + 20 * minute);
-    h.time.value = clock + 20 * minute;
-    await h.service.sweep();
-    assert.equal((await record(h)).closed, 'HARD_TIMEOUT');
-  });
-for (const restart of [false, true])
-  test('V5 owner stop-timer leaves absolute MANUAL ceiling ' + restart, async () => {
-    const h = await v5({ DAILY_SPEND_USD: '6' });
-    await rent(h);
-    await progress(h);
-    await hold(h);
-    const response = await h.call('/stop-timer/123-1', { token: env.OWNER_STOP_TOKEN });
-    assert.equal(response.status, 200);
-    if (restart) h.restart();
-    assert.equal((await record(h)).hardDeadline, null);
-    h.time.value = clock + 181 * minute;
-    await h.service.sweep();
-    assert.equal((await record(h)).ended, null);
-    h.time.value = clock + 480 * minute;
-    await h.service.sweep();
-    assert.equal((await record(h)).closed, 'MANUAL_TIMEOUT');
-  });
-for (const auth of ['box', 'oidc', 'other-oidc'])
-  test('V5 only owner may remove hard limit ' + auth, async () => {
-    const h = await v5();
-    await rent(h);
-    await progress(h);
-    await hold(h);
-    const token =
-      auth === 'box' ? callbackToken(await record(h), h.bindings.RUN_TOKEN_SECRET) : undefined;
-    assert.equal(
-      (
-        await h.call('/stop-timer/123-1', {
-          token,
-          claims: auth === 'other-oidc' ? { actor_id: '43' } : {},
-        })
-      ).status,
-      401,
-    );
-    assert.equal((await record(h)).hardDeadline, clock + 180 * minute);
-  });
-for (const token of ['bad', env.OWNER_STOP_TOKEN])
-  test('V5 hold refuses non-box capability ' + token.slice(0, 3), async () => {
-    const h = await v5();
-    await rent(h);
-    await progress(h);
-    await finish(h, 'PASS');
-    assert.equal((await hold(h, token)).status, 401);
-    assert.notEqual((await record(h)).phase, 'MANUAL');
-  });
-for (const restart of [false, true])
-  test('V5 MANUAL cron always writes Worker-authored status ' + restart, async () => {
-    const h = await v5();
-    await rent(h);
-    await progress(h);
-    await hold(h);
-    if (restart) h.restart();
-    const before = (await record(h)).logChunks;
-    h.time.value += minute;
-    await h.service.sweep();
-    h.time.value += minute;
-    await h.service.sweep();
-    const r = await record(h);
-    assert.ok(r.logChunks >= before + 2);
-    const chunks = [];
-    for (let i = before; i < r.logChunks; i++) chunks.push(await h.storage.get('log:123-1:' + i));
-    assert.ok(chunks.join('').includes('[Worker] MANUAL'));
-  });
-for (const restriction of ['daily', 'credit'])
-  test('V5 stop-timer checks extended billing liability ' + restriction, async () => {
-    const h = await v5({
-      MAX_PRICE_USD_HOUR: '0.8',
-      DAILY_SPEND_USD: restriction === 'daily' ? '6' : '20',
-    });
-    h.cloud.price = 0.8;
-    await rent(h);
-    await progress(h);
-    await hold(h);
-    if (restriction === 'credit') h.cloud.credit = 9;
-    assert.equal((await h.call('/stop-timer/123-1', { token: env.OWNER_STOP_TOKEN })).status, 409);
-    assert.equal((await record(h)).hardDeadline, clock + 180 * minute);
   });
 for (const delay of [0, 5 * minute])
   test('V5 CREATING reservation precedes provider side effect ' + delay, async () => {
@@ -325,7 +205,6 @@ test('V5 default reservation binds owner clock plan into the lease', async () =>
   assert.equal(r.bootDeadline, clock + 40 * minute);
   assert.equal(r.hardDeadline, clock + 180 * minute);
   assert.equal(r.softDeadline, clock + 170 * minute);
-  assert.equal(r.manualDeadline, clock + 480 * minute);
 });
 for (const verdict of ['PASS', 'FAIL'])
   test('V5 unbound default grace reaches the stored deadline ' + verdict, async () => {

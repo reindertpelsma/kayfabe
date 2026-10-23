@@ -25,26 +25,40 @@ test('R3 Worker job is OIDC-only with empty inherited environment', async () => 
   assert.match(job, /timeout-minutes:/);
   assert.match(text, /concurrency:/);
 });
+// MEASURED shape (public pull_request_target runs): run.head_sha is the PR head commit and
+// head_repository is the PR's head repository; the OIDC sha claim names the BASE commit.
+const target = (h, change) => {
+  Object.assign(h.cloud.run, { event: 'pull_request_target', head_sha: sha });
+  if (change === 'fork') h.cloud.run.head_repository = { full_name: 'fork-owner/kayfabe' };
+  if (change === 'run-head') h.cloud.run.head_sha = 'e'.repeat(40);
+  return h.call('/rent', {
+    claims: {
+      event_name: 'pull_request_target',
+      sha: 'd'.repeat(40),
+      ref: 'refs/heads/master',
+      workflow_ref: 'reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master',
+      workflow_sha: 'd'.repeat(40),
+    },
+    body: {
+      runner_nonce: 'f'.repeat(64),
+      tested_sha: change === 'tested-sha' ? 'e'.repeat(40) : sha,
+      pr_number: 7,
+    },
+  });
+};
 for (const fork of [false, true])
-  test('R3 target-event admission crosschecks run and exact PR ' + fork, async () => {
+  test('R3 target-event admission crosschecks run head and repository ' + fork, async () => {
     const h = await setup();
-    h.cloud.run.event = 'pull_request_target';
-    h.cloud.run.head_sha = 'd'.repeat(40);
-    h.cloud.run.head_branch = 'master';
-    h.cloud.run.pull_requests[0].head.sha = sha;
-    if (fork) h.cloud.prs[0].head.repo.full_name = 'fork-owner/kayfabe';
-    const response = await h.call('/rent', {
-      claims: {
-        event_name: 'pull_request_target',
-        sha: 'd'.repeat(40),
-        ref: 'refs/heads/master',
-        workflow_ref: 'reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master',
-        workflow_sha: 'd'.repeat(40),
-      },
-      body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 },
-    });
-    assert.equal(response.status, fork ? 403 : 200);
+    const response = await target(h, fork ? 'fork' : null);
+    assert.equal(response.status, fork ? 401 : 200);
     assert.equal(h.cloud.creates, fork ? 0 : 1);
+  });
+for (const mismatch of ['run-head', 'tested-sha'])
+  test('R3 target-event refuses mismatched ' + mismatch, async () => {
+    const h = await setup();
+    const r = await target(h, mismatch);
+    assert.equal(r.status, 409);
+    assert.equal(h.cloud.creates, 0);
   });
 for (const ref of ['refs/pull/7/merge', 'refs/heads/evil'])
   test('R3 non-base workflow cannot mint accepted admission ' + ref, async () => {
@@ -54,52 +68,6 @@ for (const ref of ['refs/pull/7/merge', 'refs/heads/evil'])
     });
     assert.equal(r.status, 401);
     assert.equal(h.cloud.creates, 0);
-  });
-for (const mismatch of ['workflow-sha', 'run-sha', 'member-sha', 'member-pr'])
-  test('R3 target-event refuses mismatched ' + mismatch, async () => {
-    const h = await setup();
-    h.cloud.run.event = 'pull_request_target';
-    h.cloud.run.head_sha = 'd'.repeat(40);
-    h.cloud.run.head_branch = 'master';
-    h.cloud.run.pull_requests[0].head.sha = sha;
-    const claims = {
-      event_name: 'pull_request_target',
-      sha: 'd'.repeat(40),
-      ref: 'refs/heads/master',
-      workflow_ref: 'reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master',
-      workflow_sha: 'd'.repeat(40),
-    };
-    if (mismatch === 'workflow-sha') claims.workflow_sha = 'e'.repeat(40);
-    if (mismatch === 'run-sha') claims.sha = 'e'.repeat(40);
-    if (mismatch === 'member-sha') h.cloud.run.pull_requests[0].head.sha = 'e'.repeat(40);
-    if (mismatch === 'member-pr') h.cloud.run.pull_requests[0].number = 8;
-    const r = await h.call('/rent', {
-      claims,
-      body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 },
-    });
-    assert.equal(r.status, 401);
-    assert.equal(h.cloud.creates, 0);
-  });
-for (const authority of ['claims', 'GitHub-run'])
-  test('R3 consistent signed BASE pair still crosschecks ' + authority, async () => {
-    const h = await setup();
-    const signed = authority === 'claims' ? 'e'.repeat(40) : 'd'.repeat(40);
-    h.cloud.run.event = 'pull_request_target';
-    h.cloud.run.head_sha = authority === 'GitHub-run' ? 'e'.repeat(40) : 'd'.repeat(40);
-    h.cloud.run.head_branch = 'master';
-    h.cloud.run.pull_requests[0].head.sha = sha;
-    const response = await h.call('/rent', {
-      claims: {
-        event_name: 'pull_request_target',
-        sha: signed,
-        workflow_sha: signed,
-        ref: 'refs/heads/master',
-      },
-      body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, pr_number: 7 },
-    });
-    assert.equal(response.status, 401);
-    assert.equal(h.cloud.creates, 0);
-    assert.ok(h.cloud.calls.some((c) => c.url.includes('/actions/runs/123')));
   });
 import { createGateway } from '../src/index.js';
 import { env, clock, jwt, jwk, repo } from './helpers.js';

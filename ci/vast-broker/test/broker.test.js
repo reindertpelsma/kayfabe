@@ -161,31 +161,13 @@ test('same SHA cache survives process restart', async () => {
   await h.call('/rent', { claims: { run_id: '124' } });
   assert.equal(h.cloud.creates, 1);
 });
-test('cached verdict never bypasses content approval', async () => {
-  const h = await setup();
-  await rent(h);
-  await finish(h);
-  h.cloud.run.id = 124;
-  h.cloud.reviews = [{ id: 2, user: { id: 42 }, state: 'DISMISSED', commit_id: sha }];
-  assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'NEEDS_APPROVAL');
-});
 test('force rerun still requires minimum SHA gap', async () => {
   const h = await setup();
   await rent(h);
   await finish(h);
   h.cloud.run.run_attempt = 2;
-  h.cloud.run.event = 'workflow_dispatch';
   assert.equal(
-    await state(
-      await h.call('/rent', {
-        claims: {
-          run_attempt: '2',
-          event_name: 'workflow_dispatch',
-          sha,
-          ref: 'refs/heads/owner-pr',
-        },
-      }),
-    ),
+    await state(await h.call('/rent', { claims: { run_attempt: '2' } })),
     'UNAVAILABLE_BUDGET',
   );
   assert.equal(h.cloud.creates, 1);
@@ -196,18 +178,8 @@ test('force gap survives restart', async () => {
   await finish(h);
   h.restart();
   h.cloud.run.run_attempt = 2;
-  h.cloud.run.event = 'workflow_dispatch';
   assert.equal(
-    await state(
-      await h.call('/rent', {
-        claims: {
-          run_attempt: '2',
-          event_name: 'workflow_dispatch',
-          sha,
-          ref: 'refs/heads/owner-pr',
-        },
-      }),
-    ),
+    await state(await h.call('/rent', { claims: { run_attempt: '2' } })),
     'UNAVAILABLE_BUDGET',
   );
 });
@@ -439,13 +411,6 @@ for (const restart of [false, true])
     assert.equal(h.cloud.creates, 1);
     assert.deepEqual(h.cloud.deletes, ['900']);
   });
-test('cron destroys superseded PR without incoming run', async () => {
-  const h = await setup();
-  await rent(h);
-  h.cloud.prs[0].head.sha = 'e'.repeat(40);
-  await h.service.sweep();
-  assert.deepEqual(h.cloud.deletes, ['900']);
-});
 test('documented Vast verification string is accepted without boolean alias', async () => {
   const h = await setup();
   delete h.cloud.offer.verified;

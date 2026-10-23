@@ -213,23 +213,6 @@ CASES += [
         "round3-summary.test.js",
     ),
     (
-        "target-base-binding",
-        "src/github.js",
-        [("c.sha!==r.head_sha||c.workflow_sha!==r.head_sha||", "")],
-        "round3-isolation.test.js",
-    ),
-    (
-        "target-PR-membership",
-        "src/github.js",
-        [
-            (
-                "if(member?.length!==1)refuse('UNAUTHORIZED',401);\n      p=await this.pr(hint.pr_number)",
-                "if(false)refuse('UNAUTHORIZED',401);\n      p=await this.pr(hint.pr_number)",
-            )
-        ],
-        "round3-isolation.test.js",
-    ),
-    (
         "runner-local-redaction",
         "runner.py",
         [
