@@ -331,7 +331,9 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
                             0,
                             MapPerm::READ_WRITE,
                         )
-                        .map_err(|e| format!("map the 2 MiB leaf through its reservation: {e:?}"))?;
+                        .map_err(|e| {
+                            format!("map the 2 MiB leaf through its reservation: {e:?}")
+                        })?;
                         let first = read(&rm, alias_va, 4, 0)?;
                         let end = read(&rm, alias_va + last * P, 5, last)?;
                         rm.unmap_in(h2, alias_va, leaf, false)
@@ -477,7 +479,10 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
                     }
                     rm.free(hu).map_err(|e| format!("free: {e:?}"))?;
                 }
-                Err(e) => l.measure("reserve_rounding_below_unaligned_start", format!("refused: {e:?}")),
+                Err(e) => l.measure(
+                    "reserve_rounding_below_unaligned_start",
+                    format!("refused: {e:?}"),
+                ),
             }
             // (3) THE GATE: an aligned 64 KiB reservation holds exactly 64 KiB.
             let ha = rm
@@ -583,7 +588,10 @@ mod tests {
     fn only_a_host_rm_refusal_status_is_a_refusal() {
         assert_eq!(classify(&Ok(1)), Answer::Accepted);
         assert_eq!(classify(&Err(RmError::NoMemory)), Answer::Refused);
-        assert_eq!(classify(&Err(RmError::InsufficientPermissions)), Answer::Refused);
+        assert_eq!(
+            classify(&Err(RmError::InsufficientPermissions)),
+            Answer::Refused
+        );
         // An RM status the driver returned (NV_ERR_INVALID_ARGUMENT 0x1F, NV_ERR_NOT_SUPPORTED 0x56…).
         assert_eq!(classify(&Err(RmError::Other(0x1F))), Answer::Refused);
         // This crate's own codes, a cancelled syscall and a mis-placed FIXED map are not refusals.
@@ -607,7 +615,10 @@ mod tests {
     fn the_fallback_posture_needs_all_five_small_refused_by_status() {
         use Answer::*;
         assert_eq!(posture(&[Accepted; 5]), Posture::Expected);
-        assert_eq!(posture(&[Accepted, Accepted, Accepted, Accepted, Refused]), Posture::Expected);
+        assert_eq!(
+            posture(&[Accepted, Accepted, Accepted, Accepted, Refused]),
+            Posture::Expected
+        );
         assert_eq!(posture(&[Refused; 5]), Posture::AllRefused);
         // Mixed (1-3 accepted): inconsistent.
         for k in 1..4 {
@@ -616,8 +627,14 @@ mod tests {
             assert_eq!(posture(&v), Posture::Inconsistent, "{k} accepted");
         }
         // One transport error among refusals (or acceptances) is not a fallback.
-        assert_eq!(posture(&[Refused, Refused, Refused, Refused, Error]), Posture::Inconsistent);
-        assert_eq!(posture(&[Accepted, Accepted, Accepted, Accepted, Error]), Posture::Inconsistent);
+        assert_eq!(
+            posture(&[Refused, Refused, Refused, Refused, Error]),
+            Posture::Inconsistent
+        );
+        assert_eq!(
+            posture(&[Accepted, Accepted, Accepted, Accepted, Error]),
+            Posture::Inconsistent
+        );
         assert_eq!(posture(&[]), Posture::Inconsistent);
     }
 

@@ -73,10 +73,10 @@ mod userpump;
 mod userquota;
 #[path = "userrelay.rs"]
 mod userrelay;
-#[path = "userstrand.rs"]
-mod userstrand;
 #[path = "usershadow.rs"]
 mod usershadow;
+#[path = "userstrand.rs"]
+mod userstrand;
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
@@ -632,7 +632,7 @@ impl PtNotifier {
 }
 
 /// ★ P5c: one host robust-channel event, bound for the guest as `RC_TRIGGERED`.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct RcEvent {
     /// The guest's chid (the token-table index).
     pub chid: u32,
@@ -642,6 +642,24 @@ pub struct RcEvent {
     pub except_type: u32,
     /// The twin's host token (for the log).
     pub host_token: u32,
+    /// Translated allocations carry a posting permit; legacy direct notifiers keep their path.
+    life: Option<crate::chanrc::Life>,
+}
+
+impl RcEvent {
+    fn keep_pending(&self) -> bool {
+        self.life
+            .as_ref()
+            .is_none_or(crate::chanrc::Life::keep_pending)
+    }
+
+    /// Keep the allocation alive through the actual post, or retain a busy event for retry.
+    pub(crate) fn post_if_live<T>(&self, post: impl FnOnce() -> T) -> crate::chanrc::Post<T> {
+        match self.life.as_ref() {
+            Some(life) => life.post(post),
+            None => crate::chanrc::Post::Posted(post()),
+        }
+    }
 }
 
 /// ★ P5b §2.7: one host engine's non-stall event, and the guest vector it is announced on.
@@ -911,16 +929,18 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
             let args = if matches!(h.form, MethodForm::Immediate | MethodForm::Legacy) {
                 1
             } else {
-                h.arg_words.min(words.len().saturating_sub(i + 1)).max(1)
+                h.arg_words
+                    .min(words.len().saturating_sub(i.saturating_add(1)))
+                    .max(1)
             };
             if h.subchannel >= 5 {
                 for arg in 0..args {
                     let advance = match h.form {
-                        MethodForm::Incrementing => arg as u32 * 4,
+                        MethodForm::Incrementing => (arg as u32).saturating_mul(4),
                         MethodForm::IncrementOnce if arg != 0 => 4,
                         _ => 0,
                     };
-                    let method = h.method + advance;
+                    let method = h.method.saturating_add(advance);
                     let host_only = method != kf_abi::submit::SET_OBJECT && method < 0x100;
                     if !host_only {
                         out.hits.push(SwMethod {
@@ -930,7 +950,7 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
                             data: if h.form == MethodForm::Immediate {
                                 Some(h.immd)
                             } else {
-                                words.get(i + 1 + arg).copied()
+                                words.get(i.saturating_add(1).saturating_add(arg)).copied()
                             },
                         });
                     }
@@ -1572,7 +1592,10 @@ impl Publisher for VaSplit<'_> {
             .ok_or("software method started with nothing planned")?;
         let p = self.sw.plane;
         // Logged: the first 16 triggers, then powers of two (the guest's trigger rate must not grow the log).
-        let nth = p.defapi_triggers.fetch_add(1, Ordering::Relaxed) + 1;
+        let nth = p
+            .defapi_triggers
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
         let log = nth <= 16 || nth.is_power_of_two();
         if log {
             eprintln!(
@@ -1641,7 +1664,7 @@ impl Publisher for VaSplit<'_> {
             Ok(line) => {
                 // First 16 completions, then powers of two (as the trigger line above).
                 static DONE: AtomicU64 = AtomicU64::new(0);
-                let nth = DONE.fetch_add(1, Ordering::Relaxed) + 1;
+                let nth = DONE.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                 if nth <= 16 || nth.is_power_of_two() {
                     eprintln!(
                         "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE #{nth}: {line}",
@@ -1725,9 +1748,12 @@ struct Slot {
     inca_seen: u64,
     /// ★ GR tier (2026-10-07): born with the kernel-GR tier (its engine's `tlive` counts it).
     gr_tier: bool,
-    /// The error notifier the guest declared at allocation (`errorNotifierMem`), kept for the
-    /// default-off `KF3_BAR0_TRACE` dump only — a Translated ring arms no notifier.
+    /// The guest-declared destination, also retained for the optional BAR0 diagnostic.
     err_notifier: Option<kf_arch::fault::ErrorNotifier>,
+    rc: kf_chan::rc::RcDelivery,
+    rc_view: crate::chanrc::GuestNotifier,
+    rc_life: crate::chanrc::Life,
+    rc_write_failed: bool,
     /// ★ OWNER_RULINGS §U: the software method the channel is stopped at.
     sw: SwSlot,
 }
@@ -2380,9 +2406,9 @@ pub struct ChanPlane {
     /// disabled on the host — exactly those its `bDisable=FALSE` re-enables (a twin the guest
     /// disabled itself with `DISABLE_CHANNELS` is neither taken nor given back).
     usermode_off: Mutex<Vec<(u32, u32)>>,
-    /// Twins born with the guest's notifier armed as their host error context.
+    /// Channels with an armed error-context subscription (direct twins and Translated rings).
     pub rc_armed: AtomicU64,
-    /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
+    /// Direct twins whose notifier could not be armed; Translated failures refuse birth.
     pub rc_unarmed: AtomicU64,
     /// ★ P1+P2 inc A / S1-43: births whose guest-named FB USERD or notifier lay outside the usable
     /// heap ([`ChanPlane::heap_bounds`]) — refused when strict (`crate::tspace::inca_strict`),
@@ -3342,15 +3368,23 @@ impl ChanPlane {
             Some(kf_trap::Route::Translated) => 0,
             Some(kf_trap::Route::Passthrough) => 1,
             _ => {
-                self.db_census[3].store(u64::from(value), Ordering::Relaxed);
+                if let Some(last) = self.db_census.get(3) {
+                    last.store(u64::from(value), Ordering::Relaxed);
+                }
                 2
             }
         };
-        self.db_census[i].fetch_add(1, Ordering::Relaxed);
+        if let Some(count) = self.db_census.get(i) {
+            count.fetch_add(1, Ordering::Relaxed);
+        }
     }
     /// `(translated, passthrough, other, last other value)`.
     pub(crate) fn doorbell_census_now(&self) -> [u64; 4] {
-        std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
+        std::array::from_fn(|i| {
+            self.db_census
+                .get(i)
+                .map_or(0, |c| c.load(Ordering::Relaxed))
+        })
     }
 
     /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).
@@ -6207,7 +6241,10 @@ impl ChanPlane {
             eprintln!(
                 "kf3: chan token {:#x} RELAY-PEEK registration bundle prefix (diagnostic, <=64 bytes): {:02x?}",
                 g.idx,
-                &update.bundle[..update.bundle.len().min(64)]
+                update
+                    .bundle
+                    .get(..update.bundle.len().min(64))
+                    .unwrap_or_default()
             );
         }
         let mirror = g.mirror.clone();
@@ -6932,7 +6969,7 @@ impl ChanPlane {
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| {
                             // ★ 2026-10-11: LOUD and counted by reason (a refused birth is a guest crash: the OpenGL ICD dereferences it).
                             let rl = me.plane.token_index.runlist_of(me.plane.token_index.clamp(idx));
-                            let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed) + 1;
+                            let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                             eprintln!("kf3: ⚠ CHANNEL BUDGET EXHAUSTED on guest runlist {rl}: {e:?} (refusal #{n}; the `channel-budget` property, docs/design/V3_CHANNEL_BUDGET.md)");
                             format!("{e:?}")
                         }));
@@ -7105,6 +7142,12 @@ impl ChanPlane {
                     mirror.live.fetch_sub(1, Ordering::AcqRel);
                     e
                 };
+                if engine == 0 || u16::try_from(engine).is_err() {
+                    return Err(fail((NV_ERR_NOT_SUPPORTED, "RC guest engine has no notifier encoding".into())));
+                }
+                let rc_view = crate::chanrc::GuestNotifier::arm(
+                    me.rm, me.ram, me.store, &me.layout, a.error_notifier,
+                ).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
                 let userd = me.userd_view(a.userd).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
                 // ★ v3-initrace: what the guest's USERD held when we took the channel — a slot
                 // an earlier channel on the same chid used still holds that channel's cursors.
@@ -7138,6 +7181,13 @@ impl ChanPlane {
                     .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?;
                 let ht = host.channel().token;
                 let ring_va = host.va();
+                if let Err(e) = host.arm_rc_event(me.rm, &me.rc_ev) {
+                    let freed = me.rm.free_channel(host.channel()).is_ok();
+                    let released = freed && host.release(me.rm).is_some_and(|l| !l.contains("REFUSED"));
+                    t.give_ring(ring_va, released);
+                    return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, e)));
+                }
+                me.rc_armed.fetch_add(1, Ordering::Relaxed);
                 // ★★★ GR tier (owner rulings 2026-10-07): USER assertion, then the allowlisted host
                 // objects — refused by name, the ring freed, the birth refused, on any failure.
                 let gr_tier = kernel_gr && kernel_gr_work();
@@ -7242,6 +7292,14 @@ impl ChanPlane {
                     inca_seen: 0,
                     gr_tier,
                     err_notifier: a.error_notifier,
+                    // The host record was cleared BEFORE native birth. Never baseline away an
+                    // error that arrived before the slot was published.
+                    rc: kf_chan::rc::RcDelivery::armed(kf_chan::rc::RcRoute {
+                        chid: me.plane.token_index.chid_of(idx), engine, host_token: ht,
+                    }, [0; 4]),
+                    rc_view,
+                    rc_life: crate::chanrc::Life::new(),
+                    rc_write_failed: false,
                     sw: SwSlot::default(),
                 };
                 // ★ §U: a fresh software numbering (a host token may be reused).
@@ -7371,6 +7429,7 @@ impl ChanPlane {
                         engine: t.engine,
                         except_type: w[2],
                         host_token: t.chan.token,
+                        life: None,
                     });
                 }
             }
@@ -7403,14 +7462,92 @@ impl ChanPlane {
             }
             let _ = self.release.signal();
         }
+        // A Translated private context uses this same fd. The drainer must look even
+        // when no Passthrough notifier changed; the fd is never the correctness source.
+        let _ = self.release.signal();
         k
+    }
+
+    fn poll_translated_rc(&self, slot: &mut Slot) -> Option<RcEvent> {
+        if !slot.rc_life.keep_pending() {
+            return None;
+        }
+        let was_failed = slot.rc.failed();
+        let words = slot.chan.host().rc_words().unwrap_or([0; 4]);
+        let result = slot
+            .rc
+            .poll(words, |offset, value| slot.rc_view.store(offset, value));
+        if slot.rc.failed() {
+            self.completions.clear(slot.guest_idx);
+            if slot.dead.is_none() {
+                slot.dead = Some("host robust-channel error".into())
+            }
+            if !was_failed {
+                self.rc_seen.fetch_add(1, Ordering::Relaxed);
+                eprintln!(
+                    "kf3: RC Translated host {:#x} guest chid {:#x} engine {:#x} Xid {} — channel in error",
+                    slot.chan.host().channel().token,
+                    self.plane.token_index.chid_of(slot.guest_idx),
+                    slot.guest_engine,
+                    words[2]
+                );
+            }
+        }
+        match result {
+            Ok(Some(event)) => Some(RcEvent {
+                chid: event.route.chid,
+                engine: event.route.engine,
+                except_type: event.except_type,
+                host_token: event.route.host_token,
+                life: Some(slot.rc_life.clone()),
+            }),
+            Ok(None) => None,
+            Err(e) => {
+                if !slot.rc_write_failed {
+                    slot.rc_write_failed = true;
+                    eprintln!(
+                        "kf3: RC Translated host {:#x} guest notifier publication REFUSED (retained): {e}",
+                        slot.chan.host().channel().token
+                    );
+                }
+                None
+            }
+        }
+    }
+
+    fn queue_translated_rc(&self, event: RcEvent) {
+        if let Ok(mut q) = self.rc_queue.lock() {
+            q.retain(RcEvent::keep_pending);
+            q.push(event);
+        }
+        let _ = self.release.signal();
+    }
+
+    /// The drainer also samples durable records on its existing passes. No new timer or
+    /// GP_PUT polling: a coalesced/missed hint or a busy slot cannot erase the host record.
+    fn scan_translated_rc(&self) {
+        let Ok(slots) = self.slots.try_read() else {
+            return;
+        };
+        for slot in slots.values() {
+            let Ok(mut slot) = slot.try_lock() else {
+                continue;
+            };
+            if let Some(event) = self.poll_translated_rc(&mut slot) {
+                self.queue_translated_rc(event);
+            }
+        }
     }
 
     /// ★ P5c (drainer): the RC events waiting to be posted.
     pub fn take_rc(&self) -> Vec<RcEvent> {
+        self.scan_translated_rc();
         self.rc_queue
             .lock()
-            .map(|mut q| std::mem::take(&mut *q))
+            .map(|mut q| {
+                q.retain(RcEvent::keep_pending);
+                std::mem::take(&mut *q)
+            })
             .unwrap_or_default()
     }
 
@@ -7419,6 +7556,7 @@ impl ChanPlane {
         if let Ok(mut q) = self.rc_queue.lock() {
             let mut back = back;
             back.append(&mut q);
+            back.retain(RcEvent::keep_pending);
             *q = back;
         }
     }
@@ -7560,6 +7698,7 @@ impl ChanPlane {
         }
         .and_then(|idx| self.dbfast.deregister(idx));
         let Ok(mut g) = slot.lock() else { return };
+        g.rc_life.retire();
         if g.gr_tier {
             self.engine_tlive(g.guest_engine, false);
         }
@@ -7723,6 +7862,9 @@ impl ChanPlane {
         };
         let g = &mut *g;
         g.serves = g.serves.saturating_add(1);
+        if let Some(event) = self.poll_translated_rc(g) {
+            self.queue_translated_rc(event);
+        }
         if g.dead.is_some()
             || !g.scheduled
             || g.disabled

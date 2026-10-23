@@ -53,7 +53,9 @@ pub(crate) struct Birth<V = CpuView> {
 }
 impl<V> Birth<V> {
     /// Exact identity for metadata prepared before commit/token publication.
-    pub(crate) fn allocation(&self) -> Arc<()> { self.allocation.clone() }
+    pub(crate) fn allocation(&self) -> Arc<()> {
+        self.allocation.clone()
+    }
 }
 
 impl<V> Drop for Birth<V> {

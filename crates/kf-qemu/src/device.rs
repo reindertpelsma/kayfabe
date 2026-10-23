@@ -3330,13 +3330,10 @@ impl Device {
         );
     }
 
-    /// ★ P5c, on the drainer (the GSP queue's owner): post each host RC event to the guest as
-    /// `RC_TRIGGERED` — what a real GSP sends when its RC path has run (`kernel_gsp.c:541-545`:
-    /// *"RC error handling … is executed in GSP-RM. Client notifications … happen in CPU-RM"*) —
-    /// then publish the registers and raise the GSP's stall vector. The notifier RECORD is already
-    /// in the guest's memory: the host wrote it there (the twin's error context is the guest's
-    /// record), as a GSP does before it sends this. ⊘ Nothing here writes guest memory but the
-    /// message queue; nothing is forged: every event is a record the HOST wrote.
+    /// Post real host RC errors as the guest's `RC_TRIGGERED`, then publish and raise stall.
+    /// The notifier is visible first: the host wrote it directly for Passthrough; for Translated
+    /// the RC plane published a bounded error record from the private host record as guest GSP.
+    /// This never retires unfinished GPU work, advances GP_GET, or releases a semaphore.
     fn deliver_rc(&self) {
         let evs = self.chans.take_rc();
         if evs.is_empty() {
@@ -3382,7 +3379,15 @@ impl Device {
                 mmu_fault_addr: 0,
                 mmu_fault_type: 0,
             };
-            match g.fsm.post_rc_triggered(&mut ram, ev.encode()) {
+            let result = match e.post_if_live(|| g.fsm.post_rc_triggered(&mut ram, ev.encode())) {
+                crate::chanrc::Post::Retired => continue,
+                crate::chanrc::Post::Busy => {
+                    back.push(e);
+                    continue;
+                }
+                crate::chanrc::Post::Posted(result) => result,
+            };
+            match result {
                 Ok(()) => {
                     posted += 1;
                     self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);

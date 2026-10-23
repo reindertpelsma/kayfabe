@@ -29,7 +29,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
 
 ## 1. Ranked findings (12)
 
-### 1. A Translated ring dies silently: no RC, no fence, no interrupt, never pumped again
+### F1. A Translated ring dies silently: no RC, no fence, no interrupt, never pumped again
 - `crates/kf-qemu/src/chan.rs:6829-6866` (any `ChanError` -> `g.dead = Some`, `completions.clear`); `serve()` returns at
   `chan.rs:6637` forever after; `crates/kf-chan/src/host.rs:1778` (`"no room for a completion tail"` kills the channel when
   pieces were pushed and the tail fence finds the ring full); also `ChanError::Bind/Sw/Publish` (split refused).
@@ -43,7 +43,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
 - Test: `kf-chan` unit test with a fake host whose `fence_releasing` returns `Busy` after `push` accepted pieces; today the
   pump returns `Err`; required behaviour is to keep the work and retry on the next completion (or post `RC_TRIGGERED`).
 
-### 2. CPU_INTR shadow publication is a load-then-store race: a latched leaf bit can be hidden after its MSI was already consumed
+### F2. CPU_INTR shadow publication is a load-then-store race: a latched leaf bit can be hidden after its MSI was already consumed
 - `crates/kf-qemu/src/device.rs:1529-1535` (vCPU: `intr.write` then `intr.shadow` then `deliver`) against
   `device.rs:1730-1738` (`latch_and_deliver`: `intr.latch` then `shadow_all` then `deliver`, from workers, drainer, display
   thread); `crates/kf-trap/src/cpuintr.rs:207-215` (W1C), `:242-258` (`shadow` loads then `put`s), `:261-264`.
@@ -61,7 +61,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
   `shadow_all`; invariant after both: every published word equals the atomics. Fails today. Fix shapes: publish under one
   small mutex held by both paths, or loop `publish; if state changed re-publish`.
 
-### 3. Non-stall edges are dropped when kayfabe does not see an arm; hardware latches them regardless and nothing catches up
+### F3. Non-stall edges are dropped when kayfabe does not see an arm; hardware latches them regardless and nothing catches up
 - `crates/kf-chan/src/ptnsi.rs:388-391` (`NotArmed`), `crates/kf-qemu/src/chan.rs:2432-2500`, arms learned only from
   observed allocs (`crates/kf-rm/src/osevent.rs:310-340`) and zeroed at every fn 1 (`osevent.rs:371-380`, `:669`).
   Run 102 final: `edges=12135 not_armed=3071` (GR0 435, CE2 1216, CE3 630); `CE2 armed=0` the whole run, `arm_clears=2`.
@@ -74,7 +74,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
 - Note: the Translated-CE relay is **not** gated on arms (`device.rs:3352`, `latch_and_deliver` straight); only host-edge
   relays are. The two share nothing but `latch_and_deliver`/`CpuIntr` (§3 of the questions below).
 
-### 4. RUNLIST_PREEMPT_COMPLETE (139) has silent-drop paths; default config refuses the async preempt (TDR exactly TdrDelay later)
+### F4. RUNLIST_PREEMPT_COMPLETE (139) has silent-drop paths; default config refuses the async preempt (TDR exactly TdrDelay later)
 - Default (`KF3_ASYNC_PREEMPT` unset): `crates/kf-rm/src/chanlink.rs:246-259, 1747-1766` refuses `DISABLE_CHANNELS`
   carrying `pRunlistPreemptEvent` (`[measured runs 78/79]` TDR follows). With it on (all Windows runs):
   `chan.rs:3522-3527` skips the push when 64 are queued; `device.rs:3090-3105` consumes the entry with no requeue when there
@@ -88,7 +88,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
   Confidence: drop points *measured from code*; firing in run 232 *unknown* (runs 100/102 posted 2 of 2 early). Falsifier:
   grep run 232 for `DISABLE_CHANNELS` / `RUNLIST_PREEMPT_COMPLETE` lines near t~108 s.
 
-### 5. The device model has no reset: guest reboot, FLR and a GSP life cycle leave every Rust-side state alive
+### F5. The device model has no reset: guest reboot, FLR and a GSP life cycle leave every Rust-side state alive
 - `qemu/hw/misc/kf3/kf3.c:1947-1965` (`class_init` sets no reset); `GspFsm::device_reset` (`crates/kf-gsp/src/boot.rs:1172`)
   has no caller in `kf-qemu`; `CpuIntr` has no reset (`cpuintr.rs`); fn 47 is inert (`kf-rm/src/inert.rs:119`) and
   `observe_unloading` only reseeds BAR1 (`device.rs:2766`). `enter_halted` (`boot.rs:1460`) drops the queue binding but keeps
@@ -99,7 +99,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
   (run 102 tail: `PeerWritePtrOutOfRange {8192,63}` x2 on stale queue memory, then Code 43 "no NVIDIA adapter"). This is the
   "loop" the coordinator saw. Does not explain the first stall. Confidence: *measured from code* and from the run-102 tail.
 
-### 6. MMU_INVALIDATE stays armed for ever on every `unreconciled` path; nothing retries
+### F6. MMU_INVALIDATE stays armed for ever on every `unreconciled` path; nothing retries
 - `crates/kf-mem/src/vasmgr.rs:1610-1612` (also 1036, 1298, 1333, 1641), VA loop `device.rs:1970` (`last_seq == req.seq`
   stops re-picking it). Paths: refused UNMAP, refused host invalidate, slot overflow, walk submit/poll error, > MAX_SPACES,
   and **a root that moves during the walk** (`vasmgr.rs:1390-1393` queues `Want::Root` but the invalidate branch only
@@ -108,7 +108,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
 - Scheduler forever: yes (the guest spins under its GPU lock; no idle completion is processed). Confidence: high that the
   state is stuck (code); medium that it matches run 232 (no `mem ... trigger armed` line is known there - grep it).
 
-### 7. Held replies: head-of-line blocking, no deadline, and no retry when a post fails
+### F7. Held replies: head-of-line blocking, no deadline, and no retry when a post fails
 - `crates/kf-gsp/src/boot.rs:2550-2570` (`release_held`: FIFO, a settle-pending head blocks the rest), `device.rs:2833-2860`
   (`release_settled` needs `inbox.all_settled()`, i.e. the VA thread momentarily idle), `device.rs:3086` (139 gated on
   `held_len()==0`), `boot.rs:2589` + `device.rs:3449` (a failed `answer` - `QueueFull`, `ProcessorSuspended`,
@@ -117,7 +117,7 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
 - Scheduler forever: possible via #4 (139 behind a held map reply) and any reply the KMD waits on. Confidence: *code*;
   held replies balanced 205/205 in run 102, so not hit there.
 
-### 8. Display completions are gated on an optional console-frame copy, and `ScanState.failed` is permanent
+### F8. Display completions are gated on an optional console-frame copy, and `ScanState.failed` is permanent
 - `crates/kf-qemu/src/display.rs:2796-2840, 3170-3188` (notifier/release/GET and `Effect::Heads` wait on `scan.barrier`);
   `:2825-2830, 3865-3869` (`failed` is never reset: every later Notify/Release/GET is dropped and `halt_scanout` runs, also
   for the next driver life); `:2900, :2929` (a notifier/semaphore write that fails to resolve is dropped while GET still
@@ -125,26 +125,26 @@ TDR recovery pass force-completes all 14 at once; 4651 earlier packets matched.
   `engine.free(Core)` emits no `Effect::Heads`). Not in the paging node's chain, but `FlushScheduler` also waits on the
   flip/present nodes. Confidence: *code*; stall link *inferred* (runs 98/99 show the display KMD waiting on exactly these).
 
-### 9. Hotplug is a kayfabe-authored trigger for the observed stack
+### F9. Hotplug is a kayfabe-authored trigger for the observed stack
 - `device.rs:3008-3070` (`queue_hotplug` from UI/broker resize), `kf-disp/model.rs:642-652`. A monitor change posts
   HOTPLUG; Windows answers with `DxgkPollDisplayChildren -> ... -> AcquireCoreSync -> SuspendScheduler` at an arbitrary time
   while GPU work is outstanding. It converts any pre-existing lost completion into the observed stall; it is not a loss itself.
   Falsifier: correlate `display: hotplug posted` lines with the stall time in run 232.
 
-### 10. Events are dropped, not requeued, when the GSP phase is not `Running`; late `IRQSCLR` can wipe a newer event's status
+### F10. Events are dropped, not requeued, when the GSP phase is not `Running`; late `IRQSCLR` can wipe a newer event's status
 - `boot.rs:2668-2680` (`post_event` -> `NotRunning`), `device.rs:2987/3021/3134` (RC, hotplug, 139 consume and log);
   `boot.rs:1405-1430` (IRQSCLR is a trapped ring write applied later by the drainer; an RC/hotplug/139 posted in between
   has its `IRQSTAT` cleared; `publish()` dedups on `published`, `device.rs:2214`, so the shadow is not restored) -> the guest ISR
   finds status 0 and returns; the message waits until the next RPC. Confidence: code, narrow window.
 
-### 11. `serve()`'s `try_lock` consumes the ring; `schedule_translated` mis-reads contention as "not stopped"
+### F11. `serve()`'s `try_lock` consumes the ring; `schedule_translated` mis-reads contention as "not stopped"
 - `chan.rs:6631-6636` (contended -> `return false`, token released as idle: a doorbell/completion ring with no pump),
   `chan.rs:3820` (`slot.try_lock().is_ok_and(|g| g.stopped)`: on contention the restart branch is skipped, `stopped` stays
   true and the ring is never re-enabled), act holders at `chan.rs:2900, 3499, 3643, 3764-3772, 3847` (GR/disable/schedule
   acts hold the slot lock around host verbs). The relay path already learned this once (run 77, `chan.rs:4998`).
   **Measured `contended=0` in runs 100-103**, so downgraded; still a real lost-doorbell hazard for Translated rings.
 
-### 12. A failed disable leaves the Translated ring disabled for good; stale queues carry into the next life
+### F12. A failed disable leaves the Translated ring disabled for good; stale queues carry into the next life
 - `chan.rs:3502` sets `g.disabled = true` before the host verb, `chan.rs:3511` returns on error without undoing it
   (`serve` then never pumps that ring); `preempt_done`/`rc_queue`/`pt` are not cleared at fn 1 and Windows reuses
   `0xc1d0xxxx`/`0xff04xxxx` handles, so a queued 139/RC of a dead life can reach the new one. Confidence: code, low-medium.
