@@ -21,6 +21,7 @@ KF_RC_BYSTANDER run=linux-rc-1 phase=before value=1
 KF_RC_EVENT chid=0x5 engine=0x9 xid=32 scope=0
 KF_RC_NOTIFIER run=linux-rc-1 chid=0x5 timestamp=0x1234 info32=32 info16=9 status=0xffff get=0
 KF_RC_BYSTANDER run=linux-rc-1 phase=after value=2
+KF_RC_BYSTANDER run=linux-rc-1 phase=after_teardown value=3
 KF_RC_PROBE_END run=linux-rc-1 result=PASS
 KF_RC_OWNER run=linux-rc-1 pid=17 errno=5 channel_error=1
 RC_CONTROL_HEALTH run=linux-rc-1 result=PASS
@@ -65,6 +66,8 @@ class GuardTests(unittest.TestCase):
     def test_fault_preceding_marker_rejected(self): self.reject(j=fixture()[3].replace("2100000", "1900000"))
     def test_bystander_missing_rejected(self): self.reject(g=fixture()[2].replace("phase=after", "phase=missing"))
     def test_bystander_did_not_progress_rejected(self): self.reject(g=fixture()[2].replace("phase=after value=2", "phase=after value=1"))
+    def test_bystander_after_victim_teardown_required(self): self.reject(g=fixture()[2].replace("phase=after_teardown", "phase=missing_teardown"))
+    def test_bystander_after_teardown_must_progress(self): self.reject(g=fixture()[2].replace("phase=after_teardown value=3", "phase=after_teardown value=2"))
     def test_guest_failure_rejected(self): self.reject(g=fixture()[2].replace("result=PASS", "result=FAIL"))
     def test_report_reaches_owning_process(self): self.reject(g=fixture()[2].replace("pid=17", "pid=18"))
     def test_missing_owner_error_rejected(self): self.reject(g=fixture()[2].replace("KF_RC_OWNER", "NO_OWNER"))
