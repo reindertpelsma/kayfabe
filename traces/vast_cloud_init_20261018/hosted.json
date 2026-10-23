@@ -17,5 +17,13 @@
       "status": "completed",
       "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39929672948"
     }
-  ]
+  ],
+  "general_rust": {
+    "conclusion": "success",
+    "databaseId": 39929665358,
+    "headSha": "d196c055ab97e63293804ede0ff354f25a6067ba",
+    "name": "CI",
+    "status": "completed",
+    "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39929665358"
+  }
 }

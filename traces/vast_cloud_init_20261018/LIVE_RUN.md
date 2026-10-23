@@ -70,7 +70,8 @@ MEASURED on 2026-10-23, run `v8-cloud-init-hosted-20261023`: both hosted box-scr
 passed on source d196c055ab97e63293804ede0ff354f25a6067ba ([push39929665645](https://github.com/reindertpelsma/kayfabe/actions/runs/39929665645),
 [PR39929672948](https://github.com/reindertpelsma/kayfabe/actions/runs/39929672948)).
 The pre-rent325 tests,96 noncanonical mutants with>=2 named killers each, canonical60/60 and
-both fresh-container scenarios are in [preflight evidence](preflight.json). General Rust CI is separate.
+both fresh-container scenarios are in [preflight evidence](preflight.json). General Rust CI also
+passed on the same source: [run39929665358](https://github.com/reindertpelsma/kayfabe/actions/runs/39929665358).
 
 NOT DONE: overall GPU PASS; remaining23 raw arms, thin30/30, census and fat CUDA; root-cause
 attribution/per-arm log retrieval for defer-liveness; independent SSH artifact/hardware proof;
