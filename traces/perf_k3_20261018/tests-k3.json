@@ -1,0 +1,30 @@
+{
+  "classification": "MEASURED",
+  "evidence": "tests-k3.json",
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "base_candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "time": "2026-10-23T04:38:58.986602+00:00",
+  "failed": 0,
+  "exit": 0,
+  "full_two_crate_suite": {
+    "head": "7251cf0acafa8d7f30c04ea87478485f89f2c2fd",
+    "passed": 1097,
+    "failed": 0,
+    "ignored": 4,
+    "summaries": 41,
+    "not_unique_tests": true
+  },
+  "runtime_sources_identical_since_full_suite": true,
+  "only_crate_changes_since_full_suite": [
+    "crates/kf-chan/tests/native_submit_observer.rs",
+    "crates/kf-qemu/tests/submit_profile.rs"
+  ],
+  "focused_exact_head": {
+    "profiler": 15,
+    "observer": 4,
+    "failed": 0
+  },
+  "clippy_added": 0,
+  "fmt": "PASS",
+  "hosted_CI": "aarch64/broker/firmware green; stable still running. No candidate/integration write; diagnostic work under repo local-green rule, CI status retained."
+}

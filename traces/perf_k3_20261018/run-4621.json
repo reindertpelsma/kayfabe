@@ -1,0 +1,80 @@
+{
+  "classification": "MEASURED",
+  "evidence": "run-4621.json",
+  "run": 4621,
+  "kind": "physical VFIO profiling reference; no emulated kf3 GPU",
+  "candidate_comparison": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "result": {
+    "classification": "MEASURED",
+    "arm": "round-K3-VFIO-profile",
+    "run": 4621,
+    "rev": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+    "workloads": [
+      "catia-07",
+      "creo-04"
+    ],
+    "iterations": 1,
+    "resolution": "FullHD",
+    "verdict": "PASS",
+    "reason": "VENDOR_COMPLETED_NO_GUARD_FAILURE",
+    "sample": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T06:17:25.215947+02:00",
+      "arm": "round-K3-VFIO-profile",
+      "run": 4621,
+      "sample": 33,
+      "completed": true,
+      "completed_workloads": [
+        "catia-07",
+        "creo-04"
+      ],
+      "failed": false,
+      "subtest": [
+        "creo-04",
+        "13_ScorpionNoHidden"
+      ],
+      "guest153": 0,
+      "guest4101": 0,
+      "boot_unchanged": true,
+      "budget_refusals": 0,
+      "counters": {
+        "pointer_large_entries": 0,
+        "pointer_entry_max_bytes": 0,
+        "refused_scan_budget": 0,
+        "poisoned": 0
+      },
+      "task": 3,
+      "qemu_before": 0,
+      "qemu_after": 0,
+      "viewperf_nonzero_exits": []
+    },
+    "events": [],
+    "telemetry_exit": 0,
+    "ended": "2026-10-23T06:17:46.973016+02:00",
+    "controller_exit": 0,
+    "host_stop": {
+      "classification": "MEASURED",
+      "reason": "REQUESTED_STOP",
+      "new_host_xids": 0,
+      "time": "2026-10-23T04:17:47.819872+00:00"
+    },
+    "agent_exit": -15,
+    "restoration": {
+      "classification": "MEASURED",
+      "time": "2026-10-23T04:18:06.568423+00:00",
+      "cuda": {
+        "before": 0,
+        "after": 0
+      },
+      "gdm": "active",
+      "nvidia_bound": true,
+      "smi_exit": 0
+    },
+    "restored": true
+  },
+  "scores": "profile-scores-nc.csv only",
+  "telemetry": "telemetry-4621.json",
+  "sampling": "Guest physical NVML200ms plus host pidstat and5s entry/exit traces; one boot, not headline score timing",
+  "restoration_scope": "Original VF1 detach/restore procedure, copied into own directory; restore true, no errors; fresh CUDA0, GDM/ubuntu/monitors independently checked",
+  "host_Xid_scope": "Host anchored delta0 across detach/restore; while VFIO owns GPU, guest153/4101 observers supply reset coverage"
+}

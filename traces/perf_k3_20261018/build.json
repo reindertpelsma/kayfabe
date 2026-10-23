@@ -1,0 +1,21 @@
+{
+  "classification": "MEASURED",
+  "evidence": "build.json",
+  "instrument_revision": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "candidate_base": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "time": "2026-10-23T04:29:24.710803+00:00",
+  "archive_sha256": "b25e94ccfd9728b57b79d27e3ab29f255e5efe33a32eacdb1ffd508f426d5d37",
+  "uptime": "06:29:24 up 13 days, 10:50,  3 users,  load average: 0.38, 1.66, 1.78",
+  "quiet_flag_absent_during_build": true,
+  "method": "Dev Cargo release build succeeded at exact instrument revision; copy archive and unchanged overlay sources, then relink existing owned configured QEMU.",
+  "qemu_sha256": "96ca752cd50ed39cb00d1bc21d5d32954e22af5f0d82d1088420108ad0a8472d",
+  "qemu_bytes": 95579888,
+  "overlay_source_hashes": {
+    "kf3.h": "80059b5a1c61161eded395104827b6b8824e6f8c36c0720d7c61326b50b0b955",
+    "kf3_guest_ram.h": "6a4f6cecffcabe979837bf8d630647891adeca3cd9e2c044027438b8881da248",
+    "kf3_gop.h": "d499ed57ddecf161bb6137fa4650ac500a7bad26c1df5e5a19b3d5e148556238",
+    "kf3.c": "ee95a9144cd559fb2773e99b1fe74e1b4424c73ccaff5b4860f6b6808acb13b2",
+    "meson.build": "a809bb613562b0852aa4ff73a21ab50844903771664861a9038b0bd493307573"
+  },
+  "tracked_source_clean": true
+}

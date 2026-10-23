@@ -1,0 +1,94 @@
+{
+  "classification": "MEASURED",
+  "evidence": "kvm-4621-creo.json",
+  "source": "kvm-creo-04.data",
+  "time": "2026-10-23T04:31:13.913809+00:00",
+  "script_exit": 0,
+  "script_diagnostics": "'trace' not valid for hardware events. Ignoring.\n'trace' not valid for software events. Ignoring.\n'trace' not valid for hardware-cache events. Ignoring.\n'trace' not valid for raw events. Ignoring.\n'trace' not valid for breakpoint events. Ignoring.\n'trace' not valid for unknown events. Ignoring.\n'trace' not valid for unknown events. Ignoring.\n",
+  "observed_wall_seconds": 5.012511991,
+  "paired_exits": 258801,
+  "paired_exit_rate_per_s": 51630.998681834375,
+  "non_hlt_exit_rate_per_s": 36839.812120461414,
+  "non_hlt_exit_elapsed_seconds": 0.35107114,
+  "non_hlt_elapsed_cpu_equivalent": 0.07003896262599484,
+  "halted_wait_seconds": 32.583822906,
+  "unmatched_entries_at_trace_edges": 8,
+  "unmatched_final_exits": 8,
+  "overwritten_exits": 0,
+  "rows": [
+    {
+      "reason": "EXIT_MSR",
+      "paired_exits": 150459,
+      "sum_us": 236030.95,
+      "avg_us": 1.569,
+      "min_us": 0.97,
+      "max_us": 30.81,
+      "p50_us": 1.44,
+      "p99_us": 3.26
+    },
+    {
+      "reason": "EXIT_HLT",
+      "paired_exits": 74141,
+      "sum_us": 32583822.906,
+      "avg_us": 439.485,
+      "min_us": 0.65,
+      "max_us": 2333.05,
+      "p50_us": 105.87,
+      "p99_us": 2010.35
+    },
+    {
+      "reason": "EXIT_INTR",
+      "paired_exits": 14385,
+      "sum_us": 66839.04,
+      "avg_us": 4.646,
+      "min_us": 1.02,
+      "max_us": 111.86,
+      "p50_us": 4.18,
+      "p99_us": 18.11
+    },
+    {
+      "reason": "EXIT_NPF",
+      "paired_exits": 12974,
+      "sum_us": 29703.09,
+      "avg_us": 2.289,
+      "min_us": 1.43,
+      "max_us": 26.31,
+      "p50_us": 2.04,
+      "p99_us": 4.39
+    },
+    {
+      "reason": "EXIT_IOIO",
+      "paired_exits": 3885,
+      "sum_us": 7162.28,
+      "avg_us": 1.844,
+      "min_us": 1.09,
+      "max_us": 18.51,
+      "p50_us": 1.71,
+      "p99_us": 4.06
+    },
+    {
+      "reason": "EXIT_VMMCALL",
+      "paired_exits": 2569,
+      "sum_us": 10679.09,
+      "avg_us": 4.157,
+      "min_us": 0.95,
+      "max_us": 17.67,
+      "p50_us": 3.8,
+      "p99_us": 9.61
+    },
+    {
+      "reason": "EXIT_PAUSE",
+      "paired_exits": 388,
+      "sum_us": 656.69,
+      "avg_us": 1.693,
+      "min_us": 0.93,
+      "max_us": 5.15,
+      "p50_us": 1.61,
+      "p99_us": 3.27
+    }
+  ],
+  "semantics": "Per-vCPU elapsed exit-to-next-entry, not CPU-only execution. HLT waits are idle and excluded from active service. Overlap across vCPUs means summed time is not serial application critical-path time.",
+  "capture_status": "Complete five-second entry/exit trace; recording and script exits0",
+  "run": 4621,
+  "arm": "VFIO-reference"
+}

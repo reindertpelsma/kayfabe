@@ -1,0 +1,17 @@
+{
+  "classification": "INFERRED",
+  "evidence": "run-4622-plan.json",
+  "candidate": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "base_candidate": "01a171e63a82198eef54c54935c5f9db5ed8e81b",
+  "run": 4622,
+  "time": "2026-10-23T04:38:58.986780+00:00",
+  "hypotheses_before_run": {
+    "H3": "Relay dispatch/processing delay may starve the GPU. FALSIFIER: directly paired first-pending-USER-doorbell to next successful native doorbell p99 below100us with no growth under load and adequate pairing coverage. Coalesced kicks and unpaired continuations are counted, never assigned zero or treated as exact PB causality.",
+    "H2": "Trap/exit service may account for the gap. FALSIFIER: low active exit rate/time during completed subtest windows, HLT waits excluded.",
+    "H5": "If relay CPU processing is the active bottleneck, sampled userspace CPU stacks will concentrate in the relay/native publication path. FALSIFIER: samples lie elsewhere or relay CPU is mostly idle."
+  },
+  "methods": "Separate instrumented profiling arm, CATIA/Creo one each, fb9216MiB, GDM stopped, same production flags plus KF3_PROF and KF3_PROF_USER_SUBMIT, DIAG_PROGRESS1000. GPU200ms and pidstat1s, KVM five-second entry/exit capture and independent five-second userspace CPU stack samples; no headline score claim.",
+  "latency_boundaries": "Starts in Device before TrapPath work publication, after BAR0 decode; ends after actual HostRm doorbell returns. Excludes initial KVM-to-QEMU entry and GPU execution/completion. Translated authored rings and Windows private USER relay reported separately. Fast ioeventfd delivery, if any, starts at userspace delivery, not guest write.",
+  "histogram_windows": "Cumulative sparse buckets and wall/elapsed markers permit workload interval subtraction; never subtract percentiles. Quantiles are bucket upper bounds.",
+  "qualification": "Prior6d PARTIAL/HOLD stands; these flags do not change product admission or native outcomes."
+}

@@ -1,0 +1,19 @@
+{
+  "classification": "CODE READ",
+  "evidence": "queued-review-hardware.json",
+  "time": "2026-10-23T04:42:06.720191+00:00",
+  "instruction": "Controller asks these AFTER K3, within existing time box or later round; never interrupt K3.",
+  "queued": [
+    {
+      "task": "Run identical cursor RGB oracle on master e9c6d39e5 baseline",
+      "falsifier_before_run": "If master passes tolerance2 while6d has48/52 errors, the candidate regression hypothesis survives. If master has the same failure under matched conditions,48/52 alone does not establish a candidate regression.",
+      "review_source": "origin/claude/review-cand6d-20261023:docs/audits/2026-10-23-candidate6d-review.md",
+      "status": "QUEUED_AFTER_K3"
+    },
+    {
+      "task": "Dedicated copy-engine KERNEL ring does actual work without SET_OBJECT",
+      "dependency": "Wait for codex/6d-review-fixes-20261023 with F1 ce_seed=<class> birth diagnostic and repro input. Do not invent an input.",
+      "status": "WAITING_FOR_F1_BRANCH_AFTER_K3"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "classification": "INFERRED",
+  "evidence": "linux-profile-plan.json",
+  "time": "2026-10-23T04:48:25.141620+00:00",
+  "run": "K3-linux-positive",
+  "rev": "70f7fb5910cbb7a28e37fbe9ce0c333c145a9fba",
+  "hypothesis": "A frozen positive CE guest-RAM arm reaches real Passthrough native calls and validates the direct path instrument. FALSIFIER: zero Passthrough call/histogram census, no native forwarding or failed client content proof.",
+  "controls": "Existing frozen source737306ee, unchanged180s boot budget, guest595.91.07 receipt, hostGPU8192MiB, no negative controls or Xid exceptions; any new Xid fatal. Fastguest lock+quiet, load receipt.",
+  "scope": "Coverage arm only; not comparable with Windows or a performance headline."
+}
