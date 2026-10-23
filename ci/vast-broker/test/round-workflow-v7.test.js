@@ -103,3 +103,12 @@ test('round V7 GPU workflow has no dispatch trigger or SHA input', async () => {
 test('round V7 sweep workflow has no tested SHA input', async () => {
   assert.doesNotMatch(await read('gpu-vast-sweep.yml'), /tested_sha/);
 });
+test('round V7 sweep inputs are exactly the die preferences', async () => {
+  const inputs = (await read('gpu-vast-sweep.yml'))
+    .split('    inputs:\n')[1]
+    .split('\npermissions:')[0];
+  assert.deepEqual(
+    [...inputs.matchAll(/^      ([\w-]+):$/gm)].map((m) => m[1]),
+    ['preferences'],
+  );
+});

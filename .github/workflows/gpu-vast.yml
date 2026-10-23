@@ -5,13 +5,6 @@ on:
   pull_request_target:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
-    inputs:
-      sha:
-        description: Exact repository commit, empty for the workflow head
-        required: false
-        default: ''
-        type: string
 permissions: {}
 defaults:
   run:
@@ -19,11 +12,11 @@ defaults:
 concurrency:
   group: >-
     gpu-vast-${{ github.event.pull_request.number || github.ref }}-${{
-    github.event.pull_request.head.sha || github.event.inputs.sha || github.sha }}
+    github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 env:
   TARGET_SHA: >-
-    ${{ github.event.pull_request.head.sha || github.event.inputs.sha || github.sha }}
+    ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   pending:
     name: Mark GPU tripwire pending
@@ -54,7 +47,7 @@ jobs:
     outputs:
       run: ${{ steps.policy.outputs.run }}
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
       - name: Fail safe to run when file metadata is uncertain
@@ -79,10 +72,49 @@ jobs:
               -o "$temporary/$file" \
               "$source_origin/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file"
           done
+          # env -i drops PATH, so run the resolved binary rather than whatever /usr/bin holds.
+          node_bin=$(command -v node)
           env -i PATH=/usr/bin:/bin GH_TOKEN="$GH_TOKEN" \
             GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" \
             GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_OUTPUT="$GITHUB_OUTPUT" \
-            PATH_SKIP_PATTERNS="$PATH_SKIP_PATTERNS" node "$temporary/trigger-policy.mjs"
+            PATH_SKIP_PATTERNS="$PATH_SKIP_PATTERNS" "$node_bin" "$temporary/trigger-policy.mjs"
+  policy-check:
+    name: Independently re-decide the GPU trigger without third-party actions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.policy.outputs.run }}
+    steps:
+      - name: Fail safe to run when file metadata is uncertain
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATH_SKIP_PATTERNS: >-
+            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ".github/ISSUE_TEMPLATE/**"]
+        run: |
+          set +x
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com
+          for file in trigger-policy.mjs package.json defaults.json \
+            src/defaults.js src/policy.js src/github.js src/workflow-authority.js; do
+            mkdir -p "$temporary/$(dirname "$file")"
+            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+              -o "$temporary/$file" \
+              "$source_origin/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file"
+          done
+          # env -i drops PATH, so run the resolved binary rather than whatever /usr/bin holds.
+          node_bin=$(command -v node)
+          env -i PATH=/usr/bin:/bin GH_TOKEN="$GH_TOKEN" \
+            GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" \
+            GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+            PATH_SKIP_PATTERNS="$PATH_SKIP_PATTERNS" "$node_bin" "$temporary/trigger-policy.mjs"
   gpu:
     name: Isolated BASE runner validates untrusted Worker
     needs: [pending, policy]
@@ -134,7 +166,7 @@ jobs:
   report:
     name: gpu-vast
     if: ${{ always() }}
-    needs: [pending, policy, gpu]
+    needs: [pending, policy, policy-check, gpu]
     runs-on: ubuntu-latest
     permissions:
       statuses: write
@@ -142,6 +174,8 @@ jobs:
       PENDING_RESULT: ${{ needs.pending.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
       POLICY_RUN: ${{ needs.policy.outputs.run }}
+      POLICY_CHECK_RESULT: ${{ needs.policy-check.result }}
+      POLICY_CHECK_RUN: ${{ needs.policy-check.outputs.run }}
       GPU_RESULT: ${{ needs.gpu.result }}
       BROKER_STATE: ${{ needs.gpu.outputs.state }}
       BROKER_VERIFIED: ${{ needs.gpu.outputs.verified }}
@@ -160,8 +194,10 @@ jobs:
               state=$BROKER_STATE ;;
           esac
           result=error
+          # NOT_NEEDED needs two agreeing decisions; the action-free policy-check job is one.
           if [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
-            "$POLICY_RUN" = 0 && "$GPU_RESULT" = skipped ]]; then
+            "$POLICY_RUN" = 0 && "${POLICY_CHECK_RESULT:-}" = success &&
+            "${POLICY_CHECK_RUN:-}" = 0 && "$GPU_RESULT" = skipped ]]; then
             state=NOT_NEEDED
             result=success
           elif [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&

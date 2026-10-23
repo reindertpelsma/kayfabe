@@ -7,11 +7,6 @@ on:
         required: false
         default: rotate
         type: string
-      tested_sha:
-        description: Exact repository commit, empty for master
-        required: false
-        default: ''
-        type: string
 permissions: {}
 defaults:
   run:
