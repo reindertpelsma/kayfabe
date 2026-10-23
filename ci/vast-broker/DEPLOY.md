@@ -71,7 +71,9 @@ arrive as optional dependencies, and `npm ci` checks every tarball against the l
 output: `wrangler deploy --config wrangler.toml --dry-run --outdir <dir>` writes `<dir>/index.js`
 (byte-identical across runs and checkout paths), and its SHA-256 is `bundle_sha256` in
 `deployment.json` and `DEPLOYED_BUNDLE_SHA256` in `wrangler.toml` (vars are not part of the
-module). `test/bundle.test.js` re-checks this when the dev dependencies are installed. After any
+module). `test/bundle.test.js` re-checks this when the dev dependencies are installed; GitHub CI
+installs only `--omit=dev` and skips it, so a `src/` change without a hash update is caught by the
+deploy helper at deploy time, not by CI (final review C1). After any
 change under `src/`, `defaults.json` or the lockfile, record the new hash in both files. Preserve
 the SQLite LEDGER namespace and migration when updating.
 

@@ -105,7 +105,7 @@ export function createReaper({
           const ack = await request('/api/v0/instances/' + row.id + '/', 'DELETE');
           if (ack.success !== true) throw Error('provider');
         } catch {
-          failed++; // MUTANT reaper-continue
+          failed++;
           continue;
         }
         if ((await list()).some((item) => item.id === row.id)) unconfirmed++;
