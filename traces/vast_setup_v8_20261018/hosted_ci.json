@@ -1,0 +1,134 @@
+{
+  "run": "v8-hosted-ci-20261023",
+  "source_sha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+  "box_script_runs": [
+    {
+      "databaseId": 39907188278,
+      "headSha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39907188278",
+      "jobs": [
+        {
+          "name": "Vast box scripts \u2014 tests and mutations",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "conclusion": "success"
+            },
+            {
+              "name": "Contract, payload, environment and diagnostic tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Payload mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Provider environment mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnostic mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup policy mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup cache mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Canonical box-script mutations",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "databaseId": 39907192667,
+      "headSha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39907192667",
+      "jobs": [
+        {
+          "name": "Vast box scripts \u2014 tests and mutations",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "conclusion": "success"
+            },
+            {
+              "name": "Contract, payload, environment and diagnostic tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Payload mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Provider environment mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnostic mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup policy mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Setup cache mutations require two named killers each",
+              "conclusion": "success"
+            },
+            {
+              "name": "Canonical box-script mutations",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "general_ci": {
+    "conclusion": "",
+    "databaseId": 39907188390,
+    "event": "push",
+    "headSha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+    "status": "in_progress",
+    "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39907188390"
+  }
+}

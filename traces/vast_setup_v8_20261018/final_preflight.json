@@ -19,5 +19,10 @@
   ],
   "canonical_killed": 60,
   "canonical_problems": 0,
-  "claims_new": 0
+  "claims_new": 0,
+  "source_sha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+  "hosted_box_script_ci": "success",
+  "hosted_push_run": 39907188278,
+  "hosted_pr_run": 39907192667,
+  "general_ci_at_report": "in_progress"
 }
