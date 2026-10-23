@@ -101,10 +101,53 @@ test('item 5: a valid DENIED_COUNTRIES override replaces the default', async () 
     [1],
   );
 });
-for (const geolocation of [undefined, '', 'Region, CHN', 'Region, Atlantis', 'Region, us'])
+for (const geolocation of [undefined, '', 'Region, XYZ', 'Region, Atlantis', 'Region, us'])
   test('item 5: unknown location handling unchanged ' + JSON.stringify(geolocation), async () => {
     assert.equal(offerCountry({ geolocation }), 'UNKNOWN');
     assert.equal((await evaluate([offer(1, geolocation)])).evaluation.allowed.length, 1);
     const strict = await evaluate([offer(1, geolocation)], { ALLOW_UNKNOWN_COUNTRY: 'false' });
     assert.equal(strict.evaluation.allowed.length, 0);
+  });
+// Review V13 (2026-10-23): a long country name must be recognised and denied, never admitted as
+// UNKNOWN. FALSIFIER: any form below maps to UNKNOWN or the wrong code, or a non-denied place
+// (Taiwan) is denied.
+for (const [geolocation, code] of [
+  ['Damascus, Syrian Arab Republic', 'SY'],
+  ['Damascus, SYR', 'SY'],
+  ['Tehran, Iran, Islamic Republic of', 'IR'],
+  ['Tehran, Islamic Republic of Iran', 'IR'],
+  ['Tehran, Iran (Islamic Republic of)', 'IR'],
+  ["Pyongyang, Korea, Democratic People's Republic of", 'KP'],
+  ['Pyongyang, Korea, Democratic People’s Republic of', 'KP'],
+  ["Pyongyang, Democratic People's Republic of Korea", 'KP'],
+  ['Pyongyang, DPRK', 'KP'],
+  ['Havana, Republic of Cuba', 'CU'],
+  ["Beijing, People's Republic of China", 'CN'],
+  ["Beijing, China, People's Republic of", 'CN'],
+  ['Beijing, CHN', 'CN'],
+  ['Central, Hong Kong SAR', 'HK'],
+  ['Central, Hong Kong SAR, China', 'HK'],
+  ['Central, hong kong sar china', 'HK'],
+  ['Kowloon, HKG', 'HK'],
+  ['Taipa, Macao', 'MO'],
+  ['Taipa, Macao SAR', 'MO'],
+  ['Taipa, Macao SAR, China', 'MO'],
+  ['Taipa, Macau Special Administrative Region', 'MO'],
+  ['  Taipa ,   macao   sar  ', 'MO'],
+])
+  test('V13: ' + JSON.stringify(geolocation) + ' is ' + code + ' and denied', async () => {
+    assert.equal(offerCountry({ geolocation }), code);
+    const { evaluation } = await evaluate([offer(1, geolocation)]);
+    assert.equal(evaluation.allowed.length, 0);
+    assert.equal(evaluation.view.rejected.COUNTRY, 1);
+  });
+for (const [geolocation, code] of [
+  ['Taipei, TW', 'TW'],
+  ['Taipei, Taiwan', 'UNKNOWN'],
+  ['Seoul, KR', 'KR'],
+  ['Seoul, Korea, Republic of', 'UNKNOWN'],
+])
+  test('V13: ' + JSON.stringify(geolocation) + ' stays ' + code + ' and admitted', async () => {
+    assert.equal(offerCountry({ geolocation }), code);
+    assert.equal((await evaluate([offer(1, geolocation)])).evaluation.allowed.length, 1);
   });
