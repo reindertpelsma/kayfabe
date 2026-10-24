@@ -25,11 +25,9 @@ FILES = [
     "vast_onstart.sh",
     "vast_report.py",
     "kf-box-kill",
-    "kf-box-hold",
     "kf-box-blob-url",
-    "kf-ci-hold.sh",
 ]
-R, E, K, D = "vast_report.py", "EnvValidation.", "KillAndHold.", "Daemon."
+R, E, K, D = "vast_report.py", "EnvValidation.", "Kill.", "Daemon."
 RP, FR, ON = "Reporter.", "FinalResult.", "Onstart."
 V = "vast_onstart.sh"
 
@@ -39,9 +37,12 @@ CASES = [
         "env-contract",
         "accept-old-protocol",
         R,
-        '{"4", "5"}',
-        '{"3", "4", "5"}',
-        [E + "test_malformed_values_are_rejected"],
+        "PROTOCOLS = {BOX_PROTOCOL}",
+        'PROTOCOLS = {BOX_PROTOCOL, "6"}',
+        [
+            E + "test_malformed_values_are_rejected",
+            E + "test_only_the_worker_box_protocol_is_accepted",
+        ],
     ),
     (
         "env-contract",
@@ -72,11 +73,219 @@ CASES = [
     ),
     (
         "env-contract",
-        "no-token-run-match",
+        "box-protocol-marker-moved",
         R,
-        '.replace(".", "-") != run:',
-        '.replace(".", "-") != run and False:',
-        [E + "test_token_must_match_run_id"],
+        'BOX_PROTOCOL = "7"',
+        'BOX_PROTOCOL = "6"',
+        [
+            E + "test_only_the_worker_box_protocol_is_accepted",
+            ON + "test_pass_run_posts_result_and_exits_zero",
+        ],
+    ),
+    (
+        "env-contract",
+        "token-signature-length-unchecked",
+        R,
+        r'\.[A-Za-z0-9_-]{43}"',
+        r'\.[A-Za-z0-9_-]{1,64}"',
+        [
+            E + "test_malformed_values_are_rejected",
+            E + "test_run_token_is_a_jwt_shape_not_tied_to_the_run_id",
+        ],
+    ),
+    (
+        "env-contract",
+        "token-segment-count-unchecked",
+        R,
+        r'TOKEN = r"[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{1,512}\.',
+        r'TOKEN = r"[A-Za-z0-9_.-]{1,64}\.[A-Za-z0-9_-]{1,512}\.',
+        [
+            E + "test_malformed_values_are_rejected",
+            E + "test_run_token_is_a_jwt_shape_not_tied_to_the_run_id",
+        ],
+    ),
+    (
+        "env-contract",
+        "old-token-format-expected",
+        R,
+        r'TOKEN = r"[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{1,512}\.[A-Za-z0-9_-]{43}"',
+        r'TOKEN = r"v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}"',
+        [E + "test_good_env_has_no_problems", ON + "test_pass_run_posts_result_and_exits_zero"],
+    ),
+    (
+        "env-contract",
+        "token-must-match-run-id",
+        R,
+        '    soft, hard = env.get("KF_SOFT_DEADLINE", ""), env.get("KF_HARD_DEADLINE", "")\n',
+        '    if env.get("KF_RUN_TOKEN", "").split(".")[1:2] != [env.get("KF_RUN_ID")]:\n'
+        '        problems.append("KF_RUN_TOKEN: does not match KF_RUN_ID")\n'
+        '    soft, hard = env.get("KF_SOFT_DEADLINE", ""), env.get("KF_HARD_DEADLINE", "")\n',
+        [
+            E + "test_good_env_has_no_problems",
+            E + "test_run_token_is_a_jwt_shape_not_tied_to_the_run_id",
+        ],
+    ),
+    (
+        "access-pair",
+        "access-id-unchecked",
+        R,
+        '("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),',
+        '("KF_ACCESS_ID", False, lambda v: True),',
+        [
+            E + "test_access_pair_is_optional_and_checked_when_present",
+            ON + "test_malformed_access_pair_stops_the_box_before_the_payload",
+        ],
+    ),
+    (
+        "access-pair",
+        "access-secret-unchecked",
+        R,
+        '("KF_ACCESS_SECRET", False, _match(r"[A-Za-z0-9_.-]{1,256}")),',
+        '("KF_ACCESS_SECRET", False, lambda v: True),',
+        [
+            E + "test_access_pair_is_optional_and_checked_when_present",
+            ON + "test_malformed_access_pair_stops_the_box_before_the_payload",
+        ],
+    ),
+    (
+        "access-pair",
+        "access-id-required",
+        R,
+        '("KF_ACCESS_ID", False,',
+        '("KF_ACCESS_ID", True,',
+        [E + "test_good_env_has_no_problems", ON + "test_pass_run_posts_result_and_exits_zero"],
+    ),
+    (
+        "access-pair",
+        "access-id-not-in-env-file",
+        R,
+        '    ("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),\n',
+        "",
+        [
+            E + "test_access_pair_is_optional_and_checked_when_present",
+            ON + "test_payload_never_sees_the_access_pair_but_the_helpers_do",
+        ],
+    ),
+    (
+        "access-pair",
+        "report-access-header-dropped",
+        R,
+        "        headers.update(self.access)\n",
+        "",
+        [
+            RP + "test_reports_carry_the_access_pair_only_when_set",
+            ON + "test_payload_never_sees_the_access_pair_but_the_helpers_do",
+        ],
+    ),
+    (
+        "access-pair",
+        "report-half-pair-sent",
+        R,
+        "            if ident and secret\n",
+        "            if ident or secret\n",
+        [
+            RP + "test_reports_carry_no_access_header_for_half_a_pair",
+            ON + "test_half_an_access_pair_is_never_sent_by_the_box",
+        ],
+    ),
+    (
+        "access-pair",
+        "reporter-built-without-the-pair",
+        R,
+        'transport=HttpsTransport(env["KF_RUN_TOKEN"], access=env),',
+        'transport=HttpsTransport(env["KF_RUN_TOKEN"]),',
+        [
+            RP + "test_reports_carry_the_access_pair_only_when_set",
+            ON + "test_payload_never_sees_the_access_pair_but_the_helpers_do",
+        ],
+    ),
+    (
+        "access-pair",
+        "kill-secret-header-dropped",
+        "kf-box-kill",
+        'Id "$KF_ACCESS_ID" \\\n            Secret "$KF_ACCESS_SECRET"',
+        'Id "$KF_ACCESS_ID"',
+        [
+            K + "test_kill_sends_the_access_pair_only_when_set",
+            K + "test_kill_and_blob_keep_the_access_pair_off_the_command_line",
+        ],
+    ),
+    (
+        "access-pair",
+        "kill-half-pair-sent",
+        "kf-box-kill",
+        '[ -z "${KF_ACCESS_ID:-}" ] || [ -z "${KF_ACCESS_SECRET:-}" ] ||',
+        '[ -z "${KF_ACCESS_ID:-}" ] && [ -z "${KF_ACCESS_SECRET:-}" ] ||',
+        [
+            K + "test_kill_and_blob_send_no_access_header_for_half_a_pair",
+            K + "test_kill_sends_no_access_header_for_half_a_pair",
+        ],
+    ),
+    (
+        "access-pair",
+        "kill-access-unvalidated",
+        "kf-box-kill",
+        "in *[!A-Za-z0-9._-]*) exit 2;; esac\nheaders()",
+        "in *[!A-Za-z0-9._-]*) true;; esac\nheaders()",
+        [
+            K + "test_tools_refuse_a_malformed_access_pair",
+            K + "test_kill_refuses_a_malformed_access_pair",
+        ],
+    ),
+    (
+        "access-pair",
+        "blob-secret-header-dropped",
+        "kf-box-blob-url",
+        'Id "$KF_ACCESS_ID" \\\n            Secret "$KF_ACCESS_SECRET"',
+        'Id "$KF_ACCESS_ID"',
+        [
+            K + "test_kill_and_blob_keep_the_access_pair_off_the_command_line",
+            K + "test_blob_url_sends_the_access_pair_only_when_set",
+        ],
+    ),
+    (
+        "access-pair",
+        "blob-half-pair-sent",
+        "kf-box-blob-url",
+        '[ -z "${KF_ACCESS_ID:-}" ] || [ -z "${KF_ACCESS_SECRET:-}" ] ||',
+        '[ -z "${KF_ACCESS_ID:-}" ] && [ -z "${KF_ACCESS_SECRET:-}" ] ||',
+        [
+            K + "test_kill_and_blob_send_no_access_header_for_half_a_pair",
+            K + "test_blob_url_sends_no_access_header_for_half_a_pair",
+        ],
+    ),
+    (
+        "access-pair",
+        "blob-access-unvalidated",
+        "kf-box-blob-url",
+        "in *[!A-Za-z0-9._-]*) exit 2;; esac\nheaders()",
+        "in *[!A-Za-z0-9._-]*) true;; esac\nheaders()",
+        [
+            K + "test_tools_refuse_a_malformed_access_pair",
+            K + "test_blob_url_refuses_a_malformed_access_pair",
+        ],
+    ),
+    (
+        "access-pair",
+        "payload-sees-access-id",
+        V,
+        "            -u KF_ACCESS_ID -u KF_ACCESS_SECRET \\\n",
+        "",
+        [
+            ON + "test_payload_never_sees_the_access_pair_but_the_helpers_do",
+            ON + "test_payload_environment_has_no_access_pair_variables",
+        ],
+    ),
+    (
+        "access-pair",
+        "payload-sees-access-secret",
+        V,
+        " -u KF_ACCESS_SECRET",
+        "",
+        [
+            ON + "test_payload_never_sees_the_access_pair_but_the_helpers_do",
+            ON + "test_payload_environment_has_no_access_pair_variables",
+        ],
     ),
     (
         "env-file",
@@ -100,14 +309,6 @@ CASES = [
         V,
         'install -m 700 "$here/kf-box-kill"',
         'install -m 755 "$here/kf-box-kill"',
-        [ON + "test_env_file_is_root_only_and_helpers_are_installed"],
-    ),
-    (
-        "env-file",
-        "hold-hook-not-installed",
-        V,
-        'install -m 644 "$here/kf-ci-hold.sh" "$profile_dir/kf-ci-hold.sh"',
-        "true",
         [ON + "test_env_file_is_root_only_and_helpers_are_installed"],
     ),
     (
@@ -171,14 +372,6 @@ CASES = [
     ),
     (
         "token-scope",
-        "hold-follows-redirects",
-        "kf-box-hold",
-        "--max-time 20 --max-redirs 0",
-        "--location --max-time 20 --max-redirs 5",
-        [K + "test_hold_does_not_follow_redirects"],
-    ),
-    (
-        "token-scope",
         "kill-token-on-argv",
         "kf-box-kill",
         "curl --config - --silent",
@@ -227,14 +420,6 @@ CASES = [
         "'%.200s'",
         "'%.2000s'",
         [K + "test_kill_default_reason_and_bounded_sanitised_reason"],
-    ),
-    (
-        "kill-command",
-        "hold-wrong-method-body",
-        "kf-box-hold",
-        "--data-binary ''",
-        "--data-binary 'x'",
-        [K + "test_hold_request_shape"],
     ),
     (
         "heartbeat",
@@ -525,49 +710,6 @@ CASES = [
         'rm -f "$result" ',
         "true ",
         [ON + "test_stale_result_file_is_not_trusted"],
-    ),
-    (
-        "hold-hook",
-        "no-once-guard",
-        "kf-ci-hold.sh",
-        '[ -z "${KF_CI_HOLD_DONE:-}" ]',
-        "true",
-        [K + "test_login_hook_calls_hold_once_per_login"],
-    ),
-    (
-        "hold-hook",
-        "any-login",
-        "kf-ci-hold.sh",
-        '[ -n "${SSH_CONNECTION:-}" ] && ',
-        "",
-        [K + "test_login_hook_ignores_non_ssh_and_non_interactive_shells"],
-    ),
-    (
-        "hold-hook",
-        "non-interactive",
-        "kf-ci-hold.sh",
-        "*i*)\n",
-        "*)\n",
-        [K + "test_login_hook_ignores_non_ssh_and_non_interactive_shells"],
-    ),
-    (
-        "hold-hook",
-        "blocking-call",
-        "kf-ci-hold.sh",
-        "2>&1 &) \\\n",
-        "2>&1) \\\n",
-        [K + "test_login_hook_never_blocks_on_a_slow_broker"],
-    ),
-    (
-        "hold-hook",
-        "failure-aborts-login",
-        "kf-ci-hold.sh",
-        "2>&1 &) \\\n                >/dev/null 2>&1 || true",
-        "2>&1) \\\n                >/dev/null 2>&1 || exit 1",
-        [
-            K + "test_login_hook_tolerates_every_failure",
-            K + "test_login_hook_never_blocks_on_a_slow_broker",
-        ],
     ),
 ]
 

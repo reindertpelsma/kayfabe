@@ -32,7 +32,10 @@ import time
 import urllib.error
 import urllib.request
 
-PROTOCOLS = {"4", "5"}
+# The Worker reads this exact line at the tested commit before renting (V6); bump it, and
+# DEFAULTS.boxProtocol, together whenever the box-facing contract changes.
+BOX_PROTOCOL = "7"
+PROTOCOLS = {BOX_PROTOCOL}
 RESULT_PATH = "/workspace/kf-result.json"
 LINE_MARK = b"...[line truncated, %d bytes dropped]"
 UNKNOWN_HW = {"gpu_name": "unknown", "compute_cap": 0, "driver_version": "unknown"}
@@ -58,9 +61,12 @@ def _match(pattern):
     return lambda v: re.fullmatch(pattern, v) is not None
 
 
-TOKEN = r"v1\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,19}\.[1-9][0-9]{0,12}\.[A-Za-z0-9_-]{43}"
+# The run token is a compact HS256 JWT minted and verified only by the Worker (protocol 7).
+TOKEN = r"[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]{1,512}\.[A-Za-z0-9_-]{43}"
 # (name, required, check). Optional entries are validated only when present.
 SPEC = [
+    ("KF_ACCESS_ID", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
+    ("KF_ACCESS_SECRET", False, _match(r"[A-Za-z0-9_.-]{1,256}")),
     ("KF_PROTOCOL", True, lambda v: v in PROTOCOLS),
     ("KF_BROKER_URL", True, _broker_url),
     ("KF_RUN_ID", True, _match(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,19}")),
@@ -89,10 +95,6 @@ def validate_env(env):
         elif not check(value):
             problems.append("%s: malformed" % name)
     bad = {p.split(":")[0] for p in problems}
-    token, run = env.get("KF_RUN_TOKEN", ""), env.get("KF_RUN_ID", "")
-    if not {"KF_RUN_TOKEN", "KF_RUN_ID"} & bad:
-        if ".".join(token.split(".")[1:3]).replace(".", "-") != run:
-            problems.append("KF_RUN_TOKEN: does not match KF_RUN_ID")
     soft, hard = env.get("KF_SOFT_DEADLINE", ""), env.get("KF_HARD_DEADLINE", "")
     if not {"KF_SOFT_DEADLINE", "KF_HARD_DEADLINE"} & bad and soft and hard:
         if int(soft) >= int(hard):
@@ -309,8 +311,15 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 class HttpsTransport:
     """HTTPS POST to one fixed URL; no proxies, no redirects; token only in that header."""
 
-    def __init__(self, token, timeout=10.0):
+    def __init__(self, token, timeout=10.0, access=None):
         self.token = token
+        ident, secret = (access or {}).get("KF_ACCESS_ID"), (access or {}).get("KF_ACCESS_SECRET")
+        # The Cloudflare Access pair the Worker injected, sent only when both halves are set.
+        self.access = (
+            {"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret}
+            if ident and secret
+            else {}
+        )
         self.timeout = timeout
         self.opener = urllib.request.build_opener(
             urllib.request.ProxyHandler({}),
@@ -321,6 +330,7 @@ class HttpsTransport:
     def post(self, url, body):
         """Return (status, parsed JSON or None); status None means no HTTP answer."""
         headers = {"Content-Type": "application/json", "Authorization": "Bearer " + self.token}
+        headers.update(self.access)
         request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
             with self.opener.open(request, timeout=self.timeout) as response:
@@ -589,7 +599,8 @@ def make_reporter(env, args):
     heartbeat = env.get("KF_HEARTBEAT_SECONDS", "")
     seconds = int(heartbeat) if heartbeat.isdigit() and int(heartbeat) > 0 else 600
     return Reporter(
-        env["KF_BROKER_URL"], env["KF_RUN_ID"], env["KF_RUN_TOKEN"], seconds, make_limits(args)
+        env["KF_BROKER_URL"], env["KF_RUN_ID"], env["KF_RUN_TOKEN"], seconds, make_limits(args),
+        transport=HttpsTransport(env["KF_RUN_TOKEN"], access=env),
     )
 
 

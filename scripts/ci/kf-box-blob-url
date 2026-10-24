@@ -12,7 +12,15 @@ for value in "$1" "$2"; do
 done
 [ "${#1}" -le 64 ] && [ "${#2}" -le 100 ] || exit 2
 case ${KF_RUN_TOKEN:-} in ''|*[!A-Za-z0-9._-]*) exit 2;; esac
-printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN" |
+# The Cloudflare Access pair the Worker injected; sent (on stdin) only when both halves are set.
+case ${KF_ACCESS_ID:-}${KF_ACCESS_SECRET:-} in *[!A-Za-z0-9._-]*) exit 2;; esac
+headers() {
+    printf 'header = "Authorization: Bearer %s"\n' "$KF_RUN_TOKEN"
+    [ -z "${KF_ACCESS_ID:-}" ] || [ -z "${KF_ACCESS_SECRET:-}" ] ||
+        printf 'header = "CF-Access-Client-%s: %s"\n' Id "$KF_ACCESS_ID" \
+            Secret "$KF_ACCESS_SECRET"
+}
+headers |
     timeout --signal=KILL 299s \
         curl --config - --silent --show-error --fail --max-time 20 --max-redirs 0 --proto '=https' \
         --retry 8 --retry-all-errors --retry-max-time 279 \

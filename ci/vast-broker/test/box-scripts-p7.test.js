@@ -444,7 +444,8 @@ test('p7 kf-box-kill after the run has ended is idempotent at the Worker', async
   }
 });
 const signed =
-  'https://release-assets.githubusercontent.com/github-production-release-asset/123/blob?sig=private-short&se=2026-10-23';
+  'https://release-assets.githubusercontent.com/github-production-release-asset/' +
+  '123/blob?sig=private-short&se=2026-10-23';
 for (const [name, overrides, expected] of [
   ['with the pair', access, true],
   ['without', {}, false],
