@@ -1,0 +1,72 @@
+.......................BOX_RC=1
+...................................................................KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=124 duration_ms=0
+KF_PAYLOAD_FAIL suite=timeout
+.KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=124 duration_ms=0
+KF_PAYLOAD_FAIL suite=timeout
+.KF_PAYLOAD_STAGE_START name=raw
+KF_PAYLOAD_STAGE_END name=raw rc=1 duration_ms=0
+KF_PAYLOAD_FAIL suite=raw_suite
+....KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_host
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=merge_bar
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_guest
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+.........KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=124 duration_ms=0
+KF_PAYLOAD_FAIL suite=timeout
+.....KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_host
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=merge_bar
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_guest
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+....KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_host
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=merge_bar
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_guest
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+...............KF_PAYLOAD_STAGE_START name=merge
+KF_PAYLOAD_STAGE_END name=merge rc=124 duration_ms=0
+KF_PAYLOAD_FAIL suite=timeout
+......KF_PREFLIGHT_FREE_BYTES=100
+KF_PAYLOAD_FAIL suite=preflight
+.KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_FAIL suite=preflight
+.KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_host
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=merge_bar
+KF_PAYLOAD_STAGE_END name=merge_bar rc=124 duration_ms=0
+KF_PAYLOAD_FAIL suite=timeout
+.KF_PREFLIGHT_FREE_BYTES=100000000000
+KF_PAYLOAD_STAGE_START name=provision
+KF_PAYLOAD_STAGE_END name=provision rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_host
+KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=merge_bar
+KF_PAYLOAD_STAGE_END name=merge_bar rc=0 duration_ms=0
+KF_PAYLOAD_STAGE_START name=cuda_guest
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+..
+----------------------------------------------------------------------
+Ran 140 tests in 3.378s
+
+OK
