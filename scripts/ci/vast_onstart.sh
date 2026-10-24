@@ -14,7 +14,6 @@ repo=$(cd "$here/../.." && pwd)
 workspace=${KF_CI_WORKSPACE:-/workspace}
 run_dir=${KF_CI_RUN_DIR:-/run/kf-ci}
 bin_dir=${KF_CI_BIN_DIR:-/usr/local/bin}
-profile_dir=${KF_CI_PROFILE_DIR:-/etc/profile.d}
 payload=scripts/ci/vast_payload.sh
 log=$workspace/kf-ci-output.log
 result=$workspace/kf-result.json
@@ -37,21 +36,32 @@ if [ -n "$(missing_tools)" ]; then
 fi
 
 install -d -m 700 "$workspace" || exit 2
+# Cloud-init may omit login variables; restore the current account's standard home.
+# Keep explicit process values, and never choose a different account or arbitrary path.
+if [ -z "${HOME:-}" ]; then
+    kf_account_home=$(python3 -c 'import os,pwd; print(pwd.getpwuid(os.geteuid()).pw_dir)') || exit 2
+    [ -d "$kf_account_home" ] || exit 2
+    export HOME="$kf_account_home"
+fi
 report check-env --write "$run_dir/env" || exit 2
 set -a
 # shellcheck disable=SC1091
 . "$run_dir/env"
 set +a
 
-mkdir -p "$bin_dir" "$profile_dir"
+mkdir -p "$bin_dir"
 install -m 700 "$here/kf-box-kill" "$bin_dir/kf-box-kill"
-if [ -f "$here/kf-box-blob-url" ]; then
-    install -m 700 "$here/kf-box-blob-url" "$bin_dir/kf-box-blob-url"
-fi
+install -m 700 "$here/kf-box-blob-url" "$bin_dir/kf-box-blob-url"
 
 rm -f "$result" "$run_dir/done" "$run_dir/done.tmp"
 : >"$log"
-report daemon --log "$log" --done "$run_dir/done" --result "$result" &
+# An internal pipe carries the first accepted report event to dependency consumers.
+# Keep ordinary/offline payloads runnable; only private blob setup waits on this event.
+ready_pipe=$run_dir/ready.$$
+mkfifo -m 600 "$ready_pipe" || exit 2
+exec {ready_fd}<>"$ready_pipe" || exit 2
+rm -f "$ready_pipe"
+report daemon --log "$log" --done "$run_dir/done" --result "$result" --ready-fd "$ready_fd" &
 reporter=$!
 
 rc=0
@@ -75,6 +85,7 @@ else
             env -u KF_RUN_TOKEN -u KF_BROKER_URL -u KF_RUN_ID -u KF_RUNNER_NONCE \
             -u KF_ACCESS_ID -u KF_ACCESS_SECRET \
             "KF_SOFT_DEADLINE_MS=$((KF_SOFT_DEADLINE * 1000))" \
+            "KF_BROKER_READY_FD=$ready_fd" \
             bash "$payload" "$KF_SHA" "$KF_NONCE"
     ) >>"$log" 2>&1 </dev/null
     rc=$?
@@ -83,6 +94,8 @@ else
         [ "$(date +%s)" -ge $((KF_SOFT_DEADLINE - 2)) ] && timed_out=1
     fi
 fi
+
+exec {ready_fd}>&-
 
 {
     printf 'rc=%d\ntimeout=%d\n' "$rc" "$timed_out"

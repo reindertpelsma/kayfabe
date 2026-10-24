@@ -1,0 +1,14 @@
+{
+  "run": "v7-provider-env-tests-20261023",
+  "expected_red": 13,
+  "provider_env_tests": 17,
+  "combined_tests": 168,
+  "combined_fail": 0,
+  "combined_duration_s": 52.419,
+  "canonical_box_mutants": 60,
+  "canonical_rule": "two mutations per behavior; individual cases may have one named killer",
+  "new_provider_mutants": 8,
+  "new_provider_minimum_named_killers": 2,
+  "real_rental_source": "28084b96cebad2a853d72171f72f8d776946b8ba",
+  "new_loader_live_deployed": false
+}

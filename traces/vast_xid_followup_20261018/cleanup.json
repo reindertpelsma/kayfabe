@@ -1,0 +1,14 @@
+{
+  "run": "v9-no-rental-followup-cleanup-20261023",
+  "at": 1792766091.8456151,
+  "rentals": 0,
+  "vast_api_calls": 0,
+  "own_test_container_remaining": false,
+  "own_test_image_removed": true,
+  "temporary_build_context_removed": true,
+  "live_worker_runtime_present": false,
+  "dev_cargo_targets_created": 0,
+  "host_locks_taken": 0,
+  "firewall_rules_added": 0,
+  "temporary_account_credentials_created": 0
+}

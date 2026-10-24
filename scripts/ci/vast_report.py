@@ -20,6 +20,7 @@ capped. The token is sent only to KF_BROKER_URL, over HTTPS, and redirects are n
 
 import argparse
 import codecs
+import hashlib
 import json
 import math
 import os
@@ -134,15 +135,87 @@ def _count(value):
     return type(value) is int and 0 <= value <= 10_000_000
 
 
+def validate_diagnostics(records, *, budget=True):
+    """Local result metadata only; never an input to a verdict or a wire extension."""
+    if type(records) is not list or len(records) > 128:
+        raise ValueError("diagnostic records")
+    fields = {"arm", "mode", "rc", "admitted", "text", "sha256", "source_bytes", "dropped_bytes"}
+    for item in records:
+        if type(item) is not dict or set(item) != fields:
+            raise ValueError("diagnostic shape")
+        if (
+            not isinstance(item["arm"], str)
+            or re.fullmatch(r"--[a-z0-9-]{1,40}|guest", item["arm"]) is None
+            or item["mode"] not in ("native", "guest")
+            or type(item["rc"]) is not int
+            or not 0 <= item["rc"] <= 255
+            or type(item["admitted"]) is not bool
+            or not isinstance(item["text"], str)
+            or len(item["text"].encode("utf-8")) > 2048
+            or not isinstance(item["sha256"], str)
+            or re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) is None
+            or type(item["source_bytes"]) is not int
+            or not 0 <= item["source_bytes"] <= 8 * 1024 * 1024
+            or type(item["dropped_bytes"]) is not int
+            or not 0 <= item["dropped_bytes"] <= item["source_bytes"]
+        ):
+            raise ValueError("diagnostic field")
+    if budget and len(json.dumps(records, separators=(",", ":")).encode()) > 49152:
+        raise ValueError("diagnostic budget")
+
+
+def diagnostic_record(arm, mode, rc, admitted, text):
+    """Keep a small head/tail plus identity of the complete original arm log."""
+    raw = text.encode("utf-8")
+    limit = 256 if admitted else 2048
+    if len(raw) <= limit:
+        preview, dropped = text, 0
+    else:
+        marker = "\n[diagnostic preview: head and tail]\n"
+        half = (limit - len(marker)) // 2
+        head = raw[:half].decode("utf-8", errors="ignore")
+        tail = raw[-half:].decode("utf-8", errors="ignore")
+        preview = head + marker + tail
+        dropped = len(raw) - len((head + tail).encode())
+    item = dict(
+        arm=arm,
+        mode=mode,
+        rc=rc,
+        admitted=admitted,
+        text=preview,
+        sha256=hashlib.sha256(raw).hexdigest(),
+        source_bytes=len(raw),
+        dropped_bytes=dropped,
+    )
+    validate_diagnostics([item])
+    return item
+
+
+def compact_diagnostics(records):
+    """Bound the local manifest, keeping the first refused arm's preview."""
+    validate_diagnostics(records, budget=False)
+    result = [dict(item) for item in records]
+    first_fault = next((i for i, item in enumerate(result) if not item["admitted"]), None)
+    order = [i for i, item in enumerate(result) if item["admitted"]]
+    order += [i for i, item in enumerate(result) if not item["admitted"] and i != first_fault]
+    for i in order:
+        if len(json.dumps(result, separators=(",", ":")).encode()) <= 49152:
+            break
+        result[i]["text"] = ""
+        result[i]["dropped_bytes"] = result[i]["source_bytes"]
+    validate_diagnostics(result)
+    return result
+
+
 def read_result_file(path):
-    """Strictly parse the payload's result file: {verdict, suites[, hardware]}."""
+    """Strictly parse local results, including optional bounded arm diagnostics."""
     with open(path, "rb") as source:
         raw = source.read(65537)
     try:
         if len(raw) > 65536:
             raise ValueError("size")
         doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique)
-        allowed = {"verdict", "suites", "hardware", "nonce", "sha", "runner_nonce"}
+        allowed = {"verdict", "suites", "hardware", "nonce", "sha", "runner_nonce", "diagnostics"}
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE"):
@@ -159,6 +232,8 @@ def read_result_file(path):
                 raise ValueError("count")
         if len({row["name"] for row in rows}) != len(rows):
             raise ValueError("duplicate suite")
+        if "diagnostics" in doc:
+            validate_diagnostics(doc["diagnostics"])
         hardware = doc.get("hardware")
         if hardware is not None:
             ok = type(hardware) is dict and set(hardware) == set(UNKNOWN_HW)
@@ -328,6 +403,8 @@ class Reporter:
         self.seq = self.posts = self.bytes = self.requests = self.attempts = 0
         self.pending = self.ack = self.last_req = None
         self.next_try, self.dead, self.fallback_used = 0.0, False, False
+        self.progress_acked = False
+        self.progress_refused = False
         self.last_ok = self.last_post = self.clock()
 
     def say(self, message):
@@ -406,6 +483,8 @@ class Reporter:
         message, state = self.pending, (doc or {}).get("state") if isinstance(doc, dict) else None
         if status == 200:
             self.pending, self.attempts, self.last_ok = None, 0, self.clock()
+            if message["kind"] == "progress":
+                self.progress_acked = True
             if message["kind"] == "result":
                 self.ack = doc if isinstance(doc, dict) else {}
             return
@@ -414,6 +493,8 @@ class Reporter:
             self.dead, self.pending = True, None
             return
         if status in (400, 413):
+            if message["kind"] == "progress":
+                self.progress_refused = True
             self.say("broker rejected a %s report (HTTP %d)" % (message["kind"], status))
             self.pending = None
             if message["kind"] == "result" and not self.fallback_used and self.fallback:
@@ -531,6 +612,7 @@ def run_daemon(args, env):
     reporter = make_reporter(env, args)
     tail, soft = LogTail(args.log), int(env["KF_SOFT_DEADLINE"])
     reporter.progress("Box ready; payload starting")
+    ready_fd = getattr(args, "ready_fd", None)
     done = None
     while done is None:
         data = tail.read()
@@ -542,6 +624,12 @@ def run_daemon(args, env):
             done = {"rc": 124, "timeout": True, "reason": None}
         if done is None:
             reporter.pump()
+            if ready_fd is not None and (
+                reporter.progress_acked or reporter.dead or reporter.progress_refused
+            ):
+                os.write(ready_fd, b"READY\n" if reporter.progress_acked else b"REFUSED\n")
+                os.close(ready_fd)
+                ready_fd = None
             time.sleep(reporter.limits.poll)
     for data in iter(tail.read, b""):
         reporter.feed(data)
@@ -566,7 +654,45 @@ def run_daemon(args, env):
     return 0 if result["verdict"] == "PASS" and not reporter.fallback_used else 1
 
 
+def load_provider_env(env, path="/etc/environment"):
+    """Read missing contract fields from Vast VM data; never source shell code.
+
+    Process values win. Provider account/instance credentials and all unrelated
+    fields are ignored. The ordinary strict validator still decides acceptance.
+    """
+    result = dict(env)
+    missing = {name for name, _, _ in SPEC if not result.get(name)}
+    if not missing:
+        return result
+    try:
+        with open(path, "rb") as source:
+            raw = source.read(65537)
+    except FileNotFoundError:
+        return result
+    if len(raw) > 65536:
+        raise ValueError("provider environment too large")
+    seen = set()
+    for line in raw.decode("utf-8").splitlines():
+        name, separator, value = line.partition("=")
+        name = name.strip()
+        if not separator or name not in missing:
+            continue
+        if name in seen:
+            raise ValueError("duplicate provider contract field")
+        seen.add(name)
+        words = shlex.split(value, comments=False, posix=True)
+        if len(words) > 1:
+            raise ValueError("invalid provider contract field")
+        result[name] = words[0] if words else ""
+    return result
+
+
 def run_check_env(args, env):
+    try:
+        env = load_provider_env(env, getattr(args, "provider_env", "/etc/environment"))
+    except (OSError, ValueError, UnicodeError):
+        sys.stderr.write("onstart: provider environment is invalid\n")
+        return 2
     problems = validate_env(env)
     if not problems:
         if args.write:
@@ -596,10 +722,12 @@ def parser():
             p.add_argument("--" + option, type=int)
         if name == "check-env":
             p.add_argument("--write")
+            p.add_argument("--provider-env", default="/etc/environment")
         else:
             p.add_argument("--log", required=True)
             p.add_argument("--done", required=True)
             p.add_argument("--result", default=RESULT_PATH)
+            p.add_argument("--ready-fd", type=int)
     return top
 
 

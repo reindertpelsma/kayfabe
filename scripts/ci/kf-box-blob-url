@@ -1,5 +1,7 @@
 #!/bin/sh
 # Resolve a private release locator using only this run's scoped capability.
+# Vast may still report created when onstart runs: the Worker requires running.
+# Failed GETs (including 401) retry with curl's exponential backoff, under 299 s total.
 set -eu
 env_file=${KF_CI_ENV_FILE:-/run/kf-ci/env}
 # shellcheck disable=SC1090
@@ -19,5 +21,7 @@ headers() {
             Secret "$KF_ACCESS_SECRET"
 }
 headers |
-    curl --config - --silent --show-error --fail --max-time 20 --max-redirs 0 --proto '=https' \
+    timeout --signal=KILL 299s \
+        curl --config - --silent --show-error --fail --max-time 20 --max-redirs 0 --proto '=https' \
+        --retry 8 --retry-all-errors --retry-max-time 279 \
         --noproxy '*' "${KF_BROKER_URL:?}/blob-url/${KF_RUN_ID:?}/$1/$2"

@@ -1,0 +1,28 @@
+{
+  "run": "v8-readiness-fix-gpu-free-20261023",
+  "tests": 299,
+  "failures": 0,
+  "errors": 0,
+  "named_mutants": 81,
+  "minimum_named_killers": 2,
+  "canonical_mutants": 60,
+  "rental_proof_of_followup_fix": false,
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "fixture_migrations": [
+    "scoped blob helper in canonical copies",
+    "mkfifo in synthetic coreutils PATH",
+    "additional existing-directory and stale-environment guard tests; original assertions retained"
+  ],
+  "expected_red_commits": [
+    "e42c4f58a",
+    "db7b94406"
+  ],
+  "canonical_killed": 60,
+  "canonical_problems": 0,
+  "claims_new": 0,
+  "source_sha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+  "hosted_box_script_ci": "success",
+  "hosted_push_run": 39907188278,
+  "hosted_pr_run": 39907192667,
+  "general_ci_at_report": "in_progress"
+}

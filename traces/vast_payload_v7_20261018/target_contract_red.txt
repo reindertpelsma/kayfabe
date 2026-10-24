@@ -1,0 +1,22 @@
+
+FAIL: test_host_binary_is_found_by_existing_fast_guest_consumer (test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/scripts/ci/test_vast_payload_v7.py", line 382, in test_host_binary_is_found_by_existing_fast_guest_consumer
+    self.assertEqual(rc, 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: 1 != 0
+
+======================================================================
+FAIL: test_provisioned_musl_binary_is_found_by_existing_guest_helper (test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/scripts/ci/test_vast_payload_v7.py", line 376, in test_provisioned_musl_binary_is_found_by_existing_guest_helper
+    self.assertEqual(rc, 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: 1 != 0
+
+----------------------------------------------------------------------
+Ran 81 tests in 2.044s
+
+FAILED (failures=2)

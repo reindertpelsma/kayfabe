@@ -1,0 +1,606 @@
+{
+  "run": "v7-payload-mutants-20261023",
+  "cases": [
+    {
+      "mutant": "minimal-profile-not-forced",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "inherited-expensive-profile-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-provision-hardware-stale",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "hardware-refreshed-only-after-success",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "existing-client-target-redirected",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "existing-client-target-nested",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "provision-exit-only",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_provision_missing_build_refuses",
+        "test_vast_payload.PayloadTests.test_provision_red_cannot_be_hidden_by_ready",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_build_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_rc_refuses"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "merge-evidence-bypass",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_gate10_fallback_is_existing_allowed_bar",
+        "test_vast_payload.PayloadTests.test_merge_exact_revision_and_counts",
+        "test_vast_payload.PayloadTests.test_merge_missing_birth_census_refuses",
+        "test_vast_payload.PayloadTests.test_merge_missing_thin_refuses",
+        "test_vast_payload.PayloadTests.test_merge_nonzero_exit_refuses_even_green_text",
+        "test_vast_payload.PayloadTests.test_merge_wrong_revision_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_conflicting_gate_summary_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_conflicting_test_totals_refuse",
+        "test_vast_payload_v7.V7Tests.test_merge_nonzero_recorded_exit_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_prefix_survives_partial_evidence",
+        "test_vast_payload_v7.V7Tests.test_merge_requires_exit_marker",
+        "test_vast_payload_v7.V7Tests.test_raw_red_keeps_earlier_merge_rows",
+        "test_vast_payload_v7.V7Tests.test_thin_red_keeps_raw_and_build_rows",
+        "test_vast_payload_v7.V7Tests.test_timeout_does_not_erase_completed_tests",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 16
+    },
+    {
+      "mutant": "ladder-exit-only",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_ladder_duplicate_row_refuses",
+        "test_vast_payload.PayloadTests.test_ladder_fat_four_unique_correct_rungs",
+        "test_vast_payload.PayloadTests.test_ladder_nonzero_boot_refuses_even_pass",
+        "test_vast_payload.PayloadTests.test_ladder_red_row_cannot_hide_behind_exit_zero",
+        "test_vast_payload.PayloadTests.test_ladder_wrong_revision_refuses",
+        "test_vast_payload_v7.V7Tests.test_ladder_repeated_last_rung_refuses"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "red-record-ignored",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_first_raw_red_is_detected",
+        "test_vast_payload.PayloadTests.test_first_thin_red_is_detected",
+        "test_vast_payload.PayloadTests.test_provision_red_is_detected",
+        "test_vast_payload.PayloadTests.test_runtime_stops_first_red_child",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_build_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_red_crate_test_totals_are_not_progress",
+        "test_vast_payload_v7.V7Tests.test_red_cuda_row_is_not_progress"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "deadline-status-forged",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_runtime_expired_deadline_never_starts",
+        "test_vast_payload.PayloadTests.test_runtime_soft_deadline_kills_own_work",
+        "test_vast_payload_v7.V7Tests.test_timeout_really_stops_grandchild_work"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "finished-prefix-lost",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "first-red-continues",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_first_bad_stage_cancels_later_stages",
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "result-never-published",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
+        "test_vast_payload_v7.V7Tests.test_result_has_only_the_pr104_payload_keys",
+        "test_vast_payload_v7.V7Tests.test_result_is_accepted_by_pr104_reader",
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_disk_preflight_prevents_spend_work",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_requires_actual_kvm_device",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 15
+    },
+    {
+      "mutant": "approved-source-unpinned",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_source_pin_uses_local_exact_approved_objects",
+        "test_vast_payload_v7.V7Tests.test_wrong_checkout_is_refused_before_remote_changes"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "xid-unconditionally-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_missing_page_marker_without_channel_and_recovery_refuses",
+        "test_vast_payload.PayloadTests.test_xid_cannot_rescue_failed_command",
+        "test_vast_payload.PayloadTests.test_xid_excess_count_refuses",
+        "test_vast_payload.PayloadTests.test_xid_instrument_unreadable_refuses",
+        "test_vast_payload.PayloadTests.test_xid_lost_baseline_refuses",
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload.PayloadTests.test_xid_wrong_address_refuses",
+        "test_vast_payload.PayloadTests.test_xid_wrong_code_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_executor_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_missing_positive_recovery_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_missing_run_source_marker_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_negative_control_cannot_pass_without_kernel_records",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_timer_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_v7.V7Tests.test_duplicate_marker_cannot_expand_allowance",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_marker_must_have_the_source_constant",
+        "test_vast_payload_v7.V7Tests.test_non_ce_client_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_only_the_marked_control_may_fault",
+        "test_vast_payload_v7.V7Tests.test_other_fault_type_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_other_page_fault_type_is_rejected_on_ce1",
+        "test_vast_payload_v7.V7Tests.test_read_fault_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm",
+        "test_vast_payload_v7.V7Tests.test_unknown_client_is_rejected"
+      ],
+      "count": 40
+    },
+    {
+      "mutant": "hardware-unvalidated",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_malformed_hardware_stays_unknown",
+        "test_vast_payload_v7.V7Tests.test_two_gpus_cannot_masquerade_as_one"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-stage-attribution-lost",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_watch_failure_retains_merge_stage_attribution",
+        "test_vast_payload_v7.V7Tests.test_watch_failure_retains_provision_attribution"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "unattributed-stage-xid-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_extra_record_next_to_approved_fault",
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_unattributed_new_xid"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "duplicate-cuda-rung-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_ladder_duplicate_row_refuses",
+        "test_vast_payload_v7.V7Tests.test_ladder_repeated_last_rung_refuses"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "merge-exit-marker-ignored",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_merge_nonzero_recorded_exit_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_requires_exit_marker"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "wrong-control-va",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_channels_are_derived_from_this_runs_doorbell_records",
+        "test_native_xid_guard.NativeXidGuardTests.test_source_matched_five_faults_are_accepted",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_historical_exact_five_still_admit",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_admit_owner_rule",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_ad102_ce0_parser_fixture_admits_exact_shapes",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ad102_exact_five_admit",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ga102_four_ce_plus_gr_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ad102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ga102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision"
+      ],
+      "count": 13
+    },
+    {
+      "mutant": "unreadable-watch-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ad102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ga102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_executor_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_timer_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm",
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_unattributed_new_xid"
+      ],
+      "count": 13
+    },
+    {
+      "mutant": "other-page-type-admitted",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_fault_type_is_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_wrong_type_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "non-ce-client-admitted",
+      "killers": [
+        "test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_missing",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_non_ce_refuses_defer",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_non_ce_refuses_missing",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce_suffix_garbage_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_non_ce_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "wrong-arm-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_clean_readable_control",
+        "test_vast_payload_admission.NativeArmAdmission.test_executor_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_timer_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_clean_arm_diagnostics_are_copied_to_callback_log",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "xid-refusal-status-forged",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "arm-watch-not-installed",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "diagnostics-not-posted",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_clean_arm_diagnostics_are_copied_to_callback_log",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_are_bounded",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_keep_head_and_tail",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_diagnostics_are_bounded",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_keeps_head_tail_and_fault"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "diagnostics-head-lost",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_keep_head_and_tail",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_keeps_head_tail_and_fault"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "diagnostics-tail-lost",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_keep_head_and_tail",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_keeps_head_tail_and_fault"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "diagnostics-unbounded",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_are_bounded",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_diagnostics_are_bounded"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "diagnostics-no-fault-reserve",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-arm-row-lost",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_failed_defer_arm_has_a_structured_suite_row",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_failed_missing_page_arm_has_a_structured_suite_row"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-supervisor-bypassed",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "guest-refusal-status-forged",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-allowed-records-lost",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_delegates_real_context_to_shared_supervisor"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "native-source-channel-ignored",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_channel_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_channel_is_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_ce1_with_wrong_channel_must_not_admit",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_channel_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_channel_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "native-source-va-ignored",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_address_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_address_is_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_ce0_with_wrong_va_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_va_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_va_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "native-extra-record-ignored",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_duplicate_matching_native_fault_is_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_one_extra_known_record_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_extra_record_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "native-ce-instance-hardcoded",
+      "killers": [
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_admit_owner_rule",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_ad102_ce0_parser_fixture_admits_exact_shapes",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ga102_four_ce_plus_gr_admit",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_defer_ce0_with_exact_source_admits",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_missing_ce0_with_exact_source_admits",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ga102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "guest-ce-instance-hardcoded",
+      "killers": [
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_defer_ce0_with_exact_source_admits",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_missing_ce0_with_exact_source_admits"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "native-entire-proof-bypassed",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_address_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_channel_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_fault_type_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_address_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_channel_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_duplicate_matching_native_fault_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_missing_kernel_fault_records_cannot_look_clean",
+        "test_native_xid_guard.NativeXidGuardTests.test_qemu_fault_cannot_use_native_exemption",
+        "test_native_xid_guard.NativeXidGuardTests.test_unmatched_xid32_in_defer_still_stops",
+        "test_native_xid_guard.NativeXidGuardTests.test_unmatched_xid32_in_missing_page_still_stops",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_ce0_with_wrong_va_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_ce1_with_wrong_channel_must_not_admit",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_one_extra_known_record_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_unrelated_xid_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_channel_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_va_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_channel_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_va_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce_suffix_garbage_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_extra_record_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_non_ce_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_wrong_type_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_negative_control_cannot_pass_without_kernel_records",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt"
+      ],
+      "count": 37
+    },
+    {
+      "mutant": "native-receipt-not-created",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "native-receipt-refusal-ignored",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-diagnostics-not-posted",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "guest-stop-flag-lost",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "timeout-options-mistaken-for-arm",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDispatch.test_defer_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_executor_arm_is_selected_after_timeout_options"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-log-descriptor-becomes-subshell-pipe",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestHook.test_defer_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_guest_guard.GuestHook.test_missing_hook_keeps_real_regular_log_and_original_timeout"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "arm-hook-bypassed",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDispatch.test_defer_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_executor_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_missing_page_arm_still_selects_its_own_name",
+        "test_vast_payload_guest_guard.GuestHook.test_defer_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_guest_guard.GuestHook.test_missing_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 8
+    }
+  ]
+}

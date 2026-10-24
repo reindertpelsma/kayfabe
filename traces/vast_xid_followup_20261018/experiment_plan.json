@@ -1,0 +1,7 @@
+{
+  "run": "v9-no-rental-followup-20261023",
+  "hypothesis": "The already-published shared guard admits the retained V9 exact native controls and refuses each changed/extra fault; the remaining defect is local structured-result log retention, not Xid admission.",
+  "falsifier": "Recorded receipt hash mismatch, valid native control refusal, acceptance of a changed/extra record, or structured result already contains per-arm logs.",
+  "rental_authorized": false,
+  "worker_changes_authorized": false
+}

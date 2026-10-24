@@ -1,0 +1,18 @@
+{
+  "gpu_name": "RTX 3090",
+  "gpu_arch": "nvidia",
+  "gpu_ram": 24576,
+  "compute_cap": 860,
+  "driver_version": "580.178.04",
+  "geolocation": "Nevada, US",
+  "verification": "verified",
+  "reliability2": 0.9849599,
+  "cpu_cores_effective": 32.0,
+  "cpu_ram": 515581,
+  "inet_down": 213.9,
+  "inet_up": 287.3,
+  "disk_bw": 6800.0,
+  "dlperf": 44.36864499845682,
+  "dph_total": 0.39333333333333337,
+  "actual_status": "created"
+}
