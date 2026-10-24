@@ -1,0 +1,5 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+version=580.159.04
+image=/workspace/bench/guest.qcow2
+staged=2026-10-24T10:59:35+00:00

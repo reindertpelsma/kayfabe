@@ -1,0 +1,63 @@
+{
+  "tools": {
+    "pyflakes": "4.0.3 in a scratch venv (Python 3.14.4)",
+    "static_check": "operator_static_check.py (compile, symtable undefined globals, alias.attr resolution)",
+    "heredocs": "20 python blocks embedded in run-kit shell scripts extracted and checked"
+  },
+  "scope": "scripts/bench/blackwell/*.py, provider-retry guards, operator workspaces a1_m30498/a1_m99805/a2_m30498, B1f and attempt run kits, embedded heredocs",
+  "real_findings": [
+    {
+      "what": "undefined name new_old in saved_xid32_observation.py:166 (watcher loop)",
+      "effect": "fail-closed stop at handoff, lease 57443671",
+      "fix": "e2d145f59 (RED e6ffde939, mutant tests 47a8a85e0)"
+    },
+    {
+      "what": "final_remote_audit.py: O.check_host_health not defined on saved_xid32_observation",
+      "effect": "closure audit after the last arm would raise AttributeError",
+      "fix": "36a7d3ad9 (RED 6ef355afd)"
+    },
+    {
+      "what": "stale run-kit copy of saved_xid32_observation.py (new_old)",
+      "effect": "uploaded to /root/sweep2/ but not executed (controller and imports use /root/sweep2/guard/blackwell)",
+      "fix": "replaced with the fixed source at wiring time (36a7d3ad9)"
+    },
+    {
+      "what": "console_pin: (DSA) fingerprint lines counted as ed25519 pins",
+      "effect": "fail-closed only (absent -> mismatch)",
+      "fix": "f61f6bfea (RED c51e33cf4)"
+    }
+  ],
+  "harmless": [
+    "unused imports: saved_xid32_observation.py sys; shutdown_census.py os, sys (both trees); test_blackwell_capture.py json (both trees); test_saved_xid32_observation.py dt; operator ops.py base64; start_stretch.py json; milestone_probe.py subprocess; run-kit phase_begin.py json, rpc_timing.py os; heredocs arm OWN_PHASE os, PHASE_END json, bind CLEAR_PHASE json, controller PRE_NATIVE json, start_secondary os",
+    "export_arm.py:61 'out' and export_meta.py:60 'dest': referenced only inside an `if \"out\" in globals()` style conditional expression; the other branch is always taken (pyflakes cannot see the guard)"
+  ],
+  "pyflakes_raw": [
+    "bw-native-edge-wt/scripts/bench/blackwell/saved_xid32_observation.py:10:1: 'sys' imported but unused",
+    "bw-native-edge-wt/scripts/bench/blackwell/shutdown_census.py:24:5: 'os' imported but unused",
+    "bw-native-edge-wt/scripts/bench/blackwell/shutdown_census.py:24:5: 'sys' imported but unused",
+    "bw-native-edge-wt/scripts/bench/blackwell/test_blackwell_capture.py:5:1: 'json' imported but unused",
+    "bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py:4:1: 'datetime as dt' imported but unused",
+    "bw-provider-retry-wt/scripts/bench/blackwell/shutdown_census.py:24:5: 'os' imported but unused",
+    "bw-provider-retry-wt/scripts/bench/blackwell/shutdown_census.py:24:5: 'sys' imported but unused",
+    "bw-provider-retry-wt/scripts/bench/blackwell/test_blackwell_capture.py:5:1: 'json' imported but unused",
+    "bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/operator_ops.py:1:1: 'base64' imported but unused",
+    "bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/phase_begin.py:2:1: 'json' imported but unused",
+    "bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/rpc_timing.py:2:1: 'os' imported but unused",
+    "bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/saved_xid32_observation.py:10:1: 'sys' imported but unused",
+    "bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/saved_xid32_observation.py:166:24: undefined name 'new_old'",
+    "bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/start_stretch.py:4:1: 'json' imported but unused",
+    "bw3-round-b1g-a1_m30498-run/diag_b1g1.py:2:1: 'json' imported but unused",
+    "bw3-round-b1g-a1_m30498-run/export_arm.py:61:56: undefined name 'out'",
+    "bw3-round-b1g-a1_m30498-run/export_arm.py:61:15: undefined name 'out'",
+    "bw3-round-b1g-a1_m30498-run/export_meta.py:60:72: undefined name 'dest'",
+    "bw3-round-b1g-a1_m30498-run/milestone_probe.py:4:1: 'subprocess' imported but unused",
+    "bw3-round-b1g-a1_m30498-run/ops.py:1:1: 'base64' imported but unused",
+    "bw3-round-b1g-a1_m30498-run/start_stretch.py:4:1: 'json' imported but unused",
+    "bw3-round-b1g-a1_m99805-run/export_arm.py:61:56: undefined name 'out'",
+    "bw3-round-b1g-a1_m99805-run/export_arm.py:61:15: undefined name 'out'",
+    "bw3-round-b1g-a1_m99805-run/export_meta.py:60:72: undefined name 'dest'",
+    "bw3-round-b1g-a1_m99805-run/milestone_probe.py:4:1: 'subprocess' imported but unused",
+    "bw3-round-b1g-a1_m99805-run/ops.py:1:1: 'base64' imported but unused",
+    "bw3-round-b1g-a1_m99805-run/start_stretch.py:4:1: 'json' imported but unused"
+  ]
+}

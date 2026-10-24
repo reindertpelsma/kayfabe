@@ -1,0 +1,3 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+{"STOP": "Xid channel differs from the exact saved observation pair", "mode": "bw3-saved-xid32-observation-v1", "verdict": "OBSERVATION_STOP", "attestation": false, "phase": ["on_observe_b", 132363], "owned_pgid": 2926, "detached_qemu_stopped": true, "observations": {"on_observe_b": []}}

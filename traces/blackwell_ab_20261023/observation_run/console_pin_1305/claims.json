@@ -1,0 +1,11 @@
+{
+  "existing_debt": 3141,
+  "new": 814,
+  "resolved": 13,
+  "identical_inherited_diagnostics": true,
+  "bw3_new_diagnostics": 0,
+  "checker_or_debt_changed": false,
+  "gate_passed": false,
+  "new_commits_pushed": false,
+  "hardware_blocker": "provider400 not available for exact authorized fallback; no lease created"
+}

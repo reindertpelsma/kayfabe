@@ -1,0 +1,18 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+8-core deviation cpu_floor_override=8 cpu_cores_effective=8.0
+=== kayfabe host preflight 2026-10-23T22:05:30+00:00 on ubuntu ===
+  ✔ /dev/kvm present
+  ✔ CPU virt extensions present
+  ✔ GPU: NVIDIA GeForce RTX 5060 Ti  driver: 595.91.07
+  ✔ /dev/nvidiactl present
+  ✔ /dev/nvidia0 present
+  ✔ /dev/nvidia-uvm present
+  ✔ disk free 153G
+  ✔ RAM 49G
+  ✘ HOST FAULT: only 7 cores
+  ✔ apt mirror 451871 B/s
+  ✔ https egress works
+=== PREFLIGHT DONE ===
+VERDICT=HOST_FAULT
+EXIT=2

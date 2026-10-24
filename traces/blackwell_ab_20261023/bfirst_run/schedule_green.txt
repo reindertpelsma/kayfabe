@@ -1,0 +1,9 @@
+test_derived_arm_is_skipped_when_start_budget_is_refused (test_bfirst_schedule.BFirstSchedule.test_derived_arm_is_skipped_when_start_budget_is_refused) ... ok
+test_measured_arm_runs_first_when_both_fit (test_bfirst_schedule.BFirstSchedule.test_measured_arm_runs_first_when_both_fit) ... ok
+test_measured_arm_still_runs_when_no_time_remains_for_derived (test_bfirst_schedule.BFirstSchedule.test_measured_arm_still_runs_when_no_time_remains_for_derived) ... ok
+test_measured_refusal_stops_before_derived (test_bfirst_schedule.BFirstSchedule.test_measured_refusal_stops_before_derived) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.021s
+
+OK

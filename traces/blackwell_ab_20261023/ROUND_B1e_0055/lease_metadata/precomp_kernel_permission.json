@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-23T22:12:42.544974+00:00",
+  "permission_lines": [],
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "cpu_floor_override": 8,
+  "cpu_cores_effective": 8.0,
+  "profile": "8-core deviation",
+  "lease_max_seconds_override": 10800,
+  "authority": "controller 00:55 B1e: this lease only",
+  "lease_id": 57429076
+}

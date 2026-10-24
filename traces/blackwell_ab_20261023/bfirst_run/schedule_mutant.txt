@@ -1,0 +1,63 @@
+test_derived_arm_is_skipped_when_start_budget_is_refused (test_bfirst_schedule.BFirstSchedule.test_derived_arm_is_skipped_when_start_budget_is_refused) ... FAIL
+test_measured_arm_runs_first_when_both_fit (test_bfirst_schedule.BFirstSchedule.test_measured_arm_runs_first_when_both_fit) ... FAIL
+test_measured_arm_still_runs_when_no_time_remains_for_derived (test_bfirst_schedule.BFirstSchedule.test_measured_arm_still_runs_when_no_time_remains_for_derived) ... FAIL
+test_measured_refusal_stops_before_derived (test_bfirst_schedule.BFirstSchedule.test_measured_refusal_stops_before_derived) ... FAIL
+
+======================================================================
+FAIL: test_derived_arm_is_skipped_when_start_budget_is_refused (test_bfirst_schedule.BFirstSchedule.test_derived_arm_is_skipped_when_start_budget_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_bfirst_schedule.py", line 34, in test_derived_arm_is_skipped_when_start_budget_is_refused
+    self.assertNotIn("CELL on_derived", result.stdout)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CELL on_derived' unexpectedly found in 'CELL on_derived\nCELL on_measured\nVALIDATION_FINAL_DONE 2026-10-23T07:42:39+00:00\n'
+
+======================================================================
+FAIL: test_measured_arm_runs_first_when_both_fit (test_bfirst_schedule.BFirstSchedule.test_measured_arm_runs_first_when_both_fit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_bfirst_schedule.py", line 29, in test_measured_arm_runs_first_when_both_fit
+    self.assertEqual(cells, ["CELL on_measured", "CELL on_derived"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['CELL on_derived', 'CELL on_measured'] != ['CELL on_measured', 'CELL on_derived']
+
+First differing element 0:
+'CELL on_derived'
+'CELL on_measured'
+
+- ['CELL on_derived', 'CELL on_measured']
++ ['CELL on_measured', 'CELL on_derived']
+
+======================================================================
+FAIL: test_measured_arm_still_runs_when_no_time_remains_for_derived (test_bfirst_schedule.BFirstSchedule.test_measured_arm_still_runs_when_no_time_remains_for_derived)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_bfirst_schedule.py", line 40, in test_measured_arm_still_runs_when_no_time_remains_for_derived
+    self.assertEqual(cells, ["CELL on_measured"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['CELL on_derived', 'CELL on_measured'] != ['CELL on_measured']
+
+First differing element 0:
+'CELL on_derived'
+'CELL on_measured'
+
+First list contains 1 additional elements.
+First extra element 1:
+'CELL on_measured'
+
+- ['CELL on_derived', 'CELL on_measured']
++ ['CELL on_measured']
+
+======================================================================
+FAIL: test_measured_refusal_stops_before_derived (test_bfirst_schedule.BFirstSchedule.test_measured_refusal_stops_before_derived)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_bfirst_schedule.py", line 45, in test_measured_refusal_stops_before_derived
+    self.assertNotIn("CELL on_derived", result.stdout)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CELL on_derived' unexpectedly found in 'CELL on_derived\nCELL on_measured\n'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.021s
+
+FAILED (failures=4)

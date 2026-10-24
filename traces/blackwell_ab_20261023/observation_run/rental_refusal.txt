@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/workspace/bw3-observe-run/ops.py", line 219, in <module>
+    assert offers, "no verified different-machine offers after known-bad exclusion"
+           ^^^^^^
+AssertionError: no verified different-machine offers after known-bad exclusion

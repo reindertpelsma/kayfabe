@@ -1,0 +1,18 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "utc": "2026-10-23T12:57:50.043579+00:00",
+  "summary": "claims: existing-debt=3141 new=814 resolved=13",
+  "exit": 1,
+  "new": 814,
+  "inherited_identical_diagnostics": 814,
+  "BW3_new_diagnostics": 0,
+  "inherited_base_commit": "36e666348202175fd40df926463e40bf088ca51b",
+  "inherited_set_sha256": "2866319abf197dc3d3b50e122873ed709e6660985936c22dacfe3f3053b30465",
+  "baseline_audit": "../bfirst_run/claims_baseline_audit.json",
+  "gate_waived": false,
+  "debt_changed": false,
+  "checker_changed": false,
+  "push": "HELD: global new=0 required",
+  "live_part_finished_before_gate": true
+}

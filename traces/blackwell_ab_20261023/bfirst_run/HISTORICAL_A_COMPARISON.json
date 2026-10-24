@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-23",
+  "A_lease": 57324106,
+  "B_lease": 57340681,
+  "same_die": "GB202",
+  "same_lease": false,
+  "A_source": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "B_source": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "A_rows": 278,
+  "B_rows": 3987,
+  "metadata_common_prefix": 278,
+  "normalization_keys": [
+    "function",
+    "kind",
+    "selector",
+    "trace_result"
+  ],
+  "B_after_prefix": [
+    {
+      "ordinal": 278,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 279,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 280,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    },
+    {
+      "ordinal": 281,
+      "function": 76,
+      "kind": "RmControl",
+      "selector": "0x0073010c",
+      "trace_result": "0x0"
+    }
+  ],
+  "B_first1000_observed_utc": "2026-10-23T08:18:12.351350+00:00",
+  "not_a_fresh_same_lease_AB": true,
+  "body_bytes_not_compared": true
+}

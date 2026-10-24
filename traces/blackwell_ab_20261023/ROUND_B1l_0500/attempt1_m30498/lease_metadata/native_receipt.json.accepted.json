@@ -1,0 +1,84 @@
+{
+  "approved_native_xid_lines": [
+    "2026-10-24T03:19:28.155429+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91102, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T03:19:31.179122+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91102, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T03:19:34.188132+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91102, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T03:19:37.239128+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91102, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T03:19:41.729144+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=91156, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+    "2026-10-24T03:59:58.278206+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=150035, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+    "2026-10-24T03:59:58.334139+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=150035, name=qemu-system-x86, channel 0x1000000b intr 00200000",
+    "2026-10-24T04:09:05.190144+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+    "2026-10-24T04:09:05.198147+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x1000000b intr 00200000"
+  ],
+  "phase": [
+    null,
+    null
+  ],
+  "observations": {
+    "on_observe_b": [
+      {
+        "code": 32,
+        "pid": 150035,
+        "channel": "0x14",
+        "intr": "00200000",
+        "timestamp_utc": "2026-10-24T03:59:58.278206+00:00",
+        "line": "2026-10-24T03:59:58.278206+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=150035, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+        "mode": "bw3-saved-xid32-observation-v1",
+        "verdict": "OBSERVATION",
+        "pass": false,
+        "attestation": false
+      },
+      {
+        "code": 32,
+        "pid": 150035,
+        "channel": "0x1000000b",
+        "intr": "00200000",
+        "timestamp_utc": "2026-10-24T03:59:58.334139+00:00",
+        "line": "2026-10-24T03:59:58.334139+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=150035, name=qemu-system-x86, channel 0x1000000b intr 00200000",
+        "mode": "bw3-saved-xid32-observation-v1",
+        "verdict": "OBSERVATION",
+        "pass": false,
+        "attestation": false
+      }
+    ],
+    "on_observe_b1": [
+      {
+        "code": 32,
+        "pid": 158235,
+        "channel": "0x14",
+        "intr": "00200000",
+        "timestamp_utc": "2026-10-24T04:09:05.190144+00:00",
+        "line": "2026-10-24T04:09:05.190144+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+        "mode": "bw3-saved-xid32-observation-v1",
+        "verdict": "OBSERVATION",
+        "pass": false,
+        "attestation": false
+      },
+      {
+        "code": 32,
+        "pid": 158235,
+        "channel": "0x1000000b",
+        "intr": "00200000",
+        "timestamp_utc": "2026-10-24T04:09:05.198147+00:00",
+        "line": "2026-10-24T04:09:05.198147+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x1000000b intr 00200000",
+        "mode": "bw3-saved-xid32-observation-v1",
+        "verdict": "OBSERVATION",
+        "pass": false,
+        "attestation": false
+      }
+    ]
+  },
+  "health": {
+    "cuInit": 0,
+    "cuDeviceGetCount": 0,
+    "devices": 1
+  },
+  "observed_utc": "2026-10-24T04:13:35.620182+00:00",
+  "mode": "bw3-saved-xid32-observation-v1",
+  "record_limit_per_arm": 8,
+  "verdict": "OBSERVATION",
+  "attestation": false,
+  "pass": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION"
+}

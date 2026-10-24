@@ -1,0 +1,81 @@
+UNVERIFIED-HOST
+test_absent_past_adaptive_stage_bound_refuses (test_console_pin.ConsolePin.test_absent_past_adaptive_stage_bound_refuses) ... ok
+test_absent_past_create_ceiling_refuses (test_console_pin.ConsolePin.test_absent_past_create_ceiling_refuses) ... ok
+test_absent_then_present_within_bound_passes (test_console_pin.ConsolePin.test_absent_then_present_within_bound_passes) ... ok
+test_different_fingerprint_refuses_immediately (test_console_pin.ConsolePin.test_different_fingerprint_refuses_immediately) ... ok
+test_existing_stage_is_not_restarted_after_a_console_attempt (test_console_pin.ConsolePin.test_existing_stage_is_not_restarted_after_a_console_attempt) ... ok
+test_factor_floor_does_not_cut_off_publication_at_two_minutes (test_console_pin.ConsolePin.test_factor_floor_does_not_cut_off_publication_at_two_minutes) ... ok
+test_factor_is_clamped_to_four_through_ten (test_console_pin.ConsolePin.test_factor_is_clamped_to_four_through_ten) ... ok
+test_matching_fingerprint_is_not_overruled_by_an_untyped_extra_fingerprint (test_console_pin.ConsolePin.test_matching_fingerprint_is_not_overruled_by_an_untyped_extra_fingerprint) ... ERROR
+test_matching_pin_can_arrive_after_an_empty_console_with_other_pins_present (test_console_pin.ConsolePin.test_matching_pin_can_arrive_after_an_empty_console_with_other_pins_present) ... ERROR
+test_matching_public_key_keeps_original_acceptance_with_other_keys_in_console (test_console_pin.ConsolePin.test_matching_public_key_keeps_original_acceptance_with_other_keys_in_console) ... ERROR
+test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch (test_console_pin.ConsolePin.test_other_algorithm_fingerprint_does_not_fake_ed25519_mismatch) ... ok
+test_outer_retry_keeps_the_original_stage_deadline (test_console_pin.ConsolePin.test_outer_retry_keeps_the_original_stage_deadline) ... ok
+test_poll_schedule_accounts_for_console_read_time (test_console_pin.ConsolePin.test_poll_schedule_accounts_for_console_read_time) ... ok
+test_present_after_adaptive_stage_bound_is_not_readiness (test_console_pin.ConsolePin.test_present_after_adaptive_stage_bound_is_not_readiness) ... ok
+test_present_after_create_ceiling_is_not_readiness (test_console_pin.ConsolePin.test_present_after_create_ceiling_is_not_readiness) ... ok
+test_present_different_ed25519_pin_refuses_immediately (test_console_pin.ConsolePin.test_present_different_ed25519_pin_refuses_immediately) ... ok
+test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console (test_console_pin.ConsolePin.test_receipts_keep_public_fingerprints_and_console_hash_not_raw_console) ... ok
+test_several_missing_console_reads_do_not_refuse_early (test_console_pin.ConsolePin.test_several_missing_console_reads_do_not_refuse_early) ... ok
+test_slow_factor_can_observe_later_console_publication (test_console_pin.ConsolePin.test_slow_factor_can_observe_later_console_publication) ... ok
+test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create (test_console_pin.ConsolePin.test_slow_factor_still_cannot_extend_past_twenty_minutes_since_create) ... ok
+
+======================================================================
+ERROR: test_matching_fingerprint_is_not_overruled_by_an_untyped_extra_fingerprint (test_console_pin.ConsolePin.test_matching_fingerprint_is_not_overruled_by_an_untyped_extra_fingerprint)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 87, in test_matching_fingerprint_is_not_overruled_by_an_untyped_extra_fingerprint
+    result, calls, sleeps, receipts = self.wait([text])
+                                      ~~~~~~~~~^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/console_pin.py", line 115, in wait_for_pin
+    raise PinMismatch("authenticated console host pin differs from scanned ed25519 key")
+console_pin.PinMismatch: authenticated console host pin differs from scanned ed25519 key
+
+======================================================================
+ERROR: test_matching_pin_can_arrive_after_an_empty_console_with_other_pins_present (test_console_pin.ConsolePin.test_matching_pin_can_arrive_after_an_empty_console_with_other_pins_present)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 93, in test_matching_pin_can_arrive_after_an_empty_console_with_other_pins_present
+    result, calls, sleeps, receipts = self.wait(["booting", text])
+                                      ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/console_pin.py", line 115, in wait_for_pin
+    raise PinMismatch("authenticated console host pin differs from scanned ed25519 key")
+console_pin.PinMismatch: authenticated console host pin differs from scanned ed25519 key
+
+======================================================================
+ERROR: test_matching_public_key_keeps_original_acceptance_with_other_keys_in_console (test_console_pin.ConsolePin.test_matching_public_key_keeps_original_acceptance_with_other_keys_in_console)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 80, in test_matching_public_key_keeps_original_acceptance_with_other_keys_in_console
+    result, calls, sleeps, receipts = self.wait(
+                                      ~~~~~~~~~^
+        ["ssh-ed25519 " + KEY + "\nssh-ed25519 " + OTHER]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_console_pin.py", line 48, in wait
+    result = C.wait_for_pin(
+        KEY,
+    ...<6 lines>...
+        record=receipts.append,
+    )
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/console_pin.py", line 115, in wait_for_pin
+    raise PinMismatch("authenticated console host pin differs from scanned ed25519 key")
+console_pin.PinMismatch: authenticated console host pin differs from scanned ed25519 key
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.003s
+
+FAILED (errors=3)

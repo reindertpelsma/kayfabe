@@ -1,0 +1,57 @@
+{
+  "round": "B1n (operator BW4: Claude), owner decisions 2026-10-24",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "lease": {
+    "id": 57472433,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070",
+    "probed_die": "GB205",
+    "geo": "Quebec, CA",
+    "quote_dph": 0.432,
+    "observed_dph": 0.4807,
+    "precreate_armed_utc": "2026-10-24T05:40:37.372679+00:00",
+    "created_utc": "2026-10-24T05:40:38.631578+00:00",
+    "absence_verified_utc": "2026-10-24T07:42:47.686237+00:00",
+    "runtime_cost_estimate_usd": 0.9786,
+    "credit_before_usd": 26.3906,
+    "credit_after_observed_usd": 25.43
+  },
+  "binary": "B1 cb80cbd29 (all arms), 19 flags, sealed 580.88 parent; Linux arm: fat guest 580.159.04 via boot_capture.sh at 6e3fd3fd6",
+  "native": "gates 9/9 + gate10 PASS, bare suite 29/29, fuzz pinned 0/3 ALIAS_REVOKED, 5 accepted native Xid31 controls",
+  "arms": {
+    "on_urt": {
+      "label": "MEASUREMENT",
+      "result": "Code0, admitted Xid32 0x14/0x1000000b at 06:41:14.418/.420Z, GUEST_PANICKED 06:41:30.298Z (15.9 s), 0x116 P3 c000009a",
+      "trace": "USER_RING_TRACE STALL on GR ring 0xc1d00126:0xff04000b: guest_put=36 cursor=0 fetch_issued=0 fetch_fetched=0; host USERD pb_get=0 gp_get=0 gp_put=0; 'pb_get=0x0 in no remembered guest segment'"
+    },
+    "on_relay_off": {
+      "label": "DIAGNOSTIC",
+      "result": "Code0, NO Xid, no TDR, no bugcheck, 10-min hold 601 s survived"
+    },
+    "on_tdr60": {
+      "label": "DIAGNOSTIC",
+      "result": "TdrDdiDelay=60 in effect (PREP_CHECK), Code0, admitted pair 07:16:49.594/.610Z, GUEST_PANICKED 07:17:06.187Z (16.6 s), 0x116 P3 c000009a; second life stops at GSP Halted->Booted"
+    },
+    "lx_reload": {
+      "label": "DIAGNOSTIC",
+      "result": "RELOAD_VERDICT PASS: life 1 nvidia-smi rc0, rmmod all, modprobe rc0, nvidia-smi rc0; GSP Halted->Booted->Running in the second life; no Xid"
+    },
+    "on_diag_pnp": {
+      "label": "DIAGNOSTIC",
+      "result": "Code0, disable at Code0+0 s (done in 46 s), enable 2 -> Code 43 after 120 s, no Xid, no bugcheck; GSP Halted->Booted then nothing; WER 0x1B0 P2 c000009a at the second start"
+    }
+  },
+  "xid_records": {
+    "on_urt": 2,
+    "on_relay_off": 0,
+    "on_tdr60": 2,
+    "on_diag_pnp": 0,
+    "lx_reload": 0,
+    "limit_per_arm": 8
+  },
+  "capture": "/data/bw4_private_capture/57472433/ (private): 5 arms + box, all sha256-verified (capture/*.json); public dump headers capture/dump_headers_all.jsonl",
+  "final_audit": "attempt1/final_remote_audit.out: exact accepted history, 4 observed records, host healthy, qemu 0, controller exited, lock free, clean sources"
+}

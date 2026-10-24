@@ -1,0 +1,182 @@
+[
+  {
+    "mutant": "journal_outer_deadline_removed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_blocking_pipe_cannot_escape_the_external_deadline",
+      "test_kernel_pipe_has_an_external_deadline_before_read"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "record_ceiling_removed",
+    "distinct_killers": 4,
+    "tests": [
+      "test_ninth_record_stops",
+      "test_phase_gap_does_not_reset_the_ninth_record_limit",
+      "test_phase_gap_does_not_reset_the_tenth_record_limit",
+      "test_tenth_record_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "foreign_pid_allowed",
+    "distinct_killers": 3,
+    "tests": [
+      "test_foreign_pid_beside_owned_record_stops",
+      "test_foreign_pid_stops",
+      "test_runtime_foreign_pid_pidfd_stops_the_guest"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "other_xid_allowed",
+    "distinct_killers": 6,
+    "tests": [
+      "test_fallen_bus_79_stops",
+      "test_native_31_stops",
+      "test_runtime_other_xid_pidfd_stops_the_guest",
+      "test_xid_45_stops",
+      "test_xid_61_stops",
+      "test_xid_62_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "wrong_intr_allowed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_wrong_intr_stops",
+      "test_zero_intr_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "pair_identity_unpinned",
+    "distinct_killers": 2,
+    "tests": [
+      "test_second_high_channel_stops",
+      "test_second_plain_channel_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "scope_check_bypassed",
+    "distinct_killers": 11,
+    "tests": [
+      "test_authority_over_150_minutes_stops",
+      "test_different_executable_stops",
+      "test_expired_authority_stops",
+      "test_future_authority_stops",
+      "test_limit_cannot_be_raised_stops",
+      "test_native_profile_stops",
+      "test_off_profile_stops",
+      "test_permanent_authority_stops",
+      "test_reused_pid_life_stops",
+      "test_second_enable_stops",
+      "test_wrong_lease_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "kernel_errors_ignored",
+    "distinct_killers": 4,
+    "tests": [
+      "test_error_text_at_warning_priority_also_stops",
+      "test_kernel_error_beside_the_allowed_pair_stops",
+      "test_runtime_kernel_error_pidfd_stops_the_guest",
+      "test_runtime_warning_error_pidfd_stops_the_guest"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "journal_history_unchecked",
+    "distinct_killers": 2,
+    "tests": [
+      "test_lost_kernel_history_stops",
+      "test_replaced_kernel_history_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "phase_gap_resets_ceiling",
+    "distinct_killers": 2,
+    "tests": [
+      "test_phase_gap_does_not_reset_the_ninth_record_limit",
+      "test_phase_gap_does_not_reset_the_tenth_record_limit"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "exit_blocks_collection",
+    "distinct_killers": 2,
+    "tests": [
+      "test_guest_exit_without_new_faults_can_reach_collection",
+      "test_pid_reuse_without_new_faults_does_not_signal_the_replacement"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "new_fault_skips_owner_proof",
+    "distinct_killers": 4,
+    "tests": [
+      "test_guest_exit_without_new_faults_can_reach_collection",
+      "test_new_fault_after_owned_qemu_exits_is_fatal",
+      "test_new_fault_after_pid_reuse_is_fatal",
+      "test_pid_reuse_without_new_faults_does_not_signal_the_replacement"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "health_checks_bypassed",
+    "distinct_killers": 7,
+    "tests": [
+      "test_cuda_process_failure_stops",
+      "test_cuinit_failure_stops",
+      "test_gpu_fallen_off_bus_text_stops",
+      "test_no_cuda_device_stops",
+      "test_nvidia_smi_failure_stops",
+      "test_probe_timeout_stops",
+      "test_stock_smi_and_cuda_health_must_both_pass"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "authority_duration_unbounded",
+    "distinct_killers": 2,
+    "tests": [
+      "test_authority_over_150_minutes_stops",
+      "test_permanent_authority_stops"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "runtime_health_bypassed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_runtime_cuda_health_failure_pidfd_stops_the_guest",
+      "test_runtime_nvidia_health_failure_pidfd_stops_the_guest"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "runtime_kernel_errors_bypassed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_runtime_kernel_error_pidfd_stops_the_guest",
+      "test_runtime_warning_error_pidfd_stops_the_guest"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "runtime_judge_bypassed",
+    "distinct_killers": 4,
+    "tests": [
+      "test_phase_gap_does_not_reset_the_ninth_record_limit",
+      "test_phase_gap_does_not_reset_the_tenth_record_limit",
+      "test_runtime_foreign_pid_pidfd_stops_the_guest",
+      "test_runtime_other_xid_pidfd_stops_the_guest"
+    ],
+    "status": "KILLED"
+  }
+]

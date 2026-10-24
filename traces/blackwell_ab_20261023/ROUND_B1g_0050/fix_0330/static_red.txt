@@ -1,0 +1,68 @@
+test_checker_detects_missing_module_attribute (test_operator_static.Static.test_checker_detects_missing_module_attribute) ... ok
+test_checker_still_detects_the_original_defect (test_operator_static.Static.test_checker_still_detects_the_original_defect) ... ok
+test_final_remote_audit_resolves_every_observation_attribute (test_operator_static.Static.test_final_remote_audit_resolves_every_observation_attribute) ... FAIL
+test_harness_guards (test_operator_static.Static.test_harness_guards) ... ok
+test_operator_workspace (test_operator_static.Static.test_operator_workspace) ... FAIL
+test_run_kit (test_operator_static.Static.test_run_kit) ... FAIL
+
+======================================================================
+FAIL: test_final_remote_audit_resolves_every_observation_attribute (test_operator_static.Static.test_final_remote_audit_resolves_every_observation_attribute)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/fix_0330/test_operator_static.py", line 35, in test_final_remote_audit_resolves_every_observation_attribute
+    self.assertEqual(S.attribute_problems(D / "final_remote_audit.py"), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('/workspace/bw3-round-b1g-a1_m30498-run/[64 chars]th')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+('/workspace/bw3-round-b1g-a1_m30498-run/final_remote_audit.py', 39, 'missing attribute O.check_host_health')
+
++ []
+- [('/workspace/bw3-round-b1g-a1_m30498-run/final_remote_audit.py',
+-   39,
+-   'missing attribute O.check_host_health')]
+
+======================================================================
+FAIL: test_operator_workspace (test_operator_static.Static.test_operator_workspace)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/fix_0330/test_operator_static.py", line 29, in test_operator_workspace
+    self.assertEqual(S.check(files(D)), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('/workspace/bw3-round-b1g-a1_m30498-run/[64 chars]th')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+('/workspace/bw3-round-b1g-a1_m30498-run/final_remote_audit.py', 39, 'missing attribute O.check_host_health')
+
++ []
+- [('/workspace/bw3-round-b1g-a1_m30498-run/final_remote_audit.py',
+-   39,
+-   'missing attribute O.check_host_health')]
+
+======================================================================
+FAIL: test_run_kit (test_operator_static.Static.test_run_kit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/fix_0330/test_operator_static.py", line 32, in test_run_kit
+    self.assertEqual(S.check(files(K)), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('/workspace/bw-native-edge-wt/traces/bla[276 chars]ld')] != []
+
+First list contains 2 additional elements.
+First extra element 0:
+('/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/final_remote_audit.py', 35, 'missing attribute O.check_host_health')
+
++ []
+- [('/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/final_remote_audit.py',
+-   35,
+-   'missing attribute O.check_host_health'),
+-  ('/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/attempt1_m30498/run_kit/saved_xid32_observation.py',
+-   92,
+-   'undefined new_old')]
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.039s
+
+FAILED (failures=3)

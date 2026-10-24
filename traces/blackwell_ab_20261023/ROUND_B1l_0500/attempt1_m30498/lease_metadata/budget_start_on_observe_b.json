@@ -1,0 +1,10 @@
+{
+  "cell": "on_observe_b",
+  "utc": "2026-10-24T03:55:44.464635+00:00",
+  "latest_start_utc": "2026-10-24T05:07:27.281151+00:00",
+  "budget_cutoff_minutes": 150.0,
+  "may_start": true,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

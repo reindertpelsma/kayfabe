@@ -1,0 +1,96 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+COLLECT now=2026-10-24T11:55:40.6762793Z boot=2026-10-24T11:53:33.5000000Z
+NODIR C:\Windows\Minidump
+FILE C:\Windows\LiveKernelReports\WATCHDOG-20261024-1141.dmp 1109569536 2026-10-24T11:42:01.0728392Z
+EVT log=System t=2026-10-24T11:21:36.7737533Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T11:26:25.8885248Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T11:29:25.7593529Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T11:38:43.9626004Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T11:53:35.3400192Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T18:17:07.1572460Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVTQ_NONE log=System id=1001 prov=
+EVTQ_NONE log=System id=41 prov=
+EVTQ_NONE log=System id=6008 prov=
+EVTQ_NONE log=System id=4101 prov=
+EVTQ_NONE log=System id=4117 prov=
+EVTQ_NONE log=System id=4119 prov=
+EVTQ_NONE log=System id= prov=nvlddmkm
+EVTQ_NONE log=System id= prov=Display
+EVT log=Application t=2026-10-24T11:42:23.6359240Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1a8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-209718-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.aa65d3f1-bc55-4dae-8478-a8908bb3dde7.
+EVT log=Application t=2026-10-24T11:42:23.6727000Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-207171-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.232fccc0-9a2c-4044-b514-96061
+EVT log=Application t=2026-10-24T11:42:23.7277732Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffe603a71d3080 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1141.dmp \\?\C:\WINDOWS\SystemTemp\WER-216937-0.sysdata.xml \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG-20261024-1141.dmp \\?\C:\Pro
+EVT log=Application t=2026-10-24T11:42:23.8584839Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1a8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-209718-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.aa65d3f1-bc55-4dae-8478-a8908bb3dde7.
+EVT log=Application t=2026-10-24T11:42:23.9403738Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-207171-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.232fccc0-9a2c-4044-b514-96061
+EVT log=Application t=2026-10-24T11:42:24.0165848Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffe603a71d3080 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1141.dmp \\?\C:\WINDOWS\SystemTemp\WER-216937-0.sysdata.xml \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG-20261024-1141.dmp \\?\C:\Pro
+EVT log=Application t=2026-10-24T11:42:24.2256382Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1a8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-209718-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.aa65d3f1-bc55-4dae-8478-a8908bb3dde7.
+EVT log=Application t=2026-10-24T11:42:24.3456623Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-207171-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.232fccc0-9a2c-4044-b514-96061
+EVT log=Application t=2026-10-24T11:42:24.4300170Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffe603a71d3080 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1141.dmp \\?\C:\WINDOWS\SystemTemp\WER-216937-0.sysdata.xml \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG-20261024-1141.dmp \\?\C:\Pro
+EVT log=Application t=2026-10-24T11:42:24.6542687Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1a8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-209718-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.aa65d3f1-bc55-4dae-8478-a8908bb3dde7.
+EVT log=Application t=2026-10-24T11:42:24.7519845Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-207171-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.232fccc0-9a2c-4044-b514-96061
+EVT log=Application t=2026-10-24T11:42:24.8448404Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffe603a71d3080 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1141.dmp \\?\C:\WINDOWS\SystemTemp\WER-216937-0.sysdata.xml \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG-20261024-1141.dmp \\?\C:\Pro
+EVT log=Application t=2026-10-24T11:42:44.6660705Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1a8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-209718-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.aa65d3f1-bc55-4dae-8478-a8908bb3dde7.
+EVT log=Application t=2026-10-24T11:42:44.7615909Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-1142.dmp \\?\C:\WINDOWS\SystemTemp\WER-207171-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.232fccc0-9a2c-4044-b514-96061
+EVT log=Application t=2026-10-24T11:42:44.8542574Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 193 P2: 815 P3: 2 P4: ffffe603a71d3080 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20261024-1141.dmp \\?\C:\WINDOWS\SystemTemp\WER-216937-0.sysdata.xml \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG-20261024-1141.dmp \\?\C:\Pro
+EVTQ_NONE log=Application id=1000 prov=
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_193_7e524d5eb125929c4181d335ae22d791e09ee2_00000000_28a6835d-849f-4e5d-81db-2c63995db562\Report.wer
+  EventType=LiveKernelEvent
+  Sig[0].Name=Code
+  Sig[0].Value=193
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=815
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=2
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=ffffe603a71d3080
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=0
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Hardware error
+  AppName=Windows
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_543f5e33-019b-4783-843f-5795617bad8d\Report.wer
+  EventType=LiveKernelEvent
+  Sig[0].Name=Code
+  Sig[0].Value=1a8
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=a
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=0
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=0
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=0
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Hardware error
+  AppName=Windows
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_47240667-fe67-4ab2-898a-5d0a5519bb28\Report.wer
+  EventType=LiveKernelEvent
+  Sig[0].Name=Code
+  Sig[0].Value=1b8
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=a
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=0
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=0
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=0
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Hardware error
+  AppName=Windows
+COLLECT_DONE

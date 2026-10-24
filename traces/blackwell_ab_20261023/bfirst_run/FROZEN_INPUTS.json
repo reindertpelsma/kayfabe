@@ -1,0 +1,39 @@
+{
+  "guard_source": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
+  "guard_hashes": {
+    "phase_xid_guard.py": "8d0121d056561018c175b993243ef0819315ba15757a94038ef3b6c5cc7d3fae",
+    "xid_policy.py": "7563095ffc1d55292d4deaf6e60b5da677c3ff564b3e60c29ed4b5119aa4d1ac",
+    "shutdown_census.py": "cfbc831b28f9a5d53e62ea13cd2c9e23e832a57e4fcb529c719f95f726173334",
+    "arm_history.py": "73ae5d56ae54639dbdb0a76203a66f1507393dfb7cce97cd892332764989fa08",
+    "media_wait.py": "9a9e8732e704e53a163bc75f87e7a7374be795ac26e49e0de67b3c32b1094053",
+    "init_observer.py": "c84a559b726c16a7c167da8ff7dc56b22532d0a750d6cb5a46d83c7e0d3c9c88",
+    "readiness.py": "c421ab2b4dd3acda78be96255b8ddc6815f8d695ef12a43dfae3992761f757b9",
+    "native_xid_guard.py": "250905586c30bff7e23d81dc08a9088025abf15e0b5fa621f80e52c0aac59b0c"
+  },
+  "flags": [
+    "KF3_WIN_USER_CHANNELS_PASSTHROUGH=1",
+    "KF3_WIN_TWIN_DEFAPI_OBJECT=1",
+    "KF3_KERNEL_GR_CE=1",
+    "KF3_KERNEL_GR_WORK=1",
+    "KF3_TRANSLATED_CE_RELAY=1",
+    "KF3_DEFERRED_API=1",
+    "KF3_PREEMPT_BIND_PROBE=1",
+    "KF3_DISPLAY_IMP_ENABLE=1",
+    "KF3_DISPLAY_CTRL_PROBE=1",
+    "KF3_ZCULL_BIND_PROBE=1",
+    "KF3_SW_RUNLIST_HOST_OWNED=1",
+    "KF3_ASYNC_PREEMPT=1",
+    "KF3_GFX_POOL_PROBE=1",
+    "KF3_SW_RUNLIST_PROBE=1",
+    "KF3_MEMORY_LIST_PROBE=1",
+    "KF3_DISPLAY_SDR_COLOR=1",
+    "KF3_DISPLAY_CAPS_PROBE=1",
+    "KF3_DISPLAY_LUT_MIRROR=1",
+    "KF3_DISPLAY_ILUT_OFFSET_256=1"
+  ],
+  "p19_sha256": "9e2207bc7f0fe1caa56b5fbc35cad57d51b063389dd50ffbb85851a50200732d",
+  "A": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "B": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "native_fixture": "618f0431815d037d4226b642ae37e76967353e90",
+  "evidence_parser": "5e3f448c1a13a1c653604e1b7ae2d489394c3d6b"
+}

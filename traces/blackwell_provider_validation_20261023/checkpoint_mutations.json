@@ -1,0 +1,38 @@
+[
+  {
+    "mutant": "original_tuple_list_comparison",
+    "killers": 2,
+    "cases": [
+      "test_precomp_checkpoint.PrecompCheckpoint.test_actual_native_tuple_matches_json_approved_array",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_same_full_receipt_survives_another_pci_and_pid"
+    ]
+  },
+  {
+    "mutant": "ignore_snapshot",
+    "killers": 6,
+    "cases": [
+      "test_precomp_checkpoint.PrecompCheckpoint.test_a_missing_fault_refuses",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_a_replaced_fault_address_or_channel_refuses",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_an_extra_identical_fault_is_not_deduplicated",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_an_unmatched_xid32_still_refuses",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_an_unrelated_31_still_refuses",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_reordered_faults_do_not_silently_match"
+    ]
+  },
+  {
+    "mutant": "deduplicate_or_reorder_faults",
+    "killers": 2,
+    "cases": [
+      "test_precomp_checkpoint.PrecompCheckpoint.test_an_extra_identical_fault_is_not_deduplicated",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_reordered_faults_do_not_silently_match"
+    ]
+  },
+  {
+    "mutant": "drop_five_control_count",
+    "killers": 2,
+    "cases": [
+      "test_precomp_checkpoint.PrecompCheckpoint.test_an_empty_matching_snapshot_is_not_the_native_baseline",
+      "test_precomp_checkpoint.PrecompCheckpoint.test_four_matching_receipt_rows_cannot_replace_the_five_controls"
+    ]
+  }
+]

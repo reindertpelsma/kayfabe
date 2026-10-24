@@ -1,0 +1,26 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
+...........F.....F.
+======================================================================
+FAIL: test_provider_response_crossing_deadline_triggers_immediate_teardown (test_precreate_watchdog.PrecreateWatchdog.test_provider_response_crossing_deadline_triggers_immediate_teardown)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 95, in test_provider_response_crossing_deadline_triggers_immediate_teardown
+    self.assertEqual(end, NOW + dt.timedelta(seconds=9020))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: datetime.datetime(2026, 10, 23, 19, 1, 40, tzinfo=datetime.timezone.utc) != datetime.datetime(2026, 10, 23, 19, 0, 20, tzinfo=datetime.timezone.utc)
+
+======================================================================
+FAIL: test_slow_query_at_last_poll_does_not_add_another_poll_interval (test_precreate_watchdog.PrecreateWatchdog.test_slow_query_at_last_poll_does_not_add_another_poll_interval)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 100, in test_slow_query_at_last_poll_does_not_add_another_poll_interval
+    self.assertEqual(end, NOW + dt.timedelta(seconds=9050))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: datetime.datetime(2026, 10, 23, 19, 2, 20, tzinfo=datetime.timezone.utc) != datetime.datetime(2026, 10, 23, 19, 0, 50, tzinfo=datetime.timezone.utc)
+
+----------------------------------------------------------------------
+Ran 19 tests in 0.135s
+
+FAILED (failures=2)

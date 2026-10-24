@@ -1,0 +1,51 @@
+test_whole_file_fallback_documented (test_box_fetch_retry.Fallback.test_whole_file_fallback_documented) ... ok
+test_backoff_never_outlives_the_cutoff (test_box_fetch_retry.RangeRetry.test_backoff_never_outlives_the_cutoff) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:177: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 44561)>
+  st, _, _, _, took = fetch(fail_times=None, mode="cut", cutoff=2.5)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_completed_ranges_are_not_downloaded_again (test_box_fetch_retry.RangeRetry.test_completed_ranges_are_not_downloaded_again) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:138: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 38229)>
+  st, _, _, counts, _ = fetch(fail_times=2)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_cut_connection_resumes_from_kept_bytes (test_box_fetch_retry.RangeRetry.test_cut_connection_resumes_from_kept_bytes) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:144: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 37275)>
+  st, data, _, counts, _ = fetch(fail_times=1, mode="cut")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_cut_forever_fails_without_publishing (test_box_fetch_retry.RangeRetry.test_cut_forever_fails_without_publishing) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:164: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 44085)>
+  st, data, left, _, _ = fetch(fail_times=None, mode="cut")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_cut_retry_requests_only_the_missing_tail (test_box_fetch_retry.RangeRetry.test_cut_retry_requests_only_the_missing_tail) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:150: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 40673)>
+  st, data, _, counts, _ = fetch(fail_times=1, mode="cut")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_cut_twice_resumes_twice_and_verifies (test_box_fetch_retry.RangeRetry.test_cut_twice_resumes_twice_and_verifies) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:158: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 45355)>
+  st, data, _, counts, _ = fetch(fail_times=2, mode="cut")
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_policy_fits_the_cutoff (test_box_fetch_retry.RangeRetry.test_policy_fits_the_cutoff) ... ok
+test_range_k_fails_forever_publishes_nothing (test_box_fetch_retry.RangeRetry.test_range_k_fails_forever_publishes_nothing) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:131: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 43395)>
+  st, data, left, counts, _ = fetch(fail_times=None)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_range_k_fails_once_then_verified (test_box_fetch_retry.RangeRetry.test_range_k_fails_once_then_verified) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:117: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 38249)>
+  st, data, left, counts, _ = fetch(fail_times=1)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_range_k_fails_twice_then_verified (test_box_fetch_retry.RangeRetry.test_range_k_fails_twice_then_verified) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:125: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 42541)>
+  st, data, _, counts, _ = fetch(fail_times=2)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_retries_stop_at_the_cutoff (test_box_fetch_retry.RangeRetry.test_retries_stop_at_the_cutoff) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py:171: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 42999)>
+  st, _, _, _, took = fetch(fail_times=None, cutoff=2.5)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_sha_still_verified_on_the_assembled_file (test_box_fetch_retry.RangeRetry.test_sha_still_verified_on_the_assembled_file) ... /usr/lib/python3.14/unittest/case.py:615: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 40219)>
+  result = method()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 20.826s
+
+OK

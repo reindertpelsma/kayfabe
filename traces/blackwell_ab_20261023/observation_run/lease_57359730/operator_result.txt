@@ -1,0 +1,2 @@
+OWN_REPLACEMENT_CREATED 57359730 retry 1
+startup guard refusal; destroyed own id, no retry

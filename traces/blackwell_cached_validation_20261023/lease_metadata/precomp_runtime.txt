@@ -1,0 +1,2 @@
+kf-host: host tier: stock
+PRECOMP_HOST_READ=REFUSED derived fallback; PRECOMP own-subdevice control: Other(31)

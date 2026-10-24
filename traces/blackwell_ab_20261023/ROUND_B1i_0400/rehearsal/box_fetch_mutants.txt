@@ -1,0 +1,11 @@
+sha_unchecked killers=2
+range_size_unchecked killers=2
+deadline_ignored killers=2
+url_any killers=2
+failure_waits killers=2
+projection_removed killers=2
+skip_removed killers=2
+no_stop_marker killers=2
+stop_ignored killers=2
+cutoff_ignored killers=2
+hard_bound_removed killers=0

@@ -1,0 +1,12 @@
+{
+  "source_bytes": 3346180,
+  "source_sha256": "90f640fed741f1ba675a41205436ad39f246d0dc970172c2d67a0b19096cef49",
+  "posted_allocation_records": 447,
+  "allocation_header_layout": "public rpc_gsp_rm_alloc_v03_00, min32,class12,status16,paramsSize20",
+  "raw_payloads_remain_rental": true,
+  "diagnostic_limit": "512records/256KiB across selected replies; no full transport/event completeness claim",
+  "export_sha256": "7ef671cd1c6a7c37ea2c32ecf889552a99cd56e5eba5e23af66eef9c9540ff61",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

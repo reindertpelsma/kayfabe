@@ -1,0 +1,4 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+2026-10-24T07:25:52.880189+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T07:25:53.316207+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780

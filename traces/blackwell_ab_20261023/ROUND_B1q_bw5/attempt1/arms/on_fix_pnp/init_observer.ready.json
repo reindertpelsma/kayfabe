@@ -1,0 +1,9 @@
+{
+  "arm": "on_fix_pnp",
+  "pid": 179725,
+  "starttime": 437407,
+  "disabled_handshake": true,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

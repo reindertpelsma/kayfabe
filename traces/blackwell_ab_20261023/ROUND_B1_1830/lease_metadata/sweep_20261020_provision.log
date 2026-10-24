@@ -1,0 +1,94 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-23T15:41:48+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+From https://github.com/reindertpelsma/kayfabe
+ * branch                9ff51a6e9432ed4d5f51636c7606360728de5b6c -> FETCH_HEAD
+Preparing worktree (detached HEAD 9ff51a6e9)
+Updating files:  31% (6749/21690)
+Updating files:  32% (6941/21690)
+Updating files:  33% (7158/21690)
+Updating files:  34% (7375/21690)
+Updating files:  35% (7592/21690)
+Updating files:  36% (7809/21690)
+Updating files:  37% (8026/21690)
+Updating files:  38% (8243/21690)
+Updating files:  39% (8460/21690)
+Updating files:  40% (8676/21690)
+Updating files:  41% (8893/21690)
+Updating files:  42% (9110/21690)
+Updating files:  43% (9327/21690)
+Updating files:  44% (9544/21690)
+Updating files:  45% (9761/21690)
+Updating files:  46% (9978/21690)
+Updating files:  47% (10195/21690)
+Updating files:  48% (10412/21690)
+Updating files:  49% (10629/21690)
+Updating files:  50% (10845/21690)
+Updating files:  51% (11062/21690)
+Updating files:  52% (11279/21690)
+Updating files:  53% (11496/21690)
+Updating files:  54% (11713/21690)
+Updating files:  55% (11930/21690)
+Updating files:  56% (12147/21690)
+Updating files:  57% (12364/21690)
+Updating files:  58% (12581/21690)
+Updating files:  59% (12798/21690)
+Updating files:  60% (13014/21690)
+Updating files:  61% (13231/21690)
+Updating files:  62% (13448/21690)
+Updating files:  63% (13665/21690)
+Updating files:  64% (13882/21690)
+Updating files:  65% (14099/21690)
+Updating files:  66% (14316/21690)
+Updating files:  67% (14533/21690)
+Updating files:  67% (14606/21690)
+Updating files:  68% (14750/21690)
+Updating files:  69% (14967/21690)
+Updating files:  70% (15183/21690)
+Updating files:  71% (15400/21690)
+Updating files:  72% (15617/21690)
+Updating files:  73% (15834/21690)
+Updating files:  74% (16051/21690)
+Updating files:  75% (16268/21690)
+Updating files:  76% (16485/21690)
+Updating files:  77% (16702/21690)
+Updating files:  78% (16919/21690)
+Updating files:  79% (17136/21690)
+Updating files:  80% (17352/21690)
+Updating files:  81% (17569/21690)
+Updating files:  82% (17786/21690)
+Updating files:  83% (18003/21690)
+Updating files:  84% (18220/21690)
+Updating files:  85% (18437/21690)
+Updating files:  86% (18654/21690)
+Updating files:  87% (18871/21690)
+Updating files:  88% (19088/21690)
+Updating files:  88% (19216/21690)
+Updating files:  89% (19305/21690)
+Updating files:  90% (19521/21690)
+Updating files:  91% (19738/21690)
+Updating files:  92% (19955/21690)
+Updating files:  93% (20172/21690)
+Updating files:  94% (20389/21690)
+Updating files:  95% (20606/21690)
+Updating files:  96% (20823/21690)
+Updating files:  97% (21040/21690)
+Updating files:  98% (21257/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at 9ff51a6e9 feat(bench): retry bounded pre-SSH provider failures on another machine
+NVIDIA GeForce RTX 5060 Ti, 595.91.07, 16311 MiB
+VERDICT=SOUND
+PROBE_START pid=78958 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x6 die=GB206
+PROBE_END admin_run=false
+AUDIT_SUBTRACT_EXISTING_CONSTANTS_NO_RECAPTURE
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-23T15:58:09+00:00
+SWEEP_PROVISION_EXIT rc=1 2026-10-23T16:00:01+00:00

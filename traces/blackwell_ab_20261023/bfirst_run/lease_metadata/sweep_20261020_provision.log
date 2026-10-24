@@ -1,0 +1,80 @@
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-23T07:48:10+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+From https://github.com/reindertpelsma/kayfabe
+ * branch                9ff51a6e9432ed4d5f51636c7606360728de5b6c -> FETCH_HEAD
+Preparing worktree (detached HEAD 9ff51a6e9)
+Updating files:  75% (16472/21690)
+Updating files:  76% (16485/21690)
+Updating files:  77% (16702/21690)
+Updating files:  78% (16919/21690)
+Updating files:  79% (17136/21690)
+Updating files:  80% (17352/21690)
+Updating files:  81% (17569/21690)
+Updating files:  82% (17786/21690)
+Updating files:  83% (18003/21690)
+Updating files:  84% (18220/21690)
+Updating files:  85% (18437/21690)
+Updating files:  86% (18654/21690)
+Updating files:  87% (18871/21690)
+Updating files:  88% (19088/21690)
+Updating files:  89% (19305/21690)
+Updating files:  90% (19521/21690)
+Updating files:  91% (19738/21690)
+Updating files:  92% (19955/21690)
+Updating files:  93% (20172/21690)
+Updating files:  94% (20389/21690)
+Updating files:  95% (20606/21690)
+Updating files:  96% (20823/21690)
+Updating files:  97% (21040/21690)
+Updating files:  98% (21257/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at 9ff51a6e9 feat(bench): retry bounded pre-SSH provider failures on another machine
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+VERDICT=SOUND
+PROBE_START pid=79154 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+AUDIT_SUBTRACT_EXISTING_CONSTANTS_NO_RECAPTURE
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-23T07:55:11+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                618f0431815d037d4226b642ae37e76967353e90 -> FETCH_HEAD
+Preparing worktree (detached HEAD 618f04318)
+Updating files:  77% (16803/21764)
+Updating files:  78% (16976/21764)
+Updating files:  79% (17194/21764)
+Updating files:  80% (17412/21764)
+Updating files:  81% (17629/21764)
+Updating files:  82% (17847/21764)
+Updating files:  83% (18065/21764)
+Updating files:  84% (18282/21764)
+Updating files:  85% (18500/21764)
+Updating files:  86% (18718/21764)
+Updating files:  87% (18935/21764)
+Updating files:  88% (19153/21764)
+Updating files:  89% (19370/21764)
+Updating files:  90% (19588/21764)
+Updating files:  91% (19806/21764)
+Updating files:  92% (20023/21764)
+Updating files:  93% (20241/21764)
+Updating files:  94% (20459/21764)
+Updating files:  95% (20676/21764)
+Updating files:  96% (20894/21764)
+Updating files:  97% (21112/21764)
+Updating files:  98% (21329/21764)
+Updating files:  99% (21547/21764)
+Updating files: 100% (21764/21764)
+Updating files: 100% (21764/21764), done.
+HEAD is now at 618f04318 fix(bench): register native completion listeners before GPU submission
+GR_TIER_VERDICT=PASS
+PRECOMP_EXISTING_MEASUREMENTS_SUBTRACTED
+SWEEP2_BIND_READY 2026-10-23T08:16:29+00:00
+{"cell": "on_measured", "utc": "2026-10-23T08:16:29.729907+00:00", "latest_start_utc": "2026-10-23T09:48:03.802672+00:00", "budget_cutoff_minutes": 150, "may_start": true}
+VALIDATION_ARM_BEGIN on_measured 2026-10-23T08:16:29+00:00
+SWEEP_PROVISION_EXIT rc=0 2026-10-23T08:18:29+00:00

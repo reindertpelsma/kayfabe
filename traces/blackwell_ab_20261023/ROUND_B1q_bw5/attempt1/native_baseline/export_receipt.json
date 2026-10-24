@@ -1,0 +1,330 @@
+{
+  "native_fuzz_findings.json": {
+    "source_sha256": "90edb08e3e245055445c1e3bb7a408a804daaae3ad9f12a68c3b5396669d13af",
+    "export_sha256": "d9f5eecf9c98090e5f9a464a13722dd457f49ee0373cf0977fcb9fe121ae0838",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_cuda_findings.json": {
+    "source_sha256": "bd7f0c688bb7bf7e6e143fa3b6e06fa2ce9383baad8115c6987690a02e5b3c7d",
+    "export_sha256": "3455f96f75f5b13bbcf0279f1e4a6af836609a66fbd766c44dda4a46a1c5a104",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_fixture.json": {
+    "source_sha256": "cc46a1d3fcce5d7a6de939005be8cfa6be656e8ef171396ac75db0437e551cff",
+    "export_sha256": "9604cde928c251f7dc5d761a417b48cb1174ce7656f53b9f08c26873189a4a2a",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_patch.json": {
+    "source_sha256": "57f069e271799b4483577c2671252d0cf194a94da4f4193671590f7ece7458bd",
+    "export_sha256": "29e75429f612cb14f03d7830cd12db26acada194066d01e368c8add5e5e85d8b",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_build.log": {
+    "source_sha256": "6dc871b7fd1710c9264dea3adc5a7c23bd0f08542a78a41caf344b153fa40d4d",
+    "export_sha256": "cfba5ef02e65978cbf0b793820a05260e18bb8f05415979caf5b6cc3afa80d75",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_repeat_0.log": {
+    "source_sha256": "a9ca07648e885ee5b142cc5c4c84b95a501efbb41fe0115c0b1aeb8d5654664d",
+    "export_sha256": "1f7bcd5ee9e86bfb518a531fd261bd3058638a17ff97fc8c3e0318552857ac63",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_repeat_1.log": {
+    "source_sha256": "1a9cc74aed8855c1c509999960eaba1c8c2ffb238fd2f39bb14330793ad98913",
+    "export_sha256": "b4fa34e9d57043d59410c73cbbec7a171b1ee38350e3afe689c6ac033c2df4e6",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_repeat_2.log": {
+    "source_sha256": "cb0ddd1a3b9b76f10c239f9d9bd8be0a0eafce68b5f0d80ae51345bc18544d87",
+    "export_sha256": "f1a7109147f363a7a4baf80b5af74b0c94f094502ab60bb1387ce5ce8f014a80",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fuzz_repeat_3.log": {
+    "source_sha256": "ac965be9520cd110215be38290768a735dadc88518a4e324e9ab6a2e9bcfe1d0",
+    "export_sha256": "17c68f16f65285673f0e1ba6734618ab391b795cf91172a3e4da725c514076f1",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "precomp_tier3_exit.txt": {
+    "source_sha256": "6f04b5f95d1d95fe0c1e46784c6fa091feac7c5383e4e792dafe1afc47b047b7",
+    "export_sha256": "77e67348bc7a9c7d138a046bd240fcdc73d40f4e3233005958d3f5534ed486f1",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "readiness_source": {
+    "source_sha256": "ce61410206bd060ef30bb0c57bdf9cb34968fe630db34388b29124a9355a05e7",
+    "export_sha256": "2ceb9f7884a1e6fc423a5ba45643a6ed19cc550ae8292b4f269b7fd55655cd88",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_20261020_provision.log": {
+    "source_sha256": "4db64feb70196ba1dfb5dc27f19eee69c92db1920694e461c7656c6cc50fc2f1",
+    "export_sha256": "b814aa9c4f9bd9089bd35a7f06386656b3450417f1bf331758a3cd843139793e",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_host_die.log": {
+    "source_sha256": "363d4efc8d4e709d5f639e2a64b091c16288bb83d3ee147c0c54900fdeece2d1",
+    "export_sha256": "47391c8cc0fbc880e688daea4d6f7ad39fc248913b7fd1b95a5501ec8b1b9b30",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_host_preflight.log": {
+    "source_sha256": "be8dbab8cf320f0b69ad1394dfd45d2f4de475f9e8a170e355df1d389ba83bd3",
+    "export_sha256": "520a05fd809b4a2f3e574e4175a7b920a8b283142cd0cecde337c45ee16d467d",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_gates.log": {
+    "source_sha256": "5bee9af940076b71b6c461b145d1a4f09d978e2bd2848fa0d75637c818affe58",
+    "export_sha256": "5b1b89df4e8aa29a29bf6df6e6b7337ea0866c1b8830bfad4f8e3aa49480540d",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_bare595.log": {
+    "source_sha256": "a9d21a956fb6daa262935bb9f28aeafefc6deba0e1239add8154381bc8b80715",
+    "export_sha256": "95026d5e9a19238b23b3431385a80b20fc69298c182ae8d7916be647ae4daeec",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_cuda_host.log": {
+    "source_sha256": "e3c4d7ea830cc7b7c7d1234188c650cc1d94ea076bb190ada5b241ce13fe04ec",
+    "export_sha256": "ef08856cab3292ef5e0f4182a88a23fb30ea40e1b0c8cc95bdf5eebc0855ebf4",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_native_grtier.log": {
+    "source_sha256": "e3703d301b67c1bbd42829840057fcafb8f19d017afcb4703b237dadda994810",
+    "export_sha256": "12d717d45afc3e987ef213919987b8e06221e4d729f9b7a608845f2609c6595b",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_qemu_sha256": {
+    "source_sha256": "284d2854b3238bb31e423a405b70df95992c919e89bcc936f179a603e3bd97e4",
+    "export_sha256": "8bf605cb4918d585a25d60fe96009b7f16af13f861272bd7807b15d21bc472a5",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_product_source": {
+    "source_sha256": "11dc747c78a5284d18016893041fe06aed3fd689083b2a162bdd444a6db8da13",
+    "export_sha256": "c099d4837ce9277c5302b98eeb67acf698b70a8c4bdc44e2e3accc8edd183f6a",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_fixture_receipt.json": {
+    "source_sha256": "87c301c52f79d2a8aad691e163ca8867a5e75ce3263192f48c4bb26362cab420",
+    "export_sha256": "f950cc576170d631ee546c73fd87cac0c8cfed0fdaa4161ef3cf5ba0e279f9ad",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "media_cache_receipt.json": {
+    "source_sha256": "c1b93e44b230179d133f0460f0c2d9e61e4b047f8633528e263a3cea62532639",
+    "export_sha256": "cfd530284bbb7c6c2300b7aac9a411af4b1304607a636ec61ebb5d9577875186",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "guard_watch.log": {
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "2a1ddd3fed10afc9f072e650975b4f369b5802434b0b0bae245d5521ac7f9404",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_receipt.json": {
+    "source_sha256": "bb67bad06b9348c430e95ed0672f373211a2454ce3c20ca391d09293c869239a",
+    "export_sha256": "242cfe46d208befb22ce12ee57c51a01670485c072e45657606d419efe77ee13",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_receipt.json.accepted.json": {
+    "source_sha256": "b7c52341c746ddca5d108908d8b3ab23eef44a25fd70872607adcd5d02ec78da",
+    "export_sha256": "1097f7263bcafafbfca1c2ded58c51584f089c6235206b78f062851aecf9aeb0",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_processes.jsonl": {
+    "source_sha256": "060cfd696aae81d25f21e21cc2b20050ff0a538bfd4b2f687e706ca12cac0893",
+    "export_sha256": "03affb1814e93d24680888b4359556d73465153bbb33ea8d90c6b96e4c239505",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "source_defer-liveness.log": {
+    "source_sha256": "ef69703864ff975e68337b2915931427d1754fa4096913fd68b8f27e4fbce215",
+    "export_sha256": "baed774a13864768593c46ad8aea60eaad1078d4d40c43826587b1b87be4d782",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "source_missing-page-fault.log": {
+    "source_sha256": "0694d843417ff5066f83f7031d43731056470c13007246df366be79ae309cd2e",
+    "export_sha256": "bea7cf529f23dfa525c8018a15bfb14518435ff82d52a5d38f3566afbea531b0",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_windows_media.log": {
+    "source_sha256": "00b7c4806a268fe33e03b651cf87ef452a717cdec302c27c7409e0e733ca8d2e",
+    "export_sha256": "dccfc4390f9810ddec882c31916c5f621416ad967e9d880e0b82bd800cb73603",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "measured_build.log": {
+    "source_sha256": "a48c2ccb4979730745e3a454c85ac49857a7255376064ad0e048cce2b17d0217",
+    "export_sha256": "8a5a6a5c5e5f36d267203683ddf04611356031df214f42190b01597824c9dd60",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "secondary_guard_receipt.json": {
+    "source_sha256": "1ab33b5cfe1d8e6fb22452f5b39b843debc834b81e54f3491b85d0491aa8f7fa",
+    "export_sha256": "911b89d22a0ff679976e31e75f8b25a9791a656a71a71b6f78cf3fbcacf95a2e",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "secondary_guard.log": {
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "export_sha256": "2a1ddd3fed10afc9f072e650975b4f369b5802434b0b0bae245d5521ac7f9404",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "secondary_receipt.json.accepted.json": {
+    "source_sha256": "eb7461077c5ee4b3073e69bbc9746797c3debb8560167f615c26781a27f8d27a",
+    "export_sha256": "cfa1a41585a14fc33382eb2dd2209aa14257c4eea1fbb651387abaab077dac36",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "pidfd_runtime_smoke.json": {
+    "source_sha256": "3ea9e253a6ca26d87445e01f84e1e1f5baad53ddc2f858a396774373f0541544",
+    "export_sha256": "7adc696be477e10f4ce82b54ab34942a2f7c2f9de3c86039c91ca5d52dbbc6a2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "native_receipt.json.ready.json": {
+    "source_sha256": "7f62046ca61b566ab43c4ba32521df767b29e5577bee58fd49625899765c746d",
+    "export_sha256": "306c2f87e2d4b318cc075c77075c8c0a842e54092187324d320b148b3d89fdf5",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "secondary_receipt.json.ready.json": {
+    "source_sha256": "6cb98b4f017dfee0a626139798c12553088d080a3ad0dd69c406396cc38160a4",
+    "export_sha256": "19a277278842437532314c56954502cf8e5b5377f371477c6b1396ae962296a9",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "sweep_windows_install.log": {
+    "source_sha256": "d11260d173229556b55f01066581d618b999ce070dfa82358032aabeef1b8109",
+    "export_sha256": "dea1e6256b389aa001726ac3ec412ff7f3a556a7a50eda17578098956a19a01c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "probed_die.json": {
+    "source_sha256": "5569a42aae00e2ff5acd7df9734219b8e7268d2560be2f8bd5fef4b2f1551f09",
+    "export_sha256": "290fd989d0f9a2c1345c343f3f924801f0a26f2e783db7b626205de20add8a77",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "cuda_primary_rows.out": {
+    "source_sha256": "790a50088ddeac631fa2a8b18682830735755ac0d6edaaf793da5988071966c8",
+    "export_sha256": "ed9a8131feb6ac618f0e0fc1a2e74519509bbdb67656e3df628d68faf136eb2e",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "kernel_xids.json": {
+    "source_sha256": "9ec3fcdd29ef2638510a37fc783023b92cd21a068bc3d9cda4be031d4e3a2858",
+    "export_sha256": "28e9257bd0f48b6a422fb162ed44e546f8a861a1412046a084ba286ff8cfdf3c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "precomp_kernel_permission.json": {
+    "source_sha256": "9ec3fcdd29ef2638510a37fc783023b92cd21a068bc3d9cda4be031d4e3a2858",
+    "export_sha256": "ad00fd98ec23440ec0a5fc32fbdcac08aed834923cd632767a04b84e712ad257",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  }
+}

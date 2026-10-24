@@ -1,0 +1,432 @@
+{
+  "arm_on_tdr60_start_receipt.json": {
+    "rental_path": "/root/prov/arm_on_tdr60_start_receipt.json",
+    "original_bytes": 582,
+    "original_sha256": "b00eafa147727feb15c7e912778c6d751cec5ecd848db4f593d4b6c6b18cbdea",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "26484c3f4b1ef935a70f18bc78d521bac2f747e37abba7e1c6b578feba88dd0e",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_process_receipt.json": {
+    "rental_path": "/root/prov/arm_on_tdr60_process_receipt.json",
+    "original_bytes": 1240,
+    "original_sha256": "4cf9db1472563d13be2423624952f043d281120c6089eeb956449e06a90dce04",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "56734b58e34b2679112b26b08766d4b48293af07771623e983518ca2f8d832d4",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_on_tdr60_pre_enable.txt",
+    "original_bytes": 422,
+    "original_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "a0d47d3efeb218989ad10686e4455b8010279e77b63a2b7acc31f5b5addfad0c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_enable.txt": {
+    "rental_path": "/root/prov/arm_on_tdr60_enable.txt",
+    "original_bytes": 503,
+    "original_sha256": "0d9f053a43b04676e2d35bb8a3e9495b88c4fb8abf3d5ec522bdd52cbb353aa4",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "f7be50203d5886b9cd4fb8d926ff54d2a0c24aa0d8db48d68833be2c433b6c6c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_diag.txt": {
+    "rental_path": "/root/prov/arm_on_tdr60_diag.txt",
+    "original_bytes": 48,
+    "original_sha256": "138644feac9a90519ea062e71704f2087a623470d9f991db9110943552fec422",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "f63801f0948958e77e020206dbdc5c8e288cd9037bf4e6d88e5c5f540ba9b605",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_diag_after.txt": {
+    "rental_path": "/root/prov/arm_on_tdr60_diag_after.txt",
+    "original_bytes": 62,
+    "original_sha256": "b1dbacf136bdb452cb3223179b7a68172c7a0379e937e4c5e60c7f9fa3dab421",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "58c73c19d73b2a772f172b396441c0b13d56e80ad9f3d6f04b073fb610b81870",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_cleanup_started.txt": {
+    "rental_path": "/root/prov/arm_on_tdr60_cleanup_started.txt",
+    "original_bytes": 26,
+    "original_sha256": "6aa9a51c1acee35cc0a59a4a3ea64018a8ef000967f4f0ba06e5be1472f85f1f",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "39db0e9d099a29cbbf34fd4a6a23068ba0c1971fb06a753b1a18f70af5796d16",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_accepted_start.json": {
+    "rental_path": "/root/prov/arm_on_tdr60_accepted_start.json",
+    "original_bytes": 1625,
+    "original_sha256": "1da7d6940b29de3246528e3b713bd1f7d9409bb495ccc9a9ec0bdfda69796626",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "c3bd77947c2f140284071c72570a2ecdeeb9496754f66146136d48bd61fc8750",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60.log": {
+    "rental_path": "/root/prov/arm_on_tdr60.log",
+    "original_bytes": 2871,
+    "original_sha256": "42eda644d664ab2b2e013cb54e6df6884e9e0d83e01297fd5e5ee7308dadaf56",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "172d42dc44dd07982636837ac4c55cafcfa5c07633ac755f8ac4465610a5aaad",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "collect_on_tdr60.txt": {
+    "rental_path": "/root/prov/collect_on_tdr60.txt",
+    "original_bytes": 6068,
+    "original_sha256": "b1191c49b48d9c78a0a66412a6b3cf100fcee50599d10c9f09141499e6775c39",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "846bc40b9b647be021c0a4a7967af62a4277632fa8ee23ea2e1c7327fc812f75",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "collect_on_tdr60.log": {
+    "rental_path": "/root/prov/collect_on_tdr60.log",
+    "original_bytes": 765,
+    "original_sha256": "cadd79136b33509af1317bb65bb995352bf521bb734740adcedf6a19c1bc60ef",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "27284e2892f6625431d1a482ffff8ef86882de45b806b37eab581953ef1e0b3c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/on_tdr60/api.tsv",
+    "original_bytes": 121198,
+    "original_sha256": "a16749bbcf59362319ad025fcf4ad35e661e03518b895975595d40d01f41b5f8",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "ea9a726c6142d1f2ad6b0291b0f2a01fcee8851bd9cea4070443153ec70f6a4c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/on_tdr60/allocations.jsonl",
+    "original_bytes": 183399,
+    "original_sha256": "a5102c1ca7bace0f15672efd907ca5f5d16f273f5a136ecee091aecf68525ea4",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "bc49960e0dfc4d1bff11066d358f36faa6f6b2b4045957ce2ed3e8adbc6f849f",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/allocations.receipt.json",
+    "original_bytes": 490,
+    "original_sha256": "6346cab29b19cffeb19a3e9ccb4e7a8ece48737b9b5fd7176ce60261d6fd6d74",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "0f6b94f07080f5bfe1e84704adc581fa2637be0277f8ffbf196ae4272203b653",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/summary.json",
+    "original_bytes": 39119,
+    "original_sha256": "dba04fb70bbe2a065614f031b79d2477326ebac84e2482703ee091ededd8f944",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "4118eaae834cca2645c316c37c358999121a17cc4c91b8f674c2042a8afe721b",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/abort_context.txt",
+    "original_bytes": 34892,
+    "original_sha256": "a9358513c3a7f9dac1ce73b482893bddcf3b7de9a0b942489f713ad1661ed8ba",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "a53a8f59391b95ff89333ee5513ad56c3b9652b649a6be78000fe79c8601e88d",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/kf_line_census.txt",
+    "original_bytes": 7192,
+    "original_sha256": "5f23ed8c47df378c99d5a398bf73fbfecf38cab7a683b8687338feaa66f2ec68",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "cba333f42169939e6375fce093f8142556bb2eecc60ab109eefe58f912f9b615",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "channel_state.tsv": {
+    "rental_path": "/root/prov/arms/on_tdr60/channel_state.tsv",
+    "original_bytes": 20277,
+    "original_sha256": "74d7e3cf21f1e86b59caae9c86d4f8d590dc1d138d6c88a642fcf1107afdcbc4",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d73466eedb696ebd33d54c8f9a7755d78f05f32b66819c548fb0e0add669f374",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "state_receipt.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/state_receipt.json",
+    "original_bytes": 423,
+    "original_sha256": "8296c5aa58bb70c3910439900838d10f2004c9e95a4d51c3ba8e34009d34046c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "04442bd923105f38ad1d68329d8c5666fd26e7b3d289a890bbc5e9bc70588495",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/on_tdr60/rpc_timing.jsonl",
+    "original_bytes": 952903,
+    "original_sha256": "2e09bcae0c27bd8576a0ec0463ee13095a517722dc6fb10bbd7c0eb7872e3675",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d6af9518421c99d56b9e3b7f819c7f3d2ccf0d2f77f7c418694ce2096827d972",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/rpc_timing.receipt.json",
+    "original_bytes": 396,
+    "original_sha256": "a73a0d8ac963c3c9e466329adbadd02f4e0204f599996ee476ee3d4d77694e85",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "bc1958236d46a77467c0e69874a0e2789567668aac00a81dccbf7a3edd380170",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/on_tdr60/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/on_tdr60/host_kernel.log",
+    "original_bytes": 656,
+    "original_sha256": "c50efa824f3fabd100f84e30beb3261a290efb161e7a8122da5a14e0d417e648",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "910a5884ec20db1873cf79de175fed077c80a01bdac2c612c13907f0283b5803",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "keylines.jsonl": {
+    "rental_path": "/root/prov/arms/on_tdr60/keylines.jsonl",
+    "original_bytes": 1004532,
+    "original_sha256": "805a0f8a775568b2c7d562b31e20acf8c23f50aa045a00d7c9023adf170a1be6",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "119cf8c739773d93f7849d8936b2c54b751ab1dfcc9a445b2b43c3084bafc760",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "dump_headers.jsonl": {
+    "rental_path": "/root/prov/arms/on_tdr60/dump_headers.jsonl",
+    "original_bytes": 553,
+    "original_sha256": "42eec607be625001cb75f7e5e4748b669ef0fd013c95446f86af747a2240f71c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "a36beda225362380ff5c69e9b4fca9f53377b808d0fc0dd05dd44ffa66d8c5cb",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "display_driver.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/display_driver.json",
+    "original_bytes": 144,
+    "original_sha256": "6d441b302422474302b6c77cc151641d5a694d0338a518ea5352f884a41d3fcd",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "bc1ee90c77bac88d8979b534b21623508216d4a54396fb5c086567fae0a4e6e4",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "minidump_sha256.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/minidump_sha256.txt",
+    "original_bytes": 121,
+    "original_sha256": "a437af8dfabfa6e8cb4f0fb20f597c4d3ee1e53250f1deffa2aafa0e9de84178",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "154231dd753f719d094ffec429ae14dd44063ef8fd581de233e215fef7690764",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "init_observer.ready.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/init_observer.ready.json",
+    "original_bytes": 84,
+    "original_sha256": "9e4d44b08ea98688b445cdac911b6ef9984b9ad4e1d064abfd80f0ccd99b868c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "bed96c80fb88d357b0c3abf567067f96b185b97c418a6cc2bed066c0d553e825",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "init_observer.log": {
+    "rental_path": "/root/prov/arms/on_tdr60/init_observer.log",
+    "original_bytes": 548,
+    "original_sha256": "8dbd6b029e44f9364db91daa5c4f0d015880d1367bdab8996efce9c5e958d4ba",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "575de940a6920e196fb69b18a64558f2fdf99647ff59cf7b0ba53b09d5337faf",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "channel_projection.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/channel_projection.json",
+    "original_bytes": 539843,
+    "original_sha256": "6d001fd7085d454d18afd1e932280a71a5828455e94bb905c7fc6601beadb1db",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "b823af08431081aed1270f346bf2ad1bbc86f59cb21db92ef5a89e64ff710dcc",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "observation_permit.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/observation_permit.json",
+    "original_bytes": 336,
+    "original_sha256": "65697039502fcee61ef6715f95c2d41a39eaed7103d5006729b05863bdc3275c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "6ddfe0aad8261a641789093d38a4eacc3305a53a6c3809e7216403c90b30854d",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "wer_times_on_tdr60.txt": {
+    "rental_path": "/root/prov/wer_times_on_tdr60.txt",
+    "original_bytes": 1612,
+    "original_sha256": "8fd9a47a5e75893752edb78eab3b5afb6bd4db79b08a13382556b69cb6a6848b",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "ca0ac9f0d8e0ee31ce81fc68d7536ab2943deacd2b8e5f9aaf0974227382f6b6",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "dump_hdr_on_tdr60.txt": {
+    "rental_path": "/root/prov/dump_hdr_on_tdr60.txt",
+    "original_bytes": 16201,
+    "original_sha256": "e2d8b714bfa461e9bf55814b8538008d24bda0af69304a3faebf47e0294896af",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "3db5e572118c081e7d15da8a2b1e64f6a918c2466cce2bd5c75155446b4bf319",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "native_receipt_observation_context.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/native_receipt_observation_context.json",
+    "original_bytes": 23189,
+    "original_sha256": "90e0ea539b910ef2c0ffe5e7872ac6c107f9d42f042ab1e096a00158243f3d1b",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "9c7140b19938ba1e8596cbcbad92b5cae1e073049f72092c8559dd10c5971277",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "secondary_receipt_observation_context.json": {
+    "rental_path": "/root/prov/arms/on_tdr60/secondary_receipt_observation_context.json",
+    "original_bytes": 23195,
+    "original_sha256": "c72a6a5c018330a4513ec8d3c859af21ffb883f2bb4f5b86cf8f8e5adf3a91b4",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "4979b891f417c7fa7fe8c2e1644c3e2cb8e32aac72a856984af8326a5ccd586d",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "native_receipt_dmesg_0.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/native_receipt_dmesg_0.txt",
+    "original_bytes": 127933,
+    "original_sha256": "711fa9e1bc82aa8f404004270b6841753015e74618b650ff8cc6cb05929f4346",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d87aec2673dc8ea8416676d9817cf044039ede9e285aa751ba2ae797112f9824",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "native_receipt_dmesg_1.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/native_receipt_dmesg_1.txt",
+    "original_bytes": 127933,
+    "original_sha256": "711fa9e1bc82aa8f404004270b6841753015e74618b650ff8cc6cb05929f4346",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d87aec2673dc8ea8416676d9817cf044039ede9e285aa751ba2ae797112f9824",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "secondary_receipt_dmesg_0.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/secondary_receipt_dmesg_0.txt",
+    "original_bytes": 127933,
+    "original_sha256": "711fa9e1bc82aa8f404004270b6841753015e74618b650ff8cc6cb05929f4346",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d87aec2673dc8ea8416676d9817cf044039ede9e285aa751ba2ae797112f9824",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "secondary_receipt_dmesg_1.txt": {
+    "rental_path": "/root/prov/arms/on_tdr60/secondary_receipt_dmesg_1.txt",
+    "original_bytes": 127933,
+    "original_sha256": "711fa9e1bc82aa8f404004270b6841753015e74618b650ff8cc6cb05929f4346",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d87aec2673dc8ea8416676d9817cf044039ede9e285aa751ba2ae797112f9824",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_tdr60_prep_check.txt": {
+    "rental_path": "/root/prov/arm_on_tdr60_prep_check.txt",
+    "original_bytes": 27,
+    "original_sha256": "914468634741e115546c6e08e78583fa2c4193500355e51fe6d5e22ef5516d4a",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "8f194e4c7469e38bae85e8e31f3889b87075b5e36518c492cc4d446870bd2b97",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "prep_on_tdr60.txt": {
+    "rental_path": "/root/prov/prep_on_tdr60.txt",
+    "original_bytes": 92,
+    "original_sha256": "cd4e5f661f6fbcdaea420b41441a46acf62445f726fd4a93586c15e2749a2500",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "c857dc5db4a633fbedda98f80f6971af6bd952bbd07bd74c1b33c8b04f67fcac",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "prep_on_tdr60.log": {
+    "rental_path": "/root/prov/prep_on_tdr60.log",
+    "original_bytes": 499,
+    "original_sha256": "b75717b7a1df0594b800672e237b9db42d52dc45410691feb7237694bc4bb042",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "f639a13b0eeeea038f8b1a643a9034d81b14c9eecf87b6383a860c8086b6e657",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "capture_guest_on_tdr60.txt": {
+    "rental_path": "/root/prov/capture_guest_on_tdr60.txt",
+    "original_bytes": 138,
+    "original_sha256": "688ddd3dcade28b93e14f23380393e2d6188558760e6525d0d2c08579181291d",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "eb780d550087fee8806e4d2b3985fafd6d0a5b0cd11112d94ff6aa65dde91e23",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  }
+}

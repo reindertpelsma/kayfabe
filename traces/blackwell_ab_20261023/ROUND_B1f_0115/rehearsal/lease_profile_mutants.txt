@@ -1,0 +1,16 @@
+default_offer_floor_7 killers=2
+default_visible_7 killers=2
+profile_floor_6 killers=3
+guest_smp_8 killers=2
+unknown_profile_ok killers=3
+prefer_dropped killers=2
+ceiling_kept killers=2
+judge_any_fault killers=3
+judge_6_ok killers=3
+judge_default_lenient killers=2
+judge_nproc_ignored killers=2
+controller_no_judge killers=2
+ops_default_floor killers=2
+install_smp8 killers=2
+common_smp8 killers=2
+bind_jobs16 killers=2

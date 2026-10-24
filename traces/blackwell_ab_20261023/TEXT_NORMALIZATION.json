@@ -1,0 +1,26 @@
+[
+  {
+    "path": "collect_on_derived.log",
+    "original_sha256": "74f3c2c9a687ee8e673e49912a54be50b5385dc29ab80276a7dbe9e4888f2aea",
+    "normalized_sha256": "99ebd6b4c2a69135fcad89132b095c15e3b55582a2e96de41c6155cf6f52dbe2",
+    "normalization": "CRLF/trailing whitespace only; header hex unchanged"
+  },
+  {
+    "path": "wer_times_on_derived.txt",
+    "original_sha256": "48a580d61e9ecb6125d1b436b79c763530c33735f2ee65143ee3c9cc0b1ede07",
+    "normalized_sha256": "5438ac7a26ef00d613440d71b3763078eb380b228ee4f2c9215d4a2ae65f3b8a",
+    "normalization": "CRLF/trailing whitespace only; header hex unchanged"
+  },
+  {
+    "path": "dump_hdr_on_derived.txt",
+    "original_sha256": "4656cdf99ca2049e44444f6cead96a7ec0024c5c04cdf96a6b0a9762797c3e84",
+    "normalized_sha256": "dc2cc325c266755e7fd6c28b65c1857dfa3ae4d085489134e12f8fbbdd5fcb97",
+    "normalization": "CRLF/trailing whitespace only; header hex unchanged"
+  },
+  {
+    "path": "collect_on_derived.txt",
+    "original_sha256": "d3c65aab12edb0879dd278ba6662c4f318a58e665515fa02c77865f8ed8bc683",
+    "normalized_sha256": "18edf8dd488b2ac0d984d181d60ddb28eeb5a1a257a10a6f0fa78e8ece666f9e",
+    "normalization": "CRLF/trailing whitespace only; header hex unchanged"
+  }
+]

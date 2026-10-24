@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_lease_profile (unittest.loader._FailedTest.test_lease_profile)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_lease_profile
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1f_0115/rehearsal/test_lease_profile.py", line 21, in <module>
+    import lease_profile as LP  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'lease_profile'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

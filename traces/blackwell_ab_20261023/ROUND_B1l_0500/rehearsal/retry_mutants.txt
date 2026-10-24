@@ -1,0 +1,6 @@
+no_retry killers=6
+deadline_ignored_in_loop killers=0
+retries_unbounded killers=2
+discard_kept killers=2
+no_append killers=3
+pause_ignores_deadline killers=2

@@ -1,0 +1,105 @@
+{
+  "round": "B1c_2340",
+  "operator": "Claude",
+  "grant": "controller 23:40 one lease + one provider retry",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "status": "NO RENTAL: no qualifying offer in the one market snapshot (harness exit 75)",
+  "market_utc": "2026-10-23T21:41:11.322102+00:00",
+  "credit_usd": 28.091756437960612,
+  "market_offers": 5,
+  "offers": [
+    {
+      "id": 56602875,
+      "machine": 147483,
+      "gpu": "RTX 5060",
+      "dph": 0.33564814814814814,
+      "verification": "verified",
+      "geolocation": "Minnesota, US",
+      "excluded_because": "is_vm_deverified=True (harness filter)"
+    },
+    {
+      "id": 43994880,
+      "machine": 69146,
+      "gpu": "RTX 5090",
+      "dph": 0.38805555555555554,
+      "verification": "deverified",
+      "geolocation": ", CN",
+      "excluded_because": "known-bad (B1b provider_boot_timeout)"
+    },
+    {
+      "id": 57376533,
+      "machine": 43459,
+      "gpu": "RTX 5090",
+      "dph": 0.6013888888888889,
+      "verification": "deverified",
+      "geolocation": "Taiwan, TW",
+      "excluded_because": "is_vm_deverified=True (harness filter)"
+    },
+    {
+      "id": 42143434,
+      "machine": 52992,
+      "gpu": "RTX 5090",
+      "dph": 0.6416666666666667,
+      "verification": "deverified",
+      "geolocation": "Mexico, MX",
+      "excluded_because": "is_vm_deverified=True (harness filter)"
+    },
+    {
+      "id": 56681562,
+      "machine": 154238,
+      "gpu": "RTX 5090",
+      "dph": 2.334074074074074,
+      "verification": "verified",
+      "geolocation": "Quebec, CA",
+      "excluded_because": "2.334 USD/h: B.plan with stop 2.00 gives < 90 min runtime (eligibility floor)"
+    }
+  ],
+  "leases_created": [],
+  "leases_destroyed": [],
+  "timers_armed": 0,
+  "spend_usd": 0.0,
+  "known_bad_added": [
+    {
+      "machine_id": 69146,
+      "instance_id": 57425378,
+      "reason": "provider_boot_timeout"
+    }
+  ],
+  "matrix": [
+    {
+      "arm": "Native raw + fuzz 3 pinned / 1 unpinned",
+      "die": "none (no lease)",
+      "OS": "Ubuntu22.04 planned",
+      "driver": "595.91.07 open planned",
+      "rev": "6e3fd3fd6",
+      "flags": "native suite + fuzz repeats",
+      "verdict": "UNRUN",
+      "evidence": "preflight.txt, market.json"
+    },
+    {
+      "arm": "B",
+      "die": "none (no lease)",
+      "OS": "Win11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "48b027267",
+      "flags": "p19, one enable",
+      "verdict": "UNRUN",
+      "evidence": "preflight.txt, market.json"
+    },
+    {
+      "arm": "B1",
+      "die": "none (no lease)",
+      "OS": "Win11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "cb80cbd29",
+      "flags": "p19, one enable",
+      "verdict": "UNRUN",
+      "evidence": "preflight.txt, market.json"
+    }
+  ],
+  "xid32_list": [],
+  "tdr_verdict": "UNRUN",
+  "alias_revoked_repeats": "UNRUN (n=0)"
+}

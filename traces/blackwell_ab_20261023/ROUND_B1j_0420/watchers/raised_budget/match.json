@@ -1,0 +1,11 @@
+{
+  "id": 54571906,
+  "machine_id": 30498,
+  "dph_total": 0.4320555555555556,
+  "candidate_die": "GB205",
+  "gpu_name": "RTX 5070",
+  "geolocation": "Quebec, CA",
+  "verification": "verified",
+  "cpu_cores_effective": 32.0,
+  "utc": "2026-10-24T02:20:05.627234+00:00"
+}

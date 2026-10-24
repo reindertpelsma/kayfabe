@@ -1,0 +1,13 @@
+test_guard_view_annotated (test_pin_evidence.KeyLines.test_guard_view_annotated) ... ok
+test_kinds (test_pin_evidence.KeyLines.test_kinds) ... ok
+test_line_bound (test_pin_evidence.KeyLines.test_line_bound) ... ok
+test_malformed_key_is_recorded_not_raised (test_pin_evidence.KeyLines.test_malformed_key_is_recorded_not_raised) ... ok
+test_only_key_lines_exported (test_pin_evidence.KeyLines.test_only_key_lines_exported) ... ok
+test_capture_writes_private_raw_and_exportable_lines (test_pin_evidence.Wiring.test_capture_writes_private_raw_and_exportable_lines) ... ok
+test_guard_source_unchanged (test_pin_evidence.Wiring.test_guard_source_unchanged) ... ok
+test_ops_captures_console_before_returning (test_pin_evidence.Wiring.test_ops_captures_console_before_returning) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.007s
+
+OK

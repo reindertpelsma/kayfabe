@@ -1,0 +1,14 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+COLLECT_START run=on_observe_b1 (standard VGA, no kf3 device) 2026-10-24T04:09:59+00:00
+[2026-10-24T04:09:59Z] detached: tag=on_observe_b1_collect, log logs/on_observe_b1_collect_run.log (stdout logs/on_observe_b1_collect_run.out)
+KF_SSH_UP
+CLOCK host=2026-10-24T04:11:49.657698245 guest=2026-10-24T04:11:59.5958736Z
+COLLECT_DONE
+COLLECT_METADATA_READY 2026-10-24T04:12:25+00:00
+WER_TIMES_DONE
+HDR_DONE
+COLLECT_ALL_DONE 2026-10-24T04:13:15+00:00
+[2026-10-24T04:13:15Z] stopping kfwin (pid 161797)
+[2026-10-24T04:13:36Z] stopped
+COLLECT_EXIT run=on_observe_b1 rc=0 2026-10-24T04:13:36+00:00

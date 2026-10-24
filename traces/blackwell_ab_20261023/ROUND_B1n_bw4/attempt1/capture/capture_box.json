@@ -1,0 +1,33 @@
+{
+ "run": "box",
+ "verified": 4,
+ "failed": [],
+ "not_pulled": [],
+ "stream_missing_or_bad": 0,
+ "files": {
+  "bench_runs.tgz": {
+   "sha256": "5ffc322df2cd234e06f1a5e84aebc2496d109e98abbde2d063fc091c6e4ebccc",
+   "status": "VERIFIED_STREAM",
+   "bytes": 48764
+  },
+  "host_kernel_full.txt": {
+   "sha256": "0aa53db19d17e279a9163c416aa413661a60f8aceb3f6a350931583b2cfa90d2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 144153
+  },
+  "kfwin_logs.tgz": {
+   "sha256": "22fe61b31662f7a2bab73b40d949a6efdb05215b4e2c2e16a751431d42ae4621",
+   "status": "VERIFIED_STREAM",
+   "bytes": 47039410
+  },
+  "prov.tgz": {
+   "sha256": "309048da705ca079b28c1e007633c7643bc2c510f09d5bf6ebba48b5209808fb",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1696588
+  }
+ },
+ "seconds": 4.4,
+ "private": true,
+ "lease": 57472433,
+ "raw_location": "private dev-box capture dir"
+}

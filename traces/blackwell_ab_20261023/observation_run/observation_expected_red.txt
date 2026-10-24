@@ -1,0 +1,465 @@
+test_cuda_process_failure_stops (test_windows_observation.HostHealth.test_cuda_process_failure_stops) ... FAIL
+test_cuinit_failure_stops (test_windows_observation.HostHealth.test_cuinit_failure_stops) ... FAIL
+test_gpu_fallen_off_bus_text_stops (test_windows_observation.HostHealth.test_gpu_fallen_off_bus_text_stops) ... FAIL
+test_no_cuda_device_stops (test_windows_observation.HostHealth.test_no_cuda_device_stops) ... FAIL
+test_nvidia_smi_failure_stops (test_windows_observation.HostHealth.test_nvidia_smi_failure_stops) ... FAIL
+test_probe_timeout_stops (test_windows_observation.HostHealth.test_probe_timeout_stops) ... FAIL
+test_stock_smi_and_cuda_health_must_both_pass (test_windows_observation.HostHealth.test_stock_smi_and_cuda_health_must_both_pass) ... FAIL
+test_absent_permit_does_not_enable_the_mode (test_windows_observation.Observation.test_absent_permit_does_not_enable_the_mode) ... FAIL
+test_actual_pair_is_recorded_with_identity_intr_and_timestamps (test_windows_observation.Observation.test_actual_pair_is_recorded_with_identity_intr_and_timestamps) ... FAIL
+test_different_executable_stops (test_windows_observation.Observation.test_different_executable_stops) ... FAIL
+test_eight_records_from_the_same_pair_are_recorded (test_windows_observation.Observation.test_eight_records_from_the_same_pair_are_recorded) ... FAIL
+test_error_text_at_warning_priority_also_stops (test_windows_observation.Observation.test_error_text_at_warning_priority_also_stops) ... FAIL
+test_expired_authority_stops (test_windows_observation.Observation.test_expired_authority_stops) ... FAIL
+test_fallen_bus_79_stops (test_windows_observation.Observation.test_fallen_bus_79_stops) ... FAIL
+test_fault_before_enable_stops (test_windows_observation.Observation.test_fault_before_enable_stops) ... FAIL
+test_foreign_pid_stops (test_windows_observation.Observation.test_foreign_pid_stops) ... FAIL
+test_future_authority_stops (test_windows_observation.Observation.test_future_authority_stops) ... FAIL
+test_future_fault_stops (test_windows_observation.Observation.test_future_fault_stops) ... FAIL
+test_high_suffix_overflow_stops (test_windows_observation.Observation.test_high_suffix_overflow_stops) ... FAIL
+test_kernel_error_beside_the_allowed_pair_stops (test_windows_observation.Observation.test_kernel_error_beside_the_allowed_pair_stops) ... FAIL
+test_limit_cannot_be_raised_stops (test_windows_observation.Observation.test_limit_cannot_be_raised_stops) ... FAIL
+test_lost_kernel_history_stops (test_windows_observation.Observation.test_lost_kernel_history_stops) ... FAIL
+test_malformed_xid_stops (test_windows_observation.Observation.test_malformed_xid_stops) ... FAIL
+test_missing_timestamp_stops (test_windows_observation.Observation.test_missing_timestamp_stops) ... FAIL
+test_native_31_stops (test_windows_observation.Observation.test_native_31_stops) ... FAIL
+test_native_profile_stops (test_windows_observation.Observation.test_native_profile_stops) ... FAIL
+test_ninth_record_stops (test_windows_observation.Observation.test_ninth_record_stops) ... FAIL
+test_off_profile_stops (test_windows_observation.Observation.test_off_profile_stops) ... FAIL
+test_only_exact_recorded_xids_are_excluded_from_new_kernel_errors (test_windows_observation.Observation.test_only_exact_recorded_xids_are_excluded_from_new_kernel_errors) ... FAIL
+test_permit_is_bound_to_each_fresh_arm_and_pid_life (test_windows_observation.Observation.test_permit_is_bound_to_each_fresh_arm_and_pid_life) ... FAIL
+test_previous_arm_permit_does_not_enable_the_next_arm (test_windows_observation.Observation.test_previous_arm_permit_does_not_enable_the_next_arm) ... FAIL
+test_replaced_kernel_history_stops (test_windows_observation.Observation.test_replaced_kernel_history_stops) ... FAIL
+test_reused_pid_life_stops (test_windows_observation.Observation.test_reused_pid_life_stops) ... FAIL
+test_second_enable_stops (test_windows_observation.Observation.test_second_enable_stops) ... FAIL
+test_second_high_channel_stops (test_windows_observation.Observation.test_second_high_channel_stops) ... FAIL
+test_second_plain_channel_stops (test_windows_observation.Observation.test_second_plain_channel_stops) ... FAIL
+test_single_record_can_precede_the_second_half_of_the_pair (test_windows_observation.Observation.test_single_record_can_precede_the_second_half_of_the_pair) ... FAIL
+test_tenth_record_stops (test_windows_observation.Observation.test_tenth_record_stops) ... FAIL
+test_wrong_high_prefix_stops (test_windows_observation.Observation.test_wrong_high_prefix_stops) ... FAIL
+test_wrong_intr_stops (test_windows_observation.Observation.test_wrong_intr_stops) ... FAIL
+test_wrong_lease_stops (test_windows_observation.Observation.test_wrong_lease_stops) ... FAIL
+test_wrong_pci_stops (test_windows_observation.Observation.test_wrong_pci_stops) ... FAIL
+test_xid_45_stops (test_windows_observation.Observation.test_xid_45_stops) ... FAIL
+test_xid_61_stops (test_windows_observation.Observation.test_xid_61_stops) ... FAIL
+test_xid_62_stops (test_windows_observation.Observation.test_xid_62_stops) ... FAIL
+test_zero_intr_stops (test_windows_observation.Observation.test_zero_intr_stops) ... FAIL
+
+======================================================================
+FAIL: test_cuda_process_failure_stops (test_windows_observation.HostHealth.test_cuda_process_failure_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_cuinit_failure_stops (test_windows_observation.HostHealth.test_cuinit_failure_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_gpu_fallen_off_bus_text_stops (test_windows_observation.HostHealth.test_gpu_fallen_off_bus_text_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_no_cuda_device_stops (test_windows_observation.HostHealth.test_no_cuda_device_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_nvidia_smi_failure_stops (test_windows_observation.HostHealth.test_nvidia_smi_failure_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_probe_timeout_stops (test_windows_observation.HostHealth.test_probe_timeout_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_stock_smi_and_cuda_health_must_both_pass (test_windows_observation.HostHealth.test_stock_smi_and_cuda_health_must_both_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 183, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_absent_permit_does_not_enable_the_mode (test_windows_observation.Observation.test_absent_permit_does_not_enable_the_mode)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_actual_pair_is_recorded_with_identity_intr_and_timestamps (test_windows_observation.Observation.test_actual_pair_is_recorded_with_identity_intr_and_timestamps)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_different_executable_stops (test_windows_observation.Observation.test_different_executable_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_eight_records_from_the_same_pair_are_recorded (test_windows_observation.Observation.test_eight_records_from_the_same_pair_are_recorded)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_error_text_at_warning_priority_also_stops (test_windows_observation.Observation.test_error_text_at_warning_priority_also_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_expired_authority_stops (test_windows_observation.Observation.test_expired_authority_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_fallen_bus_79_stops (test_windows_observation.Observation.test_fallen_bus_79_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_fault_before_enable_stops (test_windows_observation.Observation.test_fault_before_enable_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_foreign_pid_stops (test_windows_observation.Observation.test_foreign_pid_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_future_authority_stops (test_windows_observation.Observation.test_future_authority_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_future_fault_stops (test_windows_observation.Observation.test_future_fault_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_high_suffix_overflow_stops (test_windows_observation.Observation.test_high_suffix_overflow_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_kernel_error_beside_the_allowed_pair_stops (test_windows_observation.Observation.test_kernel_error_beside_the_allowed_pair_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_limit_cannot_be_raised_stops (test_windows_observation.Observation.test_limit_cannot_be_raised_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_lost_kernel_history_stops (test_windows_observation.Observation.test_lost_kernel_history_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_malformed_xid_stops (test_windows_observation.Observation.test_malformed_xid_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_missing_timestamp_stops (test_windows_observation.Observation.test_missing_timestamp_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_native_31_stops (test_windows_observation.Observation.test_native_31_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_native_profile_stops (test_windows_observation.Observation.test_native_profile_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_ninth_record_stops (test_windows_observation.Observation.test_ninth_record_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_off_profile_stops (test_windows_observation.Observation.test_off_profile_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_only_exact_recorded_xids_are_excluded_from_new_kernel_errors (test_windows_observation.Observation.test_only_exact_recorded_xids_are_excluded_from_new_kernel_errors)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_permit_is_bound_to_each_fresh_arm_and_pid_life (test_windows_observation.Observation.test_permit_is_bound_to_each_fresh_arm_and_pid_life)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_previous_arm_permit_does_not_enable_the_next_arm (test_windows_observation.Observation.test_previous_arm_permit_does_not_enable_the_next_arm)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_replaced_kernel_history_stops (test_windows_observation.Observation.test_replaced_kernel_history_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_reused_pid_life_stops (test_windows_observation.Observation.test_reused_pid_life_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_second_enable_stops (test_windows_observation.Observation.test_second_enable_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_second_high_channel_stops (test_windows_observation.Observation.test_second_high_channel_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_second_plain_channel_stops (test_windows_observation.Observation.test_second_plain_channel_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_single_record_can_precede_the_second_half_of_the_pair (test_windows_observation.Observation.test_single_record_can_precede_the_second_half_of_the_pair)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_tenth_record_stops (test_windows_observation.Observation.test_tenth_record_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_wrong_high_prefix_stops (test_windows_observation.Observation.test_wrong_high_prefix_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_wrong_intr_stops (test_windows_observation.Observation.test_wrong_intr_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_wrong_lease_stops (test_windows_observation.Observation.test_wrong_lease_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_wrong_pci_stops (test_windows_observation.Observation.test_wrong_pci_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_xid_45_stops (test_windows_observation.Observation.test_xid_45_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_xid_61_stops (test_windows_observation.Observation.test_xid_61_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_xid_62_stops (test_windows_observation.Observation.test_xid_62_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+======================================================================
+FAIL: test_zero_intr_stops (test_windows_observation.Observation.test_zero_intr_stops)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_windows_observation.py", line 57, in setUp
+    self.assertIsNotNone(O, "per-arm observation implementation missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : per-arm observation implementation missing
+
+----------------------------------------------------------------------
+Ran 46 tests in 0.007s
+
+FAILED (failures=46)

@@ -1,0 +1,26 @@
+{
+  "utc": "2026-10-24T04:18:16.562142+00:00",
+  "native_xid_count": 5,
+  "observed_record_count": 4,
+  "per_arm_counts": {
+    "on_observe_b": 2,
+    "on_observe_b1": 2
+  },
+  "exact_accepted_history": true,
+  "host_health": {
+    "cuInit": 0,
+    "cuDeviceGetCount": 0,
+    "devices": 1
+  },
+  "qemu_count": 0,
+  "controller_exited": true,
+  "gpu_lock_released": true,
+  "clean_sources": {
+    "product": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "readiness": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
+    "native_fixture": "618f0431815d037d4226b642ae37e76967353e90",
+    "measured": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+    "observed_b1": "cb80cbd29b7a05f904acd822f172485fd49938a9"
+  },
+  "no_more_product_arms": true
+}

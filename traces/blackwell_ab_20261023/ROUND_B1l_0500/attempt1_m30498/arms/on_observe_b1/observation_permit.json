@@ -1,0 +1,15 @@
+{
+  "arm": "on_observe_b1",
+  "pid": 158235,
+  "starttime": 369135,
+  "exe": "/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64",
+  "pci": "0000:00:07",
+  "mode": "bw3-saved-xid32-observation-v1",
+  "profile": "on",
+  "lease_id": 57457694,
+  "enable_count": 1,
+  "armed_utc": "2026-10-24T04:08:02.977285+00:00",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

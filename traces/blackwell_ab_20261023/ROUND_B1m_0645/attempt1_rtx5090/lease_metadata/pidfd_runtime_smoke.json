@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "scope": "disposable owned sleep child, not QEMU or GPU",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

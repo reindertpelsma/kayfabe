@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "lease_id": 57429076,
+  "record_limit": 8,
+  "arms": [
+    "on_observe_b",
+    "on_observe_b1"
+  ],
+  "not_before_utc": "2026-10-23T21:56:19.353003+00:00",
+  "expires_utc": "2026-10-24T00:56:18.073638+00:00",
+  "authority": "controller17:00 exact saved Xid32 OBSERVATION for this sweep lease only",
+  "mode": "bw3-saved-xid32-observation-v1",
+  "observation_only": true,
+  "attestation_allowed": false,
+  "exact_channels": [
+    "0x14",
+    "0x1000000b"
+  ],
+  "host_verification": "UNVERIFIED-HOST",
+  "candidate_die": "GB206",
+  "expected_page_donor": "GB206",
+  "page_policy": "own exact row",
+  "allowed_pair_class": "exact0x14/0x1000000b intr00200000; max8 per arm",
+  "other_faults_errors_or_failed_health": "immediate pidfd stop"
+}

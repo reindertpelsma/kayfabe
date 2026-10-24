@@ -1,0 +1,39 @@
+F..F
+======================================================================
+FAIL: test_china_and_hong_kong_rejected (test_denied_countries.DeniedCountries.test_china_and_hong_kong_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1d_0015/rehearsal/test_denied_countries.py", line 46, in test_china_and_hong_kong_rejected
+    self.assertEqual(keep(rows), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'geolocation': ', CN'}, {'geolocation': [45 chars]CN'}] != []
+
+First list contains 3 additional elements.
+First extra element 0:
+{'geolocation': ', CN'}
+
++ []
+- [{'geolocation': ', CN'},
+-  {'geolocation': 'Hong Kong, HK'},
+-  {'geolocation': 'Shanghai, CN'}]
+
+======================================================================
+FAIL: test_owner_denied_countries_rejected (test_denied_countries.DeniedCountries.test_owner_denied_countries_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1d_0015/rehearsal/test_denied_countries.py", line 41, in test_owner_denied_countries_rejected
+    self.assertEqual(keep([offer(geo)]), [], geo)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'geolocation': ', CN'}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'geolocation': ', CN'}
+
+- [{'geolocation': ', CN'}]
++ [] : , CN
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.038s
+
+FAILED (failures=2)

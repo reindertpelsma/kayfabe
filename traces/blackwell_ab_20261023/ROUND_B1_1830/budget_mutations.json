@@ -1,0 +1,101 @@
+{
+  "mutants": [
+    {
+      "mutant": "runtime_ceiling_extended",
+      "test_killers": 6,
+      "killers": [
+        "test_cheap_lease_retains_150_minute_ceiling (budget_tests.RoundBudget.test_cheap_lease_retains_150_minute_ceiling)",
+        "test_delay_after_create_cannot_restart_original_deadline (budget_tests.RoundBudget.test_delay_after_create_cannot_restart_original_deadline)",
+        "test_every_accepted_rate_keeps_stop_and_hard_cap (budget_tests.RoundBudget.test_every_accepted_rate_keeps_stop_and_hard_cap)",
+        "test_expired_deadline_never_gains_time (budget_tests.RoundBudget.test_expired_deadline_never_gains_time)",
+        "test_reservation_includes_fifty_cent_nonruntime_margin (budget_tests.RoundBudget.test_reservation_includes_fifty_cent_nonruntime_margin)",
+        "test_reserve_boundary_passes_only_when_exposure_is_covered (budget_tests.RoundBudget.test_reserve_boundary_passes_only_when_exposure_is_covered)"
+      ]
+    },
+    {
+      "mutant": "cost_duration_removed",
+      "test_killers": 4,
+      "killers": [
+        "test_every_accepted_rate_keeps_stop_and_hard_cap (budget_tests.RoundBudget.test_every_accepted_rate_keeps_stop_and_hard_cap)",
+        "test_high_rate_shortens_cost_deadline_before_stop (budget_tests.RoundBudget.test_high_rate_shortens_cost_deadline_before_stop)",
+        "test_rate_bound_also_covers_fifteen_percent (budget_tests.RoundBudget.test_rate_bound_also_covers_fifteen_percent)",
+        "test_teardown_has_one_minute_before_cost_stop (budget_tests.RoundBudget.test_teardown_has_one_minute_before_cost_stop)"
+      ]
+    },
+    {
+      "mutant": "fee_allowance_removed",
+      "test_killers": 6,
+      "killers": [
+        "test_high_rate_shortens_cost_deadline_before_stop (budget_tests.RoundBudget.test_high_rate_shortens_cost_deadline_before_stop)",
+        "test_rate_bound_also_covers_fifteen_percent (budget_tests.RoundBudget.test_rate_bound_also_covers_fifteen_percent)",
+        "test_rate_bound_includes_at_least_ten_cents_per_hour (budget_tests.RoundBudget.test_rate_bound_includes_at_least_ten_cents_per_hour)",
+        "test_reservation_includes_fifty_cent_nonruntime_margin (budget_tests.RoundBudget.test_reservation_includes_fifty_cent_nonruntime_margin)",
+        "test_reserve_boundary_passes_only_when_exposure_is_covered (budget_tests.RoundBudget.test_reserve_boundary_passes_only_when_exposure_is_covered)",
+        "test_reserve_is_checked_before_any_allocation (budget_tests.RoundBudget.test_reserve_is_checked_before_any_allocation)"
+      ]
+    },
+    {
+      "mutant": "account_reserve_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_high_price_reservation_preserves_the_same_account_reserve (budget_tests.RoundBudget.test_high_price_reservation_preserves_the_same_account_reserve)",
+        "test_reserve_is_checked_before_any_allocation (budget_tests.RoundBudget.test_reserve_is_checked_before_any_allocation)"
+      ]
+    },
+    {
+      "mutant": "uncertainty_margin_removed",
+      "test_killers": 5,
+      "killers": [
+        "test_high_rate_shortens_cost_deadline_before_stop (budget_tests.RoundBudget.test_high_rate_shortens_cost_deadline_before_stop)",
+        "test_reservation_includes_fifty_cent_nonruntime_margin (budget_tests.RoundBudget.test_reservation_includes_fifty_cent_nonruntime_margin)",
+        "test_reserve_boundary_passes_only_when_exposure_is_covered (budget_tests.RoundBudget.test_reserve_boundary_passes_only_when_exposure_is_covered)",
+        "test_reserve_is_checked_before_any_allocation (budget_tests.RoundBudget.test_reserve_is_checked_before_any_allocation)",
+        "test_teardown_has_one_minute_before_cost_stop (budget_tests.RoundBudget.test_teardown_has_one_minute_before_cost_stop)"
+      ]
+    },
+    {
+      "mutant": "teardown_margin_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_high_rate_shortens_cost_deadline_before_stop (budget_tests.RoundBudget.test_high_rate_shortens_cost_deadline_before_stop)",
+        "test_teardown_has_one_minute_before_cost_stop (budget_tests.RoundBudget.test_teardown_has_one_minute_before_cost_stop)"
+      ]
+    },
+    {
+      "mutant": "stop_raised",
+      "test_killers": 3,
+      "killers": [
+        "test_every_accepted_rate_keeps_stop_and_hard_cap (budget_tests.RoundBudget.test_every_accepted_rate_keeps_stop_and_hard_cap)",
+        "test_high_rate_shortens_cost_deadline_before_stop (budget_tests.RoundBudget.test_high_rate_shortens_cost_deadline_before_stop)",
+        "test_teardown_has_one_minute_before_cost_stop (budget_tests.RoundBudget.test_teardown_has_one_minute_before_cost_stop)"
+      ]
+    },
+    {
+      "mutant": "price_limit_raised",
+      "test_killers": 2,
+      "killers": [
+        "test_invalid_rate_never_creates_a_plan (budget_tests.RoundBudget.test_invalid_rate_never_creates_a_plan)",
+        "test_rate_above_owner_limit_refuses_even_with_plenty_of_credit (budget_tests.RoundBudget.test_rate_above_owner_limit_refuses_even_with_plenty_of_credit)"
+      ]
+    },
+    {
+      "mutant": "readiness_restarts_clock",
+      "test_killers": 2,
+      "killers": [
+        "test_delay_after_create_cannot_restart_original_deadline (budget_tests.RoundBudget.test_delay_after_create_cannot_restart_original_deadline)",
+        "test_expired_deadline_never_gains_time (budget_tests.RoundBudget.test_expired_deadline_never_gains_time)"
+      ]
+    },
+    {
+      "mutant": "fixed_clock_validation_removed",
+      "test_killers": 2,
+      "killers": [
+        "test_clock_before_watchdog_arm_is_refused (budget_tests.RoundBudget.test_clock_before_watchdog_arm_is_refused)",
+        "test_readiness_cannot_replace_fixed_deadline_with_a_later_one (budget_tests.RoundBudget.test_readiness_cannot_replace_fixed_deadline_with_a_later_one)"
+      ]
+    }
+  ],
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

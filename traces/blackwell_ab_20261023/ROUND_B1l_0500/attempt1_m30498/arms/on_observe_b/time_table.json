@@ -1,0 +1,93 @@
+{
+  "run": "on_observe_b",
+  "guest_minus_host_seconds": 4.634485,
+  "offset_note": "measured once at the collection boot (CLOCK line); assumed constant for the arm (INFERRED)",
+  "events": [
+    {
+      "event": "enable start",
+      "host_utc": "2026-10-24T03:59:00.647088+00:00",
+      "guest_utc": "2026-10-24T03:59:05.281573+00:00",
+      "source": "arm_on_observe_b_enable.txt (guest clock)",
+      "rpc_near": null
+    },
+    {
+      "event": "dump bugcheck 0x193",
+      "host_utc": "2026-10-24T03:59:18.693954+00:00",
+      "guest_utc": "2026-10-24T03:59:23.328439+00:00",
+      "source": "dump_headers.jsonl WATCHDOG-20261024-0359.dmp (guest clock)",
+      "rpc_near": {
+        "first": 0,
+        "last": 231,
+        "count": 232,
+        "window_s": 2.0
+      }
+    },
+    {
+      "event": "Code 0 observed",
+      "host_utc": "2026-10-24T03:59:49.609873+00:00",
+      "guest_utc": "2026-10-24T03:59:54.244358+00:00",
+      "source": "arm_on_observe_b_enable.txt (guest clock)",
+      "rpc_near": {
+        "first": 1388,
+        "last": 2772,
+        "count": 1385,
+        "window_s": 2.0
+      }
+    },
+    {
+      "event": "Xid 32 channel 0x00000014",
+      "host_utc": "2026-10-24T03:59:58.278206+00:00",
+      "guest_utc": "2026-10-24T04:00:02.912691+00:00",
+      "source": "host kernel log (host clock)",
+      "rpc_near": {
+        "first": 3764,
+        "last": 3900,
+        "count": 137,
+        "window_s": 2.0
+      }
+    },
+    {
+      "event": "Xid 32 channel 0x1000000b",
+      "host_utc": "2026-10-24T03:59:58.334139+00:00",
+      "guest_utc": "2026-10-24T04:00:02.968624+00:00",
+      "source": "host kernel log (host clock)",
+      "rpc_near": {
+        "first": 3764,
+        "last": 3900,
+        "count": 137,
+        "window_s": 2.0
+      }
+    },
+    {
+      "event": "RPC teardown_start_ordinal 3915",
+      "host_utc": "2026-10-24T04:00:03.315289+00:00",
+      "guest_utc": "2026-10-24T04:00:07.949774+00:00",
+      "source": "rpc_timing.jsonl (host observer clock)",
+      "rpc_near": {
+        "first": 3903,
+        "last": 4298,
+        "count": 396,
+        "window_s": 2.0
+      }
+    },
+    {
+      "event": "RPC unload ordinal 4295",
+      "host_utc": "2026-10-24T04:00:04.430750+00:00",
+      "guest_utc": "2026-10-24T04:00:09.065235+00:00",
+      "source": "rpc_timing.jsonl (host observer clock)",
+      "rpc_near": {
+        "first": 3909,
+        "last": 4298,
+        "count": 390,
+        "window_s": 2.0
+      }
+    },
+    {
+      "event": "dump bugcheck 0x116",
+      "host_utc": "2026-10-24T04:00:08.135197+00:00",
+      "guest_utc": "2026-10-24T04:00:12.769682+00:00",
+      "source": "dump_headers.jsonl 102426-61750-01.dmp (guest clock)",
+      "rpc_near": null
+    }
+  ]
+}

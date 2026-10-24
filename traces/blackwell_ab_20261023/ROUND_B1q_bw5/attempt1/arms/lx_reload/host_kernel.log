@@ -1,0 +1,3 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+2026-10-24T12:20:35.569237+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0

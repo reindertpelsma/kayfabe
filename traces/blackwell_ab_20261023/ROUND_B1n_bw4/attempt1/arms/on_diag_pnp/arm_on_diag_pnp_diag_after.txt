@@ -1,0 +1,3 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+BW580_RESULT {"utc":"2026-10-24T07:32:30.0436902Z","boot":"2026-10-24T07:26:11.5000000Z","driver":"32.0.15.8088","inf":"oem7.inf","code":43,"status":"Error","tdr4101":0,"width":null,"height":null}

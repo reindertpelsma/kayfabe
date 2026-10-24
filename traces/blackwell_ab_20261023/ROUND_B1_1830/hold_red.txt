@@ -1,0 +1,26 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST OBSERVATION; not PASS or attestation
+FF..
+======================================================================
+FAIL: test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect (test_saved_observation_hold.SavedObservationHold.test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_observation_hold.py", line 38, in test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect
+    self.assertTrue(self.should_hold(enable, "Connection closed by remote host"))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_actual_enable_code0_starts_hold_after_diagnostic_timeout (test_saved_observation_hold.SavedObservationHold.test_actual_enable_code0_starts_hold_after_diagnostic_timeout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_observation_hold.py", line 43, in test_actual_enable_code0_starts_hold_after_diagnostic_timeout
+    self.assertTrue(self.should_hold(enable))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.016s
+
+FAILED (failures=2)

@@ -1,0 +1,136 @@
+{
+  "utc": "2026-10-23T16:01:53.335066+00:00",
+  "saved_text_only": true,
+  "bench_text_listing": [
+    {
+      "name": "capc_native595_guest-ring-channel.log",
+      "bytes": 2269
+    },
+    {
+      "name": "capc_native595_concurrency.log",
+      "bytes": 4290
+    },
+    {
+      "name": "capc_native595_alias-two-vas.log",
+      "bytes": 2773
+    },
+    {
+      "name": "capc_native595_missing-page-fault.log",
+      "bytes": 2528
+    },
+    {
+      "name": "capc_native595_timer.log",
+      "bytes": 1798
+    },
+    {
+      "name": "capc_native595_engines.log",
+      "bytes": 4646
+    },
+    {
+      "name": "provision_serial.log",
+      "bytes": 84167
+    },
+    {
+      "name": "capc_native595_uvm-mean.log",
+      "bytes": 15421
+    },
+    {
+      "name": "capc_native595_dictated-ring.log",
+      "bytes": 1159
+    },
+    {
+      "name": "capc_native595_cross-client-leak.log",
+      "bytes": 0
+    },
+    {
+      "name": "capc_native595_pce-mask-probe.log",
+      "bytes": 909
+    },
+    {
+      "name": "capc_native595_alias-unmap-observe.log",
+      "bytes": 2707
+    },
+    {
+      "name": "capc_native595_guest-ram-pin.log",
+      "bytes": 864
+    },
+    {
+      "name": "capc_native595_bus-info-sweep.log",
+      "bytes": 7309
+    },
+    {
+      "name": "capc_native595_map-stress.log",
+      "bytes": 53466
+    },
+    {
+      "name": "capc_native595_bar1-crossing.log",
+      "bytes": 2754
+    },
+    {
+      "name": "capc_native595_executor-vas.log",
+      "bytes": 2061
+    },
+    {
+      "name": "capc_native595_ce-client.log",
+      "bytes": 12869
+    },
+    {
+      "name": "capc_native595_gpga-reserve-probe.log",
+      "bytes": 1712
+    },
+    {
+      "name": "capc_native595_uvm-invalidate.log",
+      "bytes": 1122
+    },
+    {
+      "name": "capc_native595_dictated-ring-negative.log",
+      "bytes": 754
+    },
+    {
+      "name": "capc_native595_doorbell-census.log",
+      "bytes": 1593
+    },
+    {
+      "name": "capc_native595_atomics-probe.log",
+      "bytes": 3755
+    },
+    {
+      "name": "capc_native595_map-propagation.log",
+      "bytes": 1649
+    },
+    {
+      "name": "capc_native595_rpc-mixed-allocs.log",
+      "bytes": 0
+    },
+    {
+      "name": "capc_native595_defer-liveness.log",
+      "bytes": 14327
+    },
+    {
+      "name": "capc_native595_concurrent-fuzz.log",
+      "bytes": 150142
+    },
+    {
+      "name": "capc_native595_late-map-race.log",
+      "bytes": 2683
+    },
+    {
+      "name": "capc_native595_blockage-coverage.log",
+      "bytes": 3218
+    },
+    {
+      "name": "capc_native595_gpu-info-sweep.log",
+      "bytes": 5853
+    },
+    {
+      "name": "capc_native595_ce-client-guest-ram.log",
+      "bytes": 1126
+    }
+  ],
+  "lease_id": 57388945,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "gpu_queries_after_fatal": 0,
+  "guest_boots_after_fatal": 0
+}

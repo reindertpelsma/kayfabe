@@ -1,0 +1,8 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+2026-10-24T04:05:36.054123+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T04:05:36.421176+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+2026-10-24T04:08:25.610331+0000 ubuntu kernel: x86/PAT: kf3-vamgr:158277 freeing invalid memtype [mem 0x2000640000-0x200083ffff]
+2026-10-24T04:08:25.610854+0000 ubuntu kernel: x86/PAT: kf3-vamgr:158277 freeing invalid memtype [mem 0x2000840000-0x2000a3ffff]
+2026-10-24T04:09:05.190144+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x00000014 intr 00200000
+2026-10-24T04:09:05.198147+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x1000000b intr 00200000

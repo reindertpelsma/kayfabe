@@ -1,0 +1,59 @@
+{
+  "correction_2026-10-24T10:15Z": "CORRECTION (BW5): the scanned key WAS stored in the guard receipt (expected_fingerprint). Scanned ed25519 = SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY, taken once at ~91 s after create, BEFORE console poll 1 (94.8 s, absent); the console published SHA256:rUh3N... only at poll 2 (114.9 s). The scan therefore preceded the publication by ~23 s. INFERRED: the scan reached sshd before cloud-init's host-key regeneration took effect.",
+  "scanned_fingerprint": "SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY",
+  "lease_id": 57498790,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "refusal": "console_pin.PinMismatch: authenticated console host pin differs from scanned ed25519 key",
+  "console_pin_states": [
+    {
+      "utc": "2026-10-24T10:03:54.484115+00:00",
+      "state": "absent",
+      "polls": 1
+    },
+    {
+      "utc": "2026-10-24T10:04:14.554986+00:00",
+      "state": "mismatch",
+      "polls": 2
+    }
+  ],
+  "console_polls": [
+    {
+      "utc": "2026-10-24T10:03:54.477554+00:00",
+      "poll": 0,
+      "console_sha256": "95a7a7dfa806ce9bc63771b8b9a08897caba1723c4ae28549aa153f4d75402d2",
+      "published_fingerprints": []
+    },
+    {
+      "utc": "2026-10-24T10:04:14.548582+00:00",
+      "poll": 1,
+      "console_sha256": "5825ef83822fcc5aca29e07fc2d6f256937eb0301ceb5c80d749d022b6e8feaf",
+      "published_fingerprints": [
+        {
+          "kind": "fingerprint_typed:DSA",
+          "fingerprint": "SHA256:1aSpSvOzJkyQY1p7pdRl2Vq+Z4xs0hosbtiTmMdlFKc"
+        },
+        {
+          "kind": "fingerprint_typed:ECDSA",
+          "fingerprint": "SHA256:6Jvvbu4hpnKL6EFH9TtEhygdGShBoE6/iaH/kbppVDE"
+        },
+        {
+          "kind": "fingerprint_typed:ED25519",
+          "fingerprint": "SHA256:rUh3N/5zrwfQUf1uQI1B9QsJYcHDwnBnvI4GAgqpCfc"
+        },
+        {
+          "kind": "fingerprint_typed:RSA",
+          "fingerprint": "SHA256:BJzKd0Vju8vjQ8yczWHpg2ijfrHH00szDMnBwe7pUVw"
+        },
+        {
+          "kind": "ed25519_key",
+          "fingerprint": "SHA256:rUh3N/5zrwfQUf1uQI1B9QsJYcHDwnBnvI4GAgqpCfc"
+        }
+      ]
+    }
+  ],
+  "console_context": "cloud-init line 'ssh-keygen: generating new host keys: RSA DSA ECDSA ED25519' precedes the published ED25519 fingerprint (10:03:53Z console time)",
+  "scanned_key": "SUPERSEDED by the correction above: stored as expected_fingerprint in the guard receipt",
+  "action": "exact-id destroy by start_stretch.py immediately; no SSH login, no upload, no work",
+  "raw_console": "kept private in the operator workspace, not in git"
+}

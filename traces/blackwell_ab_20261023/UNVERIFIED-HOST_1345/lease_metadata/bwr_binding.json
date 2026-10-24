@@ -1,0 +1,7 @@
+{
+  "Name": "NVIDIA GeForce RTX 5060 Ti",
+  "DriverVersion": "32.0.15.8088",
+  "ConfigManagerErrorCode": 22,
+  "PNPDeviceID": "PCI\\VEN_10DE&DEV_2D04&SUBSYS_1440196E&REV_A1\\3&11583659&0&28",
+  "host_verification": "UNVERIFIED-HOST"
+}

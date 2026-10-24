@@ -1,0 +1,9 @@
+stop_wrong killers=8
+cap_wrong killers=3
+restore_removed killers=2
+price_cap_removed killers=2
+plan_price_guard_removed killers=2
+readiness_default killers=2
+fields_missing killers=2
+most_cores_removed killers=2
+default_floor_removed killers=1

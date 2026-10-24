@@ -1,0 +1,2 @@
+UNVERIFIED-HOST
+{"STOP": "Xid channel is outside the observed pair class", "phase": ["on_observe_b", 154806], "owned_pgid": 93943, "detached_qemu_stopped": true, "observations": {"on_observe_b": []}}

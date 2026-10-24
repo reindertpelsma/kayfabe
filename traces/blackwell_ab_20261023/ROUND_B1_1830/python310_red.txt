@@ -1,0 +1,52 @@
+UNVERIFIED-HOST
+OBSERVATION; not hardware PASS or attestation
+...EE....................................
+======================================================================
+ERROR: test_kernel_context_accepts_compact_offset_with_python310_iso_parser (test_saved_xid32_observation.SavedPairObservation.test_kernel_context_accepts_compact_offset_with_python310_iso_parser)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 90, in test_kernel_context_accepts_compact_offset_with_python310_iso_parser
+    item = O.context(record, [{"line": record["line"]}], record["line"])
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/saved_xid32_observation.py", line 75, in context
+    stamp = aware(record["timestamp_utc"])
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1247, in _execute_mock_call
+    result = effect(*args, **kwargs)
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 81, in python310_iso
+    return old.aware(value)
+           ^^^^^^^^^
+AttributeError: module 'test_windows_observation' has no attribute 'aware'
+
+======================================================================
+ERROR: test_kernel_record_accepts_compact_offset_with_python310_iso_parser (test_saved_xid32_observation.SavedPairObservation.test_kernel_record_accepts_compact_offset_with_python310_iso_parser)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 85, in test_kernel_record_accepts_compact_offset_with_python310_iso_parser
+    self.assertEqual(len(self.judge()), 2)
+                         ~~~~~~~~~~^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 42, in judge
+    return O.judge_observation(pair() if lines is None else lines, **args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/saved_xid32_observation.py", line 54, in judge_observation
+    stamp = aware(line.split()[0])
+  File "/usr/lib/python3.14/unittest/mock.py", line 1176, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1180, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1247, in _execute_mock_call
+    result = effect(*args, **kwargs)
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_observation.py", line 80, in python310_iso
+    raise ValueError("Python3.10 fromisoformat rejects compact offset")
+ValueError: Python3.10 fromisoformat rejects compact offset
+
+----------------------------------------------------------------------
+Ran 41 tests in 0.006s
+
+FAILED (errors=2)

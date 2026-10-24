@@ -1,0 +1,12 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "existing_debt": 3141,
+  "new": 814,
+  "resolved": 13,
+  "identical_inherited_sites": true,
+  "bw3_new": 0,
+  "checker_and_debt_unchanged": true,
+  "gate_passed": false,
+  "new_heads_pushed": false,
+  "live_work_stopped_by_claims": false
+}

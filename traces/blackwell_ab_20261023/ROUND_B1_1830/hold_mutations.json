@@ -1,0 +1,24 @@
+{
+  "mutants": [
+    {
+      "mutant": "enable_observation_lost",
+      "test_killers": 2,
+      "killers": [
+        "test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect (test_saved_observation_hold.SavedObservationHold.test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect)",
+        "test_actual_enable_code0_starts_hold_after_diagnostic_timeout (test_saved_observation_hold.SavedObservationHold.test_actual_enable_code0_starts_hold_after_diagnostic_timeout)"
+      ]
+    },
+    {
+      "mutant": "nonzero_status_admitted",
+      "test_killers": 3,
+      "killers": [
+        "test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect (test_saved_observation_hold.SavedObservationHold.test_actual_enable_code0_starts_hold_after_diagnostic_ssh_disconnect)",
+        "test_actual_enable_code0_starts_hold_after_diagnostic_timeout (test_saved_observation_hold.SavedObservationHold.test_actual_enable_code0_starts_hold_after_diagnostic_timeout)",
+        "test_nonzero_device_status_never_starts_hold (test_saved_observation_hold.SavedObservationHold.test_nonzero_device_status_never_starts_hold)"
+      ]
+    }
+  ],
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-23T07:46:07.800944+00:00",
+  "id": 57340681,
+  "cause": "checked transport uses s4-own; new ssh config omitted that alias",
+  "repair": "same Host stanza gains s4-own alias, retaining strict key pin and exact own endpoint",
+  "chunk_started": false,
+  "media_guard_changed": false,
+  "deadline_reset": false,
+  "original_deadline_utc": "2026-10-23T08:05:22.299055+00:00"
+}

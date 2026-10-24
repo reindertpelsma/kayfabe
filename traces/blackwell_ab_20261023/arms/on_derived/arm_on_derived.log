@@ -1,0 +1,12 @@
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_derived source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b profile=on 2026-10-23T06:06:47+00:00
+[2026-10-23T06:06:47Z] detached: tag=on_derived, log logs/on_derived_run.log (stdout logs/on_derived_run.out)
+READINESS_CALIBRATED {"box": 57324106, "policy": {"banner_query": 100, "factor": 10, "first_query": 100, "handshake": 202, "observer_total": 360, "readiness_total": 900, "ssh_stage": 600, "steady_query": 25, "verify_stage": 240}, "probe_seconds": 56.54592699500017, "readiness_end": 4517.553465919}
+{"pid": 115412, "exe": "/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64", "sha256": "9aff3cc4688e7c417ea1100491da34d91f075e3f365cd48c1fd31efd63475424", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+INIT_OBSERVER_READY 2026-10-23T06:10:08+00:00
+PRE_CLEANUP_START rc=255 2026-10-23T06:11:10+00:00
+{"rpcs": 276, "unload_ordinals": [], "teardown_start_ordinal": null, "last_nonfree_before_teardown": []}
+OWN_VM_ALREADY_EXITED
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=on_derived rc=255 2026-10-23T06:11:46+00:00

@@ -1,0 +1,68 @@
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-23T02:55:15+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+From https://github.com/reindertpelsma/kayfabe
+ * branch                9ff51a6e9432ed4d5f51636c7606360728de5b6c -> FETCH_HEAD
+Preparing worktree (detached HEAD 9ff51a6e9)
+Updating files:  94% (20568/21690)
+Updating files:  95% (20606/21690)
+Updating files:  96% (20823/21690)
+Updating files:  97% (21040/21690)
+Updating files:  98% (21257/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at 9ff51a6e9 feat(bench): retry bounded pre-SSH provider failures on another machine
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+VERDICT=SOUND
+PROBE_START pid=78802 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+AUDIT_TIER2_GROUPS_ALREADY_COVERED
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-23T03:04:51+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                618f0431815d037d4226b642ae37e76967353e90 -> FETCH_HEAD
+Preparing worktree (detached HEAD 618f04318)
+Updating files:  95% (20857/21764)
+Updating files:  96% (20894/21764)
+Updating files:  97% (21112/21764)
+Updating files:  98% (21329/21764)
+Updating files:  99% (21547/21764)
+Updating files: 100% (21764/21764)
+Updating files: 100% (21764/21764), done.
+HEAD is now at 618f04318 fix(bench): register native completion listeners before GPU submission
+GR_TIER_VERDICT=PASS
+S4_KIT_PRESENT_AUDIT_SUBTRACTED
+PRECOMP_RUNTIME_BEGIN CAP_SYS_ADMIN=cleared_by_helper 2026-10-23T03:05:42+00:00
+PRECOMP_RUNTIME_EXIT rc=2 2026-10-23T03:05:42+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                a6456796e4af84d3b0c8bcb3558b63c2e85df42e -> FETCH_HEAD
+Preparing worktree (detached HEAD a6456796e)
+Updating files:  98% (21421/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at a6456796e chore(bench): use repository license for PRECOMP sweep tool
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G   33G  142G  19% /
+PRECOMP_TIER3_BEGIN 2026-10-23T03:05:49+00:00
+PRECOMP_TIER3_EXIT rc=0 2026-10-23T03:05:49+00:00
+SWEEP2_BIND_READY 2026-10-23T03:17:10+00:00
+{"cell": "on_precision", "utc": "2026-10-23T03:17:10.601059+00:00", "latest_start_utc": "2026-10-23T03:59:02.956202+00:00", "budget_cutoff_minutes": 98, "may_start": true}
+VALIDATION_ARM_BEGIN on_precision 2026-10-23T03:17:10+00:00
+VALIDATION_ARM_RESULT run=on_precision rc=255 2026-10-23T03:18:45+00:00
+VALIDATION_ARM_END on_precision 2026-10-23T03:19:55+00:00
+Traceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+  File "/usr/lib/python3.10/pathlib.py", line 1134, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+  File "/usr/lib/python3.10/pathlib.py", line 1119, in open
+    return self._accessor.open(self, mode, buffering, encoding, errors,
+FileNotFoundError: [Errno 2] No such file or directory: '/root/prov/arms/on_precision/early_code0.txt'
+OPTIONAL_B1_UNRUN_NO_ACTUAL_CODE0
+VALIDATION_FINAL_DONE 2026-10-23T03:19:55+00:00
+SWEEP_PROVISION_EXIT rc=0 2026-10-23T03:19:55+00:00

@@ -1,0 +1,9 @@
+7
+7
+CPU(s):                               7
+On-line CPU(s) list:                  0-6
+Model name:                           AMD Ryzen 7 5800X 8-Core Processor
+Thread(s) per core:                   1
+Core(s) per socket:                   1
+Socket(s):                            7
+

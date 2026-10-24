@@ -1,0 +1,42 @@
+test_errors_reset_after_success (test_market_watch.Cadence.test_errors_reset_after_success) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpsm8pm37y/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_exit_0_on_match_writes_match (test_market_watch.Cadence.test_exit_0_on_match_writes_match) ... MATCH {"id": 5, "machine_id": 6, "dph_total": 0.3, "candidate_die": "GB206", "gpu_name": null, "geolocation": "Quebec, CA", "verification": null, "cpu_cores_effective": null, "utc": "2026-10-23T22:58:44.987196+00:00"}
+/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpzwcxc0c5/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_exit_3_after_8h (test_market_watch.Cadence.test_exit_3_after_8h) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpkdq34vy5/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_exit_4_on_three_consecutive_errors (test_market_watch.Cadence.test_exit_4_on_three_consecutive_errors) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmptjs7_u3u/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_interval_bounds (test_market_watch.Cadence.test_interval_bounds) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpnt2avqy8/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_one_summary_line_per_poll (test_market_watch.Cadence.test_one_summary_line_per_poll) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpan6w3oj0/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_only_own_output_dir_written (test_market_watch.Cadence.test_only_own_output_dir_written) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py:223: ResourceWarning: unclosed file <_io.TextIOWrapper name='/tmp/tmpfwvo8nk4/market_watch.log' mode='a' encoding='UTF-8'>
+  rc = M.watch(
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_each_offer_accept_reject_matches_operator (test_market_watch.FilterParity.test_each_offer_accept_reject_matches_operator) ... ok
+test_low_credit_parity (test_market_watch.FilterParity.test_low_credit_parity) ... ok
+test_rejection_counts_add_up (test_market_watch.FilterParity.test_rejection_counts_add_up) ... ok
+test_selected_offer_matches_operator_on_every_snapshot (test_market_watch.FilterParity.test_selected_offer_matches_operator_on_every_snapshot) ... ok
+test_queries_are_the_operator_search_strings (test_market_watch.Queries.test_queries_are_the_operator_search_strings) ... ok
+test_no_rent_or_destroy_names_reachable (test_market_watch.ReadOnly.test_no_rent_or_destroy_names_reachable) ... ok
+test_readonly_api_allows_search_and_user (test_market_watch.ReadOnly.test_readonly_api_allows_search_and_user) ... ok
+test_readonly_api_refuses_mutations_before_subprocess (test_market_watch.ReadOnly.test_readonly_api_refuses_mutations_before_subprocess) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 12.516s
+
+OK

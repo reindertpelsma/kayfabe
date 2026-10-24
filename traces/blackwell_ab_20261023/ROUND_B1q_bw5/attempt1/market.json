@@ -1,0 +1,24 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "utc": "2026-10-24T10:44:54.653727+00:00",
+  "credit_usd": 25.074055030359773,
+  "offers": [
+    {
+      "id": 54571906,
+      "machine_id": 30498,
+      "gpu_name": "RTX 5070",
+      "candidate_die": "GB205",
+      "verification": "verified",
+      "dph_total": 0.4320555555555556,
+      "reliability": 0.9984393,
+      "inet_down": 1453.9,
+      "vms_enabled": true,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 128899,
+      "disk_space": 520.75,
+      "is_vm_deverified": false,
+      "geolocation": "Quebec, CA"
+    }
+  ],
+  "authority": "controller17:00 one-lease OBSERVATION, no denied countries or bad machines"
+}

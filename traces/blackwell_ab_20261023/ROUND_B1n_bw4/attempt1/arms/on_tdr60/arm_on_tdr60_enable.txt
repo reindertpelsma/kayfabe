@@ -1,0 +1,12 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-24T07:15:58.8361476Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5070","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 5070","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-24T07:16:47.5371110Z; device status is verdict, not this command rc

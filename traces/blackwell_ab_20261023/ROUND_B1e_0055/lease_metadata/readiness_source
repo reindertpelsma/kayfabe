@@ -1,0 +1,4 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+8-core deviation cpu_floor_override=8 cpu_cores_effective=8.0
+9ff51a6e9432ed4d5f51636c7606360728de5b6c

@@ -1,0 +1,24 @@
+{
+  "round": "REF (operator BW4: Claude)",
+  "lease": {
+    "id": 57486060,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070 (GB205, same machine as B1n)",
+    "geo": "Quebec, CA",
+    "observed_dph": 0.4723,
+    "created_utc": "2026-10-24T07:57:10.380418+00:00",
+    "absence_verified_utc": "2026-10-24T08:38:40.984244+00:00",
+    "runtime_cost_estimate_usd": 0.3268,
+    "credit_after_observed_usd": 25.1103
+  },
+  "template": "Windows 11 KVM on Vast.ai, hash 183b10af7fd788d08aca02e31811d70d (onstart == windows-on-vast install.sh 93b65b3)",
+  "windows_setup_complete_utc": "2026-10-24T08:23:48Z",
+  "driver": "32.0.15.8088 (580.88)",
+  "bar1_total": "256 MiB",
+  "hold": "10/10 samples Code 0, 4101=0, nvlddmkm events=0 (08:26:27Z-08:35:29Z)",
+  "disable_enable_x3": "3/3 disabled then Code 0 within 3 s each (08:36:04Z-08:36:35Z)",
+  "live_dumps": "none (LiveKernelReports empty, no Minidump dir, no .dmp in WER folders): no 0x193/0x1A8/0x1B8/0x141 natively",
+  "note": "Windows Update logged an NVIDIA Display Driver Update 32.0.16.1088 install during setup; the bound driver measured afterwards is 32.0.15.8088",
+  "verdict": "native PASS for hold and reload"
+}

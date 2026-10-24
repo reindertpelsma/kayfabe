@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_market_watch (unittest.loader._FailedTest.test_market_watch)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_market_watch
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/rehearsal/test_market_watch.py", line 29, in <module>
+    import market_watch as M  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'market_watch'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

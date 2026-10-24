@@ -1,0 +1,9 @@
+{
+  "pid": 93125,
+  "source": "owner11:05 scoped observation; frozen native/phase guard remains9ff51a6e9",
+  "sha256": "47825c705178142dd90ecdc0fb3824fee22c54298cb4f2e2b8c6a29a731341da",
+  "state": "READY before bind and all arms",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

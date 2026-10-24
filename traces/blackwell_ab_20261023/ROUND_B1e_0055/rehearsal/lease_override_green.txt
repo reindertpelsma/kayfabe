@@ -1,0 +1,20 @@
+test_default_floor_stays_16 (test_lease_override.CpuFloor.test_default_floor_stays_16) ... ok
+test_lease_constants_name_the_grant (test_lease_override.CpuFloor.test_lease_constants_name_the_grant) ... ok
+test_only_the_granted_override_value_is_accepted (test_lease_override.CpuFloor.test_only_the_granted_override_value_is_accepted) ... ok
+test_override_accepts_exactly_8_and_rejects_7 (test_lease_override.CpuFloor.test_override_accepts_exactly_8_and_rejects_7) ... ok
+test_deviation_fields (test_lease_override.Labels.test_deviation_fields) ... ok
+test_label_evidence_records_deviation (test_lease_override.Labels.test_label_evidence_records_deviation) ... ok
+test_cost_stop_still_binds_under_override (test_lease_override.LeaseCeiling.test_cost_stop_still_binds_under_override) ... ok
+test_default_plan_keeps_150_minutes_and_module_constant (test_lease_override.LeaseCeiling.test_default_plan_keeps_150_minutes_and_module_constant) ... ok
+test_override_allows_3h_within_stop_and_restores_default (test_lease_override.LeaseCeiling.test_override_allows_3h_within_stop_and_restores_default) ... ok
+test_override_ceiling_value_is_exact (test_lease_override.LeaseCeiling.test_override_ceiling_value_is_exact) ... ok
+test_timer_ceiling (test_lease_override.LeaseCeiling.test_timer_ceiling) ... ok
+test_operator_uses_override (test_lease_override.OperatorWiring.test_operator_uses_override) ... ok
+test_side_timers_allow_exactly_3h (test_lease_override.OperatorWiring.test_side_timers_allow_exactly_3h) ... ok
+test_pin_absent_means_nothing_to_rent (test_lease_override.PinnedOffer.test_pin_absent_means_nothing_to_rent) ... ok
+test_pin_keeps_only_the_granted_offer (test_lease_override.PinnedOffer.test_pin_keeps_only_the_granted_offer) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.006s
+
+OK

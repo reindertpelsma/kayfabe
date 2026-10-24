@@ -1,0 +1,11 @@
+{
+  "id": 56223809,
+  "machine_id": 150304,
+  "dph_total": 0.6480555555555555,
+  "candidate_die": "GB202",
+  "gpu_name": "RTX PRO 5000",
+  "geolocation": "Australia, AU",
+  "verification": "verified",
+  "cpu_cores_effective": 32.0,
+  "utc": "2026-10-24T02:46:20.630496+00:00"
+}

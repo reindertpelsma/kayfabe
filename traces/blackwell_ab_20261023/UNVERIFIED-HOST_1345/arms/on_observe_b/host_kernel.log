@@ -1,0 +1,8 @@
+UNVERIFIED-HOST
+2026-10-23T12:50:28.461283+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-23T12:50:28.860273+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+2026-10-23T12:53:02.618614+0000 ubuntu kernel: x86/PAT: kf3-vamgr:154857 freeing invalid memtype [mem 0x3800640000-0x380083ffff]
+2026-10-23T12:53:02.618927+0000 ubuntu kernel: x86/PAT: kf3-vamgr:154857 freeing invalid memtype [mem 0x3800840000-0x3800a3ffff]
+2026-10-23T12:53:02.619228+0000 ubuntu kernel: x86/PAT: kf3-vamgr:154857 freeing invalid memtype [mem 0x3800a40000-0x3800c3ffff]
+2026-10-23T12:53:25.234267+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=154806, name=qemu-system-x86, channel 0x00000014 intr 00200000
+2026-10-23T12:53:25.249250+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=154806, name=qemu-system-x86, channel 0x1000000b intr 00200000

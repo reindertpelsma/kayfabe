@@ -1,0 +1,11 @@
+floor_accepts_7 killers=2
+strict_greater killers=3
+default_floor_8 killers=2
+ceiling_not_restored killers=2
+ceiling_4h killers=3
+pin_removed killers=2
+label_dropped killers=2
+ops_default_floor killers=2
+ops_pin_dropped killers=2
+ops_timer_150 killers=2
+budget_watch_170 killers=2

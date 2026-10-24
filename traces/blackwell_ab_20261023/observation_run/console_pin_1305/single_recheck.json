@@ -1,0 +1,27 @@
+{
+  "utc": "2026-10-23T11:07:30.323023+00:00",
+  "queries": [
+    "RTX_5070",
+    "RTX_5060_Ti",
+    "RTX_5060",
+    "RTX_5070_Ti"
+  ],
+  "market_queries_per_sku": 1,
+  "gb202_queries": 0,
+  "offers": [
+    {
+      "id": 57143771,
+      "machine_id": 141173,
+      "gpu_name": "RTX 5060 Ti",
+      "candidate_die": "GB206",
+      "verification": "deverified",
+      "dph_total": 0.3738518518518519,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 257921,
+      "reliability": 0.997932,
+      "inet_down": 1634.6,
+      "disk_space": 888.5
+    }
+  ],
+  "original_cache_sha256": "59c9aa4cfee671810b8bb92148f83003c3f68e5a7cc671613f5ea3fff6abc868"
+}

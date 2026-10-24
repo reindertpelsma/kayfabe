@@ -1,0 +1,2 @@
+UNVERIFIED-HOST
+427d1272559cc6ec2e39c8653ae152c1b087c4a78740f3da8f16f0f0540f1c1e  /workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2

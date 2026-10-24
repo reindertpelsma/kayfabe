@@ -7,3 +7,5 @@ CODE READ from public ogkm595.91.07 commit9f087a6d4e86d85acc0ce1d354d6276fe5047b
 INFERRED from the source, not a GSP trace: this refusal is consistent with CPU-RM pre-validation before forwarding to GSP. The exported generic command is NON_PRIVILEGED, but that does not grant access to the named display offsets. No claim that the GSP itself rejected it. Other dies/driver builds remain unmeasured for this runtime permission; native caps captured earlier do not answer this access question. Physical facts remain unavailable through this tested T2 route;14 unresolved virtual fields and FVLUT semantics are not filled with capture values.
 
 MEASURED on lease 57273215, revision `6e3fd3fd6`, 2026-10-22: gates9/9,gate10PASS,USERbirths12/12. Full native30/30/CUDA/GR baseline and Windows580.88 remain pending at this H0 receipt.
+
+Owner tier verdict, 2026-10-22, from lease57273215: tier2 does not provide the PRECOMP page on this driver; physical values require tier3/privileged measurement under the constant strategy, while public derivation covers the rest. Existing captures remain evidence, not words to paste. No new tier3 measurement is authorized or needed for this retry.

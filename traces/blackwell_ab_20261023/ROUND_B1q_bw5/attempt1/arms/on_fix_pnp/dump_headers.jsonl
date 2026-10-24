@@ -1,0 +1,1 @@
+{"bugcheck": "0x193", "parameters": ["0x815", "0x2", "0xffff9b8000fcd080", "0x0"], "system_time_filetime": "134373169564340215", "system_time_utc": "2026-10-24T12:02:36.434021+00:00", "file": "C:/Windows/LiveKernelReports/WATCHDOG-20261024-1202.dmp", "bytes": 1101127680, "host_verification": "UNVERIFIED-HOST", "experiment_mode": "OBSERVATION", "attestation": false}

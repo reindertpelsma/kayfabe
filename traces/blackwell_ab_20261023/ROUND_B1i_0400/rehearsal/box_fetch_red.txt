@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_box_fetch (unittest.loader._FailedTest.test_box_fetch)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_box_fetch
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py", line 25, in <module>
+    import box_fetch as BF  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'box_fetch'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

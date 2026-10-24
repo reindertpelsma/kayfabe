@@ -1,0 +1,18 @@
+UPLOAD_STAGE lease 57429076 die GB206 donor GB206
+Fri Oct 23 21:58:12 UTC 2026
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+KVM_DISK_PASS
+
+BUNDLE_UPLOADED_NO_CONTROLLER
+MEDIA_PIN_AND_LAUNCH_STAGE
+CHECKED8_STARTED 580.88-desktop-win10-win11-64bit-international-dch-whql.exe 2064114
+CHECKED8_STARTED virtio-win-0.1.302.iso 2064199
+CHECKED8_STARTED win11_ltsc_2024_eval_x64_en-us.iso 2064264
+CHECKED8_PIN_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe
+CHECKED8_PIN_OK virtio-win-0.1.302.iso
+CHECKED8_PIN_OK win11_ltsc_2024_eval_x64_en-us.iso
+ALL4_REMOTE_PINNED
+CONTROLLER_PID=3306
+
+CONTROLLER_STARTED lease 57429076

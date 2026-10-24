@@ -1,0 +1,1 @@
+7fea392c840a5da2b56da1e4a5a681c1140a23de0b5ee7fba0030ea8d7ca074f  /workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2

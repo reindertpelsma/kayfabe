@@ -1,0 +1,19 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+COLLECT_START run=on_relay_off (standard VGA, no kf3 device) budget=600s 2026-10-24T07:04:15+00:00
+[2026-10-24T07:04:15Z] detached: tag=on_relay_off_collect, log logs/on_relay_off_collect_run.log (stdout logs/on_relay_off_collect_run.out)
+KF_SSH_UP
+CLOCK host=2026-10-24T07:06:12.528586185 guest=2026-10-24T07:06:11.9998338Z
+COLLECT_DONE
+COLLECT_METADATA_READY 2026-10-24T07:06:34+00:00
+WER_TIMES_DONE
+HDR_DONE
+scp: C:/Windows/Minidump: No such file or directory
+MINIDUMP_COPY_FAILED
+CAPTURE_GUEST_DONE bytes=1130757689 UTC=2026-10-24T07:07:45.2321244Z
+COLLECT_GUEST_SECONDS=289
+COLLECT_ALL_DONE 2026-10-24T07:09:04+00:00
+[2026-10-24T07:09:04Z] stopping kfwin (pid 193009)
+[2026-10-24T07:09:28Z] stopped
+CAPTURE_PACKED run=on_relay_off files=171 bytes=1136526773 guest_complete=True mismatches=0
+COLLECT_EXIT run=on_relay_off rc=0 2026-10-24T07:09:29+00:00

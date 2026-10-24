@@ -1,0 +1,85 @@
+test_40_second_window_includes_both_boundaries (test_channel_projection.Channels.test_40_second_window_includes_both_boundaries) ... FAIL
+test_birth_before_its_allocation_trace_can_still_join_exact_handles (test_channel_projection.Channels.test_birth_before_its_allocation_trace_can_still_join_exact_handles) ... FAIL
+test_birth_joins_exact_guest_allocation_and_engine_children (test_channel_projection.Channels.test_birth_joins_exact_guest_allocation_and_engine_children) ... FAIL
+test_failed_allocations_do_not_establish_a_live_channel_class (test_channel_projection.Channels.test_failed_allocations_do_not_establish_a_live_channel_class) ... FAIL
+test_high_pair_candidate_preserves_guest_identity_and_opaque_token (test_channel_projection.Channels.test_high_pair_candidate_preserves_guest_identity_and_opaque_token) ... FAIL
+test_missing_target_stays_unresolved (test_channel_projection.Channels.test_missing_target_stays_unresolved) ... FAIL
+test_private_reply_bytes_are_never_projected (test_channel_projection.Channels.test_private_reply_bytes_are_never_projected) ... FAIL
+test_reused_native_id_keeps_all_candidates (test_channel_projection.Channels.test_reused_native_id_keeps_all_candidates) ... FAIL
+
+======================================================================
+FAIL: test_40_second_window_includes_both_boundaries (test_channel_projection.Channels.test_40_second_window_includes_both_boundaries)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_birth_before_its_allocation_trace_can_still_join_exact_handles (test_channel_projection.Channels.test_birth_before_its_allocation_trace_can_still_join_exact_handles)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_birth_joins_exact_guest_allocation_and_engine_children (test_channel_projection.Channels.test_birth_joins_exact_guest_allocation_and_engine_children)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_failed_allocations_do_not_establish_a_live_channel_class (test_channel_projection.Channels.test_failed_allocations_do_not_establish_a_live_channel_class)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_high_pair_candidate_preserves_guest_identity_and_opaque_token (test_channel_projection.Channels.test_high_pair_candidate_preserves_guest_identity_and_opaque_token)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_missing_target_stays_unresolved (test_channel_projection.Channels.test_missing_target_stays_unresolved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_private_reply_bytes_are_never_projected (test_channel_projection.Channels.test_private_reply_bytes_are_never_projected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+======================================================================
+FAIL: test_reused_native_id_keeps_all_candidates (test_channel_projection.Channels.test_reused_native_id_keeps_all_candidates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_channel_projection.py", line 18, in setUp
+    self.assertIsNotNone(C, "public channel projection missing")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : public channel projection missing
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.002s
+
+FAILED (failures=8)

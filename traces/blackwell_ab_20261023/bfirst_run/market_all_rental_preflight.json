@@ -1,0 +1,85 @@
+{
+  "utc": "2026-10-23T07:43:02.684707+00:00",
+  "credit_usd": 30.546305473260873,
+  "offers": [
+    {
+      "id": 54571906,
+      "machine_id": 30498,
+      "gpu_name": "RTX 5070",
+      "candidate_die": "GB205",
+      "verification": "verified",
+      "dph_total": 0.41338888888888886,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 128899,
+      "reliability": 0.998426,
+      "inet_down": 1502.8,
+      "disk_space": 362.5
+    },
+    {
+      "id": 43994882,
+      "machine_id": 69146,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "deverified",
+      "dph_total": 0.38805555555555554,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 64468,
+      "reliability": 0.9960252,
+      "inet_down": 1374.8,
+      "disk_space": 331.125
+    },
+    {
+      "id": 57254352,
+      "machine_id": 41012,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "deverified",
+      "dph_total": 0.5347222222222222,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 63400,
+      "reliability": 0.9910998,
+      "inet_down": 940.1,
+      "disk_space": 1462.0
+    },
+    {
+      "id": 48798321,
+      "machine_id": 38226,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "verified",
+      "dph_total": 0.5616666666666668,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 63381,
+      "reliability": 0.9733864,
+      "inet_down": 598.4,
+      "disk_space": 1676.3
+    },
+    {
+      "id": 55429765,
+      "machine_id": 152912,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "unverified",
+      "dph_total": 0.6680555555555555,
+      "cpu_cores_effective": 24.0,
+      "cpu_ram": 64473,
+      "reliability": 0.9893835,
+      "inet_down": 949.1,
+      "disk_space": 373.125
+    },
+    {
+      "id": 47802004,
+      "machine_id": 141132,
+      "gpu_name": "RTX 5090",
+      "candidate_die": "GB202",
+      "verification": "verified",
+      "dph_total": 1.2018518518518517,
+      "cpu_cores_effective": 56.0,
+      "cpu_ram": 128659,
+      "reliability": 0.9805231,
+      "inet_down": 436.8,
+      "disk_space": 789.0
+    }
+  ],
+  "authority": "owner22:50 all verified RTX50 series; other requirements unchanged"
+}

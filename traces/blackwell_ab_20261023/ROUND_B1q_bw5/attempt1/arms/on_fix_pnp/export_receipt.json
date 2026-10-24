@@ -1,0 +1,352 @@
+{
+  "arm_on_fix_pnp_start_receipt.json": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_start_receipt.json",
+    "original_bytes": 584,
+    "original_sha256": "41cb79aa689f8878f312a48630ce260b78fbffaa33bfafab55900d9eb83c5aa7",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "c52bfba6e5a0260118d44677b22c1218a96843d26afb35cd09771955338c7a72",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_process_receipt.json": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_process_receipt.json",
+    "original_bytes": 1240,
+    "original_sha256": "18ca64c94f009d8454a3c9de86a0d9fd69a79449a1bcab829e481da4f35e9bcc",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "fbf80b7969bbc21d5f5862dd690fc26575016476081015557e9e33e58c96dcc5",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_pre_enable.txt",
+    "original_bytes": 422,
+    "original_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "a0d47d3efeb218989ad10686e4455b8010279e77b63a2b7acc31f5b5addfad0c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_enable.txt": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_enable.txt",
+    "original_bytes": 1252,
+    "original_sha256": "c69c648124b21dc31d1a7afc11a4c4dac40e921aac05ce9c32898bfa1226640c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "73caafb7d9235c9b3ecbdfac2c9e7e009012bfb38eb736e50fb935274c293b25",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_diag.txt": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_diag.txt",
+    "original_bytes": 194,
+    "original_sha256": "ad7298fd0278c20e9b283a6215ff19e2b3897406c074a333e97123d9c59e872c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "415f6d5e25a37586129ed2013a330edbc64a694c692ba67d9a2a59ca9347571b",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_diag_after.txt": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_diag_after.txt",
+    "original_bytes": 194,
+    "original_sha256": "4ea23beece4495741a0edc6f1e5a2ee926fb7ecb5d6aaf36858b7964874c930c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "57480431d4cec0cb3202dd39b8b6e41d0c3c2dca1b57fab5bf4fb9337dff3880",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_cleanup_started.txt": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_cleanup_started.txt",
+    "original_bytes": 26,
+    "original_sha256": "de75801c9aaa413578ad7c8a16fe11975a76f5bdb6a2bca4bd3f908511783965",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d3d32a4d63d389142200b5000f30a1e88791eef14a8af9712b0a8ceadf073ad9",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp_accepted_start.json": {
+    "rental_path": "/root/prov/arm_on_fix_pnp_accepted_start.json",
+    "original_bytes": 1327,
+    "original_sha256": "dbeb7bb525217221d8dc9f8b537a9cc2b602d6b7346d4804b3ef189c31a5e49a",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "93798f982bde1151fdcf81646918a2a64a361923a72c5cf06cd950a689918dfd",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "arm_on_fix_pnp.log": {
+    "rental_path": "/root/prov/arm_on_fix_pnp.log",
+    "original_bytes": 3754,
+    "original_sha256": "95d4df4d377e610b7ef1e7c01f0a9d5d8c8ae3ea319dc8a9adc611892c6ffe36",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "bc5d798952351db0d099946bfd7dcaffc5d255342b284a6ec51f609f496a54b2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "collect_on_fix_pnp.txt": {
+    "rental_path": "/root/prov/collect_on_fix_pnp.txt",
+    "original_bytes": 8739,
+    "original_sha256": "28b6d5ecba9cc89fceb51f52492c68598424612773b5c9d4886874f6faa143de",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "c947fdfef8b3b0cbf94025921f72fdc862844a313d7706f8b8814748bc4c04a3",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "collect_on_fix_pnp.log": {
+    "rental_path": "/root/prov/collect_on_fix_pnp.log",
+    "original_bytes": 850,
+    "original_sha256": "6543f5e20a92d8016f1788f8562d06eb9366e8404d3e1ce6970580d2b8d43e43",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "20889bc3cadd1a443f625002ecb47b3fdc152b0b526d5118658fc86b54cab3e8",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/api.tsv",
+    "original_bytes": 229664,
+    "original_sha256": "beab010bbfdcc052738576105185bcd83b5c584f796478e3bc40cc2577a786be",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "b63b6e4c8dd6b0bf9ceec296104e441fde15f97ff288d69a0df7af61451cf813",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/allocations.jsonl",
+    "original_bytes": 183399,
+    "original_sha256": "7bf7b320ba5709e1bbda5b963725d52f3db31b6286310abda9f8fc58de12acee",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "13ee8143736fa8499593b5c862695e55870b2977d90366849fe7eb9373af4d41",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/allocations.receipt.json",
+    "original_bytes": 490,
+    "original_sha256": "6ab39fbd45f9555e1224464274cc7e5cb663f0479d4337af7379ed71efb69918",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "e9a37c3c18332e81147023140e432a9a27755773439c2ba822ca147a6d01f278",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/summary.json",
+    "original_bytes": 58753,
+    "original_sha256": "77451fc874c98ed40a358327b6b8f758b117e1f3b775376e487446ac18f63891",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "875d7883d441b1999ae5ecc2520bacedc22837014afc802e48bc1ad95a551faa",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/abort_context.txt",
+    "original_bytes": 36736,
+    "original_sha256": "a24d2b3bf78fae2a588d648994e721e21c2b7bd46d8c592e44ebdb6fe04061e6",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "083abc657be5ed15f1293680ad307589529cc76d471d9d409bf26c3197f1acf2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/kf_line_census.txt",
+    "original_bytes": 7591,
+    "original_sha256": "ed0ac0fd17de7e2230fa144870697428ef3aa95630c3bc41fd79487b9a2ccac4",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "d715f10d96eca7ab2186f265731574c0919250100f8e9ebf830fa9da718c32ea",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "channel_state.tsv": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/channel_state.tsv",
+    "original_bytes": 33556,
+    "original_sha256": "34046ec21973143ee28a9052241368f14a473a653c3fb15aebadf2260ede2fdf",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "61510ca4435205b8ba057235af39f40a406e2fb415cac14d53a414b52a530bc5",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "state_receipt.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/state_receipt.json",
+    "original_bytes": 425,
+    "original_sha256": "dcbcfd76703b7c319bdffdc3345379e962f15397821d9f0579fb93088ed6b191",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "8851f415f4550b52a98ac775a6bfddf11659ada0f3e83976b8fa03e507568243",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/rpc_timing.jsonl",
+    "original_bytes": 1791592,
+    "original_sha256": "f8aa56f99ad193f159f1bd1d27058de6fbdeea03d46960fe2fff93b161083a30",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "9dbf7423146c48835e131385ceefc5408dce7ced8e5a1b98785b48e8dedc69f9",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/rpc_timing.receipt.json",
+    "original_bytes": 392,
+    "original_sha256": "2e957279a2c7c1192ab04e842f3ed02d8c54773fe859d0ba7335f77550f5b71c",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "3a4793072931d3e1fabec776de11659f7545bd8b94d6d5e71025b2ce48759c8c",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/host_kernel.log",
+    "original_bytes": 1138,
+    "original_sha256": "0dbfe9c81b64887c263f316046a552fc3ade8a126b7690343bd9b8d1fadea88d",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "fab4c293a658a3c0ae442630943d9ef7aabf7a10c03d132c4fafd4f5673d8071",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "keylines.jsonl": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/keylines.jsonl",
+    "original_bytes": 1902865,
+    "original_sha256": "c6184af30daf9399b21da4d6e336eeefa5cbe01fc2eb39cfb434cc92f0ffca8a",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "23a11cfc97da8f4da5b8552983c6cc6fa39dfe45825020a64e213bf6c0ec2b3a",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "dump_headers.jsonl": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/dump_headers.jsonl",
+    "original_bytes": 272,
+    "original_sha256": "4a561cd759b1ca418e55fd5a7ac9a74e9616d96347f0b26d1498f7351d1884ae",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "ba66a7a3fc6fe6eab49718481c530fb49b03debe42d96a21116ed0f15f1d73e9",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "display_driver.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/display_driver.json",
+    "original_bytes": 144,
+    "original_sha256": "6d441b302422474302b6c77cc151641d5a694d0338a518ea5352f884a41d3fcd",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "bc1ee90c77bac88d8979b534b21623508216d4a54396fb5c086567fae0a4e6e4",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "minidump_sha256.txt": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/minidump_sha256.txt",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "early_code0.txt": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/early_code0.txt",
+    "original_bytes": 135,
+    "original_sha256": "1fb4878e3def9f0838b5050d5a231e3f6ca69c8aa37cf25be7de7f39e35ede45",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "1ee94853ddf44e0dd7b16e472f2aeae44413510c9e39e6b0161a3791ecca2ae6",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "init_observer.ready.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/init_observer.ready.json",
+    "original_bytes": 86,
+    "original_sha256": "5b6eb0b881ec28e530a61a1ec34772d8b9127815f9a7d03993c7f68a5e73b893",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "a222e5c8e6b263ef84dbbb55a37cee83c95ce8c40da0c3b1f89647b43c4e4b05",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "init_observer.log": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/init_observer.log",
+    "original_bytes": 73,
+    "original_sha256": "d7b1ac71bfd670087daf8f7f5b08b40922b9fceb7b2d4f72a1712ef7a6104088",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "6ca289e7e05f4e8ca65fc4b43d0f714a4291afed813e6ad4f692424ab2f0f874",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "channel_projection.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/channel_projection.json",
+    "original_bytes": 765053,
+    "original_sha256": "3f0a2e8664b7d83f3b70306d98d099bb7c5cb52062489f423a87ba890efef629",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "e273160e008d232963d03b9df05be8302c9f92fcf598e9c8f584f5fd3dbcddb2",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "observation_permit.json": {
+    "rental_path": "/root/prov/arms/on_fix_pnp/observation_permit.json",
+    "original_bytes": 338,
+    "original_sha256": "13e5648941f2a38c600a648cdce81c8b9cdc9b50dcc81df899101b41b2308d98",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "9a47e010fd8e1a14d50ce715f16fbe01270501d9700843c6421d75355f74f979",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "wer_times_on_fix_pnp.txt": {
+    "rental_path": "/root/prov/wer_times_on_fix_pnp.txt",
+    "original_bytes": 2366,
+    "original_sha256": "b842a409e5e7f093b435e799f9f0dbd07957fbe656d890e25b2ca6e92035b96d",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "837465749dd60e0e28b1435a71783544c3bd034cf7424973588db09e82de3166",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "dump_hdr_on_fix_pnp.txt": {
+    "rental_path": "/root/prov/dump_hdr_on_fix_pnp.txt",
+    "original_bytes": 8115,
+    "original_sha256": "70c3045842aea7255ab488ce5b4ca9daac76ae0bf847940394f60b6fb3769adb",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "7ce726f1574cb74e9065e87dd64aaa006bc02325ee6a4e0efe58627674a5cbfd",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "capture_guest_on_fix_pnp.txt": {
+    "rental_path": "/root/prov/capture_guest_on_fix_pnp.txt",
+    "original_bytes": 165,
+    "original_sha256": "3687dd9bbf92fbdb194d1e4ad713e685f6c06f9b7cdb28e9aef2898d30e0955b",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "758ffda5f83bf655cca2656c8186dd4588d7c937e87c53e093138d4c31c69b31",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  }
+}

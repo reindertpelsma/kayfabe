@@ -1,0 +1,11 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "utc": "2026-10-23T11:48:06.336284+00:00",
+  "ssh_ready_utc": "2026-10-23T11:47:18.019971+00:00",
+  "ssh_fingerprint": "SHA256:ykrYaPfepuvmssRaZCygyDDzBActe572ikKiN7CSvKY",
+  "observed_dph_total": 0.4386666666666667,
+  "source_hashes_checked": 71,
+  "all_rule_hashes_intact": true,
+  "no_rule_changes_after_identity": true
+}

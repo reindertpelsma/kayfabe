@@ -1,0 +1,50 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+ARM_PLAN run=on_diag_pnp enable=enable580_cycle.ps1 count=2 prep=- label=DIAGNOSTIC
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_diag_pnp source=cb80cbd29b7a05f904acd822f172485fd49938a9 profile=on 2026-10-24T07:25:52+00:00
+[2026-10-24T07:25:52Z] detached: tag=on_diag_pnp, log logs/on_diag_pnp_run.log (stdout logs/on_diag_pnp_run.out)
+READINESS_CALIBRATED {"box": 57472433, "policy": {"banner_query": 100, "factor": 10, "first_query": 100, "handshake": 202, "observer_total": 360, "readiness_total": 900, "ssh_stage": 600, "steady_query": 25, "verify_stage": 240}, "probe_seconds": 35.35425801199972, "readiness_end": 7140.890857354}
+{"pid": 217117, "exe": "/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64", "sha256": "5b9ad863bf1af5a1819c649a000c99205ff99beb5df6273d3dce7f0366ea0ac6", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+INIT_OBSERVER_READY 2026-10-24T07:28:45+00:00
+WINDOWS_ON_OBSERVATION_ARMED {"arm": "on_diag_pnp", "pid": 217117, "starttime": 624015, "exe": "/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64", "pci": "0000:00:07", "mode": "bw3-saved-xid32-observation-v1", "profile": "on", "lease_id": 57472433, "armed_utc": "2026-10-24T07:28:45.389276+00:00", "probed_die": "GB205", "enable_count": 2, "label": "DIAGNOSTIC"}
+DIAGNOSTIC_CYCLE_RC 0
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-24T07:28:57.0216496Z label=DIAGNOSTIC enable=1of2
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0 UTC=2026-10-24T07:29:00.2675241Z
+CYCLE_CODE0_FIRST=True UTC=2026-10-24T07:29:01.9637569Z
+CYCLE_DISABLE_START UTC=2026-10-24T07:29:01.9690384Z
+Microsoft PnP Utility
+
+Disabling device:          PCI\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\3&11583659&0&28
+Device disabled successfully.
+
+CYCLE_DISABLE_RC=0 UTC=2026-10-24T07:29:47.6998884Z
+CYCLE_DISABLED=True UTC=2026-10-24T07:29:48.6448230Z
+CYCLE_ENABLE2_START UTC=2026-10-24T07:29:48.6484275Z enable=2of2
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+CYCLE_ENABLE2_RC=0 UTC=2026-10-24T07:30:06.2112644Z
+CYCLE_CODE0_SECOND=False UTC=2026-10-24T07:32:06.4371916Z
+{"Name":"NVIDIA GeForce RTX 5070","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":43}
+{"FriendlyName":"NVIDIA GeForce RTX 5070","Status":"Error","Problem":43}
+ENABLE580_OBSERVED UTC=2026-10-24T07:32:07.3470844Z; device status is verdict, not this command rc
+OBSERVATION_DIAG_RC 0
+BW580_RESULT {"utc":"2026-10-24T07:32:18.7859951Z","boot":"2026-10-24T07:26:11.5000000Z","driver":"32.0.15.8088","inf":"oem7.inf","code":43,"status":"Error","tdr4101":0,"width":null,"height":null}
+/workspace/bw-capc-validation/kfwin/logs/shots/on_diag_pnp.png
+OBSERVATION_ONLY apps_unrun held_seconds=0
+ARM_OBSERVATION_DONE 2026-10-24T07:32:31+00:00
+PRE_CLEANUP_START rc=0 2026-10-24T07:32:31+00:00
+{"rpcs": 4053, "unload_ordinals": [4052], "teardown_start_ordinal": 3737, "last_nonfree_before_teardown": [[3734, "103", "RmAlloc", "0", "0x402c", "0x56"], [3735, "76", "RmControl", "0", "0x20800aff", "none"], [3736, "76", "RmControl", "0", "0x20800aff", "none"]]}
+[2026-10-24T07:32:31Z] stopping kfwin (pid 217117)
+[2026-10-24T07:32:51Z] stopped
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=on_diag_pnp rc=0 2026-10-24T07:33:33+00:00

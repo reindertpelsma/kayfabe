@@ -1,0 +1,24 @@
+{
+  "created_utc": "2026-10-23T11:44:01.156442+00:00",
+  "absence_verified_utc": "2026-10-23T12:54:33.075924+00:00",
+  "quote_dph": 0.3738518518518519,
+  "observed_dph_total": 0.4386666666666667,
+  "elapsed_hours_until_absence": 1.1755331988888889,
+  "runtime_cost_estimate_usd": 0.5156672299125926,
+  "prior_lane_runtime_usd": 5.243903789283519,
+  "lane_runtime_total_usd": 5.759571019196112,
+  "credit_before": 29.746282189560702,
+  "credit_after_observed": 28.902164713860316,
+  "budget_stop": 7.5,
+  "phase_cap": 8,
+  "credit_reserve": 5,
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "basis": "elapsed create-to-API-absence times observed all-in rate; runtime estimate, not settled invoice",
+  "prior_basis": [
+    "../bfirst_run/COST.md",
+    "../observation_run/COST_FINAL.json",
+    "../UNVERIFIED-HOST_1320/COST_FINAL.json"
+  ],
+  "shared_credit_delta_is_not_exclusive_lane_billing": true
+}

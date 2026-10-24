@@ -1,0 +1,5 @@
+{
+  "status": "PASS",
+  "scope": "disposable owned sleep child, not QEMU or GPU",
+  "host_verification": "UNVERIFIED-HOST"
+}

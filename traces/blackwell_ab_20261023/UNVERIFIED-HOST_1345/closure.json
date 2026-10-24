@@ -1,0 +1,46 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": 57366202,
+  "utc": "2026-10-23T12:54:56.851637+00:00",
+  "known_own_ids": [
+    57099244,
+    57107585,
+    57108853,
+    57117614,
+    57132969,
+    57142142,
+    57143789,
+    57148807,
+    57273215,
+    57280677,
+    57285340,
+    57296911,
+    57302449,
+    57310491,
+    57324106,
+    57340681,
+    57359730,
+    57363603,
+    57366202
+  ],
+  "still_live_own_ids": [],
+  "timers": {
+    "auto_destroy_pid": {
+      "pid": 1368870,
+      "proc_exists": false
+    },
+    "budget_watch_pid": {
+      "pid": 1368882,
+      "proc_exists": false
+    }
+  },
+  "rule_sources_checked": 71,
+  "changed_rule_sources": [],
+  "destroyed": true,
+  "absence_verified_utc": "2026-10-23T12:54:33.075924+00:00",
+  "no_further_rentals": true,
+  "foreign_instances_untouched": true,
+  "active_local_operators": [],
+  "local_target_created": false,
+  "local_gpu_lock_taken": false
+}

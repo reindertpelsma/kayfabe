@@ -1,0 +1,6 @@
+hash_check_removed killers=2
+static_ignored killers=2
+suites_ignored killers=2
+missing_ok killers=2
+ops_gate_removed killers=2
+operator_unchecked killers=3

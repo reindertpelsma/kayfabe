@@ -1,0 +1,171 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+12034: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12036: kf3: GSP rpc Free seq=0
+12037: kf3: act free: 0xc1d00138:0xff1fe032: engine object host 0xcafe015e freed (519 us, off the GSP lock)
+12039: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12041: kf3: GSP rpc Free seq=0
+12042: kf3: act free: 0xc1d00138:0xff1fe026: engine object host 0xcafe015d freed (427 us, off the GSP lock)
+12044: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12046: kf3: GSP rpc Free seq=0
+12047: kf3: act free: 0xc1d00138:0xff1fe034: engine object host 0xcafe015a freed (339 us, off the GSP lock)
+12049: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12051: kf3: GSP rpc Free seq=0
+12052: kf3: act free: 0xc1d00138:0xff1fe01a: engine object host 0xcafe015b freed (398 us, off the GSP lock)
+12054: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12056: kf3: GSP rpc Free seq=0
+12057: kf3: act free: 0xc1d00138:0xff1fe02c: engine object host 0xcafe015c freed (383 us, off the GSP lock)
+12059: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12060: kf3: GSP rpc Free seq=0
+12061: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12063: kf3: GSP rpc Free seq=0
+12064: kf3: chan token 0x13 (host 0x40000017) USERD relay released: forwarded=0 refused=0 gets=0 last_put=0 guest[GP_PUT=Some(0) GP_GET=Some(0)] host[GP_PUT=Some(0) GP_GET=Some(0)]
+12065: kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x40000017 trap=0 fast=0
+12066: kf3: act free: 0xc1d00138:0xff040011: passthrough 0xc1d00138:0xff040011 token 0x13 host 0x40000017 objects=0 ctx=CtxBind { initialized: 4, va_bound: 0, bound: false, promotes: 4, evicts: 1 } freed (2385 us, off the GSP lock)
+12068: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12069: kf3: GSP rpc Free seq=0
+12070: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12071: kf3: GSP rpc Free seq=0
+12072: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12073: kf3: GSP rpc Free seq=0
+12074: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12075: kf3: GSP rpc Free seq=0
+12076: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12077: kf3: GSP rpc Free seq=0
+12078: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12079: kf3: GSP rpc Free seq=0
+12080: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12081: kf3: GSP rpc Free seq=0
+12082: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+12083: kf3: GSP rpc RmControl seq=0
+12084: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12086: kf3: GSP rpc Free seq=0
+12087: kf3: act free: 0xc1d00139:0xff1fe034: engine object host 0xcafe017d freed (394 us, off the GSP lock)
+12089: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12090: kf3: GSP rpc Free seq=0
+12091: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12093: kf3: GSP rpc Free seq=0
+12094: kf3: chan token 0x1014 (host 0x4010000e) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(0)]
+12095: kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4010000e trap=0 fast=0
+12096: kf3: act free: 0xc1d00139:0xff040012: passthrough 0xc1d00139:0xff040012 token 0x1014 host 0x4010000e objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1921 us, off the GSP lock)
+12098: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12099: kf3: GSP rpc Free seq=0
+12100: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12101: kf3: GSP rpc Free seq=0
+12102: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12103: kf3: GSP rpc Free seq=0
+12104: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12105: kf3: GSP rpc Free seq=0
+12106: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12107: kf3: GSP rpc Free seq=0
+12108: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12109: kf3: GSP rpc Free seq=0
+12111: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12112: kf3: GSP rpc Free seq=0
+12113: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12114: kf3: GSP rpc Free seq=0
+12115: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12116: kf3: GSP rpc Free seq=0
+12117: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12118: kf3: GSP rpc Free seq=0
+12119: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12120: kf3: GSP rpc Free seq=0
+12121: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12122: kf3: GSP rpc Free seq=0
+12123: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12124: kf3: GSP rpc Free seq=0
+12125: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12126: kf3: GSP rpc Free seq=0
+12127: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12128: kf3: GSP rpc Free seq=0
+12129: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12130: kf3: GSP rpc Free seq=0
+12131: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+12132: kf3: GSP rpc Free seq=0
+12136: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+12137: kf3: GSP rpc RmControl seq=0
+12139: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+12140: kf3: GSP rpc RmControl seq=0
+12141: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12143: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+12144: kf3: GSP rpc RmControl seq=0
+12146: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=H object=H result=none
+12147: kf3: GSP rpc RmControl seq=0
+12148: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12150: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852f client=H object=H result=none
+12151: kf3: GSP rpc RmControl seq=0
+12152: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12154: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=H object=H result=none
+12155: kf3: GSP rpc RmControl seq=0
+12156: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12158: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a619 client=H object=H result=none
+12159: kf-gsp: large RPC fn 76 seq 0 joined from 3 fragment(s), 172120 bytes, answered in 3 replies (rpc_result 0x56)
+12160: kf3: GSP rpc RmControl seq=0
+12161: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12163: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853a client=H object=H result=none
+12164: kf3: GSP rpc RmControl seq=0
+12165: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12167: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853b client=H object=H result=none
+12168: kf3: GSP rpc RmControl seq=0
+12169: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12171: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+12172: kf3: GSP rpc RmControl seq=0
+12174: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+12175: kf3: GSP rpc RmControl seq=0
+12176: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12180: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=8 over=0]
+12196: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=9 over=0]
+12212: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=10 over=0]
+12228: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=11 over=0]
+12237: kf3: chan token 0xe (host 0x40000015) USERD relay: GP_PUT 0x27a forwarded and rung (#16) — no GP entry or push-buffer word read
+12245: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=12 over=0]
+12261: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=13 over=0]
+12277: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=14 over=0]
+12286: kf3: chan token 0x1010 (host 0x4010000c) USERD relay: GP_PUT 0x65 forwarded and rung (#6) — no GP entry or push-buffer word read
+12294: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=15 over=0]
+12310: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=16 over=0]
+12326: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=17 over=0]
+12342: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=18 over=0]
+12358: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=19 over=0]
+12367: kf3: chan token 0xe (host 0x40000015) USERD relay: GP_PUT 0x503 forwarded and rung (#32) — no GP entry or push-buffer word read
+12375: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=20 over=0]
+12391: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=21 over=0]
+12407: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=22 over=0]
+12416: kf3: chan token 0x1010 (host 0x4010000c) USERD relay: GP_PUT 0x76 forwarded and rung (#7) — no GP entry or push-buffer word read
+12424: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=23 over=0]
+12440: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=24 over=0]
+12457: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=25 over=0]
+12473: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=26 over=0]
+12489: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=27 over=0]
+12505: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+12506: kf3: GSP rpc RmControl seq=0
+12508: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+12509: kf3: GSP rpc RmControl seq=0
+12510: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12512: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+12513: kf3: GSP rpc RmControl seq=0
+12515: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852e client=H object=H result=none
+12516: kf3: GSP rpc RmControl seq=0
+12517: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12519: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080852f client=H object=H result=none
+12520: kf3: GSP rpc RmControl seq=0
+12521: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12523: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a618 client=H object=H result=none
+12524: kf3: GSP rpc RmControl seq=0
+12525: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12527: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080a619 client=H object=H result=none
+12528: kf-gsp: large RPC fn 76 seq 0 joined from 3 fragment(s), 172120 bytes, answered in 3 replies (rpc_result 0x56)
+12529: kf3: GSP rpc RmControl seq=0
+12530: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12532: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853a client=H object=H result=none
+12533: kf3: GSP rpc RmControl seq=0
+12534: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12536: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080853b client=H object=H result=none
+12537: kf3: GSP rpc RmControl seq=0
+12538: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12540: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=H object=H result=0x56
+12541: kf3: GSP rpc RmControl seq=0
+12543: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080b201 client=H object=H result=none
+12544: kf3: GSP rpc RmControl seq=0
+12545: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+12547: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=582 ondemand=28 over=0]

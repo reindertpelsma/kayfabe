@@ -1,0 +1,95 @@
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-22T23:05:48+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+NVIDIA GeForce RTX 5070, 595.91.07, 12227 MiB
+VERDICT=SOUND
+PROBE_START pid=79938 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x5 die=GB205
+PROBE_END admin_run=false
+S4_KIT_PRESENT_AUDIT_SUBTRACTED
+PRECOMP_RUNTIME_BEGIN CAP_SYS_ADMIN=cleared_by_helper 2026-10-22T23:13:01+00:00
+PRECOMP_RUNTIME_EXIT rc=2 2026-10-22T23:13:01+00:00
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-22T23:18:14+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                618f0431815d037d4226b642ae37e76967353e90 -> FETCH_HEAD
+Preparing worktree (detached HEAD 618f04318)
+Updating files:  35% (7777/21764)
+Updating files:  36% (7836/21764)
+Updating files:  37% (8053/21764)
+Updating files:  38% (8271/21764)
+Updating files:  39% (8488/21764)
+Updating files:  40% (8706/21764)
+Updating files:  41% (8924/21764)
+Updating files:  42% (9141/21764)
+Updating files:  43% (9359/21764)
+Updating files:  44% (9577/21764)
+Updating files:  45% (9794/21764)
+Updating files:  46% (10012/21764)
+Updating files:  47% (10230/21764)
+Updating files:  48% (10447/21764)
+Updating files:  49% (10665/21764)
+Updating files:  50% (10882/21764)
+Updating files:  51% (11100/21764)
+Updating files:  52% (11318/21764)
+Updating files:  53% (11535/21764)
+Updating files:  54% (11753/21764)
+Updating files:  55% (11971/21764)
+Updating files:  56% (12188/21764)
+Updating files:  57% (12406/21764)
+Updating files:  58% (12624/21764)
+Updating files:  59% (12841/21764)
+Updating files:  60% (13059/21764)
+Updating files:  61% (13277/21764)
+Updating files:  62% (13494/21764)
+Updating files:  63% (13712/21764)
+Updating files:  64% (13929/21764)
+Updating files:  65% (14147/21764)
+Updating files:  66% (14365/21764)
+Updating files:  67% (14582/21764)
+Updating files:  68% (14800/21764)
+Updating files:  69% (15018/21764)
+Updating files:  70% (15235/21764)
+Updating files:  71% (15453/21764)
+Updating files:  72% (15671/21764)
+Updating files:  73% (15888/21764)
+Updating files:  74% (16106/21764)
+Updating files:  75% (16323/21764)
+Updating files:  76% (16541/21764)
+Updating files:  77% (16759/21764)
+Updating files:  78% (16976/21764)
+Updating files:  79% (17194/21764)
+Updating files:  80% (17412/21764)
+Updating files:  81% (17629/21764)
+Updating files:  81% (17811/21764)
+Updating files:  82% (17847/21764)
+Updating files:  83% (18065/21764)
+Updating files:  84% (18282/21764)
+Updating files:  85% (18500/21764)
+Updating files:  86% (18718/21764)
+Updating files:  87% (18935/21764)
+Updating files:  88% (19153/21764)
+Updating files:  89% (19370/21764)
+Updating files:  90% (19588/21764)
+Updating files:  91% (19806/21764)
+Updating files:  92% (20023/21764)
+Updating files:  93% (20241/21764)
+Updating files:  94% (20459/21764)
+Updating files:  95% (20676/21764)
+Updating files:  96% (20894/21764)
+Updating files:  97% (21112/21764)
+Updating files:  98% (21329/21764)
+Updating files:  99% (21547/21764)
+Updating files: 100% (21764/21764)
+Updating files: 100% (21764/21764), done.
+HEAD is now at 618f04318 fix(bench): register native completion listeners before GPU submission
+GR_TIER_VERDICT=PASS
+SWEEP2_BIND_READY 2026-10-22T23:54:55+00:00
+{"cell": "on_precision", "utc": "2026-10-22T23:54:55.604437+00:00", "latest_start_utc": "2026-10-23T01:14:21.872245+00:00", "budget_cutoff_minutes": 170, "may_start": true}
+VALIDATION_ARM_BEGIN on_precision 2026-10-22T23:54:55+00:00
+VALIDATION_ARM_RESULT run=on_precision rc=22 2026-10-22T23:59:02+00:00
+ARM_HARNESS_REFUSAL_STOP run=on_precision rc=22
+SWEEP_PROVISION_EXIT rc=22 2026-10-22T23:59:02+00:00

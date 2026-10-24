@@ -1,0 +1,95 @@
+FEEEEEEEEE
+======================================================================
+ERROR: test_completed_ranges_are_not_downloaded_again (test_box_fetch_retry.RangeRetry.test_completed_ranges_are_not_downloaded_again)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_cut_connection_resumes_from_kept_bytes (test_box_fetch_retry.RangeRetry.test_cut_connection_resumes_from_kept_bytes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_cut_forever_fails_without_publishing (test_box_fetch_retry.RangeRetry.test_cut_forever_fails_without_publishing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_policy_fits_the_cutoff (test_box_fetch_retry.RangeRetry.test_policy_fits_the_cutoff)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_range_k_fails_forever_publishes_nothing (test_box_fetch_retry.RangeRetry.test_range_k_fails_forever_publishes_nothing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_range_k_fails_once_then_verified (test_box_fetch_retry.RangeRetry.test_range_k_fails_once_then_verified)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_range_k_fails_twice_then_verified (test_box_fetch_retry.RangeRetry.test_range_k_fails_twice_then_verified)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_retries_stop_at_the_cutoff (test_box_fetch_retry.RangeRetry.test_retries_stop_at_the_cutoff)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+ERROR: test_sha_still_verified_on_the_assembled_file (test_box_fetch_retry.RangeRetry.test_sha_still_verified_on_the_assembled_file)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 94, in setUp
+    self.saved = BF.BACKOFF_SECONDS
+                 ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'box_fetch' has no attribute 'BACKOFF_SECONDS'
+
+======================================================================
+FAIL: test_whole_file_fallback_documented (test_box_fetch_retry.Fallback.test_whole_file_fallback_documented)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal/test_box_fetch_retry.py", line 167, in test_whole_file_fallback_documented
+    self.assertIn("partial-range SSH fallback: not implemented", text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'partial-range SSH fallback: not implemented' not found in '"""Box-side media fetch from pinned public HTTPS sources (B1i, controller 04:00).\n\nRuns on the rental. Reads the pinned table (file, url, expected_bytes, expected_sha256) from the\nuploaded media manifest, downloads each file as parallel byte ranges with curl, verifies size and\nsha256, and only then publishes <cache>/<file>.part (the name the existing whole-set verifier\nrenames). A mismatch, an unhonoured range, a short body or the per-file cutoff publishes nothing\nand removes every fragment; the operator then uses the SSH upload for that file. Public URLs\nonly; nothing secret is sent to or read on the box.\n\nUsage: box_fetch.py <manifest.json> <cache_dir> <cutoff_seconds> <status.json> [--workers N]\n"""\n\nimport argparse\nfrom concurrent.futures import ThreadPoolExecutor\nimport hashlib\nimport json\nfrom pathlib import Path\nimport subprocess\nimport threading\nimport time\n\nMIN_RANGED_BYTES = 64 * 1024\nALLOWED_PREFIXES = (\n    "https://go.microsoft.com/fwlink/",\n    "https://us.download.nvidia.com/Windows/",\n    "https://fedorapeople.org/groups/virt/virtio-win/",\n    "https://github.com/PowerShell/Win32-OpenSSH/releases/download/",\n)\n\n\ndef allowed_url(url, allow_http_for_test=False):\n    if allow_http_for_test and url.startswith("http://127.0.0.1:"):\n        return True\n    return isinstance(url, str) and url.startswith(ALLOWED_PREFIXES)\n\n\ndef ranges(size, workers):\n    n = 1 if size < MIN_RANGED_BYTES else max(1, min(workers, 16))\n    q, r = divmod(size, n)\n    out, offset = [], 0\n    for i in range(n):\n        count = q + (i < r)\n        out.append((offset, offset + count - 1))\n        offset += count\n    return out\n\n\ndef _curl(url, start, end, out, deadline, ranged, stop):\n    cmd = [\n        "curl",\n        "-fsSL",\n        "--proto",\n        "=https,http",\n        "--retry",\n        "2",\n        "--max-time",\n        str(max(1, int(deadline - time.monotonic()))),\n        "-o",\n        str(out),\n    ]\n    if ranged:\n        cmd += ["-r", "%d-%d" % (start, end)]\n    cmd.append(url)\n    child = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n    try:\n        while child.poll() is None:\n            if stop.exists() or time.monotonic() > deadline:\n                child.kill()\n                child.wait(timeout=5)\n                return None\n            time.sleep(0.2)\n        return child.returncode\n    finally:\n        if child.poll() is None:\n            child.kill()\n            child.wait(timeout=5)\n\n\ndef fetch_file(row, cache, deadline, workers=8, allow_http_for_test=False, progress=None):\n    cache = Path(cache)\n    cache.mkdir(parents=True, exist_ok=True)\n    name, size, digest = row["file"], int(row["expected_bytes"]), row["expected_sha256"]\n    if Path(name).name != name or not allowed_url(row["url"], allow_http_for_test):\n        return {"state": "failed", "reason": "name or url not allowed", "ranges": 0}\n    plan = ranges(size, workers)\n    parts = [cache / ("%s.boxfetch.%d" % (name, i)) for i in range(len(plan))]\n    status = {"state": "running", "ranges": len(plan), "bytes_total": size, "bytes_done": 0}\n    stop = cache / (name + ".boxfetch.stop")  # written by the operator when it falls back\n\n    def cleanup():\n        for p in parts + [cache / (name + ".boxfetch")]:\n            p.unlink(missing_ok=True)\n\n    def one(i):\n        start, end = plan[i]\n        remaining = deadline - time.monotonic()\n        if remaining <= 0 or stop.exists():\n            return False\n        rc = _curl(row["url"], start, end, parts[i], deadline, len(plan) > 1, stop)\n        return rc == 0 and parts[i].exists() and parts[i].stat().st_size == end - start + 1\n\n    try:\n        with ThreadPoolExecutor(max_workers=len(plan)) as pool:\n            jobs = [pool.submit(one, i) for i in range(len(plan))]\n            while not all(j.done() for j in jobs):\n                if stop.exists():\n                    break\n                status["bytes_done"] = sum(p.stat().st_size for p in parts if p.exists())\n                if progress:\n                    progress(dict(status))\n                time.sleep(0.5)\n            ok = not stop.exists() and all(j.result() for j in jobs)\n        if not ok or time.monotonic() > deadline:\n            cleanup()\n            return dict(status, state="failed", reason="range download failed or cutoff")\n        whole = cache / (name + ".boxfetch")\n        h = hashlib.sha256()\n        with whole.open("wb") as out:\n            for p in parts:\n                with p.open("rb") as src:\n                    for block in iter(lambda: src.read(8 * 1024 * 1024), b""):\n                        h.update(block)\n                        out.write(block)\n        if stop.exists():\n            cleanup()\n            return dict(status, state="failed", reason="operator fell back to upload")\n        if whole.stat().st_size != size or h.hexdigest() != digest:\n            cleanup()\n            return dict(status, state="mismatch", reason="size or sha256 differs from the pin")\n        whole.rename(cache / (name + ".part"))\n        cleanup()\n        return dict(status, state="verified", bytes_done=size, sha256=digest)\n    except OSError as error:\n        cleanup()\n        return dict(status, state="failed", reason=type(error).__name__)\n\n\ndef main(argv=None):\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument("manifest")\n    parser.add_argument("cache")\n    parser.add_argument("cutoff", type=float)\n    parser.add_argument("status")\n    parser.add_argument("--workers", type=int, default=8)\n    parser.add_argument("--allow-http-for-test", action="store_true")\n    args = parser.parse_args(argv)\n    manifest = json.loads(Path(args.manifest).read_text())\n    if manifest.get("all_verified") is not True:\n        raise SystemExit("manifest is not a verified pin table")\n    deadline = time.monotonic() + args.cutoff\n    lock = threading.Lock()\n    files = {row["file"]: {"state": "pending"} for row in manifest["files"]}\n    status_path = Path(args.status)\n\n    def write(done=False):\n        with lock:\n            tmp = status_path.with_suffix(".tmp")\n            tmp.write_text(json.dumps({"files": files, "done": done}, indent=2) + "\\n")\n            tmp.replace(status_path)\n\n    def run(row):\n        def progress(st):\n            files[row["file"]] = st\n            write()\n\n        files[row["file"]] = fetch_file(\n            row, args.cache, deadline, args.workers, args.allow_http_for_test, progress\n        )\n        write()\n\n    write()\n    with ThreadPoolExecutor(max_workers=len(manifest["files"])) as pool:\n        list(pool.map(run, manifest["files"]))\n    write(done=True)\n    return 0\n\n\nif __name__ == "__main__":\n    raise SystemExit(main())\n'
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.003s
+
+FAILED (failures=1, errors=9)

@@ -1,0 +1,41 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "tests": 3,
+  "passed": 3,
+  "operator_source_sha256": "72a14d39c7507bd588bba2ee00209e2d913b60271a015ef3735e5425ef3cb68f",
+  "guard_source_sha256": "2222e2c8950a994351c946ed09fa860416933a048f0bdd085b7dc155f3935c01",
+  "mode": "exact final operator ready branch with provider/SSH/clock fixtures",
+  "fingerprint_substitution": "bijective equality-preserving fixture keys; raw scan bytes not retained",
+  "cases": [
+    {
+      "name": "false_refusal",
+      "source": "UNVERIFIED-HOST_1320/lease_57363603/pin_receipt.jsonl",
+      "kind": "recorded pin-set replay",
+      "expected": "accept",
+      "actual": "accept"
+    },
+    {
+      "name": "absent_then_present",
+      "source": "observation_run/lease_57359730/readiness.txt",
+      "kind": "recorded absence plus explicit later-publication control",
+      "expected": "accept after20s wait",
+      "actual": "accept after20s wait"
+    },
+    {
+      "name": "mismatch",
+      "source": "recorded extra fingerprint with expected pin removed",
+      "kind": "derived negative control; not an independent live capture",
+      "expected": "refuse before SSH",
+      "actual": "refuse before SSH"
+    }
+  ],
+  "rules_frozen_after_successful_ssh_identity": true,
+  "new_round_fixture_prior_usd": 0,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "round": "B1g_0050 attempt1",
+  "operator": "Claude (B1b operator); same 3-test rehearsal as B1",
+  "ready_branch_delta_vs_B1": "readiness spend assertion < 2.0 (B1b stop) instead of < 2.5",
+  "lease_profile_tests": "rehearsal/test_lease_profile.py 33/33; RED before module; 16 mutants each >=2 killers",
+  "denied_countries_tests": "rehearsal/test_denied_countries.py 5/5 on B1f operator"
+}

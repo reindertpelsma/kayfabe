@@ -1,0 +1,1 @@
+{"utc": "2026-10-23T07:56:55.894433+00:00", "backup_kind": "bounded text exported to operator workspace before live B", "publication_deferred_until_live_complete": true, "local_export_receipt_sha256": "9dba96cb91cc22b1d4bc7569f02510ba3e7429316c657acd37fcbe06a8d9230f", "raw": 30, "cuda": 4, "gr": 15, "native_faults": 5, "exact_ordered_fault_match": true}

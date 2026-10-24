@@ -1,0 +1,3 @@
+drop_MO killers=2
+drop_HK killers=2
+drop_CN killers=2

@@ -1,0 +1,7 @@
+{
+  "own_id": 57302449,
+  "before": "small MSI upload refused before any media transfer/controller; destination directory absent",
+  "action": "install -d -m0755 cache",
+  "original_transfer_deadline_preserved": "2026-10-23T01:49:18.208558+00:00",
+  "controller_started": false
+}

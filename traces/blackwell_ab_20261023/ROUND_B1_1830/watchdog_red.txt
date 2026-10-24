@@ -1,0 +1,152 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+UNVERIFIED-HOST
+FFFFFFFFFFFF
+======================================================================
+FAIL: test_absence_is_queried_after_destroy_before_completion (test_precreate_watchdog.PrecreateWatchdog.test_absence_is_queried_after_destroy_before_completion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 76, in test_absence_is_queried_after_destroy_before_completion
+    result, events, end = self.run_case()
+                          ~~~~~~~~~~~~~^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_already_absent_id_is_recorded_without_another_destroy (test_precreate_watchdog.PrecreateWatchdog.test_already_absent_id_is_recorded_without_another_destroy)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 101, in test_already_absent_id_is_recorded_without_another_destroy
+    result, events, end = self.run_case(absent=True)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id (test_precreate_watchdog.PrecreateWatchdog.test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 106, in test_closed_ledger_cannot_suppress_destruction_of_a_still_present_id
+    result, events, end = self.run_case(close=True)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_credit_below_reserve_stops_immediately (test_precreate_watchdog.PrecreateWatchdog.test_credit_below_reserve_stops_immediately)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 91, in test_credit_below_reserve_stops_immediately
+    result, events, end = self.run_case(credit=7.99)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_destroy_is_by_the_one_exact_owned_id (test_precreate_watchdog.PrecreateWatchdog.test_destroy_is_by_the_one_exact_owned_id)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 72, in test_destroy_is_by_the_one_exact_owned_id
+    result, events, end = self.run_case()
+                          ~~~~~~~~~~~~~^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_no_allocation_before_expiry_means_no_provider_mutation (test_precreate_watchdog.PrecreateWatchdog.test_no_allocation_before_expiry_means_no_provider_mutation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 111, in test_no_allocation_before_expiry_means_no_provider_mutation
+    result, events, end = self.run_case(delay=10000)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_no_provider_query_or_destroy_before_a_contract_is_bound (test_precreate_watchdog.PrecreateWatchdog.test_no_provider_query_or_destroy_before_a_contract_is_bound)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 62, in test_no_provider_query_or_destroy_before_a_contract_is_bound
+    result, events, end = self.run_case(delay=40)
+                          ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_rate_above_owner_maximum_is_also_fatal (test_precreate_watchdog.PrecreateWatchdog.test_rate_above_owner_maximum_is_also_fatal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 86, in test_rate_above_owner_maximum_is_also_fatal
+    result, events, end = self.run_case(rate=2.51)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_rate_beyond_reserved_bound_stops_immediately (test_precreate_watchdog.PrecreateWatchdog.test_rate_beyond_reserved_bound_stops_immediately)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 81, in test_rate_beyond_reserved_bound_stops_immediately
+    result, events, end = self.run_case(rate=0.51)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_readiness_delay_does_not_extend_the_precreate_deadline (test_precreate_watchdog.PrecreateWatchdog.test_readiness_delay_does_not_extend_the_precreate_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 67, in test_readiness_delay_does_not_extend_the_precreate_deadline
+    result, events, end = self.run_case(delay=100)
+                          ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_ready_is_published_before_first_empty_ledger_read (test_precreate_watchdog.PrecreateWatchdog.test_ready_is_published_before_first_empty_ledger_read)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 57, in test_ready_is_published_before_first_empty_ledger_read
+    result, events, end = self.run_case(delay=40)
+                          ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+======================================================================
+FAIL: test_zero_credit_is_a_reserve_stop_not_an_idle_wait (test_precreate_watchdog.PrecreateWatchdog.test_zero_credit_is_a_reserve_stop_not_an_idle_wait)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 96, in test_zero_credit_is_a_reserve_stop_not_an_idle_wait
+    result, events, end = self.run_case(credit=0)
+                          ~~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_precreate_watchdog.py", line 24, in run_case
+    self.assertIsNotNone(W, "precreate watchdog not implemented")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: unexpectedly None : precreate watchdog not implemented
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.003s
+
+FAILED (failures=12)

@@ -1,0 +1,4 @@
+2026-10-24T05:02:34+00:00 START interval=1200 jitter=0..120 max_seconds=28800
+2026-10-24T05:02:36+00:00 POLL 1 offers=10 eligible=3 rejected={"base_filters": 5, "denied_or_missing_country": 1, "known_bad": 1, "plan_stop_cap_reserve_or_90min": 0}
+2026-10-24T05:02:36+00:00 MATCH id=57254348 machine=41010 price=0.5347222222222222 die=GB202
+2026-10-24T05:02:36+00:00 EXIT 0

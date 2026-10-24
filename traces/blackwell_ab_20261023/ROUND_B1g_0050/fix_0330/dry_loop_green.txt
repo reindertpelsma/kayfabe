@@ -1,0 +1,22 @@
+test_operator_dry_runs_pass_with_fake_provider (test_dry_loop.Loops.test_operator_dry_runs_pass_with_fake_provider) ... ok
+test_static_check_catches_an_injected_name_error (test_dry_loop.Loops.test_static_check_catches_an_injected_name_error) ... ok
+test_suite_list_covers_every_guard_loop (test_dry_loop.Loops.test_suite_list_covers_every_guard_loop) ... ok
+test_added_source_file_after_receipt_refuses (test_dry_loop.Receipt.test_added_source_file_after_receipt_refuses) ... ok
+test_budget_watch_dry_run_failure_marks_receipt_failed (test_dry_loop.Receipt.test_budget_watch_dry_run_failure_marks_receipt_failed) ... ok
+test_changed_source_after_receipt_refuses (test_dry_loop.Receipt.test_changed_source_after_receipt_refuses) ... ok
+test_deleted_receipt_refuses (test_dry_loop.Receipt.test_deleted_receipt_refuses) ... ok
+test_failed_operator_dry_run_refuses (test_dry_loop.Receipt.test_failed_operator_dry_run_refuses) ... ok
+test_failed_suite_marks_receipt_failed (test_dry_loop.Receipt.test_failed_suite_marks_receipt_failed) ... ok
+test_failed_suite_or_static_problem_refuses (test_dry_loop.Receipt.test_failed_suite_or_static_problem_refuses) ... ok
+test_fresh_passing_receipt_accepts (test_dry_loop.Receipt.test_fresh_passing_receipt_accepts) ... ok
+test_missing_receipt_refuses (test_dry_loop.Receipt.test_missing_receipt_refuses) ... ok
+test_precreate_dry_run_failure_marks_receipt_failed (test_dry_loop.Receipt.test_precreate_dry_run_failure_marks_receipt_failed) ... ok
+test_static_problem_marks_receipt_failed (test_dry_loop.Receipt.test_static_problem_marks_receipt_failed) ... ok
+test_ops_gate_called_exactly_once_in_rent_branch (test_dry_loop.Wiring.test_ops_gate_called_exactly_once_in_rent_branch) ... ok
+test_ops_requires_receipt_before_any_create (test_dry_loop.Wiring.test_ops_requires_receipt_before_any_create) ... ok
+test_receipt_present_and_current_for_this_workspace (test_dry_loop.Wiring.test_receipt_present_and_current_for_this_workspace) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 1.312s
+
+OK

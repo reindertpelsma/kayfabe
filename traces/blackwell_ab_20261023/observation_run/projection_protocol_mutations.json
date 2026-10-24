@@ -1,0 +1,84 @@
+[
+  {
+    "mutant": "body_filter_removed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_private_reply_bytes_are_never_projected",
+      "test_unmarked_body_bytes_are_also_excluded"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "window_lower_removed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_40_second_window_includes_both_boundaries",
+      "test_window_excludes_a_row_older_than_40_seconds"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "window_upper_removed",
+    "distinct_killers": 2,
+    "tests": [
+      "test_40_second_window_includes_both_boundaries",
+      "test_window_excludes_a_row_after_the_event"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "handles_unscoped",
+    "distinct_killers": 2,
+    "tests": [
+      "test_foreign_client_does_not_supply_the_allocation_ordinal",
+      "test_other_handle_does_not_supply_the_allocation_ordinal"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "join_promoted",
+    "distinct_killers": 3,
+    "tests": [
+      "test_ambiguous_join_is_not_promoted_to_measurement",
+      "test_high_pair_candidate_preserves_guest_identity_and_opaque_token",
+      "test_public_runlist_field_is_retained_in_the_offline_candidate"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "runlist_lost",
+    "distinct_killers": 2,
+    "tests": [
+      "test_high_pair_candidate_preserves_guest_identity_and_opaque_token",
+      "test_public_runlist_field_is_retained_in_the_offline_candidate"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "b1_ready_budget_ignored",
+    "distinct_killers": 2,
+    "tests": [
+      "test_failed_b1_build_is_skipped",
+      "test_late_b1_start_is_skipped"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "baseline_failure_ignored",
+    "distinct_killers": 2,
+    "tests": [
+      "test_baseline_harness_refusal_prevents_b1",
+      "test_baseline_safety_refusal_prevents_b1"
+    ],
+    "status": "KILLED"
+  },
+  {
+    "mutant": "early_code0_discarded",
+    "distinct_killers": 2,
+    "tests": [
+      "test_early_code0_still_holds_after_diagnostic_timeout",
+      "test_early_code0_still_holds_after_ssh_disconnect"
+    ],
+    "status": "KILLED"
+  }
+]

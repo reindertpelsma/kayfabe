@@ -1,0 +1,21 @@
+test_default_floor_rejects_the_rtx5090_offer (test_budget_b1j.Defaults.test_default_floor_rejects_the_rtx5090_offer) ... ok
+test_default_plan_refuses_raised_stop (test_budget_b1j.Defaults.test_default_plan_refuses_raised_stop) ... ok
+test_module_defaults_unchanged (test_budget_b1j.Defaults.test_module_defaults_unchanged) ... ok
+test_b1i_snapshot_selects_the_32_core_netherlands_5090 (test_budget_b1j.Operator.test_b1i_snapshot_selects_the_32_core_netherlands_5090) ... ok
+test_dry_loop_covers_this_suite (test_budget_b1j.Operator.test_dry_loop_covers_this_suite) ... ok
+test_offer_above_one_dollar_never_selected (test_budget_b1j.Operator.test_offer_above_one_dollar_never_selected) ... ok
+test_wiring (test_budget_b1j.Operator.test_wiring) ... ok
+test_0_94_offer_also_qualifies (test_budget_b1j.Override.test_0_94_offer_also_qualifies) ... ok
+test_fields_recorded (test_budget_b1j.Override.test_fields_recorded) ... ok
+test_floor_uses_the_lease_stop (test_budget_b1j.Override.test_floor_uses_the_lease_stop) ... ok
+test_module_constants_restored (test_budget_b1j.Override.test_module_constants_restored) ... ok
+test_override_values_are_exact (test_budget_b1j.Override.test_override_values_are_exact) ... ok
+test_price_cap_one_dollar (test_budget_b1j.Override.test_price_cap_one_dollar) ... ok
+test_reserve_still_binds (test_budget_b1j.Override.test_reserve_still_binds) ... ok
+test_most_cores_default_profile_first (test_budget_b1j.Selection.test_most_cores_default_profile_first) ... ok
+test_only_sub16_left_returns_nothing_for_the_default_workspace (test_budget_b1j.Selection.test_only_sub16_left_returns_nothing_for_the_default_workspace) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.238s
+
+OK

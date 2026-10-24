@@ -1,0 +1,15 @@
+{
+  "known_bad_count_before": 3,
+  "known_bad_count_after": 4,
+  "b1b_market_offers_before": 4,
+  "b1b_market_offers_after": 3,
+  "offer_43994882_machine_69146_excluded": true,
+  "bad_machines": [
+    69146,
+    145861,
+    150531,
+    152912
+  ],
+  "provider_retry_can_replace_57425378": true,
+  "other_campaign_timeouts": "none found: 145861/152912 already listed (historical startup failures), 150531 provider_host_error listed; 57359730/57363603 were tooling refusals on machines later used successfully"
+}

@@ -1,0 +1,33 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "tests": 3,
+  "passed": 3,
+  "operator_source_sha256": "538c353379ffd310b91a4fa487727a5ba6c9529b6c4c09c13b123fd2e57cf46c",
+  "guard_source_sha256": "2222e2c8950a994351c946ed09fa860416933a048f0bdd085b7dc155f3935c01",
+  "mode": "exact final operator ready branch with provider/SSH/clock fixtures",
+  "fingerprint_substitution": "bijective equality-preserving fixture keys; raw scan bytes not retained",
+  "cases": [
+    {
+      "name": "false_refusal",
+      "source": "UNVERIFIED-HOST_1320/lease_57363603/pin_receipt.jsonl",
+      "kind": "recorded pin-set replay",
+      "expected": "accept",
+      "actual": "accept"
+    },
+    {
+      "name": "absent_then_present",
+      "source": "observation_run/lease_57359730/readiness.txt",
+      "kind": "recorded absence plus explicit later-publication control",
+      "expected": "accept after20s wait",
+      "actual": "accept after20s wait"
+    },
+    {
+      "name": "mismatch",
+      "source": "recorded extra fingerprint with expected pin removed",
+      "kind": "derived negative control; not an independent live capture",
+      "expected": "refuse before SSH",
+      "actual": "refuse before SSH"
+    }
+  ],
+  "rules_frozen_after_successful_ssh_identity": true
+}

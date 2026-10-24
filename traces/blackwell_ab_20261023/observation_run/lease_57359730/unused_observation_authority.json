@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "lease_id": 57359730,
+  "record_limit": 8,
+  "arms": [
+    "on_observe_b",
+    "on_observe_b1"
+  ],
+  "not_before_utc": "2026-10-23T10:40:25.278347+00:00",
+  "expires_utc": "2026-10-23T13:10:25.278347+00:00",
+  "authority": "owner11:05/12:20/12:50 Windows ON observation; other-machine GB206 precedence",
+  "candidate_die": "GB206",
+  "page_policy": "own exact GB206 595 measured rows; no inheritance",
+  "allowed_pair_class": "first plain ID and first0e0000xx ID pinned per arm; intr00200000",
+  "other_faults_errors_or_failed_health": "immediate pidfd stop; no product recovery boot"
+}

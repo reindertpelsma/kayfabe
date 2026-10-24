@@ -1,0 +1,31 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "controller": "23:40 B1c one-lease grant",
+  "exact_channels": [
+    "0x14",
+    "0x1000000b"
+  ],
+  "intr": "00200000",
+  "code": 32,
+  "owned_qemu_only": true,
+  "record_limit_per_arm": 8,
+  "leases_authorized": 1,
+  "cap_usd": 2.5,
+  "stop_usd": 2.0,
+  "reserve_usd": 8,
+  "full_raw_xid_and_kernel_dmesg_context_required": true,
+  "production_CI_exact_VA_type_CE_rules_unchanged": true,
+  "falsifier": "TDR/bugcheck within10min after admitted pair refutes survival for actual die",
+  "native_verdicts_are_a_gate": false,
+  "pinned_repeats": 3,
+  "unpinned_controls": 1,
+  "native_falsifier": "ALIAS_REVOKED in>=2of3 valid pinned runs is native finding; root cause not claimed; continue Windows if safety healthy",
+  "attempt": 1,
+  "provider_retry_allowed": "one, different machine, same stop2.00/cap2.50",
+  "plan_stop_usd": 2.0,
+  "plan_cap_usd": 2.5,
+  "prior_round_runtime_usd": 0.0,
+  "deverified_admitted": "owner ruling: unverified hosts allowed for sweeps"
+}

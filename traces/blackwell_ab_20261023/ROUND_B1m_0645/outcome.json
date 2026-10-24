@@ -1,0 +1,86 @@
+{
+  "round": "B1m_0645",
+  "operator": "Claude",
+  "grant": "controller 06:45: one raised-budget lease on a GeForce RTX 5090 (GB202)",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "budget_override": {
+    "stop_usd": 3.0,
+    "cap_usd": 3.5,
+    "max_rate": 1.0
+  },
+  "scope": "RTX_5090 only (rehearsal/test_b1m_scope.py 2/2)",
+  "lease": {
+    "id": 57465679,
+    "offer": 56988927,
+    "machine": 57297,
+    "gpu": "RTX 5090",
+    "die": "GB202",
+    "geo": "Chile, CL",
+    "quote_dph": 0.7361111111111112,
+    "observed_dph": 0.8333333333333334,
+    "precreate_armed_utc": "2026-10-24T04:29:51.392081+00:00",
+    "created_utc": "2026-10-24T04:29:52.622963+00:00",
+    "ssh_ready_utc": "2026-10-24T04:33:00.431593+00:00",
+    "absence_verified_utc": "2026-10-24T05:00:54.778546+00:00",
+    "runtime_cost_estimate_usd": 0.4310545405092593,
+    "credit_after_observed_usd": 26.418269492660215
+  },
+  "media": {
+    "box_verified": [
+      "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "OpenSSH-Win64-v10.0.0.0.msi",
+      "virtio-win-0.1.302.iso"
+    ],
+    "fallback": [
+      "win11_ltsc_2024_eval_x64_en-us.iso"
+    ],
+    "iso_fallback_reason": "no progress at the 90 s projection check; SSH upload pinned the ISO in 104 s"
+  },
+  "native": "native suite 29/29, GR tier PASS, fuzz pinned 3/3 clean + control (ALIAS_REVOKED 0/3), 5 accepted native Xid31 controls",
+  "windows": "install check fail=0; 580.88 bind rc=0",
+  "arm_B": {
+    "rev": "48b027267",
+    "result": "STOPPED by the saved-Xid32 observation guard about 54 s after QEMU start",
+    "xid32_lines": [
+      "2026-10-24T04:59:18.563085+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=132363, name=qemu-system-x86, channel 0x0e00000b intr 00200000",
+      "2026-10-24T04:59:18.601071+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=132363, name=qemu-system-x86, channel 0x00000014 intr 00200000"
+    ],
+    "stop_reason": "Xid channel differs from the exact saved observation pair (0x0e00000b is not in {0x14, 0x1000000b})",
+    "note": "GB202 high channel 0x0e00000b matches the earlier GB202 lease 57340681; on GB205/GB206 it is 0x1000000b"
+  },
+  "arm_B1": "UNRUN (fatal stop before B1)",
+  "capture": {
+    "private": "/workspace/bw3-round-b1m-a1_rtx5090-run/private_capture_57465679/ (box /root/prov, full kfwin logs incl. on_observe_b_b1_qemu.log 1.15 MB, full host kernel journal; sha256 in lease_57465679/private_capture_SHA256SUMS.txt)",
+    "missing": "no collection boot runs after a fatal stop: no guest event export, no minidump, no live dump for this arm; the harness never copies LiveKernelReports dumps off the guest disk"
+  },
+  "time_table_tool": "tools/operator_time_table.py; the B1l time_table.json files use the collection-boot CLOCK offset, which the root-cause pass showed does not apply to the failing boot (use its A1/A2 anchors)",
+  "matrix": [
+    {
+      "arm": "Native (full stage)",
+      "die": "GB202",
+      "verdict": "PASS (native findings, not attestation)",
+      "evidence": "attempt1_rtx5090/native_baseline/"
+    },
+    {
+      "arm": "B",
+      "die": "GB202",
+      "rev": "48b027267",
+      "verdict": "STOPPED (guard: Xid32 pair 0x0e00000b/0x14 not the admitted pair)",
+      "evidence": "attempt1_rtx5090/lease_metadata/XID_STOP"
+    },
+    {
+      "arm": "B1",
+      "die": "GB202",
+      "rev": "cb80cbd29",
+      "verdict": "UNRUN",
+      "evidence": "same"
+    }
+  ],
+  "xid32_list": [
+    "2026-10-24T04:59:18.563085+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=132363, name=qemu-system-x86, channel 0x0e00000b intr 00200000",
+    "2026-10-24T04:59:18.601071+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=132363, name=qemu-system-x86, channel 0x00000014 intr 00200000"
+  ],
+  "tdr_verdict": "UNKNOWN (QEMU stopped by the guard before any TDR could occur)"
+}

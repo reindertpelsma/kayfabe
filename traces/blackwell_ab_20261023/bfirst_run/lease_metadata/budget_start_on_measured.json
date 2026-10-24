@@ -1,0 +1,7 @@
+{
+  "cell": "on_measured",
+  "utc": "2026-10-23T08:16:29.729907+00:00",
+  "latest_start_utc": "2026-10-23T09:48:03.802672+00:00",
+  "budget_cutoff_minutes": 150,
+  "may_start": true
+}

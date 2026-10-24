@@ -1,0 +1,62 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-24T11:03:42+00:00
+MEDIA_SUCCESS_WITHIN_PREPARATION_BUDGET 2026-10-24T11:03:59.375648+00:00
+[2026-10-24T11:03:59Z] WINVM_INSTALL_START name=kfwin repo=9ff51a6e qemu=/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-24T11:03:59Z] START prereqs
+[2026-10-24T11:03:59Z] EXIT prereqs rc=0
+[2026-10-24T11:03:59Z] START fetch
+[2026-10-24T11:04:21Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-24T11:04:25Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-24T11:04:25Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-24T11:04:29Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-24T11:04:29Z] EXIT fetch rc=0
+[2026-10-24T11:04:29Z] START apparmor
+[2026-10-24T11:04:29Z] AppArmor: swtpm may use /workspace/bw-capc-validation
+[2026-10-24T11:04:29Z] EXIT apparmor rc=0
+[2026-10-24T11:04:29Z] START secrets
+[2026-10-24T11:04:29Z] generated the Windows password (secrets/win_password, 0600)
+[2026-10-24T11:04:29Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-10-24T11:04:29Z] EXIT secrets rc=0
+[2026-10-24T11:04:29Z] START secureboot-key
+[2026-10-24T11:04:30Z] generated this host's kayfabe Secure Boot db key (/workspace/bw-capc-validation/secureboot/db.key, never leaves the host)
+[2026-10-24T11:04:30Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-24) sha256 Fingerprint=B2:AE:31:3C:6B:1B:F8:38:AD:09:95:82:A4:74:91:E6:4D:C3:1A:A9:BA:80:04:57:9C:10:A0:19:F2:FE:B7:9C
+[2026-10-24T11:04:30Z] EXIT secureboot-key rc=0
+[2026-10-24T11:04:30Z] START ovmf-vars
+INFO: reading raw edk2 varstore from /usr/share/OVMF/OVMF_VARS_4M.fd
+INFO: var store range: 0x64 -> 0x40000
+INFO: create variable PK
+INFO: clear PK sigdb
+INFO: add PK cert /tmp/tmpqeowscs9
+INFO: create variable KEK
+INFO: clear KEK sigdb
+INFO: add KEK cert /tmp/tmpqeowscs9
+INFO: add KEK cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationKEKCA2011.pem
+INFO: add dummy dbx entry
+INFO: create variable dbx
+INFO: create variable db
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftWindowsProductionPCA2011.pem
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationUEFICA2011.pem
+INFO: add db cert /workspace/bw-capc-validation/secureboot/db.crt
+INFO: create variable SecureBootEnable
+INFO: set variable SecureBootEnable: True
+INFO: create variable CustomMode
+INFO: set variable CustomMode: False
+INFO: writing raw edk2 varstore to /workspace/bw-capc-validation/kfwin/firmware/OVMF_VARS.fd.tmp
+[2026-10-24T11:04:31Z] VARS_CREATED /workspace/bw-capc-validation/kfwin/firmware/OVMF_VARS.fd
+[2026-10-24T11:04:31Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-24);
+[2026-10-24T11:04:31Z] EXIT ovmf-vars rc=0
+[2026-10-24T11:04:31Z] START tpm-manufacture
+TPM is listening on Unix socket.
+[2026-10-24T11:04:34Z] TPM_MANUFACTURED /workspace/bw-capc-validation/kfwin/tpm (5993 bytes of state)
+[2026-10-24T11:04:34Z] EXIT tpm-manufacture rc=0
+[2026-10-24T11:04:34Z] START disk
+[2026-10-24T11:04:34Z] DISK_CREATED base.qcow2 80G
+[2026-10-24T11:04:34Z] EXIT disk rc=0
+[2026-10-24T11:04:34Z] START unattend
+xorriso 1.5.4 : RockRidge filesystem manipulator, libburnia project.
+
+[2026-10-24T11:04:34Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-24T11:04:34Z] EXIT unattend rc=0
+[2026-10-24T11:04:34Z] START install-boot
+[2026-10-24T11:04:35Z] QEMU_START tag=install boot=1 pid=102118 log=logs/install_b1_qemu.log

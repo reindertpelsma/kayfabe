@@ -1,0 +1,20 @@
+{
+  "armed_utc": "2026-10-23T15:25:27.347817+00:00",
+  "deadline_utc": "2026-10-23T17:55:27.347817+00:00",
+  "seconds": 9000,
+  "quoted_rate": 0.2979814814814815,
+  "rate_bound": 0.3979814814814815,
+  "reservation_usd": 1.4949537037037037,
+  "credit_after_reservation": 27.173647356856787,
+  "stop_usd": 2.5,
+  "cap_usd": 3.0,
+  "reserve_usd": 8.0,
+  "leases_authorized": 1,
+  "state": "ARMED",
+  "pid": 1519909,
+  "starttime": 243471502,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "provider_verification": "verified"
+}

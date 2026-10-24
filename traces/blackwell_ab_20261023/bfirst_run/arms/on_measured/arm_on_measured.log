@@ -1,0 +1,18 @@
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_measured source=48b027267a0e05c9ffdb4a049d34f4d719fd1837 profile=on 2026-10-23T08:16:48+00:00
+[2026-10-23T08:16:48Z] detached: tag=on_measured, log logs/on_measured_run.log (stdout logs/on_measured_run.out)
+READINESS_CALIBRATED {"box": 57340681, "policy": {"banner_query": 100, "factor": 10, "first_query": 100, "handshake": 202, "observer_total": 360, "readiness_total": 900, "ssh_stage": 600, "steady_query": 25, "verify_stage": 240}, "probe_seconds": 64.969974181, "readiness_end": 2818.661281719}
+{"pid": 111032, "exe": "/workspace/bench/kf3-bins/48b02726/qemu-system-x86_64", "sha256": "4fbe887c8a1e1be0933cb25d39df4c3412de5d7ab16f09003f0b3c296553f054", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+INIT_OBSERVER_READY 2026-10-23T08:17:58+00:00
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-23T08:18:03.5671466Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2B85&SUBSYS_416F1458&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 5090","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-23T08:18:27.0097667Z; device status is verdict, not this command rc
+PRE_CLEANUP_START rc=255 2026-10-23T08:18:29+00:00

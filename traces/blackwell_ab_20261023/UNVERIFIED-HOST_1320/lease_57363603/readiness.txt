@@ -1,0 +1,28 @@
+UNVERIFIED-HOST ready
+READINESS 2026-10-23T11:19:24.758114+00:00 None
+READINESS 2026-10-23T11:19:45.858386+00:00 None
+READINESS 2026-10-23T11:20:06.970919+00:00 loading
+READINESS 2026-10-23T11:20:28.031305+00:00 loading
+READINESS 2026-10-23T11:20:49.088926+00:00 loading
+READINESS 2026-10-23T11:21:10.124956+00:00 loading
+READINESS 2026-10-23T11:21:31.175688+00:00 loading
+READINESS 2026-10-23T11:21:52.241936+00:00 loading
+READINESS 2026-10-23T11:22:13.445308+00:00 created
+READINESS 2026-10-23T11:22:34.618614+00:00 created
+READINESS 2026-10-23T11:23:00.733702+00:00 created
+READINESS 2026-10-23T11:23:26.859782+00:00 created
+READINESS 2026-10-23T11:23:52.927823+00:00 created
+READINESS 2026-10-23T11:24:19.016437+00:00 created
+READINESS 2026-10-23T11:24:45.093519+00:00 created
+READINESS 2026-10-23T11:25:11.156564+00:00 created
+CONSOLE_PIN mismatch 1
+Traceback (most recent call last):
+  File "/workspace/bw3-unverified-run/ops.py", line 404, in <module>
+    proof = C.wait_for_pin(
+        fields[2], console_text, elapsed_since_create=lease_age(),
+        factor=pin_factor, stage_started_elapsed=pin_stage_started,
+        clock=time.monotonic, sleep=time.sleep, record=record_pin,
+    )
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/console_pin.py", line 115, in wait_for_pin
+    raise PinMismatch("authenticated console host pin differs from scanned ed25519 key")
+console_pin.PinMismatch: authenticated console host pin differs from scanned ed25519 key

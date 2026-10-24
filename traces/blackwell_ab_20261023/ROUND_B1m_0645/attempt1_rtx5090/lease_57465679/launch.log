@@ -1,0 +1,15 @@
+UPLOAD_STAGE lease 57465679 die GB202 donor GB202
+Sat Oct 24 04:33:28 UTC 2026
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+KVM_DISK_PASS
+
+BUNDLE_UPLOADED_NO_CONTROLLER
+MEDIA_PIN_AND_LAUNCH_STAGE
+CHECKED8_STARTED win11_ltsc_2024_eval_x64_en-us.iso 2858325
+BOX_FETCH verified=['580.88-desktop-win10-win11-64bit-international-dch-whql.exe', 'OpenSSH-Win64-v10.0.0.0.msi', 'virtio-win-0.1.302.iso'] fallback=['win11_ltsc_2024_eval_x64_en-us.iso']
+CHECKED8_PIN_OK win11_ltsc_2024_eval_x64_en-us.iso
+ALL4_REMOTE_PINNED
+CONTROLLER_PID=2926
+
+CONTROLLER_STARTED lease 57465679

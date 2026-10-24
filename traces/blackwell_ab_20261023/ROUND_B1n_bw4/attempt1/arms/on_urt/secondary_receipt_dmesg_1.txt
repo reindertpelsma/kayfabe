@@ -1,0 +1,1156 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+2026-10-24T05:41:52,000000+00:00 Linux version 6.8.0-59-generic (buildd@lcy02-amd64-117) (x86_64-linux-gnu-gcc-12 (Ubuntu 12.3.0-1ubuntu1~22.04) 12.3.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #61~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 15 17:03:15 UTC 2 (Ubuntu 6.8.0-59.61~22.04.1-generic 6.8.12)
+2026-10-24T05:41:52,000000+00:00 Command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+2026-10-24T05:41:52,000000+00:00 KERNEL supported cpus:
+2026-10-24T05:41:52,000000+00:00   Intel GenuineIntel
+2026-10-24T05:41:52,000000+00:00   AMD AuthenticAMD
+2026-10-24T05:41:52,000000+00:00   Hygon HygonGenuine
+2026-10-24T05:41:52,000000+00:00   Centaur CentaurHauls
+2026-10-24T05:41:52,000000+00:00   zhaoxin   Shanghai
+2026-10-24T05:41:52,000000+00:00 BIOS-provided physical RAM map:
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x0000000000100000-0x00000000beb3efff] usable
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000beb3f000-0x00000000bebfffff] reserved
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bec00000-0x00000000bee67fff] usable
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bee68000-0x00000000beea8fff] reserved
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000beea9000-0x00000000bf8edfff] usable
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bf8ee000-0x00000000bfb6dfff] reserved
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bfb6e000-0x00000000bfb7dfff] ACPI data
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bfb7e000-0x00000000bfbfdfff] ACPI NVS
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bfbfe000-0x00000000bff7bfff] usable
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000bff7c000-0x00000000bfffffff] reserved
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x00000000ffc00000-0x00000000ffffffff] reserved
+2026-10-24T05:41:52,000000+00:00 BIOS-e820: [mem 0x0000000100000000-0x000000196cefffff] usable
+2026-10-24T05:41:52,000000+00:00 NX (Execute Disable) protection: active
+2026-10-24T05:41:52,000000+00:00 APIC: Static calls initialized
+2026-10-24T05:41:52,000000+00:00 e820: update [mem 0xbe0cc018-0xbe0fe457] usable ==> usable
+2026-10-24T05:41:52,000000+00:00 e820: update [mem 0xbe0cc018-0xbe0fe457] usable ==> usable
+2026-10-24T05:41:52,000000+00:00 e820: update [mem 0xbe0a4018-0xbe0cba57] usable ==> usable
+2026-10-24T05:41:52,000000+00:00 e820: update [mem 0xbe0a4018-0xbe0cba57] usable ==> usable
+2026-10-24T05:41:52,000000+00:00 extended physical RAM map:
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x0000000000100000-0x00000000be0a4017] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000be0a4018-0x00000000be0cba57] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000be0cba58-0x00000000be0cc017] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000be0cc018-0x00000000be0fe457] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000be0fe458-0x00000000beb3efff] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000beb3f000-0x00000000bebfffff] reserved
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bec00000-0x00000000bee67fff] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bee68000-0x00000000beea8fff] reserved
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000beea9000-0x00000000bf8edfff] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bf8ee000-0x00000000bfb6dfff] reserved
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bfb6e000-0x00000000bfb7dfff] ACPI data
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bfb7e000-0x00000000bfbfdfff] ACPI NVS
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bfbfe000-0x00000000bff7bfff] usable
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000bff7c000-0x00000000bfffffff] reserved
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x00000000ffc00000-0x00000000ffffffff] reserved
+2026-10-24T05:41:52,000000+00:00 reserve setup_data: [mem 0x0000000100000000-0x000000196cefffff] usable
+2026-10-24T05:41:52,000000+00:00 efi: EFI v2.7 by EDK II
+2026-10-24T05:41:52,000000+00:00 efi: SMBIOS=0xbf922000 ACPI=0xbfb7d000 ACPI 2.0=0xbfb7d014 MEMATTR=0xbe13c518 MOKvar=0xbf91c000
+2026-10-24T05:41:52,000000+00:00 efi: Remove mem143: MMIO range=[0xffc00000-0xffffffff] (4MB) from e820 map
+2026-10-24T05:41:52,000000+00:00 e820: remove [mem 0xffc00000-0xffffffff] reserved
+2026-10-24T05:41:52,000000+00:00 secureboot: Secure boot disabled
+2026-10-24T05:41:52,000000+00:00 SMBIOS 2.8 present.
+2026-10-24T05:41:52,000000+00:00 DMI: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 0.0.0 02/06/2015
+2026-10-24T05:41:52,000000+00:00 Hypervisor detected: KVM
+2026-10-24T05:41:52,000000+00:00 kvm-clock: Using msrs 4b564d01 and 4b564d00
+2026-10-24T05:41:52,000000+00:00 kvm-clock: using sched offset of 5996440700 cycles
+2026-10-24T05:41:52,000003+00:00 clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+2026-10-24T05:41:52,000006+00:00 tsc: Detected 2245.780 MHz processor
+2026-10-24T05:41:52,000142+00:00 e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+2026-10-24T05:41:52,000145+00:00 e820: remove [mem 0x000a0000-0x000fffff] usable
+2026-10-24T05:41:52,000152+00:00 last_pfn = 0x196cf00 max_arch_pfn = 0x400000000
+2026-10-24T05:41:52,000197+00:00 MTRR map: 4 entries (2 fixed + 2 variable; max 18), built from 8 variable MTRRs
+2026-10-24T05:41:52,000201+00:00 x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT
+2026-10-24T05:41:52,000257+00:00 last_pfn = 0xbff7c max_arch_pfn = 0x400000000
+2026-10-24T05:41:52,004657+00:00 Using GB pages for direct mapping
+2026-10-24T05:41:52,005231+00:00 secureboot: Secure boot disabled
+2026-10-24T05:41:52,005233+00:00 ACPI: Early table checksum verification disabled
+2026-10-24T05:41:52,005237+00:00 ACPI: RSDP 0x00000000BFB7D014 000024 (v02 BOCHS )
+2026-10-24T05:41:52,005242+00:00 ACPI: XSDT 0x00000000BFB7C0E8 00003C (v01 BOCHS  BXPC     00000001      01000013)
+2026-10-24T05:41:52,005249+00:00 ACPI: FACP 0x00000000BFB78000 000074 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-24T05:41:52,005255+00:00 ACPI: DSDT 0x00000000BFB79000 002055 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-24T05:41:52,005260+00:00 ACPI: FACS 0x00000000BFBDC000 000040
+2026-10-24T05:41:52,005264+00:00 ACPI: APIC 0x00000000BFB77000 000160 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-24T05:41:52,005270+00:00 ACPI: WAET 0x00000000BFB76000 000028 (v01 BOCHS  BXPC     00000001 BXPC 00000001)
+2026-10-24T05:41:52,005274+00:00 ACPI: Reserving FACP table memory at [mem 0xbfb78000-0xbfb78073]
+2026-10-24T05:41:52,005279+00:00 ACPI: Reserving DSDT table memory at [mem 0xbfb79000-0xbfb7b054]
+2026-10-24T05:41:52,005281+00:00 ACPI: Reserving FACS table memory at [mem 0xbfbdc000-0xbfbdc03f]
+2026-10-24T05:41:52,005282+00:00 ACPI: Reserving APIC table memory at [mem 0xbfb77000-0xbfb7715f]
+2026-10-24T05:41:52,005283+00:00 ACPI: Reserving WAET table memory at [mem 0xbfb76000-0xbfb76027]
+2026-10-24T05:41:52,005993+00:00 No NUMA configuration found
+2026-10-24T05:41:52,005996+00:00 Faking a node at [mem 0x0000000000000000-0x000000196cefffff]
+2026-10-24T05:41:52,006009+00:00 NODE_DATA(0) allocated [mem 0x196ced5000-0x196cefffff]
+2026-10-24T05:41:52,006508+00:00 Zone ranges:
+2026-10-24T05:41:52,006509+00:00   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+2026-10-24T05:41:52,006511+00:00   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+2026-10-24T05:41:52,006513+00:00   Normal   [mem 0x0000000100000000-0x000000196cefffff]
+2026-10-24T05:41:52,006514+00:00   Device   empty
+2026-10-24T05:41:52,006515+00:00 Movable zone start for each node
+2026-10-24T05:41:52,006517+00:00 Early memory node ranges
+2026-10-24T05:41:52,006518+00:00   node   0: [mem 0x0000000000001000-0x000000000009ffff]
+2026-10-24T05:41:52,006519+00:00   node   0: [mem 0x0000000000100000-0x00000000beb3efff]
+2026-10-24T05:41:52,006521+00:00   node   0: [mem 0x00000000bec00000-0x00000000bee67fff]
+2026-10-24T05:41:52,006522+00:00   node   0: [mem 0x00000000beea9000-0x00000000bf8edfff]
+2026-10-24T05:41:52,006522+00:00   node   0: [mem 0x00000000bfbfe000-0x00000000bff7bfff]
+2026-10-24T05:41:52,006523+00:00   node   0: [mem 0x0000000100000000-0x000000196cefffff]
+2026-10-24T05:41:52,006533+00:00 Initmem setup node 0 [mem 0x0000000000001000-0x000000196cefffff]
+2026-10-24T05:41:52,006543+00:00 On node 0, zone DMA: 1 pages in unavailable ranges
+2026-10-24T05:41:52,006562+00:00 On node 0, zone DMA: 96 pages in unavailable ranges
+2026-10-24T05:41:52,009860+00:00 On node 0, zone DMA32: 193 pages in unavailable ranges
+2026-10-24T05:41:52,009874+00:00 On node 0, zone DMA32: 65 pages in unavailable ranges
+2026-10-24T05:41:52,009887+00:00 On node 0, zone DMA32: 784 pages in unavailable ranges
+2026-10-24T05:41:52,120501+00:00 On node 0, zone Normal: 132 pages in unavailable ranges
+2026-10-24T05:41:52,120630+00:00 On node 0, zone Normal: 12544 pages in unavailable ranges
+2026-10-24T05:41:52,121565+00:00 ACPI: PM-Timer IO Port: 0xb008
+2026-10-24T05:41:52,121585+00:00 ACPI: LAPIC_NMI (acpi_id[0xff] dfl dfl lint[0x1])
+2026-10-24T05:41:52,121623+00:00 IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23
+2026-10-24T05:41:52,121626+00:00 ACPI: INT_SRC_OVR (bus 0 bus_irq 0 global_irq 2 dfl dfl)
+2026-10-24T05:41:52,121629+00:00 ACPI: INT_SRC_OVR (bus 0 bus_irq 5 global_irq 5 high level)
+2026-10-24T05:41:52,121630+00:00 ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+2026-10-24T05:41:52,121631+00:00 ACPI: INT_SRC_OVR (bus 0 bus_irq 10 global_irq 10 high level)
+2026-10-24T05:41:52,121632+00:00 ACPI: INT_SRC_OVR (bus 0 bus_irq 11 global_irq 11 high level)
+2026-10-24T05:41:52,121636+00:00 ACPI: Using ACPI (MADT) for SMP configuration information
+2026-10-24T05:41:52,121638+00:00 TSC deadline timer available
+2026-10-24T05:41:52,121639+00:00 smpboot: Allowing 30 CPUs, 0 hotplug CPUs
+2026-10-24T05:41:52,121664+00:00 kvm-guest: APIC: eoi() replaced with kvm_guest_apic_eoi_write()
+2026-10-24T05:41:52,121681+00:00 kvm-guest: KVM setup pv remote TLB flush
+2026-10-24T05:41:52,121685+00:00 kvm-guest: setup PV sched yield
+2026-10-24T05:41:52,121696+00:00 PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+2026-10-24T05:41:52,121698+00:00 PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+2026-10-24T05:41:52,121700+00:00 PM: hibernation: Registered nosave memory: [mem 0xbe0a4000-0xbe0a4fff]
+2026-10-24T05:41:52,121701+00:00 PM: hibernation: Registered nosave memory: [mem 0xbe0cb000-0xbe0cbfff]
+2026-10-24T05:41:52,121702+00:00 PM: hibernation: Registered nosave memory: [mem 0xbe0cc000-0xbe0ccfff]
+2026-10-24T05:41:52,121703+00:00 PM: hibernation: Registered nosave memory: [mem 0xbe0fe000-0xbe0fefff]
+2026-10-24T05:41:52,121705+00:00 PM: hibernation: Registered nosave memory: [mem 0xbeb3f000-0xbebfffff]
+2026-10-24T05:41:52,121706+00:00 PM: hibernation: Registered nosave memory: [mem 0xbee68000-0xbeea8fff]
+2026-10-24T05:41:52,121708+00:00 PM: hibernation: Registered nosave memory: [mem 0xbf8ee000-0xbfb6dfff]
+2026-10-24T05:41:52,121708+00:00 PM: hibernation: Registered nosave memory: [mem 0xbfb6e000-0xbfb7dfff]
+2026-10-24T05:41:52,121709+00:00 PM: hibernation: Registered nosave memory: [mem 0xbfb7e000-0xbfbfdfff]
+2026-10-24T05:41:52,121711+00:00 PM: hibernation: Registered nosave memory: [mem 0xbff7c000-0xbfffffff]
+2026-10-24T05:41:52,121711+00:00 PM: hibernation: Registered nosave memory: [mem 0xc0000000-0xffffffff]
+2026-10-24T05:41:52,121713+00:00 [mem 0xc0000000-0xffffffff] available for PCI devices
+2026-10-24T05:41:52,121715+00:00 Booting paravirtualized kernel on KVM
+2026-10-24T05:41:52,121718+00:00 clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1910969940391419 ns
+2026-10-24T05:41:52,121726+00:00 setup_percpu: NR_CPUS:8192 nr_cpumask_bits:30 nr_cpu_ids:30 nr_node_ids:1
+2026-10-24T05:41:52,123147+00:00 percpu: Embedded 86 pages/cpu s229376 r8192 d114688 u524288
+2026-10-24T05:41:52,123158+00:00 pcpu-alloc: s229376 r8192 d114688 u524288 alloc=1*2097152
+2026-10-24T05:41:52,123161+00:00 pcpu-alloc: [0] 00 01 02 03 [0] 04 05 06 07
+2026-10-24T05:41:52,123166+00:00 pcpu-alloc: [0] 08 09 10 11 [0] 12 13 14 15
+2026-10-24T05:41:52,123172+00:00 pcpu-alloc: [0] 16 17 18 19 [0] 20 21 22 23
+2026-10-24T05:41:52,123176+00:00 pcpu-alloc: [0] 24 25 26 27 [0] 28 29 -- --
+2026-10-24T05:41:52,123222+00:00 kvm-guest: PV spinlocks enabled
+2026-10-24T05:41:52,123225+00:00 PV qspinlock hash table entries: 256 (order: 0, 4096 bytes, linear)
+2026-10-24T05:41:52,123228+00:00 Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+2026-10-24T05:41:52,123292+00:00 Unknown kernel command line parameters "BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic", will be passed to user space.
+2026-10-24T05:41:52,123311+00:00 random: crng init done
+2026-10-24T05:41:52,127384+00:00 Dentry cache hash table entries: 8388608 (order: 14, 67108864 bytes, linear)
+2026-10-24T05:41:52,129425+00:00 Inode-cache hash table entries: 4194304 (order: 13, 33554432 bytes, linear)
+2026-10-24T05:41:52,129787+00:00 Fallback order for Node 0: 0
+2026-10-24T05:41:52,129795+00:00 Built 1 zonelists, mobility grouping on.  Total pages: 25982559
+2026-10-24T05:41:52,129797+00:00 Policy zone: Normal
+2026-10-24T05:41:52,129805+00:00 mem auto-init: stack:all(zero), heap alloc:on, heap free:off
+2026-10-24T05:41:52,129810+00:00 software IO TLB: area num 32.
+2026-10-24T05:41:52,316910+00:00 Memory: 103676144K/105588772K available (22528K kernel code, 4435K rwdata, 13948K rodata, 4984K init, 4732K bss, 1912368K reserved, 0K cma-reserved)
+2026-10-24T05:41:52,317933+00:00 SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=30, Nodes=1
+2026-10-24T05:41:52,317960+00:00 ftrace: allocating 58152 entries in 228 pages
+2026-10-24T05:41:52,331784+00:00 ftrace: allocated 228 pages with 4 groups
+2026-10-24T05:41:52,332775+00:00 Dynamic Preempt: voluntary
+2026-10-24T05:41:52,332905+00:00 rcu: Preemptible hierarchical RCU implementation.
+2026-10-24T05:41:52,332906+00:00 rcu: 	RCU restricting CPUs from NR_CPUS=8192 to nr_cpu_ids=30.
+2026-10-24T05:41:52,332907+00:00 	Trampoline variant of Tasks RCU enabled.
+2026-10-24T05:41:52,332908+00:00 	Rude variant of Tasks RCU enabled.
+2026-10-24T05:41:52,332909+00:00 	Tracing variant of Tasks RCU enabled.
+2026-10-24T05:41:52,332909+00:00 rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+2026-10-24T05:41:52,332910+00:00 rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=30
+2026-10-24T05:41:52,336079+00:00 NR_IRQS: 524544, nr_irqs: 664, preallocated irqs: 16
+2026-10-24T05:41:52,336299+00:00 rcu: srcu_init: Setting srcu_struct sizes based on contention.
+2026-10-24T05:41:52,336397+00:00 Console: colour dummy device 80x25
+2026-10-24T05:41:52,336399+00:00 printk: legacy console [tty1] enabled
+2026-10-24T05:41:52,336780+00:00 printk: legacy console [ttyS0] enabled
+2026-10-24T05:41:52,600083+00:00 ACPI: Core revision 20230628
+2026-10-24T05:41:52,601175+00:00 APIC: Switch to symmetric I/O mode setup
+2026-10-24T05:41:52,602719+00:00 x2apic enabled
+2026-10-24T05:41:52,603762+00:00 APIC: Switched APIC routing to: physical x2apic
+2026-10-24T05:41:52,605192+00:00 kvm-guest: APIC: send_IPI_mask() replaced with kvm_send_ipi_mask()
+2026-10-24T05:41:52,607043+00:00 kvm-guest: APIC: send_IPI_mask_allbutself() replaced with kvm_send_ipi_mask_allbutself()
+2026-10-24T05:41:52,609364+00:00 kvm-guest: setup PV IPIs
+2026-10-24T05:41:52,611344+00:00 tsc: Marking TSC unstable due to TSCs unsynchronized
+2026-10-24T05:41:52,613444+00:00 Calibrating delay loop (skipped) preset value.. 4491.56 BogoMIPS (lpj=2245780)
+2026-10-24T05:41:52,614439+00:00 x86/cpu: User Mode Instruction Prevention (UMIP) activated
+2026-10-24T05:41:52,614439+00:00 Last level iTLB entries: 4KB 512, 2MB 255, 4MB 127
+2026-10-24T05:41:52,614439+00:00 Last level dTLB entries: 4KB 512, 2MB 255, 4MB 127, 1GB 0
+2026-10-24T05:41:52,614439+00:00 Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+2026-10-24T05:41:52,614439+00:00 Spectre V2 : Mitigation: Retpolines
+2026-10-24T05:41:52,614439+00:00 Spectre V2 : Spectre v2 / SpectreRSB mitigation: Filling RSB on context switch
+2026-10-24T05:41:52,614439+00:00 Spectre V2 : Spectre v2 / SpectreRSB : Filling RSB on VMEXIT
+2026-10-24T05:41:52,614439+00:00 Spectre V2 : Enabling Restricted Speculation for firmware calls
+2026-10-24T05:41:52,614439+00:00 Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+2026-10-24T05:41:52,614439+00:00 Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+2026-10-24T05:41:52,614439+00:00 Speculative Return Stack Overflow: IBPB-extending microcode not applied!
+2026-10-24T05:41:52,614439+00:00 Speculative Return Stack Overflow: WARNING: See https://kernel.org/doc/html/latest/admin-guide/hw-vuln/srso.html for mitigation options.
+2026-10-24T05:41:52,614439+00:00 Speculative Return Stack Overflow: Vulnerable: Safe RET, no microcode
+2026-10-24T05:41:52,614439+00:00 x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+2026-10-24T05:41:52,614439+00:00 x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+2026-10-24T05:41:52,614439+00:00 x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+2026-10-24T05:41:52,614439+00:00 x86/fpu: Supporting XSAVE feature 0x200: 'Protection Keys User registers'
+2026-10-24T05:41:52,614439+00:00 x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+2026-10-24T05:41:52,614439+00:00 x86/fpu: xstate_offset[9]:  832, xstate_sizes[9]:    8
+2026-10-24T05:41:52,614439+00:00 x86/fpu: Enabled xstate features 0x207, context size is 840 bytes, using 'compacted' format.
+2026-10-24T05:41:52,614439+00:00 Freeing SMP alternatives memory: 48K
+2026-10-24T05:41:52,614439+00:00 pid_max: default: 32768 minimum: 301
+2026-10-24T05:41:52,614439+00:00 LSM: initializing lsm=lockdown,capability,landlock,yama,apparmor,integrity
+2026-10-24T05:41:52,614439+00:00 landlock: Up and running.
+2026-10-24T05:41:52,614439+00:00 Yama: becoming mindful.
+2026-10-24T05:41:52,614439+00:00 AppArmor: AppArmor initialized
+2026-10-24T05:41:52,614439+00:00 Mount-cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+2026-10-24T05:41:52,614439+00:00 Mountpoint-cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+2026-10-24T05:41:52,614439+00:00 smpboot: CPU0: AMD EPYC 7B13 64-Core Processor (family: 0x19, model: 0x1, stepping: 0x1)
+2026-10-24T05:41:52,614709+00:00 RCU Tasks: Setting shift to 5 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=30.
+2026-10-24T05:41:52,615493+00:00 RCU Tasks Rude: Setting shift to 5 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=30.
+2026-10-24T05:41:52,616485+00:00 RCU Tasks Trace: Setting shift to 5 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=30.
+2026-10-24T05:41:52,617603+00:00 Performance Events: Fam17h+ core perfctr, AMD PMU driver.
+2026-10-24T05:41:52,618454+00:00 ... version:                0
+2026-10-24T05:41:52,619450+00:00 ... bit width:              48
+2026-10-24T05:41:52,620450+00:00 ... generic registers:      6
+2026-10-24T05:41:52,621450+00:00 ... value mask:             0000ffffffffffff
+2026-10-24T05:41:52,622451+00:00 ... max period:             00007fffffffffff
+2026-10-24T05:41:52,623451+00:00 ... fixed-purpose events:   0
+2026-10-24T05:41:52,624450+00:00 ... event mask:             000000000000003f
+2026-10-24T05:41:52,625608+00:00 signal: max sigframe size: 3376
+2026-10-24T05:41:52,626517+00:00 rcu: Hierarchical SRCU implementation.
+2026-10-24T05:41:52,627451+00:00 rcu: 	Max phase no-delay instances is 400.
+2026-10-24T05:41:52,632955+00:00 smp: Bringing up secondary CPUs ...
+2026-10-24T05:41:52,633649+00:00 smpboot: x86: Booting SMP configuration:
+2026-10-24T05:41:52,634455+00:00 .... node  #0, CPUs:        #1  #2  #3  #4  #5  #6  #7  #8  #9 #10 #11 #12 #13 #14 #15 #16 #17 #18 #19 #20 #21 #22 #23 #24 #25 #26 #27 #28 #29
+2026-10-24T05:41:52,660601+00:00 smp: Brought up 1 node, 30 CPUs
+2026-10-24T05:41:52,662450+00:00 smpboot: Max logical packages: 30
+2026-10-24T05:41:52,663454+00:00 smpboot: Total of 30 processors activated (134746.80 BogoMIPS)
+2026-10-24T05:41:52,669982+00:00 devtmpfs: initialized
+2026-10-24T05:41:52,670530+00:00 x86/mm: Memory block size: 128MB
+2026-10-24T05:41:52,687597+00:00 ACPI: PM: Registering ACPI NVS region [mem 0xbfb7e000-0xbfbfdfff] (524288 bytes)
+2026-10-24T05:41:52,688557+00:00 clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+2026-10-24T05:41:52,689491+00:00 futex hash table entries: 8192 (order: 7, 524288 bytes, linear)
+2026-10-24T05:41:52,690614+00:00 pinctrl core: initialized pinctrl subsystem
+2026-10-24T05:41:52,691676+00:00 PM: RTC time: 05:41:52, date: 2026-10-24
+2026-10-24T05:41:52,693310+00:00 NET: Registered PF_NETLINK/PF_ROUTE protocol family
+2026-10-24T05:41:52,693902+00:00 DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations
+2026-10-24T05:41:52,694706+00:00 DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+2026-10-24T05:41:52,695877+00:00 DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+2026-10-24T05:41:52,696483+00:00 audit: initializing netlink subsys (disabled)
+2026-10-24T05:41:52,697509+00:00 audit: type=2000 audit(1792820512.971:1): state=initialized audit_enabled=0 res=1
+2026-10-24T05:41:52,697751+00:00 thermal_sys: Registered thermal governor 'fair_share'
+2026-10-24T05:41:52,698457+00:00 thermal_sys: Registered thermal governor 'bang_bang'
+2026-10-24T05:41:52,699452+00:00 thermal_sys: Registered thermal governor 'step_wise'
+2026-10-24T05:41:52,700451+00:00 thermal_sys: Registered thermal governor 'user_space'
+2026-10-24T05:41:52,701452+00:00 thermal_sys: Registered thermal governor 'power_allocator'
+2026-10-24T05:41:52,702469+00:00 EISA bus registered
+2026-10-24T05:41:52,704511+00:00 cpuidle: using governor ladder
+2026-10-24T05:41:52,705474+00:00 cpuidle: using governor menu
+2026-10-24T05:41:52,708769+00:00 acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+2026-10-24T05:41:52,709724+00:00 PCI: Using configuration type 1 for base access
+2026-10-24T05:41:52,710451+00:00 PCI: Using configuration type 1 for extended access
+2026-10-24T05:41:52,711816+00:00 kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+2026-10-24T05:41:52,745903+00:00 HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+2026-10-24T05:41:52,746454+00:00 HugeTLB: 16380 KiB vmemmap can be freed for a 1.00 GiB page
+2026-10-24T05:41:52,747453+00:00 HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+2026-10-24T05:41:52,748451+00:00 HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+2026-10-24T05:41:52,751157+00:00 fbcon: Taking over console
+2026-10-24T05:41:52,751499+00:00 ACPI: Added _OSI(Module Device)
+2026-10-24T05:41:52,752451+00:00 ACPI: Added _OSI(Processor Device)
+2026-10-24T05:41:52,753451+00:00 ACPI: Added _OSI(3.0 _SCP Extensions)
+2026-10-24T05:41:52,755465+00:00 ACPI: Added _OSI(Processor Aggregator Device)
+2026-10-24T05:41:52,761551+00:00 ACPI: 1 ACPI AML tables successfully acquired and loaded
+2026-10-24T05:41:52,766531+00:00 ACPI: _OSC evaluation for CPUs failed, trying _PDC
+2026-10-24T05:41:52,769103+00:00 ACPI: Interpreter enabled
+2026-10-24T05:41:52,771478+00:00 ACPI: PM: (supports S0 S5)
+2026-10-24T05:41:52,772453+00:00 ACPI: Using IOAPIC for interrupt routing
+2026-10-24T05:41:52,774987+00:00 PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+2026-10-24T05:41:52,779457+00:00 PCI: Using E820 reservations for host bridge windows
+2026-10-24T05:41:52,782873+00:00 ACPI: Enabled 2 GPEs in block 00 to 0F
+2026-10-24T05:41:52,796337+00:00 ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+2026-10-24T05:41:52,799463+00:00 acpi PNP0A03:00: _OSC: OS supports [ExtendedConfig ASPM ClockPM Segments MSI EDR HPX-Type3]
+2026-10-24T05:41:52,804331+00:00 acpiphp: Slot [2] registered
+2026-10-24T05:41:52,806498+00:00 acpiphp: Slot [3] registered
+2026-10-24T05:41:52,807497+00:00 acpiphp: Slot [4] registered
+2026-10-24T05:41:52,809501+00:00 acpiphp: Slot [5] registered
+2026-10-24T05:41:52,811497+00:00 acpiphp: Slot [6] registered
+2026-10-24T05:41:52,813492+00:00 acpiphp: Slot [7] registered
+2026-10-24T05:41:52,815495+00:00 acpiphp: Slot [8] registered
+2026-10-24T05:41:52,816492+00:00 acpiphp: Slot [9] registered
+2026-10-24T05:41:52,818487+00:00 acpiphp: Slot [10] registered
+2026-10-24T05:41:52,819486+00:00 acpiphp: Slot [11] registered
+2026-10-24T05:41:52,821489+00:00 acpiphp: Slot [12] registered
+2026-10-24T05:41:52,822487+00:00 acpiphp: Slot [13] registered
+2026-10-24T05:41:52,824486+00:00 acpiphp: Slot [14] registered
+2026-10-24T05:41:52,825487+00:00 acpiphp: Slot [15] registered
+2026-10-24T05:41:52,827487+00:00 acpiphp: Slot [16] registered
+2026-10-24T05:41:52,828487+00:00 acpiphp: Slot [17] registered
+2026-10-24T05:41:52,830486+00:00 acpiphp: Slot [18] registered
+2026-10-24T05:41:52,831489+00:00 acpiphp: Slot [19] registered
+2026-10-24T05:41:52,833487+00:00 acpiphp: Slot [20] registered
+2026-10-24T05:41:52,834486+00:00 acpiphp: Slot [21] registered
+2026-10-24T05:41:52,836487+00:00 acpiphp: Slot [22] registered
+2026-10-24T05:41:52,837487+00:00 acpiphp: Slot [23] registered
+2026-10-24T05:41:52,839487+00:00 acpiphp: Slot [24] registered
+2026-10-24T05:41:52,840486+00:00 acpiphp: Slot [25] registered
+2026-10-24T05:41:52,842489+00:00 acpiphp: Slot [26] registered
+2026-10-24T05:41:52,843486+00:00 acpiphp: Slot [27] registered
+2026-10-24T05:41:52,845487+00:00 acpiphp: Slot [28] registered
+2026-10-24T05:41:52,846501+00:00 acpiphp: Slot [29] registered
+2026-10-24T05:41:52,848487+00:00 acpiphp: Slot [30] registered
+2026-10-24T05:41:52,849493+00:00 acpiphp: Slot [31] registered
+2026-10-24T05:41:52,851477+00:00 PCI host bridge to bus 0000:00
+2026-10-24T05:41:52,852453+00:00 pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+2026-10-24T05:41:52,855453+00:00 pci_bus 0000:00: root bus resource [io  0x0d00-0xffff window]
+2026-10-24T05:41:52,857453+00:00 pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+2026-10-24T05:41:52,860453+00:00 pci_bus 0000:00: root bus resource [mem 0xc0000000-0xfebfffff window]
+2026-10-24T05:41:52,863453+00:00 pci_bus 0000:00: root bus resource [mem 0x2000000000-0x207fffffff window]
+2026-10-24T05:41:52,865454+00:00 pci_bus 0000:00: root bus resource [bus 00-ff]
+2026-10-24T05:41:52,867804+00:00 pci 0000:00:00.0: [8086:1237] type 00 class 0x060000 conventional PCI endpoint
+2026-10-24T05:41:52,873585+00:00 pci 0000:00:01.0: [8086:7000] type 00 class 0x060100 conventional PCI endpoint
+2026-10-24T05:41:52,877498+00:00 pci 0000:00:01.1: [8086:7010] type 00 class 0x010180 conventional PCI endpoint
+2026-10-24T05:41:52,881959+00:00 pci 0000:00:01.1: BAR 4 [io  0xc240-0xc24f]
+2026-10-24T05:41:52,883525+00:00 pci 0000:00:01.1: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+2026-10-24T05:41:52,886453+00:00 pci 0000:00:01.1: BAR 1 [io  0x03f6]: legacy IDE quirk
+2026-10-24T05:41:52,888452+00:00 pci 0000:00:01.1: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+2026-10-24T05:41:52,891453+00:00 pci 0000:00:01.1: BAR 3 [io  0x0376]: legacy IDE quirk
+2026-10-24T05:41:52,893774+00:00 pci 0000:00:01.2: [8086:7020] type 00 class 0x0c0300 conventional PCI endpoint
+2026-10-24T05:41:52,899298+00:00 pci 0000:00:01.2: BAR 4 [io  0xc220-0xc23f]
+2026-10-24T05:41:52,901827+00:00 pci 0000:00:01.3: [8086:7113] type 00 class 0x068000 conventional PCI endpoint
+2026-10-24T05:41:52,906248+00:00 pci 0000:00:01.3: quirk: [io  0xb000-0xb03f] claimed by PIIX4 ACPI
+2026-10-24T05:41:52,908469+00:00 pci 0000:00:01.3: quirk: [io  0xb100-0xb10f] claimed by PIIX4 SMB
+2026-10-24T05:41:52,912070+00:00 pci 0000:00:02.0: [1af4:1000] type 00 class 0x020000 conventional PCI endpoint
+2026-10-24T05:41:52,918464+00:00 pci 0000:00:02.0: BAR 0 [io  0xc200-0xc21f]
+2026-10-24T05:41:52,920490+00:00 pci 0000:00:02.0: BAR 1 [mem 0xc4087000-0xc4087fff]
+2026-10-24T05:41:52,923525+00:00 pci 0000:00:02.0: BAR 4 [mem 0x2012000000-0x2012003fff 64bit pref]
+2026-10-24T05:41:52,926469+00:00 pci 0000:00:02.0: ROM [mem 0xfff80000-0xffffffff pref]
+2026-10-24T05:41:52,930917+00:00 pci 0000:00:03.0: [1af4:1003] type 00 class 0x078000 conventional PCI endpoint
+2026-10-24T05:41:52,937462+00:00 pci 0000:00:03.0: BAR 0 [io  0xc1c0-0xc1ff]
+2026-10-24T05:41:52,938467+00:00 pci 0000:00:03.0: BAR 1 [mem 0xc4086000-0xc4086fff]
+2026-10-24T05:41:52,941511+00:00 pci 0000:00:03.0: BAR 4 [mem 0x2012004000-0x2012007fff 64bit pref]
+2026-10-24T05:41:52,947029+00:00 pci 0000:00:04.0: [1af4:1001] type 00 class 0x010000 conventional PCI endpoint
+2026-10-24T05:41:52,953464+00:00 pci 0000:00:04.0: BAR 0 [io  0xc100-0xc17f]
+2026-10-24T05:41:52,955471+00:00 pci 0000:00:04.0: BAR 1 [mem 0xc4085000-0xc4085fff]
+2026-10-24T05:41:52,958518+00:00 pci 0000:00:04.0: BAR 4 [mem 0x2012008000-0x201200bfff 64bit pref]
+2026-10-24T05:41:52,962836+00:00 pci 0000:00:05.0: [1af4:1001] type 00 class 0x010000 conventional PCI endpoint
+2026-10-24T05:41:52,969462+00:00 pci 0000:00:05.0: BAR 0 [io  0xc080-0xc0ff]
+2026-10-24T05:41:52,971468+00:00 pci 0000:00:05.0: BAR 1 [mem 0xc4084000-0xc4084fff]
+2026-10-24T05:41:52,973511+00:00 pci 0000:00:05.0: BAR 4 [mem 0x201200c000-0x201200ffff 64bit pref]
+2026-10-24T05:41:52,978799+00:00 pci 0000:00:06.0: [1af4:1002] type 00 class 0x00ff00 conventional PCI endpoint
+2026-10-24T05:41:52,983340+00:00 pci 0000:00:06.0: BAR 0 [io  0xc180-0xc1bf]
+2026-10-24T05:41:52,985537+00:00 pci 0000:00:06.0: BAR 4 [mem 0x2012010000-0x2012013fff 64bit pref]
+2026-10-24T05:41:52,990963+00:00 pci 0000:00:07.0: [10de:2f04] type 00 class 0x030000 PCIe Legacy Endpoint
+2026-10-24T05:41:53,138694+00:00 pci 0000:00:07.0: BAR 0 [mem 0xc0000000-0xc3ffffff]
+2026-10-24T05:41:53,140488+00:00 pci 0000:00:07.0: BAR 1 [mem 0x2000000000-0x200fffffff 64bit pref]
+2026-10-24T05:41:53,143488+00:00 pci 0000:00:07.0: BAR 3 [mem 0x2010000000-0x2011ffffff 64bit pref]
+2026-10-24T05:41:53,146470+00:00 pci 0000:00:07.0: BAR 5 [io  0xc000-0xc07f]
+2026-10-24T05:41:53,149470+00:00 pci 0000:00:07.0: ROM [mem 0xfff80000-0xffffffff pref]
+2026-10-24T05:41:53,151663+00:00 pci 0000:00:07.0: Enabling HDA controller
+2026-10-24T05:41:53,154542+00:00 pci 0000:00:07.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+2026-10-24T05:41:53,158226+00:00 pci 0000:00:07.0: 252.048 Gb/s available PCIe bandwidth, limited by 16.0 GT/s PCIe x16 link at 0000:00:07.0 (capable of 504.112 Gb/s with 32.0 GT/s PCIe x16 link)
+2026-10-24T05:41:53,167343+00:00 pci 0000:00:08.0: [10de:2f80] type 00 class 0x040300 PCIe Endpoint
+2026-10-24T05:41:53,172288+00:00 pci 0000:00:08.0: BAR 0 [mem 0xc4080000-0xc4083fff]
+2026-10-24T05:41:53,175405+00:00 pci 0000:00:08.0: 252.048 Gb/s available PCIe bandwidth, limited by 16.0 GT/s PCIe x16 link at 0000:00:08.0 (capable of 504.112 Gb/s with 32.0 GT/s PCIe x16 link)
+2026-10-24T05:41:53,191622+00:00 ACPI: PCI: Interrupt link LNKA configured for IRQ 10
+2026-10-24T05:41:53,199651+00:00 ACPI: PCI: Interrupt link LNKB configured for IRQ 10
+2026-10-24T05:41:53,202859+00:00 ACPI: PCI: Interrupt link LNKC configured for IRQ 11
+2026-10-24T05:41:53,208637+00:00 ACPI: PCI: Interrupt link LNKD configured for IRQ 11
+2026-10-24T05:41:53,211643+00:00 ACPI: PCI: Interrupt link LNKS configured for IRQ 9
+2026-10-24T05:41:53,218526+00:00 iommu: Default domain type: Translated
+2026-10-24T05:41:53,220455+00:00 iommu: DMA domain TLB invalidation policy: lazy mode
+2026-10-24T05:41:53,223806+00:00 SCSI subsystem initialized
+2026-10-24T05:41:53,225478+00:00 libata version 3.00 loaded.
+2026-10-24T05:41:53,225510+00:00 ACPI: bus type USB registered
+2026-10-24T05:41:53,227479+00:00 usbcore: registered new interface driver usbfs
+2026-10-24T05:41:53,229465+00:00 usbcore: registered new interface driver hub
+2026-10-24T05:41:53,231477+00:00 usbcore: registered new device driver usb
+2026-10-24T05:41:53,233496+00:00 pps_core: LinuxPPS API ver. 1 registered
+2026-10-24T05:41:53,236458+00:00 pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+2026-10-24T05:41:53,240462+00:00 PTP clock support registered
+2026-10-24T05:41:53,242472+00:00 EDAC MC: Ver: 3.0.0
+2026-10-24T05:41:53,244514+00:00 efivars: Registered efivars operations
+2026-10-24T05:41:53,246814+00:00 NetLabel: Initializing
+2026-10-24T05:41:53,248453+00:00 NetLabel:  domain hash size = 128
+2026-10-24T05:41:53,250453+00:00 NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+2026-10-24T05:41:53,252491+00:00 NetLabel:  unlabeled traffic allowed by default
+2026-10-24T05:41:53,255494+00:00 mctp: management component transport protocol core
+2026-10-24T05:41:53,257454+00:00 NET: Registered PF_MCTP protocol family
+2026-10-24T05:41:53,259478+00:00 PCI: Using ACPI for IRQ routing
+2026-10-24T05:41:53,261454+00:00 PCI: pci_cache_line_size set to 64 bytes
+2026-10-24T05:41:53,261856+00:00 e820: reserve RAM buffer [mem 0xbe0a4018-0xbfffffff]
+2026-10-24T05:41:53,261862+00:00 e820: reserve RAM buffer [mem 0xbe0cc018-0xbfffffff]
+2026-10-24T05:41:53,261864+00:00 e820: reserve RAM buffer [mem 0xbeb3f000-0xbfffffff]
+2026-10-24T05:41:53,261867+00:00 e820: reserve RAM buffer [mem 0xbee68000-0xbfffffff]
+2026-10-24T05:41:53,261869+00:00 e820: reserve RAM buffer [mem 0xbf8ee000-0xbfffffff]
+2026-10-24T05:41:53,261871+00:00 e820: reserve RAM buffer [mem 0xbff7c000-0xbfffffff]
+2026-10-24T05:41:53,261873+00:00 e820: reserve RAM buffer [mem 0x196cf00000-0x196fffffff]
+2026-10-24T05:41:53,262475+00:00 pci 0000:00:07.0: vgaarb: setting as boot VGA device
+2026-10-24T05:41:53,263439+00:00 pci 0000:00:07.0: vgaarb: bridge control possible
+2026-10-24T05:41:53,263439+00:00 pci 0000:00:07.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+2026-10-24T05:41:53,270448+00:00 vgaarb: loaded
+2026-10-24T05:41:53,272772+00:00 clocksource: Switched to clocksource kvm-clock
+2026-10-24T05:41:53,274925+00:00 VFS: Disk quotas dquot_6.6.0
+2026-10-24T05:41:53,276408+00:00 VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+2026-10-24T05:41:53,280713+00:00 AppArmor: AppArmor Filesystem Enabled
+2026-10-24T05:41:53,282426+00:00 pnp: PnP ACPI init
+2026-10-24T05:41:53,283813+00:00 pnp 00:03: [dma 2]
+2026-10-24T05:41:53,284327+00:00 pnp: PnP ACPI: found 5 devices
+2026-10-24T05:41:53,293968+00:00 clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+2026-10-24T05:41:53,297335+00:00 NET: Registered PF_INET protocol family
+2026-10-24T05:41:53,299293+00:00 IP idents hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+2026-10-24T05:41:53,320254+00:00 tcp_listen_portaddr_hash hash table entries: 65536 (order: 8, 1048576 bytes, linear)
+2026-10-24T05:41:53,323518+00:00 Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+2026-10-24T05:41:53,326524+00:00 TCP established hash table entries: 524288 (order: 10, 4194304 bytes, linear)
+2026-10-24T05:41:53,330067+00:00 TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+2026-10-24T05:41:53,332821+00:00 TCP: Hash tables configured (established 524288 bind 65536)
+2026-10-24T05:41:53,335430+00:00 MPTCP token hash table entries: 65536 (order: 8, 1572864 bytes, linear)
+2026-10-24T05:41:53,338366+00:00 UDP hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+2026-10-24T05:41:53,341173+00:00 UDP-Lite hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+2026-10-24T05:41:53,344109+00:00 NET: Registered PF_UNIX/PF_LOCAL protocol family
+2026-10-24T05:41:53,346158+00:00 NET: Registered PF_XDP protocol family
+2026-10-24T05:41:53,347878+00:00 pci 0000:00:02.0: ROM [mem 0xfff80000-0xffffffff pref]: can't claim; no compatible bridge window
+2026-10-24T05:41:53,351347+00:00 pci 0000:00:02.0: ROM [mem 0xc4000000-0xc407ffff pref]: assigned
+2026-10-24T05:41:53,353858+00:00 pci_bus 0000:00: resource 4 [io  0x0000-0x0cf7 window]
+2026-10-24T05:41:53,356059+00:00 pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]
+2026-10-24T05:41:53,358259+00:00 pci_bus 0000:00: resource 6 [mem 0x000a0000-0x000bffff window]
+2026-10-24T05:41:53,360704+00:00 pci_bus 0000:00: resource 7 [mem 0xc0000000-0xfebfffff window]
+2026-10-24T05:41:53,363145+00:00 pci_bus 0000:00: resource 8 [mem 0x2000000000-0x207fffffff window]
+2026-10-24T05:41:53,365795+00:00 pci 0000:00:01.0: PIIX3: Enabling Passive Release
+2026-10-24T05:41:53,367859+00:00 pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+2026-10-24T05:41:53,427967+00:00 ACPI: \_SB_.LNKD: Enabled at IRQ 11
+2026-10-24T05:41:53,487605+00:00 pci 0000:00:01.2: quirk_usb_early_handoff+0x0/0x190 took 114836 usecs
+2026-10-24T05:41:53,490601+00:00 pci 0000:00:08.0: extending delay after power-on from D3hot to 20 msec
+2026-10-24T05:41:53,493478+00:00 PCI: CLS 64 bytes, default 64
+2026-10-24T05:41:53,495107+00:00 PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+2026-10-24T05:41:53,497512+00:00 software IO TLB: mapped [mem 0x00000000b7efe000-0x00000000bbefe000] (64MB)
+2026-10-24T05:41:53,501487+00:00 Initialise system trusted keyrings
+2026-10-24T05:41:53,503102+00:00 Key type blacklist registered
+2026-10-24T05:41:53,504715+00:00 workingset: timestamp_bits=36 max_order=25 bucket_order=0
+2026-10-24T05:41:53,507024+00:00 zbud: loaded
+2026-10-24T05:41:53,508382+00:00 squashfs: version 4.0 (2009/01/31) Phillip Lougher
+2026-10-24T05:41:53,510753+00:00 fuse: init (API version 7.39)
+2026-10-24T05:41:53,512739+00:00 integrity: Platform Keyring initialized
+2026-10-24T05:41:53,514705+00:00 integrity: Machine keyring initialized
+2026-10-24T05:41:53,529019+00:00 Key type asymmetric registered
+2026-10-24T05:41:53,530825+00:00 Asymmetric key parser 'x509' registered
+2026-10-24T05:41:53,532973+00:00 Block layer SCSI generic (bsg) driver version 0.4 loaded (major 243)
+2026-10-24T05:41:53,536334+00:00 io scheduler mq-deadline registered
+2026-10-24T05:41:53,540086+00:00 shpchp: Standard Hot Plug PCI Controller Driver version: 0.4
+2026-10-24T05:41:53,543213+00:00 input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input0
+2026-10-24T05:41:53,546580+00:00 ACPI: button: Power Button [PWRF]
+2026-10-24T05:41:53,608319+00:00 ACPI: \_SB_.LNKB: Enabled at IRQ 10
+2026-10-24T05:41:53,669775+00:00 ACPI: \_SB_.LNKC: Enabled at IRQ 11
+2026-10-24T05:41:53,790263+00:00 ACPI: \_SB_.LNKA: Enabled at IRQ 10
+2026-10-24T05:41:53,853764+00:00 Serial: 8250/16550 driver, 32 ports, IRQ sharing enabled
+2026-10-24T05:41:53,885494+00:00 00:00: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+2026-10-24T05:41:53,918894+00:00 Linux agpgart interface v0.103
+2026-10-24T05:41:53,931105+00:00 loop: module loaded
+2026-10-24T05:41:53,932440+00:00 virtio_blk virtio2: 30/0/0 default/read/poll queues
+2026-10-24T05:41:53,946352+00:00 virtio_blk virtio2: [vda] 377487360 512-byte logical blocks (193 GB/180 GiB)
+2026-10-24T05:41:53,956185+00:00 GPT:Primary header thinks Alt. header is not at the end of the disk.
+2026-10-24T05:41:53,958833+00:00 GPT:46555135 != 377487359
+2026-10-24T05:41:53,960159+00:00 GPT:Alternate GPT header not at the end of the disk.
+2026-10-24T05:41:53,962300+00:00 GPT:46555135 != 377487359
+2026-10-24T05:41:53,963634+00:00 GPT: Use GNU Parted to correct GPT errors.
+2026-10-24T05:41:53,965471+00:00  vda: vda1 vda14 vda15
+2026-10-24T05:41:53,967202+00:00 virtio_blk virtio3: 30/0/0 default/read/poll queues
+2026-10-24T05:41:53,981127+00:00 virtio_blk virtio3: [vdb] 736 512-byte logical blocks (377 kB/368 KiB)
+2026-10-24T05:41:53,990164+00:00 ata_piix 0000:00:01.1: version 2.13
+2026-10-24T05:41:53,991049+00:00 scsi host0: ata_piix
+2026-10-24T05:41:53,992593+00:00 scsi host1: ata_piix
+2026-10-24T05:41:53,993840+00:00 ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xc240 irq 14 lpm-pol 0
+2026-10-24T05:41:53,996560+00:00 ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xc248 irq 15 lpm-pol 0
+2026-10-24T05:41:53,999383+00:00 ACPI: bus type drm_connector registered
+2026-10-24T05:41:54,001578+00:00 tun: Universal TUN/TAP device driver, 1.6
+2026-10-24T05:41:54,005955+00:00 PPP generic driver version 2.4.2
+2026-10-24T05:41:54,065897+00:00 uhci_hcd 0000:00:01.2: UHCI Host Controller
+2026-10-24T05:41:54,067814+00:00 uhci_hcd 0000:00:01.2: new USB bus registered, assigned bus number 1
+2026-10-24T05:41:54,070458+00:00 uhci_hcd 0000:00:01.2: detected 2 ports
+2026-10-24T05:41:54,072369+00:00 uhci_hcd 0000:00:01.2: irq 11, io port 0x0000c220
+2026-10-24T05:41:54,074591+00:00 usb usb1: New USB device found, idVendor=1d6b, idProduct=0001, bcdDevice= 6.08
+2026-10-24T05:41:54,077719+00:00 usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+2026-10-24T05:41:54,080340+00:00 usb usb1: Product: UHCI Host Controller
+2026-10-24T05:41:54,082145+00:00 usb usb1: Manufacturer: Linux 6.8.0-59-generic uhci_hcd
+2026-10-24T05:41:54,084431+00:00 usb usb1: SerialNumber: 0000:00:01.2
+2026-10-24T05:41:54,086361+00:00 hub 1-0:1.0: USB hub found
+2026-10-24T05:41:54,087775+00:00 hub 1-0:1.0: 2 ports detected
+2026-10-24T05:41:54,089528+00:00 i8042: PNP: PS/2 Controller [PNP0303:KBD,PNP0f13:MOU] at 0x60,0x64 irq 1,12
+2026-10-24T05:41:54,094003+00:00 serio: i8042 KBD port at 0x60,0x64 irq 1
+2026-10-24T05:41:54,095797+00:00 serio: i8042 AUX port at 0x60,0x64 irq 12
+2026-10-24T05:41:54,097885+00:00 mousedev: PS/2 mouse device common for all mice
+2026-10-24T05:41:54,100119+00:00 rtc_cmos 00:04: RTC can wake from S4
+2026-10-24T05:41:54,103123+00:00 input: AT Translated Set 2 keyboard as /devices/platform/i8042/serio0/input/input1
+2026-10-24T05:41:54,106306+00:00 rtc_cmos 00:04: registered as rtc0
+2026-10-24T05:41:54,108030+00:00 rtc_cmos 00:04: setting system clock to 2026-10-24T05:41:54 UTC (1792820514)
+2026-10-24T05:41:54,111076+00:00 rtc_cmos 00:04: alarms up to one day, y3k, 242 bytes nvram
+2026-10-24T05:41:54,113496+00:00 i2c_dev: i2c /dev entries driver
+2026-10-24T05:41:54,115350+00:00 device-mapper: core: CONFIG_IMA_DISABLE_HTABLE is disabled. Duplicate IMA measurements will not be recorded in the IMA log.
+2026-10-24T05:41:54,119679+00:00 device-mapper: uevent: version 1.0.3
+2026-10-24T05:41:54,121450+00:00 device-mapper: ioctl: 4.48.0-ioctl (2023-03-01) initialised: dm-devel@redhat.com
+2026-10-24T05:41:54,124492+00:00 platform eisa.0: Probing EISA bus 0
+2026-10-24T05:41:54,126229+00:00 platform eisa.0: EISA: Cannot allocate resource for mainboard
+2026-10-24T05:41:54,128701+00:00 platform eisa.0: Cannot allocate resource for EISA slot 1
+2026-10-24T05:41:54,130993+00:00 platform eisa.0: Cannot allocate resource for EISA slot 2
+2026-10-24T05:41:54,133290+00:00 platform eisa.0: Cannot allocate resource for EISA slot 3
+2026-10-24T05:41:54,135580+00:00 platform eisa.0: Cannot allocate resource for EISA slot 4
+2026-10-24T05:41:54,137975+00:00 platform eisa.0: Cannot allocate resource for EISA slot 5
+2026-10-24T05:41:54,140272+00:00 platform eisa.0: Cannot allocate resource for EISA slot 6
+2026-10-24T05:41:54,142572+00:00 platform eisa.0: Cannot allocate resource for EISA slot 7
+2026-10-24T05:41:54,144873+00:00 platform eisa.0: Cannot allocate resource for EISA slot 8
+2026-10-24T05:41:54,147172+00:00 platform eisa.0: EISA: Detected 0 cards
+2026-10-24T05:41:54,148927+00:00 amd_pstate: the _CPC object is not present in SBIOS or ACPI disabled
+2026-10-24T05:41:54,153216+00:00 ledtrig-cpu: registered to indicate activity on CPUs
+2026-10-24T05:41:54,155469+00:00 drop_monitor: Initializing network drop monitor service
+2026-10-24T05:41:54,157853+00:00 NET: Registered PF_INET6 protocol family
+2026-10-24T05:41:54,161247+00:00 Segment Routing with IPv6
+2026-10-24T05:41:54,162656+00:00 In-situ OAM (IOAM) with IPv6
+2026-10-24T05:41:54,164104+00:00 NET: Registered PF_PACKET protocol family
+2026-10-24T05:41:54,166064+00:00 Key type dns_resolver registered
+2026-10-24T05:41:54,172110+00:00 IPI shorthand broadcast: enabled
+2026-10-24T05:41:54,176796+00:00 sched_clock: Marking stable (1899002454, 277133259)->(2367036138, -190900425)
+2026-10-24T05:41:54,180127+00:00 registered taskstats version 1
+2026-10-24T05:41:54,184178+00:00 Loading compiled-in X.509 certificates
+2026-10-24T05:41:54,186882+00:00 Loaded X.509 cert 'Build time autogenerated kernel key: 3fa2747ce20c90997bcade15a1cad09daa978788'
+2026-10-24T05:41:54,190879+00:00 Loaded X.509 cert 'Canonical Ltd. Live Patch Signing: 14df34d1a87cf37625abec039ef2bf521249b969'
+2026-10-24T05:41:54,194784+00:00 Loaded X.509 cert 'Canonical Ltd. Kernel Module Signing: 88f752e560a1e0737e31163a466ad7b70a850c19'
+2026-10-24T05:41:54,198328+00:00 blacklist: Loading compiled-in revocation X.509 certificates
+2026-10-24T05:41:54,200750+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing: 61482aa2830d0ab2ad5af10b7250da9033ddcef0'
+2026-10-24T05:41:54,204245+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2017): 242ade75ac4a15e50d50c84b0d45ff3eae707a03'
+2026-10-24T05:41:54,207968+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (ESM 2018): 365188c1d374d6b07c3c8f240f8ef722433d6a8b'
+2026-10-24T05:41:54,211800+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2019): c0746fd6c5da3ae827864651ad66ae47fe24b3e8'
+2026-10-24T05:41:54,215504+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v1): a8d54bbb3825cfb94fa13c9f8a594a195c107b8d'
+2026-10-24T05:41:54,219311+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v2): 4cf046892d6fd3c9a5b03f98d845f90851dc6a8c'
+2026-10-24T05:41:54,223108+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (2021 v3): 100437bb6de6e469b581e61cd66bce3ef4ed53af'
+2026-10-24T05:41:54,226915+00:00 Loaded X.509 cert 'Canonical Ltd. Secure Boot Signing (Ubuntu Core 2019): c1d57b8f6b743f23ee41f4f7ee292f06eecadfb9'
+2026-10-24T05:41:54,241166+00:00 Key type .fscrypt registered
+2026-10-24T05:41:54,242666+00:00 Key type fscrypt-provisioning registered
+2026-10-24T05:41:54,246513+00:00 Key type encrypted registered
+2026-10-24T05:41:54,248052+00:00 AppArmor: AppArmor sha256 policy hashing enabled
+2026-10-24T05:41:54,250247+00:00 ima: No TPM chip found, activating TPM-bypass!
+2026-10-24T05:41:54,252223+00:00 Loading compiled-in module X.509 certificates
+2026-10-24T05:41:54,254643+00:00 Loaded X.509 cert 'Build time autogenerated kernel key: 3fa2747ce20c90997bcade15a1cad09daa978788'
+2026-10-24T05:41:54,258159+00:00 ima: Allocated hash algorithm: sha256
+2026-10-24T05:41:54,259874+00:00 ima: No architecture policies found
+2026-10-24T05:41:54,261524+00:00 evm: Initialising EVM extended attributes:
+2026-10-24T05:41:54,263378+00:00 evm: security.selinux
+2026-10-24T05:41:54,264588+00:00 evm: security.SMACK64
+2026-10-24T05:41:54,265805+00:00 evm: security.SMACK64EXEC
+2026-10-24T05:41:54,267139+00:00 evm: security.SMACK64TRANSMUTE
+2026-10-24T05:41:54,268614+00:00 evm: security.SMACK64MMAP
+2026-10-24T05:41:54,269951+00:00 evm: security.apparmor
+2026-10-24T05:41:54,271190+00:00 evm: security.ima
+2026-10-24T05:41:54,272275+00:00 evm: security.capability
+2026-10-24T05:41:54,273566+00:00 evm: HMAC attrs: 0x1
+2026-10-24T05:41:54,275176+00:00 PM:   Magic number: 14:489:669
+2026-10-24T05:41:54,276727+00:00 acpi LNXCPU:18: hash matches
+2026-10-24T05:41:54,278227+00:00 memory memory403: hash matches
+2026-10-24T05:41:54,287853+00:00 RAS: Correctable Errors collector initialized.
+2026-10-24T05:41:54,290037+00:00 clk: Disabling unused clocks
+2026-10-24T05:41:54,292045+00:00 md: Waiting for all devices to be available before autodetect
+2026-10-24T05:41:54,293954+00:00 md: If you don't use raid, use raid=noautodetect
+2026-10-24T05:41:54,295550+00:00 md: Autodetecting RAID arrays.
+2026-10-24T05:41:54,296725+00:00 md: autorun ...
+2026-10-24T05:41:54,297532+00:00 md: ... autorun DONE.
+2026-10-24T05:41:54,301651+00:00 EXT4-fs (vda1): mounted filesystem f589feb5-05f2-40b4-903a-c8a1ec61b750 ro with ordered data mode. Quota mode: none.
+2026-10-24T05:41:54,305369+00:00 VFS: Mounted root (ext4 filesystem) readonly on device 253:1.
+2026-10-24T05:41:54,308025+00:00 devtmpfs: mounted
+2026-10-24T05:41:54,311081+00:00 Freeing unused decrypted memory: 2028K
+2026-10-24T05:41:54,313696+00:00 Freeing unused kernel image (initmem) memory: 4984K
+2026-10-24T05:41:54,315652+00:00 Write protecting the kernel read-only data: 36864k
+2026-10-24T05:41:54,318075+00:00 Freeing unused kernel image (rodata/data gap) memory: 388K
+2026-10-24T05:41:54,384502+00:00 x86/mm: Checked W+X mappings: passed, no W+X pages found.
+2026-10-24T05:41:54,386374+00:00 Run /sbin/init as init process
+2026-10-24T05:41:54,387546+00:00   with arguments:
+2026-10-24T05:41:54,387549+00:00     /sbin/init
+2026-10-24T05:41:54,387552+00:00   with environment:
+2026-10-24T05:41:54,387554+00:00     HOME=/
+2026-10-24T05:41:54,387556+00:00     TERM=linux
+2026-10-24T05:41:54,387558+00:00     BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic
+2026-10-24T05:41:54,507327+00:00 systemd[1]: Inserted module 'autofs4'
+2026-10-24T05:41:54,536823+00:00 systemd[1]: systemd 249.11-0ubuntu3.15 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+2026-10-24T05:41:54,546820+00:00 systemd[1]: Detected virtualization kvm.
+2026-10-24T05:41:54,548250+00:00 systemd[1]: Detected architecture x86-64.
+2026-10-24T05:41:54,552815+00:00 systemd[1]: Hostname set to <ubuntu>.
+2026-10-24T05:41:54,601791+00:00 block vda: the capability attribute has been deprecated.
+2026-10-24T05:41:54,720841+00:00 systemd[1]: Configuration file /run/systemd/system/netplan-ovs-cleanup.service is marked world-inaccessible. This has no effect as configuration data is accessible via APIs without restrictions. Proceeding anyway.
+2026-10-24T05:41:54,751557+00:00 systemd[1]: /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
+2026-10-24T05:41:54,844679+00:00 systemd[1]: Queued start job for default target Graphical Interface.
+2026-10-24T05:41:54,856982+00:00 systemd[1]: Created slice Slice /system/modprobe.
+2026-10-24T05:41:54,862014+00:00 systemd[1]: Created slice Slice /system/serial-getty.
+2026-10-24T05:41:54,866949+00:00 systemd[1]: Created slice Slice /system/systemd-fsck.
+2026-10-24T05:41:54,871953+00:00 systemd[1]: Created slice User and Session Slice.
+2026-10-24T05:41:54,876221+00:00 systemd[1]: Started Forward Password Requests to Wall Directory Watch.
+2026-10-24T05:41:54,882052+00:00 systemd[1]: Set up automount Arbitrary Executable File Formats File System Automount Point.
+2026-10-24T05:41:54,888471+00:00 systemd[1]: Reached target Slice Units.
+2026-10-24T05:41:54,892270+00:00 systemd[1]: Reached target Mounting snaps.
+2026-10-24T05:41:54,896362+00:00 systemd[1]: Reached target Swaps.
+2026-10-24T05:41:54,899877+00:00 systemd[1]: Reached target Local Verity Protected Volumes.
+2026-10-24T05:41:54,904770+00:00 systemd[1]: Listening on Device-mapper event daemon FIFOs.
+2026-10-24T05:41:54,909877+00:00 systemd[1]: Listening on LVM2 poll daemon socket.
+2026-10-24T05:41:54,914627+00:00 systemd[1]: Listening on multipathd control socket.
+2026-10-24T05:41:54,919750+00:00 systemd[1]: Listening on Syslog Socket.
+2026-10-24T05:41:54,923766+00:00 systemd[1]: Listening on fsck to fsckd communication Socket.
+2026-10-24T05:41:54,929258+00:00 systemd[1]: Listening on initctl Compatibility Named Pipe.
+2026-10-24T05:41:54,935273+00:00 systemd[1]: Listening on Journal Audit Socket.
+2026-10-24T05:41:54,940188+00:00 systemd[1]: Listening on Journal Socket (/dev/log).
+2026-10-24T05:41:54,945333+00:00 systemd[1]: Listening on Journal Socket.
+2026-10-24T05:41:54,949697+00:00 systemd[1]: Listening on Network Service Netlink Socket.
+2026-10-24T05:41:54,955104+00:00 systemd[1]: Listening on udev Control Socket.
+2026-10-24T05:41:54,959445+00:00 systemd[1]: Listening on udev Kernel Socket.
+2026-10-24T05:41:54,973275+00:00 systemd[1]: Mounting Huge Pages File System...
+2026-10-24T05:41:54,978962+00:00 systemd[1]: Mounting POSIX Message Queue File System...
+2026-10-24T05:41:54,985067+00:00 systemd[1]: Mounting Kernel Debug File System...
+2026-10-24T05:41:54,990482+00:00 systemd[1]: Mounting Kernel Trace File System...
+2026-10-24T05:41:54,997766+00:00 systemd[1]: Starting Journal Service...
+2026-10-24T05:41:55,002733+00:00 systemd[1]: Starting Set the console keyboard layout...
+2026-10-24T05:41:55,009080+00:00 systemd[1]: Starting Create List of Static Device Nodes...
+2026-10-24T05:41:55,015493+00:00 systemd[1]: Starting Monitoring of LVM2 mirrors, snapshots etc. using dmeventd or progress polling...
+2026-10-24T05:41:55,026288+00:00 systemd[1]: Condition check resulted in LXD - agent being skipped.
+2026-10-24T05:41:55,040318+00:00 systemd[1]: Starting Load Kernel Module configfs...
+2026-10-24T05:41:55,046434+00:00 systemd[1]: Starting Load Kernel Module drm...
+2026-10-24T05:41:55,051791+00:00 systemd[1]: Starting Load Kernel Module efi_pstore...
+2026-10-24T05:41:55,057924+00:00 systemd[1]: Starting Load Kernel Module fuse...
+2026-10-24T05:41:55,062398+00:00 systemd[1]: Condition check resulted in OpenVSwitch configuration for cleanup being skipped.
+2026-10-24T05:41:55,066085+00:00 pstore: Using crash dump compression: deflate
+2026-10-24T05:41:55,066793+00:00 systemd[1]: Starting File System Check on Root Device...
+2026-10-24T05:41:55,069732+00:00 pstore: Registered efi_pstore as persistent store backend
+2026-10-24T05:41:55,076712+00:00 systemd[1]: Starting Load Kernel Modules...
+2026-10-24T05:41:55,081019+00:00 systemd[1]: Starting Coldplug All udev Devices...
+2026-10-24T05:41:55,086623+00:00 systemd[1]: Started Journal Service.
+2026-10-24T05:41:55,199235+00:00 EXT4-fs (vda1): re-mounted f589feb5-05f2-40b4-903a-c8a1ec61b750 r/w. Quota mode: none.
+2026-10-24T05:41:55,235195+00:00 alua: device handler registered
+2026-10-24T05:41:55,236676+00:00 systemd-journald[395]: Received client request to flush runtime journal.
+2026-10-24T05:41:55,239356+00:00 emc: device handler registered
+2026-10-24T05:41:55,242040+00:00 rdac: device handler registered
+2026-10-24T05:41:55,621166+00:00 piix4_smbus 0000:00:01.3: SMBus Host Controller at 0xb100, revision 0
+2026-10-24T05:41:55,623079+00:00 FDC 0 is a S82078B
+2026-10-24T05:41:55,645818+00:00 virtio_net virtio0 ens3: renamed from eth0
+2026-10-24T05:41:55,671422+00:00 cryptd: max_cpu_qlen set to 1000
+2026-10-24T05:41:55,686330+00:00 AVX2 version of gcm_enc/dec engaged.
+2026-10-24T05:41:55,689409+00:00 AES CTR mode by8 optimization enabled
+2026-10-24T05:41:55,870177+00:00 snd_hda_intel 0000:00:08.0: Disabling MSI
+2026-10-24T05:41:55,874042+00:00 kvm_amd: TSC scaling supported
+2026-10-24T05:41:55,874051+00:00 kvm_amd: Nested Virtualization enabled
+2026-10-24T05:41:55,874053+00:00 kvm_amd: Nested Paging enabled
+2026-10-24T05:41:55,874058+00:00 kvm_amd: LBR virtualization supported
+2026-10-24T05:41:55,874070+00:00 kvm_amd: Virtual VMLOAD VMSAVE supported
+2026-10-24T05:41:55,874072+00:00 kvm_amd: Virtual GIF supported
+2026-10-24T05:41:55,908506+00:00 input: HDA NVidia HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:08.0/sound/card0/input4
+2026-10-24T05:41:55,908707+00:00 input: HDA NVidia HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:08.0/sound/card0/input5
+2026-10-24T05:41:55,908823+00:00 input: HDA NVidia HDMI/DP,pcm=8 as /devices/pci0000:00/0000:00:08.0/sound/card0/input6
+2026-10-24T05:41:55,908945+00:00 input: HDA NVidia HDMI/DP,pcm=9 as /devices/pci0000:00/0000:00:08.0/sound/card0/input7
+2026-10-24T05:41:56,213217+00:00 nvidia: loading out-of-tree module taints kernel.
+2026-10-24T05:41:56,213240+00:00 nvidia: module license 'NVIDIA' taints kernel.
+2026-10-24T05:41:56,213243+00:00 Disabling lock debugging due to kernel taint
+2026-10-24T05:41:56,213248+00:00 nvidia: module verification failed: signature and/or required key missing - tainting kernel
+2026-10-24T05:41:56,213250+00:00 nvidia: module license taints kernel.
+2026-10-24T05:41:56,224738+00:00 loop0: detected capacity change from 0 to 130600
+2026-10-24T05:41:56,229524+00:00 loop1: detected capacity change from 0 to 183096
+2026-10-24T05:41:56,234316+00:00 loop2: detected capacity change from 0 to 104240
+2026-10-24T05:41:56,364901+00:00 nvidia-nvlink: Nvlink Core is being initialized, major device number 238
+
+2026-10-24T05:41:56,429962+00:00 nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=none:owns=io+mem
+2026-10-24T05:41:56,515929+00:00 audit: type=1400 audit(1792820516.907:2): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe" pid=627 comm="apparmor_parser"
+2026-10-24T05:41:56,517297+00:00 audit: type=1400 audit(1792820516.908:3): apparmor="STATUS" operation="profile_load" profile="unconfined" name="lsb_release" pid=626 comm="apparmor_parser"
+2026-10-24T05:41:56,517309+00:00 audit: type=1400 audit(1792820516.908:4): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe//kmod" pid=627 comm="apparmor_parser"
+2026-10-24T05:41:56,528660+00:00 audit: type=1400 audit(1792820516.920:5): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/bin/man" pid=631 comm="apparmor_parser"
+2026-10-24T05:41:56,529287+00:00 audit: type=1400 audit(1792820516.921:6): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_filter" pid=631 comm="apparmor_parser"
+2026-10-24T05:41:56,530102+00:00 audit: type=1400 audit(1792820516.921:7): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_groff" pid=631 comm="apparmor_parser"
+2026-10-24T05:41:56,585584+00:00 audit: type=1400 audit(1792820516.977:8): apparmor="STATUS" operation="profile_load" profile="unconfined" name="tcpdump" pid=632 comm="apparmor_parser"
+2026-10-24T05:41:56,593048+00:00 audit: type=1400 audit(1792820516.984:9): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/lib/snapd/snap-confine" pid=633 comm="apparmor_parser"
+2026-10-24T05:41:56,593595+00:00 audit: type=1400 audit(1792820516.985:10): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/lib/snapd/snap-confine//mount-namespace-capture-helper" pid=633 comm="apparmor_parser"
+2026-10-24T05:41:56,713866+00:00 input: ImExPS/2 Generic Explorer Mouse as /devices/platform/i8042/serio1/input/input3
+2026-10-24T05:41:57,805988+00:00 ISO 9660 Extensions: Microsoft Joliet Level 3
+2026-10-24T05:41:57,806275+00:00 ISO 9660 Extensions: RRIP_1991A
+2026-10-24T05:41:59,053344+00:00 NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+2026-10-24T05:41:59,084960+00:00 nvidia-modeset: Loading NVIDIA Kernel Mode Setting Driver for UNIX platforms  575.51.03  Wed Apr 16 13:46:27 UTC 2025
+2026-10-24T05:41:59,091680+00:00 [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+2026-10-24T05:41:59,217459+00:00 NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2f04)
+                                 NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+2026-10-24T05:41:59,217500+00:00 NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+2026-10-24T05:41:59,221566+00:00 NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
+2026-10-24T05:41:59,226684+00:00 [drm:nv_drm_load [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000007] Failed to allocate NvKmsKapiDevice
+2026-10-24T05:41:59,230781+00:00 [drm:nv_drm_register_drm_device [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000007] Failed to register device
+2026-10-24T05:42:00,715004+00:00 EXT4-fs (vda1): resizing filesystem from 5790971 to 47157499 blocks
+2026-10-24T05:42:01,030410+00:00 EXT4-fs (vda1): resized filesystem to 47157499
+2026-10-24T05:42:02,081890+00:00 kauditd_printk_skb: 30 callbacks suppressed
+2026-10-24T05:42:02,081897+00:00 audit: type=1400 audit(1792820522.473:41): apparmor="STATUS" operation="profile_load" profile="unconfined" name="docker-default" pid=1042 comm="apparmor_parser"
+2026-10-24T05:42:02,125535+00:00 evm: overlay not supported
+2026-10-24T05:42:02,146279+00:00 Initializing XFRM netlink socket
+2026-10-24T05:42:02,451221+00:00 bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+2026-10-24T05:42:03,249807+00:00 loop3: detected capacity change from 0 to 8
+2026-10-24T05:42:03,356018+00:00 audit: type=1400 audit(1792820523.747:42): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="/snap/snapd/24671/usr/lib/snapd/snap-confine" pid=1371 comm="apparmor_parser"
+2026-10-24T05:42:03,365228+00:00 audit: type=1400 audit(1792820523.757:43): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="/snap/snapd/24671/usr/lib/snapd/snap-confine//mount-namespace-capture-helper" pid=1371 comm="apparmor_parser"
+2026-10-24T05:42:03,371595+00:00 audit: type=1400 audit(1792820523.763:44): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap-update-ns.lxd" pid=1373 comm="apparmor_parser"
+2026-10-24T05:42:03,375071+00:00 audit: type=1400 audit(1792820523.766:45): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.check-kernel" pid=1377 comm="apparmor_parser"
+2026-10-24T05:42:03,375292+00:00 audit: type=1400 audit(1792820523.767:46): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.benchmark" pid=1375 comm="apparmor_parser"
+2026-10-24T05:42:03,375379+00:00 audit: type=1400 audit(1792820523.767:47): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.activate" pid=1374 comm="apparmor_parser"
+2026-10-24T05:42:03,375425+00:00 audit: type=1400 audit(1792820523.767:48): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.buginfo" pid=1376 comm="apparmor_parser"
+2026-10-24T05:42:03,375435+00:00 audit: type=1400 audit(1792820523.767:49): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.install" pid=1380 comm="apparmor_parser"
+2026-10-24T05:42:03,376037+00:00 audit: type=1400 audit(1792820523.767:50): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.remove" pid=1381 comm="apparmor_parser"
+2026-10-24T05:42:19,435239+00:00 NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2f04)
+                                 NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+2026-10-24T05:42:19,435292+00:00 NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+2026-10-24T05:42:19,440110+00:00 NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
+2026-10-24T05:42:19,469302+00:00 nvidia_uvm: module uses symbols nvUvmInterfaceDisableAccessCntr from proprietary module nvidia, inheriting taint.
+2026-10-24T05:43:36,806651+00:00 NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2f04)
+                                 NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+2026-10-24T05:43:36,806749+00:00 NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+2026-10-24T05:43:36,811576+00:00 NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
+2026-10-24T05:44:31,279914+00:00 systemd[1]: systemd 249.11-0ubuntu3.15 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+2026-10-24T05:44:31,280004+00:00 systemd[1]: Detected virtualization kvm.
+2026-10-24T05:44:31,280010+00:00 systemd[1]: Detected architecture x86-64.
+2026-10-24T05:44:31,343809+00:00 systemd[1]: Configuration file /run/systemd/system/netplan-ovs-cleanup.service is marked world-inaccessible. This has no effect as configuration data is accessible via APIs without restrictions. Proceeding anyway.
+2026-10-24T05:44:31,355687+00:00 systemd[1]: /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
+2026-10-24T05:44:54,132653+00:00 NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2f04)
+                                 NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+2026-10-24T05:44:54,132702+00:00 NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+2026-10-24T05:44:54,138097+00:00 NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
+2026-10-24T05:46:11,596394+00:00 NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2f04)
+                                 NVRM: installed in this system requires use of the NVIDIA open kernel modules.
+2026-10-24T05:46:11,596441+00:00 NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
+2026-10-24T05:46:11,603888+00:00 NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
+2026-10-24T05:47:07,412591+00:00 nvidia-modeset: Unloading
+2026-10-24T05:47:07,515554+00:00 nvidia-nvlink: Unregistered Nvlink Core, major device number 238
+2026-10-24T05:49:28,605491+00:00 VFIO - User Level meta-driver version: 0.3
+2026-10-24T05:49:28,864730+00:00 nvidia-nvlink: Nvlink Core is being initialized, major device number 236
+
+2026-10-24T05:49:28,932100+00:00 nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+2026-10-24T05:49:31,532330+00:00 NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+2026-10-24T05:49:31,618300+00:00 nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+2026-10-24T05:49:31,622910+00:00 [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+2026-10-24T05:49:31,623483+00:00 [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+2026-10-24T05:49:31,630952+00:00 [drm] [nvidia-drm] [GPU ID 0x00000007] Unloading driver
+2026-10-24T05:49:31,661391+00:00 nvidia-modeset: Unloading
+2026-10-24T05:49:31,790143+00:00 nvidia-nvlink: Unregistered Nvlink Core, major device number 236
+2026-10-24T05:50:12,113395+00:00 nvidia-nvlink: Nvlink Core is being initialized, major device number 238
+
+2026-10-24T05:50:12,177831+00:00 nvidia 0000:00:07.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+2026-10-24T05:50:14,777875+00:00 NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+2026-10-24T05:50:14,800895+00:00 nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+2026-10-24T05:50:14,806695+00:00 [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+2026-10-24T05:50:14,923094+00:00 ACPI Warning: \_SB.PCI0.S38._DSM: Argument #4 type mismatch - Found [Buffer], ACPI requires [Package] (20230628/nsarguments-61)
+2026-10-24T05:50:16,273895+00:00 [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+2026-10-24T05:50:16,273905+00:00 nvidia 0000:00:07.0: vgaarb: deactivate vga console
+2026-10-24T05:50:16,275114+00:00 nvidia 0000:00:07.0: [drm] Cannot find any crtc or sizes
+2026-10-24T05:50:28,541584+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:31,912310+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:32,627444+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:33,799128+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:34,184727+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:34,640317+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:35,245865+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:35,557347+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:35,875608+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:53,343988+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:50:53,346640+00:00 NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x1f Size: 0x100000000 RangeLo: 0x0, RangeHi: 0xffffffff, pageSzLockMask: 0x211000
+2026-10-24T05:50:53,346668+00:00 NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1efc00000 RangeLo: 0x120000000, RangeHi: 0x30fbfffff, pageSzLockMask: 0x211000
+2026-10-24T05:50:53,351567+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:50:53,351635+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:52:03,854465+00:00 kvm: SMP vm created on host with unstable TSC; guest TSC will not be reliable
+2026-10-24T05:56:03,926794+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:03,926814+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:03,926825+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:03,932174+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:03,932186+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:03,932197+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:03,967436+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:03,967451+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:03,967460+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,153147+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:04,153165+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:04,153175+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,159793+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:04,159806+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:04,159815+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,190922+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:04,190937+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:04,190947+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,237372+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,237409+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,237489+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,242515+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,242548+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,242628+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,252878+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,252911+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,253001+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,258252+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,258284+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,258364+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,268700+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,268733+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,268813+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,274120+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,274153+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,274233+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,282215+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,282248+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,282329+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,282548+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:04,282559+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:04,282569+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,290100+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,290133+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,290213+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,290566+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:04,290577+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:04,290587+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,295810+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,295870+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,295954+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,301265+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,301299+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,301379+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,311091+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,311124+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,311204+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,316550+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,316583+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,316661+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,324608+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,324641+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,324721+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,325133+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, (NvU32)rmEngineType, ENGINE_INFO_TYPE_ENG_DESC, &engDesc) @ kernel_fifo_gm107.c:362
+2026-10-24T05:56:04,325145+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, pKernelChannelGroup->engineType, ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_channel_group.c:163
+2026-10-24T05:56:04,325154+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kchangrpInit(pGpu, pKernelChannelGroup, pVAS, gfid) @ kernel_channel_group_api.c:273
+2026-10-24T05:56:04,330308+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,330342+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,330421+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,335669+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,335703+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:04,335785+00:00 NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Requested object not found [NV_ERR_OBJECT_NOT_FOUND] (0x00000057) returned from kfifoEngineInfoXlate_HAL(pGpu, pKernelFifo, ENGINE_INFO_TYPE_RM_ENGINE_TYPE, gpuGetRmEngineType(pFifoInfoParams->engineType), ENGINE_INFO_TYPE_RUNLIST, &runlistId) @ kernel_fifo_ctrl.c:329
+2026-10-24T05:56:12,670606+00:00 NVRM: GPU at PCI:0000:00:07: GPU-UUID-REMOVED
+2026-10-24T05:56:12,670616+00:00 NVRM: GPU Board Serial Number: 0
+2026-10-24T05:56:12,670619+00:00 NVRM: Xid (PCI:0000:00:07): 31, pid=91021, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-24T05:56:15,699584+00:00 NVRM: Xid (PCI:0000:00:07): 31, pid=91021, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-24T05:56:18,703862+00:00 NVRM: Xid (PCI:0000:00:07): 31, pid=91021, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-24T05:56:21,797930+00:00 NVRM: Xid (PCI:0000:00:07): 31, pid=91021, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+2026-10-24T05:56:25,672375+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:56:26,294717+00:00 NVRM: Xid (PCI:0000:00:07): 31, pid=91075, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+2026-10-24T05:56:29,836049+00:00 NVRM: GPU0 kchannelIsSchedulable_IMPL: Cannot schedule externally-owned channel 0x00000003 with unbound allocations!
+2026-10-24T05:56:30,045372+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:56:30,140854+00:00 NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+2026-10-24T05:56:30,340021+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:56:30,446374+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:57:56,957839+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T05:58:25,715981+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,716344+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,717111+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,719528+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,720420+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,720639+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,721507+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,792402+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,792957+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,793667+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,794531+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,795237+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,795434+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,795930+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,796832+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,796909+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,797366+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,799923+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,800121+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,800923+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,801060+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,801923+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,802024+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,802480+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,804797+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,806957+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,807313+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,808837+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,808915+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,809803+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,809841+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,810532+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,811325+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,811409+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,812013+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,812202+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,813284+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,813642+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,813961+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,814108+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,814963+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,816771+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,816905+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,816927+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,816992+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,817812+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,818588+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,818662+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,819022+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,819592+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,820740+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,820881+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,821129+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,821377+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,821650+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,821674+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,822810+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,823048+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,823143+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,823813+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,824338+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,825430+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,825674+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,826809+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,826970+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,827849+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,832231+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,832446+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,835289+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,835826+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,838344+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,838831+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,840103+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,842770+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,843374+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,843686+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,845306+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,845428+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,845731+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,846061+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,846323+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,847369+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,848222+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,851128+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,852372+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,854978+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,855170+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,857650+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,860332+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,861982+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,867884+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,868819+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,869435+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,870303+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,870837+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,871381+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,875383+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,876326+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,884881+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:25,891882+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,212431+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,214299+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,214381+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,215892+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,216491+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,217783+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,219041+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,219208+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,282755+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,286900+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,287411+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,290090+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,291131+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,291444+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,293727+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,296089+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,296183+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,296629+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,297887+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,297988+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,299403+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,300146+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,301581+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,301708+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,301849+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,302437+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,304081+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,304635+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,305216+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,305608+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,306492+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,307080+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,308085+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,309134+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,311159+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,311280+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,312458+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,313907+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,314020+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,314344+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,315002+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,315198+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,315618+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,315771+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,317249+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,317423+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,319262+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,319352+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,319888+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,320736+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,321587+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,323114+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,324076+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,325071+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,327249+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,329812+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,332363+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,333577+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,334269+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,335292+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,336770+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,345656+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,347411+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,348859+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,349808+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,350612+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,351948+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,359411+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,361497+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,396342+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,397734+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,729216+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,731147+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,731323+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,732658+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,733306+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,733665+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,735083+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,783926+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,801749+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,806477+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,807479+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,809153+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,811350+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,812949+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,814983+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,815170+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,815633+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,816969+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,817318+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,817338+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,817792+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,818209+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,818239+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,819603+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,822013+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,822800+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,823104+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,824011+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,824758+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,825589+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,825611+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,827880+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,828596+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,828796+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,830541+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,833397+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,834372+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,835337+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,835525+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,836049+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,837629+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,842671+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,844205+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,845796+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,849368+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,855643+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,856370+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,857826+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,858963+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,876216+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,876278+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,878364+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,886172+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,892825+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,893962+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,894083+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,899670+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,899829+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:26,902584+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,237810+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,238803+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,240286+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,242970+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,243164+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,243361+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,304790+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,306771+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,307102+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,310159+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,310211+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,311264+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,311285+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,311527+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,311838+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,312857+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,312880+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,312902+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,312926+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,313007+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,313611+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,313719+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,313742+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,313938+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,314327+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,314408+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,314481+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,314949+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315099+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315178+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315201+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315258+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315386+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315740+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,315886+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,316038+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,316200+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,316221+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,317045+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,317070+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,317217+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,317285+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,318187+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,318404+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,318430+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,318461+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,318779+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,319078+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,319310+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,319331+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,320704+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,321384+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,322360+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,323042+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,328512+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,328607+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,330020+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,331485+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,331567+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,333788+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,334991+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,335259+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,335288+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,335719+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,336190+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,336758+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,336945+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,337765+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,339355+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,340296+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,340393+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,343546+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,343590+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,344105+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:27,344195+00:00 NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+2026-10-24T05:58:41,158125+00:00 kauditd_printk_skb: 7 callbacks suppressed
+2026-10-24T05:58:41,158131+00:00 audit: type=1400 audit(1792821521.895:58): apparmor="STATUS" operation="profile_load" profile="unconfined" name="swtpm" pid=94628 comm="apparmor_parser"
+2026-10-24T05:59:20,026440+00:00 audit: type=1400 audit(1792821560.764:59): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="swtpm" pid=98841 comm="apparmor_parser"
+2026-10-24T06:26:35,691527+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T06:26:36,036331+00:00 NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+2026-10-24T06:35:41,095890+00:00 x86/PAT: worker:154623 freeing invalid memtype [mem 0xc0bb0000-0xc0bb0fff]
+2026-10-24T06:37:13,849657+00:00 NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T06:37:14,246452+00:00 NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+2026-10-24T06:40:33,743797+00:00 x86/PAT: kf3-vamgr:163279 freeing invalid memtype [mem 0x2000640000-0x200083ffff]
+2026-10-24T06:40:33,744398+00:00 x86/PAT: kf3-vamgr:163279 freeing invalid memtype [mem 0x2000840000-0x2000a3ffff]
+2026-10-24T06:40:33,744801+00:00 x86/PAT: kf3-vamgr:163279 freeing invalid memtype [mem 0x2000a40000-0x2000c3ffff]
+2026-10-24T06:41:13,724394+00:00 NVRM: Xid (PCI:0000:00:07): 32, pid=163229, name=qemu-system-x86, channel 0x00000014 intr 00200000
+2026-10-24T06:41:13,726212+00:00 NVRM: Xid (PCI:0000:00:07): 32, pid=163229, name=qemu-system-x86, channel 0x1000000b intr 00200000

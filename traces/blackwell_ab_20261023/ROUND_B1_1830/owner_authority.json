@@ -1,0 +1,21 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "controller": "17:00 decision, this sweep lease only",
+  "exact_channels": [
+    "0x14",
+    "0x1000000b"
+  ],
+  "intr": "00200000",
+  "code": 32,
+  "owned_qemu_only": true,
+  "record_limit_per_arm": 8,
+  "leases_authorized": 1,
+  "cap_usd": 3,
+  "stop_usd": 2.5,
+  "reserve_usd": 8,
+  "full_raw_xid_and_kernel_dmesg_context_required": true,
+  "production_CI_exact_VA_type_CE_rules_unchanged": true,
+  "falsifier": "TDR/bugcheck within10min after admitted pair refutes survival for actual die"
+}

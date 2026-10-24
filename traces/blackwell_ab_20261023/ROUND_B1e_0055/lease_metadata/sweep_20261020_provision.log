@@ -1,0 +1,52 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+8-core deviation cpu_floor_override=8 cpu_cores_effective=8.0
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-23T22:01:21+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+From https://github.com/reindertpelsma/kayfabe
+ * branch                9ff51a6e9432ed4d5f51636c7606360728de5b6c -> FETCH_HEAD
+Preparing worktree (detached HEAD 9ff51a6e9)
+Updating files:  63% (13862/21690)
+Updating files:  64% (13882/21690)
+Updating files:  65% (14099/21690)
+Updating files:  66% (14316/21690)
+Updating files:  67% (14533/21690)
+Updating files:  68% (14750/21690)
+Updating files:  69% (14967/21690)
+Updating files:  70% (15183/21690)
+Updating files:  71% (15400/21690)
+Updating files:  72% (15617/21690)
+Updating files:  73% (15834/21690)
+Updating files:  74% (16051/21690)
+Updating files:  75% (16268/21690)
+Updating files:  76% (16485/21690)
+Updating files:  77% (16702/21690)
+Updating files:  78% (16919/21690)
+Updating files:  79% (17136/21690)
+Updating files:  80% (17352/21690)
+Updating files:  81% (17569/21690)
+Updating files:  82% (17786/21690)
+Updating files:  83% (18003/21690)
+Updating files:  84% (18220/21690)
+Updating files:  85% (18437/21690)
+Updating files:  86% (18654/21690)
+Updating files:  87% (18871/21690)
+Updating files:  88% (19088/21690)
+Updating files:  89% (19305/21690)
+Updating files:  90% (19521/21690)
+Updating files:  91% (19738/21690)
+Updating files:  92% (19955/21690)
+Updating files:  93% (20172/21690)
+Updating files:  94% (20389/21690)
+Updating files:  95% (20606/21690)
+Updating files:  96% (20823/21690)
+Updating files:  97% (21040/21690)
+Updating files:  98% (21257/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at 9ff51a6e9 feat(bench): retry bounded pre-SSH provider failures on another machine
+NVIDIA GeForce RTX 5060 Ti, 595.91.07, 16311 MiB
+SWEEP_PROVISION_EXIT rc=2 2026-10-23T22:05:31+00:00

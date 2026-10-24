@@ -1,0 +1,85 @@
+test_first_iteration_without_phase_or_new_xid_keeps_running (test_saved_xid32_watch_loop.SavedWatchLoop.test_first_iteration_without_phase_or_new_xid_keeps_running) ... FAIL
+test_new_admitted_pair_is_recorded_as_observation (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_admitted_pair_is_recorded_as_observation) ... FAIL
+test_new_non_admitted_xid_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_non_admitted_xid_stops_fail_closed) ... FAIL
+test_new_other_code_xid_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_other_code_xid_stops_fail_closed) ... FAIL
+test_new_xid_without_permit_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_xid_without_permit_stops_fail_closed) ... FAIL
+test_ninth_xid_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_ninth_xid_stops_fail_closed) ... FAIL
+test_no_iteration_dies_on_a_name_error (test_saved_xid32_watch_loop.SavedWatchLoop.test_no_iteration_dies_on_a_name_error) ... FAIL
+test_owned_phase_without_new_xid_keeps_running (test_saved_xid32_watch_loop.SavedWatchLoop.test_owned_phase_without_new_xid_keeps_running) ... FAIL
+
+======================================================================
+FAIL: test_first_iteration_without_phase_or_new_xid_keeps_running (test_saved_xid32_watch_loop.SavedWatchLoop.test_first_iteration_without_phase_or_new_xid_keeps_running)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 112, in test_first_iteration_without_phase_or_new_xid_keeps_running
+    self.assertEqual(r["outcome"], "one_iteration", r["fatal"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") != 'one_iteration' : {'STOP': "name 'new_old' is not defined", 'mode': 'bw3-saved-xid32-observation-v1', 'verdict': 'OBSERVATION_STOP', 'attestation': False, 'phase': [None, None], 'owned_pgid': 1234, 'detached_qemu_stopped': True, 'observations': {}}
+
+======================================================================
+FAIL: test_new_admitted_pair_is_recorded_as_observation (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_admitted_pair_is_recorded_as_observation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 124, in test_new_admitted_pair_is_recorded_as_observation
+    self.assertEqual(r["outcome"], "one_iteration", r["fatal"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") != 'one_iteration' : {'STOP': "name 'new_old' is not defined", 'mode': 'bw3-saved-xid32-observation-v1', 'verdict': 'OBSERVATION_STOP', 'attestation': False, 'phase': ['on_observe_b', 111032], 'owned_pgid': 1234, 'detached_qemu_stopped': True, 'observations': {}}
+
+======================================================================
+FAIL: test_new_non_admitted_xid_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_non_admitted_xid_stops_fail_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 133, in test_new_non_admitted_xid_stops_fail_closed
+    self.assertIsInstance(r["outcome"], O.Refused)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") is not an instance of <class 'native_xid_guard.GuardRefused'>
+
+======================================================================
+FAIL: test_new_other_code_xid_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_other_code_xid_stops_fail_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 139, in test_new_other_code_xid_stops_fail_closed
+    self.assertIsInstance(r["outcome"], O.Refused)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") is not an instance of <class 'native_xid_guard.GuardRefused'>
+
+======================================================================
+FAIL: test_new_xid_without_permit_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_new_xid_without_permit_stops_fail_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 152, in test_new_xid_without_permit_stops_fail_closed
+    self.assertNotIn("is not defined", r["fatal"]["STOP"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'is not defined' unexpectedly found in "name 'new_old' is not defined"
+
+======================================================================
+FAIL: test_ninth_xid_stops_fail_closed (test_saved_xid32_watch_loop.SavedWatchLoop.test_ninth_xid_stops_fail_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 144, in test_ninth_xid_stops_fail_closed
+    self.assertIsInstance(r["outcome"], O.Refused)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") is not an instance of <class 'native_xid_guard.GuardRefused'>
+
+======================================================================
+FAIL: test_no_iteration_dies_on_a_name_error (test_saved_xid32_watch_loop.SavedWatchLoop.test_no_iteration_dies_on_a_name_error)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 157, in test_no_iteration_dies_on_a_name_error
+    self.assertNotIsInstance(r["outcome"], NameError, r["fatal"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") is an instance of <class 'NameError'> : {'STOP': "name 'new_old' is not defined", 'mode': 'bw3-saved-xid32-observation-v1', 'verdict': 'OBSERVATION_STOP', 'attestation': False, 'phase': ['on_observe_b', 111032], 'owned_pgid': 1234, 'detached_qemu_stopped': True, 'observations': {}}
+
+======================================================================
+FAIL: test_owned_phase_without_new_xid_keeps_running (test_saved_xid32_watch_loop.SavedWatchLoop.test_owned_phase_without_new_xid_keeps_running)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw-native-edge-wt/scripts/bench/blackwell/test_saved_xid32_watch_loop.py", line 118, in test_owned_phase_without_new_xid_keeps_running
+    self.assertEqual(r["outcome"], "one_iteration", r["fatal"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NameError("name 'new_old' is not defined") != 'one_iteration' : {'STOP': "name 'new_old' is not defined", 'mode': 'bw3-saved-xid32-observation-v1', 'verdict': 'OBSERVATION_STOP', 'attestation': False, 'phase': ['on_observe_b', 111032], 'owned_pgid': 1234, 'detached_qemu_stopped': True, 'observations': {}}
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.092s
+
+FAILED (failures=8)

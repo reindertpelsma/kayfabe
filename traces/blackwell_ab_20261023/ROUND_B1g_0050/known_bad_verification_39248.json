@@ -1,0 +1,13 @@
+{
+  "known_bad_before": 4,
+  "known_bad_after": 5,
+  "bad_machines": [
+    39248,
+    69146,
+    145861,
+    150531,
+    152912
+  ],
+  "b1f_market_offer_54877110_before": true,
+  "b1f_market_offer_54877110_after": false
+}

@@ -1,0 +1,30 @@
+{
+  "approved_native_xid_lines": [
+    "2026-10-24T11:01:26.574464+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93501, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T11:01:29.601266+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93501, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T11:01:32.605275+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93501, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T11:01:35.695268+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93501, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-24T11:01:40.208257+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=93577, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "phase": [
+    null,
+    null
+  ],
+  "observations": {
+    "on_fix": [],
+    "on_fix_pnp": []
+  },
+  "health": {
+    "cuInit": 0,
+    "cuDeviceGetCount": 0,
+    "devices": 1
+  },
+  "observed_utc": "2026-10-24T12:22:32.756875+00:00",
+  "mode": "bw3-saved-xid32-observation-v1",
+  "record_limit_per_arm": 8,
+  "verdict": "OBSERVATION",
+  "attestation": false,
+  "pass": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION"
+}

@@ -1,0 +1,602 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+11290: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11291: kf3: GSP rpc Free seq=0
+11292: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11293: kf3: GSP rpc Free seq=0
+11294: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11295: kf3: GSP rpc Free seq=0
+11296: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11297: kf3: GSP rpc Free seq=0
+11298: kf-rm: EXPERIMENT software-runlist diagnostic control=0x20801111 params_bytes=40 raw_u32_le=[ff008253,00000000,ff000103,00000001,00006000,00000001,00000001,00000000,00000000,00000000]; observation only
+11299: kf-rm: SW-RUNLIST HOST-OWNED 0x20801111 client=H object=H: NV_OK, request echoed, contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #8
+11300: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+11301: kf3: GSP rpc RmControl seq=0
+11302: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11304: kf3: GSP rpc Free seq=0
+11305: kf3: act free: 0xc1d0012e:0xff1fe034: engine object host 0xcafe00ab freed (331 us, off the GSP lock)
+11307: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11308: kf3: GSP rpc Free seq=0
+11309: kf3: display fps[cap=75(unset) copies=0.0 skipped=0 checks=0.0 same=453 ondemand=7 over=0]
+11310: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11312: kf3: GSP rpc Free seq=0
+11314: kf3: USER_RING_LAZY_OBSERVE (c1d0012e, ff04000c) turns=20 put_cache_hits=0 put_fresh_reads=19 obs_skipped=1 obs_unconditional=19 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+11315: kf3: DOORBELL-LEDGER tok=0x0000100e route=passthrough rung=0 emulated=0 forwarded=0 host=0x4010000b trap=0 fast=0
+11316: kf3: act free: 0xc1d0012e:0xff04000c: passthrough 0xc1d0012e:0xff04000c token 0x100e host 0x4010000b objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1694 us, off the GSP lock)
+11318: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11319: kf3: GSP rpc Free seq=0
+11320: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11321: kf3: GSP rpc Free seq=0
+11322: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11323: kf3: GSP rpc Free seq=0
+11324: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11325: kf3: GSP rpc Free seq=0
+11326: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11327: kf3: GSP rpc Free seq=0
+11328: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11329: kf3: GSP rpc Free seq=0
+11330: kf-rm: EXPERIMENT software-runlist diagnostic control=0x20801111 params_bytes=40 raw_u32_le=[ff008253,00000000,ff000103,00000000,00006000,00000000,00000001,00000000,00000000,00000000]; observation only
+11331: kf-rm: SW-RUNLIST HOST-OWNED 0x20801111 client=H object=H: NV_OK, request echoed, contents ignored (kernel channels are scheduled at birth) — AWAITING OWNER CONFIRMATION #9
+11332: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=H object=H result=0x0
+11333: kf3: GSP rpc RmControl seq=0
+11334: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11335: kf3: GSP rpc Free seq=0
+11336: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11337: kf3: GSP rpc Free seq=0
+11338: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11339: kf3: GSP rpc Free seq=0
+11340: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11341: kf3: GSP rpc Free seq=0
+11342: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11343: kf3: GSP rpc Free seq=0
+11344: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11345: kf3: GSP rpc Free seq=0
+11346: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11348: kf3: GSP rpc Free seq=0
+11349: kf3: TSPACE-RETIRE tok=0xc host=0x40000013 key=VasKey(13965662590488021072) ring_va=0xff00b00000 released=true stale_binds=0/2 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11350: kf3: DOORBELL-LEDGER tok=0x0000000c route=translated emulated=0 forwarded=1 host=0x40000013 fast=0
+11352: kf3: act free: 0xc1d00027:0xff04000a: translated host 0x40000013 (4252 us, off the GSP lock)
+11354: kf3: VasKey(13965662590488021072) root 0x1efa51000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+11356: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11357: kf3: GSP rpc Free seq=0
+11358: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11359: kf3: GSP rpc Free seq=0
+11360: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11361: kf3: GSP rpc Free seq=0
+11362: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11363: kf3: GSP rpc Free seq=0
+11364: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11365: kf3: GSP rpc Free seq=0
+11366: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11367: kf3: GSP rpc Free seq=0
+11368: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11369: kf3: GSP rpc Free seq=0
+11370: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11371: kf3: GSP rpc Free seq=0
+11372: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11373: kf3: GSP rpc Free seq=0
+11374: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11375: kf3: GSP rpc Free seq=0
+11376: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11377: kf3: GSP rpc Free seq=0
+11378: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11379: kf3: GSP rpc Free seq=0
+11380: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11381: kf3: GSP rpc Free seq=0
+11382: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11383: kf3: GSP rpc Free seq=0
+11384: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11385: kf3: GSP rpc Free seq=0
+11386: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11387: kf3: GSP rpc Free seq=0
+11388: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11389: kf3: GSP rpc Free seq=0
+11390: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11391: kf3: GSP rpc Free seq=0
+11392: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11393: kf3: GSP rpc Free seq=0
+11394: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11395: kf3: GSP rpc Free seq=0
+11396: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11397: kf3: GSP rpc Free seq=0
+11398: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11399: kf3: GSP rpc Free seq=0
+11400: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11401: kf3: GSP rpc Free seq=0
+11402: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11403: kf3: GSP rpc Free seq=0
+11404: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11405: kf3: GSP rpc Free seq=0
+11406: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11407: kf3: GSP rpc Free seq=0
+11408: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11409: kf3: GSP rpc Free seq=0
+11410: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11411: kf3: GSP rpc Free seq=0
+11412: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11413: kf3: GSP rpc Free seq=0
+11414: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11415: kf3: GSP rpc Free seq=0
+11416: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11417: kf3: GSP rpc Free seq=0
+11418: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11419: kf3: GSP rpc Free seq=0
+11420: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11421: kf3: GSP rpc Free seq=0
+11422: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11423: kf3: GSP rpc Free seq=0
+11424: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11425: kf3: GSP rpc Free seq=0
+11426: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11427: kf3: GSP rpc Free seq=0
+11428: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11429: kf3: GSP rpc Free seq=0
+11430: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11431: kf3: GSP rpc Free seq=0
+11432: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11433: kf3: GSP rpc Free seq=0
+11434: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11435: kf3: GSP rpc Free seq=0
+11436: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11437: kf3: GSP rpc Free seq=0
+11438: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11439: kf3: GSP rpc Free seq=0
+11440: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11441: kf3: GSP rpc Free seq=0
+11442: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11443: kf3: GSP rpc Free seq=0
+11444: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11445: kf3: GSP rpc Free seq=0
+11446: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11447: kf3: GSP rpc Free seq=0
+11448: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11449: kf3: GSP rpc Free seq=0
+11450: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11451: kf3: GSP rpc Free seq=0
+11452: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11453: kf3: GSP rpc Free seq=0
+11454: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11455: kf3: GSP rpc Free seq=0
+11456: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11457: kf3: GSP rpc Free seq=0
+11458: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11459: kf3: GSP rpc Free seq=0
+11460: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11461: kf3: GSP rpc Free seq=0
+11462: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11463: kf3: GSP rpc Free seq=0
+11464: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11465: kf3: GSP rpc Free seq=0
+11466: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11467: kf3: GSP rpc Free seq=0
+11468: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11469: kf3: GSP rpc Free seq=0
+11470: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11471: kf3: GSP rpc Free seq=0
+11472: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11473: kf3: GSP rpc Free seq=0
+11474: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11475: kf3: GSP rpc Free seq=0
+11476: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11477: kf3: GSP rpc Free seq=0
+11478: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11479: kf3: GSP rpc Free seq=0
+11480: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11482: kf3: GSP rpc Free seq=0
+11483: kf3: TSPACE-RETIRE tok=0x1805 host=0x40090001 key=VasKey(13965662457344034928) ring_va=0xff00400000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11484: kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x40090001 fast=0
+11485: kf3: chan token 0x1805 (host 0x40090001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11486: kf3: act free: 0xc1d00017:0xff040003: translated host 0x40090001 (2595 us, off the GSP lock)
+11488: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11489: kf3: GSP rpc Free seq=0
+11490: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11491: kf3: GSP rpc Free seq=0
+11492: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11493: kf3: GSP rpc Free seq=0
+11494: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11495: kf3: GSP rpc Free seq=0
+11496: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11497: kf3: GSP rpc Free seq=0
+11498: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11499: kf3: GSP rpc Free seq=0
+11500: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11501: kf3: GSP rpc Free seq=0
+11502: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11504: kf3: GSP rpc Free seq=0
+11505: kf3: TSPACE-RETIRE tok=0x806 host=0x400d0011 key=VasKey(13965662457344034928) ring_va=0xff00500000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11506: kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x400d0011 fast=0
+11507: kf3: chan token 0x806 (host 0x400d0011) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11508: kf3: act free: 0xc1d00018:0xff040004: translated host 0x400d0011 (2456 us, off the GSP lock)
+11510: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11511: kf3: GSP rpc Free seq=0
+11512: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11513: kf3: GSP rpc Free seq=0
+11514: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11515: kf3: GSP rpc Free seq=0
+11516: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11517: kf3: GSP rpc Free seq=0
+11518: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11519: kf3: GSP rpc Free seq=0
+11520: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11521: kf3: GSP rpc Free seq=0
+11522: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11523: kf3: GSP rpc Free seq=0
+11524: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11525: kf3: GSP rpc Free seq=0
+11526: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11528: kf3: GSP rpc Free seq=0
+11529: kf3: TSPACE-RETIRE tok=0x2007 host=0x40050001 key=VasKey(13965662457344034928) ring_va=0xff00600000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11530: kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0x40050001 fast=0
+11531: kf3: chan token 0x2007 (host 0x40050001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11532: kf3: act free: 0xc1d00019:0xff040005: translated host 0x40050001 (2431 us, off the GSP lock)
+11534: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11535: kf3: GSP rpc Free seq=0
+11536: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11537: kf3: GSP rpc Free seq=0
+11538: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11539: kf3: GSP rpc Free seq=0
+11540: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11541: kf3: GSP rpc Free seq=0
+11542: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11543: kf3: GSP rpc Free seq=0
+11544: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11545: kf3: GSP rpc Free seq=0
+11546: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11547: kf3: GSP rpc Free seq=0
+11548: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11550: kf3: GSP rpc Free seq=0
+11551: kf3: TSPACE-RETIRE tok=0x2008 host=0x40050002 key=VasKey(13965662457344034928) ring_va=0xff00700000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11552: kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0x40050002 fast=0
+11553: kf3: chan token 0x2008 (host 0x40050002) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11554: kf3: act free: 0xc1d0001a:0xff040006: translated host 0x40050002 (2702 us, off the GSP lock)
+11556: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11557: kf3: GSP rpc Free seq=0
+11558: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11559: kf3: GSP rpc Free seq=0
+11560: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11561: kf3: GSP rpc Free seq=0
+11562: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11563: kf3: GSP rpc Free seq=0
+11564: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11565: kf3: GSP rpc Free seq=0
+11566: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11567: kf3: GSP rpc Free seq=0
+11568: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11569: kf3: GSP rpc Free seq=0
+11570: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11572: kf3: GSP rpc Free seq=0
+11573: kf3: TSPACE-RETIRE tok=0x2809 host=0x40150001 key=VasKey(13965662457344034928) ring_va=0xff00800000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11574: kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x40150001 fast=0
+11575: kf3: chan token 0x2809 (host 0x40150001) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11576: kf3: act free: 0xc1d0001b:0xff040007: translated host 0x40150001 (2810 us, off the GSP lock)
+11578: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11579: kf3: GSP rpc Free seq=0
+11580: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11581: kf3: GSP rpc Free seq=0
+11582: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11583: kf3: GSP rpc Free seq=0
+11584: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11585: kf3: GSP rpc Free seq=0
+11586: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11587: kf3: GSP rpc Free seq=0
+11588: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11589: kf3: GSP rpc Free seq=0
+11590: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11591: kf3: GSP rpc Free seq=0
+11592: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11594: kf3: GSP rpc Free seq=0
+11595: kf3: TSPACE-RETIRE tok=0x200a host=0x40050003 key=VasKey(13965662457344034928) ring_va=0xff00900000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11596: kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0x40050003 fast=0
+11597: kf3: chan token 0x200a (host 0x40050003) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11598: kf3: act free: 0xc1d0001c:0xff040008: translated host 0x40050003 (2312 us, off the GSP lock)
+11600: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11601: kf3: GSP rpc Free seq=0
+11602: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11603: kf3: GSP rpc Free seq=0
+11604: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11605: kf3: GSP rpc Free seq=0
+11606: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11607: kf3: GSP rpc Free seq=0
+11608: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11609: kf3: GSP rpc Free seq=0
+11610: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11611: kf3: GSP rpc Free seq=0
+11612: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11613: kf3: GSP rpc Free seq=0
+11614: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11616: kf3: GSP rpc Free seq=0
+11617: kf3: TSPACE-RETIRE tok=0x804 host=0x400d0010 key=VasKey(13965662457344034928) ring_va=0xff00300000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11618: kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x400d0010 fast=0
+11619: kf3: chan token 0x804 (host 0x400d0010) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11620: kf3: act free: 0xc1d00016:0xff040002: translated host 0x400d0010 (2125 us, off the GSP lock)
+11622: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11623: kf3: GSP rpc Free seq=0
+11624: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11625: kf3: GSP rpc Free seq=0
+11626: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11627: kf3: GSP rpc Free seq=0
+11628: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11629: kf3: GSP rpc Free seq=0
+11630: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11631: kf3: GSP rpc Free seq=0
+11632: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11633: kf3: GSP rpc Free seq=0
+11634: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11635: kf3: GSP rpc Free seq=0
+11636: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11638: kf3: GSP rpc Free seq=0
+11639: kf3: TSPACE-RETIRE tok=0x80b host=0x400d0012 key=VasKey(13965662590488021072) ring_va=0xff00a00000 released=true stale_binds=0/1206 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11640: kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=16109 host=0x400d0012 fast=0
+11641: kf3: chan token 0x80b (host 0x400d0012) RETIRED, forwarded=16109 submissions=1027 splits=133/133 serves=849 last_put=Some(16109) gp_get=Some(16109) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11642: kf3: act free: 0xc1d00024:0xff040009: translated host 0x400d0012 (2476 us, off the GSP lock)
+11644: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11645: kf3: GSP rpc Free seq=0
+11646: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11647: kf3: GSP rpc Free seq=0
+11648: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11649: kf3: GSP rpc Free seq=0
+11650: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11651: kf3: GSP rpc Free seq=0
+11652: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11653: kf3: GSP rpc Free seq=0
+11654: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11655: kf3: GSP rpc Free seq=0
+11656: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11658: kf3: GSP rpc Free seq=0
+11659: kf3: act free: 0xc1d00134:0xff1fe032: engine object host 0xcafe00d9 freed (434 us, off the GSP lock)
+11661: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11663: kf3: GSP rpc Free seq=0
+11664: kf3: act free: 0xc1d00134:0xff1fe026: engine object host 0xcafe00d8 freed (400 us, off the GSP lock)
+11666: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11668: kf3: GSP rpc Free seq=0
+11669: kf3: act free: 0xc1d00134:0xff1fe034: engine object host 0xcafe00d5 freed (318 us, off the GSP lock)
+11671: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11673: kf3: GSP rpc Free seq=0
+11674: kf3: act free: 0xc1d00134:0xff1fe01a: engine object host 0xcafe00d6 freed (532 us, off the GSP lock)
+11676: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11678: kf3: GSP rpc Free seq=0
+11679: kf3: act free: 0xc1d00134:0xff1fe02c: engine object host 0xcafe00d7 freed (389 us, off the GSP lock)
+11681: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11682: kf3: GSP rpc Free seq=0
+11683: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11685: kf3: GSP rpc Free seq=0
+11686: kf3: USER_RING_LAZY_OBSERVE (c1d00134, ff04000d) turns=2 put_cache_hits=0 put_fresh_reads=2 obs_skipped=0 obs_unconditional=2 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+11687: kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x40000015 trap=0 fast=0
+11688: kf3: act free: 0xc1d00134:0xff04000d: passthrough 0xc1d00134:0xff04000d token 0xf host 0x40000015 objects=0 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (1994 us, off the GSP lock)
+11690: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11692: kf3: GSP rpc Free seq=0
+11693: kf3: act free: 0xc1d00135:0xff1fe034: engine object host 0xcafe00e0 freed (360 us, off the GSP lock)
+11695: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11696: kf3: GSP rpc Free seq=0
+11697: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11699: kf3: GSP rpc Free seq=0
+11700: kf3: USER_RING_LAZY_OBSERVE (c1d00135, ff04000e) turns=2 put_cache_hits=0 put_fresh_reads=2 obs_skipped=0 obs_unconditional=2 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=0
+11703: kf3: USER_RING_LAZY_OBSERVE SUMMARY (all relays gone, #1) turns=43 put_cache_hits=0 put_fresh_reads=42 obs_skipped=1 obs_unconditional=42 obs_forced_wait=0 obs_forced_low_credit=0 obs_forced_open_segment=0 obs_forced_ring_full=0 obs_forced_interval=0 inval_mode_change=0 inval_migration=0 inval_reset=0 inval_retire=1
+11704: kf3: USER_STORE_VIEWS keep=16 armed=0 evicted_at_quota=0 rm_refused_retry_ok=0 rm_refused_fallback_ok=0 rm_refused_read_refused=0
+11705: kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4010000c trap=0 fast=0
+11706: kf3: act free: 0xc1d00135:0xff04000e: passthrough 0xc1d00135:0xff04000e token 0x1010 host 0x4010000c objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (2035 us, off the GSP lock)
+11708: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11709: kf3: GSP rpc Free seq=0
+11710: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11711: kf3: GSP rpc Free seq=0
+11712: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11713: kf3: GSP rpc Free seq=0
+11714: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11715: kf3: GSP rpc Free seq=0
+11716: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11717: kf3: GSP rpc Free seq=0
+11718: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11719: kf3: GSP rpc Free seq=0
+11720: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11721: kf3: GSP rpc Free seq=0
+11722: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11723: kf3: GSP rpc Free seq=0
+11724: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11725: kf3: GSP rpc Free seq=0
+11726: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11727: kf3: GSP rpc Free seq=0
+11728: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11729: kf3: GSP rpc Free seq=0
+11730: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11731: kf3: GSP rpc Free seq=0
+11732: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11733: kf3: GSP rpc Free seq=0
+11734: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11736: kf3: GSP rpc Free seq=0
+11737: kf3: TSPACE-RETIRE tok=0x802 host=0x400d000f key=VasKey(13965662457344034928) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11738: kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x400d000f fast=0
+11739: kf3: chan token 0x802 (host 0x400d000f) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=3 last_put=Some(1) gp_get=Some(1) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+11740: kf3: act free: 0xc1d00013:0xff040000: translated host 0x400d000f (2138 us, off the GSP lock)
+11742: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11743: kf3: GSP rpc Free seq=0
+11744: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11745: kf3: GSP rpc Free seq=0
+11746: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11747: kf3: GSP rpc Free seq=0
+11748: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11749: kf3: GSP rpc Free seq=0
+11750: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11751: kf3: GSP rpc Free seq=0
+11752: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11753: kf3: GSP rpc Free seq=0
+11754: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11755: kf3: GSP rpc Free seq=0
+11756: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11757: kf3: GSP rpc Free seq=0
+11758: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11759: kf3: GSP rpc Free seq=0
+11760: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11761: kf3: GSP rpc Free seq=0
+11762: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11763: kf3: GSP rpc Free seq=0
+11764: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11765: kf3: GSP rpc Free seq=0
+11766: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11768: kf3: GSP rpc Free seq=0
+11769: kf3: TSPACE-RETIRE tok=0x3 host=0x40000012 key=VasKey(13965662457344034928) ring_va=0xff00200000 released=true stale_binds=0/14 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+11770: kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=3 host=0x40000012 fast=0
+11772: kf3: act free: 0xc1d00015:0xff040001: translated host 0x40000012 (3965 us, off the GSP lock)
+11774: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11775: kf3: GSP rpc Free seq=0
+11776: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11777: kf3: GSP rpc Free seq=0
+11778: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11779: kf3: GSP rpc Free seq=0
+11780: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11781: kf3: GSP rpc Free seq=0
+11782: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11783: kf3: GSP rpc Free seq=0
+11784: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11785: kf3: GSP rpc Free seq=0
+11786: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11787: kf3: GSP rpc Free seq=0
+11791: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11792: kf3: GSP rpc RmControl seq=0
+11793: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11794: kf3: GSP rpc Free seq=0
+11795: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11796: kf3: GSP rpc RmControl seq=0
+11797: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11798: kf3: GSP rpc Free seq=0
+11799: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11800: kf3: GSP rpc RmControl seq=0
+11801: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11802: kf3: GSP rpc Free seq=0
+11803: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11804: kf3: GSP rpc RmControl seq=0
+11805: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11806: kf3: GSP rpc Free seq=0
+11807: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11808: kf3: GSP rpc RmControl seq=0
+11809: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11810: kf3: GSP rpc Free seq=0
+11811: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11812: kf3: GSP rpc RmControl seq=0
+11813: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11814: kf3: GSP rpc Free seq=0
+11815: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11816: kf3: GSP rpc RmControl seq=0
+11817: kf-rm: display: hotplug registration retired by the FREE of 0xc1d00002:0xff0620a0
+11818: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11819: kf3: GSP rpc Free seq=0
+11820: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11821: kf3: GSP rpc RmControl seq=0
+11822: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11823: kf3: GSP rpc Free seq=0
+11824: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11825: kf3: GSP rpc RmControl seq=0
+11826: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11827: kf3: GSP rpc Free seq=0
+11828: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11829: kf3: GSP rpc RmControl seq=0
+11830: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11831: kf3: GSP rpc Free seq=0
+11832: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11833: kf3: GSP rpc RmControl seq=0
+11834: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11835: kf3: GSP rpc Free seq=0
+11836: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11837: kf3: GSP rpc RmControl seq=0
+11838: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11839: kf3: GSP rpc Free seq=0
+11840: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11841: kf3: GSP rpc RmControl seq=0
+11842: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11843: kf3: GSP rpc Free seq=0
+11844: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11845: kf3: GSP rpc RmControl seq=0
+11846: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11847: kf3: GSP rpc Free seq=0
+11848: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11849: kf3: GSP rpc RmControl seq=0
+11850: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11851: kf3: GSP rpc Free seq=0
+11852: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11853: kf3: GSP rpc RmControl seq=0
+11854: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11855: kf3: GSP rpc Free seq=0
+11856: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11857: kf3: GSP rpc RmControl seq=0
+11858: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11859: kf3: GSP rpc Free seq=0
+11860: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11861: kf3: GSP rpc RmControl seq=0
+11862: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11863: kf3: GSP rpc Free seq=0
+11864: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11865: kf3: GSP rpc RmControl seq=0
+11866: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11867: kf3: GSP rpc Free seq=0
+11868: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730301 client=H object=H params=00000000700006ff0100000000000000 result=0x0
+11869: kf3: GSP rpc RmControl seq=0
+11870: kf-rm: display: hotplug registration retired by the FREE of 0xc1d00002:0xff060070
+11871: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11872: kf3: GSP rpc Free seq=0
+11873: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730301 client=H object=H params=00000000f00014ff0200000000000000 result=0x0
+11874: kf3: GSP rpc RmControl seq=0
+11875: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11876: kf3: GSP rpc Free seq=0
+11877: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11878: kf3: GSP rpc RmControl seq=0
+11879: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11880: kf3: GSP rpc Free seq=0
+11881: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11882: kf3: GSP rpc RmControl seq=0
+11883: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11884: kf3: GSP rpc Free seq=0
+11885: kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=H object=H result=0x0
+11886: kf3: GSP rpc RmControl seq=0
+11887: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11888: kf3: GSP rpc Free seq=0
+11889: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11890: kf3: GSP rpc Free seq=0
+11891: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11892: kf3: GSP rpc Free seq=0
+11893: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11894: kf3: GSP rpc Free seq=0
+11895: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11896: kf3: GSP rpc Free seq=0
+11897: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11898: kf3: GSP rpc Free seq=0
+11899: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11900: kf3: GSP rpc Free seq=0
+11901: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11902: kf3: GSP rpc Free seq=0
+11903: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11904: kf3: GSP rpc Free seq=0
+11905: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11906: kf3: GSP rpc Free seq=0
+11907: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11908: kf3: GSP rpc Free seq=0
+11909: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11910: kf3: GSP rpc Free seq=0
+11911: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11912: kf3: GSP rpc Free seq=0
+11913: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11914: kf3: GSP rpc Free seq=0
+11915: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11916: kf3: GSP rpc Free seq=0
+11917: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11918: kf3: GSP rpc Free seq=0
+11919: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11920: kf3: GSP rpc Free seq=0
+11921: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11922: kf3: GSP rpc Free seq=0
+11923: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11924: kf3: GSP rpc Free seq=0
+11925: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11926: kf3: GSP rpc Free seq=0
+11927: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11928: kf3: GSP rpc Free seq=0
+11929: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11930: kf3: GSP rpc Free seq=0
+11931: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11932: kf3: GSP rpc Free seq=0
+11933: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11934: kf3: GSP rpc Free seq=0
+11935: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11936: kf3: GSP rpc Free seq=0
+11937: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11938: kf3: GSP rpc Free seq=0
+11939: kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+11940: kf3: GSP rpc Free seq=0

@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-22T22:46:55.302874+00:00",
+  "image_sha256": "a650252c82f1c09a62b475a4f629e304b05606d5d029357df9ce583b83f6440c",
+  "bytes": 1549436928,
+  "owner_pin_match": true,
+  "recipe_revision": "320f7f83309eddfff8d557feb0c385232f675412",
+  "build_run": "https://github.com/reindertpelsma/win-gpu-image/actions/runs/39848309657",
+  "build_conclusion": "success",
+  "boot_gate": "exact guest-written result-disk marker; COM1 best-effort",
+  "nvidia_pe_hardware_validation": "UNRUN",
+  "selected_for_this_lease": false,
+  "selected_route": "full LTSC, existing CIM Code0/hold/TDR/B1 path",
+  "binaries_and_full_private_manifest_kept_out_of_git": true,
+  "attestation_cli_output_empty_not_claimed_verified": true
+}

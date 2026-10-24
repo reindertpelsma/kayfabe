@@ -1,0 +1,111 @@
+{
+  "utc_note": "CODE READ before any rental; product rev 6e3fd3fd6, readiness 9ff51a6e9, run_kit ROUND_B1f_0115",
+  "profile": "7-visible-core deviation",
+  "rows": [
+    {
+      "where": "operator ops.py market search",
+      "parameter": "cpu_cores_effective>=N (offer)",
+      "default": "16",
+      "profile_7_visible": "7 (rejects 6)",
+      "kind": "gate"
+    },
+    {
+      "where": "operator ops.py market search",
+      "parameter": "cpu_ram>=32 GB",
+      "default": "32",
+      "profile_7_visible": "unchanged",
+      "kind": "gate"
+    },
+    {
+      "where": "operator upload.py",
+      "parameter": "MemTotal>=32000000 kB, / avail>=110 GB, /dev/kvm",
+      "default": "as listed",
+      "profile_7_visible": "unchanged",
+      "kind": "gate"
+    },
+    {
+      "where": "product 6e3fd3fd6 scripts/bench/host_preflight.sh:77-80",
+      "parameter": "RAM>=16G; nproc>=8 => else HOST_FAULT exit 2",
+      "default": "nproc>=8",
+      "profile_7_visible": "script unchanged (pinned product); run_kit preflight_profile.py accepts HOST_FAULT only if the sole failed check is 'only 7 cores' AND nproc==7; every other check still gates",
+      "kind": "gate"
+    },
+    {
+      "where": "run_kit controller.sh:15",
+      "parameter": "CARGO_BUILD_JOBS",
+      "default": "8",
+      "profile_7_visible": "7",
+      "kind": "parallelism"
+    },
+    {
+      "where": "run_kit bind.sh:8",
+      "parameter": "CARGO_BUILD_JOBS",
+      "default": "16",
+      "profile_7_visible": "7",
+      "kind": "parallelism"
+    },
+    {
+      "where": "run_kit build_b1.sh:29-31",
+      "parameter": "CARGO_BUILD_JOBS / cargo test -j",
+      "default": "8 / -j8",
+      "profile_7_visible": "7 / -j7",
+      "kind": "parallelism"
+    },
+    {
+      "where": "product provision_bench_tree.sh:127",
+      "parameter": "CARGO_BUILD_JOBS=16 for build_kf3.sh",
+      "default": "16",
+      "profile_7_visible": "unchanged (pinned product source; oversubscription slows, does not gate) - recorded",
+      "kind": "parallelism"
+    },
+    {
+      "where": "product provision_bench_tree.sh:199",
+      "parameter": "provisioning QEMU -smp 8 -m 8G (stock qemu, slirp)",
+      "default": "8",
+      "profile_7_visible": "unchanged (pinned product source) - recorded; KVM vCPU overcommit 8 on 7",
+      "kind": "guest vCPU"
+    },
+    {
+      "where": "run_kit install.sh:13, common.sh:3 -> win_vm.sh:69,353",
+      "parameter": "WINVM_SMP (Windows guest vCPUs, install, bind and arms B/B1)",
+      "default": "8",
+      "profile_7_visible": "6 (visible-1: one host CPU kept for QEMU I/O, kf drainer/relay and controller; INFERRED choice)",
+      "kind": "guest vCPU"
+    },
+    {
+      "where": "run_kit install.sh/common.sh",
+      "parameter": "WINVM_RAM_MB",
+      "default": "8192",
+      "profile_7_visible": "unchanged (host RAM 49G measured lease 57429076)",
+      "kind": "guest RAM"
+    },
+    {
+      "where": "product kayfabe-rm-ladder W385_GUEST_SMP (native suite --concurrent-fuzz default)",
+      "parameter": "fuzz cores; percore 3 threads; crowd 9 threads pinned to 3 cores; crowd-free 9 unpinned",
+      "default": "3",
+      "profile_7_visible": "unchanged: 3 cores (0-2) exist with 7 visible, so the pinned-3-core arm is hostable",
+      "kind": "native fuzz"
+    },
+    {
+      "where": "run_kit fuzz_findings.py:19-20,88",
+      "parameter": "repeat runs --fuzz-cores 3, parser requires threads=9 cores=3",
+      "default": "3/9",
+      "profile_7_visible": "unchanged (hostable)",
+      "kind": "native fuzz"
+    },
+    {
+      "where": "planner round_budget.py / lease_override",
+      "parameter": "core arithmetic",
+      "default": "none",
+      "profile_7_visible": "none; 3 h lease ceiling kept from B1e allowance (cost stop binds)",
+      "kind": "planner"
+    },
+    {
+      "where": "readiness/install/arm time bounds (win_vm.sh SSH_TIMEOUT 900/1800, arm.sh 600/120, collect 180/300, bind 90/300, controller waits)",
+      "parameter": "seconds",
+      "default": "as listed",
+      "profile_7_visible": "unchanged, none shortened",
+      "kind": "time bound"
+    }
+  ]
+}

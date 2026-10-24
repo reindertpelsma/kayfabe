@@ -1,0 +1,38 @@
+{
+  "round": "B1p (operator BW5: Claude), attempt1",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "revision_under_test": "007ba1eb03db9e21d351e465e95b46cbc3134a95 (claude/blackwell-fixes-20261024 = b85d02bae + 38fd948fd on cb80cbd29)",
+  "lease": {
+    "id": 57498790,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070 (GB205)",
+    "geolocation": "Quebec, CA",
+    "quote_usd_per_h": 0.432,
+    "observed_usd_per_h": 0.481,
+    "precreate_watchdog_armed_utc": "2026-10-24T10:02:18.365485+00:00",
+    "created_utc": "2026-10-24T10:02:19.665370+00:00",
+    "absence_verified_utc": "2026-10-24T10:04:18.417243+00:00",
+    "runtime_cost_estimate_usd": 0.016,
+    "credit_after_observed_usd": 25.078
+  },
+  "stop": "SAFETY REFUSAL at readiness: console_pin.PinMismatch (the scanned ed25519 host key differs from the key published on the authenticated console); exact-id destroy, no SSH login, no upload, no work",
+  "arms": {
+    "on_fix": "UNRUN",
+    "on_fix_pnp": "UNRUN",
+    "lx_reload": "UNRUN"
+  },
+  "hypotheses": {
+    "H-FIX": "UNTESTED",
+    "H-SL": "UNTESTED",
+    "H-LX": "UNTESTED"
+  },
+  "earlier_refusal": "rent attempt at 09:55Z stopped at its own precondition (missing empty ledger) before any create; fixed tests-first (08bdef146)",
+  "evidence": "attempt1/lease_metadata/ (console_pin_refusal_57498790.json, ready_57498790.txt, destroy_57498790.txt, precreate_refusal_rent_1.txt), attempt1/owned_instances.json",
+  "gpu_free_gate_dev_box": {
+    "revision": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+    "command": "KAYFABE_NO_KVM=1 cargo test -p kf-chip -p kf-gsp -p kf-qemu -p kf-chan -p kf-rm (debug, shared target)",
+    "result": "126 test targets, 2114 passed, 0 failed, 4 ignored; exit 0 (finished ~10:20Z)"
+  }
+}

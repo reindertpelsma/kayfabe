@@ -1,0 +1,12 @@
+{
+  "source_sha256": "f6d4c7c9099320cb901caf0606656a47a4337a38f26c075c08f2e1e6d6f8f3c8",
+  "fixture_sha256": "00e47dbf7b7c7f254d5ec1a0fa5ff89644d36e1083be28c709649916e2780bf1",
+  "change": "arm selection only; algorithms and default four-arm behavior preserved",
+  "binary": "/workspace/bw3-fuzz-target/release/kayfabe-rm-ladder",
+  "binary_sha256": "a77cd9ec3ba1c34f9fee30407f4fda7795c6790e65f89748829fa8054d419c4e",
+  "base": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "product_QEMU_unchanged": true,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "host_verification": "UNVERIFIED-HOST"
+}
