@@ -117,11 +117,14 @@ elif case in {"ambiguous-503-then-busy", "ambiguous-timeout-then-busy", "ambiguo
     rent_reply = ambiguous_once(case.split("-")[1])
     runner, result = run()
     assert ambiguity["done"], "the ambiguous reply was never sent"
-    # The runner cannot know it was not admitted: it keeps asking below the threshold ...
-    assert any(c[2]["remaining_seconds"] < need for c in rents()), len(rents())
     assert result == {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}, result
-    # ... until the budget is exhausted, and then it stops the run (best effort).
-    assert clock[0] >= runner.until - 1, (clock, runner.until)
+    if case != "ambiguous-html-then-busy":
+        # The runner cannot know it was not admitted: it keeps asking below the threshold
+        # until the budget is exhausted ...
+        assert any(c[2]["remaining_seconds"] < need for c in rents()), len(rents())
+        assert clock[0] >= runner.until - 1, (clock, runner.until)
+    # (A garbled gateway page is not retried at all: the run ends at once.) In every case the
+    # run is then stopped (best effort): the Worker may have created a box for it.
     assert [c[1] for c in stops()] == ["POST"], [c[:2] for c in calls[-3:]]
     assert calls[-1][0].startswith("/stop/"), calls[-1][:2]
 elif case == "busy-flag-reset":

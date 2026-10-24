@@ -541,6 +541,9 @@ class Runner:
         self.display_dropped = 0
         self.infrastructure_failure = False
         self.rent_busy = False
+        # Edits4 F1: sticky for the whole /rent sequence. Once any /rent reply was ambiguous
+        # (5xx, timeout, connection error, garbled page) a box may exist for this run.
+        self.rent_ambiguous = False
         self.until = time.monotonic() + 600 * 20
 
     def read(self, route, method="GET", body=None):
@@ -564,8 +567,14 @@ class Runner:
                 # Review B1: each request declares the remaining budget; after a definite BUSY
                 # the runner stops once a run would no longer fit. After an ambiguous reply it
                 # keeps asking: the Worker returns a prior admission or refuses (RUNNER_TIME).
+                # Edits4 F1: a BUSY after an ambiguous reply is not definite either (the
+                # Worker's busy flag answers a retry while the first create is still running).
                 remaining = int(self.until - time.monotonic())
-                if self.rent_busy and remaining < ADMISSION_NEED_SECONDS:
+                if (
+                    self.rent_busy
+                    and not self.rent_ambiguous
+                    and remaining < ADMISSION_NEED_SECONDS
+                ):
                     raise WaitBudget()
                 body["remaining_seconds"] = remaining
                 self.rent_busy = False
@@ -580,9 +589,14 @@ class Runner:
                         "bytes_dropped": 0,
                     }
                 else:
-                    code, data = self.decode(reply)
+                    try:
+                        code, data = self.decode(reply)
+                    except Invalid:
+                        self.rent_ambiguous |= route == "/rent"
+                        raise
             except (OSError, TimeoutError):
                 self.infrastructure_failure = True
+                self.rent_ambiguous |= route == "/rent"
                 if attempt == 5:
                     raise
             else:
@@ -594,6 +608,7 @@ class Runner:
                     code == 409 and data["state"] == "BUSY"
                 )
                 self.rent_busy = route == "/rent" and code == 409 and data["state"] == "BUSY"
+                self.rent_ambiguous |= route == "/rent" and code in {500, 502, 503, 504}
                 self.infrastructure_failure = transient or route.startswith(("/status/", "/logs/"))
                 if not transient:
                     return code, data
@@ -671,7 +686,7 @@ class Runner:
 
     def execute(self):
         result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
-        terminal = final = False
+        terminal = final = admitted = False
         try:
             profile = self.ctx.get("profile", "check")
             code, availability = self.retry_read("/availability?profile=" + profile)
@@ -739,7 +754,6 @@ class Runner:
             if "preferences" in self.ctx:
                 request["preferences"] = self.ctx["preferences"]
             code, data = self.retry_read("/rent", "POST", request)
-            admitted = False
             for attempt in range(600):
                 data = validate_status(data, self.ctx, self.manifest, code)
                 if code != 200:
@@ -778,7 +792,15 @@ class Runner:
             # now (best effort; the Worker's grace timer is the fallback). Edits2 D: an announced
             # result whose final fetch failed (hash, cursor or read) is stopped too. Only an
             # infrastructure fault before any result skips the stop, so paid work survives it.
-            if terminal or final or not self.infrastructure_failure:
+            # Edits4 F1: give-up after an ambiguous /rent reply with nothing admitted as far as
+            # the runner knows: a box may exist for this run, so ask the Worker to stop it
+            # (harmless 404 when nothing exists).
+            if (
+                terminal
+                or final
+                or not self.infrastructure_failure
+                or (self.rent_ambiguous and not admitted)
+            ):
                 try:
                     self.read("/stop/" + self.ctx["run"], "POST")
                 except Exception:

@@ -169,7 +169,14 @@ test('V4 workflow now fetches the exact BASE controller bootstrap', async () => 
   const controller = await readFile(new URL('../runner.py', import.meta.url), 'utf8');
   assert.match(controller, /Final bounded log/);
   assert.match(controller, /self.pages/);
-  assert.match(controller, /if terminal or final or not self.infrastructure_failure:/);
+  // Edits4 F1 added the ambiguous-/rent term to the stop condition.
+  for (const part of [
+    'terminal',
+    'or final',
+    'or not self.infrastructure_failure',
+    'or (self.rent_ambiguous and not admitted)',
+  ])
+    assert.ok(controller.includes('                ' + part + '\n'), part);
 });
 for (const restart of [false, true])
   test('V4 incremental log cursor survives new output ' + restart, async () => {
