@@ -82,3 +82,13 @@ for (const [geolocation, code] of DENIED) {
     },
   );
 }
+// T2: an invisible character inside an allowed code is stripped, and the code is read.
+for (const mark of ['\u200b', '\u200d', '\u00ad', '\u2060', '\ufeff'])
+  test(
+    'T2: Texas, U+' + mark.codePointAt(0).toString(16) + ' inside US is read as US',
+    async () => {
+      const geolocation = 'Texas, U' + mark + 'S';
+      assert.equal(offerCountry({ geolocation }), 'US');
+      assert.equal((await evaluate(geolocation)).allowed.length, 1);
+    },
+  );
