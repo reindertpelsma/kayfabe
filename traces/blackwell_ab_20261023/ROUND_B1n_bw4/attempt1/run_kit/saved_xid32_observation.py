@@ -16,8 +16,43 @@ G = old.G
 Refused = old.Refused
 MAX_RECORDS = 8
 MODE = "bw3-saved-xid32-observation-v1"
-CHANNELS = frozenset((0x14, 0x1000000B))
+# Owner 2026-10-24 (BW4 decision 1): exact per-die pairs, pinned here and keyed by the
+# host-probed die (controller PROBE_DIE line, carried in the permit as probed_die).
+# Any other die is unknown and stops the arm.
+DIE_PAIRS = {
+    "GB205": ("0x14", "0x1000000b"),
+    "GB202": ("0x14", "0x0e00000b"),
+}
+# One named DIAGNOSTIC arm may carry a second enable (pnputil disable/enable); no more.
+MAX_DIAGNOSTIC_ENABLES = 2
 aware = old.aware
+
+
+def die_channels(permit, authority):
+    die = permit.get("probed_die")
+    if type(die) is not str or die not in DIE_PAIRS:
+        raise Refused("probed die is missing or has no pinned observation pair")
+    if authority.get("candidate_die") != die:
+        raise Refused("probed die differs from the lease authority die")
+    pair = DIE_PAIRS[die]
+    if authority.get("exact_channels") != list(pair):
+        raise Refused("authority channels are not the pinned pair of the probed die")
+    return die, frozenset(int(channel, 16) for channel in pair)
+
+
+def enable_count_ok(permit, authority):
+    count = permit.get("enable_count")
+    if type(count) is not int:
+        return False
+    if count == 1:
+        return True
+    ceiling = (authority.get("diagnostic_enable_arms") or {}).get(permit.get("arm"))
+    return (
+        type(ceiling) is int
+        and ceiling == MAX_DIAGNOSTIC_ENABLES
+        and permit.get("label") == "DIAGNOSTIC"
+        and 1 < count <= ceiling
+    )
 
 
 def kernel_time(line):
@@ -32,10 +67,13 @@ def scope_enabled(phase, permit, authority, now):
         or permit.get("mode") != MODE
         or authority.get("observation_only") is not True
         or authority.get("attestation_allowed") is not False
-        or authority.get("exact_channels") != ["0x14", "0x1000000b"]
     ):
         raise Refused("not the separately authorized saved-signature observation mode")
-    return old.scope_enabled(phase, {**permit, "mode": old.MODE}, authority, now)
+    die_channels(permit, authority)
+    if not enable_count_ok(permit, authority):
+        raise Refused("enable count is not authorized for this arm")
+    single = {**permit, "mode": old.MODE, "enable_count": 1}
+    return old.scope_enabled(phase, single, authority, now)
 
 
 def judge_observation(lines, *, phase, permit, authority, now):
@@ -43,6 +81,7 @@ def judge_observation(lines, *, phase, permit, authority, now):
         raise Refused("no saved-signature observation permission")
     if len(lines) > MAX_RECORDS:
         raise Refused("more than eight Xid records in this arm")
+    die, channels = die_channels(permit, authority)
     records = []
     for line in lines:
         match = G.xid_policy.XID.search(line) if line.count("NVRM: Xid") == 1 else None
@@ -51,8 +90,8 @@ def judge_observation(lines, *, phase, permit, authority, now):
         code, pid, channel = int(match[1]), int(match[2]), int(match[3], 16)
         if code != 32 or pid != phase["pid"] or match[4] != "00200000":
             raise Refused("Xid code, owned pid or intr differs from observation signature")
-        if channel not in CHANNELS:
-            raise Refused("Xid channel differs from the exact saved observation pair")
+        if channel not in channels:
+            raise Refused("Xid channel differs from the exact pair of the probed die")
         if f"NVRM: Xid (PCI:{phase['pci']}):" not in line:
             raise Refused("observation fault belongs to another GPU")
         stamp = kernel_time(line)
@@ -63,6 +102,7 @@ def judge_observation(lines, *, phase, permit, authority, now):
                 "code": code,
                 "pid": pid,
                 "channel": hex(channel),
+                "die": die,
                 "intr": match[4],
                 "timestamp_utc": stamp.isoformat(),
                 "line": line,

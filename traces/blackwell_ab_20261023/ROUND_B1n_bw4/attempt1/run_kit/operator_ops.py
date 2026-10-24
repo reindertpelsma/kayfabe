@@ -2,9 +2,9 @@ import json, subprocess, sys, datetime, os, time, re, base64, hashlib, ipaddress
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-D = Path("/workspace/bw3-round-b1l-a1_m30498-run")
-W = Path("/workspace/bw-native-edge-wt")
-L = W / "traces/blackwell_ab_20261023/ROUND_B1l_0500/attempt1_m30498/owned_instances.json"
+D = Path("/workspace/bw4-round-b1n-a1-run")
+W = Path("/workspace/bw4-wt")
+L = W / "traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/owned_instances.json"
 
 
 def api(args):
@@ -122,7 +122,9 @@ print("UNVERIFIED-HOST", mode, flush=True)
 if mode in ("preflight", "rent"):
     authority = json.loads((D / "owner_authority.json").read_text())
     assert authority["leases_authorized"] == 1 and authority["record_limit_per_arm"] == 8
-    assert authority["exact_channels"] == ["0x14", "0x1000000b"]
+    import saved_xid32_observation as SX
+
+    assert authority["die_pairs"] == {k: list(v) for k, v in SX.DIE_PAIRS.items()}
     assert authority["experiment_mode"] == "OBSERVATION" and not authority["attestation"]
     L.parent.mkdir(parents=True, exist_ok=True)
     rows = json.loads(L.read_text()) if L.exists() else []
@@ -166,6 +168,8 @@ if mode in ("preflight", "rent"):
         57443671,
         57448629,
         57453849,
+        57457694,
+        57465679,
     }
     owned.update(int(r["id"]) for r in rows)
     for topic in (
@@ -182,14 +186,9 @@ if mode in ("preflight", "rent"):
     credit = float(api(["show", "user"])["credit"])
     skus = {
         "RTX_5070": "GB205",
-        "RTX_5060_Ti": "GB206",
-        "RTX_5060": "GB206",
-        "RTX_5080": "GB203",
-        "RTX_5070_Ti": "GB203",
         "RTX_5090": "GB202",
-        "RTX_5050": "GB207",
     }
-    cache = D / "single_market_B1l_1_m30498.json"
+    cache = D / "single_market_B1n_1.json"
     if cache.exists():
         market = json.loads(cache.read_text())
         offers = market["offers"]
@@ -261,7 +260,7 @@ if mode in ("preflight", "rent"):
     offers = [
         x
         for x in offers
-        if x.get("verification") in ("verified", "unverified", "deverified")
+        if x.get("verification") in ("verified", "unverified")  # BW4: not deverified
         and float(x.get("reliability", 0)) >= 0.95
         and float(x.get("inet_down", 0)) >= 200
         and bool(x.get("vms_enabled"))
@@ -383,7 +382,7 @@ if mode in ("preflight", "rent"):
             "--ssh",
             "--direct",
             "--label",
-            "codex-bw3-B1l1-OBSERVATION-20261023",
+            "claude-bw4-B1n1-OBSERVATION-20261024",
         ]
     )
     if not result.get("success"):
@@ -459,7 +458,7 @@ if mode in ("preflight", "rent"):
         "lease_profile": "default",
         "authority": "controller17:00 saved-Xid32 OBSERVATION one lease only; exact owned "
         "channels0x14/0x1000000b intr00200000 max8 per arm; no PASS/attestation; "
-        "other faults/errors/health fatal; round stop2.00 cap2.50 reserve8; B1l attempt1 (total stop/cap); native benchmark verdicts are findings",
+        "other faults/errors/health fatal; round stop2.00 cap2.50 reserve8; B1n attempt1 (owner 2026-10-24 per-die pairs); native benchmark verdicts are findings",
     }
     rows.append(row)
     save(rows)

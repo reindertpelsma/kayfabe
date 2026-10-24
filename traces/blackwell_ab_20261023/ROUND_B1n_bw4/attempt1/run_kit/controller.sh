@@ -61,6 +61,9 @@ print(die)
 EXPECTED_DIE
 )
 grep -Eq "PROBE_DIE .*die=${expected_die}([[:space:]]|$)" /root/prov/sweep_host_die.log
+# B1n (owner 2026-10-24): the observation pair is keyed by this probed die (pinned table).
+python3 /root/sweep2/b1n_arms.py probed-die /root/prov/sweep_host_die.log "$expected_die" \
+ /root/prov/probed_die.json
 echo AUDIT_SUBTRACT_EXISTING_CONSTANTS_NO_RECAPTURE
 # Falsifier: a native gate or stock workload fails; do not attribute that to kayfabe.
 bash scripts/bench/v3_gates.sh /root/prov/sweep_gates.log >/root/prov/sweep_gates.run 2>&1
@@ -195,6 +198,8 @@ run_cell(){
  if [ "$arm_rc" != 0 ]; then
   case "$arm_rc" in
    124|255) grep -q GUEST_PANICKED "$VM/logs/${run}_run.log" ;;
+   # B1n: a failed standard-VGA prep boot means no product boot happened; arm UNRUN.
+   40) echo "CELL_UNRUN_PREP run=$run"; return 0 ;;
    *) echo "ARM_HARNESS_REFUSAL_STOP run=$run rc=$arm_rc"; exit "$arm_rc" ;;
   esac
  fi
@@ -228,10 +233,28 @@ B1_META
  [ "${#b1[@]}" = 2 ]
 fi
 [ "${#measured[@]}" = 2 ]
-run_cell on_observe_b "${measured[0]}" "${measured[1]}"
-if [ "$b1_ready" = 1 ] && python3 /root/sweep2/budget_start.py on_observe_b1; then
- run_cell on_observe_b1 "${b1[0]}" "${b1[1]}"
-else
- echo "CELL_UNRUN_B1_BUILD_OR_BUDGET"
-fi
+# B1n (owner 2026-10-24): the pinned plan, in priority order; every arm uses the B1 binary.
+run_linux(){
+ local run=$1 binary=$2 source=$3 linux_rc=0
+ [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
+ echo "VALIDATION_ARM_BEGIN $run $(date -u -Is)"
+ bash /root/sweep2/linux_reload.sh "$binary" "$source" || linux_rc=$?
+ echo "VALIDATION_ARM_RESULT run=$run rc=$linux_rc $(date -u -Is)"
+ [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
+ [ -z "$(pgrep -x qemu-system-x86 || true)" ]
+ python3 -I /root/sweep2/capture_pack.py "$run" || echo "CAPTURE_PACK_FAILED $run"
+ echo "VALIDATION_ARM_END $run $(date -u -Is)"
+}
+if [ "$b1_ready" != 1 ]; then echo "CELL_UNRUN_B1_BUILD all B1n arms"; exit 31; fi
+mapfile -t plan < <(python3 /root/sweep2/b1n_arms.py list)
+[ "${#plan[@]}" = 5 ]
+for row in "${plan[@]}"; do
+ read -r run kind <<<"$row"
+ if ! python3 /root/sweep2/budget_start.py "$run"; then echo "CELL_UNRUN_BUDGET $run"; continue; fi
+ case "$kind" in
+  windows) run_cell "$run" "${b1[0]}" "${b1[1]}" ;;
+  linux) run_linux "$run" "${b1[0]}" "${b1[1]}" ;;
+  *) echo "UNKNOWN_ARM_KIND $row"; exit 32 ;;
+ esac
+done
 echo "VALIDATION_FINAL_DONE $(date -u -Is)"

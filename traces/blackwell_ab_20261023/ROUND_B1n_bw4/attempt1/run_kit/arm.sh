@@ -1,5 +1,7 @@
 #!/bin/bash
 # One owned frozen-parent arm. All observations are exported before cleanup.
+# B1n (owner 2026-10-24): the arm's one change comes from the pinned plan (b1n_arms.py):
+# a flag env file, a standard-VGA guest prep boot, or the DIAGNOSTIC enable/disable cycle.
 set -euo pipefail
 . /root/sweep2/common.sh
 profile=${1:?on or off}; run=${2:?unique run}; binary=${3:?private binary}; source=${4:?source hash}
@@ -64,6 +66,10 @@ cd /root/kayfabe
 [ -z "$(pgrep -x qemu-system-x86 || true)" ]
 [ ! -e "/root/prov/arm_${run}.started" ]
 grep -q '^BIND_STOPPED_READY ' /root/prov/bwr_bind.log
+read -r enable_script enable_count prep label < <(python3 /root/sweep2/b1n_arms.py prepare "$run")
+case "$enable_script" in enable580_once.ps1|enable580_cycle.ps1) ;; *) exit 34 ;; esac
+[[ $enable_count =~ ^[12]$ ]]
+echo "ARM_PLAN run=$run enable=$enable_script count=$enable_count prep=$prep label=$label"
 sha256sum -c /root/prov/bwr_parent_sha256.txt
 python3 -E -s /root/sweep2/guard/blackwell/arm_history.py snapshot /root/prov/native_receipt.json /root/prov/native_receipt.json.accepted.json "/root/prov/arm_${run}_accepted_start.json"
 python3 - "$profile" "$run" "$source" "$binary" <<'PY'
@@ -76,6 +82,12 @@ date -u -Is >"/root/prov/arm_${run}.started"
 parent=$VM/disk/bw580_bind.qcow2; child=$VM/disk/$run.qcow2
 [ -f "$parent" ] && [ ! -e "$child" ]
 qemu-img create -q -f qcow2 -F qcow2 -b "$parent" "$child"
+if [ "$prep" != - ]; then
+ # DIAGNOSTIC guest change on this arm's own overlay; no kf3 device, no GPU work.
+ bash /root/sweep2/prep_boot.sh "$run" "$prep" || { echo ARM_PREP_FAILED_UNRUN; exit 40; }
+ [ -z "$(pgrep -x qemu-system-x86 || true)" ] && [ ! -f "$VM/run/qemu.pid" ]
+ grep "^PREP_READY run=$run " "/root/prov/prep_${run}.log"
+fi
 while IFS= read -r key; do unset "$key"; done < <(compgen -A variable KF3_)
 while IFS= read -r flag; do export "$flag"; done </root/sweep2/p19.flags
 export KF3_RPC_TRACE=1 KF3_RPC_BODY_TRACE=1 KF3_DIAG_PROGRESS=1000
@@ -111,10 +123,19 @@ python3 -E -s "$ready_tool" boot /root/prov/phase.json "$readiness" /root/sweep2
 handshake_seconds=$(python3 -E -s "$ready_tool" value "$readiness" handshake)
 export WINVM_SSH_CONNECT_TIMEOUT=$(python3 -E -s "$ready_tool" value "$readiness" banner_query)
 python3 /root/sweep2/bind_receipt.py "arm_${run}" "$binary" "$profile"
-for f in verify_stage580.ps1 enable580_once.ps1 diag_min.ps1 init_state.ps1; do bash "$W" scp-to "/root/sweep2/probes/$f" "C:/kf/$f"; done
+for f in verify_stage580.ps1 "$enable_script" diag_min.ps1 init_state.ps1; do
+ bash "$W" scp-to "/root/sweep2/probes/$f" "C:/kf/$f"
+done
 python3 -E -s "$ready_tool" run "$readiness" verify_stage -- bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\verify_stage580.ps1' </dev/null >"/root/prov/arm_${run}_pre_enable.txt" 2>&1
 grep '^STAGE580_READY=1 ' "/root/prov/arm_${run}_pre_enable.txt"
 if grep -aq 'kf-rm: rpc-trace' "$QLOG"; then echo PRECONDITION_REFUSED_GSP_WHILE_DISABLED; exit 7; fi
+if [ "$prep" != - ]; then
+ # Record (not gate) that the prep value is in effect in this product boot.
+ q="(Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers')"
+ timeout 60 bash "$W" ssh "'PREP_CHECK TdrDdiDelay=' + $q.TdrDdiDelay" </dev/null \
+  >"/root/prov/arm_${run}_prep_check.txt" 2>&1 || echo PREP_CHECK_UNAVAILABLE
+ cat "/root/prov/arm_${run}_prep_check.txt"
+fi
 init_ready="/root/prov/arms/$run/init_observer.ready.json"
 python3 -E -s /root/sweep2/guard/blackwell/init_observer.py --calibration "$readiness" /root/prov/phase.json "$run" "$init_ready" "/root/prov/arms/$run/early_code0.txt" -- bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\init_state.ps1' </dev/null >"/root/prov/arms/$run/init_observer.log" 2>&1 &
 init_observer_pid=$!
@@ -136,14 +157,26 @@ now=datetime.datetime.now(datetime.timezone.utc)
 assert phase['arm']==sys.argv[2]
 phase['expected_pci']=phase['pci'];O.G.validate_phase_owner(phase)
 permit={key:phase[key] for key in ('arm','pid','starttime','exe','pci')}
+sys.path.insert(0,'/root/sweep2')
+import b1n_arms as B
 permit.update(mode=O.MODE,profile=sys.argv[1],lease_id=authority['lease_id'],
-              enable_count=1,armed_utc=now.isoformat())
+              armed_utc=now.isoformat())
+permit.update(B.permit_fields(sys.argv[2],'/root/prov/probed_die.json'))
 assert O.scope_enabled(phase,permit,authority,now)
 O.G.atomic_json('/root/prov/observation_permit.json',permit)
 O.G.atomic_json('/root/prov/arms/'+phase['arm']+'/observation_permit.json',permit)
 print('WINDOWS_ON_OBSERVATION_ARMED '+json.dumps(permit))
 OBSERVATION_PERMIT
-timeout 600 bash "$W" ssh 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\kf\enable580_once.ps1' </dev/null >"/root/prov/arm_${run}_enable.txt" 2>&1
+enable_cmd="powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\$enable_script"
+if [ "$enable_script" = enable580_cycle.ps1 ]; then
+ # DIAGNOSTIC cycle: a guest TDR/bugcheck during the cycle can drop SSH; record and observe.
+ enable_rc=0
+ timeout 600 bash "$W" ssh "$enable_cmd" </dev/null >"/root/prov/arm_${run}_enable.txt" 2>&1 ||
+  enable_rc=$?
+ echo "DIAGNOSTIC_CYCLE_RC $enable_rc"
+else
+ timeout 600 bash "$W" ssh "$enable_cmd" </dev/null >"/root/prov/arm_${run}_enable.txt" 2>&1
+fi
 cat "/root/prov/arm_${run}_enable.txt"
 # Read actual PnP/CIM/System state now, before the known40second crash window.
 # This observation delay is not a product/driver timeout or TDR policy change.

@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 K = Path(os.environ.get("KF_BW4_K", HERE.parent / "attempt1" / "run_kit"))
 BW = Path(os.environ.get("KF_BW4_BW", HERE.parents[3] / "scripts/bench/blackwell"))
 sys.path.insert(0, str(BW))
+sys.path.insert(0, str(K))
 
 
 def load(name, path):
@@ -131,6 +132,33 @@ class ArmPlan(unittest.TestCase):
 
     def test_repeated_name_refuses(self):
         self.bad(index=1, run="on_urt")
+
+    def test_trace_dir_of_another_arm_refuses(self):
+        self.bad(env={"KF3_USER_RING_TRACE": "/root/prov/arms/on_relay_off/urt"})
+
+    def test_relay_empty_value_refuses(self):
+        self.bad(index=1, env={"KF3_WIN_USER_RING_RELAY": ""})
+
+    def test_cycle_with_an_extra_flag_refuses(self):
+        self.bad(index=4, env={"KF3_WIN_USER_RING_RELAY": "0"})
+
+    def test_flag_arm_with_a_prep_refuses(self):
+        self.bad(index=1, prep="prep_tdr60.ps1")
+
+    def test_measurement_label_cannot_carry_the_cycle(self):
+        self.bad(index=1, env={}, enable="enable580_cycle.ps1", enable_count=2, label="MEASUREMENT")
+
+    def test_linux_kind_with_windows_name_refuses(self):
+        self.bad(index=3, run="on_linux")
+
+    def test_probed_die_mismatch_refuses(self):
+        with self.assertRaises(ValueError):
+            A.probed_die("PROBE_DIE arch=0x1b0 impl=0x2 die=GB202\n", "GB205")
+
+    def test_two_probe_lines_refuse(self):
+        line = "PROBE_DIE arch=0x1b0 impl=0x5 die=GB205\n"
+        with self.assertRaises(ValueError):
+            A.probed_die(line + line, "GB205")
 
     def test_prepare_writes_env_and_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -302,6 +330,32 @@ class CapturePack(unittest.TestCase):
             )
             self.assertEqual(summary["guest_hash_mismatches"], ["Minidump/a.dmp"])
 
+    def test_nested_watchdog_mismatch_is_recorded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            (root / "cap" / "guest" / "LiveKernelReports" / "WATCHDOG" / "w.dmp").write_bytes(b"y")
+            summary = PACK.pack(
+                "on_urt",
+                guest_dir=root / "cap" / "guest",
+                vm_logs=root / "logs",
+                prov=root / "prov",
+                out=root / "capture",
+            )
+            self.assertEqual(summary["guest_hash_mismatches"], ["LiveKernelReports/WATCHDOG/w.dmp"])
+
+    def test_another_arm_takes_only_its_own_logs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            summary = PACK.pack(
+                "on_relay_off",
+                guest_dir=root / "absent",
+                vm_logs=root / "logs",
+                prov=root / "prov",
+                out=root / "capture",
+            )
+            logs = sorted(n for n in summary["files"] if n.startswith("vm_logs/"))
+            self.assertEqual(logs, ["vm_logs/on_relay_off_b1_qemu.log"])
+
     def test_missing_guest_capture_still_packs_logs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.tree(tmp)
@@ -388,6 +442,32 @@ class CapturePull(unittest.TestCase):
             self.assertEqual(receipt["failed"], ["guest/d.dmp"])
             self.assertEqual(receipt["verified"], 1)
 
+    def test_changed_file_content_is_a_failed_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = self.remote_tree(tmp)
+            manifest = (arm / "MANIFEST.sha256").read_text()
+            (arm / "vm_logs" / "q.log").write_bytes(b"lo")
+            receipt = PULL.pull_arm(
+                "on_urt", manifest, Path(tmp) / "p", self.fetch_local(arm), deadline_s=60
+            )
+            self.assertEqual(receipt["failed"], ["vm_logs/q.log"])
+
+    def test_deadline_reached_midway_keeps_the_rest_unpulled(self):
+        ticks = iter([0, 0, 100, 100, 100, 100])
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = self.remote_tree(tmp)
+            manifest = (arm / "MANIFEST.sha256").read_text()
+            receipt = PULL.pull_arm(
+                "on_urt",
+                manifest,
+                Path(tmp) / "p",
+                self.fetch_local(arm),
+                deadline_s=50,
+                clock=lambda: next(ticks),
+            )
+            self.assertEqual(receipt["verified"], 1)
+            self.assertEqual(len(receipt["not_pulled"]), 1)
+
     def test_manifest_paths_cannot_escape_the_private_dir(self):
         for bad in ("../x", "/etc/passwd", "a/../../b"):
             manifest = "0" * 64 + "  " + bad + "\n"
@@ -402,6 +482,11 @@ class CapturePull(unittest.TestCase):
             PULL.private_root(Path("/data/bw4_private_capture"), lease=57500001),
             Path("/data/bw4_private_capture/57500001"),
         )
+
+    def test_worktree_or_traces_dirs_under_data_are_refused(self):
+        for bad in ("/data/x-wt/cap", "/data/repo/traces/cap"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                PULL.private_root(Path(bad), lease=1)
 
     def test_deadline_stops_further_fetches_and_records_them(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -434,6 +519,12 @@ class FatalCollect(unittest.TestCase):
             with self.assertRaises(ValueError):
                 FATAL.choose_run(self.prov(tmp, fatal=False), disks=set())
 
+    def test_no_marker_never_boots_even_with_started_arms_and_disks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prov = self.prov(tmp, fatal=False, started=("on_urt", "on_relay_off"))
+            with self.assertRaises(ValueError):
+                FATAL.choose_run(prov, disks={"on_urt", "on_relay_off"})
+
     def test_chooses_the_fatal_arm_when_its_overlay_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             prov = self.prov(tmp)
@@ -449,6 +540,16 @@ class FatalCollect(unittest.TestCase):
                 FATAL.choose_run(prov, disks={"on_urt", "on_relay_off"}), "on_relay_off"
             )
 
+    def test_fallback_skips_an_arm_whose_collection_already_completed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prov = self.prov(tmp, phase=(None, None), started=("on_urt",))
+            (prov / "collect_on_urt.log").write_text("COLLECT_ALL_DONE 2026\n")
+            self.assertIsNone(FATAL.choose_run(prov, disks={"on_urt"}))
+
+    def test_fatal_arm_without_overlay_collects_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(FATAL.choose_run(self.prov(tmp), disks={"on_urt"}))
+
     def test_no_overlay_means_logs_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(FATAL.choose_run(self.prov(tmp, started=()), disks=set()))
@@ -456,7 +557,7 @@ class FatalCollect(unittest.TestCase):
     def test_linux_or_bind_phase_never_boots_windows_collection(self):
         with tempfile.TemporaryDirectory() as tmp:
             prov = self.prov(tmp, phase=("lx_reload", 1), started=("on_urt", "lx_reload"))
-            self.assertEqual(FATAL.choose_run(prov, disks={"on_urt"}), "on_urt")
+            self.assertIsNone(FATAL.choose_run(prov, disks={"on_urt"}))
             prov = self.prov(tmp, phase=("bind", 1), started=())
             self.assertIsNone(FATAL.choose_run(prov, disks=set()))
 
@@ -468,6 +569,24 @@ class FatalCollect(unittest.TestCase):
             with self.assertRaises(ValueError):
                 FATAL.preconditions(prov, qemu_running=False, controller_alive=True)
             self.assertTrue(FATAL.preconditions(prov, qemu_running=False, controller_alive=False))
+
+    def test_preconditions_need_the_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prov = self.prov(tmp, fatal=False)
+            with self.assertRaises(ValueError):
+                FATAL.preconditions(prov, qemu_running=False, controller_alive=False)
+
+    def test_preconditions_refuse_a_live_qemu_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                FATAL.preconditions(self.prov(tmp), qemu_running=True, controller_alive=False)
+
+    def test_collection_uses_exactly_the_collect_script(self):
+        self.assertEqual(FATAL.collect_command("on_urt")[3], "/root/sweep2/collect_bw.sh")
+
+    def test_dropped_xid_history_refuses(self):
+        with self.assertRaises(ValueError):
+            FATAL.xid_delta(["a", "b"], ["a"])
 
     def test_collection_command_is_standard_vga_bounded_and_kf3_free(self):
         command = FATAL.collect_command("on_relay_off")
@@ -486,6 +605,12 @@ class FatalCollect(unittest.TestCase):
 
 class ScriptShapes(unittest.TestCase):
     """Static checks on the bash and PowerShell pieces (they run only on the rental)."""
+
+    def assertIn(self, needle, haystack, msg=None):  # short failure text, never the file
+        self.assertTrue(needle in haystack, msg or needle)
+
+    def assertNotIn(self, needle, haystack, msg=None):
+        self.assertFalse(needle in haystack, msg or needle)
 
     def test_bash_syntax(self):
         for name in [
@@ -522,7 +647,7 @@ class ScriptShapes(unittest.TestCase):
         self.assertIn("permit_fields", source)
         self.assertIn("prep_boot.sh", source)
         self.assertNotIn("enable_count=1,", source)
-        self.assertIn("C:\\kf\\$enable_script", source)
+        self.assertIn("C:\\\\kf\\\\$enable_script", source)
 
     def test_controller_records_the_probed_die_and_runs_the_plan(self):
         source = text("controller.sh")
@@ -538,7 +663,8 @@ class ScriptShapes(unittest.TestCase):
         self.assertIn("enable580_cycle.started", source)
         self.assertIn("DIAGNOSTIC", source)
         self.assertNotIn("Start-Sleep -Seconds 600", source)
-        self.assertRegex(source, r"AddSeconds\(\d{2,3}\)")
+        self.assertEqual(len(re.findall(r"WaitProblem (?:0|22) \d{2,3}\n", source)), 3)
+        self.assertIn("AddSeconds($seconds)", source)
 
     def test_prep_sets_only_tdrddidelay_60(self):
         source = text("prep_tdr60.ps1")
@@ -564,7 +690,7 @@ class ScriptShapes(unittest.TestCase):
         self.assertIn("phase.json", source)
         self.assertIn("timeout 900", source)
         self.assertIn("POST_CAPTURE_HOOK=/root/sweep2/reload_hook.sh", source)
-        self.assertIn("flock -o /tmp/kayfabe-fastguest.lock", source)
+        self.assertRegex(source, r"flock (-w \d+ )?-o /tmp/kayfabe-fastguest.lock")
         hook = text("reload_hook.sh")
         self.assertIn("rmmod", hook)
         self.assertIn("modprobe nvidia", hook)
