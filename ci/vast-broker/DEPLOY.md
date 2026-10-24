@@ -38,11 +38,17 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
   remaining time budget.
 - Admission order after the run read (edits3): a prior record of the same run key is returned
   as is; a run key whose spend row exists (its one attempt is spent, also after retention
-  removed the record) is `UNAVAILABLE_BUDGET`; a commit tested within `SHA_GAP_HOURS` (24 h) is
+  removed the record) is `UNAVAILABLE_BUDGET`; a commit that has a commit row is
   `UNAVAILABLE_BUDGET` at once; a run whose `remaining_seconds` is less than the hard limit plus
   `admissionMarginMinutes` (5) is `NOT_ELIGIBLE` with reason `RUNNER_TIME`. Only then does a
   newer run supersede the older runs of its branch and the caps answer BUSY. None of these
   refusals closes another run.
+- Commit gap, exactly: the commit row lives 30 days from the start of the rental (or
+  `SHA_GAP_HOURS` if that is longer) and is removed when the create failed. So a first-attempt
+  run key (`run_attempt` 1) of a commit tested in the last 30 days is refused, whatever
+  `SHA_GAP_HOURS` says. The 24 h gap applies only to a re-run of the same commit (`run_attempt`
+  above 1). The spent-key refusal lasts while the spend row exists: the row is pruned 30 days
+  after its run ended.
 - When to run (branches, drafts, docs-only paths) lives only in `gpu-vast.yml` and the trusted
   BASE helper `trigger-policy.mjs`.
 
