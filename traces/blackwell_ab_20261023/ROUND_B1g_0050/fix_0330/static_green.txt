@@ -1,0 +1,11 @@
+test_checker_detects_missing_module_attribute (test_operator_static.Static.test_checker_detects_missing_module_attribute) ... ok
+test_checker_still_detects_the_original_defect (test_operator_static.Static.test_checker_still_detects_the_original_defect) ... ok
+test_final_remote_audit_resolves_every_observation_attribute (test_operator_static.Static.test_final_remote_audit_resolves_every_observation_attribute) ... ok
+test_harness_guards (test_operator_static.Static.test_harness_guards) ... ok
+test_operator_workspace (test_operator_static.Static.test_operator_workspace) ... ok
+test_run_kit (test_operator_static.Static.test_run_kit) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.773s
+
+OK
