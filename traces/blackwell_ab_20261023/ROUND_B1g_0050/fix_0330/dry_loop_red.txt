@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_dry_loop (unittest.loader._FailedTest.test_dry_loop)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_dry_loop
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050/fix_0330/test_dry_loop.py", line 15, in <module>
+    import dry_loop as DL  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'dry_loop'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.011s
+
+FAILED (errors=1)
