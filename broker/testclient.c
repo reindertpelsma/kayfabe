@@ -40,6 +40,11 @@
  *                      test pointer (hot spot 1,1) -- for watching a real
  *                      backend put the guest's cursor up as the host's
  *   --cursor-hide      ...and then CMD_CURSOR HIDE, one second later
+ *   --cursor-xor WxH   after the first frame, send an XOR CMD_CURSOR SET
+ *                      (CURSOR_F_XOR; needs CAP_CURSOR_STREAM): a WxH I-beam
+ *                      mask, colour white, hot spot (W/2, H/2) -- the Windows
+ *                      text cursor's shape, for watching the broker compose
+ *                      the true inversion (scripts/bench/display/cursor_lane.sh)
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -228,6 +233,44 @@ static int make_cursor(unsigned w, unsigned h)
     return fd;
 }
 
+/*
+ * An I-beam XOR mask for --cursor-xor: alpha 0xff where the cursor inverts (a
+ * one-pixel vertical stroke at x = w/2 and a five-pixel serif at the top and
+ * bottom rows), 0 elsewhere; the colour channels are the XOR colour, white.
+ * Packed and unsealed, as make_cursor().  Returns the fd, or -1.
+ */
+static int make_xor_cursor(unsigned w, unsigned h)
+{
+    size_t size = (size_t)w * 4 * h;
+    int fd = memfd_create("nvkvm-broker-testxor", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    uint32_t *px;
+    unsigned x, y, cx = w / 2;
+
+    if (fd < 0 || ftruncate(fd, (off_t)size) < 0) {
+        perror("xor cursor memfd");
+        if (fd >= 0) {
+            close(fd);
+        }
+        return -1;
+    }
+    px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (px == MAP_FAILED) {
+        perror("xor cursor mmap");
+        close(fd);
+        return -1;
+    }
+    for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+            bool serif = (y == 0 || y + 1 == h) && x + 2 >= cx && x <= cx + 2;
+            bool stroke = x == cx;
+
+            px[(size_t)y * w + x] = (serif || stroke) ? 0xffffffffu : 0x00ffffffu;
+        }
+    }
+    munmap(px, size);
+    return fd;
+}
+
 int main(int argc, char **argv)
 {
     struct sockaddr_un sa;
@@ -247,7 +290,7 @@ int main(int argc, char **argv)
     struct nvkvm_broker_cmd tc_attach;
     int bad_two = 0, bad_reserved = 0, bad_commit_fd = 0;
     int quiet_after = 0, caps_clipboard = 0;
-    unsigned cur_w = 0, cur_h = 0;
+    unsigned cur_w = 0, cur_h = 0, xor_w = 0, xor_h = 0;
     int cur_hide = 0;
 
     /* Line-buffered: this tool is normally watched live and normally ended
@@ -287,6 +330,7 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--caps-clipboard")){ caps_clipboard = 1; }
         else if (!strcmp(a, "--cursor") && v)  { sscanf(v, "%ux%u", &cur_w, &cur_h); i++; }
         else if (!strcmp(a, "--cursor-hide")) { cur_hide = 1; }
+        else if (!strcmp(a, "--cursor-xor") && v) { sscanf(v, "%ux%u", &xor_w, &xor_h); i++; }
         else { fprintf(stderr, "unknown option %s\n", a); return 2; }
     }
     if (!pw) { pw = 640; }
@@ -576,6 +620,26 @@ int main(int argc, char **argv)
                     printf("  -> CURSOR HIDE\n");
                     send_cmd(sock, (const struct nvkvm_broker_cmd *)(void *)&hc,
                              NULL, 0, sizeof hc);
+                }
+            }
+            if (xor_w && xor_h) {
+                struct nvkvm_broker_cursor_cmd xc = {
+                    .type = NVKVM_BROKER_CMD_CURSOR,
+                    .op = NVKVM_BROKER_CURSOR_SET,
+                    .flags = NVKVM_BROKER_CURSOR_F_XOR,
+                    .width = xor_w, .height = xor_h, .stride = xor_w * 4,
+                    .fourcc = FOURCC('A', 'R', '2', '4'),
+                    .hot_x = xor_w / 2, .hot_y = xor_h / 2,
+                };
+                int xfd = make_xor_cursor(xor_w, xor_h);
+
+                if (xfd >= 0) {
+                    printf("  -> CURSOR SET XOR %ux%u hot %u,%u\n", xor_w, xor_h,
+                           xor_w / 2, xor_h / 2);
+                    fflush(stdout);
+                    send_cmd(sock, (const struct nvkvm_broker_cmd *)(void *)&xc,
+                             &xfd, 1, sizeof xc);
+                    close(xfd);
                 }
             }
             if (hold_s > 0) {

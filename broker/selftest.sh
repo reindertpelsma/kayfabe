@@ -450,9 +450,11 @@ check "the client is told the grab ended" 'GRAB[[:space:]]+flags=--'         "$C
 # The lane's synthetic VMM is this client: --cursor-xor WxH sends an I-beam
 # XOR SET (CURSOR_F_XOR, alpha = mask, colour white) over a readable F_SHM
 # frame; with the pointer inside the broker composes the TRUE inversion patch
-# (nb_xor_eval), hot spot (W/2, H/2), so the patch's top-left is the pointer
-# minus the hot spot.  The real-compositor half (pixels in a screencast) is the
-# lane's; this pins the tool and the decision without a display.
+# (nb_xor_eval), hot spot (W/2, H/2).  The patch is the mask's bounding box
+# (the 5-pixel serifs: x 2..6 of 9), so at pointer (40,40) its top-left is
+# (40-4+2, 40-8) = (38,32), and it inverts 16 + 2*5 - 2 = 24 pixels.  The
+# real-compositor half (pixels in a screencast) is the lane's; this pins the
+# tool and the decision without a display.
 echo "-- XOR cursor tool (cursor lane)"
 run_case 'f 1
 p 1
@@ -460,7 +462,7 @@ a 40 40
 ' --present 320x240 --shm --cursor-xor 9x16 --hold 2
 check   "--cursor-xor sends an XOR SET" 'CURSOR SET XOR 9x16 hot 4,8' "$CASE_OUT"
 check   "the broker composes the true inversion at pointer - hot" \
-        'TEST cursor: xor patch 9x16 at 36,32 n=[0-9]+ ' "$CASE_LOG"
+        'TEST cursor: xor patch 5x16 at 38,32 n=24 ' "$CASE_LOG"
 nocheck "and no approximation" 'XOR approximated' "$CASE_LOG"
 
 echo
