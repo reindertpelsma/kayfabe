@@ -4,7 +4,12 @@ import { spawnSync } from 'node:child_process';
 import { setup, sha } from './helpers.js';
 // Owner ruling 2026-10-24 item 1. FALSIFIER: the Worker still needs or accepts pr_number, the
 // status object still carries pr, or the runner still sends pr_number / accepts a pr field.
-const body = { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' };
+const body = {
+  runner_nonce: 'f'.repeat(64),
+  tested_sha: sha,
+  profile: 'check',
+  remaining_seconds: 12000,
+};
 test('item 1: rent body without pr_number is admitted', async () => {
   const h = await setup();
   const response = await h.call('/rent', { body });

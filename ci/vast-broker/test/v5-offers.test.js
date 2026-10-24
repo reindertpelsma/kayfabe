@@ -35,6 +35,7 @@ const body = (profile = 'check', preferences) => ({
   runner_nonce: 'f'.repeat(64),
   tested_sha: sha,
   profile,
+  remaining_seconds: 12000,
   ...(preferences === undefined ? {} : { preferences }),
 });
 async function harness(offers = [good], bindings = {}) {

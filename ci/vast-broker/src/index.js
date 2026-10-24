@@ -639,19 +639,33 @@ export function createService({
           await readBounded(request, 2048),
         );
         rentRequest = JSON.parse(text);
-        // runner_nonce, tested_sha and profile are required; preferences is optional.
-        const allowed = ['runner_nonce', 'tested_sha', 'profile', 'preferences'],
+        // runner_nonce, tested_sha, profile and remaining_seconds (the runner's remaining wait
+        // budget, review B1) are required; preferences is optional.
+        const allowed = [
+            'runner_nonce',
+            'tested_sha',
+            'profile',
+            'remaining_seconds',
+            'preferences',
+          ],
           keys = Object.keys(rentRequest),
-          matches = [...text.matchAll(/"(runner_nonce|tested_sha|profile|preferences)"\s*:/g)];
+          matches = [
+            ...text.matchAll(
+              /"(runner_nonce|tested_sha|profile|remaining_seconds|preferences)"\s*:/g,
+            ),
+          ];
         if (
-          keys.length < 3 ||
-          keys.length > 4 ||
+          keys.length < 4 ||
+          keys.length > 5 ||
           !keys.every((k) => allowed.includes(k)) ||
-          !allowed.slice(0, 3).every((k) => keys.includes(k)) ||
+          !allowed.slice(0, 4).every((k) => keys.includes(k)) ||
           matches.length !== keys.length ||
           new Set(matches.map((x) => x[1])).size !== keys.length ||
           !/^([0-9a-f]{64})$/.test(rentRequest.runner_nonce) ||
-          !/^([0-9a-f]{40})$/.test(rentRequest.tested_sha)
+          !/^([0-9a-f]{40})$/.test(rentRequest.tested_sha) ||
+          !Number.isSafeInteger(rentRequest.remaining_seconds) ||
+          rentRequest.remaining_seconds < 0 ||
+          rentRequest.remaining_seconds > 86400
         )
           throw Error();
       } catch {
@@ -707,6 +721,20 @@ export function createService({
         await checkContract(prior, await vast.inspect(prior), vast, cfg);
       return json(expose(prior, key));
     }
+    // Review R1: one attempt per run key, also after retention removed the record (the spend
+    // row stays 30 days, longer than any GitHub run can mint a token).
+    if (await ledger.get('cost:' + key)) refuse('UNAVAILABLE_BUDGET', 409);
+    // Review B2: the commit gap before the cap, so a repeated commit is refused at once instead
+    // of waiting BUSY, and before the supersede, so it closes nobody.
+    const cached = await ledger.get('sha:' + target.sha),
+      force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
+    // A fresh runner nonce may not inherit another run's result.
+    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409);
+    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409);
+    // Review B1: a run whose remaining budget cannot hold the hard limit plus the margin is not
+    // admitted (it would time out with a paid box) and supersedes nothing.
+    if (rentRequest.remaining_seconds * 1000 < cfg.hard + DEFAULTS.admissionMarginMinutes * 60000)
+      refuse('NOT_ELIGIBLE', 409, 'RUNNER_TIME');
     // Owner ruling 2026-10-24 item 8: a set of active runs (every record not yet ended). A newer
     // run supersedes only the older runs of its own branch; an older run's late request never
     // closes a newer one and is not eligible. Over the cap a run gets BUSY and retries.
@@ -724,10 +752,6 @@ export function createService({
         cfg.maxConcurrentProfile[profile]
     )
       refuse('BUSY', 409);
-    const cached = await ledger.get('sha:' + target.sha),
-      force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
-    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.
-    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409);
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
     const chosen = await offers.select(

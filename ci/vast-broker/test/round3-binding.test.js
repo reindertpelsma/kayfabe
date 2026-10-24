@@ -5,7 +5,12 @@ import { setup, sha, nonce, env, jwt } from './helpers.js';
 import { createGateway } from '../src/index.js';
 // Component tests inject auth; v5-front-auth tests the real gateway.
 const worker = createGateway({ authorize: async () => {} });
-const request = { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' };
+const request = {
+  runner_nonce: 'f'.repeat(64),
+  tested_sha: sha,
+  profile: 'check',
+  remaining_seconds: 12000,
+};
 for (const size of [180, 700])
   test('R3 public ingress preserves bounded nonce rent body ' + size, async () => {
     let received;

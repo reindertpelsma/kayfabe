@@ -11,6 +11,7 @@ for (const denied of ['UNKNOWN', 'AD107'])
           runner_nonce: 'f'.repeat(64),
           tested_sha: sha,
           profile: 'check',
+          remaining_seconds: 12000,
           preferences: [denied, 'AD104'],
         },
       });

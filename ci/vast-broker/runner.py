@@ -30,10 +30,18 @@ STATES = {
 }
 VERDICTS = {"PASS", "FAIL", "UNAVAILABLE"}
 ZERO = "0" * 64
+# Review B1: the runner's budget is 200 minutes (Runner.until). A run needs the hard limit
+# (defaults.json hardMinutes) plus the Worker's admission margin (admissionMarginMinutes);
+# after a definite BUSY the runner stops asking once less than that is left.
+ADMISSION_NEED_SECONDS = (180 + 5) * 60
 
 
 class Invalid(Exception):
     pass
+
+
+class WaitBudget(Exception):
+    """BUSY until the remaining budget can no longer hold a run: nothing was rented."""
 
 
 @dataclasses.dataclass
@@ -391,8 +399,11 @@ ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
 
 def validate_status(data, ctx, manifest, http_status):
+    # A refusal may carry reason/selection (checked below); before edits3 this first test
+    # refused them, so every reasoned refusal ended as Invalid.
+    refusal = {"reason", "selection"} if http_status != 200 else set()
     if (
-        not set(data) <= STATUS_KEYS | OPTIONAL_STATUS_KEYS
+        not set(data) <= STATUS_KEYS | OPTIONAL_STATUS_KEYS | refusal
         or data.get("state") not in STATES
         or data.get("verdict") not in VERDICTS
     ):
@@ -415,6 +426,7 @@ def validate_status(data, ctx, manifest, http_status):
         if "reason" in data and data["reason"] not in {
             "NO_ALLOWED_PREFERENCE",
             "NO_ALLOWED_OFFERS",
+            "RUNNER_TIME",
         }:
             raise Invalid()
         if "selection" in data:
@@ -528,6 +540,7 @@ class Runner:
         self.display_lines = 0
         self.display_dropped = 0
         self.infrastructure_failure = False
+        self.rent_busy = False
         self.until = time.monotonic() + 600 * 20
 
     def read(self, route, method="GET", body=None):
@@ -547,6 +560,15 @@ class Runner:
             if time.monotonic() >= self.until:
                 self.infrastructure_failure = True
                 raise TimeoutError()
+            if route == "/rent":
+                # Review B1: each request declares the remaining budget; after a definite BUSY
+                # the runner stops once a run would no longer fit. After an ambiguous reply it
+                # keeps asking: the Worker returns a prior admission or refuses (RUNNER_TIME).
+                remaining = int(self.until - time.monotonic())
+                if self.rent_busy and remaining < ADMISSION_NEED_SECONDS:
+                    raise WaitBudget()
+                body["remaining_seconds"] = remaining
+                self.rent_busy = False
             try:
                 reply = self.client(route, method, body)
                 if route.startswith(("/status/", "/logs/")) and reply.status != 200:
@@ -571,6 +593,7 @@ class Runner:
                 transient = code in {429, 500, 502, 503, 504} or (
                     code == 409 and data["state"] == "BUSY"
                 )
+                self.rent_busy = route == "/rent" and code == 409 and data["state"] == "BUSY"
                 self.infrastructure_failure = transient or route.startswith(("/status/", "/logs/"))
                 if not transient:
                     return code, data
@@ -745,6 +768,9 @@ class Runner:
                     break
                 time.sleep(20)
                 code, data = self.retry_read("/status/" + self.ctx["run"])
+        except WaitBudget:
+            self.show("BUSY until the remaining budget could no longer hold a run: not renting")
+            result = {"state": "BUSY", "verdict": "UNAVAILABLE", "verified": 0}
         except (Invalid, ValueError, KeyError, TypeError, UnicodeError, OSError, TimeoutError):
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:

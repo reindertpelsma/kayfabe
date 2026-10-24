@@ -51,7 +51,12 @@ test('local HTTP integration: owner rent to authenticated reports to automatic d
       new Request(env.WORKER_URL + '/' + 'i'.repeat(32) + '/rent', {
         method: 'POST',
         headers: { authorization, 'X-KF-Protocol': '6' },
-        body: JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' }),
+        body: JSON.stringify({
+          runner_nonce: 'f'.repeat(64),
+          tested_sha: sha,
+          profile: 'check',
+          remaining_seconds: 12000,
+        }),
       }),
     );
     assert.equal(r.status, 200);

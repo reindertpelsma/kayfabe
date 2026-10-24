@@ -95,10 +95,16 @@ test('returns immediately without waiting for logs or boot', async () => {
   );
 });
 // Owner ruling 2026-10-24 item 8: over the concurrency cap (default 1) a run gets BUSY.
+const anotherCommit = (h) => {
+  h.cloud.run.head_sha = 'c'.repeat(40);
+  h.cloud.run.pull_requests = [{ number: 8, head: { sha: 'c'.repeat(40) } }];
+  h.cloud.run.head_branch = 'other-pr';
+};
 test('one-live blocks another run', async () => {
   const h = await setup();
   await rent(h);
   h.cloud.run.id = 124;
+  anotherCommit(h); // Review B2: the same commit is refused by the commit gap, not BUSY.
   assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'BUSY');
   assert.equal(h.cloud.creates, 1);
 });
@@ -107,6 +113,7 @@ test('one-live survives restart', async () => {
   await rent(h);
   h.restart();
   h.cloud.run.id = 124;
+  anotherCommit(h);
   assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'BUSY');
   assert.equal(h.cloud.creates, 1);
 });

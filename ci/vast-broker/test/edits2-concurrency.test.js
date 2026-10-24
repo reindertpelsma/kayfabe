@@ -40,6 +40,7 @@ async function rentAs(h, n, { preferences, profile = 'check', ...run } = {}) {
       runner_nonce: 'f'.repeat(64),
       tested_sha: h.cloud.runs.get(String(n)).head_sha,
       profile,
+      remaining_seconds: 12000,
       ...(preferences ? { preferences } : {}),
     },
   });

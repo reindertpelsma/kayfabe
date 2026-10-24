@@ -108,18 +108,20 @@ elif case == "busy-wait-ends":
     assert not [c for c in calls if c[0].startswith("/stop/")], calls
     assert clock[0] < runner.until, (clock, runner.until)
 elif case == "ambiguous-keeps-asking":
-    # After an ambiguous answer (no reply) the runner cannot know whether it was admitted, so it
-    # keeps asking even below the threshold; the Worker returns the prior record or refuses.
+    # After an ambiguous answer (a 503: the Worker may have created a box before it failed) the
+    # runner cannot know whether it was admitted, so it keeps asking even below the threshold;
+    # the Worker returns the prior record or refuses (RUNNER_TIME).
     state = {"phase": "busy"}
+    unavailable = dict(busy, state="UNAVAILABLE")
 
     def rent_reply(remaining):  # noqa: F811 - the case replaces the reply.
-        # BUSY well above the threshold (the next send is at most 20 s later), then lost
-        # replies across it (fewer than six in a row), then the admitted record.
+        # BUSY well above the threshold (the next send is at most 20 s later), then ambiguous
+        # replies across it, then the admitted record.
         if state["phase"] == "busy" and remaining >= need + 25:
             return answer(409, busy)
-        state["phase"] = "lost"
-        if remaining >= need - 5:
-            raise OSError("reply lost")
+        state["phase"] = "ambiguous"
+        if remaining >= need:
+            return answer(503, unavailable)
         return answer(200, final)
 
     runner, result = run()

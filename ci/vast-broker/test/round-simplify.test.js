@@ -43,7 +43,12 @@ for (const tested of ['e'.repeat(40), base])
   test('simplify requested sha must equal run head ' + tested[0], async () => {
     const h = await setup();
     const response = await h.call('/rent', {
-      body: { runner_nonce: 'f'.repeat(64), tested_sha: tested, profile: 'check' },
+      body: {
+        runner_nonce: 'f'.repeat(64),
+        tested_sha: tested,
+        profile: 'check',
+        remaining_seconds: 12000,
+      },
     });
     assert.notEqual(response.status, 200);
     assert.equal(h.cloud.creates, 0);
@@ -93,7 +98,12 @@ for (const branch of ['feature', 'release'])
     pushRun(h, branch);
     const response = await h.call('/rent', {
       claims: pushClaims(branch),
-      body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' },
+      body: {
+        runner_nonce: 'f'.repeat(64),
+        tested_sha: sha,
+        profile: 'check',
+        remaining_seconds: 12000,
+      },
     });
     assert.notEqual(response.status, 200);
     assert.equal(h.cloud.creates, 0);
@@ -105,7 +115,12 @@ for (const trigger of ['42', '99'])
     h.cloud.run.triggering_actor = { id: Number(trigger) };
     const response = await h.call('/rent', {
       claims: pushClaims(),
-      body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' },
+      body: {
+        runner_nonce: 'f'.repeat(64),
+        tested_sha: sha,
+        profile: 'check',
+        remaining_seconds: 12000,
+      },
     });
     assert.equal(response.status === 200, trigger === '42');
     assert.equal(h.cloud.creates, trigger === '42' ? 1 : 0);

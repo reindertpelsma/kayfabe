@@ -44,7 +44,12 @@ for (const event of ['push', 'pull_request_target'])
       if (defect === 'completed') h.cloud.run.status = 'completed';
       const response = await h.call('/rent', {
         claims,
-        body: { runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' },
+        body: {
+          runner_nonce: 'f'.repeat(64),
+          tested_sha: sha,
+          profile: 'check',
+          remaining_seconds: 12000,
+        },
       });
       assert.notEqual(response.status, 200);
       assert.equal(h.cloud.creates, 0);

@@ -157,7 +157,14 @@ class Client:
         code, data = self.call(
             "/rent",
             "POST",
-            body={"runner_nonce": self.runner_nonce, "tested_sha": tested_sha, "profile": "check"},
+            # remaining_seconds (edits3 B1): a fresh controller declares the runner's whole
+            # 200-minute budget.
+            body={
+                "runner_nonce": self.runner_nonce,
+                "tested_sha": tested_sha,
+                "profile": "check",
+                "remaining_seconds": 12000,
+            },
         )
         if code == 200 and (
             data.get("runner_nonce") != self.runner_nonce or data.get("sha") != tested_sha

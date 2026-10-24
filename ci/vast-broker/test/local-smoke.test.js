@@ -12,7 +12,12 @@ for (const path of ['/rent', '/stop-all'])
         if (path === '/rent')
           c.enqueue(
             new TextEncoder().encode(
-              JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' }),
+              JSON.stringify({
+                runner_nonce: 'f'.repeat(64),
+                tested_sha: sha,
+                profile: 'check',
+                remaining_seconds: 12000,
+              }),
             ),
           );
         c.close();
@@ -97,7 +102,12 @@ async function localCall({
         Authorization: 'Bearer ' + (await jwt({ iss: claimsIssuer })),
         'X-KF-Protocol': '6',
       },
-      body: JSON.stringify({ runner_nonce: 'f'.repeat(64), tested_sha: sha, profile: 'check' }),
+      body: JSON.stringify({
+        runner_nonce: 'f'.repeat(64),
+        tested_sha: sha,
+        profile: 'check',
+        remaining_seconds: 12000,
+      }),
     }),
   );
   return { r, h, localReads };

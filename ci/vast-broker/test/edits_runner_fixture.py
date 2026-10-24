@@ -76,10 +76,12 @@ run = lambda: m.Runner(ctx, manifest, client, emit=lambda _: None, summary=io.St
 stops = lambda: [c for c in calls if c[0].startswith("/stop/")]
 
 if case == "rent-body":
-    # Item 1: the rent body carries no pr_number; the status object carries no pr.
+    # Item 1: the rent body carries no pr_number; the status object carries no pr. Edits3 B1
+    # added remaining_seconds (the runner's remaining wait budget).
     result = run()
     rent = [c[2] for c in calls if c[0] == "/rent"]
-    assert rent and set(rent[0]) == {"runner_nonce", "tested_sha", "profile"}, rent
+    keys = {"runner_nonce", "tested_sha", "profile", "remaining_seconds"}
+    assert rent and set(rent[0]) == keys, rent
     assert result == {"state": "GRACE", "verdict": "PASS", "verified": 1}, result
     for extra in [{"pr": 7}, {"pr": None}]:
         try:

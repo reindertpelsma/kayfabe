@@ -43,6 +43,7 @@ const target = (h, change) => {
       runner_nonce: 'f'.repeat(64),
       tested_sha: change === 'tested-sha' ? 'e'.repeat(40) : sha,
       profile: 'check',
+      remaining_seconds: 12000,
     },
   });
 };

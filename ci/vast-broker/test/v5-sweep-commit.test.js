@@ -26,6 +26,7 @@ for (const target of [sha, 'e'.repeat(40)])
         runner_nonce: 'f'.repeat(64),
         tested_sha: target,
         profile: 'sweep',
+        remaining_seconds: 12000,
         preferences: ['AD104'],
       },
     });
