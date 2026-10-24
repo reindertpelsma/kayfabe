@@ -83,7 +83,9 @@ class SavedWatchLoop(unittest.TestCase):
                 patch.object(O.G, "validate_phase_owner", return_value=True),
                 patch.object(O.G, "abort_owned_qemu", return_value=True) as abort,
                 patch.object(O.G.N, "terminate_owned_tree") as terminate,
-                patch.object(O, "dmesg_snapshot", return_value="\n".join(r["line"] for r in current)),
+                patch.object(
+                    O, "dmesg_snapshot", return_value="\n".join(r["line"] for r in current)
+                ),
                 patch.object(O.os, "getpgid", return_value=1234),
                 patch.object(O.os, "getpgrp", return_value=1234),
                 patch.object(O.dt, "datetime", Clock),
@@ -152,15 +154,21 @@ class SavedWatchLoop(unittest.TestCase):
         self.assertNotIn("is not defined", r["fatal"]["STOP"])
 
     def test_new_kernel_error_row_stops_fail_closed(self):
-        error = {"cursor": "e", "priority": 2,
-                 "line": "2026-10-23T11:59:30.000000+0000 ubuntu kernel: NVRM: GPU has fallen off"}
+        error = {
+            "cursor": "e",
+            "priority": 2,
+            "line": "2026-10-23T11:59:30.000000+0000 ubuntu kernel: NVRM: GPU has fallen off",
+        }
         r = self.run_loop(INITIAL + [error])
         self.assertIsInstance(r["outcome"], O.Refused)
         self.assertIn("kernel error", r["fatal"]["STOP"])
 
     def test_pre_existing_error_row_is_not_judged_again(self):
-        old_error = {"cursor": "e0", "priority": 3,
-                     "line": "2026-10-23T11:57:00.000000+0000 ubuntu kernel: earlier warning"}
+        old_error = {
+            "cursor": "e0",
+            "priority": 3,
+            "line": "2026-10-23T11:57:00.000000+0000 ubuntu kernel: earlier warning",
+        }
         history = INITIAL + [old_error]
         r = self.run_loop(history, initial=history)
         self.assertEqual(r["outcome"], "one_iteration", r["fatal"])

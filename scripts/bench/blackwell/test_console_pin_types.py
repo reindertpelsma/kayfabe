@@ -37,8 +37,9 @@ class TypedPins(unittest.TestCase):
         self.assertEqual(C.console_pins(text, KEY), set())
 
     def test_full_console_shape_yields_only_the_ed25519_pin(self):
-        text = "\n".join([line(DSA_FP, "DSA"), line(ECDSA_FP, "ECDSA"), line(FP, "ED25519"),
-                          line(RSA_FP, "RSA")])
+        text = "\n".join(
+            [line(DSA_FP, "DSA"), line(ECDSA_FP, "ECDSA"), line(FP, "ED25519"), line(RSA_FP, "RSA")]
+        )
         self.assertEqual(C.console_pins(text, KEY), {FP})
 
     def test_labelled_ed25519_mismatch_still_counts(self):

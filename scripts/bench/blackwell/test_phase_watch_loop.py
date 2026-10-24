@@ -36,8 +36,14 @@ class PhaseWatchLoop(unittest.TestCase):
             root = Path(directory)
             receipt = root / "native_receipt.json"
             receipt.write_text(json.dumps({"approved_native_xid_lines": [ACCEPTED], "pci": PCI}))
-            argv = ["phase_xid_guard.py", "watch", str(receipt), "1234", str(root / "phase.json"),
-                    str(root / "fatal.json")]
+            argv = [
+                "phase_xid_guard.py",
+                "watch",
+                str(receipt),
+                "1234",
+                str(root / "phase.json"),
+                str(root / "fatal.json"),
+            ]
             with (
                 patch.object(sys, "argv", argv),
                 patch.object(G.N, "kernel_snapshot", return_value=journal),
