@@ -1464,6 +1464,39 @@ impl ReasonLog {
     }
 }
 
+/// The head colour program as the console renders it: head, decoded OCSC0 (65536 = 1.0) and the
+/// OLUT's `(entries, interpolate, mirror)`, or `None` for an OLUT bypass.
+type ProgramKey = (u32, [i32; 12], Option<(u32, bool, bool)>);
+
+/// ★ DIAGNOSTIC (2026-10-24, PR #92 automated checks): each DISTINCT head colour program the console
+/// renders is logged once (`colour program #N ...`), so a lane that moves the NVIDIA app's Hue or
+/// Digital Vibrance slider can read the coefficients the guest driver really programmed and grade
+/// the screendump against them (`scripts/bench/windows/hue_vibrance_lane.sh`). Not a flag: always
+/// on, because it is bounded the way [`ReasonLog`] is — at most [`ProgramLog::MAX`] programs per
+/// device life, then one line saying further programs are only counted — so a hostile guest that
+/// rewrites OCSC0 every frame cannot grow the log or this set. Runs on the scan thread (no vCPU,
+/// no new lock).
+#[derive(Debug, Default)]
+struct ProgramLog {
+    seen: Vec<ProgramKey>,
+    full: bool,
+}
+
+impl ProgramLog {
+    const MAX: usize = 64;
+
+    /// Has this program been logged? (stub: EXPECTED RED)
+    fn admit(&mut self, _key: &ProgramKey) -> Admit {
+        Admit::Seen
+    }
+}
+
+/// The line for program number `n` (1-based). The format is parsed by
+/// `scripts/bench/windows/hue_vibrance_check.py` (`PROGRAM_RE`); change both together.
+fn program_line(_n: usize, _key: &ProgramKey) -> String {
+    String::new()
+}
+
 /// A resolved colour binding belongs to one armed channel incarnation. Unlike the
 /// framebuffer cache, its token also names the immutable GPU snapshot of the LUT.
 struct ColorDmas {
@@ -6055,6 +6088,76 @@ mod tests {
         let long = "z".repeat(ReasonLog::LEN + 40);
         assert_eq!(log.admit(&long), Admit::New);
         assert_eq!(log.admit(&format!("{long}tail")), Admit::Seen);
+    }
+
+    /// PR #92 automated checks: each distinct head colour program is logged once, a repeat is
+    /// silent, any change of a coefficient or of the table's flags is a new program, and the set is
+    /// bounded against a guest that rewrites OCSC0 every frame.
+    #[test]
+    fn each_distinct_colour_program_is_logged_once_and_the_set_is_bounded() {
+        let mut log = ProgramLog::default();
+        let mut m = kf_disp::color::IDENTITY;
+        m[3] = 0x20;
+        let k = (0, m, Some((1025, false, true)));
+        assert_eq!(log.admit(&k), Admit::New);
+        for _ in 0..100 {
+            assert_eq!(log.admit(&k), Admit::Seen, "repeats are silent");
+        }
+        let mut hue = m;
+        hue[1] = -7000;
+        assert_eq!(
+            log.admit(&(0, hue, Some((1025, false, true)))),
+            Admit::New,
+            "a coefficient"
+        );
+        assert_eq!(
+            log.admit(&(0, m, Some((1025, false, false)))),
+            Admit::New,
+            "the mirror flag"
+        );
+        assert_eq!(
+            log.admit(&(0, m, Some((1025, true, true)))),
+            Admit::New,
+            "interpolation"
+        );
+        assert_eq!(log.admit(&(0, m, None)), Admit::New, "bypass");
+        assert_eq!(
+            log.admit(&(1, m, Some((1025, false, true)))),
+            Admit::New,
+            "another head"
+        );
+        let mut full = 0;
+        for i in 0..1000 {
+            let mut x = m;
+            x[0] = i;
+            match log.admit(&(0, x, None)) {
+                Admit::Full => full += 1,
+                Admit::New | Admit::Seen => {}
+            }
+        }
+        assert_eq!(log.seen.len(), ProgramLog::MAX, "bounded");
+        assert_eq!(full, 1, "one line says the set is full");
+        assert_eq!(log.admit(&k), Admit::Seen);
+    }
+
+    /// The line the Windows hue/vibrance lane parses: number, head, the 12 decoded coefficients in
+    /// order, the table's entries and flags, and whether a signed head matrix meets a mirrored
+    /// table (the PR #92 case).
+    #[test]
+    fn the_colour_program_line_carries_the_decoded_matrix_and_table_flags() {
+        let mut m = kf_disp::color::IDENTITY;
+        m[1] = -32768;
+        m[3] = 0x20;
+        assert_eq!(
+            program_line(3, &(0, m, Some((1025, false, true)))),
+            "kf3: display: colour program #3 head=0 ocsc0=[65536,-32768,0,32,0,65536,0,0,0,0,65536,0] \
+             olut=1025 interp=0 mirror=1 signed_behind_mirror=1 (each distinct program once, at most 64)"
+        );
+        assert_eq!(
+            program_line(1, &(1, kf_disp::color::IDENTITY, None)),
+            "kf3: display: colour program #1 head=1 ocsc0=[65536,0,0,0,0,65536,0,0,0,0,65536,0] \
+             olut=bypass interp=0 mirror=0 signed_behind_mirror=0 (each distinct program once, at most 64)"
+        );
     }
 
     /// ★ §O: the worker's hover/grab switch. Without a cursor-capable broker (nothing read) and under
