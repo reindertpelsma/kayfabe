@@ -53,6 +53,16 @@ const cases = [
     line: REPLY + 'HTTP 502, content-type x?y?z?' + 'q'.repeat(58),
   },
   {
+    name: 'Worker 401 JSON with a bare state names the state',
+    args: { reply: 'json401' },
+    line: REPLY + 'HTTP 401, content-type application/json, state UNAUTHORIZED',
+  },
+  {
+    name: 'Worker 401 JSON with an unknown state shows no body text',
+    args: { reply: 'json401hostile' },
+    line: REPLY + 'HTTP 401, content-type application/json',
+  },
+  {
     name: 'timeout',
     args: { reply: 'timeout' },
     line: 'runner: network failure: TimeoutError',
