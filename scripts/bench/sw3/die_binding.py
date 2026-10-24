@@ -30,12 +30,13 @@ def bind(probe, binding, die_source, arch_source, pin):
     if len(candidates) != 1:
         raise BindingRefused("one complete native RM identity required")
     match = re.fullmatch(
-        r"host_driver=([0-9]{3}\.[0-9]{1,3}\.[0-9]{1,2}) "
-        r"arch=\(([0-9]+), ([0-9]+), ([0-9]+)\)", candidates[0]
+        r"host_driver=([0-9]{3}\.[0-9]{1,3}\.[0-9]{1,2}) " r"arch=\(([0-9]+), ([0-9]+), ([0-9]+)\)",
+        candidates[0],
     )
-    if match is None or probe.splitlines().count(
-        "PASS native read-only timer map/read/drop x3"
-    ) != 1:
+    if (
+        match is None
+        or probe.splitlines().count("PASS native read-only timer map/read/drop x3") != 1
+    ):
         raise BindingRefused("malformed/incomplete native probe")
     driver = match[1]
     architecture, implementation, revision = map(int, match.groups()[1:])
@@ -60,9 +61,7 @@ def bind(probe, binding, die_source, arch_source, pin):
     if table is None:
         raise BindingRefused("derived die table missing")
     names = {}
-    for arch, impl, die in re.findall(
-        r'\(arch::(\w+), (0x[0-9a-f]+), "([A-Z0-9]+)"\)', table[1]
-    ):
+    for arch, impl, die in re.findall(r'\(arch::(\w+), (0x[0-9a-f]+), "([A-Z0-9]+)"\)', table[1]):
         key = (int(arches[arch], 16), int(impl, 16))
         if key in names:
             raise BindingRefused("ambiguous derived die tuple")
@@ -70,16 +69,25 @@ def bind(probe, binding, die_source, arch_source, pin):
     die = names.get((architecture, implementation))
     if die not in SCOPE:
         raise BindingRefused("unknown or out-of-scope native tuple")
-    return {"die": die, "architecture": architecture, "implementation": implementation,
-            "revision": revision, "driver": driver, "pci": pci, "product_name": name}
+    return {
+        "die": die,
+        "architecture": architecture,
+        "implementation": implementation,
+        "revision": revision,
+        "driver": driver,
+        "pci": pci,
+        "product_name": name,
+    }
 
 
 def main():
     probe, binding, root, plan = map(Path, sys.argv[1:])
     result = bind(
-        probe.read_text(), binding.read_text(),
+        probe.read_text(),
+        binding.read_text(),
         (root / "crates/kf-chip/src/die.rs").read_text(),
-        (root / "crates/kf-chip/src/lib.rs").read_text(), json.loads(plan.read_text())
+        (root / "crates/kf-chip/src/lib.rs").read_text(),
+        json.loads(plan.read_text()),
     )
     print(json.dumps(result, sort_keys=True))
 

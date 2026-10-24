@@ -10,15 +10,20 @@ ROOT = Path(__file__).resolve().parents[3]
 DIES = (ROOT / "crates/kf-chip/src/die.rs").read_text()
 ARCHES = (ROOT / "crates/kf-chip/src/lib.rs").read_text()
 PROBE = (
-    "host_driver=595.91.07 arch=(368, 4, 161)\n"
-    "PASS native read-only timer map/read/drop x3\n"
+    "host_driver=595.91.07 arch=(368, 4, 161)\n" "PASS native read-only timer map/read/drop x3\n"
 )
 BINDING = "NVIDIA GeForce RTX 3060, 595.91.07, 0x248710DE\n"
 PIN = {
-    "driver": "595.91.07", "pci": "0x248710DE", "arch_impl": [368, 4],
+    "driver": "595.91.07",
+    "pci": "0x248710DE",
+    "arch_impl": [368, 4],
     "ssh_verified": True,
-    "identity": {"state": "match", "expected_fingerprint": "fixture-pin",
-                 "fingerprint": "fixture-pin", "fingerprints": ["fixture-pin"]},
+    "identity": {
+        "state": "match",
+        "expected_fingerprint": "fixture-pin",
+        "fingerprint": "fixture-pin",
+        "fingerprints": ["fixture-pin"],
+    },
 }
 
 

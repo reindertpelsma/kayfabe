@@ -11,9 +11,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 MUTANTS = {
     "forecast_reintroduced": (
-        '    return {"die": die,',
-        '    if die != "GA106":\n        raise BindingRefused("forecast")\n'
-        '    return {"die": die,',
+        "    return {",
+        '    if die != "GA106":\n        raise BindingRefused("forecast")\n' "    return {",
     ),
     "scope_guard_removed": (
         'raise BindingRefused("unknown or out-of-scope native tuple")',
@@ -46,8 +45,12 @@ def main():
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     source = (HERE / "die_binding.py").read_text()
-    tests = (HERE / "test_die_binding.py").read_text().replace(
-        "ROOT = Path(__file__).resolve().parents[3]", "ROOT = Path(" + repr(str(ROOT)) + ")"
+    tests = (
+        (HERE / "test_die_binding.py")
+        .read_text()
+        .replace(
+            "ROOT = Path(__file__).resolve().parents[3]", "ROOT = Path(" + repr(str(ROOT)) + ")"
+        )
     )
     rows = []
     for name, (before, after) in MUTANTS.items():
@@ -57,8 +60,14 @@ def main():
             root = Path(directory)
             (root / "die_binding.py").write_text(source.replace(before, after))
             (root / "test_die_binding.py").write_text(tests)
-            subprocess.run([sys.executable, "-c", DRIVER], cwd=root, capture_output=True,
-                           text=True, check=True, timeout=30)
+            subprocess.run(
+                [sys.executable, "-c", DRIVER],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
             result = json.loads((root / "result.json").read_text())
         if result["run"] != 17 or len(result["killers"]) < 2:
             raise ValueError("insufficient killing tests: " + name)
