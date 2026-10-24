@@ -174,7 +174,9 @@ def main():
         "native_driver": "595.91.07 open",
         "guest_driver": "595.91.07 open, host-mode Linux",
         "native_hypothesis": "Actual bound GB206/GB207 passes gates9/9+gate10/USER and bare30/30.",
-        "native_falsifier": "Binding/refusal, any gate/bare failure, or unmatched Xid excludes guest.",
+        "native_falsifier": (
+            "Binding/refusal, any gate/bare failure, or unmatched Xid excludes guest."
+        ),
         "guest_hypothesis": "After native pass, exact production source passes fast30/30.",
         "guest_falsifier": "Any failure/crash/unrun, unmatched Xid, or missed fixed180s oracle.",
         "xid_policy": "Exact source-derived native/guest type/channel/VA/client records only.",
