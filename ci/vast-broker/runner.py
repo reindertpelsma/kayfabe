@@ -646,7 +646,18 @@ class Runner:
                     self.infrastructure_failure = False
                     self.diagnostic = None
                     return code, data
-                validate_status(data, self.ctx, self.manifest, code)
+                try:
+                    validate_status(data, self.ctx, self.manifest, code)
+                except Invalid:
+                    # A bare refusal such as {"state": "UNAUTHORIZED"} is not a status object.
+                    # Name its HTTP status and, only when it is a known enum value, its state.
+                    state = data.get("state") if isinstance(data, dict) else None
+                    line = reply_line(code, "application/json")
+                    if type(state) is str and state in STATES:
+                        line += ", state " + state
+                    self.diagnostic = line
+                    self.rent_ambiguous |= route == "/rent"
+                    raise
                 transient = code in {429, 500, 502, 503, 504} or (
                     code == 409 and data["state"] == "BUSY"
                 )
