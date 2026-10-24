@@ -93,7 +93,7 @@ export function configuration(env) {
     env.OIDC_SUB ?? 'repo:' + env.REPOSITORY + ':environment:' + DEFAULTS.oidcEnvironment;
   if (
     typeof oidcSubject !== 'string' ||
-    !/^repo:[-\w.]+\/[-\w.]+:environment:[A-Za-z0-9_-]+$/.test(oidcSubject)
+    !/^repo:[-\w.@]+\/[-\w.@]+:environment:[A-Za-z0-9_-]+$/.test(oidcSubject)
   )
     refuse();
   const preferredCountries = list('PREFERRED_COUNTRIES', DEFAULTS.preferredCountries);

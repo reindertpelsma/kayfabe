@@ -27,12 +27,12 @@ crons = ["* * * * *"]
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "a9e10c72df70d32343f0010c48979ddebc573aa3327516a6ea1d2955a766b72b"
+DEPLOYED_BUNDLE_SHA256 = "a71415063f1d4c4c323b07b8ccd4d2fdb9a84f5a3c653278b1888fe7a8085fa7"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"
 REPOSITORY_GITHUB_ID = "1311106387"
-OIDC_SUB = "repo:reindertpelsma/kayfabe:environment:gpu-vast"
+OIDC_SUB = "repo:reindertpelsma@229738317/kayfabe@1311106387:environment:gpu-vast"
 CHECK_JOB_WORKFLOW_REFS = '["reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master"]'
 SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-sweep.yml@refs/heads/master"
 
