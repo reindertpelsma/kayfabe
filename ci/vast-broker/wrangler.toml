@@ -5,6 +5,13 @@ workers_dev = true
 # No per-version preview hostnames (wrangler 4.152.0 schema: top-level boolean).
 preview_urls = false
 
+# Workers Logs (owner 2026-10-24: on while the first CI run is debugged). A deploy replaces the
+# dashboard setting with this block, so it must be stated here or a deploy switches logging off.
+# Request logs carry the path prefix: turn this off again once the path works.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [[durable_objects.bindings]]
 name = "LEDGER"
 class_name = "BrokerLedger"
