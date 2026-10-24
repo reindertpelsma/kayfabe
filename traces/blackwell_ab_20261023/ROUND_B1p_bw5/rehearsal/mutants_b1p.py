@@ -10,6 +10,8 @@ FIX = "007ba1eb03db9e21d351e465e95b46cbc3134a95"
 BASE = "cb80cbd29b7a05f904acd822f172485fd49938a9"
 M = [
     ("fix_pin.json", "pin the base", f'"source": "{FIX}"', f'"source": "{BASE}"'),
+    ("build_fix.sh", "gate without gsp", "-p kf-chip -p kf-gsp -p kf-chan", "-p kf-chan"),
+    ("build_fix.sh", "build before tests", "fix_build.py tests", "true"),
     ("fix_build.py", "any head", 'if head != pin["source"]:', "if False:"),
     ("fix_build.py", "any parent", 'if _git(repo, "rev-parse", f"HEAD^{n}") != parent:', "if 0:"),
     (

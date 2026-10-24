@@ -1,4 +1,6 @@
 fix_pin.json           pin the base           killers=3
+build_fix.sh           gate without gsp       killers=2
+build_fix.sh           build before tests     killers=2
 fix_build.py           any head               killers=2
 fix_build.py           any parent             killers=4
 fix_build.py           any base               killers=2

@@ -396,7 +396,9 @@ class B1pScripts(unittest.TestCase):
         source = text("build_fix.sh")
         r = subprocess.run(["bash", "-n", str(K / "build_fix.sh")], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
-        tests = source.index("cargo test -j8 --release -p kf-chan -p kf-qemu -p kf-rm")
+        crates = 'crates="-p kf-chip -p kf-gsp -p kf-chan -p kf-qemu -p kf-rm"'
+        self.assertIn(crates, source)
+        tests = source.index("cargo test -j8 --release $crates")
         gate = source.index("fix_build.py tests")
         build = source.index("scripts/bench/build_kf3.sh")
         self.assertLess(source.index("fix_build.py source"), tests)
@@ -406,6 +408,19 @@ class B1pScripts(unittest.TestCase):
         self.assertIn("/root/prov/observed_fix_binary.json", source)
         self.assertIn("/root/sweep2/fix_pin.json", source)
         self.assertNotIn(BASE, source)
+
+    def test_box_gate_tests_every_crate_the_two_fixes_touch(self):
+        diff = subprocess.check_output(
+            ["git", "-C", str(REPO), "diff", "--name-only", BASE, FIX], text=True
+        )
+        touched = {line.split("/")[1] for line in diff.splitlines() if line.startswith("crates/")}
+        crates = re.search(r'^crates="([^"]+)"$', text("build_fix.sh"), re.M)[1].split()[1::2]
+        self.assertEqual(touched, {"kf-chan", "kf-chip", "kf-gsp", "kf-qemu"})
+        self.assertTrue(touched <= set(crates), sorted(touched - set(crates)))
+
+    def test_build_fix_calls_every_checker_mode(self):
+        modes = re.findall(r"fix_build\.py (\w+)", text("build_fix.sh"))
+        self.assertEqual(modes, ["source", "tests", "receipt"])
 
     def test_candidates_build_the_fix_and_not_the_b1_binary(self):
         source = text("build_candidates.sh")

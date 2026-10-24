@@ -130,7 +130,7 @@
     {
       "suite": "test_b1p_kit",
       "root": "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal",
-      "ran": 82,
+      "ran": 84,
       "ok": true
     },
     {
@@ -160,8 +160,8 @@
     }
   },
   "static": [],
-  "seconds": 91.1,
-  "utc": "2026-10-24T09:46:37.507131+00:00",
+  "seconds": 92.1,
+  "utc": "2026-10-24T09:53:32.562437+00:00",
   "sources": {
     "/workspace/bw5-wt/scripts/bench/blackwell/arm_history.py": "73ae5d56ae54639dbdb0a76203a66f1507393dfb7cce97cd892332764989fa08",
     "/workspace/bw5-wt/scripts/bench/blackwell/channel_projection.py": "e439cae14524896640296b57cb847e2a61baf9f9ac2b0a9bbc83aceb1005593e",
@@ -318,8 +318,8 @@
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_kit.py": "f62bf45b3e543ee9a3ee60680925099c85c7f75cd9053b7c5a70db2a769e2496",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_ops.py": "444128681512183730e76180b58a50be74669e06b880731cf8108aca7c76d4dc",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_snippets.py": "f8e675dc0ae300eb63a6c8dc3f549fd0333d84adc5d0cda8446303c238080c5d",
-    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/mutants_b1p.py": "2641d2360ddd5cd6a55f2cb88ae805b2725f1a88f4bd9f0010217facd9c5f122",
-    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_kit.py": "b1120773d898b0b12872a598be94803c868bf88b725ff007918764e2e822176e",
+    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/mutants_b1p.py": "35c0db86e2f26baebf30d57aeb18124a96788cf2ff8f3091f3c929d4f82acb6f",
+    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_kit.py": "739b8d52b44d73963ba19cd0d272df5f15468a74739356b26d7800a2b2c4e22d",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_ops.py": "1a0aa331177fc9f10cbb6ed210cb0e7213e5f3be29f0799a831c289420cc7683",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_snippets.py": "0b1eb1d174161232f63a50e12b539066c10d2cebcb82814f84d1326a5a0acc9a"
   },

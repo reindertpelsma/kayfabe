@@ -16,8 +16,9 @@ python3 /root/sweep2/fix_build.py source "$pin" "$work"
 cd "$work"
 export CARGO_TARGET_DIR=/workspace/fix-target CARGO_BUILD_JOBS=8
 df -h /
-KAYFABE_NO_KVM=1 nice -n 19 cargo test -j8 --release -p kf-chan -p kf-qemu -p kf-rm \
- >/root/prov/observed_fix_tests.log 2>&1
+crates="-p kf-chip -p kf-gsp -p kf-chan -p kf-qemu -p kf-rm"
+# shellcheck disable=SC2086
+KAYFABE_NO_KVM=1 nice -n 19 cargo test -j8 --release $crates >/root/prov/observed_fix_tests.log 2>&1
 python3 /root/sweep2/fix_build.py tests "$pin" /root/prov/observed_fix_tests.log
 bash scripts/bench/build_kf3.sh /workspace/bench/qemu-10.2.4 \
  /workspace/bench/qemu-build-fix >/root/prov/observed_fix_qemu_build.log 2>&1
