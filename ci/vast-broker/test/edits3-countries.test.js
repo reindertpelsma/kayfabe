@@ -66,22 +66,22 @@ const MEASURED = [
   ['IRAN.', 'IR'],
   ['Korea, DPR', 'KP'],
   ['Syrian Arab Rep.', 'SY'],
-  ['Beijing, CΝ', 'UNKNOWN'], // Greek capital Nu: a look-alike, not a code
-  ['Beijing, ＣＮ', 'CN'], // full-width CN folds under NFKC
-  ['Beijing, CN​', 'CN'], // zero-width space stripped
-  ['Beijing, CN', 'CN'], // NBSP is a space
+  ['Beijing, C\u039d', 'UNKNOWN'], // Greek capital Nu: a look-alike, not a code
+  ['Beijing, \uff23\uff2e', 'CN'], // full-width CN folds under NFKC
+  ['Beijing, CN\u200b', 'CN'], // zero-width space stripped
+  ['Beijing,\u00a0CN', 'CN'], // NBSP is a space
   ['US', 'UNKNOWN'], // bare code: not the Vast form
   ['Taiwan, Province of China', 'UNKNOWN'],
   ['Korea, Republic of', 'UNKNOWN'],
 ];
 const MORE = [
-  ['﻿Beijing, CN', 'CN'], // byte-order mark
-  ['Beijing, C‍N', 'CN'], // zero-width joiner inside the code
-  ['Beijing, C­N', 'CN'], // soft hyphen inside the code
-  ['Beijing, C⁠N', 'CN'], // word joiner
-  ['Beijing, ‮NC', 'UNKNOWN'], // bidi override: stripped, NC is no code
-  ['Beijing, СN', 'UNKNOWN'], // Cyrillic Es
-  ['Texas, UЅ', 'UNKNOWN'], // Cyrillic Dze looks like S
+  ['\ufeffBeijing, CN', 'CN'], // byte-order mark
+  ['Beijing, C\u200dN', 'CN'], // zero-width joiner inside the code
+  ['Beijing, C\u00adN', 'CN'], // soft hyphen inside the code
+  ['Beijing, C\u2060N', 'CN'], // word joiner
+  ['Beijing, \u202eNC', 'UNKNOWN'], // bidi override: a reordered code is never trusted
+  ['Beijing, \u0421N', 'UNKNOWN'], // Cyrillic Es
+  ['Texas, U\u0405', 'UNKNOWN'], // Cyrillic Dze looks like S
   ['Region, us', 'UNKNOWN'], // lower case is not the Vast form
   ['Region, USA', 'UNKNOWN'],
   [', US', 'UNKNOWN'], // no region
@@ -89,7 +89,9 @@ const MORE = [
   ['Texas, US', 'US'],
   ['Seoul, KR', 'KR'],
   ['Taiwan, TW', 'TW'],
-  ['Tehran, ır', 'IR'], // dotless i: denied matching folds case (fail closed)
+  ['Tehran, \u0131r', 'IR'], // dotless i: denied matching folds case (fail closed)
+  ['Tex\u202eas, US', 'UNKNOWN'], // a bidi control anywhere: never an allowed code
+  ['Texas\u0007, US', 'UNKNOWN'], // a control character anywhere
 ];
 for (const [geolocation, code] of [...MEASURED, ...MORE])
   test('C: ' + JSON.stringify(geolocation) + ' is ' + code, () => {
