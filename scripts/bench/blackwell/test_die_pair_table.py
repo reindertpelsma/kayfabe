@@ -120,11 +120,58 @@ class PinnedTable(unittest.TestCase):
         with self.assertRaises(ValueError):
             judge(pair(GB202), authority=authority, permit=PERMIT205)
 
+    def test_authority_die_must_match_even_when_channels_match_the_probe(self):
+        authority = {**copy.deepcopy(AUTH205), "candidate_die": "GB202"}
+        with self.assertRaises(ValueError):
+            judge(pair(GB205), authority=authority, permit=PERMIT205)
+
+    def test_authority_channels_must_match_even_when_the_xids_match_the_table(self):
+        authority = {**copy.deepcopy(AUTH205), "exact_channels": ["0x14", "0x0e00000b"]}
+        with self.assertRaises(ValueError):
+            judge(pair(GB205), authority=authority, permit=PERMIT205)
+        authority = {**copy.deepcopy(AUTH205), "exact_channels": ["0x14"]}
+        with self.assertRaises(ValueError):
+            judge([base.xid(0x14)], authority=authority, permit=PERMIT205)
+
     def test_scope_without_any_xid_still_checks_the_die(self):
         permit = {**PERMIT205, "probed_die": "GB206"}
         authority = {**copy.deepcopy(AUTH205), "candidate_die": "GB206"}
         with self.assertRaises(ValueError):
             O.scope_enabled(base.PHASE, permit, authority, base.NOW)
+
+
+class ScopeChecksDie(unittest.TestCase):
+    """scope_enabled alone (no Xid yet) already refuses a die/authority mismatch."""
+
+    def scope(self, permit, authority):
+        return O.scope_enabled(base.PHASE, permit, authority, base.NOW)
+
+    def test_scope_accepts_the_matching_gb202_lease(self):
+        self.assertTrue(self.scope(PERMIT202, AUTH202))
+
+    def test_scope_refuses_a_missing_probe(self):
+        permit = {k: v for k, v in PERMIT202.items() if k != "probed_die"}
+        with self.assertRaises(ValueError):
+            self.scope(permit, AUTH202)
+
+    def test_scope_refuses_an_authority_die_mismatch_with_matching_channels(self):
+        authority = {**copy.deepcopy(AUTH202), "candidate_die": "GB205"}
+        with self.assertRaises(ValueError):
+            self.scope(PERMIT202, authority)
+
+    def test_judge_refuses_an_authority_die_mismatch_with_matching_channels(self):
+        authority = {**copy.deepcopy(AUTH202), "candidate_die": "GB205"}
+        with self.assertRaises(ValueError):
+            judge(pair(GB202), authority=authority, permit=PERMIT202)
+
+    def test_scope_refuses_authority_channels_of_another_die(self):
+        authority = {**copy.deepcopy(AUTH202), "exact_channels": ["0x14", "0x1000000b"]}
+        with self.assertRaises(ValueError):
+            self.scope(PERMIT202, authority)
+
+    def test_scope_refuses_a_boolean_single_enable(self):
+        with self.assertRaises(ValueError):
+            self.scope({**PERMIT205, "enable_count": True}, AUTH205)
 
 
 class DiagnosticSecondEnable(unittest.TestCase):
@@ -159,6 +206,24 @@ class DiagnosticSecondEnable(unittest.TestCase):
         permit = {k: v for k, v in PERMIT_PNP.items() if k != "label"}
         with self.assertRaises(ValueError):
             judge(pair(GB205), authority=AUTH_PNP, permit=permit, phase=PHASE_PNP)
+
+    def test_other_labels_do_not_authorize_a_second_enable(self):
+        for label in ("OBSERVATION", "diagnostic", None):
+            permit = {**PERMIT_PNP, "label": label}
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                judge(pair(GB205), authority=AUTH_PNP, permit=permit, phase=PHASE_PNP)
+
+    def test_authority_ceiling_must_be_exactly_two(self):
+        for ceiling in (1, 4, True, "2"):
+            authority = {**copy.deepcopy(AUTH_PNP), "diagnostic_enable_arms": {PNP_ARM: ceiling}}
+            with self.subTest(ceiling=ceiling), self.assertRaises(ValueError):
+                judge(pair(GB205), authority=authority, permit=PERMIT_PNP, phase=PHASE_PNP)
+
+    def test_far_above_ceiling_refuses(self):
+        for count in (5, 100):
+            permit = {**PERMIT_PNP, "enable_count": count}
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                judge(pair(GB205), authority=AUTH_PNP, permit=permit, phase=PHASE_PNP)
 
     def test_diagnostic_arm_must_be_an_authorized_arm(self):
         authority = {**copy.deepcopy(AUTH_PNP), "arms": ["on_observe_b"]}

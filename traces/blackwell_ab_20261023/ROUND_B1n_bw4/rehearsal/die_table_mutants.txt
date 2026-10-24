@@ -1,0 +1,12 @@
+unknown die accepted             killers=6
+no candidate check               killers=3
+no authority channel check       killers=3
+any channel of any die           killers=6
+judge skips die                  killers=7
+enable any count                 killers=14
+no label                         killers=4
+ceiling from authority           killers=2
+count above ceiling              killers=3
+bool count                       killers=2
+scope skips enable check         killers=16
+scope skips die                  killers=4
