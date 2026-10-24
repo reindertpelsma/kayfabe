@@ -9,7 +9,8 @@ import hashlib
 import unittest
 
 import console_pin as C
-from test_console_pin import FP, KEY, OTHER, ConsolePin
+import test_console_pin as T
+from test_console_pin import FP, KEY, OTHER
 
 
 def fp_of(blob):
@@ -48,8 +49,8 @@ class TypedPins(unittest.TestCase):
 
 
 class TypedWait(unittest.TestCase):
-    setUp = ConsolePin.setUp
-    wait = ConsolePin.wait
+    setUp = T.ConsolePin.setUp
+    wait = T.ConsolePin.wait
 
     def test_dsa_line_before_ed25519_publication_is_absent_not_mismatch(self):
         first = line(DSA_FP, "DSA")

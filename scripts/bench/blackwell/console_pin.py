@@ -45,10 +45,11 @@ def console_pins(text, expected_key):
                 pins.add(fingerprint(key))
             except ValueError as error:
                 raise PinMismatch("malformed published ed25519 host pin") from error
-        # A console may also print its RSA/ECDSA fingerprints. They do not attest
-        # the ed25519 key selected by the unchanged ssh-keyscan invocation.
+        # A console may also print its RSA/ECDSA/DSA fingerprints (measured lease 57443671).
+        # They do not attest the ed25519 key selected by the unchanged ssh-keyscan invocation.
+        # Unlabelled fingerprints still count, so an unknown type stays fail-closed.
         upper = line.upper()
-        if "ED25519" in upper or not any(kind in upper for kind in ("RSA", "ECDSA")):
+        if "ED25519" in upper or not any(kind in upper for kind in ("RSA", "ECDSA", "DSA")):
             pins.update(FINGERPRINT.findall(line))
     # Preserve the earlier guard's acceptance of the full base64 key in console text.
     if expected_key in text:
