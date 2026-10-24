@@ -1,0 +1,51 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-24T04:37:14+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+From https://github.com/reindertpelsma/kayfabe
+ * branch                9ff51a6e9432ed4d5f51636c7606360728de5b6c -> FETCH_HEAD
+Preparing worktree (detached HEAD 9ff51a6e9)
+Updating files:  94% (20580/21690)
+Updating files:  95% (20606/21690)
+Updating files:  96% (20823/21690)
+Updating files:  97% (21040/21690)
+Updating files:  98% (21257/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at 9ff51a6e9 feat(bench): retry bounded pre-SSH provider failures on another machine
+NVIDIA GeForce RTX 5090, 595.91.07, 32607 MiB
+HOST_PREFLIGHT_RC=0
+PREFLIGHT_PROFILE {"verdict_line": ["VERDICT=SOUND"], "failed_checks": [], "cpu_visible": 15, "accepted": true, "accepted_deviation": [], "experiment_mode": "OBSERVATION", "attestation": false}
+PROBE_START pid=77112 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x2 die=GB202
+PROBE_END admin_run=false
+AUDIT_SUBTRACT_EXISTING_CONSTANTS_NO_RECAPTURE
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-24T04:43:49+00:00
+NATIVE_RAW_FINDING rc=0 verdict_is_not_a_gate
+BARE_SUITE_PASS=29 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=29
+NATIVE_CUDA_FINDING rc=0 verdict_is_not_a_gate
+From https://github.com/reindertpelsma/kayfabe
+ * branch                618f0431815d037d4226b642ae37e76967353e90 -> FETCH_HEAD
+Preparing worktree (detached HEAD 618f04318)
+Updating files:  95% (20780/21764)
+Updating files:  96% (20894/21764)
+Updating files:  97% (21112/21764)
+Updating files:  98% (21329/21764)
+Updating files:  99% (21547/21764)
+Updating files: 100% (21764/21764)
+Updating files: 100% (21764/21764), done.
+HEAD is now at 618f04318 fix(bench): register native completion listeners before GPU submission
+NATIVE_GR_FINDING rc=0 verdict_is_not_a_gate
+GR_TIER_VERDICT=PASS
+PRECOMP_EXISTING_MEASUREMENTS_SUBTRACTED
+{"index": 0, "arm": "crowd", "returncode": 0}
+{"index": 1, "arm": "crowd", "returncode": 1}
+{"index": 2, "arm": "crowd", "returncode": 0}
+{"index": 3, "arm": "crowd-free", "returncode": 0}
+NATIVE_FINDINGS_RECORDED_CONTINUE_WINDOWS

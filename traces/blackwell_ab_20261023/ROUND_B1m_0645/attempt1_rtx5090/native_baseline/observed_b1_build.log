@@ -1,0 +1,35 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+From https://github.com/reindertpelsma/kayfabe
+ * branch                48b027267a0e05c9ffdb4a049d34f4d719fd1837 -> FETCH_HEAD
+ * branch                c130aa98ac2b922202282cd793f2a6d64be1f091 -> FETCH_HEAD
+Preparing worktree (detached HEAD 48b027267)
+Updating files:  80% (17861/22231)
+Updating files:  81% (18008/22231)
+Updating files:  82% (18230/22231)
+Updating files:  83% (18452/22231)
+Updating files:  84% (18675/22231)
+Updating files:  85% (18897/22231)
+Updating files:  86% (19119/22231)
+Updating files:  87% (19341/22231)
+Updating files:  88% (19564/22231)
+Updating files:  89% (19786/22231)
+Updating files:  90% (20008/22231)
+Updating files:  91% (20231/22231)
+Updating files:  92% (20453/22231)
+Updating files:  93% (20675/22231)
+Updating files:  94% (20898/22231)
+Updating files:  95% (21120/22231)
+Updating files:  96% (21342/22231)
+Updating files:  97% (21565/22231)
+Updating files:  98% (21787/22231)
+Updating files:  99% (22009/22231)
+Updating files: 100% (22231/22231)
+Updating files: 100% (22231/22231), done.
+HEAD is now at 48b027267 feat(disp): serve complete measured Blackwell PRECOMP pages through consttab
+Auto-merging crates/kf-qemu/src/device.rs
+Automatic merge went well; stopped before committing as requested
+HEAD is now at cb80cbd29 Prepare measured Blackwell page plus Translated RC observation arm
+OBSERVED_B1_SOURCE cb80cbd29b7a05f904acd822f172485fd49938a9 15a57dc7d10e1536277a5fc8ed93181aab947fa3
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G   35G  140G  20% /

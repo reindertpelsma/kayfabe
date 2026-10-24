@@ -1,0 +1,2 @@
+2026-10-24T04:59:18.563085+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=132363, name=qemu-system-x86, channel 0x0e00000b intr 00200000
+2026-10-24T04:59:18.601071+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=132363, name=qemu-system-x86, channel 0x00000014 intr 00200000

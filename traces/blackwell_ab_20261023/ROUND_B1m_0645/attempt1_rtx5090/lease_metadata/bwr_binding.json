@@ -1,0 +1,9 @@
+{
+  "Name": "NVIDIA GeForce RTX 5090",
+  "DriverVersion": "32.0.15.8088",
+  "ConfigManagerErrorCode": 22,
+  "PNPDeviceID": "PCI\\VEN_10DE&DEV_2B85&SUBSYS_89E31043&REV_A1\\3&11583659&0&28",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

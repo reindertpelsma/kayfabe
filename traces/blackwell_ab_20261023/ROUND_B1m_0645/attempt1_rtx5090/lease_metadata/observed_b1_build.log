@@ -1,0 +1,37 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+From https://github.com/reindertpelsma/kayfabe
+ * branch                48b027267a0e05c9ffdb4a049d34f4d719fd1837 -> FETCH_HEAD
+ * branch                c130aa98ac2b922202282cd793f2a6d64be1f091 -> FETCH_HEAD
+Preparing worktree (detached HEAD 48b027267)
+Updating files:  80% (17861/22231)
+Updating files:  81% (18008/22231)
+Updating files:  82% (18230/22231)
+Updating files:  83% (18452/22231)
+Updating files:  84% (18675/22231)
+Updating files:  85% (18897/22231)
+Updating files:  86% (19119/22231)
+Updating files:  87% (19341/22231)
+Updating files:  88% (19564/22231)
+Updating files:  89% (19786/22231)
+Updating files:  90% (20008/22231)
+Updating files:  91% (20231/22231)
+Updating files:  92% (20453/22231)
+Updating files:  93% (20675/22231)
+Updating files:  94% (20898/22231)
+Updating files:  95% (21120/22231)
+Updating files:  96% (21342/22231)
+Updating files:  97% (21565/22231)
+Updating files:  98% (21787/22231)
+Updating files:  99% (22009/22231)
+Updating files: 100% (22231/22231)
+Updating files: 100% (22231/22231), done.
+HEAD is now at 48b027267 feat(disp): serve complete measured Blackwell PRECOMP pages through consttab
+Auto-merging crates/kf-qemu/src/device.rs
+Automatic merge went well; stopped before committing as requested
+HEAD is now at cb80cbd29 Prepare measured Blackwell page plus Translated RC observation arm
+OBSERVED_B1_SOURCE cb80cbd29b7a05f904acd822f172485fd49938a9 15a57dc7d10e1536277a5fc8ed93181aab947fa3
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G   35G  140G  20% /
+{"source": "cb80cbd29b7a05f904acd822f172485fd49938a9", "tree": "15a57dc7d10e1536277a5fc8ed93181aab947fa3", "parents": ["48b027267a0e05c9ffdb4a049d34f4d719fd1837", "c130aa98ac2b922202282cd793f2a6d64be1f091"], "binary": "/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64", "binary_sha256": "5b9ad863bf1af5a1819c649a000c99205ff99beb5df6273d3dce7f0366ea0ac6", "tests_passed": true, "test_passes": 1959, "test_ignored": 4, "utc": "2026-10-24T04:50:26.518387+00:00", "scope": "exact measured page plus c130 Translated RC source; no further product cause", "test_log": "/root/prov/observed_b1_tests.log", "build_log": "/root/prov/observed_b1_qemu_build.log"}
+OBSERVED_B1_BUILD_EXIT rc=0 2026-10-24T04:50:26+00:00
