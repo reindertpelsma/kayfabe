@@ -24,13 +24,13 @@ class ProviderEnvTests(unittest.TestCase):
             return report.load_provider_env(env or {}, str(path))
 
     def test_loads_vm_protocol_from_provider_file(self):
-        self.assertEqual(self.load("KF_PROTOCOL=5\n")["KF_PROTOCOL"], "5")
+        self.assertEqual(self.load("KF_PROTOCOL=7\n")["KF_PROTOCOL"], "7")
 
     def test_loads_quoted_vm_repository(self):
         self.assertEqual(self.load('KF_REPO="owner/repo"\n')["KF_REPO"], "owner/repo")
 
     def test_preserves_explicit_process_protocol(self):
-        self.assertEqual(self.load("KF_PROTOCOL=4\n", {"KF_PROTOCOL": "5"})["KF_PROTOCOL"], "5")
+        self.assertEqual(self.load("KF_PROTOCOL=6\n", {"KF_PROTOCOL": "7"})["KF_PROTOCOL"], "7")
 
     def test_preserves_explicit_process_repository(self):
         self.assertEqual(
@@ -51,7 +51,7 @@ class ProviderEnvTests(unittest.TestCase):
 
     def test_duplicate_missing_protocol_refuses(self):
         with self.assertRaises(ValueError):
-            self.load("KF_PROTOCOL=4\nKF_PROTOCOL=5\n")
+            self.load("KF_PROTOCOL=6\nKF_PROTOCOL=7\n")
 
     def test_duplicate_missing_repository_refuses(self):
         with self.assertRaises(ValueError):
@@ -83,7 +83,7 @@ class ProviderEnvTests(unittest.TestCase):
                 ),
                 0,
             )
-            self.assertIn("export KF_PROTOCOL=5", out.read_text())
+            self.assertIn("export KF_PROTOCOL=7", out.read_text())
 
     def test_large_unknown_field_is_bounded(self):
         with self.assertRaises(ValueError):
@@ -103,7 +103,7 @@ class ProviderEnvTests(unittest.TestCase):
                 ),
                 0,
             )
-            self.assertIn("export KF_PROTOCOL=5", out.read_text())
+            self.assertIn("export KF_PROTOCOL=7", out.read_text())
 
     def test_invalid_provider_file_returns_failure(self):
         import contextlib, io

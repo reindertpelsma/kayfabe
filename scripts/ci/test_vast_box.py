@@ -2,8 +2,7 @@
 """GPU-free, network-free falsifiers for the repo-side Vast box scripts.
 
 A fake broker (TLS on 127.0.0.1, self-signed) records every request. The scripts under test
-are vast_onstart.sh, vast_report.py, kf-box-kill, kf-box-hold and kf-ci-hold.sh. The scripts
-directory can be redirected with KF_CI_SCRIPTS_DIR (used by vast_box_mutants.py).
+are vast_onstart.sh, vast_report.py, kf-box-kill and kf-box-blob-url.
 """
 
 import hashlib
@@ -24,19 +23,20 @@ import unittest
 from pathlib import Path
 
 SCRIPTS = Path(os.environ.get("KF_CI_SCRIPTS_DIR") or Path(__file__).resolve().parent)
-FILES = [
-    "vast_onstart.sh",
-    "vast_report.py",
-    "kf-box-kill",
-    "kf-box-hold",
-    "kf-box-blob-url",
-    "kf-ci-hold.sh",
-]
+FILES = ["vast_onstart.sh", "vast_report.py", "kf-box-kill", "kf-box-blob-url"]
 RUN = "4242-7"
-TOKEN = "v1.4242.7.1729000000." + ("Zk9_-Qw" * 7)[:43]
+# A run token is a compact HS256 JWT (box protocol 7); the box never verifies it.
+TOKEN = ".".join(
+    [
+        "eyJhbGciOiJIUzI1NiJ9",
+        "eyJydW4iOiI0MjQyIiwiYXR0ZW1wdCI6IjcifQ",
+        ("Zk9_-Qw" * 7)[:43],
+    ]
+)
 NONCE = "ab" * 16
 SHA = "1234abcd" * 5
 RNONCE = "cd" * 32
+ACCESS = {"KF_ACCESS_ID": "0123abcd" * 4 + ".access", "KF_ACCESS_SECRET": "9f8e7d6c" * 8}
 PREFIX = "/pfx-9f3a7c"
 HARDWARE = {
     "gpu_name": "NVIDIA GeForce RTX 3060",
@@ -85,7 +85,7 @@ def load():
 
 
 class Broker:
-    """Worker-like fake: auth, numbered idempotent reports, kill, hold; fault injection."""
+    """Worker-like fake: auth, numbered idempotent reports, kill; fault injection."""
 
     def __init__(self, token=TOKEN, run=RUN, prefix=PREFIX):
         self.token, self.run, self.prefix = token, run, prefix
@@ -132,13 +132,17 @@ class Broker:
     def handle(self, path, headers, body, method="POST"):
         auth = headers.get("Authorization")
         record = {"path": path, "auth": auth, "body": body, "method": method, "t": time.time()}
+        record["access"] = (
+            headers.get("CF-Access-Client-Id"),
+            headers.get("CF-Access-Client-Secret"),
+        )
         with self.lock:
             self.requests.append(record)
         parts = path.split("/")
         base = self.prefix.split("/")
         ok = parts[: len(base)] == base and parts[len(base) + 1 :] == [self.run]
         kind = parts[len(base)] if len(parts) > len(base) else ""
-        if not ok or kind not in ("report", "kill", "hold"):
+        if not ok or kind not in ("report", "kill"):
             return 404, {"state": "NOT_FOUND"}, {}
         if auth != "Bearer " + self.token:
             return 401, {"state": "UNAUTHORIZED"}, {}
@@ -192,7 +196,7 @@ class Broker:
 
 def good_env(url):
     return {
-        "KF_PROTOCOL": "5",
+        "KF_PROTOCOL": "7",
         "KF_BROKER_URL": url,
         "KF_RUN_ID": RUN,
         "KF_RUN_TOKEN": TOKEN,
@@ -271,11 +275,11 @@ class EnvValidation(Tmp):
     def test_malformed_values_are_rejected(self):
         m = load()
         bad = {
-            "KF_PROTOCOL": ["3", "", "5.0", "05"],
+            "KF_PROTOCOL": ["3", "", "6", "7.0", "07"],
             "KF_BROKER_URL": ["http://h.example/p", "https://h.example/p/", "https://h/p?x=1"]
             + ["https://u:p@h.example/p", "ftp://h/p", "https://h/p#f", "https://h/ p", "h/p"],
             "KF_RUN_ID": ["0-1", "12", "1-2-3", "a-b"],
-            "KF_RUN_TOKEN": [TOKEN[:-1], TOKEN + "x", "v2" + TOKEN[2:], "x"],
+            "KF_RUN_TOKEN": [TOKEN[:-1], TOKEN + "x", TOKEN + ".x", "a.b", "x", "a b.c.d"],
             "KF_NONCE": ["ab" * 15, "AB" * 16, "zz" * 16],
             "KF_SHA": ["a" * 39, "A" * 40, "g" * 40],
             "KF_REPO": ["owner", "o w/n", "a/b/c", "/b"],
@@ -293,10 +297,15 @@ class EnvValidation(Tmp):
                     problems = m.validate_env(env)
                     self.assertTrue(any(name in p for p in problems), problems)
 
-    def test_token_must_match_run_id(self):
+    def test_access_pair_is_optional_and_checked_when_present(self):
         env = good_env("https://h.example/pfx")
-        env["KF_RUN_ID"] = "4242-8"
-        self.assertTrue(any("KF_RUN_TOKEN" in p for p in load().validate_env(env)))
+        self.assertEqual(load().validate_env(dict(env, **ACCESS)), [])
+        for name in ACCESS:
+            bad = dict(env, **ACCESS)
+            bad[name] = "has space" + ACCESS[name]
+            problems = load().validate_env(bad)
+            self.assertEqual(problems, [name + ": malformed"])
+            self.assertNotIn(ACCESS[name], "".join(problems))
 
     def test_problems_never_contain_values(self):
         env = good_env("https://h.example/pfx")
@@ -419,6 +428,29 @@ class Reporter(Daemon):
         self.assertEqual({r["path"] for r in b.requests}, {PREFIX + "/report/" + RUN})
         for payload in b.accepted:
             self.assertLessEqual(set(payload), {"seq", "kind", "text", "result"})
+
+    def test_reports_carry_the_access_pair_only_when_set(self):
+        for access, expected in ((ACCESS, tuple(ACCESS.values())), ({}, (None, None))):
+            b = self.broker()
+            self.start(b, env_extra=access, log_text="line\n")
+            result_file(self.result)
+            rc, out = self.finish()
+            self.assertEqual(rc, 0, out)
+            self.assertEqual({r["access"] for r in b.reports()}, {expected})
+            for value in ACCESS.values():
+                self.assertNotIn(value, out + b.texts())
+
+    # Final review A05: half a pair sends no Access header at all (both or none).
+    def test_reports_carry_no_access_header_for_half_a_pair(self):
+        halves = [{n: ACCESS[n]} for n in ACCESS]
+        halves += [dict({n: ""}, **{o: ACCESS[o] for o in ACCESS if o != n}) for n in ACCESS]
+        for half in halves:
+            b = self.broker()
+            self.start(b, env_extra=half, log_text="line\n")
+            result_file(self.result)
+            rc, out = self.finish()
+            self.assertEqual(rc, 0, out)
+            self.assertEqual({r["access"] for r in b.reports()}, {(None, None)}, str(half))
 
     def test_result_has_exactly_the_worker_schema_and_bindings(self):
         b = self.broker()
@@ -791,16 +823,17 @@ def make_bin(dest, names, extra=None):
     return dest
 
 
-class KillAndHold(Tmp):
-    def env_file(self, url):
+class Kill(Tmp):
+    def env_file(self, url, access=None):
         path = self.tmp / "env"
         lines = ["export KF_BROKER_URL='%s'" % url, "export KF_RUN_ID='%s'" % RUN]
+        lines += ["export %s='%s'" % item for item in (access or {}).items()]
         path.write_text("\n".join(lines + ["export KF_RUN_TOKEN='%s'" % TOKEN]) + "\n")
         path.chmod(0o600)
         return path
 
-    def run_tool(self, name, url, *args, env=None, timeout=40):
-        env_file = self.env_file(url)
+    def run_tool(self, name, url, *args, env=None, timeout=40, access=None):
+        env_file = self.env_file(url, access)
         return subprocess.run(
             ["sh", str(SCRIPTS / name), *args],
             env=base_env(dict({"KF_CI_ENV_FILE": str(env_file)}, **(env or {}))),
@@ -858,7 +891,7 @@ class KillAndHold(Tmp):
         record = self.tmp / "rec"
         stub = 'printf "%s\\n" "$@" > "$KF_REC.argv"; cat > "$KF_REC.stdin"; printf 200\n'
         bindir = make_bin(
-            self.tmp / "bin", ["sh", "cat", "printf", "tr", "head"], {"curl": "#!/bin/sh\n" + stub}
+            self.tmp / "bin", ["sh", "cat", "printf", "tr", "head", "timeout"], {"curl": "#!/bin/sh\n" + stub}
         )
         proc = self.run_tool(
             "kf-box-kill",
@@ -875,116 +908,69 @@ class KillAndHold(Tmp):
         self.assertNotIn("--location", argv)
         self.assertNotIn("-L", argv.split())
 
-    def test_hold_request_shape(self):
+    # Owner ruling 2026-10-23 21:45: the box sends the Worker-injected Access pair, when set.
+    def test_kill_sends_the_access_pair_only_when_set(self):
         b = self.broker()
-        proc = self.run_tool("kf-box-hold", b.url)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        request = b.requests[0]
-        self.assertEqual((request["method"], request["path"]), ("POST", PREFIX + "/hold/" + RUN))
-        self.assertEqual((request["auth"], request["body"]), ("Bearer " + TOKEN, b""))
+        self.assertEqual(self.run_tool("kf-box-kill", b.url, access=ACCESS).returncode, 0)
+        self.assertEqual(self.run_tool("kf-box-kill", b.url).returncode, 0)
+        pair = (ACCESS["KF_ACCESS_ID"], ACCESS["KF_ACCESS_SECRET"])
+        self.assertEqual([r["access"] for r in b.requests], [pair, (None, None)])
 
-    def test_hold_does_not_follow_redirects(self):
-        b, evil = self.broker(), self.broker()
-        b.redirect_to = evil.url
-        b.faults["hold"] = ["redirect"]
-        proc = self.run_tool("kf-box-hold", b.url)
-        self.assertNotEqual(proc.returncode, 0)
-        self.assertEqual(evil.requests, [])
-        self.assertEqual(len(b.requests), 1)
-
-    def test_hold_does_not_follow_redirects_or_http(self):
-        listener = socket.socket()
-        listener.bind(("127.0.0.1", 0))
-        listener.listen(4)
-        listener.setblocking(False)
-        self.addCleanup(listener.close)
-        url = "http://127.0.0.1:%d%s" % (listener.getsockname()[1], PREFIX)
-        self.assertNotEqual(self.run_tool("kf-box-hold", url).returncode, 0)
-        with self.assertRaises(BlockingIOError):
-            listener.accept()
-
-    def login(self, url, shell="bash", env=None, source_twice=False, timeout=30):
-        env_file = self.env_file(url)
-        hook = str(SCRIPTS / "kf-ci-hold.sh")
-        bindir = self.tmp / "hookbin"
-        if not bindir.exists():
-            bindir.mkdir()
-            wrapper = '#!/bin/sh\nexec sh "%s" "$@"\n' % (SCRIPTS / "kf-box-hold")
-            (bindir / "kf-box-hold").write_text(wrapper)
-            (bindir / "kf-box-hold").chmod(0o755)
-        script = '. "$1"; r=$?; if [ -n "$2" ]; then . "$1"; fi; echo "rc=$r"'
-        extra = {"KF_CI_ENV_FILE": str(env_file), "KF_BOX_HOLD_BIN": str(bindir / "kf-box-hold")}
-        started = time.time()
-        proc = subprocess.run(
-            [
-                shell,
-                "--norc",
-                "--noprofile",
-                "-i",
-                "-c",
-                script,
-                "x",
-                hook,
-                "1" if source_twice else "",
-            ],
-            env=base_env(dict(extra, **(env or {}))),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+    def test_kill_and_blob_keep_the_access_pair_off_the_command_line(self):
+        record = self.tmp / "rec"
+        stub = 'printf "%s\\n" "$@" > "$KF_REC.argv"; cat > "$KF_REC.stdin"; printf 200\n'
+        bindir = make_bin(
+            self.tmp / "bin", ["sh", "cat", "printf", "tr", "head", "timeout"], {"curl": "#!/bin/sh\n" + stub}
         )
-        return proc, time.time() - started
+        for tool, args in (("kf-box-kill", ["why"]), ("kf-box-blob-url", ["tag", "name"])):
+            for access in (ACCESS, None):
+                proc = self.run_tool(
+                    tool,
+                    "https://h.example/p",
+                    *args,
+                    env={"PATH": str(bindir), "KF_REC": str(record)},
+                    access=access,
+                )
+                self.assertEqual(proc.returncode, 0, tool + proc.stderr)
+                argv = Path(str(record) + ".argv").read_text()
+                stdin = Path(str(record) + ".stdin").read_text()
+                for value in ACCESS.values():
+                    self.assertNotIn(value, argv + proc.stdout + proc.stderr)
+                    self.assertEqual(value in stdin, access is not None, tool)
+                self.assertEqual("CF-Access-Client-Secret:" in stdin, access is not None)
 
-    def test_login_hook_calls_hold_once_per_login(self):
+    # Final review A04/A06: half a pair sends no Access header at all (both or none).
+    def test_kill_and_blob_send_no_access_header_for_half_a_pair(self):
+        record = self.tmp / "rec"
+        stub = 'printf "%s\\n" "$@" > "$KF_REC.argv"; cat > "$KF_REC.stdin"; printf 200\n'
+        bindir = make_bin(
+            self.tmp / "bin", ["sh", "cat", "printf", "tr", "head", "timeout"], {"curl": "#!/bin/sh\n" + stub}
+        )
+        for tool, args in (("kf-box-kill", ["why"]), ("kf-box-blob-url", ["tag", "name"])):
+            # The other half unset, or set but empty (set -u alone covers only the first).
+            halves = [{n: ACCESS[n]} for n in ACCESS]
+            halves += [dict({n: ""}, **{o: ACCESS[o] for o in ACCESS if o != n}) for n in ACCESS]
+            for half in halves:
+                name = next(n for n in half if half[n])
+                proc = self.run_tool(
+                    tool,
+                    "https://h.example/p",
+                    *args,
+                    env={"PATH": str(bindir), "KF_REC": str(record)},
+                    access=half,
+                )
+                self.assertEqual(proc.returncode, 0, tool + proc.stderr)
+                stdin = Path(str(record) + ".stdin").read_text()
+                self.assertIn("Authorization: Bearer " + TOKEN, stdin)
+                self.assertNotIn("CF-Access-Client", stdin, tool + " " + name)
+                self.assertNotIn(ACCESS[name], stdin)
+
+    def test_tools_refuse_a_malformed_access_pair(self):
         b = self.broker()
-        proc, _ = self.login(
-            b.url, env={"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, source_twice=True
-        )
-        self.assertEqual(proc.stdout, "rc=0\n")
-        self.assertTrue(wait_until(lambda: len(b.hits("hold")) >= 1))
-        time.sleep(0.5)
-        self.assertEqual(len(b.hits("hold")), 1)
-        self.assertEqual(b.hits("hold")[0]["auth"], "Bearer " + TOKEN)
-
-    def test_login_hook_ignores_non_ssh_and_non_interactive_shells(self):
-        b = self.broker()
-        proc, _ = self.login(b.url)
-        self.assertEqual(proc.stdout, "rc=0\n")
-        env_file = self.env_file(b.url)
-        env = base_env({"SSH_CONNECTION": "a b c d", "KF_CI_ENV_FILE": str(env_file)})
-        env["KF_BOX_HOLD_BIN"] = str(self.tmp / "hookbin" / "kf-box-hold")
-        out = subprocess.run(
-            ["sh", "-c", '. "$1"; echo rc=$?', "x", str(SCRIPTS / "kf-ci-hold.sh")],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        self.assertEqual(out.stdout, "rc=0\n")
-        time.sleep(0.5)
-        self.assertEqual(b.hits("hold"), [])
-
-    def test_login_hook_never_blocks_on_a_slow_broker(self):
-        b = self.broker()
-        b.delay["hold"] = 4
-        proc, took = self.login(b.url, env={"SSH_CONNECTION": "a b c d"})
-        self.assertEqual(proc.stdout, "rc=0\n")
-        self.assertLess(took, 2.5)
-
-    def test_login_hook_tolerates_every_failure(self):
-        b = self.broker()
-        b.faults["hold"] = ["500"]
-        proc, _ = self.login(b.url, env={"SSH_CONNECTION": "a b c d"})
-        self.assertEqual(proc.stdout, "rc=0\n")
-        proc, _ = self.login(
-            b.url, env={"SSH_CONNECTION": "a b c d", "KF_BOX_HOLD_BIN": "/nonexistent/x"}
-        )
-        self.assertEqual(proc.stdout, "rc=0\n")
-        proc, _ = self.login("https://localhost:1/p", env={"SSH_CONNECTION": "a b c d"})
-        self.assertEqual(proc.stdout, "rc=0\n")
-        proc, _ = self.login(
-            b.url, env={"SSH_CONNECTION": "a b c d", "KF_CI_ENV_FILE": "/nonexistent/env"}
-        )
-        self.assertEqual(proc.stdout, "rc=0\n")
+        for tool, args in (("kf-box-kill", []), ("kf-box-blob-url", ["tag", "name"])):
+            bad = dict(ACCESS, KF_ACCESS_SECRET='x" url = "https://evil.example')
+            self.assertNotEqual(self.run_tool(tool, b.url, *args, access=bad).returncode, 0)
+        self.assertEqual(b.requests, [])
 
 
 PAYLOAD_HEADER = "#!/bin/bash\n"
@@ -1081,6 +1067,37 @@ class Onstart(Tmp):
             self.assertNotIn(name + "=", dump)
         self.assertNotIn(PREFIX, dump)
 
+    def test_payload_never_sees_the_access_pair_but_the_helpers_do(self):
+        b = self.broker()
+        root = self.tree(self.OK_PAYLOAD)
+        self.assertEqual(self.onstart(root, b, env_extra=ACCESS).returncode, 0)
+        dump = (self.tmp / "dump").read_text()
+        for name, value in ACCESS.items():
+            self.assertNotIn(name + "=", dump)
+            self.assertNotIn(value, dump)
+        self.assertEqual({r["access"] for r in b.reports()}, {tuple(ACCESS.values())})
+        out = subprocess.run(
+            ["sh", str(self.bin / "kf-box-kill"), "after run"],
+            env=base_env({"KF_CI_ENV_FILE": str(self.run_dir / "env")}),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(b.hits("kill")[0]["access"], tuple(ACCESS.values()))
+
+    # Owner ruling 2026-10-24 item 7: no log line or report echoes the run token, the Access
+    # pair or the secret broker path, on a passing run and on a failing one.
+    def test_no_log_line_or_report_echoes_box_secrets(self):
+        for payload in (self.OK_PAYLOAD, self.OK_PAYLOAD + "exit 3\n"):
+            b = self.broker()
+            root = self.tree(payload)
+            proc = self.onstart(root, b, env_extra=ACCESS)
+            self.assertIn(proc.returncode, (0, 3), proc.stdout + proc.stderr)
+            seen = proc.stdout + proc.stderr + b.texts() + json.dumps(b.accepted)
+            seen += (self.ws / "kf-ci-output.log").read_text()
+            for value in (TOKEN, PREFIX, *ACCESS.values()):
+                self.assertNotIn(value, seen)
+
     def test_payload_still_gets_its_own_inputs(self):
         dump = self.payload_env()
         self.assertIn("KF_SHA=" + SHA, dump)
@@ -1094,12 +1111,12 @@ class Onstart(Tmp):
         env_file = self.run_dir / "env"
         self.assertEqual(stat.S_IMODE(env_file.stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(self.run_dir.stat().st_mode), 0o700)
-        for name in ("kf-box-kill", "kf-box-hold"):
+        for name in ("kf-box-kill",):
             mode = stat.S_IMODE((self.bin / name).stat().st_mode)
             self.assertTrue(mode & 0o100 and not mode & 0o077, oct(mode))
             self.assertNotIn(TOKEN, (self.bin / name).read_text())
-        self.assertTrue((self.profile / "kf-ci-hold.sh").exists())
-        self.assertNotIn(TOKEN, (self.profile / "kf-ci-hold.sh").read_text())
+        self.assertFalse((self.bin / "kf-box-hold").exists())
+        self.assertFalse((self.profile / "kf-ci-hold.sh").exists())
         out = subprocess.run(
             ["sh", str(self.bin / "kf-box-kill"), "after run"],
             env=base_env({"KF_CI_ENV_FILE": str(env_file)}),
