@@ -1,5 +1,5 @@
 {
-  "correction_2026-10-24T10:40Z": "CORRECTION (BW5): the scanned key WAS stored in the guard receipt (expected_fingerprint). Scanned ed25519 = SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY, taken once at ~91 s after create, BEFORE console poll 1 (94.8 s, absent); the console published SHA256:rUh3N... only at poll 2 (114.9 s). The scan therefore preceded the publication by ~23 s. INFERRED: the scan reached sshd before cloud-init's host-key regeneration took effect.",
+  "correction_2026-10-24T10:15Z": "CORRECTION (BW5): the scanned key WAS stored in the guard receipt (expected_fingerprint). Scanned ed25519 = SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY, taken once at ~91 s after create, BEFORE console poll 1 (94.8 s, absent); the console published SHA256:rUh3N... only at poll 2 (114.9 s). The scan therefore preceded the publication by ~23 s. INFERRED: the scan reached sshd before cloud-init's host-key regeneration took effect.",
   "scanned_fingerprint": "SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY",
   "lease_id": 57498790,
   "host_verification": "UNVERIFIED-HOST",
