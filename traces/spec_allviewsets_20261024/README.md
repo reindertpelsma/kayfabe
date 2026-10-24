@@ -30,3 +30,14 @@ Flags: the owner's production set of run 4501 (22 flags, `KF3_PROF` removed) + `
 
 Lane: a generalised copy of the Q4 round-6d Windows lane (`lane/` here: `spec-arm.py N REV LABEL WORKLOADS ITERATIONS [SECONDS]`,
 `spec_session.py`, `campaign.py`, `summ.py`); the guest-agent, observer, broker launcher and Xid helpers are the unchanged Q4 host copies.
+
+## Nine viewsets in one boot (MEASURED)
+
+| run | sequence | result | first failure signature |
+|---|---|---|---|
+| 5209 | blender, catia, creo, energy, enscape, maya, medical, solidworks, unreal (the run-3440 order), 1 iteration | FAIL after 54 min: blender, catia, creo, energy-04 Completed; enscape 01-06 Completed; stopped by the lane's first-host-Xid rule during enscape 07 | host `Xid 31`, MMU fault, ENGINE CE0 HUBCLIENT_CE1, FAULT_PTE ACCESS_TYPE_VIRT_WRITE, on the host twin of a Windows USER passthrough ring (DmaCopy + ThreeD + Compute class set, own VAS); guest 153/4101 = 0 up to the last sample; no Budget/SCAN_BUDGET/NoCeObject/poison |
+
+Context read from the qemu log (MEASURED order of log lines, INFERRED meaning): at that moment the guest was tearing down the
+subtest's viewperf process; a 1,572-run unmap of that channel's address space was applied before the guest's
+DISABLE_CHANNELS for the faulting twin. Whether the faulting VA lies in that unmap is not logged without `KF3_MAPLOG`.
+Hypotheses and falsifiers are in the operator report; nothing was changed in product code.
