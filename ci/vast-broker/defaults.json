@@ -1,0 +1,176 @@
+{
+  "price": 1,
+  "daily": 6,
+  "rolling": 30,
+  "reserve": 8,
+  "dailyCount": 4,
+  "gapHours": 24,
+  "bootMinutes": 40,
+  "hardMinutes": 180,
+  "softMarginMinutes": 10,
+  "heartbeatMinutes": 10,
+  "heartbeatTimeoutMinutes": 15,
+  "passGraceMinutes": 5,
+  "failGraceMinutes": 10,
+  "reportCount": 2000,
+  "reportBytes": 4194304,
+  "logRetentionHours": 6,
+  "maxConcurrentRentals": 1,
+  "admissionMarginMinutes": 5,
+  "reportRate": 20,
+  "cronPeriod": 60000,
+  "maxMinutes": 1440,
+  "diskGb": 120,
+  "bandwidthDownGb": 15,
+  "bandwidthUpGb": 2,
+  "storageMonthHours": 720,
+  "availabilityCacheMs": 60000,
+  "availabilityLimit": 100,
+  "admissionPerMinute": 30,
+  "sweepPrice": 2.5,
+  "sweepDaily": 8,
+  "sweepSkipPassedDays": 0,
+  "badMachines": [42636, 44906, 11908, 24044, 18856, 91962, 56883, 55691],
+  "badHosts": [],
+  "gpuDeny": [],
+  "checkDies": ["GA106", "AD104", "GA102", "AD102"],
+  "sweepDies": [
+    "TU116",
+    "TU106",
+    "TU104",
+    "TU102",
+    "GA106",
+    "GA104",
+    "GA102",
+    "AD107",
+    "AD106",
+    "AD104",
+    "AD103",
+    "AD102",
+    "GB207",
+    "GB206",
+    "GB205",
+    "GB203",
+    "GB202",
+    "CC_75",
+    "CC_86",
+    "CC_89",
+    "CC_120"
+  ],
+  "quality": {
+    "reliability": 0.98,
+    "cores": 8,
+    "cpuGhz": 2,
+    "ramMb": 34360,
+    "downMbps": 200,
+    "upMbps": 50,
+    "diskMbps": 100,
+    "medianRatio": 0.5
+  },
+  "dieRules": [
+    {
+      "die": "TU116",
+      "cc": 750,
+      "names": ["GTX_16*"]
+    },
+    {
+      "die": "TU106",
+      "cc": 750,
+      "names": ["RTX_2060*"]
+    },
+    {
+      "die": "TU104",
+      "cc": 750,
+      "names": ["RTX_2070*", "RTX_2080", "RTX_2080_SUPER"]
+    },
+    {
+      "die": "TU102",
+      "cc": 750,
+      "names": ["RTX_2080_TI"]
+    },
+    {
+      "die": "GA106",
+      "cc": 860,
+      "names": ["RTX_3060"]
+    },
+    {
+      "die": "GA104",
+      "cc": 860,
+      "names": ["RTX_3060_TI", "RTX_3070*"]
+    },
+    {
+      "die": "GA102",
+      "cc": 860,
+      "names": ["RTX_3080*", "RTX_3090*"]
+    },
+    {
+      "die": "AD107",
+      "cc": 890,
+      "names": ["RTX_4060"]
+    },
+    {
+      "die": "AD106",
+      "cc": 890,
+      "names": ["RTX_4060_TI"]
+    },
+    {
+      "die": "AD104",
+      "cc": 890,
+      "names": ["RTX_4070", "RTX_4070_SUPER", "RTX_4070_S", "RTX_4070_TI"]
+    },
+    {
+      "die": "AD103",
+      "cc": 890,
+      "names": ["RTX_4070_TI_SUPER", "RTX_4080*"]
+    },
+    {
+      "die": "AD102",
+      "cc": 890,
+      "names": ["RTX_4090*"]
+    },
+    {
+      "die": "GB207",
+      "cc": 1200,
+      "names": ["RTX_5050*"]
+    },
+    {
+      "die": "GB206",
+      "cc": 1200,
+      "names": ["RTX_5060*"]
+    },
+    {
+      "die": "GB205",
+      "cc": 1200,
+      "names": ["RTX_5070"]
+    },
+    {
+      "die": "GB203",
+      "cc": 1200,
+      "names": ["RTX_5070_TI", "RTX_5080*"]
+    },
+    {
+      "die": "GB202",
+      "cc": 1200,
+      "names": ["RTX_5090*"]
+    }
+  ],
+  "bootFailureFreezeMs": 120000,
+  "jwksCooldownMs": 60000,
+  "jwksCacheMs": 3600000,
+  "onstartPath": "scripts/ci/vast_onstart.sh",
+  "reporterPath": "scripts/ci/vast_report.py",
+  "boxProtocol": 7,
+  "statusProtocol": 6,
+  "controlIpPerMinute": 60,
+  "controlGlobalPerMinute": 600,
+  "controlMaxIps": 4096,
+  "checkWorkflowPath": ".github/workflows/gpu-vast.yml",
+  "sweepWorkflowPath": ".github/workflows/gpu-vast-sweep.yml",
+  "oidcEnvironment": "gpu-vast",
+  "blobRunMints": 8,
+  "blobDailyMints": 64,
+  "preferredCountries": ["US", "CA"],
+  "maxInetUsdPerGb": 0.005,
+  "lifecycleCacheMs": 60000,
+  "deniedCountries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"]
+}

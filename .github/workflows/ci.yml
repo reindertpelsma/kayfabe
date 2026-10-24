@@ -48,6 +48,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Vast broker mocks and workflow boundary
+        run: |
+          npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
+          python3 -m pip install black==25.1.0
+          python3 -m black --check --config ci/vast-broker/pyproject.toml ci/vast-broker
+          # Runtime dependency (jose) from the committed lockfile; no install scripts run.
+          npm ci --prefix ci/vast-broker --omit=dev --ignore-scripts --no-audit --no-fund
+          node --test ci/vast-broker/test
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
@@ -1026,6 +1034,12 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
+      # A GPU UUID identifies one physical board. A ratchet like the claim ledger: the hits that
+      # were already in traces/ and docs/ are fingerprinted in scripts/ci/gpu-uuids-baseline.json
+      # (never the UUIDs themselves); a new one fails, and so does a baseline entry that is gone
+      # (run `scripts/ci/no_gpu_uuids.py --shrink`), so the count only goes down.
+      - name: "GPU-UUID ratchet (no new board identifier in traces/ or docs/)"
+        run: python3 scripts/ci/no_gpu_uuids.py
       # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
       # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
       - name: "Section-number gate (no two design-doc sections share a number)"
@@ -2359,3 +2373,26 @@ jobs:
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove
+
+  # The required status check of the master ruleset ("Master_Protect") is the context `CI`.
+  # GitHub names a status check after the JOB name, not the workflow name, so without a job
+  # called CI the rule can never be satisfied. This gate job is that check: it is green only
+  # when every required job finished without failing or being cancelled. `slow` is left out
+  # on purpose (it runs nightly or on demand) and a job skipped by its own `if:` is accepted.
+  gate:
+    name: CI
+    if: always()
+    needs: [stable, aarch64, firmware, broker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every needed job to have passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "not green: $r"; exit 1 ;;
+            esac
+          done
