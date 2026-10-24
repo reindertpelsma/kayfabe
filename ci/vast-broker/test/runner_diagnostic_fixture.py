@@ -58,6 +58,11 @@ class Connection:
             return Response(404, {"Content-Type": "text/plain"}, ("Not Found " + SENTINEL).encode())
         if reply == "weird":
             return Response(502, {"Content-Type": "x y<z>" + "q" * 80}, page)
+        if reply == "json401":
+            return Response(401, {"Content-Type": "application/json"}, b'{"state":"UNAUTHORIZED"}')
+        if reply == "json401hostile":
+            body = json.dumps({"state": SENTINEL}).encode()
+            return Response(401, {"Content-Type": "application/json"}, body)
         if reply == "redirect302":
             return Response(
                 302,
