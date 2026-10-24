@@ -4964,6 +4964,41 @@ mod device_reset_from_every_phase {
         second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::FirmwareHalts, false);
     }
 
+    /// ★ 2026-10-24 (B1n, GB205 + Windows 580.88; the composed replay is
+    /// `kf-chip/tests/fsp_second_life.rs`) — the suspend sentinel lives in `MAILBOX0`, and the NEXT life's
+    /// own `MAILBOX0` write (the FMC-args low half, `_kgspBootstrapGspFmc_GH100`) replaces it, as a register
+    /// holds what was last written. Before this, only the start cleared it, and the guest's lockdown poll —
+    /// which runs before the drainer has applied that start — read the previous life's `0x80000000` as an
+    /// FMC boot error. No guest RAM is read, no phase changes: only the shadow's meaning.
+    #[test]
+    fn the_next_lifes_own_mailbox_write_ends_the_halted_lifes_sentinel() {
+        let mut d = Dev::life(fresh(None), AfterSuspend::FirmwareHalts);
+        ok("start", d.start_with_frts());
+        ok("loaded", d.firmware_loaded());
+        ok("publish", d.publish());
+        ok("run", d.run());
+        ok("unload", d.unload());
+        assert_eq!(d.fsm.phase(), BootPhase::Halted);
+        assert!(
+            d.fsm.observe().suspended,
+            "kgspWaitForProcessorSuspend reads the sentinel"
+        );
+        ok("args hi first", d.write(OFF_ARGS_HI, 0x2));
+        assert!(
+            d.fsm.observe().suspended,
+            "MAILBOX1 does not hold the sentinel; it stays until MAILBOX0 is written"
+        );
+        ok("args lo", d.write(OFF_ARGS_LO, 0x798d_0000));
+        let o = d.fsm.observe();
+        assert!(
+            !o.suspended,
+            "the guest wrote MAILBOX0: the previous life's sentinel is gone before the start"
+        );
+        assert_eq!(d.fsm.phase(), BootPhase::Halted, "no phase change");
+        assert!(!o.wpr2_up);
+        assert!(matches!(d.fsm.queue(), QueueState::Unbound));
+    }
+
     #[test]
     fn a_second_life_after_a_reset_is_a_first_life_with_a_system_info_cell() {
         second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::AwaitsTeardownUcode, true);
