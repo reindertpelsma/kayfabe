@@ -1,0 +1,11 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+2026-10-24T11:59:23.770312+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-24T11:59:24.099280+0000 ubuntu kernel: NVRM: GPU0 gpuValidateRegOffset_IMPL: User does not have permission to access register offset 0x640780
+2026-10-24T12:02:31.827408+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2000640000-0x200083ffff]
+2026-10-24T12:02:31.827781+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2000840000-0x2000a3ffff]
+2026-10-24T12:03:15.905272+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2000b70000-0x2000bbffff]
+2026-10-24T12:03:31.556326+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2001d90000-0x2001f8ffff]
+2026-10-24T12:03:31.556538+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2001f90000-0x200218ffff]
+2026-10-24T12:03:31.556581+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2002190000-0x200238ffff]
+2026-10-24T12:04:01.605282+0000 ubuntu kernel: x86/PAT: kf3-vamgr:179779 freeing invalid memtype [mem 0x2001fe0000-0x200204ffff]

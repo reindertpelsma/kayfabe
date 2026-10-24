@@ -1,0 +1,8 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+[2026-10-24T11:38:22Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-24T11:38:22Z] WINVM_RUN_START tag=on_fix repo_rev=9ff51a6e kf3=on qemu=/workspace/bench/kf3-bins/007ba1eb/qemu-system-x86_64 host_driver=595.91.07 overlay=on_fix arm=B guest_driver=580.65.06 gop_efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi sha256(gop_efi)=13476ebb3442c070
+[2026-10-24T11:38:22Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-24T11:38:23Z] QEMU_START tag=on_fix boot=1 pid=159731 log=logs/on_fix_b1_qemu.log
+[2026-10-24T11:52:46Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-shutdown kf3_lines=12177 host_xid=0
+[2026-10-24T11:52:46Z] WINVM_RUN_END tag=on_fix boots=1 reason=guest-shutdown

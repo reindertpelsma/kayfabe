@@ -1,0 +1,52 @@
+{
+  "arm_lx_reload.log": {
+    "rental_path": "/root/prov/arm_lx_reload.log",
+    "original_bytes": 3504,
+    "original_sha256": "73d50241998d1de4d01d28537afd086d63e7d52a9def0710d4d95102f9343fbb",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "c5f694c8cf686e789c46201f0372e9776a5f6217c3b59e3a8c6114fb26c55305",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/lx_reload/host_kernel.log",
+    "original_bytes": 85,
+    "original_sha256": "ecec459fddac580cb95ee946bf43d1faddaf7cec85d213bc2e72e31d757b51d5",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "2f9584cd660a9f8525663ff210eba4d5b0b3dabe665aba79e8cf49333a18b5b5",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "guest_staged.txt": {
+    "rental_path": "/root/prov/arms/lx_reload/guest_staged.txt",
+    "original_bytes": 87,
+    "original_sha256": "3d8ff7f90cd661d0ca165a7ccf9f4c37f1803f90abc771f1c99d5018ee218149",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "90dd29def937f793e10ebfb73b5d9cae582bbbb3e089c5e42b03945cc866824b",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "binary_sha256.txt": {
+    "rental_path": "/root/prov/arms/lx_reload/binary_sha256.txt",
+    "original_bytes": 120,
+    "original_sha256": "cfdc6b79205788abbcb985e82baa1ebc761ea2328619fdd53aed6665920df3bb",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "e573055572cd2d7ad8003689d8d13cc8f79ec90c06c6f2d5a1e9a6fae2883ed0",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  },
+  "run_bw4_lx_reload_probe.log": {
+    "rental_path": "/root/prov/arms/lx_reload/run_bw4_lx_reload_probe.log",
+    "original_bytes": 10394,
+    "original_sha256": "c573d941da09417e11bddcf6f72716b2e006d88a74e5ab8ed1f947b86d1d2217",
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization",
+    "export_sha256": "c678511fc08de49e9883589ebc5a4b97a0cf66c1dfc31c0a5951c792f9e8a157",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false
+  }
+}

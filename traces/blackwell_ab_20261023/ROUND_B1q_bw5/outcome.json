@@ -1,0 +1,38 @@
+{
+  "round": "B1q (operator BW5: Claude) = attempt 2 of the B1p fix validation",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "revision_under_test": "007ba1eb03db9e21d351e465e95b46cbc3134a95 (b85d02bae relay route + 38fd948fd second life, on cb80cbd29)",
+  "fix_binary_sha256": "05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448",
+  "box_gate": "cargo test --release -p kf-chip -p kf-gsp -p kf-chan -p kf-qemu -p kf-rm: 2114 passed, 4 ignored",
+  "lease": {
+    "id": 57503040,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070 (GB205)",
+    "geolocation": "Quebec, CA",
+    "quote_usd_per_h": 0.432,
+    "observed_usd_per_h": 0.481,
+    "precreate_watchdog_armed_utc": "2026-10-24T10:45:14.941424+00:00",
+    "created_utc": "2026-10-24T10:45:16.178329+00:00",
+    "settled_pin": "match x2 SHA256:VQ+UR7K9ruKE19cXsnaLM22XDkAapTpA8Fh5zLiIOzs (scanned == latest console pin), ready 10:47:08Z",
+    "absence_verified_utc": "2026-10-24T12:22:59.421404+00:00",
+    "runtime_cost_estimate_usd": 0.783,
+    "credit_after_observed_usd": 24.305
+  },
+  "native": "gates 9/9 + gate10 PASS, bare suite 29/29, probed die GB205, fuzz 3 pinned no finding, 5 native Xid controls",
+  "arms": {
+    "on_fix": "PASS: Code 0, 10-minute hold 601 s, 0 Xid, no System 1001/6008/4101, no nvlddmkm/Display events; 1 USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f, 0 private-ring births; live dumps 0x193/0x1A8/0x1B8 only (non-fatal; also in B1n relay-off)",
+    "on_fix_pnp": "PASS: Code 0, disable at 12:02:24Z, enable 2 -> Code 0 at 12:03:44Z; ONE GSP-PUBLISH after fn 47 (same_instance=false), Halted -> Booted -> Running, fn 1 + fn 65 ok; 0 Xid; then a 601 s hold",
+    "lx_reload": "PASS: RELOAD_VERDICT PASS (second life nvidia-smi rc 0, rminit_failed=0); 2 GSP-PUBLISH / 2 Running over two lives; 0 Xid"
+  },
+  "hypotheses": {
+    "H-PIN": "HELD (settled match x2)",
+    "H-FIX": "HELD on GB205",
+    "H-SL": "HELD on GB205",
+    "H-LX": "HELD on GB205"
+  },
+  "final_audit": "exact accepted history, 0 observation records, qemu 0, controller exited, GPU lock released, clean sources (observed_fix 007ba1eb0)",
+  "gb202": "NOT RUN (controller 14:15: weekly budget; next step)",
+  "private_capture": "kept privately on the operator side (on_fix 179, on_fix_pnp 179, lx_reload 14, box 4 files, sha256-verified); not in git"
+}

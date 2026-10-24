@@ -1,0 +1,17 @@
+{
+  "arm": "on_fix_pnp",
+  "pid": 179725,
+  "starttime": 437407,
+  "exe": "/workspace/bench/kf3-bins/007ba1eb/qemu-system-x86_64",
+  "pci": "0000:00:07",
+  "mode": "bw3-saved-xid32-observation-v1",
+  "profile": "on",
+  "lease_id": 57503040,
+  "armed_utc": "2026-10-24T12:02:07.406612+00:00",
+  "probed_die": "GB205",
+  "enable_count": 2,
+  "label": "DIAGNOSTIC",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

@@ -1,0 +1,15 @@
+{
+  "qemu_log_sha256": "7cd4c6ba3f1299ca0e82c27adffb8a64ab464c90216d4f7b6a7fd8f60d923473",
+  "source_bytes": 4244106,
+  "exported_lines": 125,
+  "matching_lines": {
+    "strand_diagnostic": 1,
+    "engine_or_refusal": 104,
+    "channel_census": 20
+  },
+  "max_exported_lines": 8000,
+  "limit": "Existing probes are conditional/try-lock snapshots, not a complete timeout-time census. Raw command/RPC bodies stay on rental.",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}
