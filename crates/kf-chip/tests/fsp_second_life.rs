@@ -5,17 +5,17 @@
 //! - the FIRST life boots: `w#13`..`w#26` are `kgspResetHw_GH100` (`0x1103c0` = `0x201`, `0`), the FMC-args
 //!   mailbox pair (`0x110040` = `0x798d0000`, `0x110044` = `2`), `NV_PGSP_MAILBOX(0)` (`0x110804`), the six
 //!   BCR DMA words, `BCR_DMACFG`, `BCR_CTRL` = `0x111` and `RISCV_CPUCTL` = `1` — `_kgspBootstrapGspFmc_GH100`
-//!   (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c:697-757`) — then ONE
+//!   (`ogkm-580.65.06: src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c:697-757`) — then ONE
 //!   `GSP-PUBLISH`, `Cold -> Booted`, `FALCON_OS` (`0x110080`, w#27), fn 1, `Booted -> Running` (lines 263-275);
 //! - after fn 47 (`Running -> Halted`, E9 + E13, line 10919) the SECOND life writes 70 applied words and
 //!   publishes FOUR times (lines 10939-10947: one fresh, three `same_instance=true`), stays `Booted`, and sends
 //!   no RPC again. 70 = 2 + 9 (FSP CAPS_QUERY) + 2 (doorbells, `QueueNotBound`) + 14 (attempt 1, no
 //!   `FALCON_OS`) + 3 × 15 (attempts 2-4, each with `FALCON_OS`): `kgspInitRm_IMPL`'s retry loop at its
-//!   default of 4 attempts (`ogkm-580: kernel_gsp.c:3903-3946`; `RmGspBootRetryAttempts` default 4,
+//!   default of 4 attempts (`ogkm-580.65.06: kernel_gsp.c:3903-3946`; `RmGspBootRetryAttempts` default 4,
 //!   `ogkm-595.84: src/nvidia/interface/nvrm_registry.h:2808`). Identical in `on_urt` and `on_tdr60`.
 //!
 //! ⇒ Attempt 1 fails between its `RISCV_CPUCTL` start and `FALCON_OS`. In `kgspBootstrap_GH100`
-//! (`kernel_gsp_gh100.c:833-948`) only two things lie there: `kfspWaitForGspTargetMaskReleased` (HWCFG2
+//! (`ogkm-580.65.06: kernel_gsp_gh100.c:833-948`) only two things lie there: `kfspWaitForGspTargetMaskReleased` (HWCFG2
 //! non-zero — passes at once here) and `_kgspLockdownReleasedOrFmcError` followed by the `MAILBOX0 != 0`
 //! FMC-error check. The test below replays both lives through the REAL Blackwell register model and the
 //! REAL boot FSM, stops the second life exactly where the guest's poll runs (every write before the start
@@ -59,7 +59,7 @@ const REGION_PAGES: u64 = (STAT_OFF + QSIZE) / PAGE;
 const RX_HDR_OFF: u64 = 32;
 
 /// One driver life's allocations. The first life's FMC-args address is the logged one (`MAILBOX1:MAILBOX0` =
-/// `0x2:0x798d0000`); the second life's are fresh, as `gpa_same=false` measured.
+/// `0x2:0x798d0000`); the second life's are fresh, as the logged `gpa_same=false` publish says (B1n lease 57472433, line 10939).
 #[derive(Clone, Copy)]
 struct Life {
     fmc: u64,

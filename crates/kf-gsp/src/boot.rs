@@ -919,7 +919,8 @@ pub struct GspFsm {
     after_suspend: AfterSuspend,
     /// ★ w828: the firmware halted itself after suspending ([`Transition::E13`]) — the suspend
     /// sentinel stays readable in `Halted`, as a register keeps its value until the next reset.
-    /// Cleared by the next STARTCPU.
+    /// Cleared by the next STARTCPU, ★ 2026-10-24 or earlier by the guest's own write of the register
+    /// that holds it (`MAILBOX0`, [`BootStep::BootArgsLo`]) — see that arm in `apply`.
     fw_halted_after_suspend: bool,
     abi: GspAbi,
     phase: BootPhase,
@@ -1498,6 +1499,13 @@ impl GspFsm {
             BootStep::BootArgsLo(v) => {
                 self.mailbox_lo = v;
                 self.boot_args_seen.0 = true;
+                // ★ 2026-10-24 (B1n, GB205 + Windows 580.88): the suspend sentinel lives in MAILBOX0,
+                // and this write replaced it — a register holds what was last written. Left set until
+                // the start, the FMC-direct route's lockdown poll (`_kgspLockdownReleasedOrFmcError`,
+                // `ogkm-580.65.06: kernel_gsp_gh100.c:491-535, 944-948`), which runs before the drainer has
+                // applied that start, read the previous life's `0x80000000` as an FMC boot error: four
+                // failed boot attempts and no RPC (`kf-chip/tests/fsp_second_life.rs`).
+                self.fw_halted_after_suspend = false;
             }
             BootStep::BootArgsHi(v) => {
                 self.mailbox_hi = v;
