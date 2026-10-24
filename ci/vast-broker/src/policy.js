@@ -258,14 +258,6 @@ export function configuration(env) {
       refuse();
     cfg.quality[profile] = q;
   }
-  cfg.driverTags = data('OFFER_DRIVER_TAGS', DEFAULTS.driverTags);
-  if (
-    !Array.isArray(cfg.driverTags) ||
-    !cfg.driverTags.length ||
-    cfg.driverTags.length > 128 ||
-    !cfg.driverTags.every((t) => typeof t === 'string' && /^\d{3}\.\d{1,3}(?:\.\d{1,2})?$/.test(t))
-  )
-    refuse();
   cfg.skipPassedDays = number(
     'SWEEP_SKIP_PASSED_DAYS',
     DEFAULTS.sweepSkipPassedDays || 0.000001,
@@ -458,7 +450,6 @@ export function offerRejections(
     reasons.push('PERFORMANCE');
   if (!enough('inet_down', q.downMbps) || !enough('inet_up', q.upMbps)) reasons.push('NETWORK');
   if (!enough('disk_bw', q.diskMbps)) reasons.push('DISK_BW');
-  if (!cfg.driverTags.includes(offer.driver_version)) reasons.push('DRIVER');
   if (!price) reasons.push('PRICE_FIELDS');
   else if (
     offer.inet_up_cost > cfg.maxInet ||

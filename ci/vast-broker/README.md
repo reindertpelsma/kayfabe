@@ -119,10 +119,11 @@ alias is absent. Missing/unknown/conflicting verification refuses; no configurat
 can disable this requirement. The default quality thresholds are reliability >=0.98,
 8 effective cores, 2 GHz, 34360 MB RAM (at least 32 GiB), 200 Mb/s down, 50 Mb/s up,
 100 MB/s disk bandwidth, and positive dlperf at least half its class's median in
-the current verified offer sample. Missing/odd fields refuse. Exact offer driver
-tags must be in the configured tested matrix. In VM mode this is an offer-quality
-filter; the actual kayfabe host driver is the separately provisioned VM driver,
-which must be checked again on the box. Performance scores never grade the code.
+the current verified offer sample. Missing/odd fields refuse. The offer's host driver
+version is not a filter and is never shown (owner rulings 2026-10-24 items 10/10b: for a
+KVM instance it is irrelevant and misleading; the guest loads its own driver). The status
+`driver_version` is only the box-reported guest driver, `unknown` until the result arrives.
+Performance scores never grade the code.
 
 [CODE READ: defaults.json, src/policy.js] GPU eligibility uses numeric compute_cap
 >=750 (7.5), NVIDIA gpu_arch, and the consumer/workstation RTX or GTX 16xx name

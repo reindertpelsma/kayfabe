@@ -211,7 +211,6 @@ REJECTION_CODES = frozenset(
         "PERFORMANCE",
         "NETWORK",
         "DISK_BW",
-        "DRIVER",
         "PRICE_FIELDS",
         "COUNTRY",
         "PRICE",

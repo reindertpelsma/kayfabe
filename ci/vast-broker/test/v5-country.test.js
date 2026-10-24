@@ -75,7 +75,7 @@ for (const [field, value] of [
   ['vms_enabled', false],
   ['dlperf', 0],
   ['dph_total', 2],
-  ['driver_version', '1.0'],
+  // driver_version: no longer a required field (owner ruling 2026-10-24 item 10).
 ])
   test('US never bypasses required ' + field, async () => {
     const selected = await choose([offer(1, 'US', { [field]: value }), offer(2, 'CA')]);

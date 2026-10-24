@@ -95,8 +95,7 @@ const bad = [
   ['inet_down', 10],
   ['inet_up', 1],
   ['disk_bw', 10],
-  ['driver_version', '999.1'],
-  ['driver_version', undefined],
+  // Owner ruling 2026-10-24 item 10: the host driver_version is no longer a filter.
   ['storage_cost', undefined],
   ['storage_cost', -1],
   ['inet_down_cost', undefined],

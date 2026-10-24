@@ -137,7 +137,8 @@ export function createService({
     die: r.die ?? 'unknown',
     country: r.country ?? 'UNKNOWN',
     compute_cap: r.hardware?.compute_cap ?? r.computeCap ?? 0,
-    driver_version: r.hardware?.driver_version ?? r.driver ?? 'unknown',
+    // Items 10/10b: only the box-reported guest driver; the offer's host driver is never kept.
+    driver_version: r.hardware?.driver_version ?? 'unknown',
     selection_reason: r.selectionReason ?? 'NONE',
     preferences_ignored: r.preferencesIgnored ?? 0,
     suites: r.result?.suites ?? [],
@@ -763,7 +764,6 @@ export function createService({
         computeCap: offer.compute_cap,
         machineId: offer.machine_id,
         hostId: providerId(offer.host_id),
-        driver: offer.driver_version,
         preferencesIgnored: chosen.ignored,
         selectionReason: chosen.reason,
         bandwidthCost: offer.pricing.bandwidth,
