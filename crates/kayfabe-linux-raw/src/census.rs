@@ -228,6 +228,19 @@ mod tests {
     use super::*;
     use crate::{CharDevice, DevDir, ioctl};
 
+    // A bounded peer for the census test: real ioctl writers share its process-wide
+    // counter even when they never change the recording switch or phase.
+    #[test]
+    fn census_interfering_ioctl_writer() {
+        let dir = DevDir::open(c"/dev").expect("/dev exists on a Linux host");
+        let d = CharDevice::openat(&dir, c"null").expect("/dev/null exists on a Linux host");
+        let req = ioctl::readwrite(0x46, 199, 8).expect("8 bytes encodes");
+        for _ in 0..10_000 {
+            let _ = d.ioctl(req, &mut [0u8; 8], &mut []);
+            std::thread::yield_now();
+        }
+    }
+
     /// `/dev/null` answers every ioctl with `ENOTTY`, which is what makes it the right
     /// fixture: the census must count a **refused** ioctl exactly like a served one, because
     /// *"how many times did we enter the driver"* is the question it answers.
