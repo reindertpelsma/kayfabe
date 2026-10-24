@@ -56,7 +56,7 @@ class Clock(dt.datetime):
 
 
 class SavedWatchLoop(unittest.TestCase):
-    def run_loop(self, current, *, phase=True, permit=True):
+    def run_loop(self, current, *, phase=True, permit=True, initial=INITIAL):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             files = [
@@ -78,7 +78,7 @@ class SavedWatchLoop(unittest.TestCase):
                 str(root / "permit.json"),
             ]
             with (
-                patch.object(O.old, "kernel_rows", side_effect=[INITIAL, current]),
+                patch.object(O.old, "kernel_rows", side_effect=[initial, current]),
                 patch.object(O.old, "check_host_health", return_value={"devices": 1}),
                 patch.object(O.G, "validate_phase_owner", return_value=True),
                 patch.object(O.G, "abort_owned_qemu", return_value=True) as abort,
@@ -150,6 +150,27 @@ class SavedWatchLoop(unittest.TestCase):
         self.assertIsInstance(r["outcome"], Exception)
         self.assertIsNotNone(r["fatal"])
         self.assertNotIn("is not defined", r["fatal"]["STOP"])
+
+    def test_new_kernel_error_row_stops_fail_closed(self):
+        error = {"cursor": "e", "priority": 2,
+                 "line": "2026-10-23T11:59:30.000000+0000 ubuntu kernel: NVRM: GPU has fallen off"}
+        r = self.run_loop(INITIAL + [error])
+        self.assertIsInstance(r["outcome"], O.Refused)
+        self.assertIn("kernel error", r["fatal"]["STOP"])
+
+    def test_pre_existing_error_row_is_not_judged_again(self):
+        old_error = {"cursor": "e0", "priority": 3,
+                     "line": "2026-10-23T11:57:00.000000+0000 ubuntu kernel: earlier warning"}
+        history = INITIAL + [old_error]
+        r = self.run_loop(history, initial=history)
+        self.assertEqual(r["outcome"], "one_iteration", r["fatal"])
+        self.assertIsNone(r["fatal"])
+
+    def test_replaced_kernel_history_stops_fail_closed(self):
+        replaced = [{"cursor": "z", "priority": 6, "line": INITIAL[0]["line"]}, INITIAL[1]]
+        r = self.run_loop(replaced)
+        self.assertIsInstance(r["outcome"], Exception)
+        self.assertIsNotNone(r["fatal"])
 
     def test_no_iteration_dies_on_a_name_error(self):
         for current in (INITIAL, rows(pair()), rows([base.xid(0x15)])):

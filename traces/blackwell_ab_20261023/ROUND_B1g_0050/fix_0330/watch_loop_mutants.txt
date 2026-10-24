@@ -1,0 +1,3 @@
+new_rows=[new_old.kernel_rows(rows, cursors)] killers=10
+new_rows=[[]] killers=2
+new_rows=[rows] killers=2
