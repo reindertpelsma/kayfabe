@@ -1,9 +1,7 @@
 """Synthetic observer checks only; never a production RED or hardware result."""
 
-import copy
 import datetime as dt
 import json
-from pathlib import Path
 import unittest
 
 try:
@@ -21,8 +19,9 @@ def record(kind, second, code=0, **changes):
     row = {
         "kind": kind,
         "mono": second,
-        "utc": (dt.datetime(2026, 10, 24, tzinfo=dt.timezone.utc)
-                + dt.timedelta(seconds=second)).isoformat(),
+        "utc": (
+            dt.datetime(2026, 10, 24, tzinfo=dt.timezone.utc) + dt.timedelta(seconds=second)
+        ).isoformat(),
         "boot": "2026-10-23T23:59:00+00:00",
         "code": code,
         "driver": "32.0.15.8088",
@@ -41,8 +40,9 @@ def control():
     ]
 
 
-def event(channel="System", provider="Microsoft-Windows-WER-SystemErrorReporting",
-          number=1001, rid=101):
+def event(
+    channel="System", provider="Microsoft-Windows-WER-SystemErrorReporting", number=1001, rid=101
+):
     return {"channel": channel, "provider": provider, "id": number, "record_id": rid}
 
 
@@ -56,8 +56,10 @@ class ObserverTests(unittest.TestCase):
     def test_nonfatal_dumps(self):
         rows = control()
         rows[2]["dumps"] = [{"id": "display-a", "code": "0x1a8"}]
-        rows[3]["dumps"] = [{"id": "display-b", "code": "0x1b8"},
-                             {"id": "display-c", "code": "0x193"}]
+        rows[3]["dumps"] = [
+            {"id": "display-b", "code": "0x1b8"},
+            {"id": "display-c", "code": "0x193"},
+        ]
         self.verdict(rows, "REGRESSION_PASS")
 
     def test_application_wer_is_separate(self):
@@ -70,6 +72,18 @@ class ObserverTests(unittest.TestCase):
         for row in rows:
             row["dumps"] = [{"id": "old", "code": "0x141"}]
         self.verdict(rows, "REGRESSION_PASS")
+
+    def test_replaced_dump_is_new_generation(self):
+        rows = control()
+        rows[0]["dumps"] = [{"id": "watchdog|100|1", "code": "0x1a8"}]
+        rows[3]["dumps"] = [{"id": "watchdog|200|2", "code": "0x141"}]
+        self.verdict(rows)
+
+    def test_reused_fatal_filename_is_new_generation(self):
+        rows = control()
+        rows[0]["dumps"] = [{"id": "minidump|300|3", "code": "0x113"}]
+        rows[4]["dumps"] = [{"id": "minidump|400|4", "code": "0x113"}]
+        self.verdict(rows)
 
     def test_early_141_before_code0(self):
         rows = control()
@@ -109,6 +123,17 @@ class ObserverTests(unittest.TestCase):
     def test_wrong_channel_cannot_be_bugcheck(self):
         rows = control()
         rows[2]["events"] = [event("Application", rid=201)]
+        self.verdict(rows)
+
+    def test_application_other_provider(self):
+        rows = control()
+        rows[2]["events"] = [event("Application", "Other Provider", rid=201)]
+        self.verdict(rows)
+
+    def test_second_hold_without_code0(self):
+        rows = control()
+        for row in rows[2:]:
+            row["code"] = 22
         self.verdict(rows)
 
     def test_utc_rollback(self):
@@ -184,6 +209,16 @@ class ObserverTests(unittest.TestCase):
     def test_application_cursor_stale(self):
         rows = control()
         rows[2]["events"] = [event("Application", "Windows Error Reporting", rid=200)]
+        self.verdict(rows)
+
+    def test_application_cursor_rollback(self):
+        rows = control()
+        rows[2]["events"] = [event("Application", "Windows Error Reporting", rid=199)]
+        self.verdict(rows)
+
+    def test_system_baseline_cursor_missing(self):
+        rows = control()
+        del rows[0]["cursors"]["System"]
         self.verdict(rows)
 
     def test_late_first_code0(self):
@@ -266,13 +301,17 @@ class ObserverTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             read_jsonl(json.dumps(control()[0]))
 
+    def test_full_stream_without_final_newline(self):
+        with self.assertRaises(ValueError):
+            read_jsonl("\n".join(json.dumps(row) for row in control()))
+
     def test_malformed_jsonl(self):
         with self.assertRaises(ValueError):
-            read_jsonl('{broken}\n')
+            read_jsonl("{broken}\n")
 
     def test_jsonl_roundtrip(self):
         rows = control()
-        self.assertEqual(read_jsonl(''.join(json.dumps(r) + '\n' for r in rows)), rows)
+        self.assertEqual(read_jsonl("".join(json.dumps(r) + "\n" for r in rows)), rows)
 
 
 if __name__ == "__main__":
