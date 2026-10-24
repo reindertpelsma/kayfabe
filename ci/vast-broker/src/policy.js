@@ -163,6 +163,21 @@ export function configuration(env) {
   if (!/^[1-9][0-9]?$/.test(retention) || Number(retention) > 48)
     refuse('CONFIG_VAR:LOG_RETENTION_HOURS', 503);
   cfg.logRetention = Number(retention) * 3600000;
+  // Owner ruling 2026-10-24 item 8: concurrent rentals. The account cap (default 1, at most 4)
+  // and optional per-profile caps, which may only lower it. Each refusal names its variable.
+  const slots = (name, fallback) => {
+    const raw = env[name] ?? fallback;
+    if (typeof raw !== 'string' || !/^[1-4]$/.test(raw)) refuse('CONFIG_VAR:' + name, 503);
+    return Number(raw);
+  };
+  cfg.maxConcurrent = slots('MAX_CONCURRENT_RENTALS', String(DEFAULTS.maxConcurrentRentals));
+  cfg.maxConcurrentProfile = {};
+  for (const profile of ['check', 'sweep']) {
+    const name = 'MAX_CONCURRENT_' + profile.toUpperCase(),
+      n = slots(name, String(cfg.maxConcurrent));
+    if (n > cfg.maxConcurrent) refuse('CONFIG_VAR:' + name, 503);
+    cfg.maxConcurrentProfile[profile] = n;
+  }
   cfg.ttl = cfg.hard;
   cfg.provision = cfg.boot;
   cfg.grace = cfg.passGrace;
@@ -389,7 +404,7 @@ export function offerPrice(offer, cfg) {
 export function offerRejections(
   offer,
   cfg,
-  { profile = 'check', median = offer.dlperf, badMachines = [] } = {},
+  { profile = 'check', median = offer.dlperf, badMachines = [], reserved = [] } = {},
 ) {
   const q = cfg.quality[profile],
     reasons = [],
@@ -422,6 +437,8 @@ export function offerRejections(
   )
     reasons.push('MACHINE');
   if (cfg.badHosts.includes(offer.host_id)) reasons.push('BAD_HOST');
+  // Item 8: a machine is held from CREATING until its run has ended; no second run takes it.
+  if (reserved.includes(offer.machine_id)) reasons.push('IN_USE');
   if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))
     reasons.push('DIE');
   if (!enough('reliability', q.reliability) || offer.reliability > 1) reasons.push('RELIABILITY');

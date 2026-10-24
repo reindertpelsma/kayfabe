@@ -151,7 +151,8 @@ for (const action of ['stop', 'cron']) {
       await h.service.sweep();
     }
     assert.deepEqual(h.cloud.deletes, ['900']);
-    assert.equal(await h.storage.get('active'), null);
+    // Item 8: the set of active runs (open: index) replaced the single `active` slot.
+    assert.equal(await h.storage.get('open:123-1'), undefined);
     assert.ok(h.cloud.instances.has('888'));
   });
 }

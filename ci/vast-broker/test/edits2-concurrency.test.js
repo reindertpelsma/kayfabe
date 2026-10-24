@@ -136,6 +136,15 @@ test('item 8a: a per-profile cap lowers the account cap for that profile only', 
   assert.equal((await rentAs(h, 203, { profile: 'sweep', preferences: ['GA102'] })).status, 200);
   assert.equal(h.cloud.creates, 2);
 });
+test('item 8a: the account cap holds across profiles', async () => {
+  const h = await setup({ MAX_CONCURRENT_RENTALS: '2' });
+  market(h);
+  assert.equal((await rentAs(h, 201)).status, 200);
+  assert.equal((await rentAs(h, 202)).status, 200);
+  const sweep = await rentAs(h, 203, { profile: 'sweep', preferences: ['GA102'] });
+  assert.deepEqual([sweep.status, sweep.data.state], [409, 'BUSY']);
+  assert.equal(h.cloud.creates, 2);
+});
 // Harness cost of one rental: 0.2 USD/h for 20 min + one cron period = 0.07 USD, no transfer.
 for (const [name, bindings, credit] of [
   ['daily', { DAILY_SPEND_USD: '0.1' }, 20],
@@ -213,7 +222,7 @@ test('item 8c: a refused create of one run leaves the other run untouched', asyn
   assert.equal((await statusOf(h, 201)).state, 'BOOTING');
   assert.deepEqual(h.cloud.deletes, []);
 });
-test('item 8d: stop-all stops every active run; a failed destroy is retried by the cron', async () => {
+test('item 8d: stop-all stops every run; a failed destroy is retried by the cron', async () => {
   const h = await setup({ MAX_CONCURRENT_RENTALS: '3' });
   market(h);
   for (const n of [201, 202, 203]) assert.equal((await rentAs(h, n)).status, 200);

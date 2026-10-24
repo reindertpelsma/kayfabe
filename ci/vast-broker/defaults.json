@@ -15,6 +15,7 @@
   "reportCount": 2000,
   "reportBytes": 4194304,
   "logRetentionHours": 6,
+  "maxConcurrentRentals": 1,
   "reportRate": 20,
   "cronPeriod": 60000,
   "maxMinutes": 1440,

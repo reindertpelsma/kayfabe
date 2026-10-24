@@ -94,14 +94,12 @@ test('returns immediately without waiting for logs or boot', async () => {
     false,
   );
 });
+// Owner ruling 2026-10-24 item 8: over the concurrency cap (default 1) a run gets BUSY.
 test('one-live blocks another run', async () => {
   const h = await setup();
   await rent(h);
   h.cloud.run.id = 124;
-  assert.equal(
-    await state(await h.call('/rent', { claims: { run_id: '124' } })),
-    'UNAVAILABLE_BUDGET',
-  );
+  assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'BUSY');
   assert.equal(h.cloud.creates, 1);
 });
 test('one-live survives restart', async () => {
@@ -109,10 +107,7 @@ test('one-live survives restart', async () => {
   await rent(h);
   h.restart();
   h.cloud.run.id = 124;
-  assert.equal(
-    await state(await h.call('/rent', { claims: { run_id: '124' } })),
-    'UNAVAILABLE_BUDGET',
-  );
+  assert.equal(await state(await h.call('/rent', { claims: { run_id: '124' } })), 'BUSY');
   assert.equal(h.cloud.creates, 1);
 });
 test('concurrent rent has one winner', async () => {
@@ -476,7 +471,7 @@ for (const restart of [false, true])
     h.restart();
     assert.equal(
       await state(await h.call('/rent', { claims: { run_id: '124', ref: 'refs/heads/master' } })),
-      'UNAVAILABLE_BUDGET',
+      'BUSY', // owner ruling 2026-10-24 item 8: over the concurrency cap (default 1)
     );
     assert.equal(h.cloud.creates, 1);
   });

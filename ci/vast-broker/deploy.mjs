@@ -37,6 +37,10 @@ export const ALLOWED = new Set([
   'BAD_MACHINE_IDS',
   'BAD_HOST_IDS',
   'LOG_RETENTION_HOURS',
+  // Concurrent rentals (owner ruling 2026-10-24 item 8): account cap 1-4, per-profile lower caps.
+  'MAX_CONCURRENT_RENTALS',
+  'MAX_CONCURRENT_CHECK',
+  'MAX_CONCURRENT_SWEEP',
 ]);
 // WORKER_URL is a Worker secret (`wrangler secret put WORKER_URL`). The vars file may carry it
 // only so the helper checks its format before any upload; it is never sent as a var.

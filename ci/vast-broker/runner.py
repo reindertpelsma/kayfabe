@@ -204,6 +204,7 @@ REJECTION_CODES = frozenset(
         "CAPABILITY",
         "MACHINE",
         "BAD_HOST",
+        "IN_USE",
         "DIE",
         "RELIABILITY",
         "CPU_RAM",

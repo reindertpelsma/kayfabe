@@ -52,7 +52,8 @@ for (const code of [200, 400])
     assert.equal((await h.call()).status, 503);
     const r = await h.storage.get('record:123-1');
     assert.notEqual(r.ended, null);
-    assert.equal(await h.storage.get('active'), null);
+    // Item 8: the set of active runs (open: index) replaced the single `active` slot.
+    assert.equal(await h.storage.get('open:123-1'), undefined);
     assert.equal((await h.call('/stop/123-1', { token: h.bindings.OWNER_STOP_TOKEN })).status, 200);
   });
 for (const path of ['/rent', '/availability?profile=check'])

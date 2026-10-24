@@ -56,10 +56,6 @@ export class Ledger {
       bytes_dropped: record.fullBytesDropped ?? record.bytesDropped ?? 0,
     };
   }
-  async active() {
-    const key = await this.get('active');
-    return key ? this.get('record:' + key) : null;
-  }
   async granted(run) {
     const key = await this.get('run:' + run);
     return key ? this.get('record:' + key) : null;
@@ -87,8 +83,8 @@ export class Ledger {
   }
   async reserve(record) {
     await this.save(record);
+    // Owner ruling 2026-10-24 item 8: the open: index is the set of active runs.
     await this.put('open:' + record.key, true);
-    await this.put('active', record.key);
     await this.grant(record.key, record);
     await this.put('sha:' + record.sha, { key: record.key, started: record.started });
     await this.put('cost:' + record.key, {
@@ -113,7 +109,8 @@ export class Ledger {
     });
     await this.storage.delete('open:' + record.key);
     await this.put('ended:' + record.key, now);
-    if ((await this.get('active')) === record.key) await this.put('active', null);
+    // The single `active` slot before item 8; a record from then still clears it.
+    if ((await this.get('active')) === record.key) await this.storage.delete('active');
   }
   // Owner ruling 2026-10-24: the log relay is not persistent. LOG_RETENTION_HOURS after
   // ended_at the cron deletes a run's log chunks, log-hash entries and record (at most four
@@ -144,6 +141,8 @@ export class Ledger {
     for (const [key] of await this.storage.list({ prefix: 'blob-day:', limit: 1000 }))
       if (Number(key.slice('blob-day:'.length)) < today - 1) await this.storage.delete(key);
   }
+  // Refuses a rental over the daily count, daily or rolling spend; returns the outstanding
+  // liability (remaining compute plus transfer) of the other open runs for the credit reserve.
   async budgets(cfg, now, cost, excludeKey = null) {
     const entries = await this.storage.list({ prefix: 'cost:', limit: 1000 });
     if (entries.size >= 1000) refuse('UNAVAILABLE_BUDGET', 409);
@@ -151,7 +150,8 @@ export class Ledger {
       rolling = now - 30 * 86400000;
     let daily = 0,
       monthly = 0,
-      count = 0;
+      count = 0,
+      outstanding = 0;
     for (const [key, v] of entries) {
       if (key === 'cost:' + excludeKey) continue;
       if (
@@ -182,11 +182,13 @@ export class Ledger {
         remaining +
         (end >= rolling ? (v.bandwidthCost ?? 0) : 0);
       if (v.started >= day && (v.profile ?? 'check') === (cfg.profile ?? 'check')) count++;
+      if (v.ended === null) outstanding += remaining + (v.bandwidthCost ?? 0);
       if (v.ended !== null && end < rolling) await this.storage.delete(key);
     }
     if (count >= cfg.dailyCount) refuse('UNAVAILABLE_BUDGET', 409);
     if (daily + cost > (cfg.profile === 'sweep' ? cfg.sweepDaily : cfg.daily))
       refuse('UNAVAILABLE_BUDGET', 409);
     if (monthly + cost > cfg.rolling) refuse('UNAVAILABLE_BUDGET', 409);
+    return outstanding;
   }
 }

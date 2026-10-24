@@ -17,7 +17,7 @@ const availability = async (h, profile = 'check') =>
 const hostile = { public_ipaddr: '203.0.113.7', hostname: 'box7.hoster.example' };
 const leaks = /203\.0\.113|hoster\.example|public_ipaddr|hostname/;
 
-test('item 9: availability offer rows carry the representative machine_id and host_id', async () => {
+test('item 9: availability offer rows carry the representative machine and host', async () => {
   const h = await setup();
   Object.assign(h.cloud.offer, { host_id: 3001 }, hostile);
   h.cloud.extraOffers = [
@@ -122,7 +122,7 @@ for (const [code, mutate] of Object.entries(CODES))
     const p = py(['validate', 'check'], JSON.stringify(data));
     assert.equal(p.status, 0, p.stderr + p.stdout);
   });
-test('item 9: every code the Worker can emit is in the table and accepted by the runner', async () => {
+test('item 9: every code the Worker can emit is in the table and runner-accepted', async () => {
   const source = ['policy.js', 'offers.js']
     .map((f) => readFile(new URL('../src/' + f, import.meta.url), 'utf8'))
     .map(async (x) => [...(await x).matchAll(/reasons\.push\('([A-Z_]+)'\)/g)].map((m) => m[1]));

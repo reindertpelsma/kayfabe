@@ -241,9 +241,11 @@ export function createService({
       const total = (computeStorage * ttl) / 3600000 + bandwidth;
       try {
         const credit = await vast.credit();
-        if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + total)
+        if (typeof credit !== 'number' || !Number.isFinite(credit))
           refuse('UNAVAILABLE_BUDGET', 409);
-        await ledger.budgets(cfg, now(), total, record.key);
+        // Item 8b: the reserve also covers what the other active runs may still bill.
+        const outstanding = await ledger.budgets(cfg, now(), total, record.key);
+        if (credit < cfg.reserve + total + outstanding) refuse('UNAVAILABLE_BUDGET', 409);
       } catch {
         await close(record, vast, 'CONTRACT_BUDGET', 'UNAVAILABLE');
         refuse('UNAVAILABLE_BUDGET', 409);
@@ -704,14 +706,23 @@ export function createService({
         await checkContract(prior, await vast.inspect(prior), vast, cfg);
       return json(expose(prior, key));
     }
-    const active = await ledger.active();
-    if (active && active.ended === null) {
-      if (active.branch === target.branch && active.sha !== target.sha) {
-        await close(active, vast, 'SUPERSEDED');
-        refuse('BUSY', 409);
-      }
-      refuse('UNAVAILABLE_BUDGET', 409);
+    // Owner ruling 2026-10-24 item 8: a set of active runs (every record not yet ended). A newer
+    // run supersedes only the older runs of its own branch; an older run's late request never
+    // closes a newer one and is not eligible. Over the cap a run gets BUSY and retries.
+    const open = await ledger.openRecords(),
+      branch = open.filter((o) => o.branch === target.branch && o.sha !== target.sha);
+    if (branch.some((o) => numericId(o.run) && BigInt(o.run) > BigInt(target.run)))
+      refuse('NOT_ELIGIBLE', 409);
+    if (branch.length) {
+      for (const o of branch) await close(o, vast, 'SUPERSEDED');
+      refuse('BUSY', 409);
     }
+    if (
+      open.length >= cfg.maxConcurrent ||
+      open.filter((o) => (o.profile ?? 'check') === profile).length >=
+        cfg.maxConcurrentProfile[profile]
+    )
+      refuse('BUSY', 409);
     const cached = await ledger.get('sha:' + target.sha),
       force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
     if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409); // A fresh runner nonce may not inherit another run's result.
@@ -729,9 +740,10 @@ export function createService({
       cost = offer.pricing.total,
       credit = await vast.credit();
     try {
-      if (typeof credit !== 'number' || !Number.isFinite(credit) || credit < cfg.reserve + cost)
-        refuse('UNAVAILABLE_BUDGET', 409);
-      await ledger.budgets(cfg, now(), cost);
+      if (typeof credit !== 'number' || !Number.isFinite(credit)) refuse('UNAVAILABLE_BUDGET', 409);
+      // Item 8b: daily, rolling and the credit reserve sum the liabilities of all active runs.
+      const outstanding = await ledger.budgets(cfg, now(), cost);
+      if (credit < cfg.reserve + cost + outstanding) refuse('UNAVAILABLE_BUDGET', 409);
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')
         e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };

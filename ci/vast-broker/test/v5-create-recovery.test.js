@@ -28,7 +28,8 @@ for (const stopFirst of [false, true])
       await h.service.sweep();
       const settled = await h.storage.get('record:123-1');
       assert.notEqual(settled.ended, null);
-      assert.equal(await h.storage.get('active'), null);
+      // Item 8: the set of active runs (open: index) replaced the single `active` slot.
+      assert.equal(await h.storage.get('open:123-1'), undefined);
       assert.equal((await h.storage.get('cost:123-1')).price, 0);
       assert.deepEqual(h.cloud.deletes, []);
     },
