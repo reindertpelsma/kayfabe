@@ -317,6 +317,23 @@ class CapturePack(unittest.TestCase):
                 data = (out / "on_urt" / name).read_bytes()
                 self.assertEqual(hashlib.sha256(data).hexdigest(), digest)
 
+    def test_manifest_is_ordered_smallest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            PACK.pack(
+                "on_urt",
+                guest_dir=root / "cap" / "guest",
+                vm_logs=root / "logs",
+                prov=root / "prov",
+                out=root / "capture",
+            )
+            arm = root / "capture" / "on_urt"
+            names = [
+                l.split("  ", 1)[1] for l in (arm / "MANIFEST.sha256").read_text().splitlines()
+            ]
+            sizes = [(arm / n).stat().st_size for n in names]
+            self.assertEqual(sizes, sorted(sizes))
+
     def test_guest_hash_mismatch_is_recorded_not_hidden(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.tree(tmp)
@@ -430,6 +447,62 @@ class CapturePull(unittest.TestCase):
             self.assertEqual(receipt["failed"], [])
             self.assertEqual((dest / "on_urt" / "guest" / "d.dmp").read_bytes(), b"dump")
             self.assertNotIn("dump", json.dumps(receipt["files"]).replace("d.dmp", ""))
+
+    def stream_local(self, base):
+        def stream(names, dest, timeout):
+            Path(dest).mkdir(parents=True, exist_ok=True)
+            pack = subprocess.Popen(
+                ["tar", "-C", str(base), "-cf", "-", "-T", "-"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+            )
+            unpack = subprocess.Popen(["tar", "-C", str(dest), "-xf", "-"], stdin=pack.stdout)
+            pack.stdin.write("".join(n + "\n" for n in names).encode())
+            pack.stdin.close()
+            unpack.wait(timeout=timeout)
+            pack.wait(timeout=timeout)
+
+        return stream
+
+    def test_stream_pull_verifies_every_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = self.remote_tree(tmp)
+            manifest = (arm / "MANIFEST.sha256").read_text()
+            dest = Path(tmp) / "private"
+            receipt = PULL.pull_arm_stream(
+                "on_urt", manifest, dest, self.stream_local(arm), self.fetch_local(arm), 60
+            )
+            self.assertEqual((receipt["verified"], receipt["failed"]), (2, []))
+            self.assertEqual((dest / "on_urt" / "vm_logs" / "q.log").read_bytes(), b"log")
+
+    def test_stream_pull_falls_back_per_file_for_a_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = self.remote_tree(tmp)
+            manifest = (arm / "MANIFEST.sha256").read_text()
+
+            def partial(names, dest, timeout):
+                self.stream_local(arm)(names[:1], dest, timeout)
+
+            receipt = PULL.pull_arm_stream(
+                "on_urt", manifest, Path(tmp) / "p", partial, self.fetch_local(arm), 60
+            )
+            self.assertEqual(receipt["verified"], 2)
+            self.assertEqual(receipt["stream_missing_or_bad"], 1)
+
+    def test_stream_pull_reports_a_tampered_file_after_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = self.remote_tree(tmp)
+            manifest = (arm / "MANIFEST.sha256").read_text()
+            (arm / "guest" / "d.dmp").write_bytes(b"tampered")
+            receipt = PULL.pull_arm_stream(
+                "on_urt",
+                manifest,
+                Path(tmp) / "p",
+                self.stream_local(arm),
+                self.fetch_local(arm),
+                60,
+            )
+            self.assertEqual(receipt["failed"], ["guest/d.dmp"])
 
     def test_hash_mismatch_is_a_failed_file(self):
         with tempfile.TemporaryDirectory() as tmp:
