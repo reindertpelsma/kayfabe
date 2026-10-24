@@ -39,7 +39,11 @@ fn every_vahist_hook_exists_once_behind_the_flag() {
     gated(MEM, "vahist::global().note_space(");
     gated(MEM, "vahist::global().retire(");
     gated(DEVICE, ".lookup(&t, &view)");
-    gated(VASMGR, "rec.record_apply(");
+    let before = site(VASMGR, "rec.record_apply(");
+    assert!(
+        before.contains("vahist::recording()"),
+        "per-apply recording must be behind `vahist::recording()` (off in the lookup-only mode)"
+    );
 }
 
 #[test]

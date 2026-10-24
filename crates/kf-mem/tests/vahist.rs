@@ -584,3 +584,53 @@ fn re_emitted_withheld_and_refused_runs_do_not_flood_the_last_runs() {
         "{out:?}"
     );
 }
+
+/// ★ `KF3_DIAG_VAHIST=lookup` (2026-10-24, after 5220/5221 passed enscape 08 with the full
+/// recorder on): the lighter mode records no applies and prints no CHAN_LIFE line, but keeps the
+/// channel records in memory so a lookup still names the host id's owners and their spaces.
+#[test]
+fn the_mode_parser_and_the_lookup_only_recorder() {
+    use kf_mem::vahist::{Mode, mode_of};
+    assert_eq!(mode_of(Some("1")), Mode::Full);
+    assert_eq!(mode_of(Some("lookup")), Mode::LookupOnly);
+    for v in [
+        None,
+        Some(""),
+        Some("0"),
+        Some("yes"),
+        Some("Lookup"),
+        Some("2"),
+    ] {
+        assert_eq!(mode_of(v), Mode::Off, "{v:?}");
+    }
+    let r = Recorder::with_lines(false);
+    assert!(
+        birth(&r, 0xc1d0_029b, 0xff04_0039, 0x67, K08).is_none(),
+        "no line"
+    );
+    r.chan_class(0xc1d0_029b, 0xff04_0039, 0xc7b5);
+    let mut v = View::default();
+    v.rows.insert(K08, vec![(0xb_5a20_0000, 0x40000)]);
+    let out = r.lookup(
+        &Trigger {
+            va: 0xb_5a22_5000,
+            chid: Some(0x67),
+        },
+        &v,
+    );
+    all_prefixed(&out);
+    assert!(
+        out.iter()
+            .any(|l| l.contains(" CHAN ") && l.contains("classes=[0xc7b5]")),
+        "{out:?}"
+    );
+    assert!(
+        out.iter()
+            .any(|l| l.contains("verdict=PRESENT") && l.contains("role=chan")),
+        "{out:?}"
+    );
+    assert!(
+        r.chan_free(0xc1d0_029b, 0xff04_0039, true).is_none(),
+        "no line"
+    );
+}
