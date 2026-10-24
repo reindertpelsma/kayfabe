@@ -163,7 +163,7 @@ def watch(receipt_path, root, phase_path, fatal_path, authority_path, permit_pat
                     owned_phase = dict(phase)
                 phase_key, phase_lines = key, ()
             rows = old.kernel_rows()
-            new_rows = new_old.kernel_rows(rows, cursors)
+            new_rows = old.new_kernel_rows(rows, cursors)
             journal = "\n".join(row["line"] for row in rows)
             lines = G.N.xid_lines(journal)
             if lines[: len(accepted)] != accepted:
