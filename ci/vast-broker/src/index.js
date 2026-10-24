@@ -29,20 +29,36 @@ import {onstart} from './onstart.js';
 import {appendBoxText,appendWorkerText,sanitizeBoxText} from './sanitize.js';
 // Signed facts only: repository, environment subject, master ref, run identity and a pinned
 // master workflow. Who triggered the run and which commit it tests come from one run lookup.
+// Log-only trace of a 401: the route word and the fixed check code, never a value.
+function logRefusal(error, path) {
+  if (error instanceof BrokerError && error.status === 401)
+    console.log(
+      JSON.stringify({
+        event: 'refused',
+        route: typeof path === 'string' ? (path.split('/')[1] ?? '') : '',
+        status: 401,
+        why: typeof error.why === 'string' ? error.why : 'other',
+      }),
+    );
+}
+function identityFailure(c, cfg) {
+  const checks = [
+    ['repository', c.repository === cfg.repo],
+    ['repository_id', c.repository_id === cfg.repositoryId],
+    ['repository_owner_id', c.repository_owner_id === cfg.owner],
+    ['sub', c.sub === cfg.oidcSubject],
+    ['ref', c.ref === 'refs/heads/master'],
+    ['actor_id', numericId(c.actor_id)],
+    ['run_id', numericId(c.run_id)],
+    ['run_attempt', numericId(c.run_attempt)],
+    ['sha', hexSha(c.sha)],
+    ['workflow', allowedWorkflowRef(c, cfg)],
+  ];
+  return checks.find(([, ok]) => !ok)?.[0];
+}
 function verifiedIdentity(c, cfg) {
-  if (
-    c.repository !== cfg.repo ||
-    c.repository_id !== cfg.repositoryId ||
-    c.repository_owner_id !== cfg.owner ||
-    c.sub !== cfg.oidcSubject ||
-    c.ref !== 'refs/heads/master' ||
-    !numericId(c.actor_id) ||
-    !numericId(c.run_id) ||
-    !numericId(c.run_attempt) ||
-    !hexSha(c.sha) ||
-    !allowedWorkflowRef(c, cfg)
-  )
-    refuse('UNAUTHORIZED', 401);
+  const failed = identityFailure(c, cfg);
+  if (failed) refuse('UNAUTHORIZED', 401, undefined, 'identity:' + failed);
   return c;
 }
 export function createService({
@@ -694,7 +710,8 @@ export function createService({
     if (!['check', 'sweep'].includes(profile)) refuse('BAD_REQUEST', 400);
     if (path === '/availability' && url.search !== '?profile=' + profile)
       refuse('BAD_REQUEST', 400);
-    if (!allowedWorkflowRef(c, cfg, profile)) refuse('UNAUTHORIZED', 401);
+    if (!allowedWorkflowRef(c, cfg, profile))
+      refuse('UNAUTHORIZED', 401, undefined, 'identity:profile_workflow');
     cfg.profile = profile;
     if (path === '/availability') {
       await github.authorize(c);
@@ -970,10 +987,11 @@ export function createService({
   }
   return {
     async fetch(request) {
+      let path;
       try {
         const receipt = await preauthenticate(request);
         if (receipt instanceof Response) return receipt;
-        const path = await routePath(request, env);
+        path = await routePath(request, env);
         const renting = path === '/rent';
         if (renting && busy) refuse('BUSY', 409);
         if (renting) busy = true;
@@ -990,6 +1008,7 @@ export function createService({
           if (renting) busy = false;
         }
       } catch (e) {
+        logRefusal(e, path);
         return json(
           {
             state: e instanceof BrokerError ? e.state : 'UNAVAILABLE',
@@ -1198,6 +1217,7 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
         await controlLimit(request, env, path);
         buffered = await detachedUpload(request, path);
       } catch (error) {
+        logRefusal(error, path);
         return Response.json(
           {
             state: error instanceof BrokerError ? error.state : 'UNAVAILABLE',

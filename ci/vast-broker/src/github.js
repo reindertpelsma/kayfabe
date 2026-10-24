@@ -85,7 +85,7 @@ export class Github {
       !hexSha(c.sha) ||
       !allowedWorkflowRef(c, cfg, cfg.profile ?? 'check')
     )
-      refuse('UNAUTHORIZED', 401);
+      refuse('UNAUTHORIZED', 401, undefined, 'github:claims');
     const r = await this.run(c.run_id);
     if (
       String(r.id) !== c.run_id ||
@@ -100,7 +100,7 @@ export class Github {
       String(r.triggering_actor?.id) !== cfg.owner ||
       (c.event_name !== 'pull_request_target' && c.sha !== r.head_sha)
     )
-      refuse('UNAUTHORIZED', 401);
+      refuse('UNAUTHORIZED', 401, undefined, 'github:run');
     if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);
     return { sha: r.head_sha, branch: r.head_branch, run: c.run_id, attempt: c.run_attempt };
   }

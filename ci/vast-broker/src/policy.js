@@ -2,15 +2,16 @@
 import {DEFAULTS} from './defaults.js';
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 export class BrokerError extends Error {
-  constructor(state = 'UNAVAILABLE', status = 503, reason) {
+  constructor(state = 'UNAVAILABLE', status = 503, reason, why) {
     super(state);
+    this.why = why; // Log-only: a fixed check code for the owner's observability, never sent.
     this.state = state;
     this.status = status;
     this.reason = reason;
   }
 }
-export function refuse(state = 'UNAVAILABLE', status = 503, reason) {
-  throw new BrokerError(state, status, reason);
+export function refuse(state = 'UNAVAILABLE', status = 503, reason, why) {
+  throw new BrokerError(state, status, reason, why);
 }
 export const numericId = (v) => typeof v === 'string' && /^[1-9][0-9]{0,19}$/.test(v);
 export const hexSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
@@ -419,12 +420,10 @@ export function offerRejections(
     price = offerPrice(offer, cfg);
   const enough = (key, floor) =>
     typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;
-  if (
-    !(
-      offer.verified === true ||
-      (offer.verified === undefined && offer.verification === 'verified')
-    )
-  )
+  if (!(
+    offer.verified === true ||
+    (offer.verified === undefined && offer.verification === 'verified')
+  ))
     reasons.push('VERIFICATION');
   if (
     !Number.isSafeInteger(offer.id) ||
