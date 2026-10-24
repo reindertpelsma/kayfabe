@@ -34,7 +34,10 @@ export class OidcVerifier {
       // A key-set fetch that timed out or failed on the network is an outage (503). A JWKS HTTP
       // error status is a plain JOSEError and refuses 401 (final review J1, measured).
       if (error instanceof errors.JWKSTimeout || !(error instanceof errors.JOSEError)) refuse();
-      refuse('UNAUTHORIZED', 401);
+      // Fixed code plus the NAME of the failing claim; never a claim value or the token.
+      const code = /^ERR_[A-Z_]+$/.test(error.code) ? error.code : 'JOSE';
+      const claim = /^[a-z_]{1,16}$/.test(error.claim) ? ':' + error.claim : '';
+      refuse('UNAUTHORIZED', 401, undefined, 'oidc:' + code + claim);
     }
   }
 }
