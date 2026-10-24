@@ -187,7 +187,7 @@ class Settle(unittest.TestCase):
         r = receipts[0]
         self.assertEqual(r["scanned_fingerprint"], fp(X))
         self.assertEqual(r["latest"], fp(A))
-        self.assertEqual(r["published"], [fp(A)])
+        self.assertEqual(r["published"], [fp(A), fp(A)])  # labelled line + full key line
         self.assertIn(labelled(A), r["host_key_lines"])
         self.assertIn("ssh-ed25519 " + A + " root@ubuntu", r["host_key_lines"])
         self.assertFalse(any("ci-info" in s for s in r["host_key_lines"]))
@@ -201,6 +201,56 @@ class Settle(unittest.TestCase):
         )
         self.assertIsInstance(error, C.PinMismatch)
         self.assertLessEqual(clock.t, 90 + C.stage_seconds(4) - 90 + 1e-6)
+
+
+class Pinned(unittest.TestCase):
+    def test_the_controller_numbers_are_pinned(self):
+        self.assertEqual((C.SETTLE_SECONDS, C.SETTLE_WINDOW, C.SETTLE_CONSECUTIVE), (15, 180, 2))
+
+    def test_a_never_matching_window_is_twelve_checks_fifteen_seconds_apart(self):
+        _, error, receipts, _ = run([console(A)], [X])
+        self.assertIsInstance(error, C.PinMismatch)
+        self.assertEqual(len(receipts), 12)
+        self.assertEqual(round(receipts[1]["wait_seconds"] - receipts[0]["wait_seconds"]), 15)
+        self.assertEqual(round(receipts[-1]["wait_seconds"] - receipts[0]["wait_seconds"]), 165)
+
+    def test_a_new_publication_needs_its_own_two_checks(self):
+        result, error, receipts, _ = run([console(A), console(A, B)], [A, B, X])
+        self.assertIsNone(result)
+        self.assertIsInstance(error, C.PinFlap)
+        self.assertEqual([r["consecutive"] for r in receipts], [1, 1, 0])
+
+    def test_host_key_lines_omit_the_ci_info_table(self):
+        text = console(A, extra=["ci-info: | ssh-ed25519 | 69:66 | - | u@h", "ci-info: +---+"])
+        lines, omitted = C.host_key_lines(text)
+        self.assertEqual(omitted, 1)
+        self.assertFalse(any("ci-info" in line for line in lines))
+        self.assertIn(labelled(A), lines)
+
+    def test_an_absent_pin_is_an_expiry_not_a_mismatch(self):
+        _, error, _, _ = run(["no keys yet\n"], [None], factor=10)
+        self.assertIsInstance(error, C.PinExpired)
+        self.assertNotIsInstance(error, C.PinMismatch)
+
+    def test_a_malformed_scan_refuses_at_once_by_name(self):
+        _, error, receipts, _ = run([console(A)], [A, "AAAAnotakey"])
+        self.assertIn("malformed scanned", str(error))
+        self.assertEqual([r["state"] for r in receipts], ["match", "malformed_scan"])
+        _, error, receipts, _ = run([console(A)], ["AAAAnotakey"])
+        self.assertEqual(len(receipts), 1)
+
+    def test_a_malformed_scan_is_never_followed_by_an_acceptance(self):
+        result, error, _, _ = run([console(A)], ["AAAAnotakey", A, A])
+        self.assertIsNone(result)
+        self.assertIsInstance(error, C.PinMismatch)
+
+    def test_a_late_publication_gets_only_the_checks_before_the_stage_deadline(self):
+        # factor 5: stage 300 s from 90 s; publication at the 13th check (t=240) => checks at
+        # 240, 255, 270, 285 only, then the stage deadline (300) ends the window.
+        _, error, receipts, clock = run(["boot\n"] * 12 + [console(A)], [X], factor=5)
+        self.assertIsInstance(error, C.PinMismatch)
+        self.assertEqual(sum(r["latest"] is not None for r in receipts), 4)
+        self.assertLessEqual(clock.t, 300 + 1e-6)
 
 
 if __name__ == "__main__":

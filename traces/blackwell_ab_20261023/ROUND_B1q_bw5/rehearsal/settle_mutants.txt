@@ -1,0 +1,12 @@
+console_pin.py one check enough       killers=10
+console_pin.py window 360             killers=10
+console_pin.py interval 5             killers=3
+console_pin.py no restart             killers=2
+console_pin.py no flap                killers=3
+console_pin.py unknown accepted       killers=2
+console_pin.py first not latest       killers=3
+console_pin.py ci-info kept           killers=2
+console_pin.py absent is mismatch     killers=2
+console_pin.py malformed scan ok      killers=2
+console_pin.py window past deadline   killers=2
+console_pin.py never re-scan          killers=8
