@@ -95,9 +95,10 @@ provider billing bound during an outage.
 [CODE READ: defaults.json, src/offers.js, runner.py] `PREFERRED_COUNTRIES` is an
 ordered JSON list, default `["US","CA"]`. All forced eligibility checks and die
 preferences run first. Within the chosen class, country rank precedes effective
-price and offer ID. The separate DENIED_COUNTRIES filter first rejects CU/IR/KP/SY; country preference does not relax it.
-Unknown metadata is allowed by default, configurable with ALLOW_UNKNOWN_COUNTRY=false. The provider's `geolocation` suffix is
-used, and missing/odd location ranks last. Structured status records `country`;
+price and offer ID. The separate DENIED_COUNTRIES filter first rejects CU/IR/KP/SY/CN/HK/MO;
+country preference does not relax it. Unknown or unparseable metadata is rejected by default
+(edits3 C); ALLOW_UNKNOWN_COUNTRY=true admits it and ranks it last. The provider's
+`geolocation` must be `region, CC` or a known denied name. Structured status records `country`;
 the runner independently validates and labels it untrusted. See
 [region evidence](../../traces/vast_broker_summary/README.md).
 

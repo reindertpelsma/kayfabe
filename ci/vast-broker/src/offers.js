@@ -2,14 +2,22 @@
 import {DEFAULTS} from './defaults.js';
 // prettier-ignore
 import {gpuClass,offerPrice,offerRejections,providerId,refuse} from './policy.js';
+// Edits3 C: NFKC folds full-width and compatibility forms; invisible joiners, zero-width
+// spaces, soft hyphens and the BOM are removed; every other space becomes a plain space.
+// Bidi controls and any other format or control character are removed for the denied-name
+// match only: a location that carries one is never trusted as an allowed code.
+const INVISIBLE = /[\u00ad\u200b-\u200d\u2060\ufeff]/gu,
+  OTHER_FORMAT = /[\p{Cc}\p{Cf}]/gu;
+const clean = (text) => text.normalize('NFKC').replace(INVISIBLE, '').replace(/\s+/gu, ' ').trim();
 // Denied-country spellings: ISO alpha-2 and alpha-3 codes and the names Vast or a geolocation
 // database may print (review V13: a long form must never pass as UNKNOWN). Matching ignores
-// case, apostrophes, parentheses and extra spaces.
+// case, apostrophes, full stops, hyphens, parentheses and extra spaces.
 const normal = (text) =>
-  text
+  clean(text)
+    .replace(OTHER_FORMAT, '')
     .toUpperCase()
-    .replace(/['\u2018\u2019`]/g, '')
-    .replace(/[()]/g, ' ')
+    .replace(/['\u2018\u2019`.]/g, '')
+    .replace(/[()-]/g, ' ')
     .replace(/\s*,\s*/g, ', ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -23,6 +31,7 @@ const DENIED_NAMES = new Map(
       'Islamic Republic of Iran',
       'Iran, Islamic Republic of',
       'Iran (Islamic Republic of)',
+      'Persia',
     ],
     KP: [
       'KP',
@@ -35,8 +44,9 @@ const DENIED_NAMES = new Map(
       "Democratic People's Republic of Korea",
       "Korea, Democratic People's Republic of",
       "Korea (Democratic People's Republic of)",
+      'Korea, DPR',
     ],
-    SY: ['SY', 'SYR', 'Syria', 'Syrian Arab Republic'],
+    SY: ['SY', 'SYR', 'Syria', 'Syrian Arab Republic', 'Syrian Arab Rep'],
     // Owner ruling 2026-10-24: broken or very slow CDN/Ubuntu-mirror access there.
     CN: [
       'CN',
@@ -46,6 +56,8 @@ const DENIED_NAMES = new Map(
       "People's Republic of China",
       "China, People's Republic of",
       'Mainland China',
+      'China (Mainland)',
+      'PR China',
     ],
     HK: [
       'HK',
@@ -56,6 +68,8 @@ const DENIED_NAMES = new Map(
       'Hong Kong SAR China',
       'Hong Kong, China',
       'Hong Kong Special Administrative Region',
+      'Hong Kong (China)',
+      'HongKong',
     ],
     MO: [
       'MO',
@@ -74,19 +88,24 @@ const DENIED_NAMES = new Map(
     ],
   }).flatMap(([code, names]) => names.map((name) => [normal(name), code])),
 );
-// Vast currently returns geolocation as "region, ISO country code". Region text is discarded;
-// a denied name matches on any comma-separated suffix, longest first. Missing/odd metadata
-// ranks last and never removes an offer.
+// Vast returns geolocation as "region, ISO country code". Region text is discarded; a denied
+// name matches on any comma-separated suffix, longest first. Otherwise only exactly that form
+// (a region, then two ASCII capitals) gives a code; anything else is UNKNOWN, which is
+// rejected unless the owner sets ALLOW_UNKNOWN_COUNTRY=true (edits3 C, fail closed).
 export function offerCountry(offer) {
   if (typeof offer.geolocation !== 'string' || offer.geolocation.length > 256 || !offer.geolocation)
     return 'UNKNOWN';
-  const parts = offer.geolocation.split(',');
+  const text = clean(offer.geolocation),
+    parts = text.split(',');
   for (let i = 0; i < parts.length; i++) {
     const denied = DENIED_NAMES.get(normal(parts.slice(i).join(',')));
     if (denied) return denied;
   }
-  const country = parts.at(-1).trim();
-  return parts.length > 1 && /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
+  if (/[\p{Cc}\p{Cf}]/u.test(text)) return 'UNKNOWN';
+  const at = text.lastIndexOf(','),
+    region = text.slice(0, Math.max(0, at)).trim(),
+    country = text.slice(at + 1).trim();
+  return at > 0 && region && /^[A-Z]{2}$/.test(country) ? country : 'UNKNOWN';
 }
 function countryRank(offer, cfg) {
   const index = cfg.preferredCountries.indexOf(offer.country);

@@ -119,8 +119,11 @@ else:raise AssertionError('hostile country accepted')
     assert.equal(p.status, 0, p.stderr);
   });
 for (const geolocation of [undefined, { country: 'US' }, 'Region, us', 'Region, USA'])
-  test('unknown location remains eligible ' + JSON.stringify(geolocation), async () => {
-    const selected = await choose([offer(1, 'CA', { geolocation })]);
+  test('unknown location is eligible on opt-in ' + JSON.stringify(geolocation), async () => {
+    // Edits3 C: only with ALLOW_UNKNOWN_COUNTRY=true (the default is false, fail closed).
+    const selected = await choose([offer(1, 'CA', { geolocation })], {
+      ALLOW_UNKNOWN_COUNTRY: 'true',
+    });
     assert.equal(selected.id, 1);
     assert.equal(selected.country, 'UNKNOWN');
   });

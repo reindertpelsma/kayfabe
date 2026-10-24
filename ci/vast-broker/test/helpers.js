@@ -182,6 +182,8 @@ export class MockCloud {
     inet_up_cost: 0,
     reliability: 0.999,
     disk_space: 200,
+    // Edits3 C: an unknown location is rejected by default, so the base offer has Vast's form.
+    geolocation: 'Texas, US',
   };
   // Concurrency harness: further offers, the contract ids handed out in order (default 900)
   // and per-run-id GitHub run rows (default `run`).

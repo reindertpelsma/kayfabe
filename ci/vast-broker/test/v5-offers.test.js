@@ -23,6 +23,7 @@ const good = {
   dph_total: 0.12,
   inet_down_cost: 0.001,
   inet_up_cost: 0.001,
+  geolocation: 'Texas, US', // Edits3 C: an unknown location is rejected by default.
 };
 const cfg = () =>
   configuration({

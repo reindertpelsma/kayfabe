@@ -101,13 +101,18 @@ test('item 5: a valid DENIED_COUNTRIES override replaces the default', async () 
     [1],
   );
 });
+// Edits3 C supersedes "unknown location handling unchanged": UNKNOWN is rejected by default
+// and admitted only when the owner sets ALLOW_UNKNOWN_COUNTRY=true.
 for (const geolocation of [undefined, '', 'Region, XYZ', 'Region, Atlantis', 'Region, us'])
-  test('item 5: unknown location handling unchanged ' + JSON.stringify(geolocation), async () => {
-    assert.equal(offerCountry({ geolocation }), 'UNKNOWN');
-    assert.equal((await evaluate([offer(1, geolocation)])).evaluation.allowed.length, 1);
-    const strict = await evaluate([offer(1, geolocation)], { ALLOW_UNKNOWN_COUNTRY: 'false' });
-    assert.equal(strict.evaluation.allowed.length, 0);
-  });
+  test(
+    'item 5: unknown location is rejected by default ' + JSON.stringify(geolocation),
+    async () => {
+      assert.equal(offerCountry({ geolocation }), 'UNKNOWN');
+      assert.equal((await evaluate([offer(1, geolocation)])).evaluation.allowed.length, 0);
+      const lax = await evaluate([offer(1, geolocation)], { ALLOW_UNKNOWN_COUNTRY: 'true' });
+      assert.equal(lax.evaluation.allowed.length, 1);
+    },
+  );
 // Review V13 (2026-10-23): a long country name must be recognised and denied, never admitted as
 // UNKNOWN. FALSIFIER: any form below maps to UNKNOWN or the wrong code, or a non-denied place
 // (Taiwan) is denied.
@@ -147,7 +152,9 @@ for (const [geolocation, code] of [
   ['Seoul, KR', 'KR'],
   ['Seoul, Korea, Republic of', 'UNKNOWN'],
 ])
-  test('V13: ' + JSON.stringify(geolocation) + ' stays ' + code + ' and admitted', async () => {
+  test('V13: ' + JSON.stringify(geolocation) + ' stays ' + code + ', not denied', async () => {
     assert.equal(offerCountry({ geolocation }), code);
-    assert.equal((await evaluate([offer(1, geolocation)])).evaluation.allowed.length, 1);
+    // Edits3 C: an UNKNOWN location is admitted only with ALLOW_UNKNOWN_COUNTRY=true.
+    const extra = code === 'UNKNOWN' ? { ALLOW_UNKNOWN_COUNTRY: 'true' } : {};
+    assert.equal((await evaluate([offer(1, geolocation)], extra)).evaluation.allowed.length, 1);
   });

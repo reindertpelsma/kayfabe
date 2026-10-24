@@ -133,7 +133,12 @@ applies before price and country preference. Besides the ISO alpha-2 code, the a
 and the names Vast or a geolocation database may print (CHINA, HONG KONG SAR, MACAO, SYRIAN ARAB
 REPUBLIC, "IRAN, ISLAMIC REPUBLIC OF", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF", ...) map to the
 code, case-insensitively and on any comma-separated suffix (review V13: a long form is never
-UNKNOWN).
+UNKNOWN). [CODE READ: src/offers.js; edits3 C] The text is NFKC-normalised (full-width letters
+fold), zero-width characters, soft hyphens and the BOM are removed, and full stops, hyphens and
+parentheses are ignored for the names ("P.R. China", "Hong-Kong", "Hong Kong (China)", "Korea,
+DPR" are denied). Otherwise only Vast's form `region, CC` (two ASCII capitals) gives a code; a
+bare code, a look-alike letter (Greek or Cyrillic), a bidi control, lower case or any other
+spelling is UNKNOWN.
 [CODE READ: src/policy.js; owner ruling 2026-10-24 item 6] Two owner-edited blacklists, both
 public vars (JSON arrays of positive integers, at most 256 each): BAD_MACHINE_IDS (default the
 `badMachines` list in defaults.json) rejects an offer by `machine_id` (reason `MACHINE`), and
@@ -149,9 +154,10 @@ die, and `rejected_offers[]`, each rejected offer with its reason codes) carries
 box's `Vast machine id` / `Vast host id` in the step summary (status object `machine_id`,
 `host_id`, next to the instance `id`). A missing or malformed id shows as null / `-`. No IP,
 hostname or offer id is exposed.
-ALLOW_UNKNOWN_COUNTRY defaults to true; set false to reject unknown metadata. PREFERRED_COUNTRIES
-ranks only remaining eligible offers. Contract price failure revokes the run and attempts
-deletion; failed deletion retains the liability for cleanup retry.
+ALLOW_UNKNOWN_COUNTRY defaults to false (edits3 C, fail closed): an offer with a missing or
+UNKNOWN location is rejected with reason `COUNTRY`; set true to admit it (ranked last).
+PREFERRED_COUNTRIES ranks only remaining eligible offers. Contract price failure revokes the
+run and attempts deletion; failed deletion retains the liability for cleanup retry.
 
 [CODE READ: src/ledger.js expire, src/index.js sweep; owner ruling 2026-10-24 items 2 and 4] Logs
 are relayed (box `/report` -> Worker -> runner `/logs` -> the GitHub Actions log), not kept: the

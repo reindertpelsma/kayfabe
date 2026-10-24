@@ -105,13 +105,14 @@ export function configuration(env) {
   if (
     !deniedCountries.every((x) => /^[A-Z]{2}$/.test(x)) ||
     new Set(deniedCountries).size !== deniedCountries.length ||
-    !['true', 'false'].includes(env.ALLOW_UNKNOWN_COUNTRY ?? 'true')
+    !['true', 'false'].includes(env.ALLOW_UNKNOWN_COUNTRY ?? 'false')
   )
     refuse();
   const cfg = {
     preferredCountries,
     deniedCountries,
-    allowUnknownCountry: (env.ALLOW_UNKNOWN_COUNTRY ?? 'true') === 'true',
+    // Edits3 C: unknown or unparseable geolocation is rejected unless the owner opts in.
+    allowUnknownCountry: env.ALLOW_UNKNOWN_COUNTRY === 'true',
     maxInet: number('MAX_INET_USD_PER_GB', DEFAULTS.maxInetUsdPerGb, 1),
     repositoryId: env.REPOSITORY_GITHUB_ID,
     checkWorkflows,
