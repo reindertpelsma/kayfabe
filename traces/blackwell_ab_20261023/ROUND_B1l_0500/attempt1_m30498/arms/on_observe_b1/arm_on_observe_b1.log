@@ -1,0 +1,32 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_observe_b1 source=cb80cbd29b7a05f904acd822f172485fd49938a9 profile=on 2026-10-24T04:05:35+00:00
+[2026-10-24T04:05:35Z] detached: tag=on_observe_b1, log logs/on_observe_b1_run.log (stdout logs/on_observe_b1_run.out)
+READINESS_CALIBRATED {"box": 57457694, "policy": {"banner_query": 100, "factor": 10, "first_query": 100, "handshake": 202, "observer_total": 360, "readiness_total": 900, "ssh_stage": 600, "steady_query": 25, "verify_stage": 240}, "probe_seconds": 17.921016852999855, "readiness_end": 4592.0836916690005}
+{"pid": 158235, "exe": "/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64", "sha256": "5b9ad863bf1af5a1819c649a000c99205ff99beb5df6273d3dce7f0366ea0ac6", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+INIT_OBSERVER_READY 2026-10-24T04:08:02+00:00
+WINDOWS_ON_OBSERVATION_ARMED {"arm": "on_observe_b1", "pid": 158235, "starttime": 369135, "exe": "/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64", "pci": "0000:00:07", "mode": "bw3-saved-xid32-observation-v1", "profile": "on", "lease_id": 57457694, "enable_count": 1, "armed_utc": "2026-10-24T04:08:02.977285+00:00"}
+ENABLE580_START actual=32.0.15.8088 UTC=2026-10-24T04:08:13.4014145Z
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\3&11583659&0&28
+Device enabled successfully.
+
+ENABLE580_PNPUTIL_RC=0
+{"Name":"NVIDIA GeForce RTX 5070","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"FriendlyName":"NVIDIA GeForce RTX 5070","Status":"OK","Problem":0}
+ENABLE580_OBSERVED UTC=2026-10-24T04:09:02.0727827Z; device status is verdict, not this command rc
+OBSERVATION_DIAG_RC 255
+Connection to 127.0.0.1 closed by remote host.
+ARM_VM_EXITED_DURING_HOLD
+ARM_HOLD_OBSERVED seconds=0 2026-10-24T04:09:25+00:00
+[2026-10-24T04:09:25Z] REFUSED: no QEMU running for kfwin
+OBSERVATION_ONLY apps_unrun held_seconds=0
+ARM_OBSERVATION_DONE 2026-10-24T04:09:25+00:00
+PRE_CLEANUP_START rc=0 2026-10-24T04:09:25+00:00
+{"rpcs": 4450, "unload_ordinals": [4449], "teardown_start_ordinal": 4074, "last_nonfree_before_teardown": [[4048, "76", "RmControl", "0", "0x50800101", "0x0"], [4063, "76", "RmControl", "0", "0x20801111", "0x0"], [4073, "76", "RmControl", "0", "0x20801111", "0x0"]]}
+OWN_VM_ALREADY_EXITED
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=on_observe_b1 rc=0 2026-10-24T04:09:59+00:00

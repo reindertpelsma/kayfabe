@@ -1,0 +1,12 @@
+{
+  "rows": [
+    "CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=287 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]",
+    "CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=267 graded=[CUP3_VAL=43]",
+    "CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=416 graded=[CUP8_BAD=0 CUP8_MAXERR=0]",
+    "CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=712 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]"
+  ],
+  "gate": false,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "host_verification": "UNVERIFIED-HOST"
+}

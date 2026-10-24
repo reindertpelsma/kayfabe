@@ -1,0 +1,10 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+[2026-10-24T04:05:35Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-24T04:05:35Z] WINVM_RUN_START tag=on_observe_b1 repo_rev=9ff51a6e kf3=on qemu=/workspace/bench/kf3-bins/cb80cbd2/qemu-system-x86_64 host_driver=595.91.07 overlay=on_observe_b1 arm=B guest_driver=580.65.06 gop_efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi sha256(gop_efi)=49154711040cdada
+[2026-10-24T04:05:35Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-24T04:05:36Z] QEMU_START tag=on_observe_b1 boot=1 pid=158235 log=logs/on_observe_b1_b1_qemu.log
+[2026-10-24T04:09:28Z] WINVM_BOOT_END boot=1 rc=0 reason=guest-reset kf3_lines=11878 host_xid=2
+[2026-10-24T04:09:28Z]   GUEST_PANICKED in boot 1: {"timestamp": {"seconds": 1792814957, "microseconds": 547955}, "event": "GUEST_PANICKED", "data": {"action": "run", "info": {"arg5": 4, "arg4": 18446744072635809946, "arg3": 18446735287655024944, "arg2": 18446603954662502416, "arg1": 278, "type": "hyper-v"}}}
+[2026-10-24T04:09:28Z] --once: not restarting after the guest's reboot
+[2026-10-24T04:09:28Z] WINVM_RUN_END tag=on_observe_b1 boots=1 reason=guest-reset

@@ -1,0 +1,173 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+SWEEP_PROVISION_START own_instance=FROM_LEASE_RECEIPT 2026-10-24T03:07:12+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b -> FETCH_HEAD
+HEAD is now at 6e3fd3fd6 feat(bench): record bounded actual PRECOMP host reply for the next lease
+From https://github.com/reindertpelsma/kayfabe
+ * branch                9ff51a6e9432ed4d5f51636c7606360728de5b6c -> FETCH_HEAD
+Preparing worktree (detached HEAD 9ff51a6e9)
+Updating files:  35% (7703/21690)
+Updating files:  36% (7809/21690)
+Updating files:  37% (8026/21690)
+Updating files:  38% (8243/21690)
+Updating files:  39% (8460/21690)
+Updating files:  40% (8676/21690)
+Updating files:  41% (8893/21690)
+Updating files:  42% (9110/21690)
+Updating files:  43% (9327/21690)
+Updating files:  44% (9544/21690)
+Updating files:  45% (9761/21690)
+Updating files:  46% (9978/21690)
+Updating files:  47% (10195/21690)
+Updating files:  48% (10412/21690)
+Updating files:  49% (10629/21690)
+Updating files:  50% (10845/21690)
+Updating files:  51% (11062/21690)
+Updating files:  52% (11279/21690)
+Updating files:  53% (11496/21690)
+Updating files:  54% (11713/21690)
+Updating files:  55% (11930/21690)
+Updating files:  56% (12147/21690)
+Updating files:  57% (12364/21690)
+Updating files:  58% (12581/21690)
+Updating files:  59% (12798/21690)
+Updating files:  60% (13014/21690)
+Updating files:  61% (13231/21690)
+Updating files:  62% (13448/21690)
+Updating files:  63% (13665/21690)
+Updating files:  64% (13882/21690)
+Updating files:  65% (14099/21690)
+Updating files:  66% (14316/21690)
+Updating files:  67% (14533/21690)
+Updating files:  68% (14750/21690)
+Updating files:  69% (14967/21690)
+Updating files:  70% (15183/21690)
+Updating files:  71% (15400/21690)
+Updating files:  72% (15617/21690)
+Updating files:  73% (15834/21690)
+Updating files:  74% (16051/21690)
+Updating files:  75% (16268/21690)
+Updating files:  76% (16485/21690)
+Updating files:  76% (16521/21690)
+Updating files:  77% (16702/21690)
+Updating files:  78% (16919/21690)
+Updating files:  79% (17136/21690)
+Updating files:  80% (17352/21690)
+Updating files:  81% (17569/21690)
+Updating files:  82% (17786/21690)
+Updating files:  83% (18003/21690)
+Updating files:  84% (18220/21690)
+Updating files:  85% (18437/21690)
+Updating files:  86% (18654/21690)
+Updating files:  87% (18871/21690)
+Updating files:  88% (19088/21690)
+Updating files:  89% (19305/21690)
+Updating files:  90% (19521/21690)
+Updating files:  91% (19738/21690)
+Updating files:  92% (19955/21690)
+Updating files:  93% (20172/21690)
+Updating files:  94% (20389/21690)
+Updating files:  95% (20606/21690)
+Updating files:  96% (20823/21690)
+Updating files:  96% (20863/21690)
+Updating files:  97% (21040/21690)
+Updating files:  98% (21257/21690)
+Updating files:  99% (21474/21690)
+Updating files: 100% (21690/21690)
+Updating files: 100% (21690/21690), done.
+HEAD is now at 9ff51a6e9 feat(bench): retry bounded pre-SSH provider failures on another machine
+NVIDIA GeForce RTX 5070, 595.91.07, 12227 MiB
+HOST_PREFLIGHT_RC=0
+PREFLIGHT_PROFILE {"verdict_line": ["VERDICT=SOUND"], "failed_checks": [], "cpu_visible": 30, "accepted": true, "accepted_deviation": [], "experiment_mode": "OBSERVATION", "attestation": false}
+PROBE_START pid=77101 uid=Uid: 65534 65534 65534 65534 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE_DIE arch=0x1b0 impl=0x5 die=GB205
+PROBE_END admin_run=false
+AUDIT_SUBTRACT_EXISTING_CONSTANTS_NO_RECAPTURE
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-24T03:19:18+00:00
+NATIVE_RAW_FINDING rc=0 verdict_is_not_a_gate
+BARE_SUITE_PASS=29 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=29
+NATIVE_CUDA_FINDING rc=0 verdict_is_not_a_gate
+From https://github.com/reindertpelsma/kayfabe
+ * branch                618f0431815d037d4226b642ae37e76967353e90 -> FETCH_HEAD
+Preparing worktree (detached HEAD 618f04318)
+Updating files:  35% (7777/21764)
+Updating files:  36% (7836/21764)
+Updating files:  37% (8053/21764)
+Updating files:  38% (8271/21764)
+Updating files:  39% (8488/21764)
+Updating files:  40% (8706/21764)
+Updating files:  41% (8924/21764)
+Updating files:  42% (9141/21764)
+Updating files:  43% (9359/21764)
+Updating files:  44% (9577/21764)
+Updating files:  45% (9794/21764)
+Updating files:  46% (10012/21764)
+Updating files:  47% (10230/21764)
+Updating files:  48% (10447/21764)
+Updating files:  49% (10665/21764)
+Updating files:  50% (10882/21764)
+Updating files:  51% (11100/21764)
+Updating files:  52% (11318/21764)
+Updating files:  53% (11535/21764)
+Updating files:  54% (11753/21764)
+Updating files:  55% (11971/21764)
+Updating files:  56% (12188/21764)
+Updating files:  57% (12406/21764)
+Updating files:  58% (12624/21764)
+Updating files:  59% (12841/21764)
+Updating files:  60% (13059/21764)
+Updating files:  61% (13277/21764)
+Updating files:  62% (13494/21764)
+Updating files:  63% (13712/21764)
+Updating files:  64% (13929/21764)
+Updating files:  65% (14147/21764)
+Updating files:  66% (14365/21764)
+Updating files:  67% (14582/21764)
+Updating files:  68% (14800/21764)
+Updating files:  69% (15018/21764)
+Updating files:  70% (15235/21764)
+Updating files:  71% (15453/21764)
+Updating files:  72% (15671/21764)
+Updating files:  73% (15888/21764)
+Updating files:  74% (16106/21764)
+Updating files:  75% (16323/21764)
+Updating files:  76% (16541/21764)
+Updating files:  77% (16759/21764)
+Updating files:  78% (16976/21764)
+Updating files:  79% (17194/21764)
+Updating files:  80% (17412/21764)
+Updating files:  81% (17629/21764)
+Updating files:  81% (17656/21764)
+Updating files:  82% (17847/21764)
+Updating files:  83% (18065/21764)
+Updating files:  84% (18282/21764)
+Updating files:  85% (18500/21764)
+Updating files:  86% (18718/21764)
+Updating files:  87% (18935/21764)
+Updating files:  88% (19153/21764)
+Updating files:  89% (19370/21764)
+Updating files:  90% (19588/21764)
+Updating files:  91% (19806/21764)
+Updating files:  92% (20023/21764)
+Updating files:  93% (20241/21764)
+Updating files:  94% (20459/21764)
+Updating files:  95% (20676/21764)
+Updating files:  96% (20894/21764)
+Updating files:  97% (21112/21764)
+Updating files:  98% (21329/21764)
+Updating files:  99% (21547/21764)
+Updating files: 100% (21764/21764)
+Updating files: 100% (21764/21764), done.
+HEAD is now at 618f04318 fix(bench): register native completion listeners before GPU submission
+NATIVE_GR_FINDING rc=0 verdict_is_not_a_gate
+GR_TIER_VERDICT=PASS
+PRECOMP_EXISTING_MEASUREMENTS_SUBTRACTED
+{"index": 0, "arm": "crowd", "returncode": 0}
+{"index": 1, "arm": "crowd", "returncode": 0}
+{"index": 2, "arm": "crowd", "returncode": 0}
+{"index": 3, "arm": "crowd-free", "returncode": 0}
+NATIVE_FINDINGS_RECORDED_CONTINUE_WINDOWS

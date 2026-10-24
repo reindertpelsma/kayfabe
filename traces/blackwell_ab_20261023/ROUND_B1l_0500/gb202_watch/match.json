@@ -1,0 +1,11 @@
+{
+  "id": 56988927,
+  "machine_id": 57297,
+  "dph_total": 0.7361111111111112,
+  "candidate_die": "GB202",
+  "gpu_name": "RTX 5090",
+  "geolocation": "Chile, CL",
+  "verification": "verified",
+  "cpu_cores_effective": 16.0,
+  "utc": "2026-10-24T04:18:54.955476+00:00"
+}

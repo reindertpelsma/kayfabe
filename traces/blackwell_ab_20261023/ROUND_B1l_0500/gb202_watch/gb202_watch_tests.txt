@@ -1,0 +1,11 @@
+test_b1j_snapshot_has_no_match (test_gb202_watch.GB202Watch.test_b1j_snapshot_has_no_match) ... ok
+test_only_rtx5090_queries (test_gb202_watch.GB202Watch.test_only_rtx5090_queries) ... ok
+test_price_above_one_dollar_refused (test_gb202_watch.GB202Watch.test_price_above_one_dollar_refused) ... ok
+test_raised_budget_admits_the_0_87_rtx5090 (test_gb202_watch.GB202Watch.test_raised_budget_admits_the_0_87_rtx5090) ... ok
+test_rtx_pro_5000_is_never_queried (test_gb202_watch.GB202Watch.test_rtx_pro_5000_is_never_queried) ... ok
+test_vm_deverified_country_and_known_bad_still_refused (test_gb202_watch.GB202Watch.test_vm_deverified_country_and_known_bad_still_refused) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.001s
+
+OK

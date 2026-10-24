@@ -1,0 +1,9 @@
+{
+  "arm": "on_observe_b1",
+  "pid": 158235,
+  "starttime": 369135,
+  "disabled_handshake": true,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

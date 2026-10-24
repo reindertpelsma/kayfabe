@@ -1,0 +1,166 @@
+{
+  "round": "B1l_0500",
+  "operator": "Claude",
+  "grant": "controller 05:00: box_fetch range retry, then one lease on m30498 (default budget), then GB202 RTX 5090-only watcher",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "box_fetch_change": {
+    "tests": "rehearsal/test_box_fetch_retry.py 13/13 RED first; test_box_fetch 37/37",
+    "mutants": "6 (5 >=2 killers, 1 equivalent)",
+    "dry_loop": "passed 372 tests, static 0"
+  },
+  "lease": {
+    "id": 57457694,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070",
+    "die_probe": "GB205",
+    "quote_dph": 0.4320555555555556,
+    "observed_dph": 0.4806666666666667,
+    "precreate_armed_utc": "2026-10-24T03:02:27.281151+00:00",
+    "created_utc": "2026-10-24T03:02:28.520136+00:00",
+    "ssh_ready_utc": "2026-10-24T03:04:25.793195+00:00",
+    "absence_verified_utc": "2026-10-24T04:18:25.955885+00:00",
+    "runtime_cost_estimate_usd": 0.6085020745235186,
+    "credit_after_observed_usd": 26.804928402660494
+  },
+  "media": {
+    "box_fetch_verified": [
+      "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "OpenSSH-Win64-v10.0.0.0.msi",
+      "virtio-win-0.1.302.iso",
+      "win11_ltsc_2024_eval_x64_en-us.iso"
+    ],
+    "fallback": [],
+    "elapsed_s": 133.3
+  },
+  "native": {
+    "gates": "9/9 + gate10 PASS",
+    "bare_suite": "29/29",
+    "fuzz": "pinned crowd 3/3 PASS, control PASS, ALIAS_REVOKED 0/3",
+    "native_xid31_controls": 5
+  },
+  "arm_B": {
+    "rev": "48b027267",
+    "code0": "ConfigManagerErrorCode 0 observed 03:59:54Z (guest clock, ~+4.6 s vs host)",
+    "dump_headers": [
+      {
+        "bugcheck": "0x116",
+        "parameters": [
+          "0xffffdf0294f6f010",
+          "0xfffff80478854930",
+          "0xffffffffc000009a",
+          "0x4"
+        ],
+        "system_time_utc": "2026-10-24T04:00:12.769682+00:00",
+        "file": "C:/Windows/Minidump/102426-61750-01.dmp"
+      },
+      {
+        "bugcheck": "0x193",
+        "parameters": [
+          "0x815",
+          "0x2",
+          "0xffffdf029304e080",
+          "0x0"
+        ],
+        "system_time_utc": "2026-10-24T03:59:23.328439+00:00",
+        "file": "C:/Windows/LiveKernelReports/WATCHDOG-20261024-0359.dmp"
+      }
+    ],
+    "admitted_xid32": [
+      "2026-10-24T03:59:58.278206+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=150035, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+      "2026-10-24T03:59:58.334139+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=150035, name=qemu-system-x86, channel 0x1000000b intr 00200000"
+    ],
+    "rpcs": 4296,
+    "teardown_start_ordinal": 3915,
+    "unload_ordinals": [
+      4295
+    ],
+    "hold": "VM exited at 0 s of the 10-min hold (GUEST_PANICKED arg1 278 = 0x116)",
+    "events": "System 1001 BugCheck 0x116 (..., 0xffffffffc000009a, 0x4); Kernel-Power 41; EventLog 6008; Application WER 1001 LiveKernelEvent 0x141/0x1b8 and BlueScreen 0x116; no 4101 found; nvlddmkm-provider query empty; Kernel-Boot 153 entries are VBS status lines, not nvlddmkm 153",
+    "live_dump": "LiveKernelReports WATCHDOG 0x193 at 03:59:23Z guest (before the Xid pair)"
+  },
+  "arm_B1": {
+    "rev": "cb80cbd29",
+    "code0": "ConfigManagerErrorCode 0 observed 04:09:02Z (guest)",
+    "dump_headers": [
+      {
+        "bugcheck": "0x116",
+        "parameters": [
+          "0xffff808ffdf97010",
+          "0xfffff80256574930",
+          "0xffffffffc000009a",
+          "0x4"
+        ],
+        "system_time_utc": "2026-10-24T04:09:17.289353+00:00",
+        "file": "C:/Windows/Minidump/102426-52500-01.dmp"
+      },
+      {
+        "bugcheck": "0x193",
+        "parameters": [
+          "0x815",
+          "0x2",
+          "0xffff808004263080",
+          "0x0"
+        ],
+        "system_time_utc": "2026-10-24T04:08:31.488076+00:00",
+        "file": "C:/Windows/LiveKernelReports/WATCHDOG-20261024-0408.dmp"
+      }
+    ],
+    "admitted_xid32": [
+      "2026-10-24T04:09:05.190144+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+      "2026-10-24T04:09:05.198147+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 32, pid=158235, name=qemu-system-x86, channel 0x1000000b intr 00200000"
+    ],
+    "rpcs": 4450,
+    "teardown_start_ordinal": 4074,
+    "unload_ordinals": [
+      4449
+    ],
+    "hold": "VM exited at 0 s of the hold (GUEST_PANICKED 0x116)",
+    "live_dump": "WATCHDOG 0x193 at 04:08:31Z guest"
+  },
+  "falsifier": "FIRED for GB205 in both arms: guest bugcheck 0x116 within 10 min (about 12-15 s) after the admitted exact Xid32 pair; survival/containment of the pair is refuted on this die for builds 48b027267 and cb80cbd29",
+  "tdr_verdict": "TDR -> recovery failed -> bugcheck 0x116 (VIDEO_TDR_FAILURE), parameter 3 = 0xffffffffc000009a, in both arms",
+  "xid32_decode": "exact pair, owned QEMU pid, channels 0x14 and 0x1000000b, intr 00200000, about 8-56 ms apart; per-arm admitted count B=2, B1=2 (limit 8); no other Xid; closure audit exact history, host healthy (cuInit 0)",
+  "closure_audit": "final_remote_audit.out: exact accepted history, 4 observed records, qemu 0, controller exited, GPU lock released, clean sources",
+  "gb202_watcher": {
+    "pid": 2845772,
+    "log": "/workspace/bw3-gb202-watch-run/market_watch/market_watch.log",
+    "filter": "RTX_5090 only (GeForce), raised budget stop3/cap3.5/<=1.00",
+    "tests": "gb202_watch/test_gb202_watch.py 6/6",
+    "result": "EXIT 0 at poll 1 (04:18:54Z): MATCH offer 56988927, machine 57297, RTX 5090, Chile CL, verified, 16 cores, 0.736 USD/h"
+  },
+  "matrix": [
+    {
+      "arm": "Native (full stage)",
+      "die": "GB205",
+      "OS": "Ubuntu22.04",
+      "driver": "595.91.07 open",
+      "rev": "6e3fd3fd6",
+      "flags": "default profile",
+      "verdict": "PASS (native findings, not attestation)",
+      "evidence": "attempt1_m30498/native_baseline/"
+    },
+    {
+      "arm": "B",
+      "die": "GB205",
+      "OS": "Win11 LTSC2024",
+      "driver": "580.88",
+      "rev": "48b027267",
+      "flags": "p19, one enable",
+      "verdict": "FAIL (Code0 then admitted Xid32 pair then 0x116 TDR bugcheck; no hold)",
+      "evidence": "attempt1_m30498/arms/on_observe_b/"
+    },
+    {
+      "arm": "B1",
+      "die": "GB205",
+      "OS": "Win11 LTSC2024",
+      "driver": "580.88",
+      "rev": "cb80cbd29",
+      "flags": "p19, one enable",
+      "verdict": "FAIL (same sequence)",
+      "evidence": "attempt1_m30498/arms/on_observe_b1/"
+    }
+  ]
+}
