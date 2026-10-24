@@ -1562,10 +1562,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     );
                 }
             }
-            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off; `crate::vahist`): this
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1` only, default off; `crate::vahist`): this
             // space's runs and verdicts into its bounded history; ONE bounded dump the first time
             // a MAP of the space is refused or its walk refuses leaves. Changes no decision.
-            if crate::vahist::enabled() {
+            if crate::vahist::recording() {
                 let rec = crate::vahist::global();
                 if rec.record_apply(
                     key.0,

@@ -93,11 +93,47 @@ pub fn flag_on(v: Option<&str>) -> bool {
     v == Some("1")
 }
 
-/// Is the diagnostic on (`KF3_DIAG_VAHIST=1`)? Read once.
+/// The diagnostic's mode, from `KF3_DIAG_VAHIST`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// Unset, or any value but the two below.
+    Off,
+    /// `1`: every apply recorded, `CHAN_LIFE` lines, AUTO dumps, lookups.
+    Full,
+    /// `lookup`: NO per-apply recording and no `CHAN_LIFE` line — only the space notes, the retired
+    /// extents and the channel records in memory, and the lookup (live rows + guest PTE probe).
+    /// ★ 2026-10-24: hosts runs 5220/5221 (full order, rev 75f22f78) passed enscape 08 with
+    /// `Full` on, where three runs without it faulted; this mode adds no work per apply.
+    LookupOnly,
+}
+
+/// Parse `KF3_DIAG_VAHIST` (exact values only: `1`, `lookup`).
+#[must_use]
+pub fn mode_of(v: Option<&str>) -> Mode {
+    match v {
+        Some("1") => Mode::Full,
+        Some("lookup") => Mode::LookupOnly,
+        _ => Mode::Off,
+    }
+}
+
+/// The process's mode (read once).
+#[must_use]
+pub fn mode() -> Mode {
+    static M: OnceLock<Mode> = OnceLock::new();
+    *M.get_or_init(|| mode_of(std::env::var("KF3_DIAG_VAHIST").ok().as_deref()))
+}
+
+/// Is the diagnostic on in any mode (`KF3_DIAG_VAHIST=1` or `=lookup`)? Read once.
 #[must_use]
 pub fn enabled() -> bool {
-    static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| flag_on(std::env::var("KF3_DIAG_VAHIST").ok().as_deref()))
+    mode() != Mode::Off
+}
+
+/// Is every apply recorded (`KF3_DIAG_VAHIST=1` only)?
+#[must_use]
+pub fn recording() -> bool {
+    mode() == Mode::Full
 }
 
 /// `KF3_DIAG_VAHIST_TRIGGER`: the file the host lane writes the Xid text into (read once; `None`
@@ -117,7 +153,7 @@ pub fn trigger_path() -> Option<&'static Path> {
 #[must_use]
 pub fn global() -> &'static Recorder {
     static R: OnceLock<Recorder> = OnceLock::new();
-    R.get_or_init(Recorder::new)
+    R.get_or_init(|| Recorder::with_lines(recording()))
 }
 
 /// A lookup request: the host's fault VA and, when given, its channel id.
@@ -369,6 +405,8 @@ struct State {
     auto_keys: Vec<u64>,
     trig_polled: Option<Instant>,
     trig_last: Option<Vec<u8>>,
+    /// `CHAN_LIFE` lines are printed (off in [`Mode::LookupOnly`]).
+    lines: bool,
 }
 
 /// ★ The recorder (one per process: [`global`]; tests make their own).
@@ -435,9 +473,16 @@ struct Cand {
 }
 
 impl Recorder {
-    /// A fresh recorder (its clock starts now).
+    /// A fresh recorder (its clock starts now), printing `CHAN_LIFE` lines.
     #[must_use]
     pub fn new() -> Recorder {
+        Recorder::with_lines(true)
+    }
+
+    /// A fresh recorder; `lines: false` keeps the channel records but prints no `CHAN_LIFE`
+    /// line ([`Mode::LookupOnly`]).
+    #[must_use]
+    pub fn with_lines(lines: bool) -> Recorder {
         Recorder {
             st: Mutex::new(State {
                 t0: Instant::now(),
@@ -455,6 +500,7 @@ impl Recorder {
                 auto_keys: Vec::new(),
                 trig_polled: None,
                 trig_last: None,
+                lines,
             }),
         }
     }
@@ -696,6 +742,9 @@ impl Recorder {
     }
 
     fn chan_line(st: &mut State, text: String) -> Option<String> {
+        if !st.lines {
+            return None;
+        }
         if st.chan_lines >= CHAN_LINES_MAX {
             st.chan_lines_dropped = st.chan_lines_dropped.saturating_add(1);
             return None;
@@ -810,7 +859,7 @@ impl Recorder {
         let x = t.va;
         let chid = t.chid.map_or("none".to_string(), |c| format!("{c:#x}"));
         // 1. Copy what is needed under the lock.
-        let (n, t_ms, t0, header_counts, chans, mut cands) = {
+        let (n, (t_ms, recorded), t0, header_counts, chans, mut cands) = {
             let mut st = self.st();
             if st.manual_dumps >= MANUAL_DUMPS {
                 return vec![format!(
@@ -895,7 +944,7 @@ impl Recorder {
             }
             (
                 n,
-                Self::ms(&st),
+                (Self::ms(&st), st.lines),
                 st.t0_unix_ms,
                 (
                     st.spaces.len(),
@@ -924,7 +973,12 @@ impl Recorder {
         // 3. Format.
         let (spaces, retired, nchans, untracked) = header_counts;
         let mut out = vec![cap(format!(
-            "kf3: VAHIST LOOKUP #{n} va={x:#x} chid={chid} t_ms={t_ms} t0_unix_ms={t0} spaces={spaces} retired={retired} chans={nchans} chan_matches={} spaces_untracked={untracked}",
+            "kf3: VAHIST LOOKUP #{n} va={x:#x} chid={chid} t_ms={t_ms} t0_unix_ms={t0} recorded={} spaces={spaces} retired={retired} chans={nchans} chan_matches={} spaces_untracked={untracked}",
+            if recorded {
+                "every-apply"
+            } else {
+                "lookup-only"
+            },
             chans.len()
         ))];
         for c in &chans {
@@ -1009,7 +1063,9 @@ impl Recorder {
                             e.walk, e.aux, e.t_ms
                         ))
                     ),
-                    if s.absent_evicted == 0 && s.sticky_evicted == 0 {
+                    if !recorded {
+                        "no(lookup-only: no apply recorded)".to_string()
+                    } else if s.absent_evicted == 0 && s.sticky_evicted == 0 {
                         "yes".to_string()
                     } else {
                         format!("no(evicted {}+{})", s.absent_evicted, s.sticky_evicted)
