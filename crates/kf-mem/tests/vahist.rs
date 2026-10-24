@@ -225,7 +225,11 @@ fn the_lookup_says_unmapped_refused_or_withheld_from_the_last_event_covering_the
     assert!(verdict(base + 0x100000).contains("verdict=REFUSED"));
     assert!(verdict(base + 0x200000).contains("verdict=WITHHELD"));
     assert!(verdict(base + 0x300000).contains("verdict=HELD"));
-    // a VA nobody named in any tracked space: one line saying so
+    // a VA nobody named in any tracked space: one line saying so (a fresh recorder: the four
+    // lookups above used this one's MANUAL_DUMPS)
+    let r = Recorder::new();
+    r.note_space(K08, 2, true);
+    r.record_apply(K08, 1, &[run(false, base, 0x10000)], &[ACK_APPLIED], true, 0);
     let out = r.lookup(
         &Trigger {
             va: 0x5_0000_0000,
