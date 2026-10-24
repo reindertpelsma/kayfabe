@@ -200,6 +200,7 @@ def validate_selection(value):
         or set(value) != {"die", "ignored", "reason"}
         or not class_token(value["die"])
         or not integer(value["ignored"], 0, 16)
+        or not isinstance(value["reason"], str)
         or value["reason"] not in SELECTION_REASONS
     ):
         raise Invalid()
@@ -423,11 +424,11 @@ def validate_status(data, ctx, manifest, http_status):
             or data["verdict"] != "UNAVAILABLE"
         ):
             raise Invalid()
-        if "reason" in data and data["reason"] not in {
-            "NO_ALLOWED_PREFERENCE",
-            "NO_ALLOWED_OFFERS",
-            "RUNNER_TIME",
-        }:
+        # A str test first: a list or dict reason is Invalid, not an unhashable TypeError.
+        if "reason" in data and (
+            not isinstance(data["reason"], str)
+            or data["reason"] not in {"NO_ALLOWED_PREFERENCE", "NO_ALLOWED_OFFERS", "RUNNER_TIME"}
+        ):
             raise Invalid()
         if "selection" in data:
             validate_selection(data["selection"])
