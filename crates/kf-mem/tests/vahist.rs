@@ -1,4 +1,4 @@
-//! ★ MEASUREMENT ONLY — `KF3_DIAG_VAHIST` (`kf_mem::vahist`): bounds and format, GPU-free.
+//! ★ DIAGNOSTIC ONLY — `KF3_DIAG_VAHIST` (`kf_mem::vahist`): bounds and format, GPU-free.
 //!
 //! What these pin (enscape-08 diagnostic, 2026-10-24):
 //! - the trigger parser takes the host's own Xid text (and a `va=… chid=…` line), and nothing

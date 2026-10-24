@@ -1,4 +1,4 @@
-//! ★ MEASUREMENT ONLY — `KF3_DIAG_VAHIST` hook sites (source-level, GPU-free).
+//! ★ DIAGNOSTIC ONLY — `KF3_DIAG_VAHIST` hook sites (source-level, GPU-free).
 //!
 //! Each hook of `kf_mem::vahist` must exist exactly once, sit behind `vahist::enabled()` (so the
 //! default path does nothing), and the class hook must run only after the `pt` lock is released

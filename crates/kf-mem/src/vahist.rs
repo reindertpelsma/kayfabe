@@ -1,4 +1,4 @@
-//! ★ **VA HISTORY + CHANNEL LIFETIMES — MEASUREMENT ONLY** (`KF3_DIAG_VAHIST=1`; class M, off
+//! ★ **VA HISTORY + CHANNEL LIFETIMES — DIAGNOSTIC ONLY** (`KF3_DIAG_VAHIST=1`; class M, off
 //! unless the value is exactly `1`, read once; never required to boot; nothing here changes a
 //! decision). Written for the enscape-08 CE MMU fault (host Xid 31, `FAULT_PTE`
 //! `ACCESS_TYPE_VIRT_WRITE`, 2026-10-24), where `KF3_MAPLOG` (about 1 MB/s) is too heavy to run.
@@ -93,7 +93,7 @@ pub fn flag_on(v: Option<&str>) -> bool {
     v == Some("1")
 }
 
-/// Is the measurement on (`KF3_DIAG_VAHIST=1`)? Read once.
+/// Is the diagnostic on (`KF3_DIAG_VAHIST=1`)? Read once.
 #[must_use]
 pub fn enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();

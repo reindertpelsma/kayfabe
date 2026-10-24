@@ -2057,7 +2057,7 @@ impl Device {
                     .waited(va_busy_from.saturating_sub(tw), matches!(got, Ok(0)));
             }
             let _ = self.mem.inbox.wake.drain();
-            // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1` + `KF3_DIAG_VAHIST_TRIGGER=<path>`, default
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1` + `KF3_DIAG_VAHIST_TRIGGER=<path>`, default
             // off): the host lane writes the host's Xid text there; the VA thread looks at most
             // every 500 ms (one `open`), and answers each new trigger ONCE with a bounded dump
             // (`kf_mem::vahist::Recorder::lookup`, at most 4 per process). Changes no decision.

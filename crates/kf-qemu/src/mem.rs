@@ -3459,7 +3459,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
     // ★ V3_BATCHED_MAP: VA-contiguous rows go as one range each; every batch object is freed.
-    // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's row extents at retire
+    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's row extents at retire
     // (coalesced, bounded in `kf_mem::vahist::retire`) — "was X the previous owner's VA?".
     if kf_mem::vahist::enabled() {
         let extents: Vec<(u64, u64)> = g.rows.read().map_or_else(
@@ -3502,7 +3502,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     )
 }
 
-/// ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the VA thread's live view for a
+/// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the VA thread's live view for a
 /// `kf_mem::vahist` lookup — our rows (read under their own lock, never the recorder's) and the
 /// guest's PTE for the VA (at most nine 8-byte store reads, through the walker's bounds check).
 /// Built and used ONLY on the VA thread, which owns the manager and the walker's context.
@@ -3694,7 +3694,7 @@ pub fn apply_statement(
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
                 }
-                // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's history
+                // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's history
                 // starts here, with its host space and whether it is a recycled spare.
                 if kf_mem::vahist::enabled()
                     && let Some(Target::Gpu(g)) = m.table.target(key)

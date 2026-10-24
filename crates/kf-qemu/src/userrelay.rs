@@ -754,7 +754,7 @@ impl Birth {
         }
         me.pt_births.fetch_add(1, Ordering::Relaxed);
         me.engine_live(a.engine_type.unwrap_or(0), true);
-        // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): ONE lifetime line per birth,
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): ONE lifetime line per birth,
         // capped per process (`kf_mem::vahist::CHAN_LINES_MAX`); on this act thread, never a vCPU.
         if kf_mem::vahist::enabled()
             && let Some(line) = kf_mem::vahist::global().chan_birth(kf_mem::vahist::ChanBirth {

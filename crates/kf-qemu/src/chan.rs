@@ -2604,7 +2604,7 @@ fn keep_engine_object(
     v.objects.insert(handle, object);
     v.pending_objects.remove(&handle);
     index.insert((key.0, handle), key);
-    // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the class joins the channel's
+    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the class joins the channel's
     // lifetime record — AFTER both locks are released, so the recorder's mutex is never taken
     // under the `pt` lock.
     drop(index);
@@ -5760,7 +5760,7 @@ impl ChanPlane {
                     if !t.user_ring || r.is_ok() {
                         t.live.fetch_sub(1, Ordering::AcqRel);
                     }
-                    // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the ONE lifetime line
+                    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the ONE lifetime line
                     // of a recorded USER-ring birth (capped); nothing for any other twin.
                     if t.user_ring
                         && kf_mem::vahist::enabled()
