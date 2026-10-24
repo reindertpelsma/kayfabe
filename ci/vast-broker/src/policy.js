@@ -214,6 +214,20 @@ export function configuration(env) {
     !cfg.badMachines.every((x) => Number.isSafeInteger(x) && x > 0)
   )
     refuse();
+  // Edits3 D: BAD_MACHINE_IDS replaces the built-in list; BAD_MACHINE_IDS_EXTRA adds to it.
+  let extra;
+  try {
+    extra = JSON.parse(env.BAD_MACHINE_IDS_EXTRA ?? '[]');
+  } catch {
+    refuse('CONFIG_VAR:BAD_MACHINE_IDS_EXTRA', 503);
+  }
+  if (
+    !Array.isArray(extra) ||
+    extra.length > 256 ||
+    !extra.every((x) => Number.isSafeInteger(x) && x > 0)
+  )
+    refuse('CONFIG_VAR:BAD_MACHINE_IDS_EXTRA', 503);
+  cfg.badMachines = [...new Set([...cfg.badMachines, ...extra])];
   // Owner ruling 2026-10-24: hoster-level blacklist (every machine of a listed host_id).
   try {
     cfg.badHosts = JSON.parse(env.BAD_HOST_IDS ?? JSON.stringify(DEFAULTS.badHosts));

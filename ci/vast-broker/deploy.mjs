@@ -35,6 +35,7 @@ export const ALLOWED = new Set([
   'BLOB_ALLOWED_TAG_PREFIXES',
   // Owner-edited lists and retention (owner ruling 2026-10-24): edit the var and redeploy.
   'BAD_MACHINE_IDS',
+  'BAD_MACHINE_IDS_EXTRA',
   'BAD_HOST_IDS',
   'LOG_RETENTION_HOURS',
   // Concurrent rentals (owner ruling 2026-10-24 item 8): account cap 1-4, per-profile lower caps.

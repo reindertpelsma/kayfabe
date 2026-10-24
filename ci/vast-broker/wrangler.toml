@@ -20,7 +20,7 @@ crons = ["* * * * *"]
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "8de36e6c9fd64c06ad9154b279889ac7e991bf79903d8ee5b30adc243b97f942"
+DEPLOYED_BUNDLE_SHA256 = "60f82cd869c4600cae66cdbd82cbeefb0c5821aaa39103808ac5d4b6732f32a2"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"

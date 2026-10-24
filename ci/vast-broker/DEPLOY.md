@@ -139,14 +139,17 @@ parentheses are ignored for the names ("P.R. China", "Hong-Kong", "Hong Kong (Ch
 DPR" are denied). Otherwise only Vast's form `region, CC` (two ASCII capitals) gives a code; a
 bare code, a look-alike letter (Greek or Cyrillic), a bidi control, lower case or any other
 spelling is UNKNOWN.
-[CODE READ: src/policy.js; owner ruling 2026-10-24 item 6] Two owner-edited blacklists, both
-public vars (JSON arrays of positive integers, at most 256 each): BAD_MACHINE_IDS (default the
-`badMachines` list in defaults.json) rejects an offer by `machine_id` (reason `MACHINE`), and
-BAD_HOST_IDS (default `badHosts: []`) rejects every offer whose `host_id`, the hoster, is listed
-(reason `BAD_HOST`). An invalid BAD_HOST_IDS refuses with `CONFIG_VAR:BAD_HOST_IDS`. To change
-either, edit the var in the vars file and redeploy with the helper (no owner endpoint exists or
-is wanted; a deploy without the var falls back to defaults.json). The Worker's learned
-`bad-machine:` ledger entries (frozen KVM boot) stay machine-level.
+[CODE READ: src/policy.js; owner ruling 2026-10-24 item 6; edits3 D] Owner-edited blacklists,
+all public vars (JSON arrays of positive integers, at most 256 each). Machines (`machine_id`,
+reason `MACHINE`): BAD_MACHINE_IDS, when set, replaces the built-in `badMachines` list in
+defaults.json, so re-list the defaults you still want; BAD_MACHINE_IDS_EXTRA adds to the
+built-in list (or to the BAD_MACHINE_IDS override), so one more machine needs only that var. An
+invalid BAD_MACHINE_IDS_EXTRA refuses with `CONFIG_VAR:BAD_MACHINE_IDS_EXTRA`. Hosters:
+BAD_HOST_IDS (default `badHosts: []`) rejects every offer whose `host_id` is listed (reason
+`BAD_HOST`); an invalid one refuses with `CONFIG_VAR:BAD_HOST_IDS`. To change any of them, edit
+the var in the vars file and redeploy with the helper (no owner endpoint exists or is wanted; a
+deploy without the var falls back to defaults.json). The Worker's learned `bad-machine:` ledger
+entries (frozen KVM boot) stay machine-level.
 [CODE READ: src/offers.js, src/index.js, runner.py; owner ruling 2026-10-24 item 9] To find the
 ids, read the public log: every `/availability` row (`offers[]`, the cheapest allowed offer per
 die, and `rejected_offers[]`, each rejected offer with its reason codes) carries the public Vast
