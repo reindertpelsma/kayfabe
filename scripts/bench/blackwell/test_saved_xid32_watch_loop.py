@@ -27,8 +27,9 @@ AUTHORITY = {
     "observation_only": True,
     "attestation_allowed": False,
     "exact_channels": ["0x14", "0x1000000b"],
+    "candidate_die": "GB205",
 }
-PERMIT = {**base.PERMIT, "mode": MODE}
+PERMIT = {**base.PERMIT, "mode": MODE, "probed_die": "GB205"}
 INITIAL = [
     {"cursor": "a", "priority": 6, "line": "2026-10-23T11:58:00.000000+0000 ubuntu kernel: one"},
     {"cursor": "b", "priority": 6, "line": "2026-10-23T11:58:01.000000+0000 ubuntu kernel: two"},

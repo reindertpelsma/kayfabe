@@ -24,8 +24,9 @@ AUTHORITY = {
     "observation_only": True,
     "attestation_allowed": False,
     "exact_channels": ["0x14", "0x1000000b"],
+    "candidate_die": "GB205",
 }
-PERMIT = {**old.PERMIT, "mode": MODE}
+PERMIT = {**old.PERMIT, "mode": MODE, "probed_die": "GB205"}
 
 
 def pair(count=2):
