@@ -1,0 +1,71 @@
+{
+  "lane": "SW3",
+  "written_utc": "2026-10-24T21:09:06.941707+00:00",
+  "production_rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "base": "a9105acb6",
+  "lease1": {
+    "offer": 51156488,
+    "machine_id": 54516,
+    "candidate_die": "GA102",
+    "country_iso": "CA",
+    "native_hypothesis": "The current raw client and gates pass on the actual GA102 with stock open 595.91.07.",
+    "native_falsifier": "Any native gate, gate10 proof, or bare-suite arm fails. Exclude that box/die cell; do not debug kayfabe.",
+    "guest_hypothesis": "After this exact native baseline passes, production kf3 passes the unchanged Linux fast suite (30/30).",
+    "guest_falsifier": "Any guest arm fails or misses its original 180-second budget. Record the first verdict; no timeout changes.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1": "Observe the Vast 256 MiB limitation; use existing harness defaults; no resizing.",
+    "linux_only": true
+  },
+  "bounds": {
+    "hourly_cap_usd": 2.5,
+    "stop_usd": 3.0,
+    "hard_cap_usd": 3.5,
+    "reserve_usd": 8,
+    "max_leases": 3,
+    "max_hours_per_lease": 3,
+    "chosen_stricter_watchdog_minutes": 150,
+    "provider_pre_ssh_retries": 1,
+    "identity_refusal": "Stop lane; no retry."
+  },
+  "read_sources": [
+    "COMMON.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "SW2.md",
+    "6_NEXT.md",
+    "COST.md and MATRIX.md from s4-wt (not present on origin/master)",
+    "V3_SWEEP_AND_INSTALL.md",
+    "V3_DRIVER_MATRIX.md"
+  ],
+  "market": "/data/sw3_private_capture/offers_any_20261024.json",
+  "raw_capture_root": "/data/sw3_private_capture",
+  "lease2": {
+    "offer": 57543128,
+    "machine_id": 145338,
+    "candidate_die": "GA102",
+    "country_iso": "GB",
+    "native_hypothesis": "The current raw client and gates pass on the actual GA102 with stock open 595.91.07.",
+    "native_falsifier": "Any native gate, gate10 proof, or bare-suite arm fails. Exclude that box/die cell; do not debug kayfabe.",
+    "guest_hypothesis": "After this exact native baseline passes, production kf3 passes the unchanged Linux fast suite (30/30).",
+    "guest_falsifier": "Any guest arm fails or misses its original 180-second budget. Record the first verdict; no timeout changes.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1": "Observe the Vast 256 MiB limitation; use existing harness defaults; no resizing.",
+    "linux_only": true,
+    "written_utc": "2026-10-24T21:11:30.926931+00:00",
+    "provider_retry_for": 57565088,
+    "prior_runtime_usd": 0.008967549,
+    "reason": "First box offline before authenticated SSH; different machine, single permitted retry."
+  },
+  "final_stop": {
+    "reason": "First selected offer was deverified; OWNER_RULINGS T.12 requires verified hosts.",
+    "no_further_rentals": true,
+    "native_runs": 0,
+    "guest_runs": 0
+  }
+}

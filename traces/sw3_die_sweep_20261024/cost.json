@@ -1,0 +1,10 @@
+{
+  "runtime_estimate_usd": 0.02587746944259259,
+  "not_settled_invoice": true,
+  "opening_credit_observed_usd": 23.724220217859965,
+  "closing_credit_observed_usd": 23.67013792486,
+  "shared_credit_delta_is_not_lane_spend": true,
+  "stop_usd": 3,
+  "hard_cap_usd": 3.5,
+  "untouched_reserve_usd": 8
+}

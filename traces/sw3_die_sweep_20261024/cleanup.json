@@ -1,0 +1,17 @@
+{
+  "utc": "2026-10-24T21:14:08.306790+00:00",
+  "own_ids": [
+    57565088,
+    57565292
+  ],
+  "all_owned_api_absent": true,
+  "credit_observed_usd": 23.67013792486,
+  "owned_targets_created": false,
+  "owned_locks_acquired": false,
+  "gpu_runs": 0,
+  "owned_watchdogs_running": 0,
+  "owned_readiness_processes_running": 0,
+  "owned_target_dirs_present": 0,
+  "owned_locks_held": 0,
+  "rental_authenticated_ssh_count": 0
+}
