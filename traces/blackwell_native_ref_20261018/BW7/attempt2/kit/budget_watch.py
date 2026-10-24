@@ -8,7 +8,7 @@ import sys
 import time
 
 D = Path(__file__).resolve().parent
-OWNED = Path('/workspace/bw7-wt/traces/blackwell_native_ref_20261024/BW7/attempt1/owned_instances.json')
+OWNED = Path('/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/owned_instances.json')
 iid = int(sys.argv[1])
 seconds = float(sys.argv[2])
 rows = json.loads(OWNED.read_text())

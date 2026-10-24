@@ -1,0 +1,111 @@
+..........................NATIVE_PROVIDER running
+NATIVE_FIRST_REACHABLE 2026-10-24T00:00:00+00:00
+NATIVE_PIN mismatch 1 stable 0 elapsed 0.0
+NATIVE_PIN mismatch 2 stable 0 elapsed 15.0
+NATIVE_PIN mismatch 3 stable 0 elapsed 30.0
+NATIVE_PIN mismatch 4 stable 0 elapsed 45.0
+NATIVE_PIN mismatch 5 stable 0 elapsed 60.0
+NATIVE_PIN mismatch 6 stable 0 elapsed 75.0
+NATIVE_PIN mismatch 7 stable 0 elapsed 90.0
+NATIVE_PIN mismatch 8 stable 0 elapsed 105.0
+NATIVE_PIN mismatch 9 stable 0 elapsed 120.0
+NATIVE_PIN mismatch 10 stable 0 elapsed 135.0
+NATIVE_PIN mismatch 11 stable 0 elapsed 150.0
+NATIVE_PIN mismatch 12 stable 0 elapsed 165.0
+NATIVE_PIN mismatch 13 stable 0 elapsed 180.0
+NATIVE_PIN mismatch 14 stable 0 elapsed 195.0
+NATIVE_PIN mismatch 15 stable 0 elapsed 210.0
+NATIVE_PIN mismatch 16 stable 0 elapsed 225.0
+NATIVE_PIN mismatch 17 stable 0 elapsed 240.0
+NATIVE_PIN mismatch 18 stable 0 elapsed 255.0
+NATIVE_PIN mismatch 19 stable 0 elapsed 270.0
+NATIVE_PIN mismatch 20 stable 0 elapsed 285.0
+NATIVE_PIN mismatch 21 stable 0 elapsed 300.0
+NATIVE_PIN mismatch 22 stable 0 elapsed 315.0
+NATIVE_PIN mismatch 23 stable 0 elapsed 330.0
+NATIVE_PIN mismatch 24 stable 0 elapsed 345.0
+NATIVE_PIN mismatch 25 stable 0 elapsed 360.0
+NATIVE_PIN mismatch 26 stable 0 elapsed 375.0
+NATIVE_PIN mismatch 27 stable 0 elapsed 390.0
+NATIVE_PIN mismatch 28 stable 0 elapsed 405.0
+NATIVE_PIN mismatch 29 stable 0 elapsed 420.0
+NATIVE_PIN mismatch 30 stable 0 elapsed 435.0
+NATIVE_PIN mismatch 31 stable 0 elapsed 450.0
+NATIVE_PIN mismatch 32 stable 0 elapsed 465.0
+NATIVE_PIN mismatch 33 stable 0 elapsed 480.0
+NATIVE_PIN mismatch 34 stable 0 elapsed 495.0
+NATIVE_PIN mismatch 35 stable 0 elapsed 510.0
+NATIVE_PIN mismatch 36 stable 0 elapsed 525.0
+NATIVE_PIN mismatch 37 stable 0 elapsed 540.0
+NATIVE_PIN mismatch 38 stable 0 elapsed 555.0
+NATIVE_PIN mismatch 39 stable 0 elapsed 570.0
+NATIVE_PIN mismatch 40 stable 0 elapsed 585.0
+NATIVE_PIN mismatch 41 stable 0 elapsed 600.0
+NATIVE_PIN mismatch 42 stable 0 elapsed 615.0
+NATIVE_PIN mismatch 43 stable 0 elapsed 630.0
+NATIVE_PIN mismatch 44 stable 0 elapsed 645.0
+NATIVE_PIN mismatch 45 stable 0 elapsed 660.0
+NATIVE_PIN mismatch 46 stable 0 elapsed 675.0
+NATIVE_PIN mismatch 47 stable 0 elapsed 690.0
+NATIVE_PIN mismatch 48 stable 0 elapsed 705.0
+NATIVE_PIN mismatch 49 stable 0 elapsed 720.0
+NATIVE_PIN mismatch 50 stable 0 elapsed 735.0
+NATIVE_PIN mismatch 51 stable 0 elapsed 750.0
+NATIVE_PIN mismatch 52 stable 0 elapsed 765.0
+NATIVE_PIN mismatch 53 stable 0 elapsed 780.0
+NATIVE_PIN mismatch 54 stable 0 elapsed 795.0
+NATIVE_PIN mismatch 55 stable 0 elapsed 810.0
+NATIVE_PIN mismatch 56 stable 0 elapsed 825.0
+NATIVE_PIN mismatch 57 stable 0 elapsed 840.0
+NATIVE_PIN mismatch 58 stable 0 elapsed 855.0
+NATIVE_PIN mismatch 59 stable 0 elapsed 870.0
+NATIVE_PIN mismatch 60 stable 0 elapsed 885.0
+NATIVE_PIN mismatch 61 stable 0 elapsed 900.0
+NATIVE_PIN mismatch 62 stable 0 elapsed 915.0
+NATIVE_PIN mismatch 63 stable 0 elapsed 930.0
+NATIVE_PIN mismatch 64 stable 0 elapsed 945.0
+NATIVE_PIN mismatch 65 stable 0 elapsed 960.0
+NATIVE_PIN mismatch 66 stable 0 elapsed 975.0
+NATIVE_PIN mismatch 67 stable 0 elapsed 990.0
+NATIVE_PIN mismatch 68 stable 0 elapsed 1005.0
+NATIVE_PIN mismatch 69 stable 0 elapsed 1020.0
+NATIVE_PIN mismatch 70 stable 0 elapsed 1035.0
+NATIVE_PIN mismatch 71 stable 0 elapsed 1050.0
+NATIVE_PIN mismatch 72 stable 0 elapsed 1065.0
+NATIVE_PIN mismatch 73 stable 0 elapsed 1080.0
+NATIVE_PIN mismatch 74 stable 0 elapsed 1095.0
+NATIVE_PIN mismatch 75 stable 0 elapsed 1110.0
+NATIVE_PIN mismatch 76 stable 0 elapsed 1125.0
+NATIVE_PIN mismatch 77 stable 0 elapsed 1140.0
+NATIVE_PIN mismatch 78 stable 0 elapsed 1155.0
+NATIVE_PIN mismatch 79 stable 0 elapsed 1170.0
+NATIVE_PIN mismatch 80 stable 0 elapsed 1185.0
+..NATIVE_PROVIDER running
+NATIVE_FIRST_REACHABLE 2026-10-24T00:00:00+00:00
+NATIVE_PIN mismatch 1 stable 0 elapsed 0.0
+NATIVE_PIN mismatch 2 stable 0 elapsed 15.0
+NATIVE_PIN mismatch 3 stable 0 elapsed 30.0
+NATIVE_PIN mismatch 4 stable 0 elapsed 45.0
+NATIVE_PIN mismatch 5 stable 0 elapsed 60.0
+NATIVE_PIN mismatch 6 stable 0 elapsed 75.0
+NATIVE_PIN mismatch 7 stable 0 elapsed 90.0
+NATIVE_PIN mismatch 8 stable 0 elapsed 105.0
+NATIVE_PIN mismatch 9 stable 0 elapsed 120.0
+NATIVE_PIN mismatch 10 stable 0 elapsed 135.0
+NATIVE_PIN mismatch 11 stable 0 elapsed 150.0
+NATIVE_PIN mismatch 12 stable 0 elapsed 165.0
+NATIVE_PIN match 13 stable 0.0 elapsed 180.0
+NATIVE_PIN match 14 stable 15.0 elapsed 195.0
+NATIVE_PIN match 15 stable 30.0 elapsed 210.0
+NATIVE_PIN match 16 stable 45.0 elapsed 225.0
+NATIVE_PIN match 17 stable 60.0 elapsed 240.0
+NATIVE_PIN match 18 stable 75.0 elapsed 255.0
+NATIVE_PIN match 19 stable 90.0 elapsed 270.0
+NATIVE_PIN match 20 stable 105.0 elapsed 285.0
+NATIVE_PIN match 21 stable 120.0 elapsed 300.0
+NATIVE_READINESS_PASS 2
+.
+----------------------------------------------------------------------
+Ran 29 tests in 0.070s
+
+OK

@@ -1,0 +1,127 @@
+[
+  {
+    "mutant": "no_stability_window",
+    "file": "native_pin.py",
+    "killers": [
+      "test_console_change_restarts_stability",
+      "test_mismatch_restarts_stability",
+      "test_console_transport_loss_never_becomes_attestation",
+      "test_constants_are_owner_bounds",
+      "test_latest_pin_update_cannot_leave_old_match_authorized",
+      "test_missing_windows_marker_after_transition_resets_window",
+      "test_recorded_bw7_transition_waits_without_trusting_the_third_key",
+      "test_stability_applies_when_first_contact_was_long_ago",
+      "test_two_matches_alone_do_not_authorize",
+      "test_staged_unknown_key_never_logs_in_then_windows_stabilizes"
+    ],
+    "count": 10,
+    "restored": true
+  },
+  {
+    "mutant": "deadline_constant_raised",
+    "file": "native_pin.py",
+    "killers": [
+      "test_an_older_console_pin_is_not_accepted",
+      "test_changing_pins_cannot_extend_deadline",
+      "test_console_absent_never_authorizes_scanned_key",
+      "test_console_transport_loss_never_becomes_attestation",
+      "test_constants_are_owner_bounds",
+      "test_expired_entry_does_not_poll",
+      "test_late_invocation_uses_first_reachable_deadline",
+      "test_latest_pin_update_cannot_leave_old_match_authorized",
+      "test_linux_stage_cannot_authorize_native_windows_login",
+      "test_match_arriving_at_deadline_is_refused",
+      "test_missing_windows_marker_after_transition_resets_window",
+      "test_fixed_deadline_refuses_without_any_login"
+    ],
+    "count": 12,
+    "restored": true
+  },
+  {
+    "mutant": "unbounded_wait",
+    "file": "native_pin.py",
+    "killers": [
+      "test_an_older_console_pin_is_not_accepted",
+      "test_changing_pins_cannot_extend_deadline",
+      "test_console_absent_never_authorizes_scanned_key",
+      "test_console_transport_loss_never_becomes_attestation",
+      "test_expired_entry_does_not_poll",
+      "test_late_invocation_uses_first_reachable_deadline",
+      "test_latest_pin_update_cannot_leave_old_match_authorized",
+      "test_linux_stage_cannot_authorize_native_windows_login",
+      "test_match_arriving_at_deadline_is_refused",
+      "test_missing_windows_marker_after_transition_resets_window",
+      "test_fixed_deadline_refuses_without_any_login"
+    ],
+    "count": 11,
+    "restored": true
+  },
+  {
+    "mutant": "scan_without_console",
+    "file": "native_pin.py",
+    "killers": [
+      "test_mismatch_restarts_stability",
+      "test_an_older_console_pin_is_not_accepted",
+      "test_console_absent_never_authorizes_scanned_key",
+      "test_console_transport_loss_never_becomes_attestation",
+      "test_latest_pin_update_cannot_leave_old_match_authorized",
+      "test_linux_stage_cannot_authorize_native_windows_login",
+      "test_missing_windows_marker_after_transition_resets_window",
+      "test_recorded_bw7_transition_waits_without_trusting_the_third_key",
+      "test_fixed_deadline_refuses_without_any_login"
+    ],
+    "count": 9,
+    "restored": true
+  },
+  {
+    "mutant": "older_console_pin",
+    "file": "native_pin.py",
+    "killers": [
+      "test_an_older_console_pin_is_not_accepted",
+      "test_latest_pin_update_cannot_leave_old_match_authorized"
+    ],
+    "count": 2,
+    "restored": true
+  },
+  {
+    "mutant": "mismatch_does_not_reset_window",
+    "file": "native_pin.py",
+    "killers": [
+      "test_console_change_restarts_stability",
+      "test_mismatch_restarts_stability"
+    ],
+    "count": 2,
+    "restored": true
+  },
+  {
+    "mutant": "native_template_scope_removed",
+    "file": "native_ready.py",
+    "killers": [
+      "test_the_native_helper_is_template_scoped",
+      "test_other_paths_refuse_before_provider_or_scan",
+      "test_other_paths_refuse_before_provider_or_scan"
+    ],
+    "count": 3,
+    "restored": true
+  },
+  {
+    "mutant": "old_attempt_budget",
+    "file": "ops.py",
+    "killers": [
+      "test_attempt_budget_is_lowered_everywhere",
+      "test_plan_calls_use_the_attempt_budget"
+    ],
+    "count": 2,
+    "restored": true
+  },
+  {
+    "mutant": "strict_host_check_removed",
+    "file": "native_ready.py",
+    "killers": [
+      "test_window_proof_precedes_login_and_latest_key_is_pinned",
+      "test_staged_unknown_key_never_logs_in_then_windows_stabilizes"
+    ],
+    "count": 2,
+    "restored": true
+  }
+]

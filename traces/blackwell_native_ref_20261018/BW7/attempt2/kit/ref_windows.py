@@ -23,7 +23,7 @@ KEY = re.compile(r"^(ssh-ed25519 [A-Za-z0-9+/]{68})(?: \S+)?$")
 CONSOLE = re.compile(r"^\[\s*[0-9.]+\]\s+\S+\[\d+\]:\s+")  # "[   40.85] bash[2415]: "
 WAIT_SECONDS = 80 * 60
 LEDGER = Path(
-    "/workspace/bw7-wt/traces/blackwell_native_ref_20261024/BW7/attempt1/owned_instances.json"
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/owned_instances.json"
 )
 
 
@@ -62,7 +62,7 @@ def lease():
 
 
 def win_conf(iid, host, port):
-    alias = f"bw-ref-win-{iid}"
+    alias = f"bw7-native-{iid}"
     text = (
         f"Host {alias}\n HostName {host}\n Port {port}\n User vast\n"
         " IdentityFile /root/.ssh/id_ed25519\n IdentitiesOnly yes\n ForwardAgent no\n"

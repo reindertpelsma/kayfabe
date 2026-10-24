@@ -25,9 +25,9 @@ PR_NATIVE = BW
 SUITES = [(BW, name) for name in (
     "test_console_pin", "test_console_pin_types", "test_console_pin_settle",
     "test_precreate_watchdog", "test_round_budget",
-)] + [(HERE.parent / "rehearsal", "test_bw7"),
-     (HERE.parent / "rehearsal", "test_ref_legacy"),
-     (HERE.parent / "rehearsal", "test_readiness_replay")]
+)] + [(HERE.parent / "rehearsal", name) for name in (
+    "test_native_pin", "test_native_operator", "test_native_ready_replay",
+)]
 RECEIPT = "dry_loop_pass.json"
 # Workspace-specific suites run only where their module is part of the workspace.
 REQUIRES = {"test_budget_b1j": "budget_override.py"}

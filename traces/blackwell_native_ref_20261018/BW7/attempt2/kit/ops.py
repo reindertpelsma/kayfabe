@@ -2,9 +2,9 @@ import json, subprocess, sys, datetime, os, time, re, base64, hashlib, ipaddress
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-D = Path("/workspace/bw7-wt/traces/blackwell_native_ref_20261024/BW7/kit")
+D = Path("/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit")
 W = Path("/workspace/bw7-wt")
-L = W / "traces/blackwell_native_ref_20261024/BW7/attempt1/owned_instances.json"
+L = W / "traces/blackwell_native_ref_20261018/BW7/attempt2/owned_instances.json"
 
 
 def api(args):
@@ -190,7 +190,7 @@ if mode in ("preflight", "rent"):
     skus = {
         "RTX_5090": "GB202",
     }
-    cache = D / "single_market_BW7_1.json"
+    cache = D / "single_market_BW7_2.json"
     if cache.exists():
         market = json.loads(cache.read_text())
         offers = market["offers"]
@@ -281,7 +281,7 @@ if mode in ("preflight", "rent"):
     for candidate in offers:
         try:
             proposed = LP.plan(
-                float(candidate["dph_total"]), credit, now(), stop_usd=2.5, cap_usd=3.0, max_seconds=None
+                float(candidate["dph_total"]), credit, now(), stop_usd=2.0, cap_usd=2.5, max_seconds=None
             )
         except ValueError:
             continue
@@ -312,7 +312,7 @@ if mode in ("preflight", "rent"):
                     "machine": offer["machine_id"],
                     "geolocation": offer["geolocation"],
                     "die": offer["candidate_die"],
-                    "plan": LP.plan(rate, credit, now(), stop_usd=2.5, cap_usd=3.0, max_seconds=None),
+                    "plan": LP.plan(rate, credit, now(), stop_usd=2.0, cap_usd=2.5, max_seconds=None),
                     "creates": 0,
                 }
             ),
@@ -325,7 +325,7 @@ if mode in ("preflight", "rent"):
     assert state["attempts_used"] == 0, "one lease only; no provider retry this round"
     state["attempts_used"] = 1
     (D / "stretch.json").write_text(json.dumps(state) + "\n")
-    plan = LP.plan(rate, credit, now(), stop_usd=2.5, cap_usd=3.0, max_seconds=None)
+    plan = LP.plan(rate, credit, now(), stop_usd=2.0, cap_usd=2.5, max_seconds=None)
     (D / "round_plan.json").write_text(json.dumps(plan, indent=2) + "\n")
     assert L.read_text().strip() == "[]"
     ready_path = D / "precreate_watch_ready.json"
@@ -384,7 +384,7 @@ if mode in ("preflight", "rent"):
             "--ssh",
             "--direct",
             "--label",
-            "codex-bw7-REF1-NATIVE-20261024",
+            "codex-bw7-REF2-NATIVE-20261024",
         ]
     )
     if not result.get("success"):
@@ -444,8 +444,8 @@ if mode in ("preflight", "rent"):
         "prior_lane_runtime_usd": runtime_spent,
         "prior_lane_spend_guard_usd": spent,
         "reservation_usd": reservation,
-        "budget_stop": 2.5,
-        "phase_cap": 3.0,
+        "budget_stop": 2.0,
+        "phase_cap": 2.5,
         "credit_reserve": 8,
         "auto_destroy_minutes": minutes,
         "round_deadline_utc": plan["deadline_utc"],
@@ -456,10 +456,11 @@ if mode in ("preflight", "rent"):
         "guard_rate": rate_guard,
         "harness_source": source,
         "no_kayfabe": True,
+        "native_template_hash": "183b10af7fd788d08aca02e31811d70d",
         "measured_candidate": "stock native Windows 580.88",
         "destroyed": False,
         "lease_profile": "default",
-        "authority": "owner BW7 native GB202 reference; one lease stop2.50 cap3.00 reserve8",
+        "authority": "controller BW7 attempt2 native GB202; one lease stop2.00 cap2.50 reserve8",
     }
     rows.append(row)
     save(rows)
@@ -517,197 +518,9 @@ if mode in ("preflight", "rent"):
     (D / "own-id").write_text(str(iid) + "\n")
     print(json.dumps(row), flush=True)
 elif mode == "ready":
-    iid = int((D / "own-id").read_text())
-    row = next(x for x in json.loads(L.read_text()) if x["id"] == iid)
-    assert row["auto_destroy_verified"]
-    os.kill(row["auto_destroy_pid"], 0)
-    banner_seconds = None
-    pin_stage_started = pin_factor = pin_deadline = None
+    import native_ready
 
-    def lease_age():
-        return (now() - datetime.datetime.fromisoformat(row["created_utc"])).total_seconds()
-
-    def fail_readiness(reason, status, elapsed):
-        safe = {
-            key: status.get(key)
-            for key in (
-                "id",
-                "actual_status",
-                "intended_status",
-                "status_msg",
-                "cur_state",
-                "dph_total",
-            )
-        }
-        receipt = {
-            "host_verification": "UNVERIFIED-HOST",
-            "utc": now().isoformat(),
-            "reason": reason,
-            "machine_id": row["machine_id"],
-            "status": safe,
-            "elapsed_seconds": elapsed,
-            "adaptive_boot_seconds": 1200,
-            "first_pinned_banner_seconds": banner_seconds,
-            "console_stage_started_elapsed": pin_stage_started,
-            "console_factor": pin_factor,
-            "console_deadline_since_create": pin_deadline,
-        }
-        (D / ("provider_failure_" + str(iid) + ".json")).write_text(
-            json.dumps(receipt, indent=2) + "\n"
-        )
-        print("PROVIDER_RETRYABLE", iid, reason, flush=True)
-        sys.exit(76)
-
-    def record_pin(receipt):
-        with (D / ("console_pin_" + str(iid) + ".jsonl")).open("a") as out:
-            out.write(
-                json.dumps(
-                    {
-                        "host_verification": "UNVERIFIED-HOST",
-                        "lease_id": iid,
-                        "utc": now().isoformat(),
-                        **receipt,
-                    }
-                )
-                + "\n"
-            )
-        print("CONSOLE_PIN", receipt["state"], receipt["polls"], flush=True)
-        evidence = L.parent / "lease_metadata" / ("console_pin_" + str(iid) + ".jsonl")
-        evidence.parent.mkdir(parents=True, exist_ok=True)
-        evidence.write_text((D / ("console_pin_" + str(iid) + ".jsonl")).read_text())
-
-    def console_text(timeout):
-        current = next(x for x in api(["show", "instances"]) if int(x["id"]) == iid)
-        reason = P.failure(current, lease_age(), banner_seconds=None)
-        if reason:
-            fail_readiness(reason, current, lease_age())
-        text = subprocess.run(
-            ["vastai", "logs", str(iid), "--tail", "5000"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        ).stdout
-        PE.capture(D, iid, text)
-        return text
-
-    while True:
-        x = next(x for x in api(["show", "instances"]) if int(x["id"]) == iid)
-        print("READINESS", now().isoformat(), x.get("actual_status"), flush=True)
-        elapsed = lease_age()
-        reason = P.failure(x, elapsed, banner_seconds=None)
-        if pin_deadline is not None and elapsed >= pin_deadline:
-            reason = reason or "provider_boot_timeout"
-        if reason:
-            fail_readiness(reason, x, elapsed)
-        if (
-            x.get("actual_status") == "created"
-            and x.get("intended_status") == "stopped"
-            and not row.get("explicit_start_requested_utc")
-        ):
-            subprocess.run(
-                ["vastai", "start", "instance", str(iid), "--raw"],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            row["explicit_start_requested_utc"] = now().isoformat()
-            rows = json.loads(L.read_text())
-            rows[-1] = row
-            save(rows)
-        ports = x.get("ports") or {}
-        port = (ports.get("22/tcp") or [{}])[0].get("HostPort")
-        if x.get("public_ipaddr") and port:
-            ip = str(ipaddress.ip_address(x["public_ipaddr"].strip()))
-            assert ipaddress.ip_address(ip).is_global
-            port = int(port)
-            alias = "bw-fields-" + str(iid)
-            scan_start = time.monotonic()
-            scan = subprocess.run(
-                ["ssh-keyscan", "-T", "5", "-t", "ed25519", "-p", str(port), ip],
-                capture_output=True,
-                text=True,
-                timeout=min(10, 1200 - elapsed),
-            ).stdout
-            scan_seconds = max(0.001, time.monotonic() - scan_start)
-            candidates = [l.split() for l in scan.splitlines() if l and not l.startswith("#")]
-            def rescan():
-                out = subprocess.run(
-                    ["ssh-keyscan", "-T", "5", "-t", "ed25519", "-p", str(port), ip],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                ).stdout
-                rows = [l.split() for l in out.splitlines() if l and not l.startswith("#")]
-                keys = [f[2] for f in rows if len(f) >= 3 and f[1] == "ssh-ed25519"]
-                return keys[0] if len(keys) == 1 else None
-
-            for fields in candidates:
-                if len(fields) < 3:
-                    continue
-                if pin_stage_started is None:
-                    pin_stage_started = lease_age()
-                    pin_factor = P.policy(scan_seconds)["factor"]
-                    pin_deadline = min(1200, pin_stage_started + C.stage_seconds(pin_factor))
-                try:
-                    proof = C.settle_pin(
-                        rescan,
-                        console_text,
-                        elapsed_since_create=lease_age(),
-                        factor=pin_factor,
-                        stage_started_elapsed=pin_stage_started,
-                        clock=time.monotonic,
-                        sleep=time.sleep,
-                        record=record_pin,
-                    )
-                except C.PinExpired:
-                    fail_readiness("provider_boot_timeout", x, lease_age())
-                # A different published pin propagates immediately as a safety refusal.
-                fp = proof["fingerprint"]
-                (D / "known_hosts").write_text(alias + " ssh-ed25519 " + proof["key"] + "\n")
-                (D / "ssh.conf").write_text(
-                    f"Host {alias} s4-own\n HostName {ip}\n Port {port}\n User root\n IdentityFile /root/.ssh/id_ed25519\n IdentitiesOnly yes\n ForwardAgent no\n BatchMode yes\n ConnectTimeout 80\n ServerAliveInterval 15\n ServerAliveCountMax 3\n HostKeyAlias {alias}\n UserKnownHostsFile {D}/known_hosts\n StrictHostKeyChecking yes\n"
-                )
-                remaining = min(1200, pin_deadline) - lease_age()
-                if remaining <= 0:
-                    fail_readiness("provider_boot_timeout", x, lease_age())
-                banner_start = time.monotonic()
-                try:
-                    result = subprocess.run(
-                        ["ssh", "-F", str(D / "ssh.conf"), alias, "echo CAPC_SSH_READY"],
-                        capture_output=True,
-                        text=True,
-                        timeout=min(100, remaining),
-                    )
-                except subprocess.TimeoutExpired:
-                    result = subprocess.CompletedProcess([], 255, "", "bounded SSH banner timeout")
-                if banner_seconds is None:
-                    banner_seconds = max(0.001, time.monotonic() - banner_start)
-                if result.returncode == 0 and "CAPC_SSH_READY" in result.stdout:
-                    if lease_age() >= min(1200, pin_deadline):
-                        fail_readiness("provider_boot_timeout", x, lease_age())
-                    (D / "alias").write_text(alias)
-                    row.update(
-                        ssh_ready_utc=now().isoformat(),
-                        ssh_hostkey_fingerprint=fp,
-                        observed_dph_total=float(x["dph_total"]),
-                        console_pin_proof=proof,
-                        console_pin_factor=pin_factor,
-                    )
-                    rows = json.loads(L.read_text())
-                    rows[-1] = row
-                    save(rows)
-                    assert (
-                        row["prior_lane_runtime_usd"]
-                        + row["observed_dph_total"] * row["budget_cutoff_minutes"] / 60
-                        + 0.50
-                        < 2.5
-                        and row["observed_dph_total"] <= 1.00
-                    )
-                    print("READINESS_PASS", iid, fp, flush=True)
-                    sys.exit(0)
-                print("PINNED_SSH_RC", result.returncode, flush=True)
-        time.sleep(20)
-    raise RuntimeError("provider boot loop exited unexpectedly")
+    sys.exit(native_ready.ready(D, L, save))
 elif mode == "destroy":
     iid = int((D / "own-id").read_text())
     rows = json.loads(L.read_text())

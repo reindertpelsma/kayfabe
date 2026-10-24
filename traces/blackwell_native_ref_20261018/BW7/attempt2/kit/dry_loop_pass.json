@@ -1,0 +1,104 @@
+{
+  "suites": [
+    {
+      "suite": "test_console_pin",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards",
+      "ran": 20,
+      "ok": true
+    },
+    {
+      "suite": "test_console_pin_types",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards",
+      "ran": 7,
+      "ok": true
+    },
+    {
+      "suite": "test_console_pin_settle",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards",
+      "ran": 24,
+      "ok": true
+    },
+    {
+      "suite": "test_precreate_watchdog",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards",
+      "ran": 19,
+      "ok": true
+    },
+    {
+      "suite": "test_round_budget",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards",
+      "ran": 23,
+      "ok": true
+    },
+    {
+      "suite": "test_native_pin",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal",
+      "ran": 19,
+      "ok": true
+    },
+    {
+      "suite": "test_native_operator",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal",
+      "ran": 7,
+      "ok": true
+    },
+    {
+      "suite": "test_native_ready_replay",
+      "root": "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal",
+      "ran": 3,
+      "ok": true
+    }
+  ],
+  "operator": {
+    "budget_watch": {
+      "rc": 0,
+      "ready_marker": true,
+      "absence_receipt": true,
+      "destroy_called": true
+    },
+    "precreate_watchdog": {
+      "rc": 0,
+      "state": "ARMED",
+      "result": "no contract before deadline"
+    }
+  },
+  "static": [],
+  "seconds": 2.2,
+  "utc": "2026-10-24T21:07:48.979508+00:00",
+  "sources": {
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/console_pin.py": "169f99eef6216e2ff0b69185877af20f3cc74794a875b73158c7495812b8208f",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/init_observer.py": "c84a559b726c16a7c167da8ff7dc56b22532d0a750d6cb5a46d83c7e0d3c9c88",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/lease_ownership.py": "4679961c9f90d044d86cbe264839e9684c3ba056dafc96d4bc7fe7e1cb0bf658",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/phase_xid_guard.py": "8d0121d056561018c175b993243ef0819315ba15757a94038ef3b6c5cc7d3fae",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/precreate_watchdog.py": "b81a8766fb637cd8815f47177d2454326b4308834952eb5cc11bc779b4057887",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/provider_retry.py": "763be1d59d997c8dc1fd09d29b6ecfa7aa057d5714c79f014c809b85c9a45ff1",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/readiness.py": "c421ab2b4dd3acda78be96255b8ddc6815f8d695ef12a43dfae3992761f757b9",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/round_budget.py": "d0b20e6784a664e299ed01d971ff5389c88a1704f3a3e3483aab8b0b43d4f124",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/saved_xid32_observation.py": "d3b0cd06a85f55ab9906dc2a3c3f38f670e6e5704efda3212db3edb28558d361",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/test_console_pin.py": "30c1c608cce1bb061ab817b1d1c1d513dcb774888ec6e189f05e6b1fb691e084",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/test_console_pin_settle.py": "396302edc37416aba11803e14139011e9cf18f735d2de71e0ec24dfdeba31529",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/test_console_pin_types.py": "9e094a934ab6a262355037b359d778242ff5cfc7f287b85426af5656cffef645",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/test_precreate_watchdog.py": "a27d81b073e15a9aae9da1c00b51c71780c633fcfa22c1ed4b62834a47b640ad",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/test_round_budget.py": "0510aa09b8d3d458c77e48271694da2d26175d7f01ef6880c0cac7cc85ea1b78",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/windows_observation.py": "192d07e891418eaead48bcf3f37eeff2e54223ec8efb58b9df8f68fc62680091",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/xid_policy.py": "7563095ffc1d55292d4deaf6e60b5da677c3ff564b3e60c29ed4b5119aa4d1ac",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/budget_watch.py": "c7cbe2f2dbc6e65cbfbe535fdbfef4cd38114a8dc74162a1849931bbbbb65fda",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/capture_pack.py": "04269d158fb46e1a2701b5e2636c30a9520ae0f2298484449c15fe0a097af0b5",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/dry_loop.py": "3228a1923a7cb6dd3a96539c4ec54bc64a0c1ef59df102a69e3344ab35d7c8be",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/grant_b1g.py": "37b81d0609ca6f931ab965dcf1b3214d2eff608bd2b4de04bc346460947741c7",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/lease_profile.py": "baea130dee0de26bc9f144ce72846bb0708b085e0cbebeaf82a0096d5c5a324f",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/native_pin.py": "810e22351a076954e7c65206ddc1dda2fb25562f7200162934df692013cea873",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/native_ready.py": "98c443ec335ff0ba63870fde1183e33d4e642c02234502863e4514f4893071ec",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/native_xid_guard.py": "250905586c30bff7e23d81dc08a9088025abf15e0b5fa621f80e52c0aac59b0c",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/ops.py": "3b8b2bcec4085ba96df8933cdb0cd9e6655f6597bcfee20c42456b4f407df24d",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/pin_evidence.py": "5b5fc9b2581b9dcf707aedbc13b1ad0c47cf8a6ac6af6749e415b5d1bceb8918",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/ref_windows.py": "97858bf03566d38dcc3e8b716792455c9f9c21bb2524186435e355f3f1f6706a",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/static_check.py": "a966a31f7b739891887ec5ebe824fc66d733b8e649b23f44fe16ff093e499a40",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_operator.py": "c8e2acef453123e7f0f6d7dcaed51337b8f6f1f1415ce5221cad48e0ec0ff708",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py": "720342f8bf12bb4f153ecd1a4a4cae652065799c5c8b7fb796eceac408791bf1",
+    "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_ready_replay.py": "4636d5e0fb86b392e3f10e006b39b3e2a26f49563eed91970fefe891e369e7ea"
+  },
+  "passed": true,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

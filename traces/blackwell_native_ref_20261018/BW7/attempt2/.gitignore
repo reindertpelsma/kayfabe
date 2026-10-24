@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+kit/media
+kit/single_market_*.json
+kit/console_raw_*.txt
+kit/ssh*.conf
+kit/known_hosts*
