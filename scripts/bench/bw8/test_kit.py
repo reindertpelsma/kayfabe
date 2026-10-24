@@ -19,8 +19,59 @@ except ModuleNotFoundError:
 
 HERE = Path(__file__).resolve().parent
 
+try:
+    from prepare import verify_process_receipt
+except ImportError:
+    def verify_process_receipt(baseline, actual):
+        return False
+
+
+def receipt():
+    return {"sha256": "05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448",
+            "kf3_device": "fixed-device-config", "harness_checkout": "fixed-harness",
+            "flags": {"KF3_BASELINE": "1"}}
+
+
+def probe_receipt():
+    row = receipt()
+    row["flags"]["KF3_COMPLETION_PROBE"] = "1000"
+    return row
+
 
 class KitTests(unittest.TestCase):
+    def test_matched_process_receipt(self):
+        self.assertTrue(verify_process_receipt(receipt(), probe_receipt()))
+
+    def test_pid_path_changes_do_not_change_configuration(self):
+        actual = probe_receipt()
+        actual.update(pid=1234, exe="owned-binary")
+        self.assertTrue(verify_process_receipt(receipt(), actual))
+
+    def test_unexpected_effective_flag(self):
+        actual = probe_receipt()
+        actual["flags"]["KF3_OTHER"] = "1"
+        self.assertFalse(verify_process_receipt(receipt(), actual))
+
+    def test_baseline_flag_missing(self):
+        actual = probe_receipt()
+        del actual["flags"]["KF3_BASELINE"]
+        self.assertFalse(verify_process_receipt(receipt(), actual))
+
+    def test_process_binary_changed(self):
+        actual = probe_receipt()
+        actual["sha256"] = "0" * 64
+        self.assertFalse(verify_process_receipt(receipt(), actual))
+
+    def test_device_config_changed(self):
+        actual = probe_receipt()
+        actual["kf3_device"] = "changed"
+        self.assertFalse(verify_process_receipt(receipt(), actual))
+
+    def test_harness_changed(self):
+        actual = probe_receipt()
+        actual["harness_checkout"] = "changed"
+        self.assertFalse(verify_process_receipt(receipt(), actual))
+
     def test_plan_valid(self):
         self.assertTrue(validate_inventory(inventory()))
 

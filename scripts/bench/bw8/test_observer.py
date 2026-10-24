@@ -136,6 +136,59 @@ class ObserverTests(unittest.TestCase):
         rows[-1]["kind"] = "end"
         self.verdict(rows)
 
+    def test_just_under_sixty(self):
+        rows = control()
+        rows[-1] = record("end", 61.999)
+        self.verdict(rows)
+
+    def test_forward_utc_jump(self):
+        rows = control()
+        rows[-1]["utc"] = record("sample", 120)["utc"]
+        self.verdict(rows)
+
+    def test_second_heartbeat_gap(self):
+        rows = control()
+        del rows[5:8]
+        self.verdict(rows)
+
+    def test_unknown_fatal_classification(self):
+        rows = control()
+        rows[-1]["dumps"] = [{"id": "new", "code": "not-parsed"}]
+        self.verdict(rows)
+
+    def test_partial_final_query(self):
+        rows = control()
+        rows[-1]["complete"] = False
+        self.verdict(rows)
+
+    def test_initial_device_missing(self):
+        rows = control()
+        rows[0]["code"] = 43
+        self.verdict(rows)
+
+    def test_second_driver_change(self):
+        rows = control()
+        rows[3]["driver"] = "32.0.15.9999"
+        self.verdict(rows)
+
+    def test_final_code_lost(self):
+        rows = control()
+        rows[-1]["code"] = 43
+        self.verdict(rows)
+
+    def test_repeated_enable_at_end(self):
+        rows = control()
+        rows[-1]["kind"] = "enable"
+        self.verdict(rows)
+
+    def test_application_cursor_stale(self):
+        rows = control()
+        rows[2]["events"] = [event("Application", "Windows Error Reporting", rid=200)]
+        self.verdict(rows)
+
+    def test_late_first_code0(self):
+        self.verdict(control(), readiness_seconds=0.75)
+
     def test_no_code0(self):
         rows = control()
         for row in rows[2:]:
