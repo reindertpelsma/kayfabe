@@ -41,6 +41,21 @@ pub enum Source {
 /// # Errors
 /// Unsupported entry, over-budget or out-of-format span. No mapping is resolved.
 pub fn inspect_entry(entry: u64, maximum_bytes: u64) -> Result<Source, Refusal> {
+    let source = inspect_format(entry)?;
+    if let Source::Segment(segment) = source
+        && segment.len_bytes > maximum_bytes
+    {
+        return Err(Refusal::Budget);
+    }
+    Ok(source)
+}
+
+/// Validate the captured public C56F format, independently of any CPU copy budget.
+/// Pointer forwarding reads no pushbuffer; native USER authority remains its own VAS.
+///
+/// # Errors
+/// Unsupported control/framing or a source end not representable below 2^40.
+pub fn inspect_format(entry: u64) -> Result<Source, Refusal> {
     // Public clc56f.h: LENGTH0/OPCODE_NOP; dev_pbdma.ref.txt:107-115:
     // no operation or PB fetch, but SYNC is respected. OPERAND is unused.
     // Reject all other upper bits (including reserved bit8); preserve the raw
@@ -49,9 +64,6 @@ pub fn inspect_entry(entry: u64, maximum_bytes: u64) -> Result<Source, Refusal> 
         return Ok(Source::Nop);
     }
     let segment = gp_entry_decode_direct_c56f(entry).ok_or(Refusal::Entry)?;
-    if segment.len_bytes > maximum_bytes {
-        return Err(Refusal::Budget);
-    }
     // Public NVIDIA dev_pbdma.ref: PB PUT names the first dword beyond the
     // segment, so even a span ENDING exactly at2^40 cannot be represented.
     if segment

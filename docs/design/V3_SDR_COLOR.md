@@ -10,6 +10,23 @@ the TMO/active-input-CSC exclusions below for the new opt-in implementation.
 Its hardware qualification is pending; the previously verified SDR result
 remains attached to product `2aa8b92d`.
 
+**MIRROR, 2026-10-22 (branch `claude/color-negative-20261022`; supersedes "unmirrored" below
+and the "refused" list for MIRROR only).** The NVIDIA app's Hue and Digital Vibrance sliders
+re-arm OCSC0 with signed coefficients while Windows' mirrored OLUT stays armed
+([measured] run 4500, rev `baa29775`: `scanout REFUSED SDR colour program: mirrored OLUT behind a
+signed matrix`, console at 0 fps, guest alive). The output kernel now samples a mirrored OLUT's
+negative side as the **odd extension**, `lut(-x) = -lut(x)`, and the final clamp to [0, 1] makes a
+negative result black (`cuda/display/kf_color.cu` `output_lookup`; CPU oracle
+`kf_disp::color::model::value`). **[inferred]**: ogkm defines the bit (`clc57d.h:1002`,
+`clc67e.h:504`) and NVKMS writes it `_DISABLE` everywhere (`nvkms-evo3.c:4340, 5005`,
+`nvkms-evo4.c:719`); no public text says what it does. Odd is the reading that makes a signed
+colour matrix behave as the sliders intend (a channel pushed below zero is black, as a plain
+clamp gives), and it differs from the unmirrored lookup only where the table's first sample is
+not black. An even extension, `lut(-x) = lut(|x|)`, would paint the negative channels instead.
+**Falsifier:** program a real engine (bare metal or VFIO) with a signed OCSC0 that drives a
+channel negative, a mirrored OLUT whose first sample is 0.25, and read the scanout back: odd
+predicts 0 on that channel, unmirrored sampling predicts 64, even predicts a bright value.
+
 ## SDR subset at product `2aa8b92d`
 
 RGB8888 windows, identity FMT, disabled input CSC and TMO, unmirrored DIRECT10
