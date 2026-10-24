@@ -1,0 +1,8 @@
+2026-10-23T22:59:06+00:00 START interval=1200 jitter=0..120 max_seconds=28800
+2026-10-23T22:59:30+00:00 POLL 1 offers=5 eligible=0 rejected={"base_filters": 2, "denied_or_missing_country": 0, "known_bad": 1, "plan_stop_cap_reserve_or_90min": 2}
+2026-10-23T23:20:55+00:00 POLL 2 offers=7 eligible=0 rejected={"base_filters": 3, "denied_or_missing_country": 1, "known_bad": 0, "plan_stop_cap_reserve_or_90min": 3}
+2026-10-23T23:42:28+00:00 POLL 3 offers=4 eligible=0 rejected={"base_filters": 4, "denied_or_missing_country": 0, "known_bad": 0, "plan_stop_cap_reserve_or_90min": 0}
+2026-10-24T00:04:10+00:00 POLL 4 offers=4 eligible=0 rejected={"base_filters": 3, "denied_or_missing_country": 0, "known_bad": 0, "plan_stop_cap_reserve_or_90min": 1}
+2026-10-24T00:25:14+00:00 POLL 5 offers=6 eligible=3 rejected={"base_filters": 2, "denied_or_missing_country": 0, "known_bad": 0, "plan_stop_cap_reserve_or_90min": 1}
+2026-10-24T00:25:14+00:00 MATCH id=57427095 machine=99805 price=0.27605555555555555 die=GB206
+2026-10-24T00:25:14+00:00 EXIT 0

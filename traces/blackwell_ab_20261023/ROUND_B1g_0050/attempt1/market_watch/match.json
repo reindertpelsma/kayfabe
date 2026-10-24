@@ -1,0 +1,11 @@
+{
+  "id": 57427095,
+  "machine_id": 99805,
+  "dph_total": 0.27605555555555555,
+  "candidate_die": "GB206",
+  "gpu_name": "RTX 5060 Ti",
+  "geolocation": "Quebec, CA",
+  "verification": "verified",
+  "cpu_cores_effective": 8.0,
+  "utc": "2026-10-24T00:25:14.524786+00:00"
+}
