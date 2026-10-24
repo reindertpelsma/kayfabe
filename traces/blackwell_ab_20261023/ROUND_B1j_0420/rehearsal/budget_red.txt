@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_budget_b1j (unittest.loader._FailedTest.test_budget_b1j)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_budget_b1j
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1j_0420/rehearsal/test_budget_b1j.py", line 23, in <module>
+    import budget_override as BO  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'budget_override'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)
