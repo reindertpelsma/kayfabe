@@ -6779,22 +6779,28 @@ impl ChanPlane {
             // the Windows user-work twin ADOPTS the guest's sysmem USERD like any Passthrough twin.
             // Only meaningful with the GPU's IOMMU group in identity mode (host RM refuses a USERD
             // whose DMA address is wider than PTR_HI allows; the birth then fails by name, as run61).
-            let relay_guest =
-                if userd_relay_off() || (userrelay::enabled() && a.user_ring_permit.is_some()) {
-                    None
-                } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
-                    match self.userd_view(a.userd) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            return refuse(
-                                NV_ERR_NOT_SUPPORTED,
-                                format!("USERD relay: guest slot: {e}"),
-                            );
-                        }
+            // The route of a permitted Windows user-work channel, decided ONCE for both uses below.
+            let ring_relay = userrelay::ring_relay_route(
+                userrelay::enabled(),
+                a.user_ring_permit.is_some(),
+                self.family,
+                a.class,
+            );
+            let relay_guest = if userd_relay_off() || ring_relay {
+                None
+            } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
+                match self.userd_view(a.userd) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        return refuse(
+                            NV_ERR_NOT_SUPPORTED,
+                            format!("USERD relay: guest slot: {e}"),
+                        );
                     }
-                } else {
-                    None
-                };
+                }
+            } else {
+                None
+            };
             // ★ The guest's USERD, adopted AT CREATION (RM zeroes it — `rm_takes_a_guest_userd`):
             // a store slice, or guest RAM through the mirror's RAM object.
             let userd = match a.userd {
@@ -6904,7 +6910,7 @@ impl ChanPlane {
                 Some(mirror.kernel_vas.clone())
             };
             live.fetch_add(1, Ordering::AcqRel);
-            if userrelay::enabled() && a.user_ring_permit.is_some() {
+            if ring_relay {
                 return self.birth_user_ring(a, mirror, idx, twin, err_at);
             }
             return self.defer(

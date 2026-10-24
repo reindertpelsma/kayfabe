@@ -48,6 +48,8 @@ struct Mock {
     next_scan: Scan,
     /// The private ring's `GP_GET` the mock reports (the PBDMA's pops).
     hw_get: u32,
+    /// The private ring's `REFERENCE` the mock reports (the last processed marker's tag).
+    hw_reference: u32,
 }
 
 impl Mock {
@@ -64,6 +66,7 @@ impl Mock {
             events: Vec::new(),
             next_scan: Scan::default(),
             hw_get: 0,
+            hw_reference: 0,
         }
     }
     /// The guest publishes `g` at `slot` (its pushbuffer words are known to the store).
@@ -82,7 +85,7 @@ impl Mock {
 impl Io for Mock {
     fn hw_words(&mut self) -> Turn<(u32, u32)> {
         self.calls.push(Call::HwWords);
-        Ok((self.hw_get, 0))
+        Ok((self.hw_get, self.hw_reference))
     }
     fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
         self.calls.push(Call::WriteGuestGet(get));
@@ -785,4 +788,58 @@ fn the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_at_a_st
         r.life.counts().pointer_carried_no_marker > 0,
         "the unannounced wake is counted instead"
     );
+}
+
+/// ★ 2026-10-24 (GB205 round B1n, lease 57472433, arm `on_urt`, B1 binary cb80cbd29) — a CHARACTERIZATION of the
+/// relay on a family whose engine writes no USERD words back (`kf_chip::Family::engine_writes_userd_gp_get`): the
+/// private `GP_GET` and `REFERENCE` the observe phase reads stay 0, as the trace read them on the GR ring
+/// `0xc1d00126:0xff04000b` (`STALL_USERD ... gp_get=0 gp_put=0 ref=0x0`). The first SYNC_WAIT gate's marker can then
+/// never be seen: the relay waits on `Marker { target: 1 }` for good and the cursor never passes the gated entry,
+/// the shape of the trace's second stall (`IDLE_STALL ... cursor=15 (wait=Some(Marker { target: 1 }))`). With an
+/// engine that writes the marker's reference (Ada) the same gate opens. The route keeps such a family off this relay
+/// (`kf-qemu` `userrelay::ring_relay_route`); this test pins why.
+#[test]
+fn without_engine_written_userd_words_the_first_gate_never_opens() {
+    assert!(!kf_chip::Family::Blackwell.engine_writes_userd_gp_get());
+    let gated = ge(1, Kind::Plain).sync();
+    let start = |io: &mut Mock| {
+        let mut r = relay();
+        io.put_entry(0, &ge(0, Kind::Plain));
+        io.put_entry(1, &gated);
+        io.put = 2;
+        for _ in 0..8 {
+            if io.gates() > 0 {
+                break;
+            }
+            turn(&mut r, io).unwrap();
+        }
+        assert_eq!(
+            io.gates(),
+            1,
+            "the SYNC_WAIT entry's gate: barrier + marker"
+        );
+        assert_eq!(r.need, Need::Marker { target: 1 });
+        r
+    };
+    // No USERD write-back: hw_get / hw_reference stay 0 however often the relay looks.
+    let mut io = Mock::new(16);
+    let mut r = start(&mut io);
+    for _ in 0..32 {
+        turn(&mut r, &mut io).unwrap();
+    }
+    assert_eq!(r.need, Need::Marker { target: 1 }, "the gate never opens");
+    assert_eq!(r.cursor, 1, "the cursor never passes the gated entry");
+    assert_eq!(io.gates(), 1, "no second gate either");
+    assert!(
+        !io.calls.contains(&Call::ReadPb(gated.raw())),
+        "nothing at or after the gated entry is read"
+    );
+    // An engine that writes the marker's tagged reference (and its pops) opens the same gate.
+    let mut io = Mock::new(16);
+    let mut r = start(&mut io);
+    io.hw_reference = Marks::value(1);
+    io.hw_get = 3;
+    turn(&mut r, &mut io).unwrap();
+    assert!(io.calls.contains(&Call::ReadPb(gated.raw())));
+    assert_eq!(r.cursor, 2);
 }
