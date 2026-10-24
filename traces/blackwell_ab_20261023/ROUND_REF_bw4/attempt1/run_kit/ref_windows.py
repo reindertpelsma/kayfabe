@@ -20,6 +20,7 @@ import time
 D = Path(__file__).resolve().parent
 MARKER = "Save this WINDOWS SSH HOST KEY before reboot:"
 KEY = re.compile(r"^(ssh-ed25519 [A-Za-z0-9+/]{68})(?: \S+)?$")
+CONSOLE = re.compile(r"^\[\s*[0-9.]+\]\s+\S+\[\d+\]:\s+")  # "[   40.85] bash[2415]: "
 WAIT_SECONDS = 80 * 60
 LEDGER = Path(
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_REF_bw4/attempt1/owned_instances.json"
@@ -27,11 +28,11 @@ LEDGER = Path(
 
 
 def windows_host_key(log_text):
-    lines = [line.strip() for line in log_text.splitlines()]
+    lines = [CONSOLE.sub("", line.strip()) for line in log_text.splitlines()]
     keys = set()
     for index, line in enumerate(lines):
         if line.endswith(MARKER) and index + 1 < len(lines):
-            match = KEY.match(lines[index + 1].split("] ")[-1])
+            match = KEY.match(lines[index + 1])
             if not match:
                 raise ValueError("line after the host-key marker is not an ed25519 key")
             keys.add(match[1])
