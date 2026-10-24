@@ -29,5 +29,10 @@
     "H-LX": "UNTESTED"
   },
   "earlier_refusal": "rent attempt at 09:55Z stopped at its own precondition (missing empty ledger) before any create; fixed tests-first (08bdef146)",
-  "evidence": "attempt1/lease_metadata/ (console_pin_refusal_57498790.json, ready_57498790.txt, destroy_57498790.txt, precreate_refusal_rent_1.txt), attempt1/owned_instances.json"
+  "evidence": "attempt1/lease_metadata/ (console_pin_refusal_57498790.json, ready_57498790.txt, destroy_57498790.txt, precreate_refusal_rent_1.txt), attempt1/owned_instances.json",
+  "gpu_free_gate_dev_box": {
+    "revision": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+    "command": "KAYFABE_NO_KVM=1 cargo test -p kf-chip -p kf-gsp -p kf-qemu -p kf-chan -p kf-rm (debug, shared target)",
+    "result": "126 test targets, 2114 passed, 0 failed, 4 ignored; exit 0 (finished ~10:20Z)"
+  }
 }
