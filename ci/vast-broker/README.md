@@ -1,6 +1,21 @@
 # Vast broker (stage 1)
 
-## Owner edits round 2 (2026-10-24, current; supersedes the statements tagged below)
+## Owner edits round 3 (2026-10-24, current; supersedes the statements tagged below)
+
+[CODE READ: src/, runner.py, deploy.mjs; owner rulings 2026-10-24 items 10/10b; delta review
+2026-10-24 findings 1-3 and C1] On top of round 2:
+- No host driver filter: the offer driver tag list (its public var and rejection code) is
+  gone; the status `driver_version` is the box-reported guest driver only (`unknown` until
+  the result).
+- `POST /rent` also requires `remaining_seconds`; a run that cannot hold the hard limit plus
+  5 minutes is `NOT_ELIGIBLE` (`RUNNER_TIME`), and the runner stops waiting BUSY at that point.
+- One attempt per run key also after retention (the spend row refuses it); a repeated commit
+  is refused at once (`UNAVAILABLE_BUDGET`), before any BUSY or supersede.
+- `ALLOW_UNKNOWN_COUNTRY` defaults to false; the country parser NFKC-normalises and accepts only
+  `region, CC` or a known denied name (details in DEPLOY.md).
+- `BAD_MACHINE_IDS_EXTRA` adds to the built-in machine list; `BAD_MACHINE_IDS` still replaces it.
+
+## Owner edits round 2 (2026-10-24; superseded in part by round 3 above)
 
 [CODE READ: src/, runner.py, deploy.mjs; owner rulings 2026-10-24 items 8 and 9] On top of the
 owner edits round below:
@@ -20,7 +35,7 @@ owner edits round below:
 final review of 2026-10-23] On top of the jose round:
 - `POST /rent` takes exactly `runner_nonce`, `tested_sha`, `profile` and optional `preferences`;
   `pr_number` is refused and the status object has no `pr` (status protocol stayed 5; 6 since
-  round 2).
+  round 2; round 3 adds the required `remaining_seconds`).
 - Logs are relayed, not kept: the cron deletes a run's log chunks, log-hash entries and record
   `LOG_RETENTION_HOURS` (default 6, at most 48) after `ended_at`. Spend and sha-gap rows stay.
 - Right after its verified final log fetch the runner sends `POST /stop/<run>`; the Worker

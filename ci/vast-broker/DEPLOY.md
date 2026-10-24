@@ -32,8 +32,17 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
   `github/docs` `pull_request_target` runs, PR #46406): the
   run's `head_sha` is the PR head, while the OIDC `sha`/`workflow_sha` name the base commit, so
   those claims are not compared for that event.
-- The rent body is exactly `runner_nonce`, `tested_sha`, `profile` and optional `preferences`
-  (owner ruling 2026-10-24: `pr_number` is refused, and the status object has no `pr`).
+- The rent body is exactly `runner_nonce`, `tested_sha`, `profile`, `remaining_seconds` and
+  optional `preferences` (owner ruling 2026-10-24: `pr_number` is refused, and the status object
+  has no `pr`). `remaining_seconds` (edits3 B1, a whole number 0 to 86400) is the runner's
+  remaining time budget.
+- Admission order after the run read (edits3): a prior record of the same run key is returned
+  as is; a run key whose spend row exists (its one attempt is spent, also after retention
+  removed the record) is `UNAVAILABLE_BUDGET`; a commit tested within `SHA_GAP_HOURS` (24 h) is
+  `UNAVAILABLE_BUDGET` at once; a run whose `remaining_seconds` is less than the hard limit plus
+  `admissionMarginMinutes` (5) is `NOT_ELIGIBLE` with reason `RUNNER_TIME`. Only then does a
+  newer run supersede the older runs of its branch and the caps answer BUSY. None of these
+  refusals closes another run.
 - When to run (branches, drafts, docs-only paths) lives only in `gpu-vast.yml` and the trusted
   BASE helper `trigger-policy.mjs`.
 
@@ -179,20 +188,24 @@ closed run whose destroy is still pending). Public vars, each refused as
 - `MAX_CONCURRENT_CHECK`, `MAX_CONCURRENT_SWEEP` (default: the account cap): optional per-profile
   caps; a value above the account cap is refused, so they can only lower it.
 
-A rent over either cap gets `409 BUSY` (no Vast call); the runner retries BUSY until its own time
-budget, so at the default of 1 a second run waits instead of failing at once. The daily count,
-daily and rolling spend caps sum every cost row, the active runs included, and the credit check
-(at rent and when a contract is re-priced) requires credit >= `CREDIT_RESERVE_USD` + this run's
-worst case + the outstanding worst case of every other active run, so a second box cannot dodge a
-cap. The machine of every active run is held from CREATING until the run has ended: its offers
-are rejected `IN_USE` in `/availability` and in selection, so two runs never take one machine
-(the sweep rotation then moves on to another machine of the die or the next die). Superseding
-stays per branch: a newer run (higher GitHub run id) of a branch closes the older runs of that
-branch as `SUPERSEDED` and gets BUSY once; a late request of an older run is `NOT_ELIGIBLE` and
-closes nothing. One run's failure, close or stop never touches another; `stop-all`, the cron and
-the reaper act on every run. To raise the cap, put e.g. `MAX_CONCURRENT_RENTALS=2` in the vars
-file and redeploy; check the daily caps first (two worst-case check runs at $1/hour do not fit
-the $6 daily cap, see README).
+A rent over either cap gets `409 BUSY` (no Vast call); the runner retries BUSY, so at the default
+of 1 a second run waits instead of failing at once. [CODE READ: runner.py; edits3 B1] It stops
+waiting once its remaining budget (200 minutes from its start) is below `ADMISSION_NEED_SECONDS`
+(the 180-minute default hard limit plus the 5-minute margin, so at most about 15 minutes of BUSY):
+state BUSY, nothing rented. If you raise `HARD_RUNTIME_MINUTES`, the Worker refuses every run
+whose budget cannot hold it (`RUNNER_TIME`); the runner constant only bounds the wait.
+The daily count, daily and rolling spend caps sum every cost row, the active runs included, and the
+credit check (at rent and when a contract is re-priced) requires credit >= `CREDIT_RESERVE_USD` +
+this run's worst case + the outstanding worst case of every other active run, so a second box cannot
+dodge a cap. The machine of every active run is held from CREATING until the run has ended: its
+offers are rejected `IN_USE` in `/availability` and in selection, so two runs never take one machine
+(the sweep rotation then moves on to another machine of the die or the next die). Superseding stays
+per branch: a newer run (higher GitHub run id) of a branch closes the older runs of that branch as
+`SUPERSEDED` and gets BUSY once; a late request of an older run is `NOT_ELIGIBLE` and closes
+nothing. One run's failure, close or stop never touches another; `stop-all`, the cron and the reaper
+act on every run. To raise the cap, put e.g. `MAX_CONCURRENT_RENTALS=2` in the vars file and
+redeploy; check the daily caps first (two worst-case check runs at $1/hour do not fit the $6 daily
+cap, see README).
 
 [INFERRED: src/ledger.js transfer-allowance accounting] Per-GB limits reduce exposure but do not
 make reserved 15-GB-down/2-GB-up allowances a hard bill ceiling. A hostile box can exceed the
