@@ -7,6 +7,7 @@ Run: KF_DEF=/workspace/bw3-round-b1g-a1_m30498-run KF_7V=/workspace/bw3-round-b1
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -17,8 +18,8 @@ import unittest
 DEF = Path(os.environ.get("KF_DEF", "/workspace/bw3-round-b1g-a1_m30498-run"))
 V7 = Path(os.environ.get("KF_7V", "/workspace/bw3-round-b1g-a1_m99805-run"))
 TB = Path("/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050")
-KDEF = TB / ("attempt1" + DEF.name.split("a1", 1)[1].rsplit("-run", 1)[0]) / "run_kit"
-K7 = TB / ("attempt1" + V7.name.split("a1", 1)[1].rsplit("-run", 1)[0]) / "run_kit"
+KDEF = TB / ("attempt" + re.search(r"-a(\d+_m\d+)-run$", DEF.name)[1]) / "run_kit"
+K7 = TB / ("attempt" + re.search(r"-a(\d+_m\d+)-run$", V7.name)[1]) / "run_kit"
 
 
 def offer(oid, machine, gpu, die, cores, price=0.4, geo="Quebec, CA", ram=64000):
@@ -53,8 +54,10 @@ def oracle(d, offers, credit=28.0):
         (sd / "media_manifest.json").write_text(json.dumps({"all_verified": True,
                                                             "files": files}))
         for name in ("owner_authority.json", "known_bad_machines.json", "lease_profile.py",
-                     "pin_evidence.py", "grant_b1g.py", "grant_pin.json"):
-            shutil.copy2(d / name, sd / name)
+                     "pin_evidence.py", "grant_b1g.py", "grant_pin.json",
+                     "dry_loop.py", "static_check.py"):
+            if (d / name).exists() or name not in ("dry_loop.py", "static_check.py"):
+                shutil.copy2(d / name, sd / name)
         ledger = tmp / "owned_instances.json"
         ledger.write_text("[]\n")
         src = (d / "ops.py").read_text().replace(f'D = Path("{d}")', f'D = Path("{sd}")')
@@ -85,7 +88,9 @@ class Selection(unittest.TestCase):
     def test_default_pin_30498_selected_with_150_minutes(self):
         r = oracle(DEF, MARKET)
         self.assertEqual(r["machine"], 30498)
-        self.assertEqual(r["plan"]["seconds"], 150 * 60)
+        # default ceiling (150 min) minus any prior-attempt spend; never the 3 h profile ceiling
+        self.assertLessEqual(r["plan"]["seconds"], 150 * 60)
+        self.assertGreaterEqual(r["plan"]["seconds"], 90 * 60)
 
     def test_default_pin_refuses_when_30498_absent(self):
         self.assertIsNone(oracle(DEF, [m for m in MARKET if m["machine_id"] != 30498]))
