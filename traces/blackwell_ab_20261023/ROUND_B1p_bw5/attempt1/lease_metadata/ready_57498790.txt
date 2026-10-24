@@ -1,0 +1,18 @@
+UNVERIFIED-HOST ready
+READINESS 2026-10-24T10:02:20.851614+00:00 None
+READINESS 2026-10-24T10:02:41.905377+00:00 created
+READINESS 2026-10-24T10:03:03.046365+00:00 created
+READINESS 2026-10-24T10:03:24.234371+00:00 created
+READINESS 2026-10-24T10:03:50.539630+00:00 created
+CONSOLE_PIN absent 1
+CONSOLE_PIN mismatch 2
+Traceback (most recent call last):
+  File "/workspace/bw5-round-b1p-a1-run/ops.py", line 640, in <module>
+    proof = C.wait_for_pin(
+        fields[2],
+    ...<6 lines>...
+        record=record_pin,
+    )
+  File "/workspace/bw5-wt/scripts/bench/blackwell/console_pin.py", line 123, in wait_for_pin
+    raise PinMismatch("authenticated console host pin differs from scanned ed25519 key")
+console_pin.PinMismatch: authenticated console host pin differs from scanned ed25519 key

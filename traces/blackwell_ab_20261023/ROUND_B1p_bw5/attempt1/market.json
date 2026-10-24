@@ -1,6 +1,6 @@
 {
   "host_verification": "UNVERIFIED-HOST",
-  "utc": "2026-10-24T09:54:15.814772+00:00",
+  "utc": "2026-10-24T10:01:34.893687+00:00",
   "credit_usd": 25.079456490259872,
   "offers": [
     {
@@ -15,7 +15,7 @@
       "vms_enabled": true,
       "cpu_cores_effective": 32.0,
       "cpu_ram": 128899,
-      "disk_space": 488.0,
+      "disk_space": 524.25,
       "is_vm_deverified": false,
       "geolocation": "Quebec, CA"
     }
