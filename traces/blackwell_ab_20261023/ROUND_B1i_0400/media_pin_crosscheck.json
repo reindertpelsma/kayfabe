@@ -1,0 +1,40 @@
+{
+  "local_dir": "/workspace/codex/bw-cached-validation-20261023/media (dev box)",
+  "harness_table": "scripts/bench/windows/win_vm.sh@9ff51a6e9 lines 85-90 (first fetch 2026-10-04)",
+  "windows_on_vast": "windows_on_vast_pins.json",
+  "rows": [
+    {
+      "file": "OpenSSH-Win64-v10.0.0.0.msi",
+      "pinned_sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+      "local_cached_validation_sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+      "match": true,
+      "url": "https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi",
+      "bytes": 6586368
+    },
+    {
+      "file": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "pinned_sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "local_cached_validation_sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "match": true,
+      "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "bytes": 890807536
+    },
+    {
+      "file": "virtio-win-0.1.302.iso",
+      "pinned_sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+      "local_cached_validation_sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+      "match": true,
+      "url": "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso",
+      "bytes": 877373440
+    },
+    {
+      "file": "win11_ltsc_2024_eval_x64_en-us.iso",
+      "pinned_sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+      "local_cached_validation_sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+      "match": true,
+      "url": "https://go.microsoft.com/fwlink/?linkid=2289029&clcid=0x409&culture=en-us&country=us",
+      "bytes": 5112850432
+    }
+  ],
+  "all_match": true
+}

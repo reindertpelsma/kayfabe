@@ -1,0 +1,41 @@
+{
+  "from": "dev box, HEAD + 16-byte range probe, 2026-10-24",
+  "rows": [
+    {
+      "file": "OpenSSH-Win64-v10.0.0.0.msi",
+      "final_status": "HTTP/2 200 ",
+      "content_length": "6586368",
+      "expected_bytes": 6586368,
+      "accept_ranges": "bytes",
+      "range_probe": "206 16",
+      "redirects": 1
+    },
+    {
+      "file": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "final_status": "HTTP/2 200 ",
+      "content_length": "890807536",
+      "expected_bytes": 890807536,
+      "accept_ranges": "bytes",
+      "range_probe": "206 16",
+      "redirects": 0
+    },
+    {
+      "file": "virtio-win-0.1.302.iso",
+      "final_status": "HTTP/1.1 200 OK",
+      "content_length": "877373440",
+      "expected_bytes": 877373440,
+      "accept_ranges": "bytes",
+      "range_probe": "206 16",
+      "redirects": 0
+    },
+    {
+      "file": "win11_ltsc_2024_eval_x64_en-us.iso",
+      "final_status": "HTTP/1.1 200 OK",
+      "content_length": "5112850432",
+      "expected_bytes": 5112850432,
+      "accept_ranges": "bytes",
+      "range_probe": "206 16",
+      "redirects": 1
+    }
+  ]
+}

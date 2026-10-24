@@ -1,0 +1,95 @@
+test_all_verified_skips_upload (test_box_fetch.BoxPhase.test_all_verified_skips_upload) ... ok
+test_box_fetch_started_with_the_cutoff_and_public_manifest (test_box_fetch.BoxPhase.test_box_fetch_started_with_the_cutoff_and_public_manifest) ... ok
+test_mismatch_falls_back_and_stops_that_file (test_box_fetch.BoxPhase.test_mismatch_falls_back_and_stops_that_file) ... ok
+test_mismatch_falls_back_on_the_first_poll (test_box_fetch.BoxPhase.test_mismatch_falls_back_on_the_first_poll) ... ok
+test_slow_projection_falls_back_well_before_the_cutoff (test_box_fetch.BoxPhase.test_slow_projection_falls_back_well_before_the_cutoff) ... ok
+test_stalled_fallback_also_stops_the_box_fetch (test_box_fetch.BoxPhase.test_stalled_fallback_also_stops_the_box_fetch) ... ok
+test_stalled_file_falls_back_by_the_cutoff (test_box_fetch.BoxPhase.test_stalled_file_falls_back_by_the_cutoff) ... ok
+test_unreadable_status_never_blocks_past_the_cutoff (test_box_fetch.BoxPhase.test_unreadable_status_never_blocks_past_the_cutoff) ... ok
+test_complete_but_unverified_at_cutoff_falls_back (test_box_fetch.Fallback.test_complete_but_unverified_at_cutoff_falls_back) ... ok
+test_cutoff_arithmetic (test_box_fetch.Fallback.test_cutoff_arithmetic) ... ok
+test_cutoff_falls_back (test_box_fetch.Fallback.test_cutoff_falls_back) ... ok
+test_failure_or_mismatch_falls_back_immediately (test_box_fetch.Fallback.test_failure_or_mismatch_falls_back_immediately) ... ok
+test_fast_progress_waits (test_box_fetch.Fallback.test_fast_progress_waits) ... ok
+test_missing_status_waits_then_falls_back_at_cutoff (test_box_fetch.Fallback.test_missing_status_waits_then_falls_back_at_cutoff) ... ok
+test_no_projection_before_threshold (test_box_fetch.Fallback.test_no_projection_before_threshold) ... ok
+test_slow_projection_falls_back_early (test_box_fetch.Fallback.test_slow_projection_falls_back_early) ... ok
+test_verified_is_done (test_box_fetch.Fallback.test_verified_is_done) ... ok
+test_corrupted_byte_same_size_is_a_mismatch (test_box_fetch.Fetch.test_corrupted_byte_same_size_is_a_mismatch) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py:234: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 43023)>
+  status, published, leftovers, _ = self.fetch(body, served=bad)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_cutoff_stops_a_slow_source (test_box_fetch.Fetch.test_cutoff_stops_a_slow_source) ... ok
+test_disallowed_url_fails_without_network (test_box_fetch.Fetch.test_disallowed_url_fails_without_network) ... ok
+test_ranged_download_verified_and_published_as_part (test_box_fetch.Fetch.test_ranged_download_verified_and_published_as_part) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py:165: ResourceWarning: unclosed <socket.socket fd=5, family=2, type=1, proto=0, laddr=('127.0.0.1', 40619)>
+  status, published, leftovers, content = self.fetch(body)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_server_ignoring_range_fails_without_publishing (test_box_fetch.Fetch.test_server_ignoring_range_fails_without_publishing) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py:181: ResourceWarning: unclosed <socket.socket fd=5, family=2, type=1, proto=0, laddr=('127.0.0.1', 32921)>
+  status, published, leftovers, _ = self.fetch(body, honour_range=False)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_sha_mismatch_refuses_and_publishes_nothing (test_box_fetch.Fetch.test_sha_mismatch_refuses_and_publishes_nothing) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py:174: ResourceWarning: unclosed <socket.socket fd=5, family=2, type=1, proto=0, laddr=('127.0.0.1', 42251)>
+  status, published, leftovers, _ = self.fetch(body, sha="0" * 64)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_short_range_answers_fail (test_box_fetch.Fetch.test_short_range_answers_fail) ... /usr/lib/python3.14/unittest/case.py:615: ResourceWarning: unclosed <socket.socket fd=5, family=2, type=1, proto=0, laddr=('127.0.0.1', 39045)>
+  result = method()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_single_stream_cutoff_is_enforced (test_box_fetch.Fetch.test_single_stream_cutoff_is_enforced) ... ----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 53626)
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/http/server.py", line 496, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/http/server.py", line 484, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py", line 74, in do_GET
+    self.wfile.write(part)
+    ~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 845, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+/usr/lib/python3.14/threading.py:1028: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 34769)>
+  del self._target, self._args, self._kwargs
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_status_file_written_for_all_files (test_box_fetch.Fetch.test_status_file_written_for_all_files) ... /usr/lib/python3.14/unittest/case.py:615: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 37915)>
+  result = method()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_wrong_size_body_fails (test_box_fetch.Fetch.test_wrong_size_body_fails) ... /workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal/test_box_fetch.py:188: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 37307)>
+  status, published, _, _ = self.fetch(body, served=body[:-10], workers=1)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_box_fetch_uses_only_public_https_urls_from_the_manifest (test_box_fetch.PinnedTable.test_box_fetch_uses_only_public_https_urls_from_the_manifest) ... ok
+test_manifest_equals_the_harness_win_vm_table (test_box_fetch.PinnedTable.test_manifest_equals_the_harness_win_vm_table) ... ok
+test_windows_on_vast_pins_agree (test_box_fetch.PinnedTable.test_windows_on_vast_pins_agree) ... ok
+test_stop_marker_aborts_a_running_fetch (test_box_fetch.StopMarker.test_stop_marker_aborts_a_running_fetch) ... /usr/lib/python3.14/unittest/case.py:615: ResourceWarning: unclosed <socket.socket fd=3, family=2, type=1, proto=0, laddr=('127.0.0.1', 36939)>
+  result = method()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_stop_marker_mid_download_single_stream (test_box_fetch.StopMarker.test_stop_marker_mid_download_single_stream) ... ok
+test_stop_marker_written_mid_download_kills_curl_quickly (test_box_fetch.StopMarker.test_stop_marker_written_mid_download_kills_curl_quickly) ... ok
+test_box_fetch_is_in_the_bundle_and_secret_free (test_box_fetch.Wiring.test_box_fetch_is_in_the_bundle_and_secret_free) ... ok
+test_dry_loop_covers_box_fetch (test_box_fetch.Wiring.test_dry_loop_covers_box_fetch) ... ok
+test_parallel_eight_uploads_only_fallback_files_within_the_same_deadline (test_box_fetch.Wiring.test_parallel_eight_uploads_only_fallback_files_within_the_same_deadline) ... ok
+test_verified_files_are_never_uploaded (test_box_fetch.Wiring.test_verified_files_are_never_uploaded) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 9.830s
+
+OK

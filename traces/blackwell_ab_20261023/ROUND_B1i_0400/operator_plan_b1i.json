@@ -1,0 +1,34 @@
+{
+  "utc": "2026-10-24T02:11:22.370808+00:00",
+  "operator": "Claude (B1b); BW3 harness unchanged except rehearsal receipt",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "falsifiers_recorded_before_run": {
+    "native_fuzz": "ALIAS_REVOKED in >=2 of 3 valid pinned crowd runs (9 workers on 3 cores) => native finding on this die/driver; root cause not claimed. 0-1 of 3 => not repeatable at n=3. Unpinned 9-worker control recorded once.",
+    "windows_B_hold": "Guest TDR (event 4101/153) or bugcheck (event 41/1001, GUEST_PANICKED, minidump) within 10 min after the admitted exact Xid32 pair refutes single-channel CE fault containment/survival for this die.",
+    "admission": "Only exact owned-QEMU Xid32 channels 0x14/0x1000000b intr 00200000, max 8 per arm, OBSERVATION mode; anything else stops the run.",
+    "media": "Box-side fetch: a file whose box download is not verified by 600 s (or fails/mismatches, or projects past 600 s after 90 s) falls back to the SSH upload; the transfer phase still fails if any file is not pinned by 1200 s."
+  },
+  "budget": {
+    "cap_usd": 2.5,
+    "stop_usd": 2.0,
+    "reserve_usd": 8,
+    "max_rate_usd_h": 2.5,
+    "leases": 1,
+    "box_limit_h": 3
+  },
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
+  "round": "B1i_0400 (controller 04:00, fresh budget)",
+  "target": "m30498 default profile; one retry on next qualifying offer if m30498 gone or host key/boot fails",
+  "native_precondition_choice": "FULL native stage (controller unchanged); short form not covered by the dry loop",
+  "media": "box-side fetch from pinned public URLs (media_pin_crosscheck.json, public_url_probe.json) with SSH upload fallback per file"
+}
