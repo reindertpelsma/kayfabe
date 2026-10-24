@@ -321,9 +321,13 @@ for (const [name, payload, env, row, exit] of [
   ['malformed contract', PASS_PAYLOAD, { KF_GRACE_FAIL: 'soon' }, 'env_contract', 2],
 ])
   test('p7 a failing box still gives the Worker an acceptable FAIL: ' + name, async () => {
-    const box = await rented();
+    const box = await rented(access);
     try {
       const r = await runOnstart(box, payload, env);
+      for (const request of box.reports()) {
+        assert.equal(request.headers['cf-access-client-id'], access.BOX_ACCESS_ID);
+        assert.equal(request.headers['cf-access-client-secret'], access.BOX_ACCESS_SECRET);
+      }
       assert.notEqual(r.status, 0, 'a failing run exits non-zero');
       assert.equal(r.status, exit, r.out + r.err);
       const record = await box.record();
