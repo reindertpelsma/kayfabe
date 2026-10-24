@@ -321,6 +321,14 @@ export function callbackToken(record, secret = env.RUN_TOKEN_SECRET, patch = {})
     b64({ run: r.run, attempt: r.attempt, sha: r.sha, nonce: r.nonce, exp });
   return input + '.' + createHmac('sha256', secret).update(input).digest('base64url');
 }
+// The runner's /rent body (runner.py execute). Tests build theirs here so a protocol change of
+// the body lands in one place.
+export const rentBody = (tested_sha, extra = {}) => ({
+  runner_nonce: 'f'.repeat(64),
+  tested_sha,
+  profile: 'check',
+  ...extra,
+});
 export async function setup(overrides = {}) {
   const { createService } = await import('../src/index.js');
   const cloud = new MockCloud();
@@ -424,14 +432,11 @@ export async function setup(overrides = {}) {
       } = {},
     ) {
       if (path === '/rent' && body === undefined)
-        body = {
-          runner_nonce: 'f'.repeat(64),
-          tested_sha:
-            cloud.run.event === 'pull_request_target'
-              ? (cloud.run.pull_requests?.[0]?.head.sha ?? cloud.run.head_sha)
-              : cloud.run.head_sha,
-          profile: 'check',
-        };
+        body = rentBody(
+          cloud.run.event === 'pull_request_target'
+            ? (cloud.run.pull_requests?.[0]?.head.sha ?? cloud.run.head_sha)
+            : cloud.run.head_sha,
+        );
       const authorization =
         token ??
         (await jwt({
