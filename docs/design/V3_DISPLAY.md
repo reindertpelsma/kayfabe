@@ -1,3 +1,5 @@
+**STATUS: LIVE, 2026-10-24 (amendment) — the usage example in §8 now passes `fb-mb`, which is required (no default; `V3_FLAG_INVENTORY.md` top note).** The rest of this document's status lines follow.
+
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
 **STATUS: LIVE, 2026-10-18 — §4.11.13 gains the boot-range cleanliness rule (below it: `bootclean`): the boot layer is shown only while store `[0, G)` is clean.** Measured on run 3081: the stripes on the boot screen and after an unload are the guest RM's own GPU-written vidmem, drawn as pixels — the region table declares `[0, carve)` as heap unless the guest reserves a console (Windows sent none), so the RM allocates the same low addresses every life, while the boot layer kept scanning `[0, G)` until a head was armed. Every Windows unload of the run also had its re-seed REFUSED (56 guest placements still over BAR1 `[0, G)`).
@@ -2270,11 +2272,11 @@ shared between the worker and the main loop. Nothing new runs on a vCPU. ⊘ Nar
 WAITED on between the worker and the main loop" (a busy mailbox is retried on the next frame or
 entry).
 
-Usage:
+Usage (⊘ *correction 2026-10-24:* `fb-mb=<MiB, required, like -m>` is required on every kf3 device line; it has no default):
 
 ```
 -display none \
--device kf3-gpu,id=kf0,display=on,display-broker=/run/user/1000/nvkvm/display.sock \
+-device kf3-gpu,id=kf0,fb-mb=8192,display=on,display-broker=/run/user/1000/nvkvm/display.sock \
 -device virtio-keyboard-pci \
 -device virtio-tablet-pci,display=kf0,head=0
 ```

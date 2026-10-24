@@ -33,7 +33,9 @@ const EXAMPLE: &str = "fb-mb=<MiB, required, like -m>";
 #[test]
 fn a_missing_or_zero_size_is_refused_by_name_with_an_example() {
     // `0` is what the unset property reads as (the C default), so one test covers "missing" and "0".
-    let e = config(0).check().expect_err("fb-mb=0 / unset must be refused");
+    let e = config(0)
+        .check()
+        .expect_err("fb-mb=0 / unset must be refused");
     assert!(e.contains("fb-mb is required"), "{e}");
     assert!(e.contains(EXAMPLE), "{e}");
     assert!(!e.contains('\n'), "one line: {e}");
@@ -43,7 +45,10 @@ fn a_missing_or_zero_size_is_refused_by_name_with_an_example() {
 fn realize_refuses_before_opening_anything() {
     match Device::realize(&config(0)) {
         Ok(_) => panic!("realize accepted fb-mb=0"),
-        Err(e) => assert!(e.contains("fb-mb is required") && e.contains(EXAMPLE), "{e}"),
+        Err(e) => assert!(
+            e.contains("fb-mb is required") && e.contains(EXAMPLE),
+            "{e}"
+        ),
     }
 }
 
@@ -72,7 +77,10 @@ fn the_c_property_has_no_default_size() {
         src.contains("DEFINE_PROP_UINT64(\"fb-mb\", Kf3State, fb_mb, 0)"),
         "the fb-mb property default must be 0 (unset = refused)"
     );
-    assert!(!src.contains("\"fb-mb\", Kf3State, fb_mb, 8192"), "the 8192 default is gone");
+    assert!(
+        !src.contains("\"fb-mb\", Kf3State, fb_mb, 8192"),
+        "the 8192 default is gone"
+    );
 }
 
 #[test]
@@ -80,10 +88,15 @@ fn the_c_realize_refuses_an_unset_size_by_name_before_rust() {
     let src = kf3_c();
     let at = src.find("static void kf3_dev_realize(").expect("realize");
     let body = &src[at..];
-    let check = body.find("s->fb_mb == 0").expect("realize must test s->fb_mb == 0");
+    let check = body
+        .find("s->fb_mb == 0")
+        .expect("realize must test s->fb_mb == 0");
     let rust = body.find("kf3_realize(s->gpu_minor").expect("calls Rust");
     assert!(check < rust, "the fb-mb check must precede kf3_realize");
     let msg = &body[check..rust];
-    assert!(msg.contains("error_setg") && msg.contains("fb-mb is required"), "{msg}");
+    assert!(
+        msg.contains("error_setg") && msg.contains("fb-mb is required"),
+        "{msg}"
+    );
     assert!(msg.contains(EXAMPLE), "{msg}");
 }

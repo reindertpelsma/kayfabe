@@ -1,6 +1,6 @@
 # kayfabe architecture — v3 on one page
 
-**STATUS: LIVE, 2026-09-26, at `master` `74dc3113`; crate table refreshed 2026-10-15 (integration of `claude/win11-userring-20261014`).**
+**STATUS: LIVE, 2026-09-26, at `master` `74dc3113`; 2026-10-24: the store size `fb-mb` is a required device property (no default, see *Memory and addresses*); crate table refreshed 2026-10-15 (integration of `claude/win11-userring-20261014`).**
 ⊘ *Correction 2026-10-15:* the crate table below lacked `kf-disp`, `kf-broker`, `kf-oprom` and `kf-gop-image` (added), and the guest is no longer only
 Linux 580.159.04: the stock Windows 11 driver 580.88 runs too (see `README.md`). Guest USER channels on Windows may take a relayed USER ring
 (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, `docs/design/V3_WINDOWS_USER_RING_RELAY.md`); the three channel kinds below are unchanged. This page is a map. The design authority is
@@ -62,7 +62,8 @@ the guest as host event → eventfd → MSI.
 ## Memory and addresses
 
 - **One store.** Guest vidmem is one host allocation, and its size is a hypervisor command-line
-  parameter (`fb-mb=`). A guest FB offset *is* the offset into that allocation. Guest sysmem is
+  parameter (`fb-mb=<MiB, required, like -m>`: no default, an unset size is refused at realize,
+  2026-10-24). A guest FB offset *is* the offset into that allocation. Guest sysmem is
   the hypervisor's shared memfd (§3).
 - **Mirror, never adopt** (§4.1). The host twin's VA space is populated with kayfabe's own host
   mappings. Kayfabe never points the host at the guest's tables.

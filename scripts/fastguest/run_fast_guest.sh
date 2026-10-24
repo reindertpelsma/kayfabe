@@ -223,7 +223,7 @@ export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 # single-device lane exactly as before (one device, the property's default minor 0).
 # `KF3_DEV_EXTRA` applies to every device. A host minor listed twice is the same card twice —
 # `cardbudget` then refuses by name unless the summed BAR1 demand fits.
-# ★ v3-gpcmask (2026-09-26): the store must FIT the host card. `fb-mb=8192` was the default
+# ★ v3-gpcmask (2026-09-26): the store must FIT the host card. `fb-mb=8192` was the device's default (since 2026-10-24 `fb-mb` is REQUIRED and this script always passes it)
 # because every box this ran on was a 12 GiB GA106 or larger; on an 8 GiB RTX 3060 Ti realize
 # refuses by name — "store of 8192 MiB refused: NoMemory". A lane that passes NOTHING must default
 # to something that boots (the BAR1 rule): the smallest card's memory.total less 2 GiB of
