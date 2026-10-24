@@ -1,13 +1,16 @@
 """B1n operator offer scope: only dies with a pinned observation pair; never 'deverified'."""
 
 import ast
+import json
 import os
 from pathlib import Path
 import sys
 import unittest
 
 HERE = Path(__file__).resolve().parent
-OPS = Path(os.environ.get("KF_BW4_OPS", "/workspace/bw4-round-b1n-a1-run/ops.py"))
+WS = Path(os.environ.get("KF_BW3_D", "/workspace/bw4-round-b1n-a1-run"))
+OPS = Path(os.environ.get("KF_BW4_OPS", WS / "ops.py"))
+AUTH = WS / "owner_authority.json"
 sys.path.insert(0, str(HERE.parents[3] / "scripts/bench/blackwell"))
 import saved_xid32_observation as O  # noqa: E402
 
@@ -25,7 +28,10 @@ class OfferScope(unittest.TestCase):
 
     def test_every_searched_die_has_a_pinned_pair(self):
         skus = self.skus()
-        self.assertEqual(skus, {"RTX_5070": "GB205", "RTX_5090": "GB202"})
+        want = {"RTX_5070": "GB205", "RTX_5090": "GB202"}
+        if AUTH.exists():
+            want = json.loads(AUTH.read_text()).get("skus", want)
+        self.assertEqual(skus, want)
         self.assertTrue(set(skus.values()) <= set(O.DIE_PAIRS))
 
     def test_deverified_hosts_are_not_admitted(self):
@@ -40,7 +46,7 @@ class OfferScope(unittest.TestCase):
 
     def test_denied_countries_and_label(self):
         self.assertIn('{"CU", "IR", "KP", "SY", "CN", "HK", "MO"}', self.source)
-        self.assertIn('"claude-bw4-B1n1-OBSERVATION-20261024"', self.source)
+        self.assertRegex(self.source, r'"claude-bw4-B1[no]1-OBSERVATION-20261024"')
 
     def test_owner_authority_is_checked_against_the_guard_table(self):
         self.assertIn(

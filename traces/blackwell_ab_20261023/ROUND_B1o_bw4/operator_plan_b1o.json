@@ -1,0 +1,35 @@
+{
+  "utc": "2026-10-24T07:48:16.520701+00:00",
+  "round": "B1o (operator BW4: Claude): (C) GB202 once more, granted because B1n (lease 57472433) showed the GB205 sequence",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "target": "GeForce RTX 5090 (GB202) only, default 16-core profile, not deverified, denied countries, known-bad; stop 2.00 / cap 2.50 fresh",
+  "budget": {
+    "stop_usd": 2.0,
+    "cap_usd": 2.5,
+    "reserve_usd": 8,
+    "task_total_max_usd": 8
+  },
+  "binary": "B1 cb80cbd29b7a05f904acd822f172485fd49938a9, 19 flags, sealed 580.88 parent, one boot per arm",
+  "admission": "GB202 pinned pair 0x14+0x0e00000b (probed die), intr 00200000, owned QEMU pid, max 8 per arm",
+  "falsifiers_recorded_before_run": {
+    "sequence": "No admitted Xid32 pair and no TDR/0x116 within the 10-min hold in on_urt would mean the B1l GB205 sequence does not reproduce on cb80cbd29 (then nothing below is attributable to it).",
+    "on_urt (H1 mechanism, MEASUREMENT)": "The user-ring trace STALL dump shows pb_get on an ordinary guest word, legal for the bound class and away from any relay edit => H1(a) relay edit is not supported by this arm; 'pb_get in no remembered guest segment (private staging/witness)' supports H1(a).",
+    "on_relay_off (H1a falsifier, DIAGNOSTIC)": "With KF3_WIN_USER_RING_RELAY=0 the same Xid32 pair still fires after Code 0 => the relay edit is not necessary (H1a refuted for this die). No Xid and no TDR in the 10-min hold => the relay path is implicated (H1a supported). A pair on another channel stops the arm (guard).",
+    "on_tdr60 (H2 slow vs stuck, DIAGNOSTIC)": "With TdrDdiDelay=60 the second guest RM life reaches RPC traffic beyond GSP Halted->Booted (fn 1 / static info) and the adapter recovers (event 4101, no 0x116) => the 0x116 is a TDR-budget problem, H2 'stuck' refuted. Still no RPC after Halted->Booted for >= 60 s and 0x116 => H2 'stuck' supported (not merely slow).",
+    "lx_reload (H2 outside Windows, DIAGNOSTIC)": "rmmod + modprobe + nvidia-smi in the Linux guest under kf3 succeeds (SMI2_RC=0, no RmInitAdapter failure) => a second guest RM life works on this FSP-family die in kayfabe outside a TDR; H2 'second life broken in general' refuted. Failure or stall => H2 supported.",
+    "on_diag_pnp (H2 on Windows outside a TDR, DIAGNOSTIC)": "pnputil disable then enable right after Code 0 returns to Code 0 (CYCLE_CODE0_SECOND=True) without a TDR => a Windows driver reload outside a TDR works, H2 'stuck' refuted for that path. If the Xid/TDR comes first the arm is inconclusive for this question.",
+    "H3 (Xid is a reset symptom)": "A parsed 0x141/WATCHDOG/WATCHDOG4400 header SystemTime (with the A1/A2 clock anchors) earlier than the Xid, or a TDR_RECOVERY_CONTEXT naming a node other than the two USER twins => H3 supported. Read offline from the private dumps with public Microsoft symbols only.",
+    "gb202_vs_gb205": "If on_urt on GB202 shows Code0, the admitted 0x14/0x0e00000b pair, then 0x116 c000009a, and on_relay_off survives 10 min without Xid, the B1n GB205 findings hold on GB202 too; any other outcome makes them die-specific."
+  },
+  "arm_order": [
+    "on_urt",
+    "on_relay_off",
+    "on_tdr60",
+    "lx_reload",
+    "on_diag_pnp"
+  ],
+  "split_rule": "if the lease cannot hold every arm (latest-start guard deadline-25 min), the rest go to a second lease (stop 2.00 / cap 2.50) in the same order",
+  "capture": "every arm: guest dumps (Minidump, LiveKernelReports incl. WATCHDOG/WATCHDOG4400, WER folders), full .evtx export, full kf3/QEMU logs, copied to /data/bw4_private_capture/<lease>/ with sha256 before teardown; public: names/sizes/sha256 + dump header params only. Fatal stop: one bounded standard-VGA collection boot, no kf3 device, no GPU work."
+}

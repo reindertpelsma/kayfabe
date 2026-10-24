@@ -16,7 +16,9 @@ import tempfile
 import unittest
 
 HERE = Path(__file__).resolve().parent
-K = Path(os.environ.get("KF_BW4_K", HERE.parent / "attempt1" / "run_kit"))
+K = Path(
+    os.environ.get("KF_BW4_K", os.environ.get("KF_BW3_K", HERE.parent / "attempt1" / "run_kit"))
+)
 BW = Path(os.environ.get("KF_BW4_BW", HERE.parents[3] / "scripts/bench/blackwell"))
 sys.path.insert(0, str(BW))
 sys.path.insert(0, str(K))
