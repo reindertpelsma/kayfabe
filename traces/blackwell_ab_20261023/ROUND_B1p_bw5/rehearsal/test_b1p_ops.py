@@ -129,8 +129,10 @@ class Wiring(unittest.TestCase):
     def test_launch_records_the_fix_source(self):
         self.assertIn(f'fix_source="{FIX}"', text("launch_ready.py"))
         self.assertIn('R = Path("/workspace/bw5-wt")', text("launch_ready.py"))
-        evidence = 'T = R / "traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1"'
-        self.assertIn(evidence, text("launch_ready.py"))
+        self.assertRegex(
+            text("launch_ready.py"),
+            r'T = R / "traces/blackwell_ab_20261023/ROUND_B1[pq]_bw5/attempt1"',
+        )
 
     def test_grant_pin_is_machine_30498_first(self):
         pin = json.loads(text("grant_pin.json"))
@@ -139,7 +141,8 @@ class Wiring(unittest.TestCase):
         self.assertEqual(state["attempts_used"], 0)
 
     def test_the_lease_ledger_exists_and_is_empty_before_the_create(self):
-        ledger = HERE.parent / "attempt1" / "owned_instances.json"
+        kit = Path(os.environ.get("KF_BW3_K", HERE.parent / "attempt1" / "run_kit"))
+        ledger = kit.parent / "owned_instances.json"
         if (WS / "own-id").exists():
             self.skipTest("a lease exists; the ledger then holds it")
         self.assertEqual(json.loads(ledger.read_text()), [])

@@ -1,0 +1,18 @@
+{
+  "source": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+  "parents": [
+    "b85d02bae3ed085a10cd1c8376c1a842e86c571b",
+    "38fd948fd67d89ebf42827f56a3435355df592ae"
+  ],
+  "base": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+  "branch": "claude/blackwell-fixes-20261024",
+  "bin_dir": "007ba1eb",
+  "log_line": "USER_RING_ROUTE_DECLINED family=",
+  "log_source": "crates/kf-qemu/src/userrelay.rs",
+  "source_markers": [
+    [
+      "crates/kf-gsp/src/boot.rs",
+      "fn the_next_lifes_own_mailbox_write_ends_the_halted_lifes_sentinel"
+    ]
+  ]
+}

@@ -1,4 +1,6 @@
 {
+  "correction_2026-10-24T10:40Z": "CORRECTION (BW5): the scanned key WAS stored in the guard receipt (expected_fingerprint). Scanned ed25519 = SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY, taken once at ~91 s after create, BEFORE console poll 1 (94.8 s, absent); the console published SHA256:rUh3N... only at poll 2 (114.9 s). The scan therefore preceded the publication by ~23 s. INFERRED: the scan reached sshd before cloud-init's host-key regeneration took effect.",
+  "scanned_fingerprint": "SHA256:PsuCZS1EXNZHKIB3tsL7lvKvRkZcs0KAFfB6UH1ADxY",
   "lease_id": 57498790,
   "host_verification": "UNVERIFIED-HOST",
   "experiment_mode": "OBSERVATION",
@@ -51,7 +53,7 @@
     }
   ],
   "console_context": "cloud-init line 'ssh-keygen: generating new host keys: RSA DSA ECDSA ED25519' precedes the published ED25519 fingerprint (10:03:53Z console time)",
-  "scanned_key": "not stored (the guard writes known_hosts only on a match)",
+  "scanned_key": "SUPERSEDED by the correction above: stored as expected_fingerprint in the guard receipt",
   "action": "exact-id destroy by start_stretch.py immediately; no SSH login, no upload, no work",
   "raw_console": "kept private in the operator workspace, not in git"
 }
