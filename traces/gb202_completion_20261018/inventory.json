@@ -1,0 +1,76 @@
+{
+  "rental_authorized": false,
+  "authority": "SEPARATE_CONTROLLER_GRANT_REQUIRED",
+  "source": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+  "qemu_sha256": "05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448",
+  "baseline_arm_sha256": "b8a72bf4468179539ebfe397a5a5a7256010bf3793cdd2065df9d8c2d6826fa1",
+  "baseline_process_sha256": "67605d7ca924330eb0eebdb5374b751789f3b160dd459a6286bcc9ad0cbd0292",
+  "p19_sha256": "9e2207bc7f0fe1caa56b5fbc35cad57d51b063389dd50ffbb85851a50200732d",
+  "baseline_config_sha256": "01e9a12e735a754f1a5dd8b9ff59f44d5ddde810c194da081e27c6cbde6a3770",
+  "baseline_command_sha256": "751f4bde752a75d4e1c6cde59df44e48228783e44c56981057e7bc81827e844f",
+  "route_parent": "b85d02bae3ed085a10cd1c8376c1a842e86c571b",
+  "second_life_parent": "38fd948fd67d89ebf42827f56a3435355df592ae",
+  "driver": "32.0.15.8088",
+  "host_driver": "595.91.07",
+  "image": "same BW6 image/media manifest; reverify before use",
+  "image_digest": "UNVERIFIED: no retained whole-image digest",
+  "media_sha256": {
+    "Windows_ISO": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+    "Windows_580.88": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+    "virtio_0.1.302": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+    "OpenSSH_10.0.0.0": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9"
+  },
+  "effective_flag_delta": {
+    "KF3_COMPLETION_PROBE": "1000"
+  },
+  "baseline_flags": "exact BW6 p19.flags plus RPC_TRACE/BODY_TRACE=1, DIAG_PROGRESS=1000",
+  "regression_seconds": 60,
+  "acceptance_seconds": 600,
+  "enable_count": 1,
+  "applications": 0,
+  "budget": {
+    "stop_usd": 2.25,
+    "cap_usd": 2.75,
+    "max_hourly_usd": 1,
+    "max_seconds": 7200,
+    "reserve_usd": 8,
+    "leases": 1
+  },
+  "verification": "verified",
+  "preferred_machine": 152098,
+  "preferred_host": 702330,
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
+  "admission": "BW6 legacy; BW7 native-template-only",
+  "guards": [
+    "identity",
+    "verified VM offer",
+    "blacklist",
+    "country",
+    "precreate watchdog",
+    "spend",
+    "capture and hash before destroy",
+    "exact owned id teardown",
+    "API absence before timer cancellation"
+  ],
+  "retry_after_refusal": false,
+  "falsifiers": {
+    "H1-T": "Relevant host fence completes and expected guest release is present, yet that channel still times out.",
+    "H1-G": "Complete correlated witness shows relevant host fence never completes before timeout."
+  },
+  "correlation": "Relevant channel/fence/placement/release/armed event; no log is no proof",
+  "probe_limits": "Translated slots do not cover every relayed twin; idle silence is valid",
+  "operand_samples": "Up to16 bytes of completed operand DATA; PRIVATE, never metadata",
+  "forbidden_modes": [
+    "PB peek",
+    "ring trace"
+  ],
+  "inconclusive_or_survives": "UNRESOLVED"
+}

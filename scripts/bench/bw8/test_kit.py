@@ -1,6 +1,10 @@
 """Synthetic preparation/overlay contracts; no provider, SSH or guest is contacted."""
 
+import hashlib
+import pathlib
 from pathlib import Path
+import tempfile
+from types import SimpleNamespace
 import unittest
 
 try:
@@ -57,6 +61,33 @@ def arm_fixture():
 
 
 class KitTests(unittest.TestCase):
+    def source_receipt(self, data):
+        text = arm_overlay(arm_fixture())
+        body = text.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+        with tempfile.TemporaryDirectory(prefix="bw8-receipt-") as folder:
+            root = Path(folder)
+            (root / "binary").write_bytes(b"different baseline binary")
+            (root / "operator").write_bytes(data)
+            args = ["", "", "", "", str(root / "binary"), str(root / "operator")]
+            env = {
+                "hashlib": hashlib,
+                "pathlib": pathlib,
+                "sys": SimpleNamespace(argv=args),
+                "old_hash": "baseline-hash",
+            }
+            exec(compile(body, "synthetic-receipt", "exec"), env)
+            return env["rec"]
+
+    def test_receipt_records_operator_bytes(self):
+        row = self.source_receipt(b"operator one")
+        self.assertEqual(row["harness_sha256"], hashlib.sha256(b"operator one").hexdigest())
+        self.assertEqual(row["baseline_harness_sha256"], "baseline-hash")
+
+    def test_receipt_distinguishes_operator_revision(self):
+        row = self.source_receipt(b"operator two")
+        self.assertEqual(row["harness_sha256"], hashlib.sha256(b"operator two").hexdigest())
+        self.assertEqual(row["baseline_harness_sha256"], "baseline-hash")
+
     def test_overlay_receipt_names_baseline_hash(self):
         self.assertIn("'baseline_harness_sha256':", arm_overlay(arm_fixture()))
 

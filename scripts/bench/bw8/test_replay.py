@@ -2,7 +2,8 @@
 
 BW6 lease57556167: public revision2cf144fa259c5574275e57d16a8401352e5cb5a7,
 ROUND_B1r_bw6/attempt1/arms/on_fix/bw6_result.json. BW5 lease57503040:
-ROUND_B1q_bw5 on the same publication lineage, reported in BW3 RoundB1q.
+ROUND_B1q_bw5 in retained execution revision4e990f69d4c0491e90b1c6b4b73ffb2edb8df51a,
+reported in BW3 RoundB1q. That retained execution revision was not published.
 Only dump codes/channel distinctions are replayed. Cadence and complete rows are synthetic.
 """
 

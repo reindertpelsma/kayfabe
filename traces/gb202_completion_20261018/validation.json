@@ -1,0 +1,63 @@
+{
+  "acceptance_600s": "UNRUN",
+  "checked_utc": "2026-10-24T23:01:34.299632+00:00",
+  "expected_red": [
+    {
+      "commit": "715a0e1714f03ad04b8038ca1ccd0ab64594bd77",
+      "failures": 36,
+      "tests": 36
+    },
+    {
+      "commit": "c1b51f69d9af9b52979ec297ea572f9d2d4a648b",
+      "failures": 13,
+      "tests": 20
+    },
+    {
+      "commit": "7973269aa1bd30696045dca0afd7a672cb6a9383",
+      "failures": 2,
+      "tests": 74
+    },
+    {
+      "commit": "98008e26b109f6c1e7e11a9efbe856018936bb92",
+      "failures": 2,
+      "tests": 97
+    }
+  ],
+  "inherited_tests": {
+    "all_sources_unchanged": true,
+    "legacy_identity_watchdog_budget": 93,
+    "native_template_policy_replay": 22
+  },
+  "lane_tests": {
+    "errors": 0,
+    "failures": 0,
+    "retained_metadata_replays": 4,
+    "tests": 99
+  },
+  "mutants": {
+    "count": 27,
+    "minimum_distinct_killing_tests": 2,
+    "originals_untouched": true
+  },
+  "new_leases": 0,
+  "new_spend_usd": 0,
+  "production_red": "UNRUN",
+  "scope": "synthetic/static/replayed metadata only; production and hardware UNRUN",
+  "source_sha256": {
+    "scripts/bench/bw8/enable_observe.ps1": "dee52a7d1c519344c9373383bf23af3cd0a2b8d860191e3cf002351d925ad38b",
+    "scripts/bench/bw8/mutations.py": "4f1be51639a8248ff337cdbc5d25cabbf26184ddadca3633b071823bfd2a5742",
+    "scripts/bench/bw8/observer.py": "0b8df24c9dba66508baba8a4d839598545bb61f0a8d76220d7b041cffbc028f2",
+    "scripts/bench/bw8/prepare.py": "52301cfc0a7269cc0dda476a9bed0864de62751b0adbbd78fe3da58bb5e10a32",
+    "scripts/bench/bw8/test_kit.py": "4ea08df941a7b6500da0d5c6b263ae601b95a5f6185e79b1fe7010d4a44eb1f5",
+    "scripts/bench/bw8/test_observer.py": "a7c553136944c4352a0e1f72aac399dcd720ab95fa311e83a612999a57970929",
+    "scripts/bench/bw8/test_replay.py": "fe89e900bf6174f65cfb6ac5d9507bdbd1e6204264f84e512605c2f1878037c5"
+  },
+  "static": {
+    "bash_syntax": "PASS",
+    "black_line_length": 100,
+    "black_version": "25.1.0",
+    "embedded_python_programs_compile": 4,
+    "powershell_parse_and_runtime": "UNRUN",
+    "python_files_compile_and_undefined_globals": 6
+  }
+}

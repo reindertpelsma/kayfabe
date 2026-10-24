@@ -1,0 +1,24 @@
+{
+  "scope": "retained metadata in synthetic cadence; not production RED",
+  "sources": [
+    {
+      "source_revision": "4e990f69d4c0491e90b1c6b4b73ffb2edb8df51a",
+      "path": "traces/blackwell_ab_20261023/ROUND_B1r_bw6/attempt1/arms/on_fix/bw6_result.json",
+      "sha256": "6c42d4744a3aa934a6b9e53f4ef413939bbc620b663fa222a45f9cf1f68bd1b5",
+      "replayed_dump_codes": [
+        "0x113",
+        "0x141"
+      ]
+    },
+    {
+      "source_revision": "4e990f69d4c0491e90b1c6b4b73ffb2edb8df51a",
+      "path": "traces/blackwell_ab_20261023/ROUND_B1q_bw5/attempt1/arms/on_fix/wer_times_on_fix.txt",
+      "sha256": "19be4325f087c707938c477b354674fd5e1d2128bea8530dadb748345a35539d",
+      "replayed_dump_codes": [
+        "0x193",
+        "0x1a8",
+        "0x1b8"
+      ]
+    }
+  ]
+}
