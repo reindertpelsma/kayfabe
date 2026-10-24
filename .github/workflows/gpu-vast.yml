@@ -1,0 +1,225 @@
+name: Vast GPU
+on:
+  push:
+    branches: [master]
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions: {}
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+concurrency:
+  group: >-
+    gpu-vast-${{ github.event.pull_request.number || github.ref }}-${{
+    github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+env:
+  TARGET_SHA: >-
+    ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  pending:
+    name: Mark GPU tripwire pending
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Post pending status without contacting the Worker
+        shell: bash --noprofile --norc -eo pipefail {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          temporary=$(mktemp)
+          jq -n --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{state:"pending",context:"gpu-vast",description:"GPU broker pending",target_url:$url}' > "$temporary"
+          curl --silent --show-error --fail --max-time 20 \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            -X POST --data-binary "@$temporary" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" >/dev/null
+  policy:
+    name: Decide GPU trigger from trusted repository metadata
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.policy.outputs.run }}
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Fail safe to run when file metadata is uncertain
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATH_SKIP_PATTERNS: >-
+            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ".github/ISSUE_TEMPLATE/**"]
+        run: |
+          set +x
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com
+          for file in trigger-policy.mjs package.json defaults.json \
+            src/defaults.js src/policy.js src/github.js src/workflow-authority.js; do
+            mkdir -p "$temporary/$(dirname "$file")"
+            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+              -o "$temporary/$file" \
+              "$source_origin/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file"
+          done
+          # env -i drops PATH, so run the resolved binary rather than whatever /usr/bin holds.
+          node_bin=$(command -v node)
+          env -i PATH=/usr/bin:/bin GH_TOKEN="$GH_TOKEN" \
+            GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" \
+            GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+            PATH_SKIP_PATTERNS="$PATH_SKIP_PATTERNS" "$node_bin" "$temporary/trigger-policy.mjs"
+  policy-check:
+    name: Independently re-decide the GPU trigger without third-party actions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.policy.outputs.run }}
+    steps:
+      - name: Fail safe to run when file metadata is uncertain
+        id: policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATH_SKIP_PATTERNS: >-
+            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ".github/ISSUE_TEMPLATE/**"]
+        run: |
+          set +x
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com
+          for file in trigger-policy.mjs package.json defaults.json \
+            src/defaults.js src/policy.js src/github.js src/workflow-authority.js; do
+            mkdir -p "$temporary/$(dirname "$file")"
+            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+              -o "$temporary/$file" \
+              "$source_origin/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file"
+          done
+          # env -i drops PATH, so run the resolved binary rather than whatever /usr/bin holds.
+          node_bin=$(command -v node)
+          env -i PATH=/usr/bin:/bin GH_TOKEN="$GH_TOKEN" \
+            GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" \
+            GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_OUTPUT="$GITHUB_OUTPUT" \
+            PATH_SKIP_PATTERNS="$PATH_SKIP_PATTERNS" "$node_bin" "$temporary/trigger-policy.mjs"
+  gpu:
+    name: Isolated BASE runner validates untrusted Worker
+    needs: [pending, policy]
+    if: ${{ needs.policy.outputs.run == '1' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    environment: gpu-vast
+    timeout-minutes: 210
+    permissions:
+      id-token: write
+    outputs:
+      state: ${{ steps.broker.outputs.state }}
+      verdict: ${{ steps.broker.outputs.verdict }}
+      verified: ${{ steps.broker.outputs.verified }}
+    steps:
+      - name: Fetch BASE controller and request bounded test
+        id: broker
+        shell: bash --noprofile --norc -eo pipefail {0}
+        timeout-minutes: 205
+        env:
+          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}
+          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.VAST_BROKER_ACCESS_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.VAST_BROKER_ACCESS_SECRET }}
+        run: |
+          set +x
+          set -euo pipefail
+          [[ "$GITHUB_REF" = refs/heads/master ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REPOSITORY" = reindertpelsma/kayfabe ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          for file in runner.py deployment.json; do
+            curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+              -o "$temporary/$file" \
+              "https://raw.githubusercontent.com/reindertpelsma/kayfabe/$GITHUB_SHA/ci/vast-broker/$file" 2>/dev/null
+          done
+          env -i PATH=/usr/bin:/bin HOME="$temporary" \
+            WORKER_URL="$WORKER_URL" WORKER_PATH="${WORKER_PATH:-}" \
+            CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}" \
+            CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}" \
+            GITHUB_OUTPUT="$GITHUB_OUTPUT" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \
+            GITHUB_EVENT_PATH="$GITHUB_EVENT_PATH" GITHUB_SHA="$GITHUB_SHA" \
+            GITHUB_EVENT_NAME="$GITHUB_EVENT_NAME" GITHUB_REF="$GITHUB_REF" \
+            GITHUB_REPOSITORY="$GITHUB_REPOSITORY" GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            GITHUB_RUN_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN="$ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            ACTIONS_ID_TOKEN_REQUEST_URL="$ACTIONS_ID_TOKEN_REQUEST_URL" \
+            python3 -I "$temporary/runner.py" "$temporary/deployment.json"
+  report:
+    name: gpu-vast
+    if: ${{ always() }}
+    needs: [pending, policy, policy-check, gpu]
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    env:
+      PENDING_RESULT: ${{ needs.pending.result }}
+      POLICY_RESULT: ${{ needs.policy.result }}
+      POLICY_RUN: ${{ needs.policy.outputs.run }}
+      POLICY_CHECK_RESULT: ${{ needs.policy-check.result }}
+      POLICY_CHECK_RUN: ${{ needs.policy-check.outputs.run }}
+      GPU_RESULT: ${{ needs.gpu.result }}
+      BROKER_STATE: ${{ needs.gpu.outputs.state }}
+      BROKER_VERIFIED: ${{ needs.gpu.outputs.verified }}
+      BROKER_VERDICT: ${{ needs.gpu.outputs.verdict }}
+    steps:
+      - name: Post final status and fail every unsuccessful dependency
+        shell: bash --noprofile --norc -eo pipefail {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          state=UNAVAILABLE
+          case "$BROKER_STATE" in
+            NONE|CREATING|BOOTING|TESTING|GRACE|NOT_ELIGIBLE|BUSY|UNAVAILABLE)
+              state=$BROKER_STATE ;;
+            UNAVAILABLE_BUDGET|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND)
+              state=$BROKER_STATE ;;
+            OWNERSHIP_MISMATCH|RATE_LIMIT)
+              state=$BROKER_STATE ;;
+          esac
+          result=error
+          # NOT_NEEDED needs two agreeing decisions; the action-free policy-check job is one.
+          # The Worker never decides a skip: a GPU success needs a verified GRACE/NONE PASS.
+          if [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
+            "$POLICY_RUN" = 0 && "${POLICY_CHECK_RESULT:-}" = success &&
+            "${POLICY_CHECK_RUN:-}" = 0 && "$GPU_RESULT" = skipped ]]; then
+            state=NOT_NEEDED
+            result=success
+          elif [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
+            "$POLICY_RUN" = 1 && "$GPU_RESULT" = success &&
+            "$BROKER_VERDICT" = PASS && "$BROKER_VERIFIED" = 1 &&
+            ( "$state" = GRACE || "$state" = NONE ) ]]; then
+            result=success
+          elif [[ "$BROKER_VERDICT" = FAIL ]]; then
+            result=failure
+          fi
+          description="GPU broker $state"
+          temporary=$(mktemp)
+          jq -n --arg state "$result" --arg description "$description" \
+            --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{state:$state,context:"gpu-vast",description:$description,target_url:$url}' > "$temporary"
+          curl --silent --show-error --fail --max-time 20 \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            -X POST --data-binary "@$temporary" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$TARGET_SHA" >/dev/null
+          [[ "$result" = success ]]
