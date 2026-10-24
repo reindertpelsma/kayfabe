@@ -99,7 +99,7 @@ const CODES = {
   PERFORMANCE: (h) => (h.cloud.offer.dlperf = 0),
   NETWORK: (h) => (h.cloud.offer.inet_down = 10),
   DISK_BW: (h) => (h.cloud.offer.disk_bw = 10),
-  DRIVER: (h) => (h.cloud.offer.driver_version = '999.1.1'),
+  // Owner ruling 2026-10-24 item 10: no DRIVER code (the host driver is irrelevant for KVM).
   PRICE_FIELDS: (h) => (h.cloud.offer.storage_cost = -1),
   COUNTRY: (h) => (h.cloud.offer.geolocation = 'Beijing, CN'),
   PRICE: (h) => (h.cloud.price = 0.9), // MAX_PRICE_USD_HOUR is 0.5 in the harness
