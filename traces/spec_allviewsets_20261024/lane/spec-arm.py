@@ -65,10 +65,17 @@ try:
  sample=0;offset=0;maxima={k:0 for k in ['pointer_large_entries','pointer_entry_max_bytes','refused_scan_budget','poisoned']};budget=[];refusal_lines=[];started=time.monotonic();last=None
  while not (A/'arm-stop.json').exists():
   sample+=1;t=now();before=(A/'qemu.log').stat().st_size
-  last=json.loads(agent(status_script(boot),f'status-{sample:04}.json'))
+  last=None
+  for _try in range(4):
+   try:
+    last=json.loads(agent(status_script(boot),f'status-{sample:04}-{_try}.json'));break
+   except (ValueError,RuntimeError) as _e:
+    with (S/'status-retries.log').open('a') as _f:_f.write(f'{now()} sample {sample} try {_try}: {type(_e).__name__}: {_e}\n')
+    time.sleep(3)
+  if last is None:raise RuntimeError('STATUS_UNREADABLE_4_TRIES')
   (S/'status-current.json').write_text(json.dumps(last,indent=2)+'\n')
-  with (A/'qemu.log').open() as f:f.seek(offset);chunk=f.read(16*1024*1024+1);offset=f.tell()
-  assert len(chunk.encode())<=16*1024*1024,'QEMU_LOG_BYTE_BOUND'
+  with (A/'qemu.log').open('rb') as f:f.seek(0,2);size=f.tell();offset=max(offset,size-16*1024*1024);f.seek(offset);raw=f.read(16*1024*1024);offset=f.tell();chunk=raw.decode('utf-8','replace')
+  assert len(raw)<=16*1024*1024,'QEMU_LOG_BYTE_BOUND'
   for line in chunk.splitlines():
    for key in maxima:
     hits=re.findall(key+r'[=:] ?(\d+)',line)

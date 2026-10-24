@@ -50,3 +50,24 @@ Context read from the qemu log (MEASURED order of log lines, INFERRED meaning; S
 subtest's viewperf process; a 1,572-run unmap of that channel's address space was applied before the guest's
 DISABLE_CHANNELS for the faulting twin. Whether the faulting VA lies in that unmap is not logged without `KF3_MAPLOG`.
 Hypotheses and falsifiers are in the operator report; nothing was changed in product code.
+
+## Diagnostic attempt with `KF3_MAPLOG=1` (run 5213, MEASURED; confounded by the flag)
+
+Same nine-viewset order. blender, catia, creo, energy-04 Completed; during enscape 06 (UltraHQ) the guest logged nvlddmkm 153 x3 and
+one RM unload/reload, with no host Xid and no relay refusal; the subtest made no progress for 19 min and the arm was stopped by its
+own finish flag. The run never reached subtest 07, so the fault-VA history question stays open. MAPLOG adds a log write per doorbell
+and per diff run (about 1 MB/s here), so this TDR is not attributed to the product (enscape 06 already needs about 1.4 s of GPU time
+per frame on kayfabe without the flag). Harness-only changes for this run: extra-flag plumbing, tail-seeking byte-bounded log reads,
+status-read retries (`lane/`).
+
+## Status per viewset on candidate 6d (correctness)
+
+| viewset | alone, fresh boot | inside one boot after blender/catia/creo/energy |
+|---|---|---|
+| blender-01, catia-07, creo-04, energy-04 | PASS full | Completed in 5209, 5210, 5213 |
+| enscape-01 | PASS full (5201) | FAIL 2/2 at subtest 07 (host Xid 31, CE0 FAULT_PTE VIRT_WRITE, the subtest's graphics channel); TDR at 06 with MAPLOG |
+| maya-07, medical-04, solidworks-08, unreal_engine-01 | PASS full (first ever kayfabe runs) | not reached (behind enscape) |
+
+Open (not implemented): the faulting page's map/unmap history (needs a lighter VA diagnostic than MAPLOG), whether the earlier
+workloads are needed (energy + enscape only), and whether the 8192 MiB store's VRAM pressure is needed (same sequence with a
+larger store).

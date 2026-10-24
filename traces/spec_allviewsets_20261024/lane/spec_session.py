@@ -66,8 +66,8 @@ try:
     resets=[];offset=0
     while True:
         now=time.time();lines=E.read_xids();fresh=E.delta('\n'.join(lines),history)
-        with (ROOT/'qemu.log').open() as f:f.seek(offset);chunk=f.read(16*1024*1024+1);offset=f.tell()
-        assert len(chunk.encode())<=16*1024*1024,'QEMU observation byte bound'
+        with (ROOT/'qemu.log').open('rb') as f:f.seek(0,2);size=f.tell();offset=max(offset,size-16*1024*1024);f.seek(offset);raw=f.read(16*1024*1024);offset=f.tell();chunk=raw.decode('utf-8','replace')
+        assert len(raw)<=16*1024*1024,'QEMU observation byte bound'
         resets.extend([now]*C.unload_markers(chunk))
         reason=C.abort_reason(len(fresh),resets,now,C.DEADLINE)
         if (ROOT/'finish.flag').exists() and reason is None:reason='COMPLETE_REQUESTED'

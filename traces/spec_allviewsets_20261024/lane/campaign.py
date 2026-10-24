@@ -47,6 +47,8 @@ def launch(number, rev):
     assert seconds > 0
     env={k:v for k,v in os.environ.items() if not k.startswith('KF3_')}
     env.update(production_environment(data,W,rev,seconds))
+    extra=os.environ.get('SPEC_EXTRA_FLAGS','').split()
+    if extra: env['WIN_FLAGS']=env['WIN_FLAGS']+' '+' '.join(extra)
     env['BROKER_ARGS']='--stats-line'
     env['WIN_CPU']=argv[argv.index('-cpu')+1]
     device=next(x for x in argv if x.startswith('kf3-gpu,'))
@@ -66,6 +68,7 @@ def launch(number, rev):
         run(['bash',str(BROKER),'run',str(number)],env=env,stdout=f,stderr=subprocess.STDOUT)
     actual=json.loads((root/'command.json').read_text())
     desired={k:v for k,v in data['flags'].items() if k!='KF3_PROF'};desired['KF3_DIAG_PROGRESS']='1000'
+    for kv in os.environ.get('SPEC_EXTRA_FLAGS','').split(): k,v=kv.split('=',1); desired[k]=v
     assert actual['flags']==desired,(actual['flags'],desired)
     print((root/'launcher.log').read_text(),flush=True)
 
