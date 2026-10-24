@@ -21,11 +21,11 @@
   "gb202_market_queries_this_authority": 0,
   "page_policy": "GB202/GB206 exact rows; GB203/GB205/GB207 explicit GB202 donor and reason at host595 branch",
   "falsifier": "Guest TDR/bugcheck within10min after admitted exact pair refutes survival/containment for this actual die; no admitted Xid leaves containment untested",
-  "actual_lease": 57457694,
+  "actual_lease": 57472433,
   "expected_die": "GB205",
   "expected_donor": "GB202",
   "provider_exception_used": false,
-  "deadline_utc": "2026-10-24T05:32:27.281151+00:00",
+  "deadline_utc": "2026-10-24T08:10:37.372679+00:00",
   "attempt_state": "launching_authenticated_lease",
   "actual_die_driver_page_verified": false,
   "ssh_identity_guard_refusal": false,
@@ -61,5 +61,16 @@
   "guest_smp": 6,
   "build_jobs": 7,
   "fuzz_cores": 3,
-  "lease_max_seconds": 10800
+  "lease_max_seconds": 10800,
+  "die_pairs": {
+    "GB205": [
+      "0x14",
+      "0x1000000b"
+    ],
+    "GB202": [
+      "0x14",
+      "0x0e00000b"
+    ]
+  },
+  "owner_decisions": "2026-10-24 BW4: per-die pairs; collection boot after fatal"
 }

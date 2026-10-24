@@ -1,0 +1,9 @@
+{
+  "arm": "on_relay_off",
+  "pid": 177970,
+  "starttime": 404242,
+  "disabled_handshake": true,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

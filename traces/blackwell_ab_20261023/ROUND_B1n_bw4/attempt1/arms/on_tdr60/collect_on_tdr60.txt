@@ -1,0 +1,67 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+COLLECT now=2026-10-24T07:20:53.1900366Z boot=2026-10-24T07:18:09.5000000Z
+FILE C:\Windows\Minidump\102426-59343-01.dmp 7114122 2026-10-24T07:18:59.2620829Z
+FILE C:\Windows\LiveKernelReports\WATCHDOG-20261024-0716.dmp 1084198912 2026-10-24T07:16:42.7351635Z
+EVT log=System t=2026-10-24T06:18:28.9101086Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T06:24:07.8286145Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T06:26:57.6564373Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T07:10:25.5008154Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T07:13:11.9177539Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T07:18:11.3554454Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T13:14:01.2276679Z prov=Microsoft-Windows-Kernel-Boot id=153 msg=Virtualization-based security (policies: 0) is disabled.
+EVT log=System t=2026-10-24T07:19:05.7807069Z prov=Microsoft-Windows-WER-SystemErrorReporting id=1001 msg=The computer has rebooted from a bugcheck. The bugcheck was: 0x00000116 (0xffff8085f0323050, 0xfffff80727434930, 0xffffffffc000009a, 0x0000000000000004). A dump was saved in: C:\WINDOWS\Minidump\102426-59343-01.dmp. Report Id: 64114b63-3c10-489b-b373-8bd272a055e3.
+EVT log=System t=2026-10-24T07:18:35.0971195Z prov=Microsoft-Windows-Kernel-Power id=41 msg=The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly.
+EVT log=System t=2026-10-24T07:19:15.1274160Z prov=EventLog id=6008 msg=The previous system shutdown at 7:14:20 AM on ?10/?24/?2026 was unexpected.
+EVTQ_NONE log=System id=4101 prov=
+EVTQ_NONE log=System id=4117 prov=
+EVTQ_NONE log=System id=4119 prov=
+EVTQ_NONE log=System id= prov=nvlddmkm
+EVTQ_NONE log=System id= prov=Display
+EVT log=Application t=2026-10-24T07:19:50.8416602Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-0716.dmp \\?\C:\WINDOWS\SystemTemp\WER-59390-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.406480f0-dc2b-4b6d-b4da-d1aca8
+EVT log=Application t=2026-10-24T07:19:51.2619193Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-0716.dmp \\?\C:\WINDOWS\SystemTemp\WER-59390-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.406480f0-dc2b-4b6d-b4da-d1aca8
+EVT log=Application t=2026-10-24T07:19:51.7182331Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: BlueScreen Response: Not available Cab Id: 0 Problem signature: P1: 116 P2: ffff8085f0323050 P3: fffff80727434930 P4: ffffffffc000009a P5: 4 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\Minidump\102426-59343-01.dmp \\?\C:\WINDOWS\SystemTemp\WER-59390-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8f7eb428-c4a3-441d-b9af
+EVT log=Application t=2026-10-24T07:19:52.7034500Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: LiveKernelEvent Response: Not available Cab Id: 0 Problem signature: P1: 1b8 P2: a P3: 0 P4: 0 P5: 0 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\LiveKernelReports\WATCHDOG4400\WATCHDOG4400-20261024-0716.dmp \\?\C:\WINDOWS\SystemTemp\WER-59390-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.406480f0-dc2b-4b6d-b4da-d1aca8
+EVT log=Application t=2026-10-24T07:19:53.7208083Z prov=Windows Error Reporting id=1001 msg=Fault bucket , type 0 Event Name: BlueScreen Response: Not available Cab Id: 0 Problem signature: P1: 116 P2: ffff8085f0323050 P3: fffff80727434930 P4: ffffffffc000009a P5: 4 P6: 10_0_26100 P7: 0_0 P8: 256_1 P9: P10: Attached files: \\?\C:\WINDOWS\Minidump\102426-59343-01.dmp \\?\C:\WINDOWS\SystemTemp\WER-59390-0.sysdata.xml \\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.8f7eb428-c4a3-441d-b9af
+EVTQ_NONE log=Application id=1000 prov=
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_116_676222c227ae2a6466c8ff41428718a354b5627_00000000_98cadad3-1d47-4576-8a24-e4fb86cf5164\Report.wer
+  EventType=BlueScreen
+  Sig[0].Name=Code
+  Sig[0].Value=116
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=ffff8085f0323050
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=fffff80727434930
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=ffffffffc000009a
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=4
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Shut down unexpectedly
+  AppName=Windows
+WER C:\ProgramData\Microsoft\Windows\WER\ReportQueue\Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_bd8aaf82-a32c-49c8-aa24-76b2ed2f66f1\Report.wer
+  EventType=LiveKernelEvent
+  Sig[0].Name=Code
+  Sig[0].Value=1b8
+  Sig[1].Name=Parameter 1
+  Sig[1].Value=a
+  Sig[2].Name=Parameter 2
+  Sig[2].Value=0
+  Sig[3].Name=Parameter 3
+  Sig[3].Value=0
+  Sig[4].Name=Parameter 4
+  Sig[4].Value=0
+  Sig[5].Name=OS version
+  Sig[5].Value=10_0_26100
+  Sig[6].Name=Service Pack
+  Sig[6].Value=0_0
+  Sig[7].Name=Product
+  Sig[7].Value=256_1
+  FriendlyEventName=Hardware error
+  AppName=Windows
+COLLECT_DONE

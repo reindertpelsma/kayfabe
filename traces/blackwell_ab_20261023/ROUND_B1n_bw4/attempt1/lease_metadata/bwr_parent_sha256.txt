@@ -1,0 +1,3 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+bd9c319b88df235a0eb81fb2790f936eb95fc4cfafd1422c97094df2f0fdf794  /workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2

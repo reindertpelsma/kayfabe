@@ -1,0 +1,83 @@
+{
+ "run": "lx_reload",
+ "verified": 14,
+ "failed": [],
+ "not_pulled": [],
+ "stream_missing_or_bad": 0,
+ "files": {
+  "prov/arms/lx_reload/run_bw4_lx_reload_rev.txt": {
+   "sha256": "f7d0e624d2f4d2e767c7f0e27c32bd5ac1fec58f391e7eefeba0dc5992e9cb7e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 21
+  },
+  "prov/arm_lx_reload.started": {
+   "sha256": "5303af8ba9b1909982b3d6bcabbd8a191490efbc26d90394cf119b936650bf76",
+   "status": "VERIFIED_STREAM",
+   "bytes": 26
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_hostdmesg.log": {
+   "sha256": "d638252b3b077e0f60e5d64a96442eecc3be215ed14d281fe9fbf24123064bf9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 53
+  },
+  "prov/arms/lx_reload/host_kernel.log": {
+   "sha256": "be207c723d539d52b6e54888cb0e63f85a48a66db7db474297c234d7cc32461f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 85
+  },
+  "prov/arms/lx_reload/guest_staged.txt": {
+   "sha256": "84401f8c0b5c3596532b7e5d9e2290fccb6cafee5fa3c2b2b53d2c5e8fdde95a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 87
+  },
+  "prov/arms/lx_reload/binary_sha256.txt": {
+   "sha256": "77413ede56958e95e917078b8c911674c031318bf0d770bb36dcaf774f980560",
+   "status": "VERIFIED_STREAM",
+   "bytes": 120
+  },
+  "prov/budget_start_lx_reload.json": {
+   "sha256": "e123b8c280de92c261aeee501251b75babe9226ebb750376a335011c5facd9d9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 184
+  },
+  "prov/arm_lx_reload.log": {
+   "sha256": "b07aefb81d696dfead477e41d5f1a7c1d804d5a0682e58e33a2db8a7175d2157",
+   "status": "VERIFIED_STREAM",
+   "bytes": 3504
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_dmesg.log": {
+   "sha256": "dc03ff3229e8e7a4753c6f447578f62768bd142e9602fc53ce51f896bf0ec709",
+   "status": "VERIFIED_STREAM",
+   "bytes": 4930
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_dmesg_after.log": {
+   "sha256": "af315aef74a1f6a341f3192eb6b8eded36acf56b37208b96c46aca0e21af8160",
+   "status": "VERIFIED_STREAM",
+   "bytes": 5010
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_reload.log": {
+   "sha256": "33f885d93296be4b2da720d0d0e05423f87053286511af79d1d9e6204c7f3045",
+   "status": "VERIFIED_STREAM",
+   "bytes": 6913
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_probe.log": {
+   "sha256": "e6ef19acab9c86346f0b7f9611f05ff1c99d7ace31a54efc944a8fee66753a43",
+   "status": "VERIFIED_STREAM",
+   "bytes": 10394
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_serial.log": {
+   "sha256": "ee5017fc4decf6c8e02959ca69d8da22aeadf8678da6a4a9bdfc386e4a97aac5",
+   "status": "VERIFIED_STREAM",
+   "bytes": 71218
+  },
+  "prov/arms/lx_reload/run_bw4_lx_reload_qemu.log": {
+   "sha256": "67b2eb6d2038b8bcb239f66a18797942897fc83e1a51400393810105a95ef512",
+   "status": "VERIFIED_STREAM",
+   "bytes": 193772
+  }
+ },
+ "seconds": 3.4,
+ "private": true,
+ "lease": 57472433,
+ "raw_location": "private dev-box capture dir"
+}

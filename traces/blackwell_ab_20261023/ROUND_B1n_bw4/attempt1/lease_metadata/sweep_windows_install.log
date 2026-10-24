@@ -1,0 +1,91 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+WIN_BASE_INSTALL_START pinned-QEMU/std-VGA baseline preparation 2026-10-24T05:58:29+00:00
+MEDIA_SUCCESS_WITHIN_PREPARATION_BUDGET 2026-10-24T05:58:49.799319+00:00
+[2026-10-24T05:58:50Z] WINVM_INSTALL_START name=kfwin repo=9ff51a6e qemu=/workspace/bench/kf3-bins/6e3fd3fd/qemu-system-x86_64 host_driver=595.91.07
+[2026-10-24T05:58:50Z] START prereqs
+[2026-10-24T05:58:50Z] EXIT prereqs rc=0
+[2026-10-24T05:58:50Z] START fetch
+[2026-10-24T05:59:12Z] MEDIUM_OK win11_ltsc_2024_eval_x64_en-us.iso sha256=67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68 bytes=5112850432
+[2026-10-24T05:59:16Z] MEDIUM_OK virtio-win-0.1.302.iso sha256=303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d bytes=877373440
+[2026-10-24T05:59:16Z] MEDIUM_OK OpenSSH-Win64-v10.0.0.0.msi sha256=ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9 bytes=6586368
+[2026-10-24T05:59:20Z] MEDIUM_OK 580.88-desktop-win10-win11-64bit-international-dch-whql.exe sha256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9 bytes=890807536
+[2026-10-24T05:59:20Z] EXIT fetch rc=0
+[2026-10-24T05:59:20Z] START apparmor
+[2026-10-24T05:59:20Z] AppArmor: swtpm may use /workspace/bw-capc-validation
+[2026-10-24T05:59:20Z] EXIT apparmor rc=0
+[2026-10-24T05:59:20Z] START secrets
+[2026-10-24T05:59:20Z] generated the Windows password (secrets/win_password, 0600)
+[2026-10-24T05:59:20Z] generated the harness ssh key (secrets/ssh_ed25519)
+[2026-10-24T05:59:20Z] EXIT secrets rc=0
+[2026-10-24T05:59:20Z] START secureboot-key
+[2026-10-24T05:59:21Z] generated this host's kayfabe Secure Boot db key (/workspace/bw-capc-validation/secureboot/db.key, never leaves the host)
+[2026-10-24T05:59:21Z] SB_DB_CERT subject=CN = kayfabe GOP db key (ubuntu 2026-10-24) sha256 Fingerprint=F9:CD:91:F3:83:BC:6A:2E:3A:7A:9A:F6:A5:DC:DB:31:09:5B:BA:63:37:A5:FA:0A:48:0A:B7:C4:BC:72:A2:1B
+[2026-10-24T05:59:21Z] EXIT secureboot-key rc=0
+[2026-10-24T05:59:21Z] START ovmf-vars
+INFO: reading raw edk2 varstore from /usr/share/OVMF/OVMF_VARS_4M.fd
+INFO: var store range: 0x64 -> 0x40000
+INFO: create variable PK
+INFO: clear PK sigdb
+INFO: add PK cert /tmp/tmp84ilhlpr
+INFO: create variable KEK
+INFO: clear KEK sigdb
+INFO: add KEK cert /tmp/tmp84ilhlpr
+INFO: add KEK cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationKEKCA2011.pem
+INFO: add dummy dbx entry
+INFO: create variable dbx
+INFO: create variable db
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftWindowsProductionPCA2011.pem
+INFO: add db cert /usr/lib/python3/dist-packages/virt/firmware/certs/MicrosoftCorporationUEFICA2011.pem
+INFO: add db cert /workspace/bw-capc-validation/secureboot/db.crt
+INFO: create variable SecureBootEnable
+INFO: set variable SecureBootEnable: True
+INFO: create variable CustomMode
+INFO: set variable CustomMode: False
+INFO: writing raw edk2 varstore to /workspace/bw-capc-validation/kfwin/firmware/OVMF_VARS.fd.tmp
+[2026-10-24T05:59:23Z] VARS_CREATED /workspace/bw-capc-validation/kfwin/firmware/OVMF_VARS.fd
+[2026-10-24T05:59:23Z] VARS_DB CN=Microsoft Windows Production PCA 2011; CN=Microsoft Corporation UEFI CA 2011; CN=kayfabe GOP db key (ubuntu 2026-10-24);
+[2026-10-24T05:59:24Z] EXIT ovmf-vars rc=0
+[2026-10-24T05:59:24Z] START tpm-manufacture
+TPM is listening on Unix socket.
+[2026-10-24T05:59:25Z] TPM_MANUFACTURED /workspace/bw-capc-validation/kfwin/tpm (5993 bytes of state)
+[2026-10-24T05:59:25Z] EXIT tpm-manufacture rc=0
+[2026-10-24T05:59:25Z] START disk
+[2026-10-24T05:59:26Z] DISK_CREATED base.qcow2 80G
+[2026-10-24T05:59:26Z] EXIT disk rc=0
+[2026-10-24T05:59:26Z] START unattend
+xorriso 1.5.4 : RockRidge filesystem manipulator, libburnia project.
+
+[2026-10-24T05:59:26Z] UNATTEND_ISO secrets/unattend.iso (6985728 bytes; 1 authorized key(s))
+[2026-10-24T05:59:26Z] EXIT unattend rc=0
+[2026-10-24T05:59:26Z] START install-boot
+[2026-10-24T05:59:26Z] QEMU_START tag=install boot=1 pid=101313 log=logs/install_b1_qemu.log
+[2026-10-24T06:23:53Z] INSTALL_BOOT_END rc=0 reason=guest-shutdown
+[2026-10-24T06:23:53Z] EXIT install-boot rc=0
+[2026-10-24T06:23:53Z] START check-boot
+[2026-10-24T06:23:54Z] QEMU_START tag=installcheck boot=1 pid=148999 log=logs/installcheck_b1_qemu.log
+[2026-10-24T06:25:08Z] SSH_UP after 20s
+[2026-10-24T06:25:25Z] first logon said: KF_FIRSTLOGON OK 2026-10-24T06:22:54.5341688+00:00
+  WIN_EDITION PASS Microsoft Windows 11 Enterprise LTSC Evaluation build 26100 10.0.26100
+  WIN_SECUREBOOT PASS Confirm-SecureBootUEFI=True
+  WIN_DB_HAS_KAYFABE PASS db contains 'kayfabe GOP'=True; Microsoft entries: Windows Production PCA 2011; Microsoft Corporation UEFI CA 2011; Windows UEFI CA 2023; Microsoft UEFI CA 2023; Microsoft Option ROM UEFI CA 2023
+  WIN_TPM PASS present=True ready=True enabled=True activated=True owned=True spec=2.0, 0, 1.64
+  WIN_TPM_EK INFO PublicKeyHash=aaaa3550977d58637bed4124857f4f6cb0c2b5f3764a7524a3b46b3da4a2d243 ManufacturerCertificates=1
+  WIN_BITLOCKER PASS VolumeStatus=FullyDecrypted ProtectionStatus=Off PreventDeviceEncryption=1; manage-bde: Conversion Status: Fully Decrypted; Percentage Encrypted: 0.0%; Encryption Method: None; Protection Status: Protection Off
+  WIN_VBS PASS VirtualizationBasedSecurityStatus=0
+  WIN_VIRTIO PASS store: fwcfg.inf,pvpanic.inf,smbus.inf,viorng.inf,vioser.inf,viostor.inf,netkvm.inf; missing: ; balloon/viomem staged: ; bound: QEMU FwCfg Device; QEMU PVPanic Device; Red Hat VirtIO SCSI controller; VirtIO RNG Device; VirtIO Serial Driver; Red Hat VirtIO Ethernet Adapter
+  WIN_PNP_CLEAN PASS problem devices:
+  WIN_DISPLAY INFO Microsoft Basic Display Adapter [PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08] status=OK problem=CM_PROB_NONE
+  WIN_SERVICES PASS QEMU-GA=Running sshd=Running
+  WIN_WU_OFF PASS NoAutoUpdate=1 ExcludeWUDriversInQualityUpdate=1 wuauserv=Running
+  WIN_NO_HIBER PASS HiberbootEnabled=0
+  WIN_SAC_OFF PASS VerifiedAndReputablePolicyState=0
+  WIN_FIRSTLOGON PASS KF_FIRSTLOGON OK 2026-10-24T06:22:54.5341688+00:00
+  WIN_CHECK_DONE fail=0
+[2026-10-24T06:26:34Z] CHECK_BOOT_END rc=0 reason=guest-shutdown check_rc=0
+[2026-10-24T06:26:34Z] EXIT check-boot rc=0
+[2026-10-24T06:26:34Z] START seal
+[2026-10-24T06:26:34Z] SEALED disk/base.qcow2 (0400); unattend.iso (it held the password) deleted; every run uses an overlay
+[2026-10-24T06:26:34Z] EXIT seal rc=0
+[2026-10-24T06:26:34Z] WINVM_INSTALL_DONE name=kfwin
+WIN_BASE_INSTALL_EXIT rc=0 2026-10-24T06:26:34+00:00

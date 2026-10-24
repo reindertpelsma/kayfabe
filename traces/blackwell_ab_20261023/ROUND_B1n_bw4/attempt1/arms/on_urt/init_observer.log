@@ -1,0 +1,13 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+WINDOWS_INIT_OBSERVER_START on_urt
+Traceback (most recent call last):
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 197, in <module>
+    sys.exit(main())
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 181, in main
+    ok = observe(
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 72, in observe
+    text = fetch()
+  File "/root/sweep2/guard/blackwell/init_observer.py", line 160, in fetch
+    raise ValueError("diagnostic command failed: " + str(r.returncode))
+ValueError: diagnostic command failed: 255

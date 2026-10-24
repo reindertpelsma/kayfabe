@@ -1,0 +1,9 @@
+{
+  "Name": "NVIDIA GeForce RTX 5070",
+  "DriverVersion": "32.0.15.8088",
+  "ConfigManagerErrorCode": 22,
+  "PNPDeviceID": "PCI\\VEN_10DE&DEV_2F04&SUBSYS_53231462&REV_A1\\3&11583659&0&28",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

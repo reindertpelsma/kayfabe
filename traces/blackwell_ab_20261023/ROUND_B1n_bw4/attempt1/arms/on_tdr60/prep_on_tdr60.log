@@ -1,0 +1,9 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+PREP_START run=on_tdr60 script=prep_tdr60.ps1 (standard VGA, no kf3 device) 2026-10-24T07:10:11+00:00
+[2026-10-24T07:10:11Z] detached: tag=on_tdr60_prep, log logs/on_tdr60_prep_run.log (stdout logs/on_tdr60_prep_run.out)
+PREP_TDR60_DONE TdrDdiDelay=60 TdrDelay= label=DIAGNOSTIC UTC=2026-10-24T07:12:29.0028918Z
+[2026-10-24T07:12:29Z] stopping kfwin (pid 199120)
+[2026-10-24T07:12:48Z] stopped
+PREP_READY run=on_tdr60 2026-10-24T07:12:48+00:00
+PREP_EXIT run=on_tdr60 rc=0 2026-10-24T07:12:50+00:00
