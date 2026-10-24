@@ -82,6 +82,17 @@ class Sw4Budget(unittest.TestCase):
         p = B.plan(0.34, 23, NOW)
         self.assertEqual((p["stop_usd"], p["cap_usd"]), (1.5, 2))
 
+    def test_cheap_deadline_never_exceeds_two_hours(self):
+        p = B.plan(0.01, 23, NOW)
+        end = dt.datetime.fromisoformat(p["deadline_utc"])
+        self.assertLessEqual((end - NOW).total_seconds(), 7200)
+
+    def test_hard_cap_independent_of_stop(self):
+        self.assertEqual(B.plan(0.1, 23, NOW)["cap_usd"], 2)
+
+    def test_nonruntime_margin_cannot_disappear(self):
+        self.assertEqual(B.plan(0.1, 23, NOW)["nonruntime_margin_usd"], 0.5)
+
     def test_rate_limit(self):
         with self.assertRaises(ValueError):
             B.plan(0.61, 23, NOW)
@@ -185,6 +196,12 @@ class Sw4Lifecycle(unittest.TestCase):
         self.assertIn(("destroy", 123456), events)
         self.assertNotIn(("cancel", 99), events)
 
+    def test_another_capture_hash_failure_tears_down_without_success(self):
+        events, result = self.lifecycle(receipt_hash="0" * 64)
+        self.assertIsInstance(result, Exception)
+        self.assertIn(("destroy", 123456), events)
+        self.assertNotIn(("cancel", 99), events)
+
     def test_native_refusal_no_guest_retry(self):
         events, result = self.lifecycle(native_failed=True)
         self.assertIsInstance(result, Exception)
@@ -228,6 +245,15 @@ class Sw4Lifecycle(unittest.TestCase):
             path.write_bytes(b"changed")
             with self.assertRaises(ValueError):
                 L.source_lock({str(path): "wrong"})
+
+    def test_source_lock_changed_second_fixture(self):
+        import lifecycle as L
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "source"
+            path.write_bytes(b"another alteration")
+            with self.assertRaises(ValueError):
+                L.source_lock({str(path): "0" * 64})
 
     def test_source_lock_missing(self):
         import lifecycle as L

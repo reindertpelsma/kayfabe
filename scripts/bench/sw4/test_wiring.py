@@ -22,6 +22,27 @@ class Wiring(unittest.TestCase):
         self.assertLess(events.index("bare30"), events.index("kf3-build"))
         self.assertLess(events.index("kf3-build"), events.index("guest30-180s"))
 
+    def test_seven_cpu_preflight_refuses_before_build(self):
+        import operator_backend as O
+
+        result, events = O.rehearse(cpus=7)
+        self.assertTrue(result["refused"])
+        self.assertNotIn("native-binding", events)
+        self.assertIn("destroy", events)
+
+    def test_one_cpu_preflight_refuses_before_build(self):
+        import operator_backend as O
+
+        result, events = O.rehearse(cpus=1)
+        self.assertTrue(result["refused"])
+        self.assertNotIn("native-binding", events)
+
+    def test_remote_native_pass_before_guest_build(self):
+        import operator_backend as O
+
+        script = O.remote_script()
+        self.assertLess(script.index("SW4_NATIVE_PASS"), script.index("build_kf3.sh"))
+
     def test_remote_source_contract(self):
         import operator_backend as O
 
