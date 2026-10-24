@@ -135,7 +135,7 @@ pub fn output_exact(src: [f64; 3], m: &[i32; 12], t: Option<&RefTable<'_>>) -> [
 /// Rec.709 luma weights.
 pub const LUMA: [f64; 3] = [0.2126, 0.7152, 0.0722];
 
-/// Windows' OCSC0 rounding bias (run 99, measured), in the offset column.
+/// Windows' OCSC0 rounding bias (measured in run 99, RTX 4070, 2026-10-09), in the offset column.
 pub const WINDOWS_BIAS: i32 = 0x20;
 
 /// Encoded coefficient, 65536 = 1.0.

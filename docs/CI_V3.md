@@ -1,7 +1,39 @@
 # CI scope after the v3 migration
 
-**STATUS: LIVE, 2026-09-29.** This describes the CI repair, not an expansion of the
-hardware support matrix or a claim of complete unsafe-code soundness.
+**STATUS: LIVE, 2026-09-29 (section "PR #92 automated checks" added 2026-10-24).** This describes the
+CI repair, not an expansion of the hardware support matrix or a claim of complete unsafe-code soundness.
+
+## PR #92 automated checks (2026-10-24, branch `claude/auto-checks-92-20261024`)
+
+**STATUS: LIVE for part A (GPU-free, in CI); DESIGN-ONLY for B-D until their first host run (all
+three are written and lint-clean; none has run, because the GPU host was busy with another session's
+Windows VM in a quiet window on 2026-10-24).** The owner's manual checks for the display colour path
+(PR #92: mirrored OLUT behind a signed OCSC0, Hue / Digital Vibrance) and for the broker's cursor
+ownership (OWNER_RULINGS §AJ), as tests. One gate runs them in order and writes `summary.json`:
+
+```sh
+scripts/bench/auto_checks_92.sh --only A                          # anywhere: cargo, python3, make
+scripts/bench/auto_checks_92.sh --rev <kf3-rev8> --win-run <N>    # trusted GPU host, serially
+```
+
+| part | what | where | result |
+|---|---|---|---|
+| A | `kf-disp --test color_hue_vibrance` (330 hue/vibrance/boundary OCSC0 configurations as register words in run 99's Windows program: decode `Ok` = no `Fault::Console`, CPU oracle = independent f64 reference, bounded properties, any 32-bit coefficient word); `--test color_output_ptx` (the committed `kf_color_output` PTX executed on the host by an interpreter, vs the oracle and the reference); `kf-qemu --lib colour_program` (the bounded `colour program #N` log line); `scripts/ci/test_auto_checks_92.py` (grader selftests, line-format pin); `make -C broker check` (incl. the `--cursor-xor` tool) | CI (`cargo test --workspace`, the unittest step, the broker step) | exit code |
+| B | `scripts/bench/display/color_gpu_lane.sh`: the GPU-free colour tests of the same revision, then `color_mirror`, `color_sdr`, `color_tmo`, `color_hue_vibrance` (the same table on the GPU, every byte vs oracle and reference) | GPU host, fast-guest lock | `result.json`, `COLOR_GPU_LANE_EXIT` |
+| C | `scripts/bench/windows/hue_vibrance_lane.sh`: owner image, production flags, throw-away overlay; sliders moved by UI Automation; per setting and for `HV_HOLD_MIN` minutes: frame counter in the test pattern changes, no `scanout REFUSED SDR colour program`, no STALL, patches = reference math on the logged coefficients (+-2), no guest 153/4101, no host Xid | GPU host, no other VM | `result.json`, `HV_LANE_EXIT` |
+| D | `scripts/bench/display/cursor_lane.sh`: on the live GNOME Wayland session, mutter ScreenCast (cursor embedded) and RemoteDesktop; legs `xor` (synthetic VMM, true inversion), `hover` (guest pointer = mapped host pointer, no cursor in kayfabe's frame, the guest's XFixes cursor on the host screen), `grab`, `log` (CAP_CURSOR_STREAM line, no `host cursor COMPOSED`, `cursor_refused=0`) | GPU host, no other VM | `result.json`, `CURSOR_LANE_EXIT` |
+
+Verdicts are `PASS`, `FAIL`, `INCONCLUSIVE` (a stated assumption did not hold: e.g. the guest's
+ILUT/OLUT are not identity, the window is scaled), `ROUTE_UNAVAILABLE` (the UI Automation sliders or
+the mutter D-Bus route were not found), `BUSY` (lock held, quiet window, another VM: nothing ran) and
+`ERROR`. Exit codes: 0 / 1 / 3 / 4 / 75 / 2. A `BUSY` is never a pass.
+
+What these do NOT prove: that the real display engine's MIRROR is the odd extension (still
+`[inferred]`; the falsifier is a VFIO or bare-metal readback, `V3_SDR_COLOR.md`); what NVIDIA's
+Windows driver programs for a slider position until lane C's `colour program` lines are recorded; the
+Hue / Digital Vibrance route itself (no supported CLI/API exists: the public NVAPI SDK has no DVC/HUE
+entry points, checked 2026-10-24; private ids or registry values would be reverse engineering). The
+full write-up, with commands and what each test proves, is the lane's report.
 
 ## CI repair of 2026-10-21 (branch `claude/ci-green-20261021`)
 

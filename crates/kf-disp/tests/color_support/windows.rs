@@ -11,7 +11,7 @@ use kf_disp::class::{ClassTable, put};
 use kf_disp::color::IDENTITY;
 use std::collections::HashMap;
 
-/// Window and core classes of the measured program.
+/// Window and core classes of the measured program (run 99, 2026-10-09).
 pub const WIN: u32 = 0xc67e;
 /// Core class (C77D, Ada).
 pub const CORE: u32 = 0xc77d;
@@ -31,7 +31,8 @@ pub fn set(b: &mut Words, t: &ClassTable, c: u32, name: &str, head: Option<u32>,
     b.insert(addr(t, c, name, head), v);
 }
 
-/// The measured OLUT/ILUT control word: DIRECT10, 1029 entries, MIRROR=1, no interpolation.
+/// The measured OLUT/ILUT control word (runs 98/99, RTX 4070, 2026-10-09): DIRECT10, 1029 entries,
+/// MIRROR=1, no interpolation.
 pub const WINDOWS_LUT_CONTROL: u32 = 0x0004_050a;
 
 /// Run 99's program (identity OCSC0 with the 0x20 bias, mirrored ILUT and OLUT).

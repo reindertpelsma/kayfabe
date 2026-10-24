@@ -84,7 +84,7 @@ fn every_hue_and_vibrance_configuration_decodes_without_a_console_fault() {
     let mut decoded = 0;
     for version in VERSIONS {
         let t = for_version(version).unwrap();
-        // the measured control word is DIRECT10 / 1029 / MIRROR, no interpolation
+        // the measured control word (run 99, RTX 4070, 2026-10-09) is DIRECT10 / 1029 / MIRROR, no interpolation
         assert_eq!(
             windows::olut_control(t, true, false, true),
             windows::WINDOWS_LUT_CONTROL,
