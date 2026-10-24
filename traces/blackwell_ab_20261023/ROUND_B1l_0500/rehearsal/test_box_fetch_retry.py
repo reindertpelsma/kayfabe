@@ -14,8 +14,13 @@ import threading
 import time
 import unittest
 
-K = Path(os.environ.get("KF_BW3_K", "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/"
-                        "ROUND_B1l_0500/attempt1_m30498/run_kit"))
+K = Path(
+    os.environ.get(
+        "KF_BW3_K",
+        "/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/"
+        "ROUND_B1l_0500/attempt1_m30498/run_kit",
+    )
+)
 sys.path.insert(0, str(K))
 import box_fetch as BF  # noqa: E402
 
@@ -44,8 +49,9 @@ class FlakyHandler(http.server.BaseHTTPRequestHandler):
             n = self.counts.get(self.k, 0)
             if in_k:
                 self.counts[self.k] = n + 1
+                self.counts.setdefault("starts", []).append(a)
         failing = in_k and (self.fail_times is None or n < self.fail_times)
-        part = BODY[a:b + 1]
+        part = BODY[a : b + 1]
         if failing and self.mode == "http500":
             self.send_response(500)
             self.send_header("Content-Length", "0")
@@ -75,11 +81,16 @@ def fetch(cutoff=40, **kw):
     try:
         with tempfile.TemporaryDirectory() as tmp:
             cache = Path(tmp)
-            row = {"file": "f.bin", "url": url, "expected_bytes": len(BODY),
-                   "expected_sha256": hashlib.sha256(BODY).hexdigest()}
+            row = {
+                "file": "f.bin",
+                "url": url,
+                "expected_bytes": len(BODY),
+                "expected_sha256": hashlib.sha256(BODY).hexdigest(),
+            }
             t0 = time.monotonic()
-            st = BF.fetch_file(row, cache, time.monotonic() + cutoff, workers=WORKERS,
-                               allow_http_for_test=True)
+            st = BF.fetch_file(
+                row, cache, time.monotonic() + cutoff, workers=WORKERS, allow_http_for_test=True
+            )
             took = time.monotonic() - t0
             part = cache / "f.bin.part"
             data = part.read_bytes() if part.exists() else None
@@ -135,6 +146,20 @@ class RangeRetry(unittest.TestCase):
         self.assertEqual(data, BODY)
         self.assertGreaterEqual(st["resumed_bytes"][3], 1)
 
+    def test_cut_retry_requests_only_the_missing_tail(self):
+        st, data, _, counts, _ = fetch(fail_times=1, mode="cut")
+        k_start, k_end = RANGES[3]
+        starts = counts["starts"]
+        self.assertEqual(starts[0], k_start)
+        self.assertEqual(starts[1], k_start + (k_end - k_start + 1) // 2)
+        self.assertEqual(data, BODY)
+
+    def test_cut_twice_resumes_twice_and_verifies(self):
+        st, data, _, counts, _ = fetch(fail_times=2, mode="cut")
+        self.assertEqual(st["state"], "verified", st)
+        self.assertEqual(data, BODY)
+        self.assertEqual(len(counts["starts"]), 3)
+
     def test_cut_forever_fails_without_publishing(self):
         st, data, left, _, _ = fetch(fail_times=None, mode="cut")
         self.assertEqual(st["state"], "failed")
@@ -147,14 +172,25 @@ class RangeRetry(unittest.TestCase):
         self.assertEqual(st["state"], "failed")
         self.assertLess(took, 5)
 
+    def test_backoff_never_outlives_the_cutoff(self):
+        BF.BACKOFF_SECONDS = (5, 5, 5)
+        st, _, _, _, took = fetch(fail_times=None, mode="cut", cutoff=2.5)
+        self.assertEqual(st["state"], "failed")
+        self.assertLess(took, 5)
+
     def test_sha_still_verified_on_the_assembled_file(self):
         httpd, handler, url = serve(fail_times=1)
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                row = {"file": "f.bin", "url": url, "expected_bytes": len(BODY),
-                       "expected_sha256": "0" * 64}
-                st = BF.fetch_file(row, Path(tmp), time.monotonic() + 30, workers=WORKERS,
-                                   allow_http_for_test=True)
+                row = {
+                    "file": "f.bin",
+                    "url": url,
+                    "expected_bytes": len(BODY),
+                    "expected_sha256": "0" * 64,
+                }
+                st = BF.fetch_file(
+                    row, Path(tmp), time.monotonic() + 30, workers=WORKERS, allow_http_for_test=True
+                )
                 self.assertEqual(st["state"], "mismatch")
                 self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), [])
         finally:
