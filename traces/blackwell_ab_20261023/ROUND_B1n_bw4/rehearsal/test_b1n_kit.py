@@ -334,6 +334,21 @@ class CapturePack(unittest.TestCase):
             sizes = [(arm / n).stat().st_size for n in names]
             self.assertEqual(sizes, sorted(sizes))
 
+    def test_the_large_dump_is_listed_last(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            big = root / "cap" / "guest" / "LiveKernelReports" / "WATCHDOG-0359.dmp"
+            big.write_bytes(b"z" * 5000)
+            PACK.pack(
+                "on_urt",
+                guest_dir=root / "cap" / "guest",
+                vm_logs=root / "logs",
+                prov=root / "prov",
+                out=root / "capture",
+            )
+            last = (root / "capture" / "on_urt" / "MANIFEST.sha256").read_text().splitlines()[-1]
+            self.assertTrue(last.endswith("guest/LiveKernelReports/WATCHDOG-0359.dmp"), last)
+
     def test_guest_hash_mismatch_is_recorded_not_hidden(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.tree(tmp)
@@ -488,6 +503,22 @@ class CapturePull(unittest.TestCase):
             )
             self.assertEqual(receipt["verified"], 2)
             self.assertEqual(receipt["stream_missing_or_bad"], 1)
+
+    def test_stream_pull_refetches_a_corrupted_stream_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            arm = self.remote_tree(tmp)
+            manifest = (arm / "MANIFEST.sha256").read_text()
+
+            def corrupt(names, dest, timeout):
+                self.stream_local(arm)(names, dest, timeout)
+                (Path(dest) / "guest" / "d.dmp").write_bytes(b"dXmp")
+
+            dest = Path(tmp) / "p"
+            receipt = PULL.pull_arm_stream(
+                "on_urt", manifest, dest, corrupt, self.fetch_local(arm), 60
+            )
+            self.assertEqual(receipt["stream_missing_or_bad"], 1)
+            self.assertEqual((dest / "on_urt" / "guest" / "d.dmp").read_bytes(), b"dump")
 
     def test_stream_pull_reports_a_tampered_file_after_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:

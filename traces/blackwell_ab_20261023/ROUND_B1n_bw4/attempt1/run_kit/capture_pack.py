@@ -84,8 +84,10 @@ def pack(run, *, guest_dir=None, vm_logs=VM_LOGS, prov=PROV, out=OUT):
             if want and (want[0] != files[name]["sha256"] or want[1] != files[name]["bytes"]):
                 mismatches.append(name[len("guest/") :])
     missing = sorted(set(expected) - {n[len("guest/") :] for n in files if n.startswith("guest/")})
+    # Smallest first: a slow link at the pull deadline drops only the largest files.
+    order = sorted(files.items(), key=lambda item: (item[1]["bytes"], item[0]))
     (root / "MANIFEST.sha256").write_text(
-        "".join(f"{row['sha256']}  {name}\n" for name, row in files.items())
+        "".join(f"{row['sha256']}  {name}\n" for name, row in order)
     )
     summary = {
         "run": run,

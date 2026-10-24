@@ -130,7 +130,7 @@
     {
       "suite": "test_b1n_kit",
       "root": "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal",
-      "ran": 69,
+      "ran": 75,
       "ok": true
     },
     {
@@ -160,8 +160,8 @@
     }
   },
   "static": [],
-  "seconds": 86.5,
-  "utc": "2026-10-24T05:34:25.220147+00:00",
+  "seconds": 86.1,
+  "utc": "2026-10-24T05:38:03.403689+00:00",
   "sources": {
     "/workspace/bw4-wt/scripts/bench/blackwell/arm_history.py": "73ae5d56ae54639dbdb0a76203a66f1507393dfb7cce97cd892332764989fa08",
     "/workspace/bw4-wt/scripts/bench/blackwell/channel_projection.py": "e439cae14524896640296b57cb847e2a61baf9f9ac2b0a9bbc83aceb1005593e",
@@ -254,8 +254,8 @@
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/budget_start.py": "45e937913ce76b9cb7c2b0162d69a63b345d436a3a8f6eeebeffa81db8dcbf96",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/budget_watch.py": "efe865f5df3ba1d02382bd768c8dda7f22859a8cd6f759fec4f458f5405fe121",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/cache_upload.py": "3e4e95f16cb160cd4ebdbb5f0d969cb7409293d2616bb899e305f183bcfe65d1",
-    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/capture_pack.py": "4b23df3a8165a65955f6b4ddf66428f6a6250e35e721a7195200f241d07e5358",
-    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/capture_pull.py": "8dfa3aa30c0707c377127eb9da76d1f33abed86fe9b2a2a915536e722dc77fad",
+    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/capture_pack.py": "04269d158fb46e1a2701b5e2636c30a9520ae0f2298484449c15fe0a097af0b5",
+    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/capture_pull.py": "3ccef7fe041e8f404103ecc7e9863049578e58c47dbd42f16eff69c8f2c036f2",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/checked_chunks.py": "5415c4fb76c193b70db7d200a384da81e478c820316eaebdc1f545e3a2e674c3",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/export.py": "abc829486e63e3eb7f36ab383619c2fd586b3d6f937268ca0ef23ba2e48fcf32",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit/export_state.py": "60c12be918257a183e582183be00bf5f2d235d90b746874301c4cba49e37a4e1",
@@ -290,7 +290,7 @@
     "/workspace/bw4-round-b1n-a1-run/ack_native_template.py": "abc36b672c1df46878605a2f9bbf3d9adfac507b2354a41ac898ab0d55a1114f",
     "/workspace/bw4-round-b1n-a1-run/budget_watch.py": "a0b850405f43bac90cb89cac73bd000de184d63f5de576e8f766b10718899714",
     "/workspace/bw4-round-b1n-a1-run/cache_upload.py": "3e4e95f16cb160cd4ebdbb5f0d969cb7409293d2616bb899e305f183bcfe65d1",
-    "/workspace/bw4-round-b1n-a1-run/capture_pull.py": "8dfa3aa30c0707c377127eb9da76d1f33abed86fe9b2a2a915536e722dc77fad",
+    "/workspace/bw4-round-b1n-a1-run/capture_pull.py": "3ccef7fe041e8f404103ecc7e9863049578e58c47dbd42f16eff69c8f2c036f2",
     "/workspace/bw4-round-b1n-a1-run/checked_chunks.py": "5415c4fb76c193b70db7d200a384da81e478c820316eaebdc1f545e3a2e674c3",
     "/workspace/bw4-round-b1n-a1-run/dry_loop.py": "9ce6bba30cf1c8648d5c82bc97c2344679db33b714b6c69c8154d0ccbf464283",
     "/workspace/bw4-round-b1n-a1-run/export_arm.py": "be2c279ddf98eb3239c3e21c7409da703f0ae4ccccaf0ad93e6ed1e39f090610",
@@ -311,8 +311,8 @@
     "/workspace/bw4-round-b1n-a1-run/static_check.py": "a966a31f7b739891887ec5ebe824fc66d733b8e649b23f44fe16ff093e499a40",
     "/workspace/bw4-round-b1n-a1-run/upload.py": "5f6a873c1f90fc018d2cd6527e1a41b87cbd5efe75c6c68b66145d4fac686299",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/mutants_die.py": "25bd5b8fda3a0f9faac3ac2300bc95e8a1a26a9fba827bf798bb215a0913807c",
-    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/mutants_kit.py": "792a26d976e9839e0d4a59892d24a417291ac5315634f58849f5030c7fe7e1bc",
-    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_kit.py": "e378e7e75bf03dd1f402a5b332f263c5bf5b807ed97603e8c20dfb8409fd95aa",
+    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/mutants_kit.py": "ff7003453c03ab9906e9e639df007cdcef6c230632678482b752633cd7b8ccad",
+    "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_kit.py": "6a62157b0fee7301adc139cf9d9559b9e775ddaf1e55d89da0ad9ce045e7c909",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_ops.py": "4bdc4848e0b432f0bd56ed8216cfd26e6bfd5b7c1bb60d2ddfb2ae33f7b8784b",
     "/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_snippets.py": "91091100a4dacb43c7adcf12ec39b84ddcf97e26373e165dadd259b41896760d"
   },

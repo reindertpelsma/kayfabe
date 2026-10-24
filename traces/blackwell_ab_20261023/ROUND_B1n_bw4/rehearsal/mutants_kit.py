@@ -35,6 +35,15 @@ M = [
     ("fatal_collect.py", "linux collects", "        return arm if type(arm) is str and RUN.fullmatch(arm) and arm in disks else None",
      "        pass"),
     ("fatal_collect.py", "history change ok", "    if list(after[: len(before)]) != list(before):", "    if False:"),
+    ("capture_pack.py", "unordered manifest",
+     'order = sorted(files.items(), key=lambda item: (item[1]["bytes"], item[0]))',
+     "order = sorted(files.items())"),
+    ("capture_pull.py", "stream trusted",
+     "        if not (target.is_file() and sha256(target) == digest):",
+     "        if not target.is_file():"),
+    ("capture_pull.py", "no fallback",
+     'retry = pull_arm(run, "".join(f"{d}  {n}\\n" for d, n in bad), dest_root, fetch, remaining)',
+     'retry = pull_arm(run, "", dest_root, fetch, remaining)'),
 ]
 
 

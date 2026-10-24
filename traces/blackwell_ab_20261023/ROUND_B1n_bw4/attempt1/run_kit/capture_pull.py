@@ -89,6 +89,70 @@ def pull_arm(run, manifest_text, dest_root, fetch, deadline_s, clock=time.monoto
     }
 
 
+def pull_arm_stream(run, manifest_text, dest_root, stream, fetch, deadline_s, clock=time.monotonic):
+    """One tar stream for the whole manifest (in its smallest-first order), then sha256 checks;
+    a missing or bad file is fetched once more by itself inside the remaining deadline."""
+    rows = parse_manifest(manifest_text)
+    start = clock()
+    names = [name for _, name in rows]
+    try:
+        stream(names, Path(dest_root) / run, timeout=deadline_s)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    bad = []
+    for digest, name in rows:
+        target = Path(dest_root) / run / name
+        if not (target.is_file() and sha256(target) == digest):
+            bad.append((digest, name))
+    remaining = max(0, deadline_s - (clock() - start))
+    retry = pull_arm(run, "".join(f"{d}  {n}\n" for d, n in bad), dest_root, fetch, remaining)
+    files = {}
+    for digest, name in rows:
+        target = Path(dest_root) / run / name
+        files[name] = {"sha256": digest, "status": "VERIFIED_STREAM"}
+        if target.is_file():
+            files[name]["bytes"] = target.stat().st_size
+    files.update(retry["files"])
+    return {
+        "run": run,
+        "private_dir": str(Path(dest_root) / run),
+        "verified": len(rows) - len(bad) + retry["verified"],
+        "failed": retry["failed"],
+        "not_pulled": retry["not_pulled"],
+        "stream_missing_or_bad": len(bad),
+        "files": files,
+        "seconds": round(clock() - start, 1),
+    }
+
+
+def ssh_streamer(workspace, run):
+    conf = Path(workspace) / "ssh.conf"
+    alias = (Path(workspace) / "alias").read_text().strip()
+
+    def stream(names, dest, timeout):
+        Path(dest).mkdir(parents=True, exist_ok=True)
+        remote = f"tar -C /root/capture/{run} -cf - -T -"
+        pack = subprocess.Popen(
+            ["ssh", "-F", str(conf), alias, remote],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+        )
+        unpack = subprocess.Popen(["tar", "-C", str(dest), "-xf", "-"], stdin=pack.stdout)
+        pack.stdout.close()
+        pack.stdin.write("".join(n + "\n" for n in names).encode())
+        pack.stdin.close()
+        try:
+            unpack.wait(timeout=max(1, timeout))
+            pack.wait(timeout=30)
+        finally:
+            for child in (unpack, pack):
+                if child.poll() is None:
+                    child.kill()
+                    child.wait()
+
+    return stream
+
+
 def ssh_fetcher(workspace, run):
     conf = Path(workspace) / "ssh.conf"
     alias = (Path(workspace) / "alias").read_text().strip()
@@ -129,7 +193,9 @@ def main(argv):
         runs = [r for r in listing.split() if RUN.fullmatch(r)]
     for run in runs:
         manifest = remote_text(workspace, f"cat /root/capture/{run}/MANIFEST.sha256")
-        receipt = pull_arm(run, manifest, root, ssh_fetcher(workspace, run), deadline_s=1500)
+        receipt = pull_arm_stream(
+            run, manifest, root, ssh_streamer(workspace, run), ssh_fetcher(workspace, run), 1500
+        )
         public = {k: v for k, v in receipt.items() if k != "private_dir"}
         public.update(private=True, lease=lease, raw_location="private dev-box capture dir")
         evidence.mkdir(parents=True, exist_ok=True)
