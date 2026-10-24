@@ -26,6 +26,33 @@ pub(super) fn shadow_enabled() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_WIN_USER_RING_SHADOW").is_ok_and(|v| v == "1"))
 }
 
+/// Whether the private-ring relay can serve a channel of `class` on `family`: the class/family part
+/// of the birth admission ([`Birth`]'s `USER_RING_SOURCE_DECLARATION`).
+///
+/// # Errors
+/// The admission's refusal, by name.
+pub(super) fn ring_relay_serves(family: kf_chip::Family, class: u32) -> Result<(), &'static str> {
+    let _ = family;
+    if class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A {
+        return Err("USER_RING_SOURCE_DECLARATION");
+    }
+    Ok(())
+}
+
+/// The route of a permitted Windows user-work channel: `true` = the private-ring relay
+/// ([`ChanPlane::birth_user_ring`]), `false` = the USERD-relay Passthrough birth
+/// (`KF3_WIN_USER_RING_RELAY=0`'s route). `enabled` is [`enabled`], `permitted` = the channel
+/// carries a `WindowsUserRingPermit`.
+pub(super) fn ring_relay_route(
+    enabled: bool,
+    permitted: bool,
+    family: kf_chip::Family,
+    class: u32,
+) -> bool {
+    let _ = (family, class);
+    enabled && permitted
+}
+
 /// Private Windows USER channels use an explicit native mask identity. Zero
 /// is a valid guest default, not malformed input: author bit 0 on our own
 /// channel and give the scanner that SAME identity. This does not infer the
@@ -450,7 +477,7 @@ impl Birth {
         // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
         // CPU access additionally retains exact Pt allocation identity.
         let source = (|| {
-            if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+            if ring_relay_serves(me.family, a.class).is_err()
                 || a.entries < 2
                 || !a.entries.is_power_of_two()
                 || a.entries > (1 << 20)
@@ -1042,6 +1069,88 @@ mod tests {
     use kf_core::lifetime::Step;
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
+
+    /// ★ 2026-10-24, GB205 round B1n (lease 57472433, arm `on_urt`, B1 binary cb80cbd29): the first DWM
+    /// process's two Windows user-work channels as the kf3 log declared them -- GR
+    /// `0xc1d00126:0xff04000b` (class `0xca6f`, engine 1, GPFIFO `0x4000000` x 8192) and CE
+    /// `0xc1d00129:0xff04000c` (class `0xca6f`, engine `0x10`, GPFIFO `0x4036000` x 8192), each with a
+    /// Windows user-work permit and the relay on (the default). Both were BORN on the private-ring relay
+    /// (host `0x40000014` / `0x4010000b`), whose USERD the trace then read as all zero (`gp_get=0 ref=0x0`),
+    /// and both took Xid 32 METHOD at the relay's first publication.
+    const GB20X_DWM: [(u32, &str); 2] =
+        [(0xca6f, "GR 0x4000000x8192"), (0xca6f, "CE 0x4036000x8192")];
+
+    #[test]
+    fn a_gb20x_windows_user_channel_takes_the_userd_relay_route_not_the_private_ring() {
+        // The family's engine writes no USERD GP_GET (kf_chip::Family::engine_writes_userd_gp_get,
+        // measured on GB203 bare metal) and its control struct names neither GPGet nor Reference
+        // (clc96f.h / clca6f.h): the two words the private-ring relay reads as its fetch credit and
+        // as its marker proof. The relay-off arm of the same lease (USERD-relay route, same USER twin
+        // privilege) survived a 10-minute hold with no Xid.
+        for (class, what) in GB20X_DWM {
+            assert!(
+                !ring_relay_route(true, true, kf_chip::Family::Blackwell, class),
+                "{what}: a Blackwell Windows user-work channel must not be born on the private ring"
+            );
+        }
+    }
+
+    #[test]
+    fn every_routed_channel_is_one_the_private_ring_birth_admits() {
+        // A route the birth then refuses (`USER_RING_SOURCE_DECLARATION`) fails the guest's channel
+        // allocation: route and admission must be one decision.
+        for family in kf_chip::Family::ALL {
+            let classes = family.classes().channel_gpfifo;
+            for &class in classes
+                .iter()
+                .chain(&[kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A])
+            {
+                if ring_relay_route(true, true, family, class) {
+                    assert_eq!(
+                        ring_relay_serves(family, class),
+                        Ok(()),
+                        "{family:?} {class:#x}: routed to the private ring, refused at its birth"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_private_ring_is_served_only_where_the_engine_writes_its_userd_words() {
+        // Derived, never captured: the class's own control struct (generated from ogkm) must name the
+        // GP_GET word the relay's observe phase reads, and the family row must say the engine writes it.
+        for family in kf_chip::Family::ALL {
+            for &class in family.classes().channel_gpfifo {
+                if ring_relay_serves(family, class).is_ok() {
+                    assert!(family.engine_writes_userd_gp_get(), "{family:?} {class:#x}");
+                    assert_eq!(
+                        kf_chip::hwref::expect::class_offset(&format!("Nv{class:x}Control.GPGet")),
+                        Some(kf_abi::submit::USERD_GP_GET),
+                        "{family:?} {class:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ada_c56f_keeps_the_private_ring_and_the_negative_control_keeps_the_old_route() {
+        let (ada, c56f) = (
+            kf_chip::Family::Ada,
+            kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A,
+        );
+        assert!(ring_relay_route(true, true, ada, c56f));
+        assert!(
+            !ring_relay_route(false, true, ada, c56f),
+            "KF3_WIN_USER_RING_RELAY=0"
+        );
+        assert!(
+            !ring_relay_route(true, false, ada, c56f),
+            "no Windows permit"
+        );
+        assert_eq!(ring_relay_serves(ada, c56f), Ok(()));
+    }
 
     #[test]
     fn windows_relay_is_the_default_with_an_explicit_negative_control() {
