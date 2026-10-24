@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 // its in-isolate busy flag answers the runner's own retry while that create is running. The
 // runner keeps asking, and on the give-up path sends a best-effort POST /stop/<run>. A clean
 // BUSY (nothing was ever admitted) still stops waiting before the budget is gone, no stop.
+// T4: a refusal's reason and selection are validated (types and values).
 // T5: the BUSY flag is reset before every /rent send.
 // FALSIFIER: an ambiguous reply followed by BUSY ends the run early, or ends it without a
 // /stop; a clean BUSY waits out the budget or sends a /stop.
@@ -24,3 +25,8 @@ for (const name of [
     assert.equal(p.status, 0, p.stderr + p.stdout);
     assert.match(p.stdout, new RegExp('^ok ' + name));
   });
+test('T4: runner refusal-shapes', () => {
+  const p = py(['refusal-shapes']);
+  assert.equal(p.status, 0, p.stderr + p.stdout);
+  assert.match(p.stdout, /^ok refusal-shapes/);
+});

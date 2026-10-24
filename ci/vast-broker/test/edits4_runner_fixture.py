@@ -144,6 +144,54 @@ elif case == "busy-flag-reset":
     code, data = runner.retry_read("/rent", "POST", {"runner_nonce": ctx["nonce"]})
     assert code == 200 and seen == [False, False], (code, seen)
     assert runner.rent_busy is False
+elif case == "refusal-shapes":
+    # T4: a refusal's `reason` and `selection` are checked, not just allowed: wrong types or
+    # values are Invalid (and never a TypeError that depends on the value's type).
+    ok_selection = {"die": "AD104", "ignored": 0, "reason": "DEFAULT_ORDER"}
+    refusal = lambda **extra: dict(busy, state="NOT_ELIGIBLE", **extra)
+    good = [
+        refusal(),
+        refusal(reason="RUNNER_TIME"),
+        refusal(reason="NO_ALLOWED_OFFERS", selection=ok_selection),
+        refusal(selection=dict(ok_selection, reason="PREFERENCE", ignored=16)),
+    ]
+    bad = [
+        refusal(reason="BUSY"),
+        refusal(reason="runner_time"),
+        refusal(reason=""),
+        refusal(reason=None),
+        refusal(reason=1),
+        refusal(reason=True),
+        refusal(reason=["RUNNER_TIME"]),
+        refusal(reason={"RUNNER_TIME": 1}),
+        refusal(selection=None),
+        refusal(selection="DEFAULT_ORDER"),
+        refusal(selection=[ok_selection]),
+        refusal(selection={}),
+        refusal(selection=dict(ok_selection, extra=1)),
+        refusal(selection={k: v for k, v in ok_selection.items() if k != "die"}),
+        refusal(selection=dict(ok_selection, die="ad104")),
+        refusal(selection=dict(ok_selection, die=7)),
+        refusal(selection=dict(ok_selection, ignored="0")),
+        refusal(selection=dict(ok_selection, ignored=-1)),
+        refusal(selection=dict(ok_selection, ignored=17)),
+        refusal(selection=dict(ok_selection, ignored=True)),
+        refusal(selection=dict(ok_selection, reason="BOGUS")),
+        refusal(selection=dict(ok_selection, reason=["NONE"])),
+        refusal(reason="RUNNER_TIME", selection={"die": "AD104"}),
+        dict(refusal(reason="RUNNER_TIME"), verdict="PASS"),
+        dict(refusal(reason="RUNNER_TIME"), extra=1),
+    ]
+    for data in good:
+        m.validate_status(dict(data), ctx, manifest, 409)
+    for data in bad:
+        try:
+            m.validate_status(dict(data), ctx, manifest, 409)
+        except m.Invalid:
+            continue
+        except Exception as error:  # noqa: BLE001 - the type is the finding
+            raise AssertionError("not Invalid: %r -> %s" % (data, type(error).__name__))
+        raise AssertionError("accepted: %r" % (data,))
 else:
     raise AssertionError("unknown case " + case)
 print("ok " + case)
