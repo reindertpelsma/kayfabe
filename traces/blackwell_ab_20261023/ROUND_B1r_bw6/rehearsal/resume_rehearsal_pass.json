@@ -1,0 +1,40 @@
+{
+  "host_verification": "UNVERIFIED-HOST",
+  "tests": 3,
+  "passed": 3,
+  "operator_source_sha256": "aa48a2fab7d4ae2c401f02f163087e456c668f92c168128238b396d2dff16733",
+  "guard_source_sha256": "169f99eef6216e2ff0b69185877af20f3cc74794a875b73158c7495812b8208f",
+  "mode": "exact final operator ready branch with provider/SSH/clock fixtures",
+  "fingerprint_substitution": "bijective equality-preserving fixture keys; raw scan bytes not retained",
+  "cases": [
+    {
+      "name": "false_refusal",
+      "source": "UNVERIFIED-HOST_1320/lease_57363603/pin_receipt.jsonl",
+      "kind": "recorded pin-set replay",
+      "expected": "accept",
+      "actual": "accept"
+    },
+    {
+      "name": "absent_then_present",
+      "source": "observation_run/lease_57359730/readiness.txt",
+      "kind": "recorded absence plus explicit later-publication control",
+      "expected": "accept after20s wait",
+      "actual": "accept after20s wait"
+    },
+    {
+      "name": "mismatch",
+      "source": "recorded extra fingerprint with expected pin removed",
+      "kind": "derived negative control; not an independent live capture",
+      "expected": "refuse before SSH",
+      "actual": "refuse before SSH"
+    }
+  ],
+  "rules_frozen_after_successful_ssh_identity": true,
+  "new_round_fixture_prior_usd": 0,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "round": "B1r BW6 RTX 5090 GB202",
+  "operator": "Codex BW6",
+  "ready_branch_delta_vs_B1": "BW6 named B1m budget override and observed price <= 1.00 USD/h",
+  "denied_countries_tests": "ROUND_B1g_0050/rehearsal/test_denied_countries.py on the B1q ops.py"
+}

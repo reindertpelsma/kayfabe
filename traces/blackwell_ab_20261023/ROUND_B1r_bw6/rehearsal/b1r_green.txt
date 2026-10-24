@@ -1,0 +1,17 @@
+....................................................../workspace/bw6-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_kit.py:501: ResourceWarning: unclosed file <_io.BufferedReader name=5>
+  self.stream_local(arm)(names[:1], dest, timeout)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/bw6-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_kit.py:515: ResourceWarning: unclosed file <_io.BufferedReader name=5>
+  self.stream_local(arm)(names, dest, timeout)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/bw6-wt/traces/blackwell_ab_20261023/ROUND_B1r_bw6/attempt1/run_kit/capture_pull.py:99: ResourceWarning: unclosed file <_io.BufferedReader name=5>
+  stream(names, Path(dest_root) / run, timeout=deadline_s)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./workspace/bw6-wt/traces/blackwell_ab_20261023/ROUND_B1r_bw6/attempt1/run_kit/capture_pull.py:99: ResourceWarning: unclosed file <_io.BufferedReader name=5>
+  stream(names, Path(dest_root) / run, timeout=deadline_s)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+......................................................................................
+----------------------------------------------------------------------
+Ran 143 tests in 3.887s
+
+OK

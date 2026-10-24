@@ -1,0 +1,61 @@
+[
+  {
+    "mutant": "sku",
+    "killing_tests": [
+      "FAIL: test_searched_skus_are_the_authority_skus_with_a_pinned_pair (test_b1r_legacy_ops.OfferScope.test_searched_skus_are_the_authority_skus_with_a_pinned_pair)",
+      "FAIL: test_no_gb205_search (test_b1r_ops.Grant.test_no_gb205_search)",
+      "FAIL: test_sku_is_only_geforce_5090 (test_b1r_ops.Grant.test_sku_is_only_geforce_5090)"
+    ],
+    "kills": 3,
+    "returncode": 1
+  },
+  {
+    "mutant": "rate",
+    "killing_tests": [
+      "FAIL: test_fields_recorded (test_b1r_budget.Override.test_fields_recorded)",
+      "FAIL: test_override_values_are_exact (test_b1r_budget.Override.test_override_values_are_exact)",
+      "FAIL: test_plan_refuses_above_one_dollar (test_b1r_budget.Override.test_plan_refuses_above_one_dollar)",
+      "FAIL: test_plan_refuses_just_above_one_dollar (test_b1r_budget.Override.test_plan_refuses_just_above_one_dollar)",
+      "FAIL: test_price_cap_one_dollar (test_b1r_budget.Override.test_price_cap_one_dollar)",
+      "FAIL: test_price_ok_rejects_1_20 (test_b1r_budget.Override.test_price_ok_rejects_1_20)",
+      "FAIL: test_above_one_dollar_refuses (test_b1r_ops.Grant.test_above_one_dollar_refuses)",
+      "FAIL: test_price_1_20_refuses (test_b1r_ops.Grant.test_price_1_20_refuses)"
+    ],
+    "kills": 8,
+    "returncode": 1
+  },
+  {
+    "mutant": "stop",
+    "killing_tests": [
+      "FAIL: test_0_94_offer_also_qualifies (test_b1r_budget.Override.test_0_94_offer_also_qualifies)",
+      "FAIL: test_fields_recorded (test_b1r_budget.Override.test_fields_recorded)",
+      "FAIL: test_floor_uses_the_lease_stop (test_b1r_budget.Override.test_floor_uses_the_lease_stop)",
+      "FAIL: test_override_values_are_exact (test_b1r_budget.Override.test_override_values_are_exact)",
+      "FAIL: test_budget_plan_uses_three_dollar_stop (test_b1r_ops.Grant.test_budget_plan_uses_three_dollar_stop)"
+    ],
+    "kills": 5,
+    "returncode": 1
+  },
+  {
+    "mutant": "extra_arm",
+    "killing_tests": [
+      "FAIL: test_only_lx_reload_is_linux_and_no_arm_carries_a_flag (test_b1r_kit.B1pArmPlan.test_only_lx_reload_is_linux_and_no_arm_carries_a_flag)",
+      "FAIL: test_priority_order_is_the_task_order (test_b1r_kit.B1pArmPlan.test_priority_order_is_the_task_order)",
+      "FAIL: test_authority_names_the_b1p_arms_and_the_cycle (test_b1r_kit.B1pAuthority.test_authority_names_the_b1p_arms_and_the_cycle)",
+      "FAIL: test_controller_plan_count_is_the_plan_length (test_b1r_kit.B1pScripts.test_controller_plan_count_is_the_plan_length)",
+      "FAIL: test_only_on_fix_scheduled (test_b1r_ops.Grant.test_only_on_fix_scheduled)"
+    ],
+    "kills": 5,
+    "returncode": 1
+  },
+  {
+    "mutant": "label",
+    "killing_tests": [
+      "FAIL: test_denied_countries_label_and_fix (test_b1r_legacy_ops.OfferScope.test_denied_countries_label_and_fix)",
+      "FAIL: test_label_and_paths_are_bw6 (test_b1r_ops.Grant.test_label_and_paths_are_bw6)",
+      "FAIL: test_label_cache_and_paths_are_b1q (test_b1r_pin.SettledReadiness.test_label_cache_and_paths_are_b1q)"
+    ],
+    "kills": 3,
+    "returncode": 1
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "execution_head": "4e990f69d4c0491e90b1c6b4b73ffb2edb8df51a",
+  "publication_base": "a9105acb656ec212daf5da7b8b916387f5da1671",
+  "files": [
+    {
+      "file": "attempt1/lease_metadata/guard_watch.log",
+      "execution_sha256": "2a1ddd3fed10afc9f072e650975b4f369b5802434b0b0bae245d5521ac7f9404",
+      "publication_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+      "change": "Remove extra EOF blank lines only"
+    },
+    {
+      "file": "attempt1/lease_metadata/secondary_guard.log",
+      "execution_sha256": "2a1ddd3fed10afc9f072e650975b4f369b5802434b0b0bae245d5521ac7f9404",
+      "publication_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+      "change": "Remove extra EOF blank lines only"
+    },
+    {
+      "file": "attempt1/native_baseline/guard_watch.log",
+      "execution_sha256": "2a1ddd3fed10afc9f072e650975b4f369b5802434b0b0bae245d5521ac7f9404",
+      "publication_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+      "change": "Remove extra EOF blank lines only"
+    },
+    {
+      "file": "attempt1/native_baseline/secondary_guard.log",
+      "execution_sha256": "2a1ddd3fed10afc9f072e650975b4f369b5802434b0b0bae245d5521ac7f9404",
+      "publication_sha256": "2704dce43809794330519d913ccafeddc4aa336334c78728f86a3dacd8a7abc2",
+      "change": "Remove extra EOF blank lines only"
+    },
+    {
+      "file": "rehearsal/test_b1r_budget.py",
+      "execution_sha256": "5bae4c7e27dfec8bf9d93a2b4a23308556c96a49563016cbe1e4a79c60c5f275",
+      "publication_sha256": "7672863166d83ed3d975130441c56768610d6e78ee759c18654e002d6da0bce5",
+      "change": "Remove extra EOF blank lines only"
+    }
+  ]
+}

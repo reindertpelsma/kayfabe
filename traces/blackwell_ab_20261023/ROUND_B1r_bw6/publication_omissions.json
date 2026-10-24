@@ -1,0 +1,7 @@
+[
+  {
+    "file": "attempt1/arms/on_fix/dump_hdr_on_fix.txt",
+    "sha256": "ff41404e8afd4a0fb9dc1f41c51014bdffd93729b0a80a0091ba42de0bd47ddd",
+    "reason": "Raw header hex retained only in private capture; publish parsed metadata instead."
+  }
+]

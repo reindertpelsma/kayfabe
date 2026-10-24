@@ -1,0 +1,2 @@
+CAPTURE_PULLED run=box verified=4 failed=0 not_pulled=0
+CAPTURE_PULLED run=on_fix verified=172 failed=0 not_pulled=0

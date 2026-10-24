@@ -1,0 +1,82 @@
+{
+  "verified": [
+    "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+    "OpenSSH-Win64-v10.0.0.0.msi"
+  ],
+  "fallback": [
+    "virtio-win-0.1.302.iso",
+    "win11_ltsc_2024_eval_x64_en-us.iso"
+  ],
+  "box_pid": "1780",
+  "elapsed_s": 111.2,
+  "status": {
+    "OpenSSH-Win64-v10.0.0.0.msi": {
+      "state": "verified",
+      "ranges": 8,
+      "bytes_total": 6586368,
+      "bytes_done": 6586368,
+      "sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+      "range_attempts": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1,
+        "5": 1,
+        "6": 1,
+        "7": 1
+      },
+      "resumed_bytes": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      }
+    },
+    "580.88-desktop-win10-win11-64bit-international-dch-whql.exe": {
+      "state": "verified",
+      "ranges": 8,
+      "bytes_total": 890807536,
+      "bytes_done": 890807536,
+      "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "range_attempts": {
+        "0": 1,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "4": 1,
+        "5": 1,
+        "6": 1,
+        "7": 1
+      },
+      "resumed_bytes": {
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0
+      }
+    },
+    "virtio-win-0.1.302.iso": {
+      "state": "running",
+      "ranges": 8,
+      "bytes_total": 877373440,
+      "bytes_done": 0
+    },
+    "win11_ltsc_2024_eval_x64_en-us.iso": {
+      "state": "running",
+      "ranges": 8,
+      "bytes_total": 5112850432,
+      "bytes_done": 0
+    }
+  },
+  "cutoff_s": 600,
+  "total_s": 1200
+}

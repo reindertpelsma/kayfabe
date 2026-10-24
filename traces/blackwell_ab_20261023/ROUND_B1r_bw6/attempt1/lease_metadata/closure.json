@@ -1,0 +1,9 @@
+{
+  "lease": 57556167,
+  "api_absent_rechecked_utc": "2026-10-24T20:19:22.978200+00:00",
+  "timers_exited": true,
+  "own_target_exists": false,
+  "qemu_count": 0,
+  "controller_exited": true,
+  "gpu_lock_released": true
+}

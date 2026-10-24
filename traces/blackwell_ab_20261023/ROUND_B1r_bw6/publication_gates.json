@@ -1,0 +1,32 @@
+{
+  "utc": "2026-10-24T20:26:17.557180+00:00",
+  "publication_branch": "codex/bw6b-20261024",
+  "publication_base": "a9105acb656ec212daf5da7b8b916387f5da1671",
+  "local_execution_head": "4e990f69d4c0491e90b1c6b4b73ffb2edb8df51a",
+  "scope": "ROUND_B1r_bw6 only; no inherited branch code or unrelated trace documents copied",
+  "claims": {
+    "existing_debt": 3758,
+    "new": 0,
+    "resolved": 0
+  },
+  "frozen": {
+    "files": 37,
+    "changed": 0
+  },
+  "dependencies": {
+    "crates": 22,
+    "violations": 0
+  },
+  "gpu_uuids": {
+    "files": 182,
+    "baselined": 182,
+    "new": 0,
+    "stale": 0
+  },
+  "secret_ip_binary_scan": "PASS",
+  "whitespace_diff_check": "PASS",
+  "line_length": "All changed code is under traces/, the explicit COMMON.md exemption.",
+  "baseline_edits": false,
+  "guard_behavior_changes": false,
+  "lease_closed_before_publication": 57556167
+}

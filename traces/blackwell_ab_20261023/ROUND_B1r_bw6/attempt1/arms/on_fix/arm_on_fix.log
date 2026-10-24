@@ -1,0 +1,16 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+ARM_PLAN run=on_fix enable=enable580_once.ps1 count=1 prep=- label=MEASUREMENT
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_START run=on_fix source=007ba1eb03db9e21d351e465e95b46cbc3134a95 profile=on 2026-10-24T20:10:18+00:00
+[2026-10-24T20:10:18Z] detached: tag=on_fix, log logs/on_fix_run.log (stdout logs/on_fix_run.out)
+READINESS_CALIBRATED {"box": 57556167, "policy": {"banner_query": 100, "factor": 10, "first_query": 100, "handshake": 202, "observer_total": 360, "readiness_total": 900, "ssh_stage": 600, "steady_query": 25, "verify_stage": 240}, "probe_seconds": 24.26165081199997, "readiness_end": 2551.804214684}
+{"pid": 134250, "exe": "/workspace/bench/kf3-bins/007ba1eb/qemu-system-x86_64", "sha256": "05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/bw-capc-validation/secureboot/kf-gop.9ff51a6e.signed.efi,id=kf0,guest-driver=580.65.06"}
+STAGE580_READY=1 actual=32.0.15.8088 device_disabled=1 GSP_flags=1; fresh QEMU580.65.06 then one enable
+INIT_OBSERVER_READY 2026-10-24T20:10:59+00:00
+WINDOWS_ON_OBSERVATION_ARMED {"arm": "on_fix", "pid": 134250, "starttime": 165099, "exe": "/workspace/bench/kf3-bins/007ba1eb/qemu-system-x86_64", "pci": "0000:00:07", "mode": "bw3-saved-xid32-observation-v1", "profile": "on", "lease_id": 57556167, "armed_utc": "2026-10-24T20:10:59.443254+00:00", "probed_die": "GB202", "enable_count": 1, "label": "MEASUREMENT"}
+PRE_CLEANUP_START rc=255 2026-10-24T20:11:30+00:00
+{"rpcs": 5041, "unload_ordinals": [4453], "teardown_start_ordinal": 4015, "last_nonfree_before_teardown": [[4005, "76", "RmControl", "0", "0x20801211", "0x0"], [4013, "76", "RmControl", "0", "0x20801111", "0x0"], [4014, "76", "RmControl", "0", "0x20801111", "0x0"]]}
+OWN_VM_ALREADY_EXITED
+/workspace/bw-capc-validation/kfwin/disk/bw580_bind.qcow2: OK
+ARM_EXIT run=on_fix rc=255 2026-10-24T20:11:45+00:00

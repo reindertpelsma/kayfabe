@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-24T18:48:21.485326+00:00",
+  "command": "python3 scripts/ci/debt.py claims",
+  "exit_code": 1,
+  "existing_debt": 3141,
+  "new": 814,
+  "resolved": 13,
+  "base_commit": "f4879bda249946da0ce237edd84cfce442ed6480",
+  "changed_scanned_paths": [],
+  "gate_and_baseline_unchanged": true,
+  "decision": "STOP before rental and push; no claims-debt entries added or gates bypassed.",
+  "full_log": "scratchpad/claims_before_push.txt"
+}

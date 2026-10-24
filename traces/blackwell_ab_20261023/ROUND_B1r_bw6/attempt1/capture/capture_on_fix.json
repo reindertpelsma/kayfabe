@@ -1,0 +1,873 @@
+{
+ "run": "on_fix",
+ "verified": 172,
+ "failed": [],
+ "not_pulled": [],
+ "stream_missing_or_bad": 0,
+ "files": {
+  "prov/arm_env_on_fix.sh": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "status": "VERIFIED_STREAM",
+   "bytes": 0
+  },
+  "prov/arms/on_fix/rpc_timing_controller.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "status": "VERIFIED_STREAM",
+   "bytes": 0
+  },
+  "vm_logs/on_fix_collect_b1_host_dmesg.txt": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "status": "VERIFIED_STREAM",
+   "bytes": 0
+  },
+  "vm_logs/on_fix_collect_b1_qemu.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "status": "VERIFIED_STREAM",
+   "bytes": 0
+  },
+  "prov/arm_on_fix.started": {
+   "sha256": "4a35523111e268240a3fab20751b44290743ac691159b8de7b867f3994164efe",
+   "status": "VERIFIED_STREAM",
+   "bytes": 26
+  },
+  "prov/arm_on_fix_cleanup_started.txt": {
+   "sha256": "a80190c696924566a123ffdc4421fceaffe82b84db1529368aaf05c72ef27efa",
+   "status": "VERIFIED_STREAM",
+   "bytes": 26
+  },
+  "prov/arms/on_fix/init_observer.log": {
+   "sha256": "e34b5b1e2b1fdaa8957ed3825a3326a53d05d6c4daeb6ad10f014c64c71f866f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69
+  },
+  "prov/arms/on_fix/init_observer.ready.json": {
+   "sha256": "1cf344a086ecc0ef468c4eaf48f34e9dab64ee0a3d9919ad0853dc209974a4e9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 82
+  },
+  "prov/arms/on_fix/minidump_sha256.txt": {
+   "sha256": "13da12e4cf9986a06355731172788a3527c20469a49b969858a6443a6f7d5cbd",
+   "status": "VERIFIED_STREAM",
+   "bytes": 118
+  },
+  "prov/arms/on_fix/early_code0.txt": {
+   "sha256": "8eabc6409cd73e1e84b3d8ef5e2a6fbeeba3e05ebb900737224ada3e9871d2cd",
+   "status": "VERIFIED_STREAM",
+   "bytes": 135
+  },
+  "prov/capture_guest_on_fix.txt": {
+   "sha256": "12a0fb4132dc39fbefabe5cb66da81491e31149cea7c47ec3dd21dd0ed0bc471",
+   "status": "VERIFIED_STREAM",
+   "bytes": 138
+  },
+  "prov/arms/on_fix/display_driver.json": {
+   "sha256": "6d441b302422474302b6c77cc151641d5a694d0338a518ea5352f884a41d3fcd",
+   "status": "VERIFIED_STREAM",
+   "bytes": 144
+  },
+  "prov/arm_cfg_on_fix.json": {
+   "sha256": "01e9a12e735a754f1a5dd8b9ff59f44d5ddde810c194da081e27c6cbde6a3770",
+   "status": "VERIFIED_STREAM",
+   "bytes": 153
+  },
+  "prov/budget_start_on_fix.json": {
+   "sha256": "50b44009f879689f6611c9034d721e84408f39395488a7799cbeddb9886cf95a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 181
+  },
+  "prov/arm_on_fix_enable.txt": {
+   "sha256": "a8b832993867fb96ca2c5615d736c3ab0ffc14cd15b7191c0a10bea42e32ff44",
+   "status": "VERIFIED_STREAM",
+   "bytes": 287
+  },
+  "vm_logs/on_fix_b1_serial.log": {
+   "sha256": "581212cf8eaf966b3e110a6a9f912808466e8b65de0022e49df1d1cba339319d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 326
+  },
+  "vm_logs/on_fix_collect_b1_serial.log": {
+   "sha256": "581212cf8eaf966b3e110a6a9f912808466e8b65de0022e49df1d1cba339319d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 326
+  },
+  "prov/arms/on_fix/observation_permit.json": {
+   "sha256": "b6d4dd94b3a5ddcdbaadb450631ca4250334fb4928ca55a27363e56413756575",
+   "status": "VERIFIED_STREAM",
+   "bytes": 335
+  },
+  "prov/arms/on_fix/rpc_timing.receipt.json": {
+   "sha256": "19a1a3ad5d3d6e14116f95b1783028dec9e190784b2383dc70adbb933e800458",
+   "status": "VERIFIED_STREAM",
+   "bytes": 396
+  },
+  "prov/arm_on_fix_pre_enable.txt": {
+   "sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab",
+   "status": "VERIFIED_STREAM",
+   "bytes": 422
+  },
+  "prov/arms/on_fix/state_receipt.json": {
+   "sha256": "0affffa5a896ea99c0f35584a634c69f4a87d45065de6f51e9d3d3933f2d9083",
+   "status": "VERIFIED_STREAM",
+   "bytes": 425
+  },
+  "prov/arms/on_fix/allocations.receipt.json": {
+   "sha256": "ce77303ab3dc79f94381cebbcb732e5c8f19daf3d531608d98900de5135fc1df",
+   "status": "VERIFIED_STREAM",
+   "bytes": 490
+  },
+  "vm_logs/on_fix_collect_run.log": {
+   "sha256": "ed0385c76384d52187ead912ab0fecc359b9d7df9642b9b3960d4c1e69182b4e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 526
+  },
+  "vm_logs/on_fix_collect_run.out": {
+   "sha256": "ed0385c76384d52187ead912ab0fecc359b9d7df9642b9b3960d4c1e69182b4e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 526
+  },
+  "prov/arms/on_fix/dump_headers.jsonl": {
+   "sha256": "97c622915c3336ce183abcdc8b42783a0858a397293ff40339ebb513e3a95b19",
+   "status": "VERIFIED_STREAM",
+   "bytes": 551
+  },
+  "prov/arm_on_fix_start_receipt.json": {
+   "sha256": "f13ca99fa312ad10447c10354b03aeb4629484e1f1a987df75054dfdf5348cc4",
+   "status": "VERIFIED_STREAM",
+   "bytes": 580
+  },
+  "prov/collect_on_fix.log": {
+   "sha256": "8e2e76c7057d9954f82ac58b4b6a3bfd70154942e3ed863bf085adade51fed1c",
+   "status": "VERIFIED_STREAM",
+   "bytes": 611
+  },
+  "vm_logs/on_fix_collect_b1_qmp_events.jsonl": {
+   "sha256": "ac6cd3bf6e1e7cea32456bcc5a38b8b5e738dd6530d2f3dd9b7536519ff5eb8b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 693
+  },
+  "vm_logs/on_fix_b1_host_dmesg.txt": {
+   "sha256": "66be2c61b4ea5219acfe9c2b548870dc06a35ea8b0080362269c658d8d3225b5",
+   "status": "VERIFIED_STREAM",
+   "bytes": 878
+  },
+  "vm_logs/on_fix_b1_qmp_events.jsonl": {
+   "sha256": "f1c730f9e5dd59f9c2ad55b01f7febda8de295dbd3f76fe23c34ec32b9360caf",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1050
+  },
+  "prov/arms/on_fix/host_kernel.log": {
+   "sha256": "2e836a15694737eeb267148152890ed0442efb23febddf472ffd5bf2bf3a45e1",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1166
+  },
+  "prov/arm_on_fix_process_receipt.json": {
+   "sha256": "9f2fd18e8a37d81f80f2a35c7f72881ce43639aedf4defd8c9535b9c446ae72e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1240
+  },
+  "vm_logs/on_fix_run.log": {
+   "sha256": "f6678a3fa9a1df1293c26df0a249f672848f96f1bd28a3f1b70f7438d58f0f91",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1258
+  },
+  "vm_logs/on_fix_run.out": {
+   "sha256": "f6678a3fa9a1df1293c26df0a249f672848f96f1bd28a3f1b70f7438d58f0f91",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1258
+  },
+  "prov/arm_on_fix_accepted_start.json": {
+   "sha256": "90c09f0a6ca85f14a7726ef6aeb95a3fb3f0e1ac9884f87e0f40ece74cb8e456",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1327
+  },
+  "vm_logs/on_fix_collect_b1_cmdline.txt": {
+   "sha256": "2854926e22c0eb72bbc6de8b2d59b74772020061112b2c6c35a2014cba50f17f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1783
+  },
+  "prov/arm_on_fix.log": {
+   "sha256": "72cfdae17452d19b1e56550ff8ae0c1bbce047880e6012cbfaf7a1cd1874c9ea",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1970
+  },
+  "vm_logs/on_fix_b1_cmdline.txt": {
+   "sha256": "751f4bde752a75d4e1c6cde59df44e48228783e44c56981057e7bc81827e844f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 2069
+  },
+  "prov/wer_times_on_fix.txt": {
+   "sha256": "a41b68d4e685c80a06f28e55da74401725b35a234298079113f73f31b397268b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 2374
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/WER.7876dd49-919e-4403-b84c-683807a0beec.tmp.xml": {
+   "sha256": "9de54e8fdc50e8fc78105053ca07d5e4ebb715a7ac4116091dd62f9a64b97b47",
+   "status": "VERIFIED_STREAM",
+   "bytes": 4061
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/WER.970f1138-dfb9-46cd-82b3-8b01c19b9f02.tmp.xml": {
+   "sha256": "4c96bf2e2788aba1ca36d8baaaeeeb9cc52dcb9e4f2436453d17cd7574ef0ddf",
+   "status": "VERIFIED_STREAM",
+   "bytes": 4066
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/WER.aefcdc3c-14b4-453f-891b-36e590a6eac3.tmp.xml": {
+   "sha256": "310206cc9b0b0c15adf6ff26cb160047259df81ab0c23d9dc45b918bea9e42be",
+   "status": "VERIFIED_STREAM",
+   "bytes": 4066
+  },
+  "prov/collect_on_fix.txt": {
+   "sha256": "6caffc4464414b3e602ca57bb11e1c7c679543dc0df00f391775c904b6efa98b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 5905
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/WER.4971aaf5-f1bf-4c89-b715-a1dda74d9517.tmp.WERInternalMetadata.xml": {
+   "sha256": "760a2a79f38a3b92e7d0ece2f3cdc2f619988e4bcabacafdeb31df75b1b38652",
+   "status": "VERIFIED_STREAM",
+   "bytes": 6344
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/WER.2dc48603-dea6-47ea-89d2-1a01f0e8fad0.tmp.WERInternalMetadata.xml": {
+   "sha256": "babe2813ee50a073a015ac2ba843a65a9e1e74108e799f51e587a0aba7c9fd6e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 6344
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/WER.49ec3c5b-3482-4ea1-9244-af79bb7bbfe7.tmp.WERInternalMetadata.xml": {
+   "sha256": "21ab138e7d5f19860174811be21edc73f231447fc7375be659a39c4028b02e98",
+   "status": "VERIFIED_STREAM",
+   "bytes": 6396
+  },
+  "prov/arms/on_fix/kf_line_census.txt": {
+   "sha256": "c1372392470509266458313d3f1ab1ced00fb9484c2d0a3ef7a27dcac24a5cef",
+   "status": "VERIFIED_STREAM",
+   "bytes": 7549
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/Report.wer": {
+   "sha256": "5552b529510ba22cd76b70435caa74095d26c9ea76a63cc0eeaec8415d8a2345",
+   "status": "VERIFIED_STREAM",
+   "bytes": 9726
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/Report.wer": {
+   "sha256": "0e0242c51b070d9b666cf35e6d54113ffc68c8456288ea69fb2051cd536c8444",
+   "status": "VERIFIED_STREAM",
+   "bytes": 9814
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/Report.wer": {
+   "sha256": "59862007d3c243836c5e87f34c4156fa61b1e64c9f7ced59c868123b3a84dafa",
+   "status": "VERIFIED_STREAM",
+   "bytes": 9848
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/WER.a3ae2882-5f26-4bdd-905b-a1e76359138a.tmp.txt": {
+   "sha256": "04792b0c0c36073cf9575120b3ced896fbf0397145c193de74920c91a2ce21db",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13340
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/WER.a1749335-1250-48b6-a668-5b66a054b6b9.tmp.txt": {
+   "sha256": "906e9d6da426370fe9726b224fff02c6030ea9e9d64864eeb47ab5a11accfcb4",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13340
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/WER.e3d470ee-1144-4223-baad-c67aa007dd00.tmp.txt": {
+   "sha256": "3cbeec77faeef9836a52981a37ce8c7274cc0aa45d03ba050d59641083af15f2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13340
+  },
+  "vm_logs/on_fix_b1_host_smi_before.txt": {
+   "sha256": "ec2f68aba7041f317955209c2c2e51909bcf636cdcb38c43fa98bf026fff78cf",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13653
+  },
+  "vm_logs/on_fix_collect_b1_host_smi_before.txt": {
+   "sha256": "e833916de819f1e43a983867a35aa0c3c3b16a27227aaef534cea483a74bc397",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13653
+  },
+  "vm_logs/on_fix_collect_b1_host_smi_after.txt": {
+   "sha256": "050f22c16742104323e65b3664a20bbea59458aa2363c02d2017753913fa877a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13657
+  },
+  "vm_logs/on_fix_b1_host_smi_after.txt": {
+   "sha256": "7d128afd77a593a5a21a659ef9d428805af8bff31832a2015f75a1dde5ce5a15",
+   "status": "VERIFIED_STREAM",
+   "bytes": 13661
+  },
+  "prov/dump_hdr_on_fix.txt": {
+   "sha256": "31549ee3d31c7aadaeea5a8964daf507901155e534aebb08d57dcef37f734108",
+   "status": "VERIFIED_STREAM",
+   "bytes": 16200
+  },
+  "guest/GUEST_MANIFEST.txt": {
+   "sha256": "026cc4a51f3f35fcbc018663c3685e79a9602a5991ee429a918eb3b12d338536",
+   "status": "VERIFIED_STREAM",
+   "bytes": 18512
+  },
+  "prov/arms/on_fix/channel_state.tsv": {
+   "sha256": "758e094b1d4956e426fc2a241bfb1df023edf808e018f6f288f0a41be33b0193",
+   "status": "VERIFIED_STREAM",
+   "bytes": 37931
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/WER.f995a35a-c5c6-477b-9494-46fa8a6f794e.tmp.csv": {
+   "sha256": "896af015fc263414d9083fbf693ecd4743ab30ffb3fd9af598de8cc80b5984c3",
+   "status": "VERIFIED_STREAM",
+   "bytes": 38260
+  },
+  "prov/arms/on_fix/abort_context.txt": {
+   "sha256": "517d03a7b1a88cc9a7330f13bd94e98e57c62634af09e923532631c531eafd35",
+   "status": "VERIFIED_STREAM",
+   "bytes": 38959
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/WER.2716a366-eab1-4c74-a7e5-9ecc60347d23.tmp.csv": {
+   "sha256": "c57fa0a685edc0f783aee638f93c4849b737345c00c297c39ed4d531f15f8977",
+   "status": "VERIFIED_STREAM",
+   "bytes": 41084
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/WER.58e8db2f-5455-451d-8041-1c45555cc931.tmp.csv": {
+   "sha256": "825094f606cc93edc9e42224eb1f0e375658556af6deb2128f05957cd9497815",
+   "status": "VERIFIED_STREAM",
+   "bytes": 41100
+  },
+  "guest/evtx/0005_OpenSSH_Operational.evtx": {
+   "sha256": "12fdd2d6608ab16a1a90577012d38f2c7a65bbd58c09251196d16de7a57b7f2b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0007_Microsoft-Windows-WinRM_Operational.evtx": {
+   "sha256": "cbefbb8853b425cb2e1197148ca2a63e8747a5567aa232a149aeac795d7ca477",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0008_Microsoft-Windows-Winlogon_Operational.evtx": {
+   "sha256": "44824008c606b081818bafd789633a6a1d4e76f7d9658be4f9554a7e04805cac",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0009_Microsoft-Windows-WinINet-Config_ProxyConfigChanged.evtx": {
+   "sha256": "79aeb5c094bf944815e58738b84a855c1dd051570c2428814193e6e10156ffc0",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0011_Microsoft-Windows-Windows_Defender_Operational.evtx": {
+   "sha256": "f103719873ae26c4ced7da5ca70c87bafd941af2c7477a8658a940627af34312",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0012_Microsoft-Windows-WebAuthN_Operational.evtx": {
+   "sha256": "8be9788126f6935e3ae32db01e6bc91ba556917d05e00487ed2342973bc7cdc5",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0013_Microsoft-Windows-Wcmsvc_Operational.evtx": {
+   "sha256": "9d32d5bb130ba076802ebbee66c673ea38f2e6866990ce753f6fd0f74c806dce",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0014_Microsoft-Windows-VolumeSnapshot-Driver_Operational.evtx": {
+   "sha256": "d620b1eacd7a98bb44e0517ea9029b363451142df1e7cc0c5e1ef26556934d5c",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0015_Microsoft-Windows-UserPnp_DeviceInstall.evtx": {
+   "sha256": "52f7609bee1e311e7004801f8b45b6051e88485ac7d2563187d4069a990f763c",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0016_Microsoft-Windows-User_Profile_Service_Operational.evtx": {
+   "sha256": "d3ffed83909f05413e19072c340a6487378ddcf13049bcb53a203f22b477d669",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0017_Microsoft-Windows-User_Device_Registration_Admin.evtx": {
+   "sha256": "d6f12ea207682745823cb982c68c0bc0e0b6785a7b2938b8a93226c667d65af5",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0018_Microsoft-Windows-UniversalTelemetryClient_Operational.evtx": {
+   "sha256": "0bc52858c97fcac5d22cb8925403b177ea45beb642e0ddda9332ccc98c62879b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0019_Microsoft-Windows-TZSync_Operational.evtx": {
+   "sha256": "1df95da84688f88cab94a46056dd2d3b51e0fc84cce8b240153607baa26608c5",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0020_Microsoft-Windows-TWinUI_Operational.evtx": {
+   "sha256": "144c3678769753ac7763e402759fd8fd2856eb97044116c5a63d18afe6083f03",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0021_Microsoft-Windows-Time-Service_Operational.evtx": {
+   "sha256": "1aac01ab2b2b72322359ae23dbfc1b9a8161386b973b88f353dad114cda5507a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0022_Microsoft-Windows-TerminalServices-LocalSessionManager_Operational.evtx": {
+   "sha256": "aedc42d9d6eb4d3dd108b406d483cd3359a5ce3b057cca1735231409786f29f8",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0023_Microsoft-Windows-TaskScheduler_Maintenance.evtx": {
+   "sha256": "1b61c93a39c645fa94f8a08c731bb3193b3267329de2fdd7137b7a876ac7c503",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0025_Microsoft-Windows-StorageVolume_Operational.evtx": {
+   "sha256": "cb5ffd398abfb3e5559c70e32f8e0871eba7c698af5a38a86b6163a63f9b9c0c",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0026_Microsoft-Windows-StorageSpaces-Driver_Operational.evtx": {
+   "sha256": "3a1c1dfeb65c4e7346684e296a0be59a18d4747adfe50a8cf7b857cbcf7b4ff0",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0027_Microsoft-Windows-StorageManagement_Operational.evtx": {
+   "sha256": "9a20cdc34c2128012a75feaa6d922a80e781fa065fc1db704bc89578865b77e9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0028_Microsoft-Windows-Storage-Storport_Operational.evtx": {
+   "sha256": "0c7ea865964772b68949cd996415e8c61c9a5bc9fd909f27b99e088ad1930af7",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0029_Microsoft-Windows-Storage-Storport_Health.evtx": {
+   "sha256": "3c452a7de8a3476c756b4a4b5ec3b4d9c520e6008f5840fdb23c3bdc192208de",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0031_Microsoft-Windows-SMBServer_Operational.evtx": {
+   "sha256": "6a457c49606ad10d9dc60e3d2137feafb50cb5215d45e83f872da5ce1983649d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0032_Microsoft-Windows-SMBClient_Operational.evtx": {
+   "sha256": "96a0e63bdca35b90cba4070b0855dab365d749365b45c8bad16bfe6128e100ce",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0033_Microsoft-Windows-SmbClient_Connectivity.evtx": {
+   "sha256": "37a2c88212f126aaf583ce312381da12fb2abd2ace0ac4f7c1adae6d4cab5451",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0036_Microsoft-Windows-Security-SPP-UX-Notifications_ActionCenter.evtx": {
+   "sha256": "f51647206d5e27803a522c2897a748cef689b80eff9d1aeb711625759036b2a9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0037_Microsoft-Windows-Security-Mitigations_KernelMode.evtx": {
+   "sha256": "e88c21d7fa5d1169743e3a05d88952d711ad371bef04f973287c915df808c293",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0038_Microsoft-Windows-Resource-Exhaustion-Detector_Operational.evtx": {
+   "sha256": "401c96add394b07091746bfd1b484b0e4c558bd9578163e0455c39e82dbdf909",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0039_Microsoft-Windows-ReadyBoost_Operational.evtx": {
+   "sha256": "4078c7c6251e085d72d5bfc97dc3f0ec833f482358a0d8b36c9c7fcbdaf6489a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0040_Microsoft-Windows-PushNotification-Platform_Operational.evtx": {
+   "sha256": "90d2f610811d6f030ab271ad9d4353ef7307534910cf3ec61872ac7a20bbbccd",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0041_Microsoft-Windows-Provisioning-Diagnostics-Provider_Admin.evtx": {
+   "sha256": "126113f37a04e7278ce8ed809e03e19a38876d2eab6d7dad9d540dbd5d6b8b1d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0042_Microsoft-Windows-Privacy-Auditing_Operational.evtx": {
+   "sha256": "d32a87d3578d2b1b27ec5d301496ae733c9dbe497cc8a316286b3d566092efc2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0043_Microsoft-Windows-PrintService_Admin.evtx": {
+   "sha256": "438a2c9cbc72822bf1b19c059467b9cdcff0857de85dc335ed9042aebd6a6cd7",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0045_Microsoft-Windows-PCI_Operational.evtx": {
+   "sha256": "2486931a4d4025b4664620b971f21a52347e6b3da57fd21ea4de51de2ddf5773",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0046_Microsoft-Windows-Partition_Diagnostic.evtx": {
+   "sha256": "30a93375c37687d24cc376255cf026f0e40bba4dfe8f442da9c966cedfba3639",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0047_Microsoft-Windows-Ntfs_WHC.evtx": {
+   "sha256": "42d05570e5e7e74f99e669a156e3025ab34ae7338eb77563194cd93dc4a1b66e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0049_Microsoft-Windows-NetworkProfile_Operational.evtx": {
+   "sha256": "5d566681b688e3dfcdb6a74ea2c78b28b43c6149b47693402191fd731c980627",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0050_Microsoft-Windows-NCSI_Operational.evtx": {
+   "sha256": "84eb635ae7baae7fe1a505b2dbc19bacaa9473dc700fce58b8fe54babcc661d0",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0051_Microsoft-Windows-MUI_Operational.evtx": {
+   "sha256": "08383b64544ea926fad4ec83c98865784a0e834606d0585b3b1170d5cbcacdcc",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0052_Microsoft-Windows-ModernDeployment-Diagnostics-Provider_ManagementService.evtx": {
+   "sha256": "7112c8e8dd333acabb2fe252cf9e005d44f95e388a550db4bdbad00853d4193d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0053_Microsoft-Windows-ModernDeployment-Diagnostics-Provider_Autopilot.evtx": {
+   "sha256": "82725863b18e3b497514ed2fa26d34b388b30518934d9367c42932e2be0f9f78",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0055_Microsoft-Windows-Known_Folders_API_Service.evtx": {
+   "sha256": "19d0a48b763d8bae3ba4ec31b1f30a692e52ea21f4c21dd71f6e890739c3c6ea",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0057_Microsoft-Windows-Kernel-ShimEngine_Operational.evtx": {
+   "sha256": "bc693a3551f0a9393ef2e2ad9399c21c3eb6d53db4f5ae146e62a167f2ebf80d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0059_Microsoft-Windows-Kernel-EventTracing_Admin.evtx": {
+   "sha256": "e3b4723d76e8145b1acfde143c476e83319064a7dc642bf950cfceed86b71195",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0060_Microsoft-Windows-Kernel-Dump_Operational.evtx": {
+   "sha256": "b531e69d613fd88cd87e979dc90a0ac5944a5d084aeaa4342dcdde747d3941e3",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0061_Microsoft-Windows-Kernel-Cache_Operational.evtx": {
+   "sha256": "5c9f6fd6791a4ce0335e621d163acd116972b7400cbe6b8bfe02a656cdd46488",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0062_Microsoft-Windows-Kernel-Boot_Operational.evtx": {
+   "sha256": "fdc802d4d9aafa3b9fc6a8cd4af09d17210cd07fbb5db4f506e81974dc179e86",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0063_Microsoft-Windows-HelloForBusiness_Operational.evtx": {
+   "sha256": "332a8c0ff4875845b57e71b354d9164cbfb73941cf8f5271694b8cb944ef6e7a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0065_Microsoft-Windows-Diagnosis-PCW_Operational.evtx": {
+   "sha256": "e589547fd1f5aafa4131565c8c33897ea81609994ed48988b9181b3dad4bfc12",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0066_Microsoft-Windows-Diagnosis-DPS_Operational.evtx": {
+   "sha256": "357b89b6b9b64b48b5e93b2c0c2039b2e8182f6b2f4289045653b38b1e2f021f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0067_Microsoft-Windows-Dhcp-Client_Admin.evtx": {
+   "sha256": "aa513e3c33a1d0974ce642e0bb256a0a9df4409d32e47185f1e0438bc6727b09",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0068_Microsoft-Windows-DeviceSetupManager_Operational.evtx": {
+   "sha256": "7d2c9a9c9b035dd1911f3ac3b504bcfca1e23bab0b61acc11fa4f53402f3567a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0070_Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider_Operational.evtx": {
+   "sha256": "5e343e8b20cfd977d97ee49dc664dfdf852dffc7c8888b8da49ca86f81b004a3",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0071_Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider_Admin.evtx": {
+   "sha256": "1460199aecd0f2e590094e2a8b0f03b0e99dfcef4c698312723b8b332e8ccfdb",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0073_Microsoft-Windows-Crypto-NCrypt_KeyMgmt.evtx": {
+   "sha256": "fe369678ec1f2606cc3aa1607f52ffca4c4979f7fdce274ff48489cd3e7c97be",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0074_Microsoft-Windows-Crypto-DPAPI_Operational.evtx": {
+   "sha256": "0825ddc36ed4261dcbb1641fbb2b13f4148a8f6d750b7d7ae33dfa99110effce",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0075_Microsoft-Windows-Containers-Wcifs_Operational.evtx": {
+   "sha256": "58c7d488bcb8f63d3d980c1834ecf42de4cc4f2de16a8fbc0930c934c83e1db9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0076_Microsoft-Windows-Containers-BindFlt_Operational.evtx": {
+   "sha256": "7034cf6d778ec4abde6dcf5f8e2958909ab470f9855ad3067629b7a659d23f59",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0077_Microsoft-Windows-CodeIntegrity_Operational.evtx": {
+   "sha256": "b8ee61024b619505c7a9ee0c9513d353d6a909934430cd3e22c96d638d41a31e",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0078_Microsoft-Windows-CloudStore_Operational.evtx": {
+   "sha256": "d5c6aee4d15388e214982307b4eb1201ffd33fd5a300c0fb0d79254c18c8116b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0079_Microsoft-Windows-CloudStore_Initialization.evtx": {
+   "sha256": "ada241a48dddf33133fda5719422e16c2662cfa4c27202d0a2ca2b359c67ac5a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0080_Microsoft-Windows-CloudFiles-Filter_Operational.evtx": {
+   "sha256": "2155bdf8f4286e7576f1d81e8c788ede50f52bbb9d10010952652b5a8d7df0c1",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0081_Microsoft-Windows-Bits-Client_Operational.evtx": {
+   "sha256": "1512a1d4762c8e90e8639450440eab38ea5355ff62e9c39a22e551deaa1b9692",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0082_Microsoft-Windows-Biometrics_Operational.evtx": {
+   "sha256": "1f220a88607937e6a9c420b3655e78e6681a016621ec93cbeabeae40f48be10f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0083_Microsoft-Windows-BackgroundTaskInfrastructure_Operational.evtx": {
+   "sha256": "e472f262a808008929457bb5c40f89eecf6c55a626425d76fb7e5d21ad8b506a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0084_Microsoft-Windows-Audio_Operational.evtx": {
+   "sha256": "b5b89f862d37ddc322652a03a18db9bf4163c322baa7c9b37a4eee60fe76ce8b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0085_Microsoft-Windows-AppxPackaging_Operational.evtx": {
+   "sha256": "8d97da49da4c26c44ee63117f7ca07fc8753e872f6e789280384c0268994582b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0087_Microsoft-Windows-AppXDeployment_Operational.evtx": {
+   "sha256": "e7540915f1869bdbe4e85289838f53e9e270594b9a997ab4889cc88a8dee628f",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0088_Microsoft-Windows-AppReadiness_Operational.evtx": {
+   "sha256": "cc54ea9c00e6c78771f6f99c3b9ff551130ade1cb85c197952c5a51811a1c40a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0089_Microsoft-Windows-AppReadiness_Admin.evtx": {
+   "sha256": "9096ee5a541df50f66143d230557deebe690085f8d82db6a0ed42cc2ae9032cf",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0091_Microsoft-Windows-Application-Experience_Program-Telemetry.evtx": {
+   "sha256": "44dcd83a5a6d9c2f7405d07cf486a6456e184c40189de72580b938a130234eb8",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0092_Microsoft-Windows-AAD_Operational.evtx": {
+   "sha256": "dd2054fbde28bb78b125a61d4a7d73f1fcee3d66b949b2b908f6540f1414b710",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/0093_Microsoft-Client-Licensing-Platform_Admin.evtx": {
+   "sha256": "5f10e2f42331c53ec7bc54b27767805586443db84f5d5026c860be3702f6faa1",
+   "status": "VERIFIED_STREAM",
+   "bytes": 69632
+  },
+  "guest/evtx/Application.txt": {
+   "sha256": "385911de0766425b90d6ceeae0787d1aba248fd95bb9398987fbc7ec3ddaae8c",
+   "status": "VERIFIED_STREAM",
+   "bytes": 139770
+  },
+  "prov/arms/on_fix/api.tsv": {
+   "sha256": "b5842cc852f8767bb17dcf70a810d66f0b32107b88ea84d35c74de82e7f98f7d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 141491
+  },
+  "prov/arms/on_fix/allocations.jsonl": {
+   "sha256": "856495e8c6b3dcfed912e96573d0c11a62ff4ba5a87edd0a3d1f1add4b6863a3",
+   "status": "VERIFIED_STREAM",
+   "bytes": 183439
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/WATCHDOG-20261024-2011.dmp": {
+   "sha256": "5e2d9536a97ce722d12617c855e451dbca59bc150d60b5054ad1999d63534daa",
+   "status": "VERIFIED_STREAM",
+   "bytes": 330560
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/WER-7500-0.sysdata.xml": {
+   "sha256": "7bae65b0619c933420174b60c7a13f589ee8a4e43214ed7b825e893e08c11a49",
+   "status": "VERIFIED_STREAM",
+   "bytes": 391054
+  },
+  "guest/WER_ReportQueue/Kernel_1a8_3748bd66a7bb3ae96eac533a61a9ac86d47cc_00000000_d50822f9-ef53-41b2-8f8e-829d2473affc/WER-47203-0.sysdata.xml": {
+   "sha256": "bea47a2d2b2f009b72cc453cb3ee677ea6007b9f64a3bd061c3dc859a9c30bbe",
+   "status": "VERIFIED_STREAM",
+   "bytes": 391756
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/WER-47312-1.sysdata.xml": {
+   "sha256": "bea47a2d2b2f009b72cc453cb3ee677ea6007b9f64a3bd061c3dc859a9c30bbe",
+   "status": "VERIFIED_STREAM",
+   "bytes": 391756
+  },
+  "guest/evtx/System.txt": {
+   "sha256": "bd14f6160402b6d870844ca5176dd5aaf10afe00b1986ddd6aab19cd555bbea1",
+   "status": "VERIFIED_STREAM",
+   "bytes": 611706
+  },
+  "prov/arms/on_fix/rpc_timing.jsonl": {
+   "sha256": "f73436c81ed26d0090df91ea28c6833fb8f638aa117fb677bc4260ac98eda8f4",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1092088
+  },
+  "guest/evtx/0001_Windows_PowerShell.evtx": {
+   "sha256": "f82ab6ded06097e2f713c94d7070745391080740ddd20bb6f6c088ed9b67421a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0002_System.evtx": {
+   "sha256": "283d90ae35d702c9ddf1cb31032821949bdec1f8c1c6ce1cf8138c6fad604004",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0004_Application.evtx": {
+   "sha256": "9d20578169c415942600bcf918f63d5c01308a50a2ba1bb194fb1feea7b6feb2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0006_Microsoft-Windows-WMI-Activity_Operational.evtx": {
+   "sha256": "36e6d08374ef3cfe005abb86cfe2390ad54c5433164cea2ee35eed46df5af001",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0010_Microsoft-Windows-Windows_Firewall_With_Advanced_Security_Firewall.evtx": {
+   "sha256": "a73a67afb96ec62ec638d87fb8b43d48ca868dc98b92448364c488b3f90d9dc2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0024_Microsoft-Windows-Store_Operational.evtx": {
+   "sha256": "e048cea25e6d89b0b419cd7c14b6745a714fe273f820d9833d6768cce74b0ba4",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0030_Microsoft-Windows-StateRepository_Operational.evtx": {
+   "sha256": "a243707e22f2de02fcc0fef72eae272e21e8fa0c15202081837e294d1ef8cc27",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0034_Microsoft-Windows-Shell-Core_Operational.evtx": {
+   "sha256": "d8bf7a0ffafc3fc37bd900b58ba491a07179af55737da9acc89f6f5338a1c6c2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0035_Microsoft-Windows-Shell-Core_AppDefaults.evtx": {
+   "sha256": "91d526aef375b70778abaf88dfaf055dd567be4633f1875c9897f9c3adce8525",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0048_Microsoft-Windows-Ntfs_Operational.evtx": {
+   "sha256": "fa8ecd69ef6e37caea8c1362c6ba1dce35b76475610f2492f93cbc604540cb72",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0054_Microsoft-Windows-LiveId_Operational.evtx": {
+   "sha256": "c9f9c5bf65a1a033cd0137c56bbd2a1e09fb4e2b5c71c41716959b1be4cc86ca",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0056_Microsoft-Windows-Kernel-WHEA_Operational.evtx": {
+   "sha256": "9b42e40e6607fd9d0d2e3877091d8bd0b570d3e4f8a94878bf3caa452fb9fbd9",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0058_Microsoft-Windows-Kernel-PnP_Configuration.evtx": {
+   "sha256": "567ab10577ea74f6bb540366c8f97fdbff48da79479ba5cc6f5d7d6b03faf921",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0064_Microsoft-Windows-GroupPolicy_Operational.evtx": {
+   "sha256": "012d16b8d8df5c6020f029ceea83ba39614330ea06192562d783ee8d916f0ada",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0069_Microsoft-Windows-DeviceSetupManager_Admin.evtx": {
+   "sha256": "2339d31b89b5456d740e7dbf731ebefe206771b8d6f81b2b840ed33fb200e2ca",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0072_Microsoft-Windows-Crypto-NCrypt_Operational.evtx": {
+   "sha256": "99c606318e5e1ff585ad78ec7bfcb668acb7c8e9fb51473f56f092caeb7aaf1d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0086_Microsoft-Windows-AppXDeploymentServer_Operational.evtx": {
+   "sha256": "d37c43f0125b4eefe5dbf985b4b8f637681b23e033773676dcd97cd8a997de5a",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "guest/evtx/0090_Microsoft-Windows-AppModel-Runtime_Admin.evtx": {
+   "sha256": "a859a562b3d36bb8473d27236d3283f6dcec2abfe66ce47a6710ba2f4d3663ae",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1118208
+  },
+  "prov/arms/on_fix/keylines.jsonl": {
+   "sha256": "7975baacb4bd48f73901734644a7a7bdbd34e9e228cbc9fb954f47d99c5160e0",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1158800
+  },
+  "guest/WER_ReportQueue/Kernel_1b8_8fa7e01760fd533c5dce8eb299b7ad27ad53e77_00000000_82970014-24e7-46ad-8f26-cee5592f05ef/WATCHDOG4400-20261024-2011.dmp": {
+   "sha256": "994603c16eafd6069abccdf96474fc4c4ba4dfb4b9fcfedbe15f16880bf03543",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1296245
+  },
+  "vm_logs/on_fix_b1_qemu.log": {
+   "sha256": "e8e26ddd4f07e6904fbf83fc2e949b0971530e976b6332158b9d0acd172c1bf2",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1657671
+  },
+  "guest/evtx/0003_Security.evtx": {
+   "sha256": "c27b18e0e15e705dd38b552cfc8b301fcbe6d5edeaf8be9e4562f840adf95321",
+   "status": "VERIFIED_STREAM",
+   "bytes": 2166784
+  },
+  "guest/Minidump/102426-7484-01.dmp": {
+   "sha256": "79382b77cbc3e8ea1693a5b19d2af60e3dbcfa08548f5480be64a15d119b855b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 3356081
+  },
+  "guest/WER_ReportQueue/Kernel_113_27a3ae5856aacf4c637e2c9d83fe3d128764669_00000000_04480a35-0eb4-4e99-afc2-860286c36446/102426-7484-01.dmp": {
+   "sha256": "79382b77cbc3e8ea1693a5b19d2af60e3dbcfa08548f5480be64a15d119b855b",
+   "status": "VERIFIED_STREAM",
+   "bytes": 3356081
+  },
+  "guest/evtx/0044_Microsoft-Windows-PowerShell_Operational.evtx": {
+   "sha256": "0c4abdb410ce3380f5ae17bb9426ad68712915dbb82df520215417344059536d",
+   "status": "VERIFIED_STREAM",
+   "bytes": 10555392
+  },
+  "guest/LiveKernelReports/WATCHDOG-20261024-2011.dmp": {
+   "sha256": "a27d60ec27e13566d21860975586f97ad94136b69b04a6329fb4b917e2aa56cc",
+   "status": "VERIFIED_STREAM",
+   "bytes": 1182012512
+  }
+ },
+ "seconds": 145.4,
+ "private": true,
+ "lease": 57556167,
+ "raw_location": "private dev-box capture dir"
+}

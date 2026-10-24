@@ -1,0 +1,138 @@
+{
+  "utc": "2026-10-24T19:58:25.444997+00:00",
+  "backup_kind": "bounded text exported to operator workspace before live B",
+  "publication_deferred_until_live_complete": true,
+  "local_export_receipt_sha256": "1f74a63fd53c698a1c9d3fdffd361a70308bb9ee23703d962605fccab5c220da",
+  "raw_summary": [
+    "BARE_SUITE_PASS=29 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=29"
+  ],
+  "cuda_rows": [
+    "CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=208 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]",
+    "CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=160 graded=[CUP3_VAL=43]",
+    "CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=189 graded=[CUP8_BAD=0 CUP8_MAXERR=0]",
+    "CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=318 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]"
+  ],
+  "gr_summary": [
+    "GR_TIER_VERDICT=PASS"
+  ],
+  "fuzz": {
+    "records": [
+      {
+        "arm": "crowd",
+        "returncode": 0,
+        "valid_sample": true,
+        "alias_revoked": false,
+        "fields": {
+          "FUZZ_ARM": "crowd",
+          "verdict": "PASS",
+          "why": "CLEAN",
+          "threads": "9",
+          "pin": "crowd",
+          "cores": "3",
+          "ops": "576",
+          "engine_ops": "133",
+          "alias_ops": "32",
+          "overlap": "1678",
+          "viol": "0",
+          "refused": "0",
+          "pinned": "9/9",
+          "finished": "9/9"
+        },
+        "raw_sha256": "11010e5e4ac4325bc75048496e41f7240577ae4c9d3092ce2f8867e252f1d1e7",
+        "experiment_mode": "OBSERVATION",
+        "attestation": false
+      },
+      {
+        "arm": "crowd",
+        "returncode": 0,
+        "valid_sample": true,
+        "alias_revoked": false,
+        "fields": {
+          "FUZZ_ARM": "crowd",
+          "verdict": "PASS",
+          "why": "CLEAN",
+          "threads": "9",
+          "pin": "crowd",
+          "cores": "3",
+          "ops": "576",
+          "engine_ops": "125",
+          "alias_ops": "20",
+          "overlap": "897",
+          "viol": "0",
+          "refused": "0",
+          "pinned": "9/9",
+          "finished": "9/9"
+        },
+        "raw_sha256": "3ff2546c0a7759cb110c1959a1ed9aedc311e61ae66fa9ea1599a9e1787d619e",
+        "experiment_mode": "OBSERVATION",
+        "attestation": false
+      },
+      {
+        "arm": "crowd",
+        "returncode": 0,
+        "valid_sample": true,
+        "alias_revoked": false,
+        "fields": {
+          "FUZZ_ARM": "crowd",
+          "verdict": "PASS",
+          "why": "CLEAN",
+          "threads": "9",
+          "pin": "crowd",
+          "cores": "3",
+          "ops": "576",
+          "engine_ops": "115",
+          "alias_ops": "9",
+          "overlap": "1212",
+          "viol": "0",
+          "refused": "0",
+          "pinned": "9/9",
+          "finished": "9/9"
+        },
+        "raw_sha256": "0683d63d32e4f3edf71b0042fe863f739c6935b147c4f3ac8d31947b5a08e2cf",
+        "experiment_mode": "OBSERVATION",
+        "attestation": false
+      },
+      {
+        "arm": "crowd-free",
+        "returncode": 0,
+        "valid_sample": true,
+        "alias_revoked": false,
+        "fields": {
+          "FUZZ_ARM": "crowd-free",
+          "verdict": "PASS",
+          "why": "CLEAN",
+          "threads": "9",
+          "pin": "unpinned",
+          "cores": "3",
+          "ops": "576",
+          "engine_ops": "108",
+          "alias_ops": "21",
+          "overlap": "1753",
+          "viol": "0",
+          "refused": "0",
+          "pinned": "0/9",
+          "finished": "9/9"
+        },
+        "raw_sha256": "990438eea862670bc067d8223b9a437ad8733374e785bbf3ee65b521c711e0c2",
+        "experiment_mode": "OBSERVATION",
+        "attestation": false
+      }
+    ],
+    "pinned_samples": 3,
+    "valid_pinned_samples": 3,
+    "alias_revoked_recurrences": 0,
+    "native_finding": false,
+    "root_cause_claimed": false,
+    "continue_windows": true,
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "lease_id": 57556167
+  },
+  "native_faults": 5,
+  "exact_ordered_fault_match": true,
+  "native_verdicts_are_a_gate": false,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "utc_local": "2026-10-24T19:58:25.540627+00:00",
+  "host_verification": "UNVERIFIED-HOST"
+}

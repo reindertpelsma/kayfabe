@@ -1,0 +1,59 @@
+{
+  "lane": "BW6",
+  "round": "B1r",
+  "written_utc": "2026-10-24T18:40:48.721968+00:00",
+  "fix_source": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+  "hypothesis": {
+    "id": "H-FIX",
+    "statement": "On GB202 the combined fix reaches Code 0 and holds 600 seconds with zero Xid, no TDR and no bugcheck.",
+    "falsifier": "Any Xid 32 pair, TDR/bugcheck (System 1001/6008/4101), or no Code 0 within the hold. Any Xid is a failed zero-Xid hold. Collect evidence and stop; do not iterate on fixes.",
+    "attribution": "A failure counts as kayfabe only if native windows-on-vast on the same box type passed. Box gates and bare suite alone do not establish this Windows attribution."
+  },
+  "arms": [
+    {
+      "run": "on_fix",
+      "flags": "default p19",
+      "enable_count": 1,
+      "hold_seconds": 600
+    }
+  ],
+  "native_first": "Full B1q box gates and bare suite, unchanged; native Windows reference required for failure attribution.",
+  "budget": {
+    "stop_usd": 3.0,
+    "cap_usd": 3.5,
+    "max_hourly_usd": 1.0,
+    "credit_reserve_usd": 8.0,
+    "leases": 1,
+    "max_seconds": 10800
+  },
+  "skus": {
+    "RTX_5090": "GB202"
+  },
+  "geforce_only": true,
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
+  "guards": [
+    "settle_pin unchanged",
+    "watchdog armed before create",
+    "exact owned id only",
+    "capture pulled and sha256 verified before normal destroy",
+    "API absence verified before timers cancelled"
+  ],
+  "bar1": "Run and mark Vast 256 MiB exception; never resize.",
+  "display_dumps": "Report 0x193/0x1A8/0x1B8 if present; native REF in BW3 showed none.",
+  "market_watch": "Read-only, at most 60 minutes; stop on qualifying offer, no auto-create.",
+  "pnputil_reload": "Not scheduled: on_fix only. No follow-up arm within this plan.",
+  "provenance": "No RE-derived values; private captures only under /data/bw4_private_capture.",
+  "controller_resume": {
+    "utc": "2026-10-24T19:39:21.661537+00:00",
+    "ruling": "Proceed with one on_fix lease; claims new=0 gates pushes, not renting. Keep BW6 local. After teardown create codex/bw6b-20261024 from origin/master with BW6-authored evidence only; gate and push only that branch.",
+    "all_lease_guards_unchanged": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "started_utc": "2026-10-24T18:41:05.614308+00:00",
+  "max_seconds": 3600,
+  "query": "vms_enabled=true num_gpus=1 gpu_name=RTX_5090 disk_space>=180 cpu_cores_effective>=16 cpu_ram>=32 inet_down>=200 reliability>=0.95 verified=any",
+  "creates": 0,
+  "status": "QUALIFYING_OFFER_FOUND",
+  "samples": 1,
+  "elapsed_seconds": 0.959,
+  "last_sample_utc": "2026-10-24T18:41:05.614335+00:00",
+  "qualifying_offer_ids": [
+    56988927
+  ]
+}

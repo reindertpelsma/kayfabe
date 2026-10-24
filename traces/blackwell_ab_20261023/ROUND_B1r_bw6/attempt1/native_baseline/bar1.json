@@ -1,0 +1,15 @@
+{
+  "lease": 57556167,
+  "utc": "2026-10-24T19:57:07.508861+00:00",
+  "bar1_lines": [
+    "    BAR1 Memory Usage",
+    "        Total                                          : 32768 MiB",
+    "        Used                                           : 65 MiB",
+    "        Free                                           : 32703 MiB",
+    "    Conf Compute Protected Memory Usage"
+  ],
+  "resize_attempted": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

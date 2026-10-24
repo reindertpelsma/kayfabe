@@ -1,0 +1,12 @@
+{
+  "lease": 57556167,
+  "verified_before_destroy_utc": "2026-10-24T20:17:57.680247+00:00",
+  "verified_files": {
+    "box": 4,
+    "on_fix": 172
+  },
+  "failed": 0,
+  "not_pulled": 0,
+  "private_capture_root": "/data/bw4_private_capture/57556167",
+  "all_file_hashes_rechecked": true
+}
