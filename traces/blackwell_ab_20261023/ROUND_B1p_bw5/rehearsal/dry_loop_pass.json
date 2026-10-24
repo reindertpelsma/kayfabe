@@ -142,7 +142,7 @@
     {
       "suite": "test_b1p_ops",
       "root": "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal",
-      "ran": 14,
+      "ran": 15,
       "ok": true
     }
   ],
@@ -160,8 +160,8 @@
     }
   },
   "static": [],
-  "seconds": 92.1,
-  "utc": "2026-10-24T09:53:32.562437+00:00",
+  "seconds": 92.5,
+  "utc": "2026-10-24T09:56:18.973401+00:00",
   "sources": {
     "/workspace/bw5-wt/scripts/bench/blackwell/arm_history.py": "73ae5d56ae54639dbdb0a76203a66f1507393dfb7cce97cd892332764989fa08",
     "/workspace/bw5-wt/scripts/bench/blackwell/channel_projection.py": "e439cae14524896640296b57cb847e2a61baf9f9ac2b0a9bbc83aceb1005593e",
@@ -278,7 +278,7 @@
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/operator_parallel_eight.py": "d77d00fab8d0f9df24434968ca73473e02290d8ce00f808cd24dfc5f1b3223c4",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/operator_poll.py": "4c2ddb92bb3aa041fee7506b2f16b2a961904df4d7b8f016b56c2fd3515a2259",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/operator_upload.py": "4e31967d35c7319a2ff9f15ce1ffe6317592dc665df01a16ed728db144d11d6e",
-    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/operator_wire_b1p.py": "b6da1aafde7f4f22784c8aa0a236eb8f43a501db2095472d8c77e72c78cc8c4e",
+    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/operator_wire_b1p.py": "f2c298a83fc2231d1efa517036568585dc5725f155a29b144c69947ff62d397d",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/parallel_eight.py": "6a921fd1731db93c66378a229ecaa2fbf391c59486e56b4bb704db8529d70a1f",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/phase_begin.py": "72ce5ac2ddd9221a97caee0f0f140bd6658fd8f861d3be13ee9e30f81c6ebe67",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit/precreate_watchdog.py": "b81a8766fb637cd8815f47177d2454326b4308834952eb5cc11bc779b4057887",
@@ -320,7 +320,7 @@
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal/test_b1n_snippets.py": "f8e675dc0ae300eb63a6c8dc3f549fd0333d84adc5d0cda8446303c238080c5d",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/mutants_b1p.py": "35c0db86e2f26baebf30d57aeb18124a96788cf2ff8f3091f3c929d4f82acb6f",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_kit.py": "739b8d52b44d73963ba19cd0d272df5f15468a74739356b26d7800a2b2c4e22d",
-    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_ops.py": "1a0aa331177fc9f10cbb6ed210cb0e7213e5f3be29f0799a831c289420cc7683",
+    "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_ops.py": "0c3a6ebf0885855396fbfa9590bfbfd627c6073f197a4bf0473365a18b43e6d7",
     "/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal/test_b1p_snippets.py": "0b1eb1d174161232f63a50e12b539066c10d2cebcb82814f84d1326a5a0acc9a"
   },
   "passed": true,

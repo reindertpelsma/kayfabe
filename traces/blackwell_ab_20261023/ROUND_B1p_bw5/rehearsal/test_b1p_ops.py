@@ -138,6 +138,13 @@ class Wiring(unittest.TestCase):
         state = json.loads(text("stretch.json"))
         self.assertEqual(state["attempts_used"], 0)
 
+    def test_the_lease_ledger_exists_and_is_empty_before_the_create(self):
+        ledger = HERE.parent / "attempt1" / "owned_instances.json"
+        if (WS / "own-id").exists():
+            self.skipTest("a lease exists; the ledger then holds it")
+        self.assertEqual(json.loads(ledger.read_text()), [])
+        self.assertIn('assert L.read_text().strip() == "[]"', OPS.read_text())
+
     def test_workspace_is_fresh(self):
         for name in ("own-id", "lease.json", "alias", "round_plan.json"):
             self.assertFalse((WS / name).exists(), name)

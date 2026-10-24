@@ -220,6 +220,12 @@ def main():
     )
     for path in (D / "owner_authority.json", T / "owner_authority.json"):
         path.write_text(json.dumps(auth, indent=2) + "\n")
+    # The rent requires an existing, empty lease ledger (B1n's was made by hand; BW5 rent 1 stopped
+    # on its absence before any create). Never reset a ledger that holds a lease.
+    ledger = T / "owned_instances.json"
+    if not ledger.exists():
+        ledger.write_text("[]\n")
+    assert json.loads(ledger.read_text()) == [], "the lease ledger is not empty; never re-wire"
     shutil.copy2(SRC / "known_bad_machines.json", D / "known_bad_machines.json")
     shutil.copy2(T / "run_kit" / "capture_pull.py", D / "capture_pull.py")
     print("WIRED", D, TNAME)
