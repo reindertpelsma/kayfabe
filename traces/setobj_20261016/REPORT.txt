@@ -1,0 +1,87 @@
+SET_OBJECT on software subchannels — measured on the bare-metal host (RTX 4070 AD104, host driver 595.91.07)
+STATUS: PARTIAL (owner pause 2026-10-17 ~02:50 CEST; see RESUME.txt for exactly what did NOT run). 2026-10-17.
+Branch claude/setobj-20261016. Pre-registration: PREREG.md (committed before any run). Probe: scripts/bench/setobj/setobj_probe.c
+(C over /dev/nvidiactl, public ogkm 595.91.07 headers, no closed binary read). Raw logs: traces/setobj_20261016/raw/ (a_1, a_2 =
+first smoke runs with the FIRST binary md5 5f72c7dd..., no delayed fault look; a_3, b_1..b_4 = binary md5 8b0cd0d0c9fd, with the
++250 ms notifier look and the 1.5 s final settle tail). One process = one fresh RM client / TSG / GR channel per (case, rep).
+Labels: MEASURED = in the raw logs; INFERRED = reasoning, never evidence.
+
+0. HARNESS FINDINGS THAT CHANGE HOW "ACCEPTED" IS READ (MEASURED)
+ * The channel stays alive after a legal sequence and dies after a faulting one: after a fault the later semaphore releases never
+   arrive, the channel error notifier carries the RC code (13 = graphics exception, 32 = PBDMA error) and the host journal has an
+   "NVRM: Xid ... pid=<probe pid>, name=setobj_probe" line.
+ * A fault caused by a SOFTWARE method / software-subchannel SET_OBJECT is ASYNCHRONOUS to the semaphore in the SAME pushbuffer:
+   in c_badsw and in every S3 case the semaphore right after the offending method still arrived (ne=0 at that moment) and the notifier
+   showed the error 250 ms later. A semaphore alone is therefore NOT a fault detector; the verdicts below use D1 (later semaphores
+   incl. the final tail after 1.5 s) + D2 (notifier, read at once and +250 ms) + D3 (journal Xid for the probe's pid) together.
+ * Positive controls (3 reps each unless noted) all behaved as pre-registered, so a "no error" below is a real reading:
+     c_ok          SO(1,compute) + compute report-semaphore on sub 1: engine semaphore 0xc0de0001 lands, no fault          3/3
+     c_badclass    SO(2,0xdead): Xid 13 pid, notifier 13, no later semaphore                                                   3/3
+     c_badsw       A bound on 6, then software method 0x300 (outside the 0x5080 table): Xid 32 (intr 00800000), notifier 32   3/3
+   Oracle self-test r0 (3/3): register H1 and H2 on A, send 0x200=H1: REMOVE_API(H1) -> 0xffff (entry gone = executed),
+   REMOVE_API(H2) -> 0x0 (still present). The registration control (0x50800101, DMA_INVALIDATE_TLB, DELETE_IMPLICIT) was accepted from
+   this root process (status 0) and executes. "executed_by=X" below = REMOVE_API fails only on object X.
+ * Software object numbering (MEASURED): GET_CLASS_ENGINEID (0x906f0101) of the first 0x5080 child = classEngineID 0x1 (engineID 0x22);
+   the second = 0x2, also when the first was FREED before the second was allocated (s2b): the per-channel counter is never rolled back.
+
+1. TABLE (bare-metal, host RM + GSP; reps are fresh channels; "prereg" is the prediction in PREREG.md)
+ case | what was sent (public methods, see 2.) | RM status of allocs/frees | fault? | reps | prereg | verdict
+ S1   | SO(6,A) ; NOP(6,0x100) ; sem ; SO(6,A) AGAIN ; NOP,NOP(0x101) ; sem ; NOP ; sem          | alloc A 0x0 | none (no Xid, ne=0, final tail ok) | 3/3 | accepted: CONFIRMED | ACCEPTED
+ S1r  | S1 + register H on A, SW(6,0x200,H) after the second bind                                | register 0x0 | none | 3/3 | - | method after the re-bind REACHED A (REMOVE_API(A) 0xffff, executed) 3/3
+ S2   | A alloc, SO(6,A), work+sem, WAIT; THEN alloc B (channel already ran work); SO(6,B); sem  | alloc B 0x0, B id 2 | none | 3/3 | alloc ok + accepted: CONFIRMED | ACCEPTED
+ S2r  | S2 + register H on A and B, SW(6,0x200,H)                                                | register 0x0 x2 | none | 3/3 | - | reached B ONLY (REMOVE_API(A) 0x0 present, REMOVE_API(B) 0xffff executed) 3/3: the rebind is effective, not merely tolerated
+ S2b  | SO(6,A), work, FREE A (0x0), alloc B (0x0, id 2), SO(6,B), sem                            | free 0x0; alloc B 0x0 | none | 3/3 | accepted: CONFIRMED | ACCEPTED; reach (s2br) B 3/3
+ S2c5 | SO(6,A), work, alloc B, SO(5,B) while A stays on 6                                       | alloc B 0x0 | none | 3/3 | accepted: CONFIRMED | ACCEPTED; reach (s2c5r): 0x200 on sub5 -> B, 0x200 on sub6 -> A, 3/3
+ S2c7 | same with subchannel 7                                                                   | alloc B 0x0 | none | 3/3 | accepted: CONFIRMED | ACCEPTED; reach (s2c7r): sub7 -> B, sub6 -> A, 3/3
+ S2d  | alloc A and B BEFORE the first submission, SO(6,A), work, SO(6,B)                         | allocs 0x0 | none | 3/3 | accepted: CONFIRMED | ACCEPTED; reach (s2dr) B 3/3
+ S2e  | SO(6,A), work, SO(5 or 7, A) (same object on a SECOND software subchannel), NOP on both  | alloc A 0x0 | none | sub5 4/4, sub7 4/4 (b_4 x3 + a_3 x1) | accepted: CONFIRMED (acceptance only) | ACCEPTED (no fault); "method on the 2nd subchannel reaches A" NOT MEASURED, see RESUME.txt (the s2e*r runs hit a dispatch bug, they ran the S2 flow)
+ S2e-hw | SO(k, A's id 1) [plain] and SO(k, 1|0x1f<<16) on HARDWARE subchannel k=0..4 after A bound on 6 | - | YES: k=0..3 Xid 13 (Graphics Exception), k=4 Xid 32 (copy engine rejects the value) ; both encodings | 1 each | (recorded) | REJECTED with a channel-killing fault
+ enc  | SO(6,A) then SO(6, A|ENGINE_SW(0x1f)<<16)                                               | - | none | 3/3 (+1) | - | both encodings ACCEPTED on a software subchannel
+ S3   | SO(5|6|7, ADA_COMPUTE_A 0xc9c0) ; compute report-semaphore on that subchannel ; sem        | compute alloc 0x0 | YES: Xid 32 intr 00800000 pid, notifier 32 (ne=1 at +250 ms, BEFORE any further method), engine semaphore never written (slot=0), later sems never arrive | 1 each (sub 5, 6, 7) | rejected/ignored: CONFIRMED as REJECTED | REJECTED by hardware/GSP: channel killed, no engine work executed
+ S3-3D | SO(6, ADA_A 0xc997) ; NOP                                                            | 3D alloc 0x0 | YES: same Xid 32 signature | 1 | same | REJECTED (same)
+ S4d  | SO(1,compute) twice on a HARDWARE subchannel + compute semaphore                         | - | none | 3/3 | accepted: CONFIRMED | ACCEPTED (hardware re-send is idempotent)
+ S4e  | SO(1,compute)+SO(2,compute) (same engine object on two hardware subchannels)             | - | YES Xid 13 on sub 2 | 3/3 | accepted: FALSIFIED | REJECTED: see hwsub map
+ hwsub| SO(k,compute) alone, k=0..4                                                              | - | k=1 OK (engine sem lands); k=0,2,3 Xid 13 ; k=4 Xid 32 (HCE_DBG1 0xc9c0) | 1 each | - | hardware subchannels have a FIXED class mapping; only a matching class is accepted (sub 1 = compute here)
+
+ Pre-registered falsifiers: S1 not falsified; S2/S2b/S2c/S2d not falsified (alloc succeeds, bind accepted, no fault at any step);
+ S2e (acceptance) not falsified; S3 not falsified (rejected, no engine work); S4e falsified (my prediction that two hardware
+ subchannels accept the same compute object was wrong: the mapping is fixed, a mismatching class faults; this does not weaken the
+ controls: c_hw_rebind, same sub, same object, is accepted 3/3).
+
+2. EXACT PUSHBUFFER WORDS (public methods only; header = 0x20000000 | count<<16 | subchannel<<13 | method>>2, SEC_OP=1 incrementing)
+   SET_OBJECT, sub 6, one word:       0x2001c000 <data>          data = classEngineID from GET_CLASS_ENGINEID (A=1, B=2), 0xc9c0 compute, 0xc997 3D
+   SET_OBJECT, sub 5 / 7:             0x2001a000 <data> / 0x2001e000 <data>      (s2c: 0x2001a000 0x00000002 = SO(5,B))
+   NOP (class 0x5080 table 0x100..0x103):  0x2001c040 0x00000000 (sub 6, method 0x100) ; 0x2001c044 (0x101) ; sub 5: 0x2001a040
+   0x200 trigger:                     0x2001c080 <handle>      e.g. 0xde100001 (s1r), sub 5: 0x2001a080, sub 7: 0x2001e080
+   undefined method (control):        0x2001c0c0 0x00000000   (method 0x300 on sub 6)
+   semaphore release (host methods, sub 0): 0x20040004 <addr_hi 0x00000001> <addr_lo 0x2000xxxx> <payload 0x5e0000nn> 0x01000002
+        (SEMAPHOREA/B/C/D = 0x10..0x1c, operation RELEASE, 4-byte; the ring object is mapped at GPU VA 0x120000000, semaphores at +0x2000)
+   compute report-semaphore (engine work, S3/c_ok): 0x20050056 | sub<<13 (sub 6: 0x2005c056; sub 1: 0x20052056; count 5, method 0x158) payload,0,addr_lo,addr_hi,0x00000008
+   Full dumps are in the raw logs (lines "PB ..." / "PBW i word"), e.g. raw/b_2/s1r_1.log, raw/b_3/s2c5r_1.log, raw/a_3/s3_6_1.log.
+
+3. HOST JOURNAL EXCERPTS (attributed to the probe by pid)
+   c_badclass: NVRM: Xid (PCI:0000:01:00): 13, pid=<pid>, name=setobj_probe, Graphics Exception: channel 0x00000004, Class 0000c997, Offset 00000000, Data 00000000
+   c_badsw / S3: NVRM: Xid (PCI:0000:01:00): 32, pid=<pid>, name=setobj_probe, channel 0x00000004 intr 00800000
+   hw sub 4 (copy engine): Xid 32 ... intr1 00000010 HCE_DBG0 00000000 HCE_DBG1 0000c9c0  (HCE_DBG1 = the rejected SET_OBJECT value; 00000001 / 001f0001 for SO(4,A))
+   No Xid for any S1, S2, S2b, S2c, S2d, S2e acceptance run (0 lines for the pid in every one of those runs). Full per-run journals: raw/*/*.journal.
+
+4. VERDICTS (plain)
+   S1  : ACCEPTED. A second identical SET_OBJECT on a software subchannel is accepted by hardware/RM/GSP, no error (3/3), and a deferred
+         trigger sent after it reaches the same object (3/3). The hardware allows a RE-SEND; the question whether the driver does it stays
+         with the app-matrix counters.
+   S2  : ACCEPTED (rebind to a LATER-allocated object on the same software subchannel, after the channel executed work). RM status of the
+         later alloc: NV_OK (0x0) 3/3; the later object takes the next classID (2). The rebind is EFFECTIVE: a 0x200 trigger on that subchannel
+         is executed by the new object (B) and not by the old one (A) 3/3. => "a rebind is impossible by construction" is FALSE at the
+         RM/hardware layer; the kayfabe relay's assumption "the 5080 object cannot be allocated after the first publication" is also
+         FALSE for the host RM (the alloc succeeds after the channel ran work, also after freeing the first object).
+   S2b : ACCEPTED (free A, alloc B, bind B; id 2, not reused), effective, 3/3.
+   S2c : ACCEPTED (B on a different software subchannel 5 or 7 while A stays on 6); each subchannel's 0x200 reaches its own object, 3/3.
+   S2d : ACCEPTED (B allocated before the first submission, bound later), effective, 3/3.
+   S2e : ACCEPTED (acceptance only): the same object bound on a second software subchannel (5 or 7) raises no fault, 4/4 each. Whether a
+         0x200 on the SECOND subchannel is executed by A is NOT MEASURED (harness bug found afterwards, fixed in source, not run). INFERRED
+         (not evidence): yes, because S2c shows each software subchannel dispatches to the object bound on it. So a Pointer-mode relay
+         that has seen one binding cannot assume a trigger arrives only on that subchannel.
+   S3  : REJECTED by hardware/GSP (1 rep per subchannel 5/6/7 and 3D on 6): SET_OBJECT of a compute/3D class on a software subchannel
+         kills the channel (Xid 32, notifier 32), no engine work. A software subchannel accepts only software-object ids.
+   Not measured (the owner pause stopped the queue): S3 reps 2-3, SET_OBJECT of a stale id (A freed, then SO(6,A)) and of a nonexistent id
+         (SO(6,99)), the S2e trigger-reach, S2e-hw / hwsub repetitions. See RESUME.txt.

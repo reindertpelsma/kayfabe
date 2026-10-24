@@ -1,0 +1,9 @@
+JOB_START 2026-10-17T01:56:35+02:00 pid=2557679 n=7
+DONE case=s2 rep=1 pid=2557684 rc=0 xid_lines_for_pid=0
+DONE case=s2r rep=1 pid=2557706 rc=0 xid_lines_for_pid=0
+DONE case=s2b rep=1 pid=2557768 rc=0 xid_lines_for_pid=0
+DONE case=s2c5 rep=1 pid=2557840 rc=0 xid_lines_for_pid=0
+DONE case=s2c7 rep=1 pid=2557879 rc=0 xid_lines_for_pid=0
+DONE case=s2d rep=1 pid=2557927 rc=0 xid_lines_for_pid=0
+DONE case=s2d rep=1 pid=2557955 rc=0 xid_lines_for_pid=0
+JOB_END 2026-10-17T01:56:50+02:00
