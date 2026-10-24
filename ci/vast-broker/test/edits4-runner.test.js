@@ -30,3 +30,8 @@ test('T4: runner refusal-shapes', () => {
   assert.equal(p.status, 0, p.stderr + p.stdout);
   assert.match(p.stdout, /^ok refusal-shapes/);
 });
+test('T5: the BUSY flag is reset before every /rent send', () => {
+  const p = py(['busy-flag-reset']);
+  assert.equal(p.status, 0, p.stderr + p.stdout);
+  assert.match(p.stdout, /^ok busy-flag-reset/);
+});
