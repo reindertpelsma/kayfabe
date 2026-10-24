@@ -59,12 +59,33 @@ class CostWatch(unittest.TestCase):
             clock[0] += dt.timedelta(seconds=seconds)
 
         result = W.watch(
-            plan, ledger=lambda: [{"id": 123456}], ready=lambda row: None,
-            now=lambda: clock[0], pause=pause, status=status,
+            plan,
+            ledger=lambda: [{"id": 123456}],
+            ready=lambda row: None,
+            now=lambda: clock[0],
+            pause=pause,
+            status=status,
             destroy=lambda iid: events.append((iid, clock[0])),
         )
         self.assertEqual(result["reason"], "billed allocation stop")
         self.assertEqual(events, [(123456, NOW)])
+
+    def fail_closed(self, error):
+        import network_guard as N
+
+        stopped = []
+
+        def monitor():
+            raise error
+
+        N.run_owned(monitor, lambda: stopped.append("stop"))
+        self.assertEqual(stopped, ["stop"])
+
+    def test_counter_io_failure_stops_owned_controller(self):
+        self.fail_closed(OSError("fixture missing counter"))
+
+    def test_interface_failure_stops_owned_controller(self):
+        self.fail_closed(ValueError("fixture missing interface"))
 
     def test_credit_delta_plus_margin_stops(self):
         self.check_credit(21.99)
