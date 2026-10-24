@@ -18,7 +18,7 @@ MUTANTS = {
         'if not offer.get("verification"):',
     ),
     "blacklist_removed": (
-        'if offer.get("machine_id") in blacklisted:',
+        'if offer.get("machine_id") in blacklisted or offer.get("host_id") in blacklisted:',
         "if False:",
     ),
     "vm_status_removed": (

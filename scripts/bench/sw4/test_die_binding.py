@@ -10,13 +10,13 @@ ROOT = Path(__file__).resolve().parents[3]
 DIES = (ROOT / "crates/kf-chip/src/die.rs").read_text()
 ARCHES = (ROOT / "crates/kf-chip/src/lib.rs").read_text()
 PROBE = (
-    "host_driver=595.91.07 arch=(368, 4, 161)\n" "PASS native read-only timer map/read/drop x3\n"
+    "host_driver=595.91.07 arch=(432, 6, 161)\n" "PASS native read-only timer map/read/drop x3\n"
 )
 BINDING = "NVIDIA GeForce RTX 3060, 595.91.07, 0x248710DE\n"
 PIN = {
     "driver": "595.91.07",
     "pci": "0x248710DE",
-    "arch_impl": [368, 4],
+    "arch_impl": [432, 6],
     "ssh_verified": True,
     "identity": {
         "state": "match",
@@ -33,42 +33,42 @@ def check(probe=PROBE, binding=BINDING, pin=None):
 
 class DieBindingTests(unittest.TestCase):
     def test_actual_ga104_under_rtx3060_name(self):
-        self.assertEqual(check()["die"], "GA104")
+        self.assertEqual(check()["die"], "GB206")
 
     def test_marketing_name_cannot_override_native_tuple(self):
-        self.assertEqual(check(binding=BINDING.replace("RTX 3060", "RTX 3070"))["die"], "GA104")
+        self.assertEqual(check(binding=BINDING.replace("RTX 3060", "RTX 3070"))["die"], "GB206")
 
     def test_native_tuple_is_retained(self):
         result = check()
-        self.assertEqual((result["architecture"], result["implementation"]), (368, 4))
+        self.assertEqual((result["architecture"], result["implementation"]), (432, 6))
 
     def test_unknown_native_tuple_refused(self):
         pin = copy.deepcopy(PIN)
         pin["arch_impl"] = [368, 9]
         with self.assertRaises(BindingRefused):
-            check(probe=PROBE.replace("368, 4", "368, 9"), pin=pin)
+            check(probe=PROBE.replace("432, 6", "368, 9"), pin=pin)
 
     def test_different_unknown_native_tuple_refused(self):
         pin = copy.deepcopy(PIN)
         pin["arch_impl"] = [999, 4]
         with self.assertRaises(BindingRefused):
-            check(probe=PROBE.replace("368, 4", "999, 4"), pin=pin)
+            check(probe=PROBE.replace("432, 6", "999, 4"), pin=pin)
 
     def test_out_of_scope_ga107_refused(self):
         pin = copy.deepcopy(PIN)
         pin["arch_impl"] = [368, 7]
         with self.assertRaises(BindingRefused):
-            check(probe=PROBE.replace("368, 4", "368, 7"), pin=pin)
+            check(probe=PROBE.replace("432, 6", "368, 7"), pin=pin)
 
     def test_out_of_scope_blackwell_refused(self):
         pin = copy.deepcopy(PIN)
         pin["arch_impl"] = [432, 2]
         with self.assertRaises(BindingRefused):
-            check(probe=PROBE.replace("368, 4", "432, 2"), pin=pin)
+            check(probe=PROBE.replace("432, 6", "432, 2"), pin=pin)
 
     def test_malformed_tuple_refused(self):
         with self.assertRaises(BindingRefused):
-            check(probe=PROBE.replace("368, 4, 161", "368, four, 161"))
+            check(probe=PROBE.replace("432, 6, 161", "368, four, 161"))
 
     def test_truncated_probe_refused(self):
         with self.assertRaises(BindingRefused):
@@ -88,7 +88,7 @@ class DieBindingTests(unittest.TestCase):
 
     def test_inconsistent_tuple_binding_refused(self):
         with self.assertRaises(BindingRefused):
-            check(probe=PROBE.replace("368, 4", "368, 6"))
+            check(probe=PROBE.replace("432, 6", "368, 6"))
 
     def test_real_ssh_failure_refused(self):
         pin = copy.deepcopy(PIN)

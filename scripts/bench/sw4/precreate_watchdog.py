@@ -62,6 +62,9 @@ def watch(plan, *, ledger, ready, now, pause, status, destroy):
                     return retire("price beyond reservation")
                 if credit < B.RESERVE_USD:
                     return retire("account reserve")
+                spent = plan["credit_before"] - credit
+                if spent + B.NONRUNTIME_MARGIN >= plan["stop_usd"]:
+                    return retire("billed allocation stop")
                 if row.get("destroyed"):
                     return retire("closed ledger but provider still present")
             pause(min(20, remaining))

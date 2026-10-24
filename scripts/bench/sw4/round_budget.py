@@ -3,11 +3,11 @@
 import datetime as dt
 import math
 
-STOP_USD = 2.50
-CAP_USD = 3.00
+STOP_USD = 1.50
+CAP_USD = 2.00
 RESERVE_USD = 8.00
-MAX_RATE = 2.50
-MAX_SECONDS = 150 * 60
+MAX_RATE = 0.60
+MAX_SECONDS = 120 * 60
 NONRUNTIME_MARGIN = 0.50
 TEARDOWN_SECONDS = 60
 
@@ -24,7 +24,7 @@ def aware(value):
     return value.astimezone(dt.timezone.utc)
 
 
-def plan(hourly, credit, armed_at, *, stop_usd=STOP_USD, cap_usd=CAP_USD):
+def plan(hourly, credit, armed_at, *, stop_usd=STOP_USD, cap_usd=CAP_USD, transfer_usd=0.0):
     hourly = positive_number(hourly, "hourly price")
     credit = positive_number(credit, "credit")
     armed_at = aware(armed_at)
@@ -35,14 +35,23 @@ def plan(hourly, credit, armed_at, *, stop_usd=STOP_USD, cap_usd=CAP_USD):
     if hourly > MAX_RATE:
         raise ValueError("hourly price exceeds the owner limit")
     rate_bound = max(hourly * 1.15, hourly + 0.10)
-    cost_seconds = int((stop_usd - NONRUNTIME_MARGIN) * 3600 / rate_bound)
+    if (
+        type(transfer_usd) not in (int, float)
+        or not math.isfinite(transfer_usd)
+        or transfer_usd < 0
+    ):
+        raise ValueError("invalid transfer allocation")
+    cost_seconds = int((stop_usd - NONRUNTIME_MARGIN - transfer_usd) * 3600 / rate_bound)
     seconds = min(MAX_SECONDS, cost_seconds - TEARDOWN_SECONDS)
     if seconds <= 0:
         raise ValueError("no runtime remains within the cost stop")
-    reservation = rate_bound * seconds / 3600 + NONRUNTIME_MARGIN
+    reservation = rate_bound * seconds / 3600 + NONRUNTIME_MARGIN + transfer_usd
     if reservation >= stop_usd or credit - reservation < RESERVE_USD:
         raise ValueError("round reservation exceeds stop or account reserve")
     return {
+        "credit_before": credit,
+        "transfer_usd": transfer_usd,
+        "nonruntime_margin_usd": NONRUNTIME_MARGIN,
         "armed_utc": armed_at.isoformat(),
         "deadline_utc": (armed_at + dt.timedelta(seconds=seconds)).isoformat(),
         "seconds": seconds,

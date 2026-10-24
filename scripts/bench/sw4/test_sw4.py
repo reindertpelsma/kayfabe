@@ -180,15 +180,27 @@ class Sw4Lifecycle(unittest.TestCase):
     def test_complete_fake_lifecycle(self):
         events, result = self.lifecycle()
         self.assertIsInstance(result, dict)
-        self.assertEqual([x[0] for x in events], [
-            "arm", "report", "create", "report", "ready", "run", "capture",
-            "report", "destroy", "absence", "cancel", "report",
-        ])
+        self.assertEqual(
+            [x[0] for x in events],
+            [
+                "arm",
+                "report",
+                "create",
+                "report",
+                "ready",
+                "run",
+                "capture",
+                "report",
+                "destroy",
+                "absence",
+                "cancel",
+                "report",
+            ],
+        )
 
     def test_arm_precedes_create(self):
         events, result = self.lifecycle()
-        self.assertLess([x[0] for x in events].index("arm"),
-                        [x[0] for x in events].index("create"))
+        self.assertLess([x[0] for x in events].index("arm"), [x[0] for x in events].index("create"))
 
     def test_capture_hash_failure_still_tears_down(self):
         events, result = self.lifecycle(receipt_hash="wrong")

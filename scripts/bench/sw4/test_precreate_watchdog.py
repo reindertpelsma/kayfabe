@@ -83,21 +83,21 @@ class PrecreateWatchdog(unittest.TestCase):
 
     def test_readiness_delay_does_not_extend_the_precreate_deadline(self):
         result, events, end = self.run_case(delay=100)
-        self.assertEqual(end, NOW + dt.timedelta(seconds=9000))
+        self.assertEqual(end, NOW + dt.timedelta(seconds=7140))
         self.assertEqual(result["reason"], "fixed deadline")
 
     def test_long_readiness_still_uses_the_original_deadline(self):
         result, events, end = self.run_case(delay=1200)
-        self.assertEqual(end, NOW + dt.timedelta(seconds=9000))
+        self.assertEqual(end, NOW + dt.timedelta(seconds=7140))
 
     def test_provider_response_crossing_deadline_triggers_immediate_teardown(self):
-        result, events, end = self.run_case(delay=8950, status_seconds=60)
-        self.assertEqual(end, NOW + dt.timedelta(seconds=9020))
+        result, events, end = self.run_case(delay=7090, status_seconds=60)
+        self.assertEqual(end, NOW + dt.timedelta(seconds=7160))
         self.assertEqual(result["reason"], "fixed deadline")
 
     def test_slow_query_at_last_poll_does_not_add_another_poll_interval(self):
-        result, events, end = self.run_case(delay=8980, status_seconds=70)
-        self.assertEqual(end, NOW + dt.timedelta(seconds=9050))
+        result, events, end = self.run_case(delay=7120, status_seconds=70)
+        self.assertEqual(end, NOW + dt.timedelta(seconds=7190))
         self.assertEqual(result["reason"], "fixed deadline")
 
     def test_destroy_is_by_the_one_exact_owned_id(self):

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import sys
 
-SCOPE = {"GA104", "GA106", "GA102", "TU106", "TU116", "AD103", "AD106"}
+SCOPE = {"GB206", "GB207"}
 
 
 class BindingRefused(ValueError):

@@ -7,10 +7,11 @@ from offer_selector import OfferRefused, eligible, require_offer
 
 def offer(**changes):
     row = {
-        "id": 54435093,
-        "machine_id": 34087,
-        "host_id": 79466,
+        "id": 57427095,
+        "machine_id": 99805,
+        "host_id": 70221,
         "verification": "verified",
+        "geolocation": "Quebec, CA",
         "vms_enabled": True,
         "is_vm_deverified": False,
         "num_gpus": 1,
@@ -47,12 +48,12 @@ class OfferSelectorTests(unittest.TestCase):
 
     def test_blacklisted_machine_direct(self):
         with self.assertRaises(OfferRefused):
-            require_offer(offer(machine_id=54516), {54516})
+            require_offer(offer(), {99805})
 
     def test_blacklisted_machine_removed_from_candidate_list(self):
-        refused = offer(id=51156488, machine_id=54516)
-        accepted = offer()
-        self.assertEqual(eligible([refused, accepted], {54516}), [accepted])
+        refused = offer()
+        accepted = offer(id=50694293, machine_id=45428)
+        self.assertEqual(eligible([refused, accepted], {99805}), [accepted])
 
     def test_vm_deverified_direct(self):
         with self.assertRaises(OfferRefused):

@@ -1,4 +1,6 @@
-"""SW3 offer admission predicates extracted from the original operator."""
+"""SW4 admission retains SW3 guards and pins the independent grant."""
+
+import math
 
 
 class OfferRefused(ValueError):
@@ -12,9 +14,16 @@ def require_offer(offer, blacklisted):
         raise OfferRefused("one VM-capable GPU required")
     if offer.get("is_vm_deverified") is not False:
         raise OfferRefused("VM status is unavailable or disqualified")
-    if offer.get("machine_id") in blacklisted:
+    if offer.get("machine_id") in blacklisted or offer.get("host_id") in blacklisted:
         raise OfferRefused("blacklisted machine")
-    if not 0 < float(offer.get("dph_total", 0)) <= 2.50:
+    pairs = {57427095: 99805, 50694293: 45428}
+    if pairs.get(offer.get("id")) != offer.get("machine_id") or offer.get("host_id") != 70221:
+        raise OfferRefused("candidate outside SW4 grant")
+    location = offer.get("geolocation")
+    if not isinstance(location, str) or not location.endswith(", CA"):
+        raise OfferRefused("candidate country is not granted Canada")
+    rate = offer.get("dph_total")
+    if type(rate) not in (int, float) or not math.isfinite(rate) or not 0 < rate <= 0.60:
         raise OfferRefused("hourly price outside lane limit")
     return offer
 
