@@ -49,6 +49,15 @@ class HostKeyPin(unittest.TestCase):
     def test_key_after_the_marker_is_pinned(self):
         self.assertEqual(R.windows_host_key(log(KEY)), KEY)
 
+    def test_kernel_console_prefixed_lines_are_parsed(self):
+        # MEASURED format, lease 57486060 console: "[   40.85] bash[1406]: <text>"
+        text = (
+            "[   40.853381] bash[1406]: Save this WINDOWS SSH HOST KEY before reboot:\n"
+            f"[   40.855409] bash[2415]: {KEY} root@ubuntu\n"
+            "[   40.861619] bash[2416]: 256 SHA256:x root@ubuntu (ED25519)\n"
+        )
+        self.assertEqual(R.windows_host_key(text), KEY)
+
     def test_the_same_key_printed_twice_is_one_pin(self):
         self.assertEqual(R.windows_host_key(log(KEY, KEY)), KEY)
 
