@@ -1,0 +1,77 @@
+{
+  "round": "B1k_0430",
+  "operator": "Claude",
+  "grant": "controller 04:30: rent m30498 now on the B1i workspace (box-side fetch), default budget, one retry for offer-gone/host-key/boot only; then GB202-only watcher",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "workspace": "/workspace/bw3-round-b1i-a1_m30498-run (evidence under ROUND_B1i_0400/attempt1_m30498)",
+  "lease": {
+    "id": 57453849,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070",
+    "die_advertised": "GB205",
+    "quote_dph": 0.4320555555555556,
+    "observed_dph": 0.4806666666666667,
+    "precreate_armed_utc": "2026-10-24T02:21:50.169501+00:00",
+    "created_utc": "2026-10-24T02:21:51.735956+00:00",
+    "ssh_ready_utc": "2026-10-24T02:23:30.677651+00:00",
+    "absence_verified_utc": "2026-10-24T02:45:20.535241+00:00",
+    "runtime_cost_estimate_usd": 0.18810079836333335,
+    "credit_after_observed_usd": 27.416531241560733
+  },
+  "box_fetch": {
+    "verified_from_public_sources": [
+      "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "OpenSSH-Win64-v10.0.0.0.msi",
+      "virtio-win-0.1.302.iso"
+    ],
+    "fallback": [
+      "win11_ltsc_2024_eval_x64_en-us.iso"
+    ],
+    "elapsed_s": 72.0,
+    "iso_status": {
+      "state": "failed",
+      "ranges": 8,
+      "bytes_total": 5112850432,
+      "bytes_done": 626286592,
+      "reason": "range download failed or cutoff"
+    },
+    "post_failure_probe": "three 16-byte box-side range requests on the ISO URL (start, middle, end) answered 206 from software-static.download.prss.microsoft.com: the ranged failure was transient (one of 8 ranges failed after 626 MB)"
+  },
+  "upload_fallback": {
+    "file": "win11_ltsc_2024_eval_x64_en-us.iso",
+    "result": "6/8 chunks done, 2 still progressing at the 1200 s bound (same pattern as B1h)"
+  },
+  "stop": "transfer phase bound reached; per the rule no controller started; not a granted retry cause",
+  "gb202_watcher": {
+    "pid": 2746468,
+    "log": "/workspace/bw3-gb202-watch-run/market_watch/market_watch.log",
+    "result": "EXIT 0 at poll 1 (02:46:20Z): MATCH offer 56223809, machine 150304, RTX PRO 5000 (GB202), Australia, verified, 32 cores, 0.648 USD/h",
+    "tests": "test_gb202_watch.py 5/5",
+    "caution": "RTX PRO 5000 is a workstation card; the Windows arm uses the GeForce 580.88 package (controller 00:55 dropped PRO 5000 for that reason)"
+  },
+  "matrix": [
+    {
+      "arm": "Native (full stage)",
+      "die": "GB205 (advertised)",
+      "verdict": "UNRUN",
+      "evidence": "ROUND_B1i_0400/attempt1_m30498/lease_57453849/launch.log"
+    },
+    {
+      "arm": "B",
+      "die": "GB205 (advertised)",
+      "verdict": "UNRUN",
+      "evidence": "ROUND_B1i_0400/attempt1_m30498/lease_57453849/launch.log"
+    },
+    {
+      "arm": "B1",
+      "die": "GB205 (advertised)",
+      "verdict": "UNRUN",
+      "evidence": "ROUND_B1i_0400/attempt1_m30498/lease_57453849/launch.log"
+    }
+  ],
+  "xid32_list": [],
+  "tdr_verdict": "UNRUN"
+}

@@ -1,0 +1,18 @@
+{
+  "kernel_xids.json": {
+    "source_sha256": "baacde84d27d2359238b73a4f997fe241961e6725e84c570ee80fe95d688fc60",
+    "export_sha256": "9c8d5e33e7cdd5dbfd7c4969cae86a6411993900437b09e72f3d9f4d6217bdb9",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  },
+  "precomp_kernel_permission.json": {
+    "source_sha256": "baacde84d27d2359238b73a4f997fe241961e6725e84c570ee80fe95d688fc60",
+    "export_sha256": "e110e7fefbfcdd64dbf78f7cd087231802f6b498f48598c11327282f05e9899a",
+    "host_verification": "UNVERIFIED-HOST",
+    "experiment_mode": "OBSERVATION",
+    "attestation": false,
+    "normalization": "UNVERIFIED-HOST label plus existing whitespace/UUID normalization"
+  }
+}
