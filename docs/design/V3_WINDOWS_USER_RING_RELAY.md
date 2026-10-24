@@ -1,6 +1,18 @@
 # V3 Windows user-channel ring relay: private GPFIFO + private USERD, with a safe migration path
 
 **STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; the §AB.2 amendment in §6 is PROPOSED, not yet a ruling).**
+**Correction, 2026-10-24 (family scope):** the private ring proves progress with two words
+the ENGINE writes back into its private USERD: `GP_GET` (fetch credit) and `REFERENCE` (the
+marker's `SET_REFERENCE`, the gate proof). Both are C56F contracts. Blackwell's control
+struct names only `GPPut` (`clc96f.h`, `clca6f.h`), and `kf_chip::Family::engine_writes_userd_gp_get`
+is false there. Public RM never pushes `SET_REFERENCE` on Hopper or later
+(`ogkm-595.84 kernel_rc_watchdog.c:1416-1446`). On GB205 round B1n (lease 57472433,
+binary cb80cbd29, which admitted the generated non-Ada classes), both relayed DWM rings
+took Xid 32 METHOD. INFERRED, not measured: this was at the relay's first publication, since the
+trace's first turn and the Xid fall in the same 100 ms. The relay-off arm of the same lease, with
+the same USER twin privilege, held 10 minutes with no Xid. The route is now one decision with
+the birth admission (`userrelay::ring_relay_route`), so such a family takes the USERD-relay
+route. A Blackwell-capable private ring needs another progress proof, which is an owner decision.
 **Correction, 2026-10-13:** a prepared native deferred relocation at source
 `1a666d783` succeeds on RTX 4070 / 595.91.07 as UID 65534 / CapEff zero, with
 replacement-only GPU marker/USERD GET and matched NOP controls. Thus §1's

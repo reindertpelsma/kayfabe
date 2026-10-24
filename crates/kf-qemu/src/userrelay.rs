@@ -414,7 +414,15 @@ impl Drop for NeverBorn {
 }
 
 /// Whether the private-ring relay can serve a channel of `class` on `family`: the class/family part
-/// of the birth admission ([`source_declaration`]).
+/// of the birth admission ([`source_declaration`]), and the route's condition ([`ring_relay_route`])
+/// — one decision, so a routed channel is never refused at its birth.
+///
+/// ★ 2026-10-24 (GB205 round B1n, lease 57472433): the relay's turn learns its fetch credit from the
+/// private USERD `GP_GET` (`user_storage::Storage::gpu_get`) and its gate / batch proof from the
+/// private USERD `REFERENCE` its marker's `SET_REFERENCE` writes (`Storage::gpu_reference`). Both are
+/// words the ENGINE writes back. A family whose engine writes no USERD word
+/// ([`kf_chip::Family::engine_writes_userd_gp_get`]; its control struct names only `GPPut`) can never
+/// prove a marker, whatever class it binds — the generated Blackwell set also names `0xc56f`.
 ///
 /// # Errors
 /// The admission's refusal, by name.
@@ -428,21 +436,36 @@ pub(super) fn ring_relay_serves(family: kf_chip::Family, class: u32) -> Result<(
     {
         return Err("USER_RING_SOURCE_DECLARATION");
     }
+    if !family.engine_writes_userd_gp_get() {
+        return Err("USER_RING_FAMILY_WRITES_NO_USERD");
+    }
     Ok(())
 }
 
 /// The route of a permitted Windows user-work channel: `true` = the private-ring relay
 /// ([`ChanPlane::birth_user_ring`]), `false` = the USERD-relay Passthrough birth
-/// (`KF3_WIN_USER_RING_RELAY=0`'s route). `enabled` is [`enabled`], `permitted` = the channel
-/// carries a `WindowsUserRingPermit`.
+/// (`KF3_WIN_USER_RING_RELAY=0`'s route, the same USER twin privilege). `enabled` is [`enabled`],
+/// `permitted` = the channel carries a `WindowsUserRingPermit`. A channel the private ring cannot
+/// serve ([`ring_relay_serves`]) takes the USERD-relay route instead of a birth that would refuse it.
 pub(super) fn ring_relay_route(
     enabled: bool,
     permitted: bool,
     family: kf_chip::Family,
     class: u32,
 ) -> bool {
-    let _ = (family, class);
-    enabled && permitted
+    enabled && permitted && ring_relay_serves(family, class).is_ok()
+}
+
+/// Once per VM, by name: a permitted Windows user-work channel was kept off the private ring.
+pub(super) fn note_route_declined(family: kf_chip::Family, class: u32) {
+    static ONCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    if let Err(why) = ring_relay_serves(family, class) {
+        ONCE.get_or_init(|| {
+            eprintln!(
+                "kf3: USER_RING_ROUTE_DECLINED family={family:?} class={class:#x}: {why} — Windows user-work takes the USERD-relay route (as KF3_WIN_USER_RING_RELAY=0), USER twin unchanged (logged once)"
+            );
+        });
+    }
 }
 
 /// Validate class and bounded ring geometry before resolving own-VM USERD storage.
@@ -1089,14 +1112,22 @@ mod tests {
 
     #[test]
     fn user_ring_source_accepts_generated_non_ada_channels() {
+        // ★ 2026-10-24: narrowed from the 2026-10-19 family admission (871c38fad). A family whose
+        // engine writes no USERD word (Blackwell) is refused by name: the private ring's marker and
+        // fetch credit read engine-written USERD words (`ring_relay_serves`).
         for family in kf_chip::Family::ALL {
             if family == kf_chip::Family::Ada {
                 continue;
             }
             for &class in family.classes().channel_gpfifo {
+                let want = if family.engine_writes_userd_gp_get() {
+                    Ok(())
+                } else {
+                    Err("USER_RING_FAMILY_WRITES_NO_USERD")
+                };
                 assert_eq!(
                     source_declaration(family, class, 1024, 0x300200000),
-                    Ok(()),
+                    want,
                     "{family:?} {class:#x}"
                 );
             }
