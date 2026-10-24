@@ -1,0 +1,92 @@
+{
+  "round": "B1h_0350",
+  "operator": "Claude",
+  "grant": "controller 03:50: one lease + one retry (offer gone / host key / boot), fresh budget",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "native_precondition_choice": "full native stage kept (controller unchanged); it was never reached",
+  "lease": {
+    "id": 57448629,
+    "offer": 54571906,
+    "machine": 30498,
+    "gpu": "RTX 5070",
+    "die_advertised": "GB205",
+    "profile": "default",
+    "quote_dph": 0.4320555555555556,
+    "observed_dph": 0.4806666666666667,
+    "precreate_armed_utc": "2026-10-24T01:22:29.888830+00:00",
+    "created_utc": "2026-10-24T01:22:31.111406+00:00",
+    "ssh_ready_utc": "2026-10-24T01:24:28.681351+00:00",
+    "absence_verified_utc": "2026-10-24T01:46:37.421335+00:00",
+    "runtime_cost_estimate_usd": 0.19310916397888891,
+    "credit_after_observed_usd": 27.601696064461294
+  },
+  "checks_before_create": {
+    "dry_loop": "passed, 322 tests, static 0",
+    "rehearsal": "3/3",
+    "known_bad": 5,
+    "denied": [
+      "CU",
+      "IR",
+      "KP",
+      "SY",
+      "CN",
+      "HK",
+      "MO"
+    ]
+  },
+  "box": {
+    "console_pin": "match",
+    "df_root_avail": "167G",
+    "kvm": "present (KVM_DISK_PASS)"
+  },
+  "stop": {
+    "stage": "checked eight-stream media transport (parallel_eight.py)",
+    "bound_s": 1200,
+    "start_utc": "2026-10-24T01:25:13.8Z",
+    "deadline_utc": "2026-10-24T01:45:13.8Z",
+    "measured": {
+      "580.88 driver": "8/8 chunks, 297 s, sha verified",
+      "virtio-win": "8/8 chunks, 157 s, sha verified",
+      "win11 LTSC ISO 5.1 GB": "6/8 chunks by 455 s, 2 chunks unfinished at the 1200 s bound"
+    },
+    "comparison": "same machine in B1g (lease 57443671): all four media pinned within ~9 min",
+    "rule": "falsifier recorded in parallel_eight_plan.json: any failed chunk/size/hash or deadline; no controller starts on failure",
+    "why_no_retry": "not one of the granted retry causes (offer gone, host key or boot failure); extending the transfer bound would work around a guard"
+  },
+  "matrix": [
+    {
+      "arm": "Native (full stage)",
+      "die": "GB205 (advertised)",
+      "OS": "Ubuntu22.04",
+      "driver": "595.91.07 open",
+      "rev": "6e3fd3fd6",
+      "flags": "default profile",
+      "verdict": "UNRUN",
+      "evidence": "attempt1_m30498/lease_57448629/launch.log"
+    },
+    {
+      "arm": "B",
+      "die": "GB205 (advertised)",
+      "OS": "Win11 LTSC2024",
+      "driver": "580.88",
+      "rev": "48b027267",
+      "flags": "default profile",
+      "verdict": "UNRUN",
+      "evidence": "attempt1_m30498/lease_57448629/launch.log"
+    },
+    {
+      "arm": "B1",
+      "die": "GB205 (advertised)",
+      "OS": "Win11 LTSC2024",
+      "driver": "580.88",
+      "rev": "cb80cbd29",
+      "flags": "default profile",
+      "verdict": "UNRUN",
+      "evidence": "attempt1_m30498/lease_57448629/launch.log"
+    }
+  ],
+  "xid32_list": [],
+  "tdr_verdict": "UNRUN"
+}

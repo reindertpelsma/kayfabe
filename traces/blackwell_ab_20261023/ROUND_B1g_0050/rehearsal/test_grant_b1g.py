@@ -18,8 +18,16 @@ import unittest
 DEF = Path(os.environ.get("KF_DEF", "/workspace/bw3-round-b1g-a1_m30498-run"))
 V7 = Path(os.environ.get("KF_7V", "/workspace/bw3-round-b1g-a1_m99805-run"))
 TB = Path("/workspace/bw-native-edge-wt/traces/blackwell_ab_20261023/ROUND_B1g_0050")
-KDEF = TB / ("attempt" + re.search(r"-a(\d+_m\d+)-run$", DEF.name)[1]) / "run_kit"
-K7 = TB / ("attempt" + re.search(r"-a(\d+_m\d+)-run$", V7.name)[1]) / "run_kit"
+ROUNDS = {"b1g": "ROUND_B1g_0050", "b1h": "ROUND_B1h_0350"}
+
+
+def kit(d):
+    m = re.search(r"bw3-round-(b1[gh])-a(\d+_m\d+)-run$", d.name)
+    return TB.parent / ROUNDS[m[1]] / ("attempt" + m[2]) / "run_kit"
+
+
+KDEF = kit(DEF)
+K7 = kit(V7)
 
 
 def offer(oid, machine, gpu, die, cores, price=0.4, geo="Quebec, CA", ram=64000):
@@ -64,7 +72,7 @@ def oracle(d, offers, credit=28.0):
         a = src.index("L = W / ")
         src = src[:a] + f'L = Path("{ledger}")' + src[src.index("\n", a):]
         (sd / "ops.py").write_text(src)
-        cache = next(n for n in src.split('"') if n.startswith("single_market_B1g_"))
+        cache = next(n for n in src.split('"') if re.match(r"single_market_B1[gh]_", n))
         (sd / cache).write_text(json.dumps({"utc": "2026-10-24T00:00:00+00:00",
                                             "offers": offers}))
         b = tmp / "bin"
