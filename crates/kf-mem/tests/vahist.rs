@@ -545,3 +545,42 @@ fn the_guest_pte_probe_walks_the_descriptor_and_prints_raw_words() {
     let mut refused = |_a: u64| None;
     assert!(probe_pte(&fmt, pd3, va, &mut refused).contains("read refused"));
 }
+
+/// ★ Found on the first hardware run (5220, 2026-10-24): a user space's privileged leaves are
+/// re-emitted WITHHELD by every walk, and they flooded the last-runs ring. A re-emitted refused or
+/// withheld run must not push real history out: it is counted in its de-duplicated ring only.
+#[test]
+fn re_emitted_withheld_and_refused_runs_do_not_flood_the_last_runs() {
+    let r = Recorder::new();
+    r.note_space(K08, 1, true);
+    r.record_apply(
+        K08,
+        1,
+        &[run(false, 0xb_5a20_0000, 0x40000)],
+        &[ACK_APPLIED],
+        true,
+        0,
+    );
+    let mut p = run(false, 0x1_2400_0000, 0x25f_0000);
+    p.privileged = true;
+    for w in 2..500u64 {
+        let refused = run(false, 0x7_0000_0000, 0x1000);
+        r.record_apply(K08, w, &[p, refused], &[ACK_FAILED, ACK_FAILED], true, 0);
+    }
+    let s = r.space_stats(K08).expect("tracked");
+    assert_eq!(
+        s.last_len, 3,
+        "MAP + first WITHHELD + first REFUSED only: {s:?}"
+    );
+    let out = r.auto_dump(K08, "test");
+    assert!(
+        out.iter()
+            .any(|l| l.contains(" LAST ") && l.contains("op=MAP") && l.contains("va=0xb5a200000")),
+        "{out:?}"
+    );
+    assert!(
+        out.iter()
+            .any(|l| l.contains("op=REFUSED") && l.contains("seen=498")),
+        "{out:?}"
+    );
+}
