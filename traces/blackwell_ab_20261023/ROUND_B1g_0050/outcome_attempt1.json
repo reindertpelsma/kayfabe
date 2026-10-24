@@ -1,0 +1,96 @@
+{
+  "round": "B1g_0050",
+  "operator": "Claude",
+  "grant": "controller 02:30: up to 3 attempts, selection override 30498 (default) > 99805 (7vis) > next",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "attempts_used": 1,
+  "attempt1": {
+    "lease_id": 57443671,
+    "machine": 30498,
+    "offer": 54571906,
+    "gpu": "RTX 5070",
+    "die_probe": "GB205 (PROBE_DIE arch=0x1b0 impl=0x5)",
+    "profile": "default (no CPU deviation)",
+    "nproc_preflight": 30,
+    "quote_dph": 0.4320555555555556,
+    "observed_dph": 0.4806666666666667,
+    "precreate_armed_utc": "2026-10-24T00:33:17.199382+00:00",
+    "created_utc": "2026-10-24T00:33:18.490102+00:00",
+    "ssh_ready_utc": "2026-10-24T00:35:18.069797+00:00",
+    "absence_verified_utc": "2026-10-24T01:01:24.912328+00:00",
+    "runtime_cost_estimate_usd": 0.22516860241944445,
+    "credit_after_observed_usd": 27.791168442361027
+  },
+  "native": {
+    "host_preflight": "VERDICT=SOUND (cores 30)",
+    "gates": "9/9 + gate10 PASS",
+    "bare_suite": "29/29 PASS",
+    "cuda_rows_pass": 4,
+    "gr_tier": "PASS",
+    "fuzz_repeats": {
+      "pinned_crowd_9_on_3": [
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "crowd_free_control": "PASS",
+      "alias_revoked_recurrences": "0/3",
+      "native_finding": false,
+      "note": "GB205 die, different box from lease 57388945 (GB206); not repeatable here at n=3; root cause of the earlier failure not claimed"
+    },
+    "native_xids": "5 intentional source-marked Xid31 controls, all accepted by the native guard; no Xid32"
+  },
+  "stop": {
+    "utc": "2026-10-24T00:59:16.73Z",
+    "marker": "XID_STOP",
+    "text": "name 'new_old' is not defined",
+    "mode": "bw3-saved-xid32-observation-v1",
+    "where": "scripts/bench/blackwell/saved_xid32_observation.py line 166 (CODE READ): the observation watcher calls new_old.kernel_rows(rows, cursors); new_old is not defined in that module",
+    "effect": "the observation guard fails closed at the handoff from native to Windows; no Windows arm started",
+    "why_no_further_attempt": "the defect is in the harness and would stop every attempt at the same point; fixing it is a change to the observation guard that needs its own tests-first review before another lease"
+  },
+  "pin_hypothesis_update": {
+    "measured": "console_keylines_57443671.jsonl: the console prints DSA, ECDSA, ED25519 and RSA fingerprint lines; the guard counted the (DSA) line as a published pin",
+    "fix": "console_pin.py excludes DSA-labelled lines (tests-first, 7 tests, mutant killed by 3); fail-closed for unlabelled pins unchanged; applied after the lease closed"
+  },
+  "matrix": [
+    {
+      "arm": "Native raw + fuzz 3 pinned / 1 unpinned",
+      "die": "GB205",
+      "OS": "Ubuntu22.04",
+      "driver": "595.91.07 open",
+      "rev": "6e3fd3fd6",
+      "flags": "default profile",
+      "verdict": "PASS (native findings, not attestation)",
+      "evidence": "attempt1_m30498/lease_metadata/"
+    },
+    {
+      "arm": "B",
+      "die": "GB205",
+      "OS": "Win11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "48b027267",
+      "flags": "p19, one enable",
+      "verdict": "UNRUN",
+      "evidence": "attempt1_m30498/lease_metadata/XID_STOP"
+    },
+    {
+      "arm": "B1",
+      "die": "GB205",
+      "OS": "Win11 LTSC2024 planned",
+      "driver": "580.88 planned",
+      "rev": "cb80cbd29",
+      "flags": "p19, one enable",
+      "verdict": "UNRUN",
+      "evidence": "attempt1_m30498/lease_metadata/XID_STOP"
+    }
+  ],
+  "xid32_list": [],
+  "admitted_count": {
+    "B": 0,
+    "B1": 0
+  },
+  "tdr_verdict": "UNRUN"
+}

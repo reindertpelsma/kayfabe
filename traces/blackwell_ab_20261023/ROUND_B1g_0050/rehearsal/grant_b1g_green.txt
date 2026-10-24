@@ -1,0 +1,19 @@
+test_pin_files (test_grant_b1g.Module.test_pin_files) ... ok
+test_select_pin_and_none (test_grant_b1g.Module.test_select_pin_and_none) ... ok
+test_7vis_pin_99805_selected_even_when_30498_present (test_grant_b1g.Selection.test_7vis_pin_99805_selected_even_when_30498_present) ... ok
+test_7vis_pin_refuses_when_99805_absent (test_grant_b1g.Selection.test_7vis_pin_refuses_when_99805_absent) ... ok
+test_default_pin_30498_selected_with_150_minutes (test_grant_b1g.Selection.test_default_pin_30498_selected_with_150_minutes) ... ok
+test_default_pin_refuses_when_30498_absent (test_grant_b1g.Selection.test_default_pin_refuses_when_30498_absent) ... ok
+test_default_profile_rejects_8_core_offer (test_grant_b1g.Selection.test_default_profile_rejects_8_core_offer) ... ok
+test_ram_31g_offer_never_selected (test_grant_b1g.Selection.test_ram_31g_offer_never_selected) ... ok
+test_unpinned_eligible_offer_does_not_replace_the_pin (test_grant_b1g.Selection.test_unpinned_eligible_offer_does_not_replace_the_pin) ... ok
+test_7vis_run_kit_keeps_profile (test_grant_b1g.Wiring.test_7vis_run_kit_keeps_profile) ... ok
+test_both_judge_preflight (test_grant_b1g.Wiring.test_both_judge_preflight) ... ok
+test_default_offer_filter_uses_default_floor (test_grant_b1g.Wiring.test_default_offer_filter_uses_default_floor) ... ok
+test_default_operator_has_no_deviation (test_grant_b1g.Wiring.test_default_operator_has_no_deviation) ... ok
+test_default_run_kit_is_standard (test_grant_b1g.Wiring.test_default_run_kit_is_standard) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 1.019s
+
+OK

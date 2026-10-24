@@ -1,0 +1,4 @@
+pin_ignored killers=4
+floor_profile_in_default killers=2
+no_match_exit_removed killers=3
+default_3h killers=2

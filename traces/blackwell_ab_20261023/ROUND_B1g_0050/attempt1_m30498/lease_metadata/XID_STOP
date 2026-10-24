@@ -1,0 +1,3 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+{"STOP": "name 'new_old' is not defined", "mode": "bw3-saved-xid32-observation-v1", "verdict": "OBSERVATION_STOP", "attestation": false, "phase": [null, null], "owned_pgid": 95559, "detached_qemu_stopped": false, "observations": {}}
