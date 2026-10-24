@@ -1,0 +1,112 @@
+{
+  "native_seed": "BW3 Round REF / BW4 lease57486060 native windows-on-vast kit, preserved in execution parent4e990f69d",
+  "readiness": "BW6 settled ready branch and unmodified console_pin.py",
+  "guards": "Unmodified copies of existing Blackwell and provider retry dependencies; no admission-rule change",
+  "own_changes": "GB202 scope and preference, owner budget, no machine blacklist, settled pin wiring, capture rehash, exact hold events",
+  "files": [
+    {
+      "path": "kit/budget_watch.py",
+      "sha256": "7d42b9285576f8b82dcf1f832163795f82fd736b5f40d3c6868024f8d91faaab"
+    },
+    {
+      "path": "kit/capture_pack.py",
+      "sha256": "04269d158fb46e1a2701b5e2636c30a9520ae0f2298484449c15fe0a097af0b5"
+    },
+    {
+      "path": "kit/dry_loop.py",
+      "sha256": "6b69764b4dfbadb0cd6b3364591c352048d72da9c3ffb9b9830dde820be04cd7"
+    },
+    {
+      "path": "kit/grant_b1g.py",
+      "sha256": "37b81d0609ca6f931ab965dcf1b3214d2eff608bd2b4de04bc346460947741c7"
+    },
+    {
+      "path": "kit/guards/console_pin.py",
+      "sha256": "169f99eef6216e2ff0b69185877af20f3cc74794a875b73158c7495812b8208f"
+    },
+    {
+      "path": "kit/guards/init_observer.py",
+      "sha256": "c84a559b726c16a7c167da8ff7dc56b22532d0a750d6cb5a46d83c7e0d3c9c88"
+    },
+    {
+      "path": "kit/guards/lease_ownership.py",
+      "sha256": "4679961c9f90d044d86cbe264839e9684c3ba056dafc96d4bc7fe7e1cb0bf658"
+    },
+    {
+      "path": "kit/guards/phase_xid_guard.py",
+      "sha256": "8d0121d056561018c175b993243ef0819315ba15757a94038ef3b6c5cc7d3fae"
+    },
+    {
+      "path": "kit/guards/precreate_watchdog.py",
+      "sha256": "b81a8766fb637cd8815f47177d2454326b4308834952eb5cc11bc779b4057887"
+    },
+    {
+      "path": "kit/guards/provider_retry.py",
+      "sha256": "763be1d59d997c8dc1fd09d29b6ecfa7aa057d5714c79f014c809b85c9a45ff1"
+    },
+    {
+      "path": "kit/guards/readiness.py",
+      "sha256": "c421ab2b4dd3acda78be96255b8ddc6815f8d695ef12a43dfae3992761f757b9"
+    },
+    {
+      "path": "kit/guards/round_budget.py",
+      "sha256": "d0b20e6784a664e299ed01d971ff5389c88a1704f3a3e3483aab8b0b43d4f124"
+    },
+    {
+      "path": "kit/guards/saved_xid32_observation.py",
+      "sha256": "d3b0cd06a85f55ab9906dc2a3c3f38f670e6e5704efda3212db3edb28558d361"
+    },
+    {
+      "path": "kit/guards/test_console_pin.py",
+      "sha256": "30c1c608cce1bb061ab817b1d1c1d513dcb774888ec6e189f05e6b1fb691e084"
+    },
+    {
+      "path": "kit/guards/test_console_pin_settle.py",
+      "sha256": "396302edc37416aba11803e14139011e9cf18f735d2de71e0ec24dfdeba31529"
+    },
+    {
+      "path": "kit/guards/test_console_pin_types.py",
+      "sha256": "9e094a934ab6a262355037b359d778242ff5cfc7f287b85426af5656cffef645"
+    },
+    {
+      "path": "kit/guards/test_precreate_watchdog.py",
+      "sha256": "a27d81b073e15a9aae9da1c00b51c71780c633fcfa22c1ed4b62834a47b640ad"
+    },
+    {
+      "path": "kit/guards/test_round_budget.py",
+      "sha256": "0510aa09b8d3d458c77e48271694da2d26175d7f01ef6880c0cac7cc85ea1b78"
+    },
+    {
+      "path": "kit/guards/windows_observation.py",
+      "sha256": "192d07e891418eaead48bcf3f37eeff2e54223ec8efb58b9df8f68fc62680091"
+    },
+    {
+      "path": "kit/guards/xid_policy.py",
+      "sha256": "7563095ffc1d55292d4deaf6e60b5da677c3ff564b3e60c29ed4b5119aa4d1ac"
+    },
+    {
+      "path": "kit/lease_profile.py",
+      "sha256": "baea130dee0de26bc9f144ce72846bb0708b085e0cbebeaf82a0096d5c5a324f"
+    },
+    {
+      "path": "kit/native_xid_guard.py",
+      "sha256": "250905586c30bff7e23d81dc08a9088025abf15e0b5fa621f80e52c0aac59b0c"
+    },
+    {
+      "path": "kit/ops.py",
+      "sha256": "c576a4ba275e4ed03058567a7056773d207c0661a93639cde80227311b76eecb"
+    },
+    {
+      "path": "kit/pin_evidence.py",
+      "sha256": "5b5fc9b2581b9dcf707aedbc13b1ad0c47cf8a6ac6af6749e415b5d1bceb8918"
+    },
+    {
+      "path": "kit/ref_windows.py",
+      "sha256": "8116d411f615c109901de39775663f1fefeb0aa461258044e459e711f079c531"
+    },
+    {
+      "path": "kit/static_check.py",
+      "sha256": "a966a31f7b739891887ec5ebe824fc66d733b8e649b23f44fe16ff093e499a40"
+    }
+  ]
+}

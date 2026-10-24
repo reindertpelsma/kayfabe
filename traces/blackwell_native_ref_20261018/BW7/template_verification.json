@@ -1,0 +1,8 @@
+{
+  "hash_id": "183b10af7fd788d08aca02e31811d70d",
+  "name": "Windows 11 KVM on Vast.ai",
+  "image": "docker.io/vastai/kvm",
+  "creator_id": 527355,
+  "onstart_sha256": "c9b88d8d2373d9c29818b1321191635bf65f468145b204f8812bb29e7b531ee9",
+  "bytes": 16361
+}

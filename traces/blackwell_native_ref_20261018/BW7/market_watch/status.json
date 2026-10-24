@@ -1,0 +1,16 @@
+{
+  "started_utc": "2026-10-24T20:47:07.475372+00:00",
+  "read_only": true,
+  "max_seconds": 3600,
+  "polls": [
+    {
+      "poll": 1,
+      "utc": "2026-10-24T20:47:15.593956+00:00",
+      "rc": 0,
+      "stdout": "UNVERIFIED-HOST preflight\n{\"selected_offer\": 56509993, \"machine\": 152098, \"geolocation\": \"Chile, CL\", \"die\": \"GB202\", \"plan\": {\"armed_utc\": \"2026-10-24T20:47:15.583257+00:00\", \"deadline_utc\": \"2026-10-24T23:08:00.583257+00:00\", \"seconds\": 8445, \"quoted_rate\": 0.7361111111111112, \"rate_bound\": 0.8465277777777778, \"reservation_usd\": 2.4858130787037034, \"credit_after_reservation\": 21.31919278695602, \"stop_usd\": 2.5, \"cap_usd\": 3.0, \"reserve_usd\": 8.0, \"leases_authorized\": 1}, \"creates\": 0}\n",
+      "stderr": ""
+    }
+  ],
+  "result": "MATCH",
+  "ended_utc": "2026-10-24T20:47:15.594398+00:00"
+}

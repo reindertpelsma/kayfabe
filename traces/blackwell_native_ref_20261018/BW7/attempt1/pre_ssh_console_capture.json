@@ -1,0 +1,38 @@
+{
+  "lease_id": 57562949,
+  "utc": "2026-10-24T20:53:56.471663+00:00",
+  "private_root": "/data/bw7_private_capture/57562949",
+  "files": {
+    "console_raw_57562949_3.txt": {
+      "bytes": 139603,
+      "sha256": "d82b14a5254b6f0ad52bb3f2b88de81ac1e221154bed87e9287da71aaec2557e"
+    },
+    "console_raw_57562949_0.txt": {
+      "bytes": 90725,
+      "sha256": "5b3b081da24aa2d547bc2415986a688e08b915fb5e516e6f770963ae04473f8d"
+    },
+    "early_console.txt": {
+      "bytes": 59,
+      "sha256": "f56c41eda3f248c71b6f5a07b2d2410d0fb89a4089f7ed714c2a1a849425eefb"
+    },
+    "console_raw_57562949_4.txt": {
+      "bytes": 141091,
+      "sha256": "b57f4f541265be0585ebb76f5beb7757cf40b20033f17a2436ba8c29742dd357"
+    },
+    "console_raw_57562949_2.txt": {
+      "bytes": 139603,
+      "sha256": "d82b14a5254b6f0ad52bb3f2b88de81ac1e221154bed87e9287da71aaec2557e"
+    },
+    "console_final.txt": {
+      "bytes": 148355,
+      "sha256": "0cd2747af3d0ed62c35ac051bfb8ccc3fc1064944d4cf25c94b71da6b206d425"
+    },
+    "console_raw_57562949_1.txt": {
+      "bytes": 139506,
+      "sha256": "f5260ae654b19b5eb39a182a9e1ad1ccbdc5c6fd38dbc0ed4efe574dfcfda440"
+    }
+  },
+  "rehashed_before_destroy": true,
+  "Windows_guest_capture": "UNRUN; identity refused before authenticated SSH",
+  "native_verdict": "UNRUN"
+}

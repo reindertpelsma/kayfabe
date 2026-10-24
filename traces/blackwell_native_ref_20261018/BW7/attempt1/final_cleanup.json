@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-24T20:54:49.706859+00:00",
+  "lease_id": 57562949,
+  "API_absent": true,
+  "owned_timer_processes_present": {
+    "3414403": false,
+    "3414408": false
+  },
+  "capture_files_rehashed": 7,
+  "dev_target_created": false,
+  "locks_acquired": false,
+  "no_authenticated_SSH": true,
+  "own_remote_work_started": false,
+  "windows_scripts_executed": false
+}

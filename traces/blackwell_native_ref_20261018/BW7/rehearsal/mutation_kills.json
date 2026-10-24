@@ -1,0 +1,50 @@
+[
+  {
+    "mutant": "SKU_GB205",
+    "killers": [
+      "test_only_rtx5090_gb202",
+      "test_same_die_only"
+    ],
+    "count": 2,
+    "restored": true
+  },
+  {
+    "mutant": "price_raised",
+    "killers": [
+      "test_hourly_rejection_executes_the_actual_filter",
+      "test_price_ceiling"
+    ],
+    "count": 2,
+    "restored": true
+  },
+  {
+    "mutant": "old_budget",
+    "killers": [
+      "test_stop_and_cap",
+      "test_guards_unchanged"
+    ],
+    "count": 2,
+    "restored": true
+  },
+  {
+    "mutant": "unsettled_pin",
+    "killers": [
+      "test_absent_then_two_matches",
+      "test_different_pin_refuses_before_login",
+      "test_two_matches_before_login",
+      "test_settled_pin_before_login"
+    ],
+    "count": 4,
+    "restored": true
+  },
+  {
+    "mutant": "capture_gate_removed",
+    "killers": [
+      "test_destroy_incomplete_capture_never_accesses_provider",
+      "test_destroy_without_capture_never_accesses_provider",
+      "test_capture_gate_precedes_destroy"
+    ],
+    "count": 3,
+    "restored": true
+  }
+]

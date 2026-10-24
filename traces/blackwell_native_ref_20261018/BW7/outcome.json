@@ -1,0 +1,51 @@
+{
+  "lane": "BW7",
+  "result": "UNRUN_IDENTITY_REFUSAL",
+  "measured": {
+    "run": "lease 57562949 / attempt1/ready.txt and kit/console_pin_57562949.jsonl",
+    "same_BW6_machine": 152098,
+    "host_id": 702330,
+    "country": "CL",
+    "offer_id": 56509993,
+    "created": [
+      57562949
+    ],
+    "destroyed": [
+      57562949
+    ],
+    "quote_usd_h": 0.7361111111111112,
+    "observed_usd_h": 0.8166666666666668,
+    "runtime_cost_estimate_usd": 0.08285934005092593,
+    "credit_before": 23.805005865659723,
+    "credit_after_observed": 23.78923248385979,
+    "observed_shared_account_credit_delta_usd": 0.015773381799931485,
+    "absence_verified_utc": "2026-10-24T20:53:59.955959+00:00",
+    "pin_states": [
+      "mismatch",
+      "mismatch",
+      "mismatch",
+      "mismatch",
+      "flap"
+    ],
+    "native_hold_samples": 0,
+    "authenticated_SSH": false,
+    "guest_events": "UNRUN",
+    "BAR1": "UNRUN",
+    "native_dump_presence": "UNRUN",
+    "driver_bound": "UNRUN"
+  },
+  "code_read": {
+    "run": "template_verification.json and operator_plan.json",
+    "installer_hash_matches_BW3_REF": true,
+    "driver_target": "580.88",
+    "image_target": "Win11 Enterprise LTSC 2024 evaluation",
+    "no_kayfabe_on_template": true
+  },
+  "inferred": {
+    "run": "lease57562949 pin sequence",
+    "interpretation": "The Linux readiness stage encountered a console that already advertised the future Windows key. The subsequent scanned-key flap is not authenticated as either installation stage. This does not measure Windows GPU behavior or establish a provider/security root cause.",
+    "owner_decision": "No native pass or native bugcheck; BW6 attribution remains unresolved."
+  },
+  "retry": false,
+  "stop_reason": "Actual console_pin.PinFlap; no retry after a real refusal."
+}

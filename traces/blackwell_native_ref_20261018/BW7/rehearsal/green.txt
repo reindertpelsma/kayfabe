@@ -1,0 +1,27 @@
+....................READINESS 2026-10-23T00:10:10+00:00 running
+CONSOLE_PIN absent 1
+CONSOLE_PIN match 2
+CONSOLE_PIN match 3
+READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
+.READINESS 2026-10-23T00:10:10+00:00 running
+CONSOLE_PIN mismatch 1
+CONSOLE_PIN mismatch 2
+CONSOLE_PIN mismatch 3
+CONSOLE_PIN mismatch 4
+CONSOLE_PIN mismatch 5
+CONSOLE_PIN mismatch 6
+CONSOLE_PIN mismatch 7
+CONSOLE_PIN mismatch 8
+CONSOLE_PIN mismatch 9
+CONSOLE_PIN mismatch 10
+CONSOLE_PIN mismatch 11
+CONSOLE_PIN mismatch 12
+.READINESS 2026-10-23T00:10:00+00:00 running
+CONSOLE_PIN match 1
+CONSOLE_PIN match 2
+READINESS_PASS 1234 SHA256:RXm/ruZ0eTzRXKwi1AQEDynB0VgHQ2ac9KPSFdf/YnA
+...............
+----------------------------------------------------------------------
+Ran 37 tests in 0.047s
+
+OK

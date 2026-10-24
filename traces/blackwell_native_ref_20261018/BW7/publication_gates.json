@@ -1,0 +1,15 @@
+{
+  "utc": "2026-10-24T20:57:56.932315+00:00",
+  "publication_base": "a9105acb656ec212daf5da7b8b916387f5da1671",
+  "execution_head": "8e56ab4e7bf9b46d3e6fd8a43cafbc8345356eb9",
+  "claims": "claims: existing-debt=3758 new=0 resolved=0",
+  "frozen": "files=37 changed=0",
+  "secret_IP_binary_scan": "PASS; only documentation/version and synthetic DNS fixture addresses",
+  "IPv4_looking_strings": [
+    "10.0.0.0",
+    "8.8.8.8"
+  ],
+  "code_line_length": "traces/ exemption in COMMON.md; no product code changes",
+  "only_own_new_files": true,
+  "leases_remaining": 0
+}

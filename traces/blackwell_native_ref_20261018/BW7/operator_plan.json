@@ -1,0 +1,36 @@
+{
+  "utc": "2026-10-24T20:44:27.711128+00:00",
+  "lane": "BW7",
+  "H-REF": "Native RTX 5090 GB202, stock Windows 580.88 reaches Code 0 and holds 600 s without bugcheck or System 1001/6008/4101 or nvlddmkm/Display error events.",
+  "FALSIFIER": "Bugcheck 0x113 or any System 1001 within hold, or no Code 0. Other required event/driver/boot identity failures prevent PASS.",
+  "interpretation": {
+    "native_bugcheck": "Under owner rule, BW6 failure is not attributed to kayfabe; native die/driver/box property.",
+    "native_pass": "Under owner rule, attribute BW6 failure to kayfabe.",
+    "unrun": "No attribution decision."
+  },
+  "target": "RTX 5090 GB202; prefer Chile machine 152098, else any qualifying offer; no blacklist",
+  "template_hash": "183b10af7fd788d08aca02e31811d70d",
+  "image": "Win11 Enterprise LTSC 2024 evaluation x64 en-US",
+  "image_sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+  "driver": "580.88 / 32.0.15.8088",
+  "driver_sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+  "stop_usd": 2.5,
+  "cap_usd": 3.0,
+  "price_max_usd_h": 1.0,
+  "reserve_usd": 8,
+  "max_seconds": 9000,
+  "leases": 1,
+  "retry": "Only one provider-side pre-SSH retry; none after a real refusal",
+  "market_watch_max_seconds": 3600,
+  "arms": [
+    "native Code 0 hold only; no pnputil/reload or product arm"
+  ],
+  "guards": [
+    "watchdog ARMED before create",
+    "settle_pin before SSH",
+    "Windows host-key console pin before strict SSH",
+    "capture pull and sha256 verification before normal destroy",
+    "exact owned id destroy then API absence then cancel timers"
+  ],
+  "media_provenance": "BW3 Round REF pins and BW6 media_manifest.json; no kayfabe or own QEMU passthrough on native lease"
+}

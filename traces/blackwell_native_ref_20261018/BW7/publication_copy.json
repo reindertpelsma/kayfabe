@@ -1,0 +1,14 @@
+{
+  "execution_head": "8e56ab4e7bf9b46d3e6fd8a43cafbc8345356eb9",
+  "publication_base": "origin/master",
+  "source": "traces/blackwell_native_ref_20261024/BW7",
+  "destination": "traces/blackwell_native_ref_20261018/BW7",
+  "source_bytes_changed": true,
+  "files_initially_verified_equal": 67,
+  "code_and_runtime_receipt_bytes_changed": false,
+  "report_attribution_edit": {
+    "before_sha256": "add9d33ef2e6ffb8d50f0dde6cfa5dbdeda4f89c2590dcc0121d7226afcb8a10",
+    "after_sha256": "b6a6d015a049b840239ddf61b771922bf36f4642a927d9e1640f578e80433a76",
+    "changes": "Add measurement date to report citations and rename limits heading for the unchanged claims gate."
+  }
+}

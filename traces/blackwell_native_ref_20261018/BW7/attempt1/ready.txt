@@ -1,0 +1,27 @@
+UNVERIFIED-HOST ready
+READINESS 2026-10-24T20:48:02.497467+00:00 None
+READINESS 2026-10-24T20:48:23.861380+00:00 loading
+READINESS 2026-10-24T20:48:45.060553+00:00 loading
+READINESS 2026-10-24T20:49:06.081963+00:00 loading
+READINESS 2026-10-24T20:49:27.362804+00:00 loading
+READINESS 2026-10-24T20:49:48.570975+00:00 loading
+READINESS 2026-10-24T20:50:09.585351+00:00 loading
+READINESS 2026-10-24T20:50:30.718550+00:00 loading
+READINESS 2026-10-24T20:50:51.822698+00:00 created
+READINESS 2026-10-24T20:51:17.868768+00:00 created
+READINESS 2026-10-24T20:51:43.898988+00:00 created
+CONSOLE_PIN mismatch 1
+CONSOLE_PIN mismatch 2
+CONSOLE_PIN mismatch 3
+CONSOLE_PIN mismatch 4
+CONSOLE_PIN flap 5
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261024/BW7/kit/ops.py", line 652, in <module>
+    proof = C.settle_pin(
+        rescan,
+    ...<6 lines>...
+        record=record_pin,
+    )
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261024/BW7/kit/guards/console_pin.py", line 292, in settle_pin
+    raise PinFlap("scanned host key changed between checks without matching the console")
+console_pin.PinFlap: scanned host key changed between checks without matching the console
