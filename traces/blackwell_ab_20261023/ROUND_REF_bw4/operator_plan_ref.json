@@ -1,0 +1,25 @@
+{
+  "utc": "2026-10-24T07:56:45.534156+00:00",
+  "round": "REF (operator BW4: Claude): (D) native windows-on-vast reference on the B1n die",
+  "template": {
+    "name": "Windows 11 KVM on Vast.ai",
+    "hash_id": "183b10af7fd788d08aca02e31811d70d",
+    "creator_id": 527355,
+    "onstart_sha256_without_trailing_newline": "c9b88d8d2373d9c29818b1321191635bf65f468145b204f8812bb29e7b531ee9",
+    "equals": "reindertpelsma/windows-on-vast install.sh at 93b65b3 (minus the final newline)"
+  },
+  "target": "RTX 5070 (GB205), machine 30498 first, else any qualifying GB205 offer; same country/known-bad/price/not-deverified rules; stop 2.00 / cap 2.50",
+  "no_kayfabe_on_this_lease": true,
+  "guest": "Win11 Enterprise LTSC 2024 eval + NVIDIA 580.88 (+ CUDA 13.0 from the template)",
+  "falsifiers_recorded_before_run": {
+    "native_pass": "Native Windows reaches Code 0, holds 10 min with no 4101/nvlddmkm error event and no bugcheck, and pnputil disable/enable x3 returns to Code 0 each time => the B1n failures (0x116 after the USER-ring Xid; Code 43 after re-enable) count as kayfabe's (owner rule).",
+    "native_fail": "Native shows a TDR/0x116, or Code 43 after a re-enable => that failure is not (only) kayfabe's.",
+    "artifacts": "0x193 (0x815) / 0x1A8 / 0x1B8 live dumps present natively => environment artifacts, not kayfabe; absent natively => kayfabe-specific."
+  },
+  "captures": [
+    "ref_state (BAR1, driver, code, dumps)",
+    "10-min hold",
+    "disable/enable x3",
+    "full .evtx + dumps (private)"
+  ]
+}
