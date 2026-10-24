@@ -1,0 +1,11 @@
+# SHAPE 1 variant: channel-level BIND and SCHEDULE (the in-tree driver style), no group verbs
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=0
+chan g ctx=S engine=gr objs=3d+cmp
+chan c ctx=A engine=gr objs=cmp rawflags=0x10
+bindchan g
+bindchan c
+schedchan g
+schedchan c
+work g,c

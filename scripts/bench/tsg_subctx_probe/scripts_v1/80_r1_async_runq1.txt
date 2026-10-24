@@ -1,0 +1,11 @@
+# RUNQUEUE: SYNC 3D+cmp (runqueue 0); ASYNC compute channel on runqueue 1 (NVOS04_FLAGS_GROUP_CHANNEL_RUNQUEUE_ONE, flag bit 4)
+tsg engine=gr vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=0
+chan g ctx=S engine=gr objs=3d+cmp
+chan c ctx=A engine=gr rawflags=0x10 objs=cmp
+bindtsg
+schedtsg
+work g,c
+work g,c
+bench g,c iters=300
