@@ -70,9 +70,6 @@ def bind(probe, binding, die_source, arch_source, pin):
     die = names.get((architecture, implementation))
     if die not in SCOPE:
         raise BindingRefused("unknown or out-of-scope native tuple")
-    # Original operator forecast predicate, preserved until its regression is RED.
-    if die != "GA106":
-        raise BindingRefused("operator forecast expected GA106")
     return {"die": die, "architecture": architecture, "implementation": implementation,
             "revision": revision, "driver": driver, "pci": pci, "product_name": name}
 
