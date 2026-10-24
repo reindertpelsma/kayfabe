@@ -135,7 +135,7 @@ def oracle(offers, credit=27.6):
         a = src.index("L = W / ")
         src = src[:a] + f'L = Path("{ledger}")' + src[src.index("\n", a) :]
         (sd / "ops.py").write_text(src)
-        cache = next(n for n in src.split('"') if n.startswith("single_market_B1j_"))
+        cache = next(n for n in src.split('"') if n.startswith(("single_market_B1j_", "single_market_B1m_")))
         (sd / cache).write_text(json.dumps({"utc": "2026-10-24T02:00:00+00:00", "offers": offers}))
         b = tmp / "bin"
         b.mkdir()
@@ -163,7 +163,8 @@ def oracle(offers, credit=27.6):
 
 class Operator(unittest.TestCase):
     def snapshot(self):
-        return json.loads((TB / "ROUND_B1i_0400/attempt1_m30498/market.json").read_text())["offers"]
+        # frozen copy: the live B1i market.json is rewritten by later preflights
+        return json.loads((Path(__file__).parent / "fixture_b1i_snapshot_021259.json").read_text())["offers"]
 
     def test_b1i_snapshot_selects_the_32_core_netherlands_5090(self):
         r = oracle(self.snapshot())
