@@ -1,0 +1,76 @@
+{
+  "scope": "controller17:00 exact saved Xid32 OBSERVATION for one sweep lease; no PASS/attestation",
+  "B_source": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "B1_source": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+  "B1_parents": [
+    "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+    "c130aa98ac2b922202282cd793f2a6d64be1f091"
+  ],
+  "native_guard_source": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
+  "max_records_per_arm": 8,
+  "lease_minutes": 150,
+  "goal": "10-minute post-Code0 survival or guestTDR/0x116; public channel/RPC/event/header evidence",
+  "owner_authority": "controller17:00 one lease OBSERVATION; no PASS/attestation",
+  "die_preference": [
+    "GB206",
+    "GB205",
+    "GB203",
+    "GB202",
+    "GB207"
+  ],
+  "gb202_market_queries_this_authority": 0,
+  "page_policy": "GB202/GB206 exact rows; GB203/GB205/GB207 explicit GB202 donor and reason at host595 branch",
+  "falsifier": "Guest TDR/bugcheck within10min after admitted exact pair refutes survival/containment for this actual die; no admitted Xid leaves containment untested",
+  "actual_lease": 57472433,
+  "expected_die": "GB205",
+  "expected_donor": "GB202",
+  "provider_exception_used": false,
+  "deadline_utc": "2026-10-24T08:10:37.372679+00:00",
+  "attempt_state": "launching_authenticated_lease",
+  "actual_die_driver_page_verified": false,
+  "ssh_identity_guard_refusal": false,
+  "native_guest_work_started": false,
+  "host_verification": "UNVERIFIED-HOST",
+  "lease_id": null,
+  "advertised_die": null,
+  "corrected_matching_rule_commit": "a3284002089cd7b2f95e6f4949d0cadfeb4f5848",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "exact_channels": [
+    "0x14",
+    "0x1000000b"
+  ],
+  "intr": "00200000",
+  "round_stop_usd": 2.5,
+  "round_cap_usd": 3,
+  "credit_reserve_usd": 8,
+  "leases_authorized": 1,
+  "provider_retries": 0,
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
+  "prior_closed_lease": 57366202,
+  "profile": "7-visible-core deviation",
+  "cpu_profile_floor": 7,
+  "guest_smp": 6,
+  "build_jobs": 7,
+  "fuzz_cores": 3,
+  "lease_max_seconds": 10800,
+  "die_pairs": {
+    "GB205": [
+      "0x14",
+      "0x1000000b"
+    ],
+    "GB202": [
+      "0x14",
+      "0x0e00000b"
+    ]
+  },
+  "owner_decisions": "2026-10-24 BW4: per-die pairs; collection boot after fatal"
+}

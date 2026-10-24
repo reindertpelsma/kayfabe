@@ -1,0 +1,66 @@
+{
+  "round": "B1p (operator BW5: Claude), attempt1",
+  "written_utc": "2026-10-24T09:30:00Z",
+  "written_before_any_lease": true,
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "fix_under_test": {
+    "branch": "claude/blackwell-urt-cb80-20261024",
+    "source": "b85d02bae3ed085a10cd1c8376c1a842e86c571b",
+    "red": "e3bae55ddebe35e95809c06d7195152a4679aa31",
+    "base": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+    "kf3_bin_dir": "b85d02ba",
+    "expected_log_line": "USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f"
+  },
+  "hypothesis": {
+    "id": "H-FIX",
+    "statement": "The fix build (b85d02bae) with default flags (the unchanged p19 profile, no relay variable) reaches Code 0 and survives the 10-minute hold with no Xid 32 and no 0x116 on GB205.",
+    "falsifier": "An Xid 32 pair (0x14/0x1000000b on GB205, 0x14/0x0e00000b on GB202), any other Xid, or a bugcheck/TDR (GUEST_PANICKED, 0x116, event 4101/141) within the 10-minute hold of arm on_fix.",
+    "supporting_expectations": [
+      "exactly one 'USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f' line in the arm's kf3 log",
+      "no 'BORN USER private-read-only-ring' line",
+      "DWM user channels born on the USERD-relay passthrough route"
+    ]
+  },
+  "arms_priority_order": [
+    {
+      "run": "on_fix",
+      "label": "MEASUREMENT",
+      "change": "none: fix binary, default p19 flags, one enable, 10-minute hold (main arm)"
+    },
+    {
+      "run": "on_fix_pnp",
+      "label": "DIAGNOSTIC",
+      "change": "fix binary; the existing B1n pnputil cycle (enable, disable, enable: one disable/enable cycle, second enable)",
+      "question": "does the Windows second-life stall (H2: Code 43 on re-enable, 0x1B0 c000009a) still appear with the fix build",
+      "falsifier_for_H2_unchanged": "re-enable returns Code 0 => the B1n second-life stall was a consequence of the relay fault, not an independent defect"
+    },
+    {
+      "run": "on_fix_hold2",
+      "label": "MEASUREMENT",
+      "change": "none: the main arm repeated (10-minute hold), only if the budget guard admits it"
+    }
+  ],
+  "not_wired_and_why": [
+    {
+      "requested": "arm (2): fix build + KF3_WIN_USER_RING_SHADOW=1",
+      "reason": "CODE READ at b85d02bae: shadow acts only inside the private-ring birth/pump (userrelay.rs Birth::run lines 533/661, userpump.rs 997/1021); ring_relay_route() is false for Blackwell whatever the flag, so on GB20x the arm would take the same USERD-relay route as on_fix and discriminate nothing. The rank-1/rank-2 discriminator of the root-cause pass is shadow on cb80cbd29, which this task did not request. Not improvised; owner decision."
+    },
+    {
+      "requested": "arm (3): disable/enable x3",
+      "reason": "The kayfabe kit has only the single-cycle DIAGNOSTIC script (enable580_cycle.ps1, enable_count 2); the guard ceiling MAX_DIAGNOSTIC_ENABLES is exactly 2. x3 needs 4 enables, i.e. raising a guard ceiling, which this task forbids (never relax a guard). The existing single cycle answers the stated question (does the second life stall). x3 is an owner decision."
+    }
+  ],
+  "lease_rules": {
+    "V1": "GB205, machine 30498 if listed else the next qualifying GeForce RTX 5070 (GB205); default 16-core profile; stop 2.00 / cap 2.50; fresh",
+    "V2": "only if on_fix PASSES on GB205 and credit allows: one GeForce RTX 5090 (GB202) lease, stop 3.00 / cap 3.50, price <= 1.00 USD/h, arm on_fix",
+    "denied_countries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"],
+    "deverified_admitted": false,
+    "known_bad_list": "unchanged B1n list",
+    "credit_reserve_usd": 8,
+    "task_total_ceiling_usd": 8,
+    "watchdog_armed_before_create": true,
+    "teardown": "exact id, API absence verified before any next create, timers cancelled after absence",
+    "native_stage": "full B1n native stage (no short form)"
+  }
+}
