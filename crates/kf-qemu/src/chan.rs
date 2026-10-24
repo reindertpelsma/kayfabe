@@ -6803,6 +6803,9 @@ impl ChanPlane {
                 self.family,
                 a.class,
             );
+            if userrelay::enabled() && a.user_ring_permit.is_some() && !ring_relay {
+                userrelay::note_route_declined(self.family, a.class);
+            }
             let relay_guest = if userd_relay_off() || ring_relay {
                 None
             } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
