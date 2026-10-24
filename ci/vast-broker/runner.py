@@ -40,6 +40,41 @@ class Invalid(Exception):
     pass
 
 
+class Diagnosed(Invalid):
+    """An Invalid that carries its one trusted diagnostic line.
+
+    The line is built only from an integer status, a sanitised media type, an exception class
+    name, a setting NAME and a fixed reason. Never a value, URL, path, header or body.
+    """
+
+    def __init__(self, line):
+        super().__init__()
+        self.line = line
+
+
+def clean(value, limit=64):
+    """Truncate to `limit` characters; anything outside [A-Za-z0-9/+.;=-] becomes '?'."""
+    return re.sub(r"[^A-Za-z0-9/+.;=-]", "?", str(value)[:limit])
+
+
+def reply_line(status, content_type):
+    code = status if type(status) is int else "?"
+    return (
+        "runner: Worker reply not accepted: HTTP "
+        + str(code)
+        + ", content-type "
+        + clean(content_type or "none")
+    )
+
+
+def setting_line(name, reason):
+    return "runner: setting rejected before any request: " + name + " " + reason
+
+
+def network_line(error):
+    return "runner: network failure: " + clean(type(error).__name__)
+
+
 class WaitBudget(Exception):
     """BUSY until the remaining budget can no longer hold a run: nothing was rented."""
 
@@ -546,6 +581,8 @@ class Runner:
         # (5xx, timeout, connection error, garbled page) a box may exist for this run.
         self.rent_ambiguous = False
         self.until = time.monotonic() + 600 * 20
+        # The newest unrecovered failure of a Worker call, as one trusted line (see Diagnosed).
+        self.diagnostic = None
 
     def read(self, route, method="GET", body=None):
         return self.decode(self.client(route, method, body))
@@ -555,7 +592,7 @@ class Runner:
             reply.status in {301, 302, 303, 307, 308}
             or reply.headers.get("content-type", "").split(";")[0].strip() != "application/json"
         ):
-            raise Invalid()
+            raise Diagnosed(reply_line(reply.status, reply.headers.get("content-type", "")))
         return reply.status, strict_json(reply.body)
 
     def retry_read(self, route, method="GET", body=None):
@@ -595,7 +632,11 @@ class Runner:
                     except Invalid:
                         self.rent_ambiguous |= route == "/rent"
                         raise
-            except (OSError, TimeoutError):
+            except Diagnosed as error:
+                self.diagnostic = error.line
+                raise
+            except (OSError, TimeoutError) as error:
+                self.diagnostic = network_line(error)
                 self.infrastructure_failure = True
                 self.rent_ambiguous |= route == "/rent"
                 if attempt == 5:
@@ -603,6 +644,7 @@ class Runner:
             else:
                 if code == 200:
                     self.infrastructure_failure = False
+                    self.diagnostic = None
                     return code, data
                 validate_status(data, self.ctx, self.manifest, code)
                 transient = code in {429, 500, 502, 503, 504} or (
@@ -809,6 +851,8 @@ class Runner:
         safe, dropped = scrub(
             "".join(self.raw), max_bytes=65536, redactions=self.ctx.get("redactions", ())
         )
+        if self.diagnostic and result["verified"] != 1:
+            self.emit(self.diagnostic + "\n")
         self.emit("::group::Final bounded log: UNTRUSTED Worker/box output\n")
         self.show("".join(self.raw))
         self.emit(
@@ -913,10 +957,15 @@ def access_headers(environ):
     secret = environ.get("CF_ACCESS_CLIENT_SECRET", "")
     if not ident and not secret:
         return {}
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,256}", ident) or not re.fullmatch(
-        r"[A-Za-z0-9_.-]{32,256}", secret
-    ):
-        raise Invalid()
+    for name, value, pattern, least in [
+        ("CF_ACCESS_CLIENT_ID", ident, r"[A-Za-z0-9_.-]{1,256}", 1),
+        ("CF_ACCESS_CLIENT_SECRET", secret, r"[A-Za-z0-9_.-]{32,256}", 32),
+    ]:
+        if not value:
+            raise Diagnosed(setting_line(name, "empty"))
+        if not re.fullmatch(pattern, value):
+            short = re.fullmatch(r"[A-Za-z0-9_.-]*", value) and len(value) < least
+            raise Diagnosed(setting_line(name, "too short" if short else "bad characters"))
     return {"CF-Access-Client-Id": ident, "CF-Access-Client-Secret": secret}
 
 
@@ -935,7 +984,7 @@ def https_request(url, method="GET", headers=None, body=None):
             )
             response = connection.getresponse()
             if response.status in {301, 302, 303, 307, 308}:
-                raise Invalid()
+                raise Diagnosed(reply_line(response.status, response.getheader("Content-Type", "")))
             if int(response.getheader("Content-Length", "0")) > MAX_RESPONSE:
                 raise Invalid()
             raw = response.read(MAX_RESPONSE + 1)
@@ -994,14 +1043,22 @@ def main():
         run = os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]
         if not re.fullmatch("[1-9][0-9]{0,19}-[1-9][0-9]{0,19}", run):
             raise Invalid()
-        origin = os.environ["WORKER_URL"].rstrip("/")
+        origin = os.environ.get("WORKER_URL", "").rstrip("/")
         prefix = os.environ.get("WORKER_PATH", "")
-        if (
-            not re.fullmatch(r"https://[A-Za-z0-9.-]+", origin)
-            or prefix
-            and not re.fullmatch("[A-Za-z0-9_-]{32,128}", prefix)
-        ):
-            raise Invalid()
+        if not origin:
+            raise Diagnosed(setting_line("WORKER_URL", "empty"))
+        if not re.fullmatch(r"https://[A-Za-z0-9.-]+", origin):
+            path = re.fullmatch(r"https://[A-Za-z0-9.-]+[/?#].*", origin)
+            raise Diagnosed(
+                setting_line("WORKER_URL", "trailing slash or path" if path else "bad characters")
+            )
+        if prefix and not re.fullmatch("[A-Za-z0-9_-]{32,128}", prefix):
+            if "/" in prefix:
+                reason = "trailing slash or path"
+            else:
+                short = re.fullmatch("[A-Za-z0-9_-]*", prefix) and len(prefix) < 32
+                reason = "too short" if short else "bad characters"
+            raise Diagnosed(setting_line("WORKER_PATH", reason))
         for value in [
             origin,
             urllib.parse.urlsplit(origin).hostname,
@@ -1053,10 +1110,20 @@ def main():
         def client(route, method="GET", body=None):
             audience = urllib.parse.quote(origin, safe="")
             print("::add-mask::" + audience, flush=True)
-            token_reply = https_request(
-                os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=" + audience,
-                headers={"Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]},
-            )
+            if not os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL") or not os.environ.get(
+                "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
+            ):
+                raise Diagnosed(setting_line("GITHUB_OIDC", "empty"))
+            try:
+                token_reply = https_request(
+                    os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=" + audience,
+                    headers={
+                        "Authorization": "Bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
+                    },
+                )
+            except Diagnosed:
+                # A redirect from the token endpoint is not a Worker reply.
+                raise Invalid() from None
             token_data = strict_json(token_reply.body)
             if (
                 token_reply.status != 200
@@ -1087,6 +1154,10 @@ def main():
             result = Runner(
                 ctx, manifest, client, emit=lambda s: print(s, end="", flush=True), summary=summary
             ).execute()
+    except Diagnosed as error:
+        # Reached only by a setting rejected in this function (a setting NAME and a fixed
+        # reason, see setting_line); Worker calls run inside Runner.execute.
+        print(error.line, flush=True)
     except Exception:
         pass  # Raw exceptions may contain endpoint/Worker input.
     with open(output, "a", encoding="ascii") as outputs:
