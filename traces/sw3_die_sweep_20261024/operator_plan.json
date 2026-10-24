@@ -67,5 +67,109 @@
     "no_further_rentals": true,
     "native_runs": 0,
     "guest_runs": 0
+  },
+  "attempt2": {
+    "authority": "Controller correction: same budget and at most three leases total.",
+    "written_utc": "2026-10-24T21:40:39.349990+00:00",
+    "market_utc": "2026-10-24T21:39:51.166628+00:00",
+    "market_query": "verified=true vms_enabled=true num_gpus=1 inet_down>=200 disk_space>=180 reliability>=0.95",
+    "market_sha256": "2808c4fbb28df5cffa7b012e2c6f6d13de9a4f9f6dc7eb1e46522f17d8ed66d6",
+    "candidates": [
+      {
+        "die": "GA106",
+        "offer_id": 54435093,
+        "machine_id": 34087,
+        "host_id": 79466,
+        "price_usd_hour": 0.20055555555555554,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "Quebec, CA",
+        "blacklisted": false
+      },
+      {
+        "die": "AD106",
+        "offer_id": 43725433,
+        "machine_id": 29929,
+        "host_id": 166946,
+        "price_usd_hour": 0.2961111111111111,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "United Kingdom, GB",
+        "blacklisted": false
+      },
+      {
+        "die": "AD106",
+        "offer_id": 49645022,
+        "machine_id": 20126,
+        "host_id": 92038,
+        "price_usd_hour": 0.3987222222222222,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "Quebec, CA",
+        "blacklisted": false
+      },
+      {
+        "die": "AD106",
+        "offer_id": 49744625,
+        "machine_id": 16592,
+        "host_id": 92038,
+        "price_usd_hour": 0.3987222222222222,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "Quebec, CA",
+        "blacklisted": false
+      },
+      {
+        "die": "GA102",
+        "offer_id": 46019435,
+        "machine_id": 143824,
+        "host_id": 166946,
+        "price_usd_hour": 0.4018518518518518,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "United Kingdom, GB",
+        "blacklisted": false
+      }
+    ],
+    "GA104": "NOT AVAILABLE",
+    "TU106": "NOT AVAILABLE in this fresh snapshot",
+    "prior_spend_usd": 0.026,
+    "leases_used": 2,
+    "remaining_leases": 1,
+    "priority": "Original die order among currently verified-available offers; GA106 first.",
+    "native_hypothesis": "The confirmed die passes production 714ec29d3 native gates 9/9 plus gate10 and bare 30/30.",
+    "native_falsifier": "Any native test fails, or any unmatched Xid appears; exclude the cell and stop GPU work.",
+    "guest_hypothesis": "On that exact passing native box, production 714ec29d3 passes fast suite 30/30.",
+    "guest_falsifier": "Any arm fails the unchanged 180-second oracle, or unmatched Xid appears.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1": "Observe and report, never resize.",
+    "lease_retry": "No remaining lease after the next allocation; no identity-refusal retry.",
+    "selected": {
+      "offer_id": 54435093,
+      "die": "GA106",
+      "machine_id": 34087,
+      "host_id": 79466,
+      "price_usd_hour": 0.20055555555555554,
+      "verified": "verified",
+      "is_vm_deverified": false,
+      "country_iso": "CA",
+      "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7"
+    },
+    "selector_fix": "434297484; tests-only EXPECTED RED 2ff605c1b",
+    "mutant_killers": {
+      "verification_removed": 6,
+      "verification_truthiness": 4,
+      "blacklist_removed": 2,
+      "vm_status_removed": 4,
+      "missing_vm_status_accepted": 2
+    }
   }
 }
