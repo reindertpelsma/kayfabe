@@ -721,8 +721,10 @@ export function createService({
         await checkContract(prior, await vast.inspect(prior), vast, cfg);
       return json(expose(prior, key));
     }
-    // Review R1: one attempt per run key, also after retention removed the record (the spend
-    // row stays 30 days, longer than any GitHub run can mint a token).
+    // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
+    // while the spend row exists the key is refused. The row is pruned once its run ended more
+    // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
+    // (owner only; GitHub allows a run up to 35 days) could rent again. Not guaranteed beyond.
     if (await ledger.get('cost:' + key)) refuse('UNAVAILABLE_BUDGET', 409);
     // Review B2: the commit gap before the cap, so a repeated commit is refused at once instead
     // of waiting BUSY, and before the supersede, so it closes nobody.
