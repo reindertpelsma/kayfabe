@@ -1,0 +1,173 @@
+...FFFEFFFFFFFEFFFF
+======================================================================
+ERROR: test_console_change_restarts_stability (test_native_pin.NativeStability.test_console_change_restarts_stability)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 85, in test_console_change_restarts_stability
+    first_b = next(r for r in rows if r["latest"] == C.fingerprint(B))
+StopIteration
+
+======================================================================
+ERROR: test_mismatch_restarts_stability (test_native_pin.NativeStability.test_mismatch_restarts_stability)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 79, in test_mismatch_restarts_stability
+    mismatch = next(r for r in rows if r["state"] == "mismatch")
+StopIteration
+
+======================================================================
+FAIL: test_an_older_console_pin_is_not_accepted (test_native_pin.NativeStability.test_an_older_console_pin_is_not_accepted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 112, in test_an_older_console_pin_is_not_accepted
+    self.assertIsInstance(error, C.PinFlap)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: PinMismatch('scanned ed25519 never settled on the latest console pin in the window') is not an instance of <class 'console_pin.PinFlap'>
+
+======================================================================
+FAIL: test_changing_pins_cannot_extend_deadline (test_native_pin.NativeStability.test_changing_pins_cannot_extend_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 122, in test_changing_pins_cannot_extend_deadline
+    self.assertIsInstance(error, C.PinFlap)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: PinMismatch('scanned ed25519 never settled on the latest console pin in the window') is not an instance of <class 'console_pin.PinFlap'>
+
+======================================================================
+FAIL: test_console_absent_never_authorizes_scanned_key (test_native_pin.NativeStability.test_console_absent_never_authorizes_scanned_key)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 101, in test_console_absent_never_authorizes_scanned_key
+    self.assertIsInstance(error, C.PinFlap)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: PinExpired('console host pin absent past readiness bound') is not an instance of <class 'console_pin.PinFlap'>
+
+======================================================================
+FAIL: test_console_transport_loss_never_becomes_attestation (test_native_pin.NativeStability.test_console_transport_loss_never_becomes_attestation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 106, in test_console_transport_loss_never_becomes_attestation
+    self.assertIsNone(result)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+AssertionError: {'check': 2, 'polls': 2, 'console_sha256': '24103e6250262553e0555e5417bbdcc5e6429de9b4fd94829e8b9b549c7cd110', 'host_key_lines': ['[   13.6] cloud-init[1483]: ssh-keygen: generating new host keys: RSA DSA ED25519', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU root@ubuntu (ED25519)', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:LAsZZFjhUp/03uExqahGKxMupunnr8BjgN60NdZkTgI root@ubuntu (RSA)', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7 root@ubuntu', 'Save this WINDOWS SSH HOST KEY before reboot:', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'], 'ci_info_lines_omitted': 0, 'transport_error': None, 'state': 'match', 'consecutive': 2, 'published': ['SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU'], 'latest': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scanned_fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scan_error': None, 'wait_seconds': 15.0, 'elapsed_since_create': 15.0, 'deadline_since_create': 600.0, 'window_end_since_create': 180.0, 'fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'key': 'AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'} is not None
+
+======================================================================
+FAIL: test_constants_are_owner_bounds (test_native_pin.NativeStability.test_constants_are_owner_bounds)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 60, in test_constants_are_owner_bounds
+    self.assertEqual(getattr(N, "STABILITY_SECONDS", None), 120)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != 120
+
+======================================================================
+FAIL: test_expired_entry_does_not_poll (test_native_pin.NativeStability.test_expired_entry_does_not_poll)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 138, in test_expired_entry_does_not_poll
+    self.assertIsNone(result)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+AssertionError: {'check': 2, 'polls': 2, 'console_sha256': '24103e6250262553e0555e5417bbdcc5e6429de9b4fd94829e8b9b549c7cd110', 'host_key_lines': ['[   13.6] cloud-init[1483]: ssh-keygen: generating new host keys: RSA DSA ED25519', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU root@ubuntu (ED25519)', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:LAsZZFjhUp/03uExqahGKxMupunnr8BjgN60NdZkTgI root@ubuntu (RSA)', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7 root@ubuntu', 'Save this WINDOWS SSH HOST KEY before reboot:', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'], 'ci_info_lines_omitted': 0, 'transport_error': None, 'state': 'match', 'consecutive': 2, 'published': ['SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU'], 'latest': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scanned_fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scan_error': None, 'wait_seconds': 15.0, 'elapsed_since_create': 15.0, 'deadline_since_create': 600.0, 'window_end_since_create': 180.0, 'fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'key': 'AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'} is not None
+
+======================================================================
+FAIL: test_late_invocation_uses_first_reachable_deadline (test_native_pin.NativeStability.test_late_invocation_uses_first_reachable_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 126, in test_late_invocation_uses_first_reachable_deadline
+    result, error, rows, end = run([(native(A), X)], start=1190)
+                               ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 51, in run
+    result = N.settle_pin(scan, fetch, first_reachable_at=first, clock=clock,
+                          sleep=clock.sleep, record=receipts.append)
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/native_pin.py", line 5, in settle_pin
+    return C.settle_pin(scan, fetch_console, elapsed_since_create=0, factor=10,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        clock=clock, sleep=sleep, record=record)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/console_pin.py", line 301, in settle_pin
+    sleep(min(max(0, interval - (clock() - at)), max(0, limit - clock())))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 32, in sleep
+    raise AssertionError("unbounded wait crossed the independent test clock limit")
+AssertionError: unbounded wait crossed the independent test clock limit
+
+======================================================================
+FAIL: test_latest_pin_update_cannot_leave_old_match_authorized (test_native_pin.NativeStability.test_latest_pin_update_cannot_leave_old_match_authorized)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 116, in test_latest_pin_update_cannot_leave_old_match_authorized
+    self.assertIsNone(result)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+AssertionError: {'check': 2, 'polls': 2, 'console_sha256': '24103e6250262553e0555e5417bbdcc5e6429de9b4fd94829e8b9b549c7cd110', 'host_key_lines': ['[   13.6] cloud-init[1483]: ssh-keygen: generating new host keys: RSA DSA ED25519', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU root@ubuntu (ED25519)', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:LAsZZFjhUp/03uExqahGKxMupunnr8BjgN60NdZkTgI root@ubuntu (RSA)', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7 root@ubuntu', 'Save this WINDOWS SSH HOST KEY before reboot:', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'], 'ci_info_lines_omitted': 0, 'transport_error': None, 'state': 'match', 'consecutive': 2, 'published': ['SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU'], 'latest': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scanned_fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scan_error': None, 'wait_seconds': 15.0, 'elapsed_since_create': 15.0, 'deadline_since_create': 600.0, 'window_end_since_create': 180.0, 'fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'key': 'AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'} is not None
+
+======================================================================
+FAIL: test_linux_stage_cannot_authorize_native_windows_login (test_native_pin.NativeStability.test_linux_stage_cannot_authorize_native_windows_login)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 144, in test_linux_stage_cannot_authorize_native_windows_login
+    self.assertIsNone(result)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+AssertionError: {'check': 2, 'polls': 2, 'console_sha256': 'e5727c0de2d95a4ec9073e10e062860b8cae48db64eb753bb15bcb27c3ac85be', 'host_key_lines': ['[   13.6] cloud-init[1483]: ssh-keygen: generating new host keys: RSA DSA ED25519', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU root@ubuntu (ED25519)', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:LAsZZFjhUp/03uExqahGKxMupunnr8BjgN60NdZkTgI root@ubuntu (RSA)', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7 root@ubuntu'], 'ci_info_lines_omitted': 0, 'transport_error': None, 'state': 'match', 'consecutive': 2, 'published': ['SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU'], 'latest': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scanned_fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scan_error': None, 'wait_seconds': 15.0, 'elapsed_since_create': 15.0, 'deadline_since_create': 600.0, 'window_end_since_create': 180.0, 'fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'key': 'AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'} is not None
+
+======================================================================
+FAIL: test_match_arriving_at_deadline_is_refused (test_native_pin.NativeStability.test_match_arriving_at_deadline_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 132, in test_match_arriving_at_deadline_is_refused
+    result, error, rows, end = run([(native(A), A)], start=1180, fetch_cost=20)
+                               ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 51, in run
+    result = N.settle_pin(scan, fetch, first_reachable_at=first, clock=clock,
+                          sleep=clock.sleep, record=receipts.append)
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/native_pin.py", line 5, in settle_pin
+    return C.settle_pin(scan, fetch_console, elapsed_since_create=0, factor=10,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        clock=clock, sleep=sleep, record=record)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/kit/guards/console_pin.py", line 301, in settle_pin
+    sleep(min(max(0, interval - (clock() - at)), max(0, limit - clock())))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 29, in sleep
+    raise AssertionError("poll must be positive and bounded")
+AssertionError: poll must be positive and bounded
+
+======================================================================
+FAIL: test_missing_windows_marker_after_transition_resets_window (test_native_pin.NativeStability.test_missing_windows_marker_after_transition_resets_window)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 149, in test_missing_windows_marker_after_transition_resets_window
+    self.assertIsNone(result)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^
+AssertionError: {'check': 2, 'polls': 2, 'console_sha256': '24103e6250262553e0555e5417bbdcc5e6429de9b4fd94829e8b9b549c7cd110', 'host_key_lines': ['[   13.6] cloud-init[1483]: ssh-keygen: generating new host keys: RSA DSA ED25519', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU root@ubuntu (ED25519)', '<14>Oct 24 10:03:53 cloud-init: 256 SHA256:LAsZZFjhUp/03uExqahGKxMupunnr8BjgN60NdZkTgI root@ubuntu (RSA)', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7 root@ubuntu', 'Save this WINDOWS SSH HOST KEY before reboot:', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'], 'ci_info_lines_omitted': 0, 'transport_error': None, 'state': 'match', 'consecutive': 2, 'published': ['SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU'], 'latest': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scanned_fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'scan_error': None, 'wait_seconds': 15.0, 'elapsed_since_create': 15.0, 'deadline_since_create': 600.0, 'window_end_since_create': 180.0, 'fingerprint': 'SHA256:tiMhMnRPrlvkQ5cs0JKKkfs5jVh0z0YO308IwZMTntU', 'key': 'AAAAC3NzaC1lZDI1NTE5AAAAIMqXgRLKG73K+sIxs5oj3E2nhu/4FHxOcrmAd4Wv7ki7'} is not None
+
+======================================================================
+FAIL: test_recorded_bw7_transition_waits_without_trusting_the_third_key (test_native_pin.NativeStability.test_recorded_bw7_transition_waits_without_trusting_the_third_key)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 94, in test_recorded_bw7_transition_waits_without_trusting_the_third_key
+    self.assertIsNone(error)
+    ~~~~~~~~~~~~~~~~~^^^^^^^
+AssertionError: PinFlap('scanned host key changed between checks without matching the console') is not None
+
+======================================================================
+FAIL: test_stability_applies_when_first_contact_was_long_ago (test_native_pin.NativeStability.test_stability_applies_when_first_contact_was_long_ago)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 73, in test_stability_applies_when_first_contact_was_long_ago
+    self.assertGreaterEqual(end, 820)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+AssertionError: 715.0 not greater than or equal to 820
+
+======================================================================
+FAIL: test_two_matches_alone_do_not_authorize (test_native_pin.NativeStability.test_two_matches_alone_do_not_authorize)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/bw7-wt/traces/blackwell_native_ref_20261018/BW7/attempt2/rehearsal/test_native_pin.py", line 67, in test_two_matches_alone_do_not_authorize
+    self.assertGreaterEqual(end, 120)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+AssertionError: 15.0 not greater than or equal to 120
+
+----------------------------------------------------------------------
+Ran 19 tests in 0.006s
+
+FAILED (failures=14, errors=2)
