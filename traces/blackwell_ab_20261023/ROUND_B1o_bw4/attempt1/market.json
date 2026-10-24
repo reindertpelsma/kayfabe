@@ -1,10 +1,10 @@
 {
   "host_verification": "UNVERIFIED-HOST",
-  "utc": "2026-10-24T07:48:24.336579+00:00",
+  "utc": "2026-10-24T07:48:46.580044+00:00",
   "credit_usd": 25.407962987459882,
   "offers": [
     {
-      "id": 43994882,
+      "id": 43994880,
       "machine_id": 69146,
       "gpu_name": "RTX 5090",
       "candidate_die": "GB202",
@@ -52,7 +52,7 @@
       "geolocation": "Mexico, MX"
     },
     {
-      "id": 57376530,
+      "id": 57376519,
       "machine_id": 43459,
       "gpu_name": "RTX 5090",
       "candidate_die": "GB202",
@@ -66,22 +66,6 @@
       "disk_space": 745.3710504772183,
       "is_vm_deverified": true,
       "geolocation": "Taiwan, TW"
-    },
-    {
-      "id": 52245926,
-      "machine_id": 150566,
-      "gpu_name": "RTX 5090",
-      "candidate_die": "GB202",
-      "verification": "verified",
-      "dph_total": 0.6951851851851852,
-      "reliability": 0.9956329,
-      "inet_down": 568.0,
-      "vms_enabled": true,
-      "cpu_cores_effective": 32.0,
-      "cpu_ram": 128705,
-      "disk_space": 631.9000000000003,
-      "is_vm_deverified": true,
-      "geolocation": "South Korea, KR"
     },
     {
       "id": 50420387,
