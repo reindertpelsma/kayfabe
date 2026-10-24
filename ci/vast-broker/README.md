@@ -1,15 +1,31 @@
 # Vast broker (stage 1)
 
-## Owner edits round (2026-10-24, current; supersedes the statements tagged below)
+## Owner edits round 2 (2026-10-24, current; supersedes the statements tagged below)
+
+[CODE READ: src/, runner.py, deploy.mjs; owner rulings 2026-10-24 items 8 and 9] On top of the
+owner edits round below:
+- Concurrent rentals: a set of active runs, `MAX_CONCURRENT_RENTALS` (default 1, at most 4) and
+  optional lower `MAX_CONCURRENT_CHECK` / `MAX_CONCURRENT_SWEEP`; over a cap `409 BUSY`. Spend
+  caps and the credit reserve sum all active runs; an active run's machine is `IN_USE`; a newer
+  run supersedes only the older runs of its own branch (details in DEPLOY.md).
+- Offer identity: `machine_id` and `host_id` in every `/availability` row (`offers[]` and the new
+  `rejected_offers[]` with reason codes) and in the status object; runner validators, log and
+  step summary follow.
+- Status protocol 6 (runner sends `X-KF-Protocol: 6`; each side refuses 5 and any other value).
+- The runner also stops a run whose announced result failed the final log fetch.
+
+## Owner edits round (2026-10-24; superseded in part by round 2 above)
 
 [CODE READ: src/, runner.py, release_gate.py, gpu-vast.yml; owner rulings 2026-10-23/24 and the
 final review of 2026-10-23] On top of the jose round:
 - `POST /rent` takes exactly `runner_nonce`, `tested_sha`, `profile` and optional `preferences`;
-  `pr_number` is refused and the status object has no `pr` (status protocol stays 5).
+  `pr_number` is refused and the status object has no `pr` (status protocol stayed 5; 6 since
+  round 2).
 - Logs are relayed, not kept: the cron deletes a run's log chunks, log-hash entries and record
   `LOG_RETENTION_HOURS` (default 6, at most 48) after `ended_at`. Spend and sha-gap rows stay.
 - Right after its verified final log fetch the runner sends `POST /stop/<run>`; the Worker
-  destroys at once. The PASS/FAIL grace timer is only the fallback.
+  destroys at once. The PASS/FAIL grace timer is only the fallback. (Round 2: a failed final
+  fetch is stopped too.)
 - Denied countries: CU, IR, KP, SY, CN, HK, MO, matched on ISO alpha-2/alpha-3 codes and long
   names (V13). `BAD_HOST_IDS` rejects every machine of a listed hoster (`BAD_HOST`).
 - A Worker-sent NOT_NEEDED (and MANUAL / NEEDS_APPROVAL) is refused; only the workflow's two
@@ -32,7 +48,8 @@ claude/vast-broker-jose-20261023] Owner decisions 19:35/19:45 and the 21:45 adde
   0.28.2; install with `npm ci --ignore-scripts`). `deployment.json` pins the SHA-256 of
   wrangler's emitted module; `deploy.mjs` re-bundles, refuses a mismatch and uploads exactly the
   hash-checked file. The project linker `bundle.js` and the mutation tooling are deleted.
-- Status protocol 5 (runner sends `X-KF-Protocol: 5`; each side refuses the other version);
+- Status protocol 5 (runner sends `X-KF-Protocol: 5`; each side refuses the other version;
+  [SUPERSEDED 2026-10-24: protocol 6, see round 2 above]);
   box protocol 7 (JWT run token, optional Cloudflare Access pair `KF_ACCESS_ID` /
   `KF_ACCESS_SECRET` passed through from Worker secrets `BOX_ACCESS_ID` / `BOX_ACCESS_SECRET`).
 Below, any mention of `npm run bundle`, `dist/worker.js`, `npm run mutants`, mutation campaigns,
@@ -300,7 +317,8 @@ triggering_actor check.
 ## V5 protocol checkpoint and remaining live evidence
 
 [CODE READ: 2026-10-22 src/results.js, src/onstart.js, runner.py] Protocol 4 / v5 (status
-protocol 5 since 2026-10-23: MANUAL left the shape; runner sends `X-KF-Protocol: 5`)
+protocol 5 since 2026-10-23: MANUAL left the shape; runner sends `X-KF-Protocol: 5`;
+SUPERSEDED 2026-10-24: status protocol 6, see the round 2 section)
 requires a bounded payload result file with the exact approved SHA and run nonce,
 then adds the runner nonce in the fixed sender. Exit zero or log text alone is
 FAIL. PASS requires a nonempty table of uniquely named, bounded successful suites

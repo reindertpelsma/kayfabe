@@ -55,8 +55,11 @@ ignored if still configured):
 Owner `stop`, `stop-all` and the box `kf-box-kill` switch remain. [CODE READ: runner.py; owner
 ruling 2026-10-24 item 4] Right after the final log pages pass the cursor/hash check the runner
 sends a best-effort `POST /stop/<run>`; the Worker destroys at once and keeps the verdict. The
-PASS/FAIL grace timer (5/10 minutes) stays as the fallback, and is the only path when the final
-fetch fails validation.
+PASS/FAIL grace timer (5/10 minutes) stays as the fallback.
+[SUPERSEDED 2026-10-24, edits2 D: the previous text said the grace timer is the only path when
+the final fetch fails validation.] An announced result whose final fetch fails the cursor or hash
+check, or cannot be read, is stopped as well; only an infrastructure fault before any result
+leaves the box to the Worker's timers (paid work survives a Worker outage).
 
 ## Build and test
 
@@ -139,6 +142,13 @@ BAD_HOST_IDS (default `badHosts: []`) rejects every offer whose `host_id`, the h
 either, edit the var in the vars file and redeploy with the helper (no owner endpoint exists or
 is wanted; a deploy without the var falls back to defaults.json). The Worker's learned
 `bad-machine:` ledger entries (frozen KVM boot) stay machine-level.
+[CODE READ: src/offers.js, src/index.js, runner.py; owner ruling 2026-10-24 item 9] To find the
+ids, read the public log: every `/availability` row (`offers[]`, the cheapest allowed offer per
+die, and `rejected_offers[]`, each rejected offer with its reason codes) carries the public Vast
+`machine_id` and `host_id`; the runner prints them under *Availability* and puts the rented
+box's `Vast machine id` / `Vast host id` in the step summary (status object `machine_id`,
+`host_id`, next to the instance `id`). A missing or malformed id shows as null / `-`. No IP,
+hostname or offer id is exposed.
 ALLOW_UNKNOWN_COUNTRY defaults to true; set false to reject unknown metadata. PREFERRED_COUNTRIES
 ranks only remaining eligible offers. Contract price failure revokes the run and attempts
 deletion; failed deletion retains the liability for cleanup retry.
@@ -150,6 +160,30 @@ hours, default 6, at most 48; any other value is `CONFIG_VAR:LOG_RETENTION_HOURS
 `ended_at`. Afterwards `/status`, `/logs` and `/stop` for that run answer 404 `NOT_FOUND`. The
 spend rows (30-day caps) and the sha-gap rows (kept max(gap, 30 days)) are not log data and stay.
 The 4 MiB per-run log cap is unchanged.
+
+[CODE READ: src/index.js, src/ledger.js, src/offers.js, src/policy.js; owner ruling 2026-10-24,
+item 8]
+Concurrent rentals. The ledger keeps a set of active runs (every run not yet ended, including a
+closed run whose destroy is still pending). Public vars, each refused as
+`CONFIG_VAR:<name>` unless a whole number 1 to 4:
+- `MAX_CONCURRENT_RENTALS` (default 1, `maxConcurrentRentals` in defaults.json): the account cap.
+- `MAX_CONCURRENT_CHECK`, `MAX_CONCURRENT_SWEEP` (default: the account cap): optional per-profile
+  caps; a value above the account cap is refused, so they can only lower it.
+
+A rent over either cap gets `409 BUSY` (no Vast call); the runner retries BUSY until its own time
+budget, so at the default of 1 a second run waits instead of failing at once. The daily count,
+daily and rolling spend caps sum every cost row, the active runs included, and the credit check
+(at rent and when a contract is re-priced) requires credit >= `CREDIT_RESERVE_USD` + this run's
+worst case + the outstanding worst case of every other active run, so a second box cannot dodge a
+cap. The machine of every active run is held from CREATING until the run has ended: its offers
+are rejected `IN_USE` in `/availability` and in selection, so two runs never take one machine
+(the sweep rotation then moves on to another machine of the die or the next die). Superseding
+stays per branch: a newer run (higher GitHub run id) of a branch closes the older runs of that
+branch as `SUPERSEDED` and gets BUSY once; a late request of an older run is `NOT_ELIGIBLE` and
+closes nothing. One run's failure, close or stop never touches another; `stop-all`, the cron and
+the reaper act on every run. To raise the cap, put e.g. `MAX_CONCURRENT_RENTALS=2` in the vars
+file and redeploy; check the daily caps first (two worst-case check runs at $1/hour do not fit
+the $6 daily cap, see README).
 
 [INFERRED: src/ledger.js transfer-allowance accounting] Per-GB limits reduce exposure but do not
 make reserved 15-GB-down/2-GB-up allowances a hard bill ceiling. A hostile box can exceed the
@@ -314,7 +348,8 @@ rental with `RENTING_ENABLED=true`, in this order:
    hostname-wide Access policy blocks every box callback and the box bills until BOOT_TIMEOUT).
 4. The reaper is deployed with its own list+delete key (see *Independent reaper*) and its deploy
    output lists `*/5 * * * *`.
-5. Only one trigger may rent during the watch: put `DAILY_RENTALS=1` (and optionally a lower
+5. Only one trigger may rent during the watch: keep `MAX_CONCURRENT_RENTALS` at its default 1,
+   put `DAILY_RENTALS=1` (and optionally a lower
    `MAX_PRICE_USD_HOUR`) in the vars file and redeploy, and pause agent pushes, PR updates and
    merges that use the owner's credentials (every owner-credential `pull_request_target` or
    master push is owner-triggered and rents). Resume them, and restore `DAILY_RENTALS`, after

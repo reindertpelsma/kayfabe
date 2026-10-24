@@ -1,6 +1,7 @@
 # Box interface
 
-STATUS: LIVE, 2026-10-24. Box protocol 7 (since 2026-10-23); runner status protocol 5. Owner
+STATUS: LIVE, 2026-10-24. Box protocol 7 (since 2026-10-23); runner status protocol 6 (was 5
+until the edits2 round of 2026-10-24). Owner
 rulings 2026-10-24: right after the runner's verified final log fetch it sends `POST /stop/<run>`
 and the Worker destroys the box at once, so the result grace below is only the fallback; box
 log text is relayed, not kept: the Worker deletes it `LOG_RETENTION_HOURS` (default 6) after the
@@ -26,6 +27,8 @@ configured `scripts/ci/vast_onstart.sh`. Transport and payload logic live in the
 | KF_GRACE_PASS | Optional grace ceiling in seconds |
 | KF_ACCESS_ID / KF_ACCESS_SECRET | Optional Cloudflare Access service-token pair; both or none |
 
+[SUPERSEDED 2026-10-24, edits2 C: status protocol 5 below is now 6; the status object gained
+`machine_id` and `host_id` and lost `pr`; the runner sends `X-KF-Protocol: 6`.]
 The runner status protocol is separate: 5 since 2026-10-23 (the runner sends `X-KF-Protocol: 5`;
 each side refuses the other version).
 
@@ -61,6 +64,7 @@ owner stop/stop-all or by `kf-box-kill`. The Worker injects no Cloudflare Access
 box. Worker caps remain 20 requests/10 seconds, 2000 requests and 4 MiB per run.
 
 [SUPERSEDED in part 2026-10-24, final review D1] In the next paragraph, "protocol-4 metadata
-field" reads status protocol 5 (`country` is still the one optional status key; the status
-object has no `pr` since 2026-10-24) and "the environment is protocol 6" reads box protocol 7.
+field" reads status protocol 6 (`country` is still the one optional status key; the status
+object has no `pr` and has `machine_id` / `host_id` since 2026-10-24) and "the environment is
+protocol 6" reads box protocol 7.
 [CODE READ: src/index.js, runner.py] Structured Worker status includes the selected provider `country` (two uppercase letters or `UNKNOWN`), separate from payload hardware. The runner accepts it as an explicitly optional protocol-4 metadata field, validates it independently, and labels it untrusted. The repo-side result-file contract is unchanged; the environment is protocol 6.
