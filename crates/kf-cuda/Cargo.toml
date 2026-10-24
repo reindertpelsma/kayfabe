@@ -14,6 +14,10 @@ license.workspace = true
 kf-linux-raw.workspace = true
 
 [dev-dependencies]
+# 2026-10-24: the hardware example `color_hue_vibrance` compares the GPU's bytes with the CPU
+# oracle `kf_disp::color::model`. Dev-only (examples and tests), and kf-disp depends on nothing of
+# this crate, so no cycle and no product-code coupling.
+kf-disp.workspace = true
 
 # ★★★ DELIBERATELY NOT `[lints] workspace = true` — the THIRD crate to omit it, and the
 # first one added since the QEMU adapter. `l1_os_shell.md` §4.1's gate A says in as many
