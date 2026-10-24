@@ -375,7 +375,8 @@ deployment, secret configuration or a successful hosted run.
 1. Keep `RENTING_ENABLED=false`. Use only reviewed master code and the deploy helper's
    `deployment.json` bundle-hash check for the initial deployment. Branch work is not deployment
    authority; the owner/controller must accept and merge any required changes first.
-2. Require GitHub environment `gpu-vast` to allow **master only**, with a required reviewer.
+2. Require GitHub environment `gpu-vast` to allow **master only**; a required reviewer is
+   optional at the owner's discretion.
    Check its deployment-branch policy read-only with
    `gh api repos/<repo>/environments/gpu-vast`; branch workflows must not bind its secrets.
 3. Review the scoped main Vast key against [Vast key scope](#vast-key-scope), and configure the
@@ -426,8 +427,8 @@ deployment, secret configuration or a successful hosted run.
 
 ### Superseded checklist — retained history
 
-[SUPERSEDED 2026-10-25 by the current checklist above: the optional reviewer, unverified
-reaper-schedule-only gate, implicit placement assumption, automatic cap restoration and expected
+[SUPERSEDED 2026-10-25 by the current checklist above: the unverified reaper-schedule-only
+gate, implicit placement assumption, automatic cap restoration and expected
 `payload_missing` outcome below are not current acceptance instructions.]
 
 [CODE READ: final review 2026-10-23 section 8 (c); owner rulings 2026-10-24] Before the first
