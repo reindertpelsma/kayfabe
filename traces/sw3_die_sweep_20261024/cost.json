@@ -1,10 +1,12 @@
 {
-  "runtime_estimate_usd": 0.02587746944259259,
+  "new_runtime_estimate_usd": 0.17582299606666665,
+  "lane_runtime_estimate_usd": 0.20170046550925924,
+  "nonruntime_reserve_usd": 0.5,
+  "new_conservative_cost_guard_usd": 0.6758229960666666,
   "not_settled_invoice": true,
-  "opening_credit_observed_usd": 23.724220217859965,
-  "closing_credit_observed_usd": 23.67013792486,
-  "shared_credit_delta_is_not_lane_spend": true,
-  "stop_usd": 3,
-  "hard_cap_usd": 3.5,
-  "untouched_reserve_usd": 8
+  "coordinator_new_stop_usd": 2.5,
+  "coordinator_new_cap_usd": 3,
+  "credit_observed_usd": 23.097188094559897,
+  "credit_reserve_usd": 8,
+  "retained_transfer_billing_liability_reserve_usd": 0.5
 }

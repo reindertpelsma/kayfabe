@@ -1,0 +1,5 @@
+host_driver=595.91.07 arch=(368, 4, 161)
+round=0 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1792879850886634720 second=1792879850906762496 delta=20127776 usermode=1792879850906766752 delta_to_usermode=4256
+round=1 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1792879850908357120 second=1792879850928478944 delta=20121824 usermode=1792879850928483232 delta_to_usermode=4288
+round=2 base=0x9000 layout=TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 } first=1792879850929978112 second=1792879850950091104 delta=20112992 usermode=1792879850950095360 delta_to_usermode=4256
+PASS native read-only timer map/read/drop x3

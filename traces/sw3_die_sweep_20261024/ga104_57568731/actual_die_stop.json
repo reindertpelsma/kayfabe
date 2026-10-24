@@ -1,0 +1,21 @@
+{
+  "utc": "2026-10-24T22:00:18.797867+00:00",
+  "lease_id": 57568731,
+  "advertised_name": "RTX 3060",
+  "candidate_die": "GA106",
+  "actual_rm_architecture": 368,
+  "actual_rm_implementation": 4,
+  "actual_rm_revision": 161,
+  "actual_die": "GA104",
+  "host_driver": "595.91.07",
+  "native_read_only_timer": "PASS x3",
+  "controller_rc": 1,
+  "reason": "Operator forecast assertion expected GA106 implementation 6.",
+  "native_gates": "UNRUN",
+  "bare_suite": "UNRUN",
+  "kf3_binary": "UNBUILT",
+  "fast_suite": "UNRUN",
+  "runtime_source": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "mapping_source": "crates/kf-chip/src/die.rs DIES entry arch::GA100/0x4/GA104",
+  "request": "Await explicit direction on same-lease GA104 resumption; no GPU work pending answer."
+}
