@@ -3459,6 +3459,20 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
     // ★ V3_BATCHED_MAP: VA-contiguous rows go as one range each; every batch object is freed.
+    // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's row extents at retire
+    // (coalesced, bounded in `kf_mem::vahist::retire`) — "was X the previous owner's VA?".
+    if kf_mem::vahist::enabled() {
+        let extents: Vec<(u64, u64)> = g.rows.read().map_or_else(
+            |_| Vec::new(),
+            |r| {
+                r.iter()
+                    .take(kf_mem::vahist::RETIRE_EXTENTS.saturating_mul(64))
+                    .map(|(&va, &(len, _, _, _))| (va, len))
+                    .collect()
+            },
+        );
+        kf_mem::vahist::global().retire(key.0, extents, live);
+    }
     let t_unmap = std::time::Instant::now();
     let (nrows, mut refused, calls) = g.unmap_all_rows();
     let host_calls = calls.saturating_add(u64::from(nrows > 0));
@@ -3486,6 +3500,50 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         if recycled { "kept as a spare" } else { "freed" },
         g.calls_line()
     )
+}
+
+/// ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the VA thread's live view for a
+/// `kf_mem::vahist` lookup — our rows (read under their own lock, never the recorder's) and the
+/// guest's PTE for the VA (at most nine 8-byte store reads, through the walker's bounds check).
+/// Built and used ONLY on the VA thread, which owns the manager and the walker's context.
+pub struct VahistView<'a> {
+    /// The VA manager.
+    pub m: &'a Manager,
+}
+
+impl kf_mem::vahist::SpaceView for VahistView<'_> {
+    fn live_keys(&self) -> Vec<u64> {
+        self.m
+            .table
+            .objects()
+            .into_iter()
+            .take(kf_mem::vahist::MAX_SPACES)
+            .map(|(k, _, _)| k.0)
+            .collect()
+    }
+
+    fn row_at(&self, key: u64, va: u64) -> Option<(u64, u64, bool, u64)> {
+        let Some(Target::Gpu(g)) = self.m.table.target(VasKey(key)) else {
+            return None;
+        };
+        let r = g.rows.read().ok()?;
+        let (&start, &(len, off, ram, _)) = r.range(..=va).next_back()?;
+        (va < start.checked_add(len)?).then_some((start, len, ram, off))
+    }
+
+    fn guest_pte(&self, key: u64, va: u64) -> Option<String> {
+        let root = self.m.table.root(VasKey(key))?;
+        let kernel = &self.m.walker().kernel;
+        let fmt = *kernel.format();
+        let mut read8 = |off: u64| {
+            let mut b = [0u8; 8];
+            kernel
+                .read_store(off, &mut b)
+                .ok()
+                .map(|()| u64::from_le_bytes(b))
+        };
+        Some(kf_mem::vahist::probe_pte(&fmt, root, va, &mut read8))
+    }
 }
 
 /// Diagnostics: every VA-space object the plane holds, `key=slot@root:rows`.
@@ -3635,6 +3693,17 @@ pub fn apply_statement(
                     );
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
+                }
+                // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's history
+                // starts here, with its host space and whether it is a recycled spare.
+                if kf_mem::vahist::enabled()
+                    && let Some(Target::Gpu(g)) = m.table.target(key)
+                {
+                    kf_mem::vahist::global().note_space(
+                        key.0,
+                        g.vas.space.space.into(),
+                        reused.is_some(),
+                    );
                 }
             }
             match m.table.set_root(key, s.pdb.0, ap) {

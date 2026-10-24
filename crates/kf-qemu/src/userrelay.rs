@@ -754,6 +754,23 @@ impl Birth {
         }
         me.pt_births.fetch_add(1, Ordering::Relaxed);
         me.engine_live(a.engine_type.unwrap_or(0), true);
+        // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off): ONE lifetime line per birth,
+        // capped per process (`kf_mem::vahist::CHAN_LINES_MAX`); on this act thread, never a vCPU.
+        if kf_mem::vahist::enabled()
+            && let Some(line) = kf_mem::vahist::global().chan_birth(kf_mem::vahist::ChanBirth {
+                client: a.client,
+                handle: a.handle,
+                guest_token: self.idx,
+                host_token: chan.token,
+                pid: a.process_id,
+                engine: a.engine_type.unwrap_or(0),
+                gp_entries: a.entries,
+                gpfifo_va: a.gpfifo_va,
+                vas: (u64::from(a.vaspace_client) << 32) | u64::from(a.vaspace.unwrap_or(0)),
+            })
+        {
+            eprintln!("{line}");
+        }
         // No fast-register path: every ring wakes a worker, including first use.
         Ok(format!(
             "Windows USER ring chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{} declared_subdevice={:x?} native_scan_subdevice={native_id:#x}",

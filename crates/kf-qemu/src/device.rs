@@ -2057,6 +2057,24 @@ impl Device {
                     .waited(va_busy_from.saturating_sub(tw), matches!(got, Ok(0)));
             }
             let _ = self.mem.inbox.wake.drain();
+            // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1` + `KF3_DIAG_VAHIST_TRIGGER=<path>`, default
+            // off): the host lane writes the host's Xid text there; the VA thread looks at most
+            // every 500 ms (one `open`), and answers each new trigger ONCE with a bounded dump
+            // (`kf_mem::vahist::Recorder::lookup`, at most 4 per process). Changes no decision.
+            if kf_mem::vahist::enabled()
+                && let Some(path) = kf_mem::vahist::trigger_path()
+            {
+                match kf_mem::vahist::global().poll_trigger(path, std::time::Instant::now()) {
+                    Some(Ok(t)) => {
+                        let view = crate::mem::VahistView { m: &m };
+                        for line in kf_mem::vahist::global().lookup(&t, &view) {
+                            eprintln!("{line}");
+                        }
+                    }
+                    Some(Err(e)) => eprintln!("kf3: VAHIST trigger not looked up: {e}"),
+                    None => {}
+                }
+            }
             self.serve_cache_ops(&mut cache_done);
             // ★★ Device reset, stage Memory (`docs/design/V3_DEVICE_RESET.md` §3): the channel plane
             // freed every guest client already. The old life's queued walks are dropped at once; a

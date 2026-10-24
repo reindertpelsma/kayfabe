@@ -81,15 +81,30 @@ fn birth(r: &Recorder, client: u32, handle: u32, host_token: u32, vas: u64) -> O
 
 fn all_prefixed(lines: &[String]) {
     for l in lines {
-        assert!(l.starts_with("kf3: VAHIST ") || l.starts_with("kf3: CHAN_LIFE "), "{l}");
-        assert!(l.len() <= LINE_MAX, "line over {LINE_MAX} bytes: {}", l.len());
+        assert!(
+            l.starts_with("kf3: VAHIST ") || l.starts_with("kf3: CHAN_LIFE "),
+            "{l}"
+        );
+        assert!(
+            l.len() <= LINE_MAX,
+            "line over {LINE_MAX} bytes: {}",
+            l.len()
+        );
     }
 }
 
 #[test]
 fn the_flag_is_on_only_for_exactly_one() {
     assert!(flag_on(Some("1")));
-    for v in [None, Some(""), Some("0"), Some("yes"), Some("true"), Some(" 1"), Some("11")] {
+    for v in [
+        None,
+        Some(""),
+        Some("0"),
+        Some("yes"),
+        Some("true"),
+        Some(" 1"),
+        Some("11"),
+    ] {
         assert!(!flag_on(v), "{v:?}");
     }
 }
@@ -177,17 +192,33 @@ fn the_rings_are_bounded_whatever_the_guest_maps() {
 fn the_lookup_says_present_when_our_row_covers_the_va() {
     let r = Recorder::new();
     r.note_space(K08, 0xcaff_4b20, true);
-    r.record_apply(K08, 3, &[run(false, 0xb_5a20_0000, 0x40000)], &[ACK_APPLIED], true, 0);
+    r.record_apply(
+        K08,
+        3,
+        &[run(false, 0xb_5a20_0000, 0x40000)],
+        &[ACK_APPLIED],
+        true,
+        0,
+    );
     assert!(birth(&r, 0xc1d0_029b, 0xff04_0039, 0x67, K08).is_some());
     let mut v = View::default();
     v.rows.insert(K08, vec![(0xb_5a20_0000, 0x40000)]);
     let out = r.lookup(&parse_trigger(b"va=0xb5a225000 chid=0x67").unwrap(), &v);
     all_prefixed(&out);
-    let vas = out.iter().find(|l| l.contains(" VAS ")).expect("a VAS line");
+    let vas = out
+        .iter()
+        .find(|l| l.contains(" VAS "))
+        .expect("a VAS line");
     assert!(vas.contains("verdict=PRESENT"), "{vas}");
     assert!(vas.contains("role=chan"), "{vas}");
-    assert!(out.iter().any(|l| l.contains(" CHAN ") && l.contains("host_token=0x67")));
-    assert!(out.iter().any(|l| l.contains(" EV ") && l.contains("op=MAP")));
+    assert!(
+        out.iter()
+            .any(|l| l.contains(" CHAN ") && l.contains("host_token=0x67"))
+    );
+    assert!(
+        out.iter()
+            .any(|l| l.contains(" EV ") && l.contains("op=MAP"))
+    );
     assert!(out.first().unwrap().contains(" LOOKUP #1 "));
     assert!(out.last().unwrap().contains(" END #1 "));
 }
@@ -198,23 +229,41 @@ fn the_lookup_says_unmapped_refused_or_withheld_from_the_last_event_covering_the
     r.note_space(K08, 2, true);
     let base = 0xa_2fbd_0000u64;
     // mapped, then unmapped (the guest's own UNMAP, acked)
-    r.record_apply(K08, 1, &[run(false, base, 0x10000)], &[ACK_APPLIED], true, 0);
+    r.record_apply(
+        K08,
+        1,
+        &[run(false, base, 0x10000)],
+        &[ACK_APPLIED],
+        true,
+        0,
+    );
     r.record_apply(K08, 2, &[run(true, base, 0x10000)], &[ACK_APPLIED], true, 0);
     // a refused MAP elsewhere, a withheld privileged MAP elsewhere, a HELD one
-    assert!(r.record_apply(K08, 3, &[run(false, base + 0x100000, 0x1000)], &[ACK_FAILED], true, 0));
+    assert!(r.record_apply(
+        K08,
+        3,
+        &[run(false, base + 0x100000, 0x1000)],
+        &[ACK_FAILED],
+        true,
+        0
+    ));
     let mut p = run(false, base + 0x200000, 0x1000);
     p.privileged = true;
-    assert!(!r.record_apply(K08, 4, &[p], &[ACK_FAILED], true, 0), "withheld is not a refusal");
-    r.record_apply(K08, 5, &[run(false, base + 0x300000, 0x1000)], &[ACK_HELD], true, 0);
+    assert!(
+        !r.record_apply(K08, 4, &[p], &[ACK_FAILED], true, 0),
+        "withheld is not a refusal"
+    );
+    r.record_apply(
+        K08,
+        5,
+        &[run(false, base + 0x300000, 0x1000)],
+        &[ACK_HELD],
+        true,
+        0,
+    );
     let v = View::default();
     let verdict = |va: u64| {
-        let out = r.lookup(
-            &Trigger {
-                va,
-                chid: None,
-            },
-            &v,
-        );
+        let out = r.lookup(&Trigger { va, chid: None }, &v);
         all_prefixed(&out);
         out.iter()
             .find(|l| l.contains(" VAS "))
@@ -229,7 +278,14 @@ fn the_lookup_says_unmapped_refused_or_withheld_from_the_last_event_covering_the
     // lookups above used this one's MANUAL_DUMPS)
     let r = Recorder::new();
     r.note_space(K08, 2, true);
-    r.record_apply(K08, 1, &[run(false, base, 0x10000)], &[ACK_APPLIED], true, 0);
+    r.record_apply(
+        K08,
+        1,
+        &[run(false, base, 0x10000)],
+        &[ACK_APPLIED],
+        true,
+        0,
+    );
     let out = r.lookup(
         &Trigger {
             va: 0x5_0000_0000,
@@ -237,7 +293,10 @@ fn the_lookup_says_unmapped_refused_or_withheld_from_the_last_event_covering_the
         },
         &v,
     );
-    assert!(out.iter().any(|l| l.contains("verdict=NOT_NAMED")), "{out:?}");
+    assert!(
+        out.iter().any(|l| l.contains("verdict=NOT_NAMED")),
+        "{out:?}"
+    );
 }
 
 #[test]
@@ -247,8 +306,17 @@ fn the_lookup_names_the_previous_owner_of_a_reused_host_channel_and_its_retired_
     r.note_space(K07, 0xcaff_4b20, true);
     assert!(birth(&r, 0xc1d0_0284, 0xff04_0039, 0x67, K07).is_some());
     r.chan_class(0xc1d0_0284, 0xff04_0039, 0xc7b5);
-    r.record_apply(K07, 1, &[run(false, 0xb_5a00_0000, 0x400000)], &[ACK_APPLIED], true, 0);
-    let free = r.chan_free(0xc1d0_0284, 0xff04_0039, true).expect("a free line");
+    r.record_apply(
+        K07,
+        1,
+        &[run(false, 0xb_5a00_0000, 0x400000)],
+        &[ACK_APPLIED],
+        true,
+        0,
+    );
+    let free = r
+        .chan_free(0xc1d0_0284, 0xff04_0039, true)
+        .expect("a free line");
     assert!(free.contains("classes=[0xc7b5]"), "{free}");
     r.retire(K07, vec![(0xb_5a00_0000, 0x400000)], 0);
     // process 08: same host token, recycled host space, the VA never named
@@ -269,7 +337,10 @@ fn the_lookup_names_the_previous_owner_of_a_reused_host_channel_and_its_retired_
     assert!(chans[0].contains("(0xc1d0029b,0xff040039)") && chans[0].contains("alive"));
     assert!(chans[1].contains("(0xc1d00284,0xff040039)") && chans[1].contains("freed_ms="));
     let vas: Vec<&String> = out.iter().filter(|l| l.contains(" VAS ")).collect();
-    assert!(vas[0].contains("verdict=NOT_NAMED") && vas[0].contains("role=chan"), "{vas:?}");
+    assert!(
+        vas[0].contains("verdict=NOT_NAMED") && vas[0].contains("role=chan"),
+        "{vas:?}"
+    );
     assert!(
         vas.iter()
             .any(|l| l.contains("verdict=RETIRED_MAPPED") && l.contains("(0xc1d00276,0xff000850)")),
@@ -286,7 +357,7 @@ fn manual_dumps_are_capped_and_each_is_bounded() {
         let runs: Vec<DiffRun> = (0..200u64)
             .map(|i| run(i % 2 == 0, 0x1_0000_0000 + i * 0x2000, 0x1000))
             .collect();
-        r.record_apply(key, k, &runs, &vec![ACK_APPLIED; 200], true, 0);
+        r.record_apply(key, k, &runs, &[ACK_APPLIED; 200], true, 0);
         assert!(birth(&r, 0xc1d0_1000 + k as u32, 0xff04_0039, 0x67, key).is_some());
     }
     let v = View::default();
@@ -314,7 +385,14 @@ fn an_auto_dump_fires_once_per_space_on_a_refusal_and_is_capped() {
     for k in 0..(AUTO_DUMPS as u64 + 10) {
         let key = (0xc1d0_2000u64 + k) << 32 | 0xff00_0850;
         r.note_space(key, k, false);
-        assert!(r.record_apply(key, 1, &[run(false, 0x1000, 0x1000)], &[ACK_FAILED], true, 0));
+        assert!(r.record_apply(
+            key,
+            1,
+            &[run(false, 0x1000, 0x1000)],
+            &[ACK_FAILED],
+            true,
+            0
+        ));
         let out = r.auto_dump(key, "refused map");
         all_prefixed(&out);
         if !out.is_empty() {
@@ -333,7 +411,11 @@ fn a_walk_refusal_is_recorded_without_a_va() {
     r.note_space(K08, 1, false);
     assert!(r.record_apply(K08, 9, &[], &[], true, 0x400));
     let out = r.auto_dump(K08, "walk refused");
-    assert!(out.iter().any(|l| l.contains("op=WALK_REFUSED") && l.contains("mask=0x400")), "{out:?}");
+    assert!(
+        out.iter()
+            .any(|l| l.contains("op=WALK_REFUSED") && l.contains("mask=0x400")),
+        "{out:?}"
+    );
 }
 
 #[test]
@@ -353,18 +435,28 @@ fn channel_lines_have_one_fixed_format_and_are_capped() {
     ] {
         assert!(b.contains(f), "{f} in {b}");
     }
-    for c in [0xc7b5, 0xa140, 0x902d, 0xc997, 0xc9c0, 0xc7b5, 1, 2, 3, 4, 5, 6] {
+    for c in [
+        0xc7b5, 0xa140, 0x902d, 0xc997, 0xc9c0, 0xc7b5, 1, 2, 3, 4, 5, 6,
+    ] {
         r.chan_class(0xc1d0_029b, 0xff04_0039, c);
     }
-    let f = r.chan_free(0xc1d0_029b, 0xff04_0039, true).expect("free line");
+    let f = r
+        .chan_free(0xc1d0_029b, 0xff04_0039, true)
+        .expect("free line");
     assert!(f.starts_with("kf3: CHAN_LIFE free #2 t_ms="), "{f}");
     assert!(f.contains("lived_ms=") && f.contains("ok=true") && f.contains("host_token=0x67"));
     assert!(
         f.contains("classes=[0xc7b5,0xa140,0x902d,0xc997,0xc9c0,0x1,0x2,0x3]"),
         "deduplicated, at most 8: {f}"
     );
-    assert!(r.chan_free(0xc1d0_029b, 0xff04_0039, true).is_none(), "one free per birth");
-    assert!(r.chan_free(0x1, 0x2, true).is_none(), "no line for a channel never recorded");
+    assert!(
+        r.chan_free(0xc1d0_029b, 0xff04_0039, true).is_none(),
+        "one free per birth"
+    );
+    assert!(
+        r.chan_free(0x1, 0x2, true).is_none(),
+        "no line for a channel never recorded"
+    );
     let mut lines = 2usize;
     for i in 0..(CHAN_LINES_MAX as u32) {
         if birth(&r, i, 1, 0x67, K08).is_some() {
@@ -388,7 +480,8 @@ fn the_trigger_file_fires_once_per_new_content_rate_limited() {
     assert!(r.poll_trigger(&path, t0).is_none(), "no file");
     std::fs::write(&path, b"va=0x1000 chid=0x67").unwrap();
     assert!(
-        r.poll_trigger(&path, t0 + Duration::from_millis(1)).is_none(),
+        r.poll_trigger(&path, t0 + Duration::from_millis(1))
+            .is_none(),
         "rate limited"
     );
     let step = Duration::from_millis(TRIGGER_POLL_MS + 1);
@@ -400,7 +493,10 @@ fn the_trigger_file_fires_once_per_new_content_rate_limited() {
             chid: Some(0x67)
         })
     );
-    assert!(r.poll_trigger(&path, t0 + step * 2).is_none(), "same content");
+    assert!(
+        r.poll_trigger(&path, t0 + step * 2).is_none(),
+        "same content"
+    );
     std::fs::write(&path, b"garbage").unwrap();
     assert!(matches!(r.poll_trigger(&path, t0 + step * 3), Some(Err(_))));
     std::fs::write(&path, b"va=0x2000").unwrap();
@@ -435,7 +531,10 @@ fn the_guest_pte_probe_walks_the_descriptor_and_prints_raw_words() {
     };
     let s = probe_pte(&fmt, pd3, va, &mut read8);
     assert!(reads <= 9, "bounded reads: {reads}");
-    assert!(s.contains(&format!("small@{:#x}={pte:#x}", pt + si * 8)), "{s}");
+    assert!(
+        s.contains(&format!("small@{:#x}={pte:#x}", pt + si * 8)),
+        "{s}"
+    );
     assert!(s.contains("small_valid=1"), "{s}");
     assert!(s.contains("big_valid=none"), "{s}");
     // An invalid PDE ends the path, by name.

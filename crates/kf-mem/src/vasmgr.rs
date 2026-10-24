@@ -1562,6 +1562,29 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     );
                 }
             }
+            // ⊘ MEASUREMENT ONLY (`KF3_DIAG_VAHIST=1`, default off; `crate::vahist`): this
+            // space's runs and verdicts into its bounded history; ONE bounded dump the first time
+            // a MAP of the space is refused or its walk refuses leaves. Changes no decision.
+            if crate::vahist::enabled() {
+                let rec = crate::vahist::global();
+                if rec.record_apply(
+                    key.0,
+                    batch.id,
+                    &e.runs,
+                    &a.codes,
+                    space.target.withholds_privileged(),
+                    e.refused,
+                ) {
+                    let why = if e.refused != 0 {
+                        "the walk refused leaves"
+                    } else {
+                        "a MAP was refused (absent on the host)"
+                    };
+                    for line in rec.auto_dump(key.0, why) {
+                        eprintln!("{line}");
+                    }
+                }
+            }
             self.stats.timing.apply_ns = self.stats.timing.apply_ns.saturating_add(apply_ns);
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.

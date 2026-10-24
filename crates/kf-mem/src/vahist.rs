@@ -48,7 +48,9 @@
 
 use crate::apply::DiffRun;
 use crate::refusal_dump::{aperture, decode, field, index_at, path_to};
-use kf_cuda::abi::{KF_DIRS, KF_PS_NONE, KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KfFormat};
+use kf_cuda::abi::{
+    KF_DIRS, KF_PS_NONE, KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KfFormat,
+};
 use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::io::Read as _;
@@ -137,14 +139,17 @@ fn hex_at(s: &str) -> Option<u64> {
         }
         let Some(d) = c.to_digit(16) else { break };
         v = v.checked_mul(16)?.checked_add(u64::from(d))?;
-        n += 1;
+        n = n.saturating_add(1);
     }
     (n > 0).then_some(v)
 }
 
 fn find_hex(s: &str, keys: &[&str]) -> Option<u64> {
     keys.iter()
-        .find_map(|k| s.find(k).map(|i| s.get(i + k.len()..).unwrap_or("")))
+        .find_map(|k| {
+            s.find(k)
+                .map(|i| s.get(i.saturating_add(k.len())..).unwrap_or(""))
+        })
         .and_then(hex_at)
 }
 
@@ -250,7 +255,7 @@ struct Ev {
 
 impl Ev {
     fn covers(&self, va: u64) -> bool {
-        va >= self.va && va - self.va < self.len
+        va.checked_sub(self.va).is_some_and(|d| d < self.len)
     }
 }
 
@@ -323,7 +328,7 @@ impl Space {
             .copied()
             .collect();
         // Newest first; a duplicate (an event both in `last` and in a ring) shows once.
-        v.sort_by(|a, b| (b.walk, b.t_ms).cmp(&(a.walk, a.t_ms)));
+        v.sort_by_key(|e| std::cmp::Reverse((e.walk, e.t_ms)));
         v.dedup();
         v.truncate(n);
         v
@@ -387,7 +392,7 @@ fn cap(mut s: String) -> String {
     if s.len() > LINE_MAX {
         let mut at = LINE_MAX.saturating_sub(3);
         while !s.is_char_boundary(at) {
-            at -= 1;
+            at = at.saturating_sub(1);
         }
         s.truncate(at);
         s.push_str("...");
@@ -402,7 +407,10 @@ fn ev_text(e: &Ev) -> String {
         format!("ack={}", e.aux)
     };
     let seen = if e.count > 1 {
-        format!(" seen={} first_walk#{} first_ms={}", e.count, e.first_walk, e.first_ms)
+        format!(
+            " seen={} first_walk#{} first_ms={}",
+            e.count, e.first_walk, e.first_ms
+        )
     } else {
         String::new()
     };
@@ -452,7 +460,9 @@ impl Recorder {
     }
 
     fn st(&self) -> std::sync::MutexGuard<'_, State> {
-        self.st.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.st
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn ms(st: &State) -> u64 {
@@ -594,7 +604,7 @@ impl Recorder {
         let Some(sp) = st.spaces.get(&key).cloned() else {
             return Vec::new();
         };
-        st.auto_dumps += 1;
+        st.auto_dumps = st.auto_dumps.saturating_add(1);
         st.auto_keys.push(key);
         let n = st.auto_dumps;
         let t_ms = Self::ms(&st);
@@ -617,21 +627,29 @@ impl Recorder {
             sp.withheld.len()
         ))];
         for e in sp.refused.iter().rev().take(PER_LOOKUP) {
-            out.push(cap(format!("kf3: VAHIST EV key={} {}", pair(key), ev_text(e))));
+            out.push(cap(format!(
+                "kf3: VAHIST EV key={} {}",
+                pair(key),
+                ev_text(e)
+            )));
         }
         if let Some(e) = &sp.last_refusal {
-            out.push(cap(format!("kf3: VAHIST EV key={} {}", pair(key), ev_text(e))));
+            out.push(cap(format!(
+                "kf3: VAHIST EV key={} {}",
+                pair(key),
+                ev_text(e)
+            )));
         }
         let len = sp.last.len();
         for (i, e) in sp.last.iter().enumerate() {
             out.push(cap(format!(
                 "kf3: VAHIST LAST key={} {}/{len} {}",
                 pair(key),
-                i + 1,
+                i.saturating_add(1),
                 ev_text(e)
             )));
         }
-        let lines = out.len() + 1;
+        let lines = out.len().saturating_add(1);
         out.push(format!("kf3: VAHIST END #{n} auto lines={lines}"));
         out
     }
@@ -675,7 +693,7 @@ impl Recorder {
             st.chan_lines_dropped = st.chan_lines_dropped.saturating_add(1);
             return None;
         }
-        st.chan_lines += 1;
+        st.chan_lines = st.chan_lines.saturating_add(1);
         Some(cap(text.replacen("#N", &format!("#{}", st.chan_lines), 1)))
     }
 
@@ -771,7 +789,10 @@ impl Recorder {
         }
         st.trig_last = Some(buf.clone());
         drop(st);
-        Some(parse_trigger(&buf).ok_or_else(|| format!("trigger of {} byte(s) names no VA", buf.len())))
+        Some(
+            parse_trigger(&buf)
+                .ok_or_else(|| format!("trigger of {} byte(s) names no VA", buf.len())),
+        )
     }
 
     /// ★★ **THE LOOKUP** — what was at `t.va` in the channel's space and in every tracked space
@@ -780,9 +801,7 @@ impl Recorder {
     #[must_use]
     pub fn lookup(&self, t: &Trigger, view: &dyn SpaceView) -> Vec<String> {
         let x = t.va;
-        let chid = t
-            .chid
-            .map_or("none".to_string(), |c| format!("{c:#x}"));
+        let chid = t.chid.map_or("none".to_string(), |c| format!("{c:#x}"));
         // 1. Copy what is needed under the lock.
         let (n, t_ms, t0, header_counts, chans, mut cands) = {
             let mut st = self.st();
@@ -791,7 +810,7 @@ impl Recorder {
                     "kf3: VAHIST LOOKUP capped: {MANUAL_DUMPS} lookup(s) already answered; va={x:#x} chid={chid} not looked up"
                 )];
             }
-            st.manual_dumps += 1;
+            st.manual_dumps = st.manual_dumps.saturating_add(1);
             let n = st.manual_dumps;
             let chans: Vec<ChanLife> = match t.chid {
                 Some(c) => st
@@ -823,7 +842,9 @@ impl Recorder {
                         space: Some(r.space.clone()),
                         retired: Some((
                             r.retired_ms,
-                            r.extents.iter().any(|&(s, l)| x >= s && x - s < l),
+                            r.extents
+                                .iter()
+                                .any(|&(s, l)| x.checked_sub(s).is_some_and(|d| d < l)),
                             r.extents_truncated,
                             r.live_at_retire,
                         )),
@@ -855,7 +876,9 @@ impl Recorder {
                 .iter()
                 .rev()
                 .filter(|r| {
-                    r.extents.iter().any(|&(s, l)| x >= s && x - s < l)
+                    r.extents
+                        .iter()
+                        .any(|&(s, l)| x.checked_sub(s).is_some_and(|d| d < l))
                         || !r.space.covering(x, 1).is_empty()
                 })
                 .map(|r| r.key)
@@ -962,7 +985,9 @@ impl Recorder {
                     String::new(),
                 )
             };
-            let age = newest.map_or("none".to_string(), |e| t_ms.saturating_sub(e.t_ms).to_string());
+            let age = newest.map_or("none".to_string(), |e| {
+                t_ms.saturating_sub(e.t_ms).to_string()
+            });
             let (meta, complete) = match &c.space {
                 Some(s) => (
                     format!(
@@ -994,7 +1019,11 @@ impl Recorder {
                 c.role
             )));
             for e in &evs {
-                out.push(cap(format!("kf3: VAHIST EV key={} {}", pair(c.key), ev_text(e))));
+                out.push(cap(format!(
+                    "kf3: VAHIST EV key={} {}",
+                    pair(c.key),
+                    ev_text(e)
+                )));
             }
             if c.retired.is_none()
                 && let Some(p) = view.guest_pte(c.key, x)
@@ -1013,12 +1042,12 @@ impl Recorder {
                 out.push(cap(format!(
                     "kf3: VAHIST LAST key={} {}/{len} {}",
                     pair(key),
-                    i + 1,
+                    i.saturating_add(1),
                     ev_text(e)
                 )));
             }
         }
-        let lines = out.len() + 1;
+        let lines = out.len().saturating_add(1);
         out.push(format!("kf3: VAHIST END #{n} lines={lines}"));
         out
     }
@@ -1062,11 +1091,18 @@ pub fn probe_pte(
     };
     let mut path = String::new();
     for s in &steps {
-        let _ = write!(path, " L{}[{:#x}]@{:#x}={:#x}", s.level, s.idx, s.table, s.raw);
+        let _ = write!(
+            path,
+            " L{}[{:#x}]@{:#x}={:#x}",
+            s.level, s.idx, s.table, s.raw
+        );
     }
     let Some(t) = table else {
         if refused {
-            return format!("va={va:#x} root={pdb:#x}: read refused after {} step(s):{path}", steps.len());
+            return format!(
+                "va={va:#x} root={pdb:#x}: read refused after {} step(s):{path}",
+                steps.len()
+            );
         }
         return match steps.last() {
             Some(s) => format!(
@@ -1089,7 +1125,11 @@ pub fn probe_pte(
     let Some(lo) = read8(at) else {
         return format!("va={va:#x}: read refused at the dual entry @{at:#x}:{path}");
     };
-    let hi = if d.entry_bytes >= 16 { read8(at.saturating_add(8)) } else { Some(0) };
+    let hi = if d.entry_bytes >= 16 {
+        read8(at.saturating_add(8))
+    } else {
+        Some(0)
+    };
     let Some(hi) = hi else {
         return format!("va={va:#x}: read refused at the dual entry's high word @{at:#x}:{path}");
     };
@@ -1107,7 +1147,12 @@ pub fn probe_pte(
             .and_then(|o| bt.checked_add(o));
         match ba.and_then(|a| read8(a).map(|r| (a, r))) {
             Some((a, r)) => {
-                let _ = write!(s, " big@{a:#x}={r:#x} big_valid={} ({})", bit(r, fmt.valid_bit), decode(fmt, r));
+                let _ = write!(
+                    s,
+                    " big@{a:#x}={r:#x} big_valid={} ({})",
+                    bit(r, fmt.valid_bit),
+                    decode(fmt, r)
+                );
             }
             None => s.push_str(" big=read refused"),
         }
@@ -1122,7 +1167,12 @@ pub fn probe_pte(
             .and_then(|o| st.checked_add(o));
         match sa.and_then(|a| read8(a).map(|r| (a, r))) {
             Some((a, r)) => {
-                let _ = write!(s, " small@{a:#x}={r:#x} small_valid={} ({})", bit(r, fmt.valid_bit), decode(fmt, r));
+                let _ = write!(
+                    s,
+                    " small@{a:#x}={r:#x} small_valid={} ({})",
+                    bit(r, fmt.valid_bit),
+                    decode(fmt, r)
+                );
             }
             None => s.push_str(" small=read refused"),
         }

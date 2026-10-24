@@ -45,8 +45,12 @@ fn every_vahist_hook_exists_once_behind_the_flag() {
 #[test]
 fn the_class_hook_runs_after_the_pt_lock_is_released() {
     let before = site(CHAN, "vahist::global().chan_class(");
-    let drop_pt = before.rfind("drop(pt);").expect("drop(pt) before the class hook");
-    before.rfind("drop(index);").expect("drop(index) before the class hook");
+    let drop_pt = before
+        .rfind("drop(pt);")
+        .expect("drop(pt) before the class hook");
+    before
+        .rfind("drop(index);")
+        .expect("drop(index) before the class hook");
     assert!(
         !before[drop_pt..].contains(".lock()"),
         "no lock may be taken again between drop(pt) and the hook"
@@ -64,5 +68,8 @@ fn the_lookup_runs_on_the_va_thread_with_a_trigger_path() {
     let next_fn = DEVICE[va_loop + 1..]
         .find("\n    pub fn ")
         .map_or(DEVICE.len(), |i| va_loop + 1 + i);
-    assert!(at > va_loop && at < next_fn, "the lookup must be inside va_loop");
+    assert!(
+        at > va_loop && at < next_fn,
+        "the lookup must be inside va_loop"
+    );
 }
