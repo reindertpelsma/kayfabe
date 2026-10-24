@@ -2,9 +2,9 @@ import json, subprocess, sys, datetime, os, time, re, base64, hashlib, ipaddress
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-D = Path("/workspace/bw4-round-b1n-a1-run")
-W = Path("/workspace/bw4-wt")
-L = W / "traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/owned_instances.json"
+D = Path("/workspace/bw5-round-b1p-a1-run")
+W = Path("/workspace/bw5-wt")
+L = W / "traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/owned_instances.json"
 
 
 def api(args):
@@ -170,6 +170,9 @@ if mode in ("preflight", "rent"):
         57453849,
         57457694,
         57465679,
+        57472433,
+        57485318,
+        57486060,
     }
     owned.update(int(r["id"]) for r in rows)
     for topic in (
@@ -186,9 +189,8 @@ if mode in ("preflight", "rent"):
     credit = float(api(["show", "user"])["credit"])
     skus = {
         "RTX_5070": "GB205",
-        "RTX_5090": "GB202",
     }
-    cache = D / "single_market_B1n_1.json"
+    cache = D / "single_market_B1p_1.json"
     if cache.exists():
         market = json.loads(cache.read_text())
         offers = market["offers"]
@@ -382,7 +384,7 @@ if mode in ("preflight", "rent"):
             "--ssh",
             "--direct",
             "--label",
-            "claude-bw4-B1n1-OBSERVATION-20261024",
+            "claude-bw5-B1p1-OBSERVATION-20261024",
         ]
     )
     if not result.get("success"):
@@ -454,11 +456,12 @@ if mode in ("preflight", "rent"):
         "guard_rate": rate_guard,
         "product_head": source,
         "measured_candidate": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+        "fix_candidate": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
         "destroyed": False,
         "lease_profile": "default",
         "authority": "controller17:00 saved-Xid32 OBSERVATION one lease only; exact owned "
         "channels0x14/0x1000000b intr00200000 max8 per arm; no PASS/attestation; "
-        "other faults/errors/health fatal; round stop2.00 cap2.50 reserve8; B1n attempt1 (owner 2026-10-24 per-die pairs); native benchmark verdicts are findings",
+        "other faults/errors/health fatal; round stop2.00 cap2.50 reserve8; B1p attempt1 (BW5: fixes 007ba1eb0, per-die pairs); native benchmark verdicts are findings",
     }
     rows.append(row)
     save(rows)

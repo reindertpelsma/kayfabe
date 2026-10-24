@@ -36,7 +36,7 @@ health=O.old.check_host_health(json.loads((r/'native_receipt.json').read_text())
 sources={}
 for name,path in [('product','/root/kayfabe'),('readiness','/workspace/bw-readiness'),
                   ('native_fixture','/workspace/bw-native-fixture'),
-                  ('measured','/workspace/bw-measured'),('observed_b1','/workspace/bw-observed-b1')]:
+                  ('measured','/workspace/bw-measured'),('observed_fix','/workspace/bw-fix')]:
     if not Path(path).exists():continue
     source=subprocess.check_output(['git','-C',path,'rev-parse','HEAD'],text=True).strip()
     status=subprocess.check_output(['git','-C',path,'status','--porcelain',
@@ -44,8 +44,8 @@ for name,path in [('product','/root/kayfabe'),('readiness','/workspace/bw-readin
     assert not status
     sources[name]=source
 assert sources['measured']=='48b027267a0e05c9ffdb4a049d34f4d719fd1837'
-if (r/'observed_b1_binary.json').exists():
-    assert sources['observed_b1']=='cb80cbd29b7a05f904acd822f172485fd49938a9'
+if (r/'observed_fix_binary.json').exists():
+    assert sources['observed_fix']=='007ba1eb03db9e21d351e465e95b46cbc3134a95'
 print(json.dumps({'utc':dt.datetime.now(dt.timezone.utc).isoformat(),
                   'native_xid_count':5,'observed_record_count':len(recorded),
                   'per_arm_counts':{key:len(v) for key,v in a['observations'].items()},

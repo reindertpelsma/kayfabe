@@ -1,11 +1,14 @@
-"""BW5 round B1p run kit: the fix revision b85d02bae, pinned and checked (tests first).
+"""BW5 round B1p run kit: the combined fix revision 007ba1eb0, pinned and checked (tests first).
 
-The B1p plan reuses the B1n kit (capture, collection boots, fatal collection, guard) unchanged
-and changes only (a) the binary every arm runs: the pinned fix revision, built on the box with
-its GPU-free tests and checked to carry the route log line, and (b) the arm plan, in the task's
-priority order: on_fix (default flags, 10-minute hold), on_fix_pnp (the existing single
-DIAGNOSTIC disable/enable cycle), on_fix_hold2 (the main arm repeated). The plan-independent
-B1n suites (Present, CapturePack, CapturePull, FatalCollect, ScriptShapes) run on this kit too.
+Controller 11:50: ONE combined revision, the merge of the relay-route fix (b85d02bae) and the
+second-life fix (38fd948fd), both on cb80cbd29. The B1p plan reuses the B1n kit (capture,
+collection boots, fatal collection, guard) unchanged and changes only (a) the binary every arm
+runs: the pinned merge, built on the box with its GPU-free tests, checked to have exactly the two
+pinned parents and both fixes' markers, and to carry the route log line, and (b) the arm plan:
+on_fix (default flags, 10-minute hold), on_fix_pnp (the existing single DIAGNOSTIC
+disable/enable cycle), lx_reload (the existing Linux reload arm, regression). The
+plan-independent B1n suites (Present, CapturePack, CapturePull, FatalCollect, ScriptShapes) run
+on this kit too.
 """
 
 import copy
@@ -15,6 +18,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,11 +37,14 @@ sys.path.insert(0, str(B1N_REHEARSAL))
 from test_b1n_kit import CapturePack, CapturePull, FatalCollect, Present, ScriptShapes  # noqa
 from test_b1n_snippets import heredoc  # noqa: E402
 
-FIX = "b85d02bae3ed085a10cd1c8376c1a842e86c571b"
-RED = "e3bae55ddebe35e95809c06d7195152a4679aa31"
+FIX = "007ba1eb03db9e21d351e465e95b46cbc3134a95"
+PARENTS = ["b85d02bae3ed085a10cd1c8376c1a842e86c571b", "38fd948fd67d89ebf42827f56a3435355df592ae"]
+RED = PARENTS[0]
+MARKER = "fn the_next_lifes_own_mailbox_write_ends_the_halted_lifes_sentinel"
 BASE = "cb80cbd29b7a05f904acd822f172485fd49938a9"
 LOG_LINE = "USER_RING_ROUTE_DECLINED family="
-PLAN = ["on_fix", "on_fix_pnp", "on_fix_hold2"]
+PLAN = ["on_fix", "on_fix_pnp", "lx_reload"]
+WINDOWS = ["on_fix", "on_fix_pnp"]
 NOW = dt.datetime(2026, 10, 24, 12, 0, tzinfo=dt.timezone.utc)
 START = NOW - dt.timedelta(minutes=30)
 END = START + dt.timedelta(minutes=150)
@@ -69,7 +76,7 @@ class B1pArmPlan(unittest.TestCase):
 
     def test_main_arms_run_default_flags_and_one_enable(self):
         arms = {arm["run"]: arm for arm in A.ARMS}
-        for run in ("on_fix", "on_fix_hold2"):
+        for run in ("on_fix",):
             arm = arms[run]
             self.assertEqual(arm["kind"], "windows", run)
             self.assertEqual(arm["env"], {}, run)
@@ -86,10 +93,12 @@ class B1pArmPlan(unittest.TestCase):
         self.assertEqual(arm["env"], {})
         self.assertIsNone(arm["prep"])
 
-    def test_no_arm_is_linux_and_no_arm_carries_a_relay_flag(self):
+    def test_only_lx_reload_is_linux_and_no_arm_carries_a_flag(self):
         for arm in A.ARMS:
-            self.assertEqual(arm["kind"], "windows", arm["run"])
+            want = "linux" if arm["run"] == "lx_reload" else "windows"
+            self.assertEqual(arm["kind"], want, arm["run"])
             self.assertFalse(arm["env"], arm["run"])
+        self.assertEqual(A.windows_arms(), WINDOWS)
 
     def bad(self, **change):
         arms = copy.deepcopy(list(A.ARMS))
@@ -100,7 +109,13 @@ class B1pArmPlan(unittest.TestCase):
 
     def test_shadow_flag_is_not_admitted(self):
         # CODE READ at b85d02bae: shadow acts only on the private ring, which GB20x no longer takes.
-        self.bad(env={"KF3_WIN_USER_RING_SHADOW": "1"})
+        arms = copy.deepcopy(list(A.ARMS))
+        arms[0].update(label="DIAGNOSTIC", env={"KF3_WIN_USER_RING_SHADOW": "1"})
+        with self.assertRaises(ValueError):
+            A.validate(arms)
+
+    def test_flag_table_is_the_unchanged_b1n_table(self):
+        self.assertEqual(set(A.ENV_VALUES), {"KF3_USER_RING_TRACE", "KF3_WIN_USER_RING_RELAY"})
 
     def test_cycle_count_above_two_refuses(self):
         self.bad(index=1, enable_count=4)
@@ -117,9 +132,7 @@ class B1pArmPlan(unittest.TestCase):
             self.assertEqual(
                 A.prepare("on_fix_pnp", prov=tmp), "enable580_cycle.ps1 2 - DIAGNOSTIC"
             )
-            self.assertEqual(
-                A.prepare("on_fix_hold2", prov=tmp), "enable580_once.ps1 1 - MEASUREMENT"
-            )
+            self.assertEqual(A.prepare("lx_reload", prov=tmp), "- 0 - DIAGNOSTIC")
             with self.assertRaises(ValueError):
                 A.prepare("on_urt", prov=tmp)
 
@@ -130,7 +143,7 @@ class B1pAuthority(unittest.TestCase):
 
     def test_authority_names_the_b1p_arms_and_the_cycle(self):
         a = self.build()
-        self.assertEqual(a["arms"], PLAN)
+        self.assertEqual(a["arms"], WINDOWS)
         self.assertEqual(a["diagnostic_enable_arms"], {"on_fix_pnp": 2})
         self.assertEqual(a["exact_channels"], ["0x14", "0x1000000b"])
         self.assertEqual(self.build("GB202")["exact_channels"], ["0x14", "0x0e00000b"])
@@ -140,7 +153,7 @@ class B1pAuthority(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             probed = Path(tmp) / "probed_die.json"
             probed.write_text(json.dumps({"die": "GB205"}))
-            for run in PLAN:
+            for run in WINDOWS:
                 phase = {"arm": run, "pid": 4242, "starttime": 9, "exe": "/x/q", "pci": "0:0:7"}
                 permit = {**phase, "mode": O.MODE, "profile": "on", "lease_id": 57500002}
                 permit.update(armed_utc=(NOW - dt.timedelta(minutes=1)).isoformat())
@@ -158,10 +171,11 @@ class FixPin(unittest.TestCase):
     def pin(self):
         return json.loads(text("fix_pin.json"))
 
-    def test_pin_names_the_fix_its_red_and_its_base(self):
+    def test_pin_names_the_merge_its_two_parents_and_its_base(self):
         pin = self.pin()
         self.assertEqual(pin["source"], FIX)
-        self.assertEqual(pin["red"], RED)
+        self.assertEqual(pin["parents"], PARENTS)
+        self.assertEqual(pin["source_markers"], [["crates/kf-gsp/src/boot.rs", MARKER]])
         self.assertEqual(pin["base"], BASE)
         self.assertEqual(pin["bin_dir"], FIX[:8])
         self.assertEqual(pin["log_line"], LOG_LINE)
@@ -170,7 +184,9 @@ class FixPin(unittest.TestCase):
 
     def test_pin_matches_the_repository_objects(self):
         git = ["git", "-C", str(REPO)]
-        for rev, want in ((FIX + "^", RED), (FIX + "^^", BASE)):
+        revs = [(FIX + "^1", PARENTS[0]), (FIX + "^2", PARENTS[1])]
+        revs += [(FIX + "^1~2", BASE), (FIX + "^2~2", BASE)]
+        for rev, want in revs:
             got = subprocess.check_output([*git, "rev-parse", rev], text=True).strip()
             self.assertEqual(got, want, rev)
         source = subprocess.check_output(
@@ -181,10 +197,24 @@ class FixPin(unittest.TestCase):
             [*git, "show", BASE + ":crates/kf-qemu/src/userrelay.rs"], text=True
         )
         self.assertNotIn(LOG_LINE, base)
+        boot = subprocess.check_output(
+            [*git, "show", FIX + ":crates/kf-gsp/src/boot.rs"], text=True
+        )
+        self.assertIn(MARKER, boot)
+        base = subprocess.check_output(
+            [*git, "show", BASE + ":crates/kf-gsp/src/boot.rs"], text=True
+        )
+        self.assertNotIn(MARKER, base)
 
     def test_load_pin_refuses_a_bin_dir_or_hash_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for change in ({"bin_dir": "cb80cbd2"}, {"source": "b85d02ba"}, {"log_line": ""}):
+            for change in (
+                {"bin_dir": "cb80cbd2"},
+                {"source": "007ba1eb"},
+                {"log_line": ""},
+                {"parents": PARENTS[:1]},
+                {"source_markers": []},
+            ):
                 path = Path(tmp) / "pin.json"
                 path.write_text(json.dumps({**self.pin(), **change}))
                 with self.subTest(change=change), self.assertRaises(ValueError):
@@ -192,25 +222,38 @@ class FixPin(unittest.TestCase):
 
 
 def chain(tmp):
-    """A real three-commit chain base -> red -> fix with the log line, like the pinned one."""
+    """A real merge of two fix branches (base -> red -> fix each), like the pinned revision."""
     repo = Path(tmp) / "repo"
-    (repo / "crates/kf-qemu/src").mkdir(parents=True)
+    for d in ("crates/kf-qemu/src", "crates/kf-gsp/src"):
+        (repo / d).mkdir(parents=True)
     git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    revs = []
-    for body in ("base\n", "red\n", 'eprintln!("kf3: ' + LOG_LINE + '{x}");\n'):
-        (repo / "crates/kf-qemu/src/userrelay.rs").write_text(body)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    relay, boot = repo / "crates/kf-qemu/src/userrelay.rs", repo / "crates/kf-gsp/src/boot.rs"
+
+    def commit(path, body):
+        path.write_text(body)
         subprocess.run([*git, "add", "-A"], check=True)
-        subprocess.run([*git, "commit", "-qm", body[:4]], check=True)
-        revs.append(subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip())
+        subprocess.run([*git, "commit", "-qm", body[:8]], check=True)
+        return subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip()
+
+    boot.write_text("base\n")
+    base = commit(relay, "base\n")
+    commit(relay, "red\n")
+    fix1 = commit(relay, 'eprintln!("kf3: ' + LOG_LINE + '{x}");\n')
+    subprocess.run([*git, "checkout", "-q", "-b", "life", base], check=True)
+    commit(boot, "red\n")
+    fix2 = commit(boot, MARKER + "() {}\n")
+    subprocess.run([*git, "checkout", "-q", "main"], check=True)
+    subprocess.run([*git, "merge", "-q", "--no-ff", "--no-edit", "life"], check=True)
     pin = {
-        "source": revs[2],
-        "red": revs[1],
-        "base": revs[0],
-        "bin_dir": revs[2][:8],
+        "source": subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip(),
+        "parents": [fix1, fix2],
+        "base": base,
         "log_line": LOG_LINE,
         "log_source": "crates/kf-qemu/src/userrelay.rs",
+        "source_markers": [["crates/kf-gsp/src/boot.rs", MARKER]],
     }
+    pin["bin_dir"] = pin["source"][:8]
     return repo, pin, git
 
 
@@ -218,6 +261,12 @@ OK_LOG = (
     "test result: ok. 410 passed; 0 failed; 2 ignored; 0 measured\n"
     "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured\n"
 )
+
+
+def cli(*args):
+    return subprocess.run(
+        [sys.executable, str(K / "fix_build.py"), *map(str, args)], capture_output=True, text=True
+    )
 
 
 class FixBuild(unittest.TestCase):
@@ -229,7 +278,13 @@ class FixBuild(unittest.TestCase):
     def test_source_check_refuses_another_head_a_wrong_chain_or_a_dirty_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo, pin, git = chain(tmp)
-            for change in ({"source": pin["red"]}, {"red": pin["base"]}, {"base": pin["red"]}):
+            for change in (
+                {"source": pin["parents"][0]},
+                {"parents": pin["parents"][::-1]},
+                {"parents": [pin["parents"][0], pin["base"]]},
+                {"base": pin["parents"][0]},
+                {"source_markers": [["crates/kf-gsp/src/boot.rs", "NOT_A_MARKER"]]},
+            ):
                 with self.subTest(change=change), self.assertRaises(ValueError):
                     FB.check_source(repo, {**pin, **change})
             with self.assertRaises(ValueError):
@@ -237,6 +292,53 @@ class FixBuild(unittest.TestCase):
             (repo / "crates/kf-qemu/src/userrelay.rs").write_text("edited\n")
             with self.assertRaises(ValueError):
                 FB.check_source(repo, pin)
+
+    def test_receipt_refuses_each_foreign_revision_and_a_dirty_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pin, bench, tests, build, _ = self.receipt_env(tmp, LOG_LINE.encode())
+            for change in (
+                {"source": pin["parents"][0]},
+                {"parents": pin["parents"][::-1]},
+                {"parents": [pin["parents"][0], pin["base"]]},
+                {"base": pin["parents"][0]},
+                {"source_markers": [["crates/kf-gsp/src/boot.rs", "NOT_A_MARKER"]]},
+            ):
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    FB.receipt({**pin, **change}, repo, bench, tests, build)
+            (repo / "crates/kf-qemu/src/userrelay.rs").write_text("edited\n")
+            with self.assertRaises(ValueError):
+                FB.receipt(pin, repo, bench, tests, build)
+
+    def test_cli_receipt_writes_nothing_for_a_binary_without_the_line_or_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pin, bench, tests, build, binary = self.receipt_env(tmp, b"old binary")
+            pin_path = Path(tmp) / "pin.json"
+            pin_path.write_text(json.dumps(pin))
+            out = Path(tmp) / "observed_fix_binary.json"
+            r = cli("receipt", pin_path, repo, bench, tests, build, out)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("does not carry the route log line", r.stderr)
+            binary.unlink()
+            r = cli("receipt", pin_path, repo, bench, tests, build, out)
+            self.assertIn("pinned kf3 binary missing", r.stderr)
+            self.assertFalse(out.exists())
+            binary.write_bytes(b"new " + LOG_LINE.encode())
+            r = cli("receipt", pin_path, repo, bench, tests, build, out)
+            self.assertEqual(r.returncode, 0, r.stderr[-300:])
+            self.assertEqual(json.loads(out.read_text())["source"], pin["source"])
+
+    def test_cli_source_refuses_a_pin_with_a_foreign_bin_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, pin, _ = chain(tmp)
+            pin_path = Path(tmp) / "pin.json"
+            pin_path.write_text(json.dumps({**pin, "bin_dir": "cb80cbd2"}))
+            r = cli("source", pin_path, repo)
+            self.assertIn("bin_dir", r.stderr)
+            pin_path.write_text(json.dumps({**pin, "parents": pin["parents"][:1]}))
+            r = cli("source", pin_path, repo)
+            self.assertIn("exactly two parents", r.stderr)
+            pin_path.write_text(json.dumps(pin))
+            self.assertEqual(cli("source", pin_path, repo).returncode, 0)
 
     def test_tests_gate_needs_passes_and_no_failure(self):
         self.assertEqual(FB.tests_ok(OK_LOG), (419, 2))
@@ -337,10 +439,14 @@ class B1pScripts(unittest.TestCase):
             "route_log_line_in_binary": line,
         }
         (root / "prov/observed_fix_binary.json").write_text(json.dumps(row))
-        code = code.replace("/root/prov", str(root / "prov")).replace("/root/sweep2", str(root / "s2"))
+        code = code.replace("/root/prov", str(root / "prov")).replace(
+            "/root/sweep2", str(root / "s2")
+        )
         code = code.replace("/workspace/bench", str(root / "bench"))
         (root / "meta.py").write_text(code)
-        return subprocess.run([sys.executable, str(root / "meta.py")], capture_output=True, text=True)
+        return subprocess.run(
+            [sys.executable, str(root / "meta.py")], capture_output=True, text=True
+        )
 
     def test_fix_meta_heredoc_prints_the_pinned_binary_and_source(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -348,8 +454,30 @@ class B1pScripts(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr[-400:])
             lines = r.stdout.splitlines()
             self.assertEqual(len(lines), 2)
-            self.assertTrue(lines[0].endswith("/kf3-bins/b85d02ba/qemu-system-x86_64"))
+            self.assertTrue(lines[0].endswith("/kf3-bins/007ba1eb/qemu-system-x86_64"))
             self.assertEqual(lines[1], FIX)
+
+    def test_fix_meta_heredoc_refuses_other_tampering(self):
+        for kwargs in ({"sha": "f" * 64}, {"source": PARENTS[0]}, {"line": None}):
+            with tempfile.TemporaryDirectory() as tmp, self.subTest(kwargs=kwargs):
+                r = self.fix_meta(tmp, **kwargs)
+                self.assertNotEqual(r.returncode, 0)
+                self.assertEqual(r.stdout, "")
+
+    def test_controller_plan_count_is_the_plan_length(self):
+        found = re.findall(r'\[ "\$\{#plan\[@\]\}" = (\d+) \]', text("controller.sh"))
+        self.assertEqual([int(n) for n in found], [len(A.ARMS)])
+
+    def test_candidates_call_only_scripts_of_this_kit(self):
+        for name in re.findall(
+            r"bash /root/sweep2/([A-Za-z0-9_.-]+\.sh)", text("build_candidates.sh")
+        ):
+            self.assertTrue((K / name).is_file(), name)
+
+    def test_final_audit_reads_the_worktree_build_fix_creates(self):
+        work = re.search(r"^work=(\S+)$", text("build_fix.sh"), re.M)[1]
+        audit = re.search(r"\('observed_fix','([^']+)'\)", text("final_remote_audit.py"))[1]
+        self.assertEqual(audit, work)
 
     def test_fix_meta_heredoc_refuses_a_tampered_or_foreign_binary(self):
         for kwargs in ({"sha": "0" * 64}, {"source": BASE}, {"line": False}):

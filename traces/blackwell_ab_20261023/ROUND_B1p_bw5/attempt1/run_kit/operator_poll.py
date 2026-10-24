@@ -18,12 +18,10 @@ with (D / 'milestones.jsonl').open('a') as f:
     f.write(clean + '\n')
 keys = ['utc', 'controller_alive', 'fatal', 'native_ready', 'native_ack']
 keys += [
-    'sweep_windows_install.log', 'install_life', 'measured_build.log', 'bwr_bind.log',
-    'arm_on_urt.log', 'collect_on_urt.log', 'on_urt_panic',
-    'arm_on_relay_off.log', 'collect_on_relay_off.log', 'on_relay_off_panic',
-    'arm_on_tdr60.log', 'collect_on_tdr60.log', 'on_tdr60_panic',
+    'sweep_windows_install.log', 'install_life', 'measured_build.log', 'observed_fix_build.log', 'bwr_bind.log',
+    'arm_on_fix.log', 'collect_on_fix.log', 'on_fix_panic',
+    'arm_on_fix_pnp.log', 'collect_on_fix_pnp.log', 'on_fix_pnp_panic',
     'arm_lx_reload.log', 'collect_lx_reload.log', 'lx_reload_panic',
-    'arm_on_diag_pnp.log', 'collect_on_diag_pnp.log', 'on_diag_pnp_panic',
     'fatal_collect.log',
 ]
 if not row.get('controller_alive'):

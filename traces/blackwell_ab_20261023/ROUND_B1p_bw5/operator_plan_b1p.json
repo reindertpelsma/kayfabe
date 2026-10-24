@@ -5,16 +5,20 @@
   "experiment_mode": "OBSERVATION",
   "attestation": false,
   "fix_under_test": {
-    "branch": "claude/blackwell-urt-cb80-20261024",
-    "source": "b85d02bae3ed085a10cd1c8376c1a842e86c571b",
-    "red": "e3bae55ddebe35e95809c06d7195152a4679aa31",
+    "branch": "claude/blackwell-fixes-20261024",
+    "source": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+    "parents": [
+      "b85d02bae3ed085a10cd1c8376c1a842e86c571b",
+      "38fd948fd67d89ebf42827f56a3435355df592ae"
+    ],
     "base": "cb80cbd29b7a05f904acd822f172485fd49938a9",
-    "kf3_bin_dir": "b85d02ba",
+    "kf3_bin_dir": "007ba1eb",
+    "merge": "no conflicts, no rebase",
     "expected_log_line": "USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f"
   },
   "hypothesis": {
     "id": "H-FIX",
-    "statement": "The fix build (b85d02bae) with default flags (the unchanged p19 profile, no relay variable) reaches Code 0 and survives the 10-minute hold with no Xid 32 and no 0x116 on GB205.",
+    "statement": "The combined build (007ba1eb0, relay part b85d02bae) with default flags (the unchanged p19 profile, no relay variable) reaches Code 0 and survives the 10-minute hold with no Xid 32 and no 0x116 on GB205.",
     "falsifier": "An Xid 32 pair (0x14/0x1000000b on GB205, 0x14/0x0e00000b on GB202), any other Xid, or a bugcheck/TDR (GUEST_PANICKED, 0x116, event 4101/141) within the 10-minute hold of arm on_fix.",
     "supporting_expectations": [
       "exactly one 'USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f' line in the arm's kf3 log",
@@ -26,19 +30,20 @@
     {
       "run": "on_fix",
       "label": "MEASUREMENT",
-      "change": "none: fix binary, default p19 flags, one enable, 10-minute hold (main arm)"
+      "change": "none: combined binary, default p19 flags, one enable, 10-minute hold",
+      "tests": "H-FIX"
     },
     {
       "run": "on_fix_pnp",
       "label": "DIAGNOSTIC",
-      "change": "fix binary; the existing B1n pnputil cycle (enable, disable, enable: one disable/enable cycle, second enable)",
-      "question": "does the Windows second-life stall (H2: Code 43 on re-enable, 0x1B0 c000009a) still appear with the fix build",
-      "falsifier_for_H2_unchanged": "re-enable returns Code 0 => the B1n second-life stall was a consequence of the relay fault, not an independent defect"
+      "change": "combined binary; the existing B1n single pnputil cycle (enable, disable, enable)",
+      "tests": "H-SL"
     },
     {
-      "run": "on_fix_hold2",
-      "label": "MEASUREMENT",
-      "change": "none: the main arm repeated (10-minute hold), only if the budget guard admits it"
+      "run": "lx_reload",
+      "label": "DIAGNOSTIC",
+      "change": "combined binary; the existing B1n Linux 580.159.04 unload/reload arm",
+      "tests": "H-LX"
     }
   ],
   "not_wired_and_why": [
@@ -48,13 +53,29 @@
     },
     {
       "requested": "arm (3): disable/enable x3",
-      "reason": "The kayfabe kit has only the single-cycle DIAGNOSTIC script (enable580_cycle.ps1, enable_count 2); the guard ceiling MAX_DIAGNOSTIC_ENABLES is exactly 2. x3 needs 4 enables, i.e. raising a guard ceiling, which this task forbids (never relax a guard). The existing single cycle answers the stated question (does the second life stall). x3 is an owner decision."
+      "reason": "The kayfabe kit has only the single-cycle DIAGNOSTIC script (enable580_cycle.ps1, enable_count 2); the guard ceiling MAX_DIAGNOSTIC_ENABLES is exactly 2. x3 needs 4 enables, i.e. raising a guard ceiling, which this task forbids (never relax a guard). The existing single cycle answers the stated question (does the second life stall). x3 is an owner decision. Controller 11:50 allowed raising the ceiling 2 -> 3 tests-first (= two cycles, not x3); not taken: one cycle is the H-SL falsifier and keeps the guard unchanged."
+    },
+    {
+      "requested": "arm (4) TDR-path style arm (controller 11:50: only if one exists)",
+      "reason": "No arm in the kit forces a TDR: the B1n TDRs came from the relay Xid, which the relay fix removes (on_tdr60 only changes the TDR budget). Not wired; not improvised."
+    },
+    {
+      "requested": "on_fix_hold2 (original task arm (4): hold again if budget remains)",
+      "reason": "Replaced by the controller 11:50 plan (arm (4) redefined, lx_reload added)."
     }
   ],
   "lease_rules": {
     "V1": "GB205, machine 30498 if listed else the next qualifying GeForce RTX 5070 (GB205); default 16-core profile; stop 2.00 / cap 2.50; fresh",
     "V2": "only if on_fix PASSES on GB205 and credit allows: one GeForce RTX 5090 (GB202) lease, stop 3.00 / cap 3.50, price <= 1.00 USD/h, arm on_fix",
-    "denied_countries": ["CU", "IR", "KP", "SY", "CN", "HK", "MO"],
+    "denied_countries": [
+      "CU",
+      "IR",
+      "KP",
+      "SY",
+      "CN",
+      "HK",
+      "MO"
+    ],
     "deverified_admitted": false,
     "known_bad_list": "unchanged B1n list",
     "credit_reserve_usd": 8,
@@ -62,5 +83,19 @@
     "watchdog_armed_before_create": true,
     "teardown": "exact id, API absence verified before any next create, timers cancelled after absence",
     "native_stage": "full B1n native stage (no short form)"
-  }
+  },
+  "plan_change_utc": "2026-10-24T09:55:00Z",
+  "plan_change": "controller 11:50 CEST: test ONE combined revision = relay-route fix b85d02bae + second-life fix 38fd948fd (merge, branch claude/blackwell-fixes-20261024). Arms: (1) default-flag hold, (3) pnputil cycle, (4) TDR-path arm only if one exists, lx_reload as Linux regression. Written before any lease.",
+  "hypothesis_second_life": {
+    "id": "H-SL",
+    "statement": "With the combined build, the Windows second RM life after the pnputil disable (fn 47) makes exactly one GSP boot attempt: one GSP-PUBLISH, GSP Halted -> Booted -> Running, fn 1, and Code 0 on the second enable (within the cycle script's 120 s wait); no 0x1B0, no Code 43.",
+    "falsifier": "In on_fix_pnp, more than one GSP-PUBLISH after fn 47, or the second life never reaches Running (stays Booted without fn 1), or the second enable ends in Code 43 / 0x1B0 c000009a.",
+    "source": "the H2 second-life root-cause pass (2026-10-24), section 2"
+  },
+  "hypothesis_linux_regression": {
+    "id": "H-LX",
+    "statement": "lx_reload with the combined build: RELOAD_VERDICT PASS, GSP Running -> Halted -> Booted -> Running in the second life, one publish per life, no Xid (as B1n on cb80cbd29).",
+    "falsifier": "RELOAD_VERDICT not PASS, any Xid, or more than one GSP-PUBLISH in a life."
+  },
+  "separability": "If an arm fails the fixes separate by arm: on_fix (hold) = relay fix, on_fix_pnp (second enable) = second-life fix."
 }

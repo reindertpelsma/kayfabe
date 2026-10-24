@@ -8,8 +8,8 @@ import subprocess
 import sys
 
 D = Path(__file__).resolve().parent
-R = Path("/workspace/bw4-wt")
-T = R / "traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1"
+R = Path("/workspace/bw5-wt")
+T = R / "traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1"
 K = T / "run_kit"
 rows = json.loads((T / "owned_instances.json").read_text())
 iid = int((D / "own-id").read_text())
@@ -31,7 +31,7 @@ die = row["candidate_die"]
 donor = die if die in ["GB202", "GB206"] else "GB202"
 # BW4 B1n: the authority comes from the guard's pinned per-die table.
 sys.path.insert(0, str(K))
-sys.path.insert(0, "/workspace/bw4-wt/scripts/bench/blackwell")
+sys.path.insert(0, "/workspace/bw5-wt/scripts/bench/blackwell")
 import b1n_authority as BA  # noqa: E402
 import saved_xid32_observation as SX  # noqa: E402
 
@@ -52,6 +52,7 @@ j.update(
     exact_channels=authority["exact_channels"],
     die_pairs={k: list(v) for k, v in SX.DIE_PAIRS.items()},
     owner_decisions="2026-10-24 BW4: per-die pairs; collection boot after fatal",
+    fix_source="007ba1eb03db9e21d351e465e95b46cbc3134a95",
 )
 (K / "manifest.json").write_text(json.dumps(j, indent=2) + "\n")
 assert not row.get("work_started") and not (D / "parallel_eight_plan.json").exists()

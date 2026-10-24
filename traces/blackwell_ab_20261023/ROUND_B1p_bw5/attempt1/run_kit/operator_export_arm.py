@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess, sys, re, json, hashlib
 
 run = sys.argv[1]
-IID = Path('/workspace/bw4-round-b1n-a1-run/own-id').read_text().strip()
+IID = Path('/workspace/bw5-round-b1p-a1-run/own-id').read_text().strip()
 assert re.fullmatch('[a-z0-9_]{1,40}', run)
 remote = r'''
 from pathlib import Path
@@ -40,10 +40,10 @@ for p in paths:
  files[str(p.relative_to(root))]={'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest(),'text':s}
 print(json.dumps(files))
 '''
-p = subprocess.run(['timeout','45','ssh','-F','/workspace/bw4-round-b1n-a1-run/ssh.conf',Path('/workspace/bw4-round-b1n-a1-run/alias').read_text().strip(),'python3 -I - '+run], input=remote, capture_output=True, timeout=50, check=True, text=True)
+p = subprocess.run(['timeout','45','ssh','-F','/workspace/bw5-round-b1p-a1-run/ssh.conf',Path('/workspace/bw5-round-b1p-a1-run/alias').read_text().strip(),'python3 -I - '+run], input=remote, capture_output=True, timeout=50, check=True, text=True)
 assert len(p.stdout) <= 100*1024*1024
 files = json.loads(p.stdout)
-dest = Path('/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/arms') / run
+dest = Path('/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/arms') / run
 dest.mkdir(parents=True, exist_ok=True)
 receipt = {}
 for name, item in files.items():

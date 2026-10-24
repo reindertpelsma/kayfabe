@@ -175,8 +175,8 @@ bash /root/sweep2/build_candidates.sh &
 measured_build_pid=$!
 bash /root/sweep_windows_install.sh
 wait "$measured_build_pid"
-b1_ready=0
-if [ -f /root/prov/observed_b1_binary.json ]; then b1_ready=1; fi
+fix_ready=0
+if [ -f /root/prov/observed_fix_binary.json ]; then fix_ready=1; fi
 bash /root/sweep_windows580.sh
 echo "SWEEP2_BIND_READY $(date -u -Is)"
 
@@ -219,21 +219,26 @@ assert hashlib.sha256(Path(j['binary']).read_bytes()).hexdigest()==j['binary_sha
 print(j['binary']);print(j['source'])
 MEASURED_META
 )
-b1=()
-if [ "$b1_ready" = 1 ]; then
- mapfile -t b1 < <(python3 - <<'B1_META'
+# BW5 B1p: every arm runs the pinned fix binary (fix_pin.json; receipt from build_fix.sh).
+fix=()
+if [ "$fix_ready" = 1 ]; then
+ mapfile -t fix < <(python3 - <<'FIX_META'
 import hashlib,json
 from pathlib import Path
-j=json.loads(Path('/root/prov/observed_b1_binary.json').read_text())
-assert j['source']=='cb80cbd29b7a05f904acd822f172485fd49938a9' and j['tests_passed'] is True
+pin=json.loads(Path('/root/sweep2/fix_pin.json').read_text())
+assert pin['source']=='007ba1eb03db9e21d351e465e95b46cbc3134a95'
+j=json.loads(Path('/root/prov/observed_fix_binary.json').read_text())
+assert j['source']==pin['source'] and j['tests_passed'] is True
+assert j['route_log_line_in_binary'] is True
+assert j['binary']=='/workspace/bench/kf3-bins/'+pin['bin_dir']+'/qemu-system-x86_64'
 assert hashlib.sha256(Path(j['binary']).read_bytes()).hexdigest()==j['binary_sha256']
 print(j['binary']);print(j['source'])
-B1_META
+FIX_META
  )
- [ "${#b1[@]}" = 2 ]
+ [ "${#fix[@]}" = 2 ]
 fi
 [ "${#measured[@]}" = 2 ]
-# B1n (owner 2026-10-24): the pinned plan, in priority order; every arm uses the B1 binary.
+# B1p (BW5): the pinned plan, in priority order; every arm uses the fix binary.
 run_linux(){
  local run=$1 binary=$2 source=$3 linux_rc=0
  [ ! -e /root/prov/XID_STOP ]; kill -0 "$guard_pid"
@@ -245,15 +250,15 @@ run_linux(){
  python3 -I /root/sweep2/capture_pack.py "$run" || echo "CAPTURE_PACK_FAILED $run"
  echo "VALIDATION_ARM_END $run $(date -u -Is)"
 }
-if [ "$b1_ready" != 1 ]; then echo "CELL_UNRUN_B1_BUILD all B1n arms"; exit 31; fi
+if [ "$fix_ready" != 1 ]; then echo "CELL_UNRUN_FIX_BUILD all B1p arms"; exit 31; fi
 mapfile -t plan < <(python3 /root/sweep2/b1n_arms.py list)
-[ "${#plan[@]}" = 5 ]
+[ "${#plan[@]}" = 3 ]
 for row in "${plan[@]}"; do
  read -r run kind <<<"$row"
  if ! python3 /root/sweep2/budget_start.py "$run"; then echo "CELL_UNRUN_BUDGET $run"; continue; fi
  case "$kind" in
-  windows) run_cell "$run" "${b1[0]}" "${b1[1]}" ;;
-  linux) run_linux "$run" "${b1[0]}" "${b1[1]}" ;;
+  windows) run_cell "$run" "${fix[0]}" "${fix[1]}" ;;
+  linux) run_linux "$run" "${fix[0]}" "${fix[1]}" ;;
   *) echo "UNKNOWN_ARM_KIND $row"; exit 32 ;;
  esac
 done

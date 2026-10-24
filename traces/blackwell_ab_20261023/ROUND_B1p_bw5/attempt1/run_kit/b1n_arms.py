@@ -1,13 +1,13 @@
-"""BW4 round B1n arm plan (owner 2026-10-24), pinned in priority order; box side.
+"""BW5 round B1p arm plan (combined fix 007ba1eb0), pinned in priority order; box side.
 
-Every arm is its own boot of the sealed 580.88 parent with the B1 binary (cb80cbd29) and the
-unchanged 19 flags. Each arm changes exactly one thing, or nothing (the trace arm only adds a
-measurement-only flag):
-  on_urt       KF3_USER_RING_TRACE=<arm dir>/urt (existing flag, measures only)   MEASUREMENT
-  on_relay_off KF3_WIN_USER_RING_RELAY=0 (existing diagnostic falsifier)          DIAGNOSTIC
-  on_tdr60     guest registry TdrDdiDelay=60, set in a standard-VGA prep boot     DIAGNOSTIC
-  lx_reload    Linux guest driver unload/reload (second guest RM life)            DIAGNOSTIC
-  on_diag_pnp  pnputil disable/enable once after Code 0 (second enable)           DIAGNOSTIC
+The B1n plan module, reused with the B1p arms (controller 11:50: one combined revision = the
+relay-route fix b85d02bae + the second-life fix 38fd948fd). Every arm is its own boot with the
+pinned fix binary (fix_pin.json, built by build_fix.sh) and the unchanged 19 flags. No arm carries
+a relay, shadow or trace flag (default flags):
+  on_fix       none: the main arm, one enable, 10-minute hold (relay fix)          MEASUREMENT
+  on_fix_pnp   the existing pnputil disable/enable once after Code 0 (2nd enable)  DIAGNOSTIC
+               (second-life fix: one GSP-PUBLISH, Running, Code 0 on enable 2)
+  lx_reload    Linux guest driver unload/reload (second guest RM life; regression)  DIAGNOSTIC
 Usage: b1n_arms.py list | prepare RUN | probed-die LOG EXPECTED OUT
 """
 
@@ -22,31 +22,22 @@ RUN = re.compile(r"[a-z0-9_]{1,40}")
 DIE = re.compile(r"^PROBE_DIE arch=0x[0-9a-f]+ impl=0x[0-9a-f]+ die=(GB20[2-7])$")
 ARMS = (
     {
-        "run": "on_urt",
+        "run": "on_fix",
         "kind": "windows",
         "label": "MEASUREMENT",
-        "env": {"KF3_USER_RING_TRACE": "/root/prov/arms/on_urt/urt"},
+        "env": {},
         "prep": None,
         "enable": "enable580_once.ps1",
         "enable_count": 1,
     },
     {
-        "run": "on_relay_off",
-        "kind": "windows",
-        "label": "DIAGNOSTIC",
-        "env": {"KF3_WIN_USER_RING_RELAY": "0"},
-        "prep": None,
-        "enable": "enable580_once.ps1",
-        "enable_count": 1,
-    },
-    {
-        "run": "on_tdr60",
+        "run": "on_fix_pnp",
         "kind": "windows",
         "label": "DIAGNOSTIC",
         "env": {},
-        "prep": "prep_tdr60.ps1",
-        "enable": "enable580_once.ps1",
-        "enable_count": 1,
+        "prep": None,
+        "enable": "enable580_cycle.ps1",
+        "enable_count": 2,
     },
     {
         "run": "lx_reload",
@@ -56,15 +47,6 @@ ARMS = (
         "prep": None,
         "enable": None,
         "enable_count": 0,
-    },
-    {
-        "run": "on_diag_pnp",
-        "kind": "windows",
-        "label": "DIAGNOSTIC",
-        "env": {},
-        "prep": None,
-        "enable": "enable580_cycle.ps1",
-        "enable_count": 2,
     },
 )
 ENV_VALUES = {
@@ -129,7 +111,7 @@ def find(run, arms=ARMS):
     for arm in arms:
         if arm["run"] == run:
             return arm
-    raise ValueError("arm is not in the pinned B1n plan: " + run)
+    raise ValueError("arm is not in the pinned B1p plan: " + run)
 
 
 def env_text(arm):

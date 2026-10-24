@@ -1,17 +1,17 @@
 from pathlib import Path
 import subprocess, json, tarfile, hashlib, os
 
-D = Path("/workspace/bw4-round-b1n-a1-run")
-W = Path("/workspace/bw4-wt")
+D = Path("/workspace/bw5-round-b1p-a1-run")
+W = Path("/workspace/bw5-wt")
 O = Path("/workspace/bw-provider-retry-wt")
-K = W / "traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/run_kit"
+K = W / "traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/run_kit"
 iid = int((D / "own-id").read_text())
 alias = (D / "alias").read_text().strip()
 conf = D / "ssh.conf"
 r = next(
     x
     for x in json.loads(
-        (W / "traces/blackwell_ab_20261023/ROUND_B1n_bw4/attempt1/owned_instances.json").read_text()
+        (W / "traces/blackwell_ab_20261023/ROUND_B1p_bw5/attempt1/owned_instances.json").read_text()
     )
     if x["id"] == iid
 )
@@ -64,8 +64,6 @@ for name in ["dump_header.py", "keyline_times.py", "dump_hdr_hex.ps1"]:
 (D / "lease.json").write_text(json.dumps(r, indent=2) + "\n")
 files["sweep2/lease.json"] = D / "lease.json"
 files["sweep2/observation_authority.json"] = D / "observation_authority.json"
-files["sweep2/b1_commit.txt"] = D / "b1_commit.txt"
-files["sweep2/b1_merge.json"] = D / "b1_merge.json"
 for name in ["windows_observation.py", "saved_xid32_observation.py", "cuda_health_probe.py"]:
     files["sweep2/guard/blackwell/" + name] = W / "scripts/bench/blackwell" / name
 files["sweep2/channel_projection.py"] = W / "scripts/bench/blackwell/channel_projection.py"

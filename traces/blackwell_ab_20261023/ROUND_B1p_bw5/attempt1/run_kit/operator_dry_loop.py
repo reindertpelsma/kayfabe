@@ -19,7 +19,7 @@ import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
-BW = Path("/workspace/bw4-wt/scripts/bench/blackwell")
+BW = Path("/workspace/bw5-wt/scripts/bench/blackwell")
 PR = Path("/workspace/bw-provider-retry-wt/scripts/bench/blackwell")
 PR_NATIVE = Path("/workspace/bw-provider-retry-wt/scripts/bench")
 SUITES = [
@@ -42,29 +42,29 @@ SUITES = [
     (PR, "test_provider_retry"),
     # B1i box-side media fetch, fallback and pinned table (needs the workspace/run kit env)
     (
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal"),
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1i_0400/rehearsal"),
         "test_box_fetch",
     ),
     (
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1j_0420/rehearsal"),
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1j_0420/rehearsal"),
         "test_budget_b1j",
     ),
     (
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal"),
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1l_0500/rehearsal"),
         "test_box_fetch_retry",
     ),
     (BW, "test_die_pair_table"),  # BW4: per-die pinned pairs, diagnostic enable
     (
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal"),
-        "test_b1n_kit",
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal"),
+        "test_b1p_kit",
     ),  # BW4: B1n plan, capture, fatal collect
     (
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal"),
-        "test_b1n_snippets",
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal"),
+        "test_b1p_snippets",
     ),  # BW4: box heredocs, live dummy
     (
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal"),
-        "test_b1n_ops",
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal"),
+        "test_b1p_ops",
     ),  # BW4: offer scope, budget, label
 ]
 RECEIPT = "dry_loop_pass.json"
@@ -79,7 +79,8 @@ def default_roots(workspace, run_kit):
         PR_NATIVE,
         Path(run_kit),
         Path(workspace),
-        Path("/workspace/bw4-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal"),
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1n_bw4/rehearsal"),
+        Path("/workspace/bw5-wt/traces/blackwell_ab_20261023/ROUND_B1p_bw5/rehearsal"),
     ]
 
 
