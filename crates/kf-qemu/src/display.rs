@@ -1472,8 +1472,8 @@ type ProgramKey = (u32, [i32; 12], Option<(u32, bool, bool)>);
 /// renders is logged once (`colour program #N ...`), so a lane that moves the NVIDIA app's Hue or
 /// Digital Vibrance slider can read the coefficients the guest driver really programmed and grade
 /// the screendump against them (`scripts/bench/windows/hue_vibrance_lane.sh`). Not a flag: always
-/// on, because it is bounded the way [`ReasonLog`] is — at most [`ProgramLog::MAX`] programs per
-/// device life, then one line saying further programs are only counted — so a hostile guest that
+/// on, because it is bounded the way [`ReasonLog`] is — at most [`ProgramLog::MAX`] programs in the
+/// display worker's life, then one line saying further ones are not logged — so a hostile guest that
 /// rewrites OCSC0 every frame cannot grow the log or this set. Runs on the scan thread (no vCPU,
 /// no new lock).
 #[derive(Debug, Default)]
@@ -1485,16 +1485,41 @@ struct ProgramLog {
 impl ProgramLog {
     const MAX: usize = 64;
 
-    /// Has this program been logged? (stub: EXPECTED RED)
-    fn admit(&mut self, _key: &ProgramKey) -> Admit {
-        Admit::Seen
+    /// Has this program been logged? A linear search of at most [`Self::MAX`] keys, once per
+    /// colour copy.
+    fn admit(&mut self, key: &ProgramKey) -> Admit {
+        if self.seen.contains(key) {
+            Admit::Seen
+        } else if self.seen.len() < Self::MAX {
+            self.seen.push(*key);
+            Admit::New
+        } else if !self.full {
+            self.full = true;
+            Admit::Full
+        } else {
+            Admit::Seen
+        }
     }
 }
 
 /// The line for program number `n` (1-based). The format is parsed by
 /// `scripts/bench/windows/hue_vibrance_check.py` (`PROGRAM_RE`); change both together.
-fn program_line(_n: usize, _key: &ProgramKey) -> String {
-    String::new()
+fn program_line(n: usize, (head, m, olut): &ProgramKey) -> String {
+    let coefficients: Vec<String> = m.iter().map(i32::to_string).collect();
+    let (entries, interp, mirror) = match olut {
+        Some((e, i, mirror)) => (e.to_string(), *i, *mirror),
+        None => ("bypass".to_string(), false, false),
+    };
+    let signed = mirror && m.iter().any(|&v| v < 0);
+    format!(
+        "kf3: display: colour program #{n} head={head} ocsc0=[{}] olut={entries} interp={} mirror={} \
+         signed_behind_mirror={} (each distinct program once, at most {})",
+        coefficients.join(","),
+        u8::from(interp),
+        u8::from(mirror),
+        u8::from(signed),
+        ProgramLog::MAX
+    )
 }
 
 /// A resolved colour binding belongs to one armed channel incarnation. Unlike the
@@ -4351,6 +4376,8 @@ struct ScanState {
     serial: u64,
     /// Which scanout refusals were already logged: one line per distinct reason ([`ReasonLog`]).
     refusal_log: ReasonLog,
+    /// Which head colour programs were already logged ([`ProgramLog`]).
+    program_log: ProgramLog,
     /// The last copy number logged as late but not lost ([`ScanState::give_up_if_stuck`]).
     slow_logged: u64,
     /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
@@ -5314,7 +5341,24 @@ impl ScanState {
                 Ok((inputs, lut, out.matrix))
             })();
             match program {
-                Ok(p) => Some(p),
+                Ok(p) => {
+                    let key = (
+                        comp.head,
+                        p.2,
+                        p.1.map(|l| (l.entries, l.interpolate, l.mirror)),
+                    );
+                    match self.program_log.admit(&key) {
+                        Admit::Seen => {}
+                        Admit::New => {
+                            eprintln!("{}", program_line(self.program_log.seen.len(), &key))
+                        }
+                        Admit::Full => eprintln!(
+                            "kf3: display: colour programs: {} distinct programs logged; further new ones are not",
+                            ProgramLog::MAX
+                        ),
+                    }
+                    Some(p)
+                }
                 Err(e) => {
                     // the console's colour conversion of this frame is what failed: console-only
                     self.fault(
