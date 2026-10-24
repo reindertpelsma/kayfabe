@@ -1523,6 +1523,13 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     char err[512] = "";
     uint8_t *c = pci->config;
 
+    /* fb-mb is REQUIRED, like -m (owner decision 2026-10-24): no silent default size. Refused by name,
+     * before anything else, with an example; Rust's Config::check says the same. */
+    if (s->fb_mb == 0) {
+        error_setg(errp, "kf3: fb-mb is required (the kayfabe store size in MiB, like -m, no default): "
+                   "pass fb-mb=<MiB, required, like -m> to -device kf3-gpu, e.g. fb-mb=8192");
+        return;
+    }
     if (!kvm_enabled()) {
         error_setg(errp, "kf3: requires -accel kvm");
         return;
@@ -1935,7 +1942,7 @@ static void kf3_reset_exit(Object *obj, ResetType type)
 
 static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("gpu-minor", Kf3State, gpu_minor, 0),
-    DEFINE_PROP_UINT64("fb-mb", Kf3State, fb_mb, 8192),
+    DEFINE_PROP_UINT64("fb-mb", Kf3State, fb_mb, 0), /* REQUIRED like -m: 0 = unset, refused at realize */
     DEFINE_PROP_UINT64("bar1-size", Kf3State, bar1_size, 256 * MiB),
     /* Hopper+ only: how many BAR1 doorbell views can be trapped at once (~1 per CUDA process). */
     DEFINE_PROP_UINT32("bar1-overlays", Kf3State, bar1_overlays, KF3_BAR1_OVERLAYS_DEFAULT),

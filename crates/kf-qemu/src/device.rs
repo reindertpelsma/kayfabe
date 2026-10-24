@@ -30,12 +30,19 @@ pub const PROM_BASE: u64 = 0x0030_0000;
 /// The PROM window's size.
 pub const PROM_BYTES: u64 = 0x0010_0000;
 
+/// How `fb-mb` is spelled in a refusal and in the docs.
+pub const FB_MB_EXAMPLE: &str = "fb-mb=<MiB, required, like -m>";
+/// The one-line refusal for an unset (or zero) `fb-mb`; the C device says the same words.
+pub const FB_MB_REQUIRED: &str = "kf3: fb-mb is required (the kayfabe store size in MiB, like -m, no default): \
+    pass fb-mb=<MiB, required, like -m> to -device kf3-gpu, e.g. fb-mb=8192";
+
 /// Realize-time configuration (the QEMU device's properties).
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Host GPU device minor (`/dev/nvidia<N>`).
     pub gpu_minor: u32,
-    /// The framebuffer the guest gets, in MiB — reserved as ONE store object. ⊘ If the host refuses
+    /// The framebuffer the guest gets, in MiB — reserved as ONE store object. REQUIRED: `0` (the
+    /// unset property) is refused by [`Config::check`]. ⊘ If the host refuses
     /// the reservation, the VM does not start (constraint 15: the size is what we could reserve).
     pub fb_mb: u64,
     /// The BAR1 (framebuffer window) aperture the C device decodes, in bytes.
@@ -99,6 +106,18 @@ impl Config {
     /// # Errors
     /// The refusal.
     pub fn check(&self) -> Result<(), String> {
+        // ★ `fb-mb` is REQUIRED, like QEMU's `-m` (owner decision 2026-10-24): unset reads as 0 and
+        // is refused, never replaced by a guessed size. The budget semantics (`cardbudget`) are
+        // unchanged and run later; this only rejects "no size" and a size whose byte count overflows.
+        if self.fb_mb == 0 {
+            return Err(FB_MB_REQUIRED.into());
+        }
+        if self.fb_mb > (u64::MAX >> 20) {
+            return Err(format!(
+                "fb-mb={} MiB is not a size ({FB_MB_EXAMPLE} gives the store size in MiB)",
+                self.fb_mb
+            ));
+        }
         if self.display_broker && !self.display {
             return Err(
                 "display-broker needs display=on (the broker shows the virtual display)".into(),
