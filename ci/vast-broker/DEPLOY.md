@@ -344,7 +344,12 @@ strictly older exact kf-ci-<run>-<attempt> labels with a valid numeric provider 
 matching ID/label/start_date in two list snapshots; anything uncertain fails closed. Each sweep
 deletes at most 20 and confirms absence. A failed DELETE no longer aborts the sweep (V9): the
 remaining boxes are still deleted, the report counts `{deleted, unconfirmed, failed}` and the next
-tick retries. A failed list still aborts the whole sweep. Logs carry fixed event/count fields only.
+tick retries. A failed list still aborts the whole sweep. Logs carry fixed event/count fields and a static
+`reason` on `reaper_unavailable`: `configuration` (local admission), `transport` (fetch/body read),
+`http_refusal` (non-200 or redirected response), `invalid_response` (missing or oversized body),
+`invalid_json` (UTF-8/JSON decoding), `incomplete_list` (success/shape/pagination/row-cap check),
+or `malformed_list` (null document or invalid/duplicate ID). These name the failed check, not a
+provider root cause. No exception text, provider body, key, header, label, ID or URL is reported.
 
 [INFERRED: independent scheduler and account quotas] Put the reaper in a separate Cloudflare
 account if request-quota independence is required. Provider outages and inaccurate
