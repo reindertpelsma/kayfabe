@@ -1,0 +1,25 @@
+{
+  "source": "github.com/reindertpelsma/windows-on-vast install.sh (main), read via gh api 2026-10-24",
+  "pins": [
+    {
+      "name": "nvidia.exe",
+      "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe"
+    },
+    {
+      "name": "cuda.exe",
+      "sha256": "9244f71a248ae99a71e2974907fa16818090d48f0589a5b67035e1dbe1e05c03",
+      "url": "https://developer.download.nvidia.com/compute/cuda/13.0.0/local_installers/cuda_13.0.0_windows.exe"
+    },
+    {
+      "name": "7zr.exe",
+      "sha256": "ad4c82fadcbdf93c03b4fc440f300509c7d60c5c2f4d183e35d9d70d6957037d",
+      "url": "https://github.com/ip7z/7zip/releases/download/26.03/7zr.exe"
+    }
+  ],
+  "openssh": {
+    "url": "https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi",
+    "sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9"
+  },
+  "iso_url_unpinned_there": "https://go.microsoft.com/fwlink/?linkid=2289029&clcid=0x409&culture=en-us&country=us"
+}
