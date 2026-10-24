@@ -1108,6 +1108,12 @@ async function detachedUpload(request, path) {
   headers.set('Content-Length', String(length));
   return new Request(request.url, { method: request.method, headers, body: bytes });
 }
+// A new identity requests initial placement; a hint cannot move the old ledger's state.
+function placedLedger(env) {
+  return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account-enam-v1'), {
+    locationHint: 'enam',
+  });
+}
 export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {}) {
   const verifier = new OidcVerifier(fetcher, now),
     local = new Map();
@@ -1231,13 +1237,11 @@ export function createGateway({ authorize, fetcher = fetch, now = Date.now } = {
           },
         );
       }
-      return env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(buffered);
+      return placedLedger(env).fetch(buffered);
     },
     scheduled(_event, env, ctx) {
       ctx.waitUntil(
-        env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account')).fetch(
-          new Request('https://internal.invalid/cron', { method: 'POST' }),
-        ),
+        placedLedger(env).fetch(new Request('https://internal.invalid/cron', { method: 'POST' })),
       );
     },
   };
