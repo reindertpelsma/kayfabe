@@ -420,10 +420,12 @@ export function offerRejections(
     price = offerPrice(offer, cfg);
   const enough = (key, floor) =>
     typeof offer[key] === 'number' && Number.isFinite(offer[key]) && offer[key] >= floor;
-  if (!(
-    offer.verified === true ||
-    (offer.verified === undefined && offer.verification === 'verified')
-  ))
+  if (
+    !(
+      offer.verified === true ||
+      (offer.verified === undefined && offer.verification === 'verified')
+    )
+  )
     reasons.push('VERIFICATION');
   if (
     !Number.isSafeInteger(offer.id) ||
