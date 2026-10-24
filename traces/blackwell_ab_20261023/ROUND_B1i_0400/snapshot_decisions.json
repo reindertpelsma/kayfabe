@@ -1,0 +1,78 @@
+{
+  "utc": "2026-10-24T02:12:59.460491+00:00",
+  "m30498_present": false,
+  "rows": [
+    {
+      "id": 49733338,
+      "machine": 37415,
+      "gpu": "RTX 5060 Ti",
+      "dph": 0.162,
+      "geo": "United Kingdom, GB",
+      "excluded_because": [
+        "is_vm_deverified"
+      ]
+    },
+    {
+      "id": 43994882,
+      "machine": 69146,
+      "gpu": "RTX 5090",
+      "dph": 0.388,
+      "geo": ", CN",
+      "excluded_because": [
+        "known-bad",
+        "denied country"
+      ]
+    },
+    {
+      "id": 57376528,
+      "machine": 43459,
+      "gpu": "RTX 5090",
+      "dph": 0.601,
+      "geo": "Taiwan, TW",
+      "excluded_because": [
+        "is_vm_deverified"
+      ]
+    },
+    {
+      "id": 42143434,
+      "machine": 52992,
+      "gpu": "RTX 5090",
+      "dph": 0.642,
+      "geo": "Mexico, MX",
+      "excluded_because": [
+        "is_vm_deverified"
+      ]
+    },
+    {
+      "id": 35126127,
+      "machine": 55678,
+      "gpu": "RTX 5090",
+      "dph": 0.869,
+      "geo": "The Netherlands, NL",
+      "excluded_because": [
+        "plan 5343 s < 90 min under stop 2.00"
+      ]
+    },
+    {
+      "id": 43092247,
+      "machine": 141929,
+      "gpu": "RTX 5090",
+      "dph": 0.936,
+      "geo": "Denmark, DK",
+      "excluded_because": [
+        "is_vm_deverified",
+        "plan 4958 s < 90 min under stop 2.00"
+      ]
+    },
+    {
+      "id": 54642865,
+      "machine": 153274,
+      "gpu": "RTX 5090",
+      "dph": 1.454,
+      "geo": "Ontario, CA",
+      "excluded_because": [
+        "plan 3168 s < 90 min under stop 2.00"
+      ]
+    }
+  ]
+}

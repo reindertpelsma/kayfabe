@@ -1,0 +1,42 @@
+{
+  "round": "B1i_0400",
+  "operator": "Claude",
+  "grant": "controller 04:00: box-side media fetch, then one lease (+1 retry), fresh budget",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false,
+  "transfer_change": {
+    "tests": "rehearsal/test_box_fetch.py 37/37 (RED first)",
+    "mutants": "11 (10 with >=2 killers, 1 equivalent redundant bound)",
+    "pins": "media_pin_crosscheck.json: harness win_vm.sh@9ff51a6e9 = manifest = windows-on-vast = local copies (4/4)",
+    "public_urls": "public_url_probe.json: 4/4 serve pinned size, 206 on range",
+    "dry_loop": "passed, 359 tests incl test_box_fetch, static 0",
+    "harness_suite": "388/388"
+  },
+  "status": "NO RENTAL: m30498 absent from the fresh snapshot and no other offer qualifies (harness exit 75)",
+  "snapshot": "snapshot_decisions.json (7 offers)",
+  "leases_created": [],
+  "spend_usd": 0.0,
+  "matrix": [
+    {
+      "arm": "Native (full stage)",
+      "die": "none (no lease)",
+      "verdict": "UNRUN",
+      "evidence": "snapshot_decisions.json"
+    },
+    {
+      "arm": "B",
+      "die": "none (no lease)",
+      "verdict": "UNRUN",
+      "evidence": "snapshot_decisions.json"
+    },
+    {
+      "arm": "B1",
+      "die": "none (no lease)",
+      "verdict": "UNRUN",
+      "evidence": "snapshot_decisions.json"
+    }
+  ],
+  "xid32_list": [],
+  "tdr_verdict": "UNRUN"
+}
