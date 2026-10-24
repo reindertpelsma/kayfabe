@@ -1,0 +1,15 @@
+{
+  "lease_id": 57565048,
+  "utc": "2026-10-24T21:38:46.012110+00:00",
+  "API_absence_independently_verified": true,
+  "timer_processes_present": {
+    "3425385": false,
+    "3425394": false
+  },
+  "capture_rehashed_before_destroy": true,
+  "capture_files_verified": 133,
+  "dev_target_created": false,
+  "locks_acquired": false,
+  "remote_jobs_finished": true,
+  "no_further_lease": true
+}

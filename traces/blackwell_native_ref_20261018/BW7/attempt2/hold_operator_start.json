@@ -1,0 +1,7 @@
+{
+  "lease_id": 57565048,
+  "operator_utc": "2026-10-24T21:22:13.514974+00:00",
+  "script": "kit/ref_hold.ps1",
+  "timeout_seconds": 780,
+  "H_REF": "UNCHANGED; Code0 +580.88 for600s, no System1001/6008/4101 or nvlddmkm/Display errors; same boot identity"
+}

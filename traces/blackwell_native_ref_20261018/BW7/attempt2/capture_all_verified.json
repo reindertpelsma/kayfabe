@@ -1,0 +1,545 @@
+{
+  "lease_id": 57565048,
+  "utc": "2026-10-24T21:38:40.253847+00:00",
+  "private_root": "/data/bw7_private_capture/57565048",
+  "files": {
+    "console/console_final.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_0.txt": {
+      "bytes": 81070,
+      "sha256": "4f614e7f3786dd6ac466b53ca058e9a2794606edf03946fe2fddc562c59a491f"
+    },
+    "console/console_raw_57565048_1.txt": {
+      "bytes": 101900,
+      "sha256": "a53243cee6f80c9ac47b05eae1a27b4292f37dedc0bb5b97afb10136c16f9ccb"
+    },
+    "console/console_raw_57565048_10.txt": {
+      "bytes": 169910,
+      "sha256": "c0b53aafed33ce593105c61d34b8cb005f91c49db849c37c7e069e2c8f9eedeb"
+    },
+    "console/console_raw_57565048_11.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_12.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_13.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_14.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_15.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_16.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_17.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_18.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_19.txt": {
+      "bytes": 173585,
+      "sha256": "08d0a6f485980759802bf12c6f55cb90abd3757e14c5ca04bb5f06bb0629fbb8"
+    },
+    "console/console_raw_57565048_2.txt": {
+      "bytes": 139152,
+      "sha256": "160e7cab27815170775e6e36032950d4865457348c5f83b938b1c2a925aa0fdb"
+    },
+    "console/console_raw_57565048_20.txt": {
+      "bytes": 173733,
+      "sha256": "d1b065dc05226e8e01a175c98735d49cbaf9d054602fe85d31e8acd538c9645b"
+    },
+    "console/console_raw_57565048_21.txt": {
+      "bytes": 173733,
+      "sha256": "d1b065dc05226e8e01a175c98735d49cbaf9d054602fe85d31e8acd538c9645b"
+    },
+    "console/console_raw_57565048_22.txt": {
+      "bytes": 173733,
+      "sha256": "d1b065dc05226e8e01a175c98735d49cbaf9d054602fe85d31e8acd538c9645b"
+    },
+    "console/console_raw_57565048_23.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_24.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_25.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_26.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_27.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_28.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_29.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_3.txt": {
+      "bytes": 139249,
+      "sha256": "89c89821889fd42ffe428ac0637071bbac7ec46ae0fcc65774f4145a3efe391a"
+    },
+    "console/console_raw_57565048_30.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_31.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_32.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_33.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_34.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_35.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_36.txt": {
+      "bytes": 174141,
+      "sha256": "172856bb28a153a5a885ccee1093071b48629e7814deca2e7586aa8a0eadeaff"
+    },
+    "console/console_raw_57565048_4.txt": {
+      "bytes": 139306,
+      "sha256": "017db9fd7917505079c83b5a38e7e5210faf4530b74543a9db1abad3fbac69f2"
+    },
+    "console/console_raw_57565048_5.txt": {
+      "bytes": 142605,
+      "sha256": "743e588337514d98b173ea72cb7b40ff5fbd0a17104e058f5ad7b314d0d50369"
+    },
+    "console/console_raw_57565048_6.txt": {
+      "bytes": 143502,
+      "sha256": "6355a675c1a9791121dabbac411a0e42136de9a5a35c6bdc137d488f00485846"
+    },
+    "console/console_raw_57565048_7.txt": {
+      "bytes": 146344,
+      "sha256": "783e70707d10acf11f110ffd15a71d9fce48a1cc97aa2a0398ed8cc1cdc7e5eb"
+    },
+    "console/console_raw_57565048_8.txt": {
+      "bytes": 147124,
+      "sha256": "1a61c2b806fb31787af0769f1c24fac8203d588651dd72258bd94b536e80239c"
+    },
+    "console/console_raw_57565048_9.txt": {
+      "bytes": 147897,
+      "sha256": "507c14ae5a87b05806030319cf3de05122ba5b553e5eb9c668010218f7024b4d"
+    },
+    "guest/GUEST_MANIFEST.txt": {
+      "bytes": 12965,
+      "sha256": "34b76c36f39c6497a2f0143e4fedc113950cb227337fa7e3e8a0e4d88f6bc201"
+    },
+    "guest/evtx/0001_Windows_PowerShell.evtx": {
+      "bytes": 1118208,
+      "sha256": "51996b59a4fabad829833908ae0d2514e2bc5f6f017f25589aafbb5e8214e8e8"
+    },
+    "guest/evtx/0002_System.evtx": {
+      "bytes": 1118208,
+      "sha256": "40db9e32cd76fd79c792998ddc6baa7b01bb56ace4f761a629477f3bf2544846"
+    },
+    "guest/evtx/0003_Security.evtx": {
+      "bytes": 1118208,
+      "sha256": "ce732a2d35045f124bdefa7b6eb14e2a38bfcc3b4e3d025832b27b190f172a5b"
+    },
+    "guest/evtx/0004_Application.evtx": {
+      "bytes": 69632,
+      "sha256": "a0b33066c8364ac3ac5244317cc0e9a0f22e35dd244e0533841b8348b4e6cd34"
+    },
+    "guest/evtx/0005_Setup.evtx": {
+      "bytes": 69632,
+      "sha256": "2efb1d78e824c0cf350f6e79cb7fd4b6de5974db2ec35b45ceb68536bc33f5cf"
+    },
+    "guest/evtx/0006_OpenSSH_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "e9a0d611ae16e463eb6006cac67f0506d14719b436def7350a1568f9b6325c0f"
+    },
+    "guest/evtx/0007_Microsoft-Windows-WMI-Activity_Operational.evtx": {
+      "bytes": 1118208,
+      "sha256": "ec4a69635221909b47946bccf3a3d27d66806a2cf89ddc88a9466156d769e9cb"
+    },
+    "guest/evtx/0008_Microsoft-Windows-WinRM_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "03319cb46c814f9e8684760544a70155d88fd9a39dfad6d99503f1d97ffa6dc0"
+    },
+    "guest/evtx/0009_Microsoft-Windows-Winlogon_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "5b3ff596f9113dc047f37a1a5cff085e14240b80d5cb7397d124357cbb9115b1"
+    },
+    "guest/evtx/0010_Microsoft-Windows-WinINet-Config_ProxyConfigChanged.evtx": {
+      "bytes": 69632,
+      "sha256": "a2fb43bd69fb61fe790cd9a5e3cee8b1907d9920de9a4ad07c905c450b4f5bb3"
+    },
+    "guest/evtx/0011_Microsoft-Windows-WindowsUpdateClient_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "24c26da0d7fa4446e98cf891dda93d4a1abcd95373966e35e7071e1ba34076e5"
+    },
+    "guest/evtx/0012_Microsoft-Windows-Windows_Firewall_With_Advanced_Security_Firewall.evtx": {
+      "bytes": 1118208,
+      "sha256": "214eceba6b686a402a7c47e8a34875b8cc20b229aa10d046a240b0e05ae85d0c"
+    },
+    "guest/evtx/0013_Microsoft-Windows-Windows_Defender_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "07ad17b797eea8440a4615431c16846cd008077941d333a994e390ea405a81e5"
+    },
+    "guest/evtx/0014_Microsoft-Windows-WebAuthN_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "da44682c0d855d6c4126e043e782156a1a95327ec57935aa647959a78f1db3e3"
+    },
+    "guest/evtx/0015_Microsoft-Windows-Wcmsvc_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "2dda9b06ce986363ef52fa1de026d52a2486288178c72947c41696fb69d415aa"
+    },
+    "guest/evtx/0016_Microsoft-Windows-VolumeSnapshot-Driver_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "a26df251549a45f00459d5f52c24b9c7f9b9e4419fbd80562a971dd55507dd4f"
+    },
+    "guest/evtx/0017_Microsoft-Windows-UserPnp_DeviceInstall.evtx": {
+      "bytes": 69632,
+      "sha256": "5d80fade7217eaee7adafcc1d1022b3bc47fdc5cbe903e42b28c6ff514c87fe7"
+    },
+    "guest/evtx/0018_Microsoft-Windows-User_Profile_Service_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "466e429e8abd8eb13bc024bffa034595692ba2c5f259ceba621145d4744e24c2"
+    },
+    "guest/evtx/0019_Microsoft-Windows-UniversalTelemetryClient_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "78c774b9d2802ee9a8d5474ad8e5cd47b1c77fcf4fbeafc0f120c593ffcadb74"
+    },
+    "guest/evtx/0020_Microsoft-Windows-Time-Service_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "a8d7a159e79a0b3f4ca473e969e547edb6d0a6ab5b998488dc126b1a079d3048"
+    },
+    "guest/evtx/0021_Microsoft-Windows-TerminalServices-LocalSessionManager_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "8071efffe0830f6cfce4e75d004ea297d2ff83b3914fc0147b605639053fe7e1"
+    },
+    "guest/evtx/0022_Microsoft-Windows-TaskScheduler_Maintenance.evtx": {
+      "bytes": 69632,
+      "sha256": "6747972a585094a91d229fc78e49e1320c51cbfca904b930474452aeeae7f626"
+    },
+    "guest/evtx/0023_Microsoft-Windows-Store_Operational.evtx": {
+      "bytes": 1118208,
+      "sha256": "f5ed475b257e05fec453f7bcbd0e69c832348416ce2c0c50d2fe0478cdd39486"
+    },
+    "guest/evtx/0024_Microsoft-Windows-StorageVolume_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "0dab450299cb5ea5bdfa5b5ecda2457bedfb44d7e526b894cbb7e97efb420de0"
+    },
+    "guest/evtx/0025_Microsoft-Windows-StorageSpaces-Driver_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "510d031ce9b315eb72d5be0b47f849ac191c7f66a91ee555ec7ed2c0c7fc1090"
+    },
+    "guest/evtx/0026_Microsoft-Windows-Storage-Storport_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "9da51a687e93794cf5a0ba7a86f96ee6f2753dd62b047a505624f576c6bfe6ff"
+    },
+    "guest/evtx/0027_Microsoft-Windows-StateRepository_Operational.evtx": {
+      "bytes": 1118208,
+      "sha256": "f396dc652dc141447099231ccdb5614b03dfd22527c4e707d3fd4ccd20dc9461"
+    },
+    "guest/evtx/0028_Microsoft-Windows-SMBServer_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "1603ce7965b4bc22de81374653734770a209415d1dfa39384f1df37cd2698bee"
+    },
+    "guest/evtx/0029_Microsoft-Windows-SMBClient_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "ea900136f148477082a405e0716fee5cb7e165227a5fe5211f8484d0d707152f"
+    },
+    "guest/evtx/0030_Microsoft-Windows-SmbClient_Connectivity.evtx": {
+      "bytes": 69632,
+      "sha256": "20b5f759bd5f67d576c2e06cb1a3867eb6b5e9a5b7c6b2d1f9db35fb0f7b6a4e"
+    },
+    "guest/evtx/0031_Microsoft-Windows-ShellCommon-StartLayoutPopulation_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "9b1490cf53d4a44d394d3bbf1d00648e43548ff7171926bf7abd8cb21df03087"
+    },
+    "guest/evtx/0032_Microsoft-Windows-Shell-Core_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "eb48abc492fcf53f4586d0810e6a171813df6e96b77a7f251403cc73abe1b360"
+    },
+    "guest/evtx/0033_Microsoft-Windows-Security-SPP-UX-Notifications_ActionCenter.evtx": {
+      "bytes": 69632,
+      "sha256": "5b91cadd353575ff249a730bbf886e8449bedbf4853530890bdff3637d38853a"
+    },
+    "guest/evtx/0034_Microsoft-Windows-Security-Mitigations_KernelMode.evtx": {
+      "bytes": 69632,
+      "sha256": "7f27935996ce18de33a394972fbefa42fe1bf2626c877480f3e5336122092cfc"
+    },
+    "guest/evtx/0035_Microsoft-Windows-Resource-Exhaustion-Detector_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "dd5bfc032e312139468b0590fc699d6112ac14b337e79efb6f0a53f6bb110566"
+    },
+    "guest/evtx/0036_Microsoft-Windows-ReadyBoost_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "9e9fb90a2528d2c8e4a459ea526cf8b050a700e08f2331dc2b1c13fc8819c5fc"
+    },
+    "guest/evtx/0037_Microsoft-Windows-PushNotification-Platform_Operational.evtx": {
+      "bytes": 1118208,
+      "sha256": "0f676343d15911f35353763e994e8bcaf80fa06369b830f24776461939fca463"
+    },
+    "guest/evtx/0038_Microsoft-Windows-Provisioning-Diagnostics-Provider_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "763d72ce97aee1168f1604ce8947fbce83f8de6a50f66aacc145f46669b2bd6c"
+    },
+    "guest/evtx/0039_Microsoft-Windows-Privacy-Auditing_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "2df20c6bc399b4a7987d9317dabeb80ac1fa4de3e749f3b7b5050da7157201d7"
+    },
+    "guest/evtx/0040_Microsoft-Windows-PrintService_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "92ae55c6e3b1196b70e6fdfe908284fc3747c5bc058c4bd6114f3edb8e3be880"
+    },
+    "guest/evtx/0041_Microsoft-Windows-PowerShell_Operational.evtx": {
+      "bytes": 7409664,
+      "sha256": "01ae91f78a0e89a7bd89ed7ffc71099b1f15874f8f19345010120b77617edb1c"
+    },
+    "guest/evtx/0042_Microsoft-Windows-Perflib_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "216d2559f6135ae3ec85056de242b7cda276c75f99ea2a49afa9f9ebce9ab95c"
+    },
+    "guest/evtx/0043_Microsoft-Windows-PCI_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "6e4c3f7329cfa2b053bab90bd79a932f42fba9f49f08c0668f621e6883da0c0b"
+    },
+    "guest/evtx/0044_Microsoft-Windows-Partition_Diagnostic.evtx": {
+      "bytes": 69632,
+      "sha256": "95e69d68cdd9160560f937941222b838063e1481478a179d04007e5c322b1b4f"
+    },
+    "guest/evtx/0045_Microsoft-Windows-Ntfs_WHC.evtx": {
+      "bytes": 69632,
+      "sha256": "299e2aa2f5c9c67f673bc44eaf941e56654982d7e766f71b3a637e66bb751169"
+    },
+    "guest/evtx/0046_Microsoft-Windows-Ntfs_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "b27fbf6549464a338a6b98b4a2b2fb4b9b1114cd436c7690f5fab1ee9a14f71e"
+    },
+    "guest/evtx/0047_Microsoft-Windows-NetworkProfile_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "b3eb61d5341699fbd03817eb22605b059a0d554c2ac47c16f4b219ae4421ad4b"
+    },
+    "guest/evtx/0048_Microsoft-Windows-NCSI_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "3aeea076bf5a76b04c12537a80ef680973ffa076dfe14d6973a92a2003f603ff"
+    },
+    "guest/evtx/0049_Microsoft-Windows-MUI_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "adafbaa8cf312ad59501c6407e284ad3825f11a7f554ff629ab5ceb1b1c8263a"
+    },
+    "guest/evtx/0050_Microsoft-Windows-LiveId_Operational.evtx": {
+      "bytes": 1118208,
+      "sha256": "ebf54690625ee2b8eb091885843c8501436cb951c0ffecc2f858433827140e2f"
+    },
+    "guest/evtx/0051_Microsoft-Windows-Known_Folders_API_Service.evtx": {
+      "bytes": 69632,
+      "sha256": "426ef79e579d987c2e921eb7886ac6351a7b796638b8e9b7fdab71b138b76e12"
+    },
+    "guest/evtx/0052_Microsoft-Windows-Kernel-WHEA_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "d3476ea2d22e10b4c2ac67354759ca722e76a17fa867d7faad85e226cb679ed2"
+    },
+    "guest/evtx/0053_Microsoft-Windows-Kernel-ShimEngine_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "036fb4cabe7e442a5548b254a3ca076ebd6dd0f7dfc1d0727f4a32c39f003518"
+    },
+    "guest/evtx/0054_Microsoft-Windows-Kernel-PnP_Device_Management.evtx": {
+      "bytes": 69632,
+      "sha256": "26b146857f75bf4a2de791c5b2948a1e65a04af48875e793fd28f89b6ee166a0"
+    },
+    "guest/evtx/0055_Microsoft-Windows-Kernel-PnP_Configuration.evtx": {
+      "bytes": 1118208,
+      "sha256": "5d8022000ef9d76f2d9534eb516a37125303ee6f1d4e7aec1a0e3bef08df3bff"
+    },
+    "guest/evtx/0056_Microsoft-Windows-Kernel-EventTracing_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "4e73ccb097fbffb529d461273490ebead0e8092d21f18ad4a2c71d2643d7d140"
+    },
+    "guest/evtx/0057_Microsoft-Windows-Kernel-Dump_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "f48f59269507cbbd52eb8a142d76906ba62c2139fc6467333a4f46627c7efde4"
+    },
+    "guest/evtx/0058_Microsoft-Windows-Kernel-Cache_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "8ef37197f984cd095b88c65e1f85263fb30856cc3fc76fa73103693878e1d16c"
+    },
+    "guest/evtx/0059_Microsoft-Windows-Kernel-Boot_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "deee72a1013ec9995e950dc651f1afe3212e1bdc471532dfbd997f87c7732d04"
+    },
+    "guest/evtx/0060_Microsoft-Windows-HelloForBusiness_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "11aff2b5afbefddfc4519716713cd0c23d70374300dba4495c184dd05d2a1b3b"
+    },
+    "guest/evtx/0061_Microsoft-Windows-GroupPolicy_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "bbdf8da1a8e1097c4472a650fafc385e5cbc4ea8f92fff2bd02be2043b119f14"
+    },
+    "guest/evtx/0062_Microsoft-Windows-DxgKrnl-Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "65f0e27301878b61eb5c52a57efe6902f9a93bd3ac8d9b531f3378323d020b9d"
+    },
+    "guest/evtx/0063_Microsoft-Windows-Diagnosis-PCW_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "33a51ff6e60f1f61c6f7bdac08e4c3e16b957f525a3c2b3cdd6c58b51d0568a2"
+    },
+    "guest/evtx/0064_Microsoft-Windows-Diagnosis-DPS_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "37802f7e1751e49f3a63d64379dd3828903d035b6ab352189858bb44495f6a3a"
+    },
+    "guest/evtx/0065_Microsoft-Windows-Dhcp-Client_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "e0a1f1d5d701309bfe1ad4ba8a2d0c8fe8d60d3b1e71d13195775abf6df4680a"
+    },
+    "guest/evtx/0066_Microsoft-Windows-DeviceSetupManager_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "e9f64146dd18442332f1a0dcd0b331a1eae21585deeac48ad0cfd65bfdd9cf15"
+    },
+    "guest/evtx/0067_Microsoft-Windows-DeviceSetupManager_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "b1a626fbf6754beccf1e8b902dbdf151667608a6821e70ccaef2d28354eb6a7a"
+    },
+    "guest/evtx/0068_Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "5fd27b21e181a57e25319b8ebbf983ee1e6d7551069039156bdcd440ecb99adf"
+    },
+    "guest/evtx/0069_Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "b08e2c76153186f8dcaf1177ca489f6856d1452d4208a8cbd8d9f3075d2e04a9"
+    },
+    "guest/evtx/0070_Microsoft-Windows-Crypto-NCrypt_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "46470b77a51ceefec4f5ab3d4850bf3e429325ef1112e17e58ce5779a86f0967"
+    },
+    "guest/evtx/0071_Microsoft-Windows-Crypto-NCrypt_KeyMgmt.evtx": {
+      "bytes": 69632,
+      "sha256": "db4c0fd5ddf1b8c811e66fb493f8ba8d47f03d7c6090df42646b31c90520f22a"
+    },
+    "guest/evtx/0072_Microsoft-Windows-Crypto-DPAPI_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "6b6d2c64e886b330413f48061e43d425db260d9d659a41e652c523ce58b836bd"
+    },
+    "guest/evtx/0073_Microsoft-Windows-Containers-Wcifs_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "8107366fb2a590a24b1894e5114607e256e4fcb2ff3fa75c0eb41e09c69d0dec"
+    },
+    "guest/evtx/0074_Microsoft-Windows-Containers-BindFlt_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "f6137d85f6e1e28385207c218c95f7ab9503b9a516073a713128212824147400"
+    },
+    "guest/evtx/0075_Microsoft-Windows-CodeIntegrity_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "7a4e1311668744b840cde4d27eb718f8ce6b250f38c79c06f7d89d56ee67ac2d"
+    },
+    "guest/evtx/0076_Microsoft-Windows-CloudStore_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "46cfd4685602492cf36e57e5e4c71d428ff8392c4f294bb8bb204dae5c76f452"
+    },
+    "guest/evtx/0077_Microsoft-Windows-CloudFiles-Filter_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "3bf617a90044be5a5d6a2eb9ae61d4ae6fb4b8e855be4712a5514ec9e314557b"
+    },
+    "guest/evtx/0078_Microsoft-Windows-Bits-Client_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "cd7e6852f0f01f4f9f0bcc744502f108ff2722dcca8ef07221035cd383fe882d"
+    },
+    "guest/evtx/0079_Microsoft-Windows-Biometrics_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "efe1ce5e0e2b997e8309e61519164d2eb7bff349ba7d4bb64a1c9137ec0e13e2"
+    },
+    "guest/evtx/0080_Microsoft-Windows-Audio_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "6c9b81b736020c072070ce4a804eeac29cedc3576fdc7f461ffc446af352631b"
+    },
+    "guest/evtx/0081_Microsoft-Windows-AppxPackaging_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "8d4690c998576b956877b5d82c4f14deb61e9e2d10a8aff0d92146b5a1d11260"
+    },
+    "guest/evtx/0082_Microsoft-Windows-AppXDeploymentServer_Operational.evtx": {
+      "bytes": 1118208,
+      "sha256": "48c330407f54921430c1d7bf282f2c6564ca27ac62baa6ed35e50c691cf53ddb"
+    },
+    "guest/evtx/0083_Microsoft-Windows-AppXDeployment_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "c3759f2c2a30c1551229592495634849c3e3a1108dd01495094768e8d25d07a1"
+    },
+    "guest/evtx/0084_Microsoft-Windows-AppXDeployment-Server_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "ad2f551a67c1f428742ca6e541a20341e4785cf5c973d121a17c704adea4efac"
+    },
+    "guest/evtx/0085_Microsoft-Windows-AppReadiness_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "99115a6cdd2a3ee99d258292e2d5dd9ad0a5b4629676dd185642618eb0f76c71"
+    },
+    "guest/evtx/0086_Microsoft-Windows-AppReadiness_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "416c0a4e44ed30443fc9d27aa6544edf30c7426bc946d90d307006f13ee5af16"
+    },
+    "guest/evtx/0087_Microsoft-Windows-AppModel-Runtime_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "01318889f549a23beaccc781715b957ec498a5adfc51ca822062415ee6b13aee"
+    },
+    "guest/evtx/0088_Microsoft-Windows-AppLocker_MSI_and_Script.evtx": {
+      "bytes": 69632,
+      "sha256": "222160611ba63994fdb92da12e802d035fe6352bef27a1a1f28f6ef52a471552"
+    },
+    "guest/evtx/0089_Microsoft-Windows-AppLocker_EXE_and_DLL.evtx": {
+      "bytes": 69632,
+      "sha256": "047228bc134cbdfe27da9bf7284cc3cf118b3c0d9ba399aa4907372d4ddeab20"
+    },
+    "guest/evtx/0090_Microsoft-Windows-AppID_Operational.evtx": {
+      "bytes": 69632,
+      "sha256": "26f94626321f4dd9a45a15554c0087c2cf48cfbde3d1d2c6b74d65f429c694db"
+    },
+    "guest/evtx/0091_Microsoft-Client-Licensing-Platform_Admin.evtx": {
+      "bytes": 69632,
+      "sha256": "05da7c0b62e1d72591805575cfe895823888bb8459cc694ab293dc2b395db6b6"
+    },
+    "guest/evtx/Application.txt": {
+      "bytes": 71518,
+      "sha256": "204eb7fe4737e88a7c76ecf41047fc3535847ce7da85714e9b1258eedc6dcbbf"
+    },
+    "guest/evtx/System.txt": {
+      "bytes": 261718,
+      "sha256": "14ee300504ecb6fb6045edea93c5a8f6ce3a7151278e827428fa06a41dd3c465"
+    },
+    "native_capture_receipt.json": {
+      "bytes": 18706,
+      "sha256": "12223ce92c1b5e55ff144c24d2fc3c7c5884093eb763c91b8ac7730d40b11311"
+    }
+  },
+  "files_verified": 133,
+  "guest_manifest_files": 93,
+  "total_bytes": 31769425,
+  "failed": 0,
+  "not_pulled": 0,
+  "rehashed_before_destroy": true
+}

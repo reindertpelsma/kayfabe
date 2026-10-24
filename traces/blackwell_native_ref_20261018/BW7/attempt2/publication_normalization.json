@@ -1,0 +1,16 @@
+[
+  {
+    "path": "compare1.txt",
+    "private_raw": "/data/bw7_private_capture/57565048/operator_outputs/compare1.txt",
+    "raw_sha256": "e6d0045a463bfa44c1aa426e0e48dfefb0e5fed6108d0fdda0a5a95f34b66615",
+    "publication_sha256": "5679c3a3a91c55f8d486466b8601c9366fbdfcfce843155fcfd41c9103347688",
+    "normalization": "Remove trailing whitespace and excess EOF blank lines only."
+  },
+  {
+    "path": "windows_ubr.txt",
+    "private_raw": "/data/bw7_private_capture/57565048/operator_outputs/windows_ubr.txt",
+    "raw_sha256": "33182a6792320539641f44a3b6a0f50c530f70ca636bb839764b85a47f44485b",
+    "publication_sha256": "1dbc891abdd651a3433bb4ef9f8ceea4f03b6d0595dcd04fc05f0a1146ae6bb4",
+    "normalization": "Remove trailing whitespace and excess EOF blank lines only."
+  }
+]

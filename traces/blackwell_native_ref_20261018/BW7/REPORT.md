@@ -1,53 +1,67 @@
-# BW7 — native GB202 reference UNRUN after identity refusal
+# BW7 — native GB202 reference PASS; both leases closed
 
-1. Lane, branches and request
+1. Lane, branch and request
 
-Lane BW7. Request: one RTX 5090 / GB202 native windows-on-vast lease, the BW6 Windows image and 580.88 driver, Code 0 plus a 600-second hold; collect bounded event/dump metadata and decide BW6 attribution under the owner's rule. H-REF and its falsifier were recorded before create in `operator_plan.json` (execution source commit `6fcf93ca8`, following EXPECTED RED `e39cbc1ba`).
+Lane BW7. The controller separately authorized attempt 2 after attempt 1's correct identity refusal: native-template-only staged pin admission, RED then change, >=2 mutation killers, unchanged BW5/BW6 behavior, then one new RTX 5090 native Windows lease. H-REF and its falsifier remain unchanged in `attempt2/operator_plan.json`: stock Windows 580.88 reaches Code 0 and holds 600 seconds without System 1001/6008/4101 or nvlddmkm/Display error events; a 0x113/any 1001 during the hold, or no Code 0, falsifies it.
 
-Execution branch `codex/bw7-20261024` remains local. Publication branch `codex/bw7b-20261024` is created from origin/master and contains only BW7 new files under `traces/blackwell_native_ref_20261018/BW7/`. Runtime receipts retain the original execution location `traces/blackwell_native_ref_20261024/BW7/`; code and runtime receipt bytes are preserved; `publication_copy.json` records report attribution edits. Final publication head and origin equality are recorded in the lane's external report `/root/codex_overnight_20261018/reports/BW7.md` and final message. No product changes, force-push, PR, merge or second lease.
+Publication branch `codex/bw7b-20261024` descends from its previous origin head `834d1c0a888fd50cbf2af0f187c230ad75d38025`, originally based on origin/master `a9105acb656ec212daf5da7b8b916387f5da1671`. Only BW7 files change. Attempt-2 RED commits are `5da1a43e0` and `7e48fac1a`; the pre-lease implementation is `2f5e34b43`. Final publication head and origin equality are recorded in `/root/codex_overnight_20261018/reports/BW7.md` and its origin receipt after push. No force-push, rebase, PR, merge, product-code change or additional retry. The earlier result is retained in `attempt1/REPORT.md`.
 
 2. Result (<=15 lines)
 
-- STOPPED — MEASURED (2026-10-24; lease 57562949; `attempt1/ready.txt`, `kit/console_pin_57562949.jsonl`): settled readiness recorded four mismatches then an actual `console_pin.PinFlap`; no authenticated SSH or Windows probe ran. The real identity refusal ended hardware work; no retry.
-- UNRUN — MEASURED (2026-10-24; lease 57562949; `outcome.json`): H-REF, Code 0, 600-second hold, System 1001/6008/4101 and nvlddmkm/Display event counts, BAR1 and native 0x193/0x1A8/0x1B8/0x141/0x113 dump presence have no samples. This is neither a native pass nor a native GPU failure.
-- DONE — MEASURED (2026-10-24; lease 57562949; `attempt1/offer_identity.json`): the selected offer was 56509993 on BW6's exact Chile machine 152098, host 702330, advertised RTX 5090 / GB202 and host driver 595.91.07. No in-box driver/die/BAR1 probe was possible.
-- DONE — MEASURED (2026-10-24; `template_verification.json`, lease 57562949 `attempt1/rent.txt`): the native template was `183b10af7fd788d08aca02e31811d70d`; its installer sha256 matches BW3 Round REF exactly. CODE READ (`operator_plan.json`, `kit/media_manifest.json`): intended media is Win11 Enterprise LTSC 2024 evaluation and Windows driver 580.88; actual installed/bound versions remain unverified.
-- DONE — MEASURED (2026-10-24; lease 57562949; `attempt1/pre_ssh_console_capture.json`): seven available console files, 798942 bytes, were pulled and sha256-rechecked before normal teardown. Private raw root: `/data/bw7_private_capture/57562949/`; no Windows guest capture exists.
-- DONE — MEASURED (2026-10-24; lease 57562949; `attempt1/owned_instances.json`, `attempt1/final_cleanup.json`): exact-id destroy and API absence verified; both timers exited after absence; one instance created and one destroyed, 57562949.
-- INFERRED (lease 57562949; `kit/console_pin_57562949.jsonl`): the readiness wiring encountered a staged native installation identity transition; the later scanned key is not authenticated as either stage. No provider/security root cause or Windows GPU result is established.
-- INFERRED (lease 57562949; `outcome.json`): BW6 attribution remains unresolved because this reference produced neither a native pass nor a native bugcheck.
+- DONE — MEASURED (2026-10-24, lease 57565048; `attempt2/native_hold_result.json`, `attempt2/hold.txt`): H-REF PASS. All 11 samples, n=0..10, were Code 0 on driver 32.0.15.8088 / 580.88; first-to-last span602.024182 seconds; script elapsed602.949798 seconds; the boot identity stayed constant throughout the hold.
+- MEASURED (2026-10-24, lease 57565048; `attempt2/compare0.txt`, `attempt2/compare_since_boot.txt`, `attempt2/hold.txt`): System 1001 = 0, 6008 = 0, 4101 = 0, nvlddmkm/Display errors=0 during the hold and in successful whole-boot queries before/after it. No recovery or bugcheck was observed.
+- DONE — MEASURED (2026-10-24, lease 57565048; `attempt2/offer_identity.json`, `attempt2/state0.txt`): the exact BW6 machine 152098 / host 702330, Chile CL, RTX 5090; native BAR1 total 32768 MiB. GB202 is the BW6-probed die on this machine and the offer's class; no new Linux die probe was performed.
+- DONE — MEASURED (2026-10-24, lease 57565048; `attempt2/compare0.txt`, `attempt2/windows_ubr.txt`): Windows 11 Enterprise LTSC Evaluation 10.0.26100.1742; bound driver 580.88; package sha256 matches the pinned 90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9. CODE READ (`attempt2/template_verification.json`, `attempt2/operator_plan.json`): native template/install source and Windows media URL match the reference kit.
+- DONE — MEASURED (2026-10-24, lease 57565048; `attempt2/compare_since_boot.txt`, `attempt2/outcome.json`, private capture): no .dmp files in captured Minidump, LiveKernelReports, WER or MEMORY.DMP locations; native 0x193/0x1A8/0x1B8/0x141/0x113 dumps absent from this run.
+- DONE — MEASURED (2026-10-24, lease 57565048; `attempt2/native_identity_result.json`): strict SSH succeeded only after latest console pin = scanned pin = Windows-marker pin for 135.012999 continuous seconds / 10 consecutive polls; elapsed 545.178245 seconds at the proof, within the fixed 1200-second first-reachable deadline. The untrusted intermediate scanned key never authorized login.
+- DONE — MEASURED (2026-10-24, lease 57565048; `attempt2/capture_all_verified.json`, `attempt2/final_cleanup.json`): 93 guest manifest files, 91 .evtx logs; 133 combined guest/console files, 31769425 bytes, rehashed before exact-id destroy; API absence verified and both timers exited.
+- INFERRED (2026-10-24, lease 57565048; `attempt2/outcome.json`, owner rule in `attempt2/operator_plan.json`): this native pass on the exact BW6 machine attributes BW6's Code 0 then 0x113 failure to kayfabe. The specific bugcheck root cause is not established.
 
-3. Tests, hardware, identity evidence and spend
+3. Tests, pin timeline, hardware and spend
 
-MEASURED (2026-10-24; `rehearsal/expected_red.txt`, commit `e39cbc1ba`): 13 tests ran against the unadapted reference and produced 15 failing assertions/subtests. MEASURED (2026-10-24; `rehearsal/green.txt`, `kit/dry_loop_pass.json`): 37 lane tests pass; final pre-lease dry loop 130 tests, static problems 0; both watchdog teardown paths exercised on a fake provider. The exact readiness branch passed three cases: absent then two matches, two matches before login, and mismatch refusing before login. These fixtures did not establish that staged native installation key transitions would authenticate successfully.
+MEASURED (2026-10-24; `attempt2/rehearsal/expected_red.txt`, commit 5da1a43e0): policy RED ran 19 tests, 14 failures and 2 errors against the legacy settle behavior. MEASURED (2026-10-24; `attempt2/rehearsal/operator_expected_red.txt`, commit 7e48fac1a): operator wiring/budget RED ran 7 tests with 6 failures. MEASURED (2026-10-24; `attempt2/rehearsal/green.txt`, `attempt2/kit/dry_loop_pass.json`):29 lane tests pass; 122 dry-loop tests pass; static 0; both timer teardown paths exercised. The native operator's 3 replay cases cover staged success, fixed-deadline refusal without login, and rejection of non-native/wrong-template paths.
 
-MEASURED (2026-10-24; `rehearsal/mutation_kills.json`): five mutants restored after checking; each had at least two killing tests.
+MEASURED (2026-10-24; `attempt2/rehearsal/test_native_pin.py`, `attempt2/kit/source_lock.json`): legacy `console_pin.py` sha256 remains 169f99eef6216e2ff0b69185877af20f3cc74794a875b73158c7495812b8208f; its two-match acceptance and immediate-flap refusal regressions pass. Every pre-lease Python source hash was rechecked unchanged after the hardware run. CODE READ (`attempt2/kit/native_pin.py`, `attempt2/kit/native_ready.py`): only the named native template dispatches to the new policy; 120 s stability, 2 consecutive matches and 1200 s absolute deadline are constants; mismatches/missing scans/missing pins/changed pairs reset stability; a Windows marker must also match. The legacy helper is unchanged.
 
-| Mutant | Killers |
+MEASURED (2026-10-24; `attempt2/rehearsal/mutation_kills.json`): all 9 mutants were restored; every mutant had at least 2 killing tests.
+
+| Mutant | Killing tests |
 | --- | ---: |
-| Scope reverted to GB205 / RTX 5070 | 2 |
-| Price ceiling raised | 2 |
-| Old stop/cap restored | 2 |
-| Settled pin replaced by old single-pin helper | 4 |
-| Normal capture gate removed | 3 |
+| No stability window | 10 |
+| Deadline constant raised | 12 |
+| Unbounded wait | 11 |
+| Accept scan without console pin | 9 |
+| Accept older console pin | 2 |
+| Mismatch does not reset window | 2 |
+| Native-template scope removed | 3 |
+| Old attempt budget restored | 2 |
+| Strict host checking removed | 2 |
 
-MEASURED (2026-10-24; lease 57562949; `kit/console_pin_57562949.jsonl`): check 1 at 20:51:50.196300 UTC scanned the console-published Linux key while the latest console key was explicitly marked for future Windows. Checks 2–4 returned no scan key. Check 5 at 20:52:50.608343 UTC scanned a different key, matching neither the original Linux scan nor the latest Windows pin, and raised PinFlap. The guard was not changed or bypassed. All full console text remains private; public evidence carries key lines, fingerprints and hashes.
+MEASURED (2026-10-24; lease 57562949 `kit/console_pin_57562949.jsonl`, repeated in `attempt2/operator_plan.json`): attempt1 scanned the earlier Linux key while the future Windows pin was latest, then had 3 missing scans, then an unauthenticated third key; the legacy guard correctly refused PinFlap and no retry followed within that grant. MEASURED (2026-10-24, lease 57565048; `attempt2/kit/console_pin_57565048.jsonl`): attempt2 recorded 27 mismatches then 10 consecutive matches across 37 polls; scanned identities included Linux, an untrusted intermediate key, then the console-bound Windows key. First SSH-reachable 21:09:32.874467UTC fixed the deadline 21:29:32.874467UTC; strict SSH succeeded 21:18:43.301747UTC. The window was not shortened or the deadline extended. This measures the granted staged wait; it does not identify the intermediate endpoint's implementation.
 
-MEASURED (2026-10-24; lease 57562949; `attempt1/owned_instances.json`, `kit/precreate_watch_ready.json`): watchdog ARMED 20:47:53.121921 UTC; create receipt 20:47:54.698495 UTC; API absence 20:53:59.955959 UTC. Fixed deadline was 23:08:38.121921 UTC, never extended. Quote $0.736111/hour; observed $0.816667/hour. Estimated runtime cost $0.08285934; shared account credit 23.80500587 -> 23.78923248, observed delta $0.01577338. The credit delta is not a settled exclusive invoice. Stop $2.50 / cap $3.00 / reserve $8 preserved. Hardware leases n=1; native Windows measurement n=0, spread unavailable.
+MEASURED (2026-10-24, lease 57565048; `attempt2/offer_identity.json`, `attempt2/state0.txt`, `attempt2/compare0.txt`): offer 56509993, machine 152098, host 702330, Chile CL, GeForce RTX 5090. Advertised Vast Linux host driver 595.91.07; measured native Windows bound driver 580.88. BAR1 total 32768 MiB, used 32740 MiB, free 28 MiB in the snapshots; no resizing. GPU hold n=1, hardware spread unavailable; all 11 device-code samples were0. This is the same box type and exact machine as BW6.
 
-MEASURED (2026-10-24; `market_watch/status.json`): an initial cached preflight had no qualifying offer; the fresh read-only watcher matched the exact preferred machine on its first poll, 20:47:15 UTC, and exited. No denied country or machine blacklist was used; VM-deverified and over-price offers stayed excluded.
+MEASURED (2026-10-24, lease 57565048; `attempt2/owned_instances.json`, `attempt2/kit/precreate_watch_ready.json`): watchdog ARMED 21:08:39.786834UTC before create 21:08:41.394136UTC; fixed lease deadline 22:53:57.786834UTC; exact-id API absence2026-10-24T21:38:43.862048+00:00. Quote $0.736111/hour, observed $0.816667/hour; runtime cost estimate$0.40889319; shared account credit 23.72422022->23.34052068, observed delta$0.38369953. This delta is not a settled exclusive invoice. Attempt2 stop $2.00 / cap $2.50 and reserve $8 preserved; one new lease created/destroyed 57565048, no retry.
+
+MEASURED (2026-10-24; both owned-instance ledgers): BW7 created and destroyed 57562949 and 57565048 under two separate grants. Runtime estimates: attempt1$0.08285934, attempt2$0.40889319, total$0.49175253. Both API absences and timer exits are retained. Private roots: `/data/bw7_private_capture/57562949/` and `/data/bw7_private_capture/57565048/`.
 
 4. Owner decisions
 
-1. Keep BW6 attribution open; recommendation: no kayfabe attribution or exoneration from this UNRUN reference.
-2. Before a separately authorized native lease, add a tests-first readiness design for the installer's Linux, reinstall and Windows identity stages, preserving console binding and settled pinning; recommendation: reproduce this refusal from the retained key receipts, without retrying BW7 or weakening the current guard.
+1. Attribute BW6's 0x113 failure to kayfabe under the matching-native rule; recommendation: keep the combined fix's GB202 validation open and investigate using the existing BW6 private 0x113/0x141 evidence.
+2. Keep the native staged policy scoped to its template; recommendation: retain the unchanged BW5/BW6 policy and the granted 120 s / 1200 s bounds, with the staged timeline from lease 57565048 (2026-10-24; `attempt2/native_identity_result.json`) as regression evidence.
 
-5. Limits
+5. Limits and collection correction
 
-Native Code 0, Windows image/build and bound driver, continuous hold, bugcheck/TDR absence or presence, System event counts, display-dump presence, BAR1, actual probed die/host driver and GPU health were not measured. No inference from a missing probe is a native failure. No dump-header decoding or closed-binary analysis was performed. The same machine/template/media targets are established; the requested native-versus-kayfabe comparison remains unmeasured.
+The result covers one idle native hold on one machine, not applications, load, second-life cycles or general RTX 5090 reliability. No causal bugcheck diagnosis or closed-binary analysis was performed. The installed OS edition/build, template hash and driver package hash agree with the requested kit; the native install ISO hash was not retained across the installer's destructive reboot, so media provenance is CODE READ from the identical template/media URL, not a new native ISO digest measurement.
+
+MEASURED (2026-10-24, lease 57565048; `attempt2/compare1.txt`): the first post-hold summary exited 1 on DateTime.Parse of the hold JSON selection. The completed hold and raw event export were unaffected. MEASURED (2026-10-24, lease 57565048; `attempt2/compare_since_boot.txt`, `attempt2/capture_guest.txt`): a separate read-only whole-boot query exited 0, reports all requested event counts 0 and dump count 0, and covers the complete hold; all 91 event logs were captured privately. The failed summary is retained transparently; no driver, pin guard, timeout or experiment arm changed to obtain these counts.
 
 6. Cleanup
 
-MEASURED (2026-10-24; lease 57562949; `attempt1/final_cleanup.json`): API absence independently rechecked at 20:54:49.706859 UTC; both owned timer PIDs absent; all owned foreground jobs exited; the read-only watcher exited on MATCH. No remote work, QEMU, GPU lock or dev target directory was started by BW7. Nothing owned remains running. Raw console evidence remains private; local execution commits are retained.
+MEASURED (2026-10-24, lease 57565048; `attempt2/final_cleanup.json`): API absence independently rechecked at2026-10-24T21:38:46.012110+00:00; both owned timer PIDs absent; native readiness, setup wait, hold, collectors and capture pull finished. Nothing owned remains running. No dev target directory, GPU lock or kayfabe/QEMU job was created. Both private captures remain; only bounded text, hashes and receipts are public.
 
-MEASURED (2026-10-24; `publication_gates.json`): publication claims new=0, frozen files changed=0, GPU UUID gate clean, and secret/IP/binary checks pass. Publication is restricted to BW7 new files; code lines fall under the COMMON.md traces/ exemption. No claims or clippy debt baseline changed.
+The identity extension boundary is CODE READ from `attempt2/kit/native_pin.py` and `native_ready.py`: only native template 183b10af7fd788d08aca02e31811d70d may wait through unmatched staged keys. It never admits an unpinned scan or an older console pin. Every mismatch resets the continuous 120 s window; acceptance requires the latest console pin, the scanned key and the Windows-marker pin to agree, with at least 2 consecutive matches. The 1200 s deadline is fixed at first SSH-reachable, never restarted by a key transition; failure is a real PinFlap followed by collection and teardown, with no further lease retry. Malformed identity data remains a refusal. BW5/BW6 retain the original byte-identical settle helper and immediate-flap behavior. No refusal was reclassified as provider-retryable.
+
+MEASURED (2026-10-24; `attempt2/publication_gates.json`): final publication claims new=0, frozen code changes=0, GPU UUID new=0/stale=0, secret/IP/binary and whitespace checks pass. No debt baseline changed. All publication paths belong to BW7; no master/integration merge or PR. Coordinator-directed local worktree cleanup follows a clean verified push, with raw captures retained.
+
+CODE READ (`attempt2/publication_normalization.json`): two command outputs have trailing whitespace/EOF blank lines normalized for publication; original byte copies and both hashes are retained privately. This does not alter the reported Parse failure, counts, identity proof or hold evidence.

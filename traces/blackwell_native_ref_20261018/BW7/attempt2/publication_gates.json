@@ -1,0 +1,21 @@
+{
+  "utc": "2026-10-24T21:44:39.787764+00:00",
+  "claims": "claims: existing-debt=3758 new=0 resolved=0",
+  "frozen_changes": 0,
+  "GPU_UUID_new": 0,
+  "GPU_UUID_stale": 0,
+  "secret_IP_binary_scan": "PASS",
+  "IPv4_looking_strings": [
+    "10.0.0.0",
+    "8.8.8.8"
+  ],
+  "prelease_Python_sources_unchanged": true,
+  "native_lease_closed": 57565048,
+  "previous_lease_closed": 57562949,
+  "guards_legacy_unchanged": true,
+  "template_scope": "native183b10af7fd788d08aca02e31811d70d only",
+  "native_stability_seconds": 120,
+  "native_absolute_seconds_from_first_reachable": 1200,
+  "real_refusal_retry_allowed": false,
+  "coordinator_cleanup": "Only own worktree after clean verified push; all raw capture preserved."
+}

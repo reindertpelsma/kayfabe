@@ -1,0 +1,108 @@
+{
+  "lane": "BW7 attempt2",
+  "result": "H_REF_PASS",
+  "lease_id": 57565048,
+  "measured": {
+    "evidence": "2026-10-24 lease57565048; native_hold_result.json, native_identity_result.json, compare_since_boot.txt, capture_all_verified.json and final_cleanup.json",
+    "machine_id": 152098,
+    "host_id": 702330,
+    "GPU": "NVIDIA GeForce RTX5090",
+    "die": "GB202 from BW6 probe on same machine and offer class",
+    "native_Windows_driver": "580.88 /32.0.15.8088",
+    "advertised_Vast_Linux_host_driver": "595.91.07",
+    "BAR1_total_MiB": 32768,
+    "Windows_version": "10.0.26100.1742",
+    "OS": "Microsoft Windows 11 Enterprise LTSC Evaluation",
+    "driver_package_sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+    "hold": {
+      "lease_id": 57565048,
+      "verdict": "NATIVE_HOLD_PASS",
+      "samples": 11,
+      "first_sample_utc": "2026-10-24T21:22:27.8766073Z",
+      "last_sample_utc": "2026-10-24T21:32:29.9007899Z",
+      "elapsed_from_script_start_seconds": 602.9497983,
+      "first_to_last_sample_seconds": 602.024182,
+      "driver": "32.0.15.8088",
+      "device": "RTX5090 / advertised GB202",
+      "boot": "2026-10-24T21:15:17.6390550Z",
+      "all_Code0": true,
+      "System_1001": 0,
+      "System_6008": 0,
+      "System_4101": 0,
+      "nvlddmkm_Display_errors": 0,
+      "source_lock_unchanged": true,
+      "owner_rule_interpretation": "INFERRED under owner rule: matching GB202 native reference passes, so attribute BW6 failure to kayfabe. No root cause established."
+    },
+    "identity": {
+      "lease_id": 57565048,
+      "first_reachable_utc": "2026-10-24T21:09:32.874467+00:00",
+      "identity_deadline_utc": "2026-10-24T21:29:32.874467+00:00",
+      "strict_SSH_ready_utc": "2026-10-24T21:18:43.301747+00:00",
+      "proof_latest": "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+      "proof_scan": "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+      "proof_windows_marker": "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+      "stable_seconds": 135.01299852598459,
+      "consecutive_matches": 10,
+      "elapsed_since_first_reachable": 545.1782452790067,
+      "polls": 37,
+      "states": {
+        "absent": 0,
+        "match": 10,
+        "mismatch": 27
+      },
+      "distinct_scan_fingerprints": [
+        "SHA256:9zw2mvWe2IhCMgkmjuoDdppcQPZnDDNJYHSyporsDPo",
+        "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+        "SHA256:iNFYIYnVssCQForyLeeUk+pYQQlzTdNO+DQ1Td7t/n0"
+      ],
+      "native_identity_admission": "PASS; does not establish H-REF or GPU health"
+    },
+    "whole_boot_event_counts": {
+      "begin": "2026-10-24T21:15:17.6403810Z",
+      "event1001": 0,
+      "event6008": 0,
+      "event4101": 0,
+      "displayErrors": 0
+    },
+    "dump_files": [],
+    "dump_codes_present": {
+      "0x193": false,
+      "0x1A8": false,
+      "0x1B8": false,
+      "0x141": false,
+      "0x113": false
+    },
+    "capture_files_verified": 133,
+    "capture_total_bytes": 31769425,
+    "guest_manifest_files": 93,
+    "private_root": "/data/bw7_private_capture/57565048",
+    "created_instances": [
+      57565048
+    ],
+    "destroyed_instances": [
+      57565048
+    ],
+    "created_utc": "2026-10-24T21:08:41.394136+00:00",
+    "absence_verified_utc": "2026-10-24T21:38:43.862048+00:00",
+    "quote_usd_h": 0.7361111111111112,
+    "observed_usd_h": 0.8166666666666668,
+    "runtime_cost_estimate_usd": 0.40889318986574075,
+    "credit_before": 23.724220217859965,
+    "credit_after_observed": 23.34052068485971,
+    "observed_shared_account_credit_delta": 0.3836995330002537,
+    "stop_usd": 2,
+    "cap_usd": 2.5,
+    "reserve_usd": 8
+  },
+  "inferred": {
+    "evidence": "Native H-REF PASS on same BW6 machine/driver; owner attribution rule in operator_plan.json",
+    "decision": "Attribute BW6 0x113 failure to kayfabe under owner rule. Native reference does not establish the specific bugcheck root cause.",
+    "identity": "The staged native path was waited out without admitting the untrusted intermediate scanned key."
+  },
+  "limits": [
+    "One native GPU hold on one machine; no application or load result.",
+    "Actual native install ISO hash was not captured after destructive installer reboot; template/image URL, OS edition/build and pinned driver hash agree with the requested kit.",
+    "Post-hold compare1.txt contains a read-only timestamp Parse failure; compare_since_boot.txt succeeds and covers the complete boot, and full private System logs cover the hold.",
+    "No Linux-native Xid query on the native Windows image; no new product arm, re-enable cycle or source fix iteration."
+  ]
+}

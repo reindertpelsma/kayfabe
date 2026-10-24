@@ -1,0 +1,24 @@
+{
+  "lease_id": 57565048,
+  "first_reachable_utc": "2026-10-24T21:09:32.874467+00:00",
+  "identity_deadline_utc": "2026-10-24T21:29:32.874467+00:00",
+  "strict_SSH_ready_utc": "2026-10-24T21:18:43.301747+00:00",
+  "proof_latest": "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+  "proof_scan": "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+  "proof_windows_marker": "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+  "stable_seconds": 135.01299852598459,
+  "consecutive_matches": 10,
+  "elapsed_since_first_reachable": 545.1782452790067,
+  "polls": 37,
+  "states": {
+    "absent": 0,
+    "match": 10,
+    "mismatch": 27
+  },
+  "distinct_scan_fingerprints": [
+    "SHA256:9zw2mvWe2IhCMgkmjuoDdppcQPZnDDNJYHSyporsDPo",
+    "SHA256:LqjXd8ye7liQXVKrqCgGLYpULmp11wtH9lIIgzAd2QA",
+    "SHA256:iNFYIYnVssCQForyLeeUk+pYQQlzTdNO+DQ1Td7t/n0"
+  ],
+  "native_identity_admission": "PASS; does not establish H-REF or GPU health"
+}

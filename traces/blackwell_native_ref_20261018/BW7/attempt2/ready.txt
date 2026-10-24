@@ -1,0 +1,43 @@
+UNVERIFIED-HOST ready
+NATIVE_PROVIDER loading
+NATIVE_PROVIDER created
+NATIVE_PROVIDER created
+NATIVE_FIRST_REACHABLE 2026-10-24T21:09:32.874467+00:00
+NATIVE_PIN mismatch 1 stable 0 elapsed 5.2
+NATIVE_PIN mismatch 2 stable 0 elapsed 19.3
+NATIVE_PIN mismatch 3 stable 0 elapsed 39.0
+NATIVE_PIN mismatch 4 stable 0 elapsed 49.4
+NATIVE_PIN mismatch 5 stable 0 elapsed 64.4
+NATIVE_PIN mismatch 6 stable 0 elapsed 80.3
+NATIVE_PIN mismatch 7 stable 0 elapsed 95.2
+NATIVE_PIN mismatch 8 stable 0 elapsed 110.2
+NATIVE_PIN mismatch 9 stable 0 elapsed 125.3
+NATIVE_PIN mismatch 10 stable 0 elapsed 140.1
+NATIVE_PIN mismatch 11 stable 0 elapsed 155.1
+NATIVE_PIN mismatch 12 stable 0 elapsed 174.0
+NATIVE_PIN mismatch 13 stable 0 elapsed 189.1
+NATIVE_PIN mismatch 14 stable 0 elapsed 204.1
+NATIVE_PIN mismatch 15 stable 0 elapsed 218.9
+NATIVE_PIN mismatch 16 stable 0 elapsed 233.9
+NATIVE_PIN mismatch 17 stable 0 elapsed 248.9
+NATIVE_PIN mismatch 18 stable 0 elapsed 264.2
+NATIVE_PIN mismatch 19 stable 0 elapsed 279.0
+NATIVE_PIN mismatch 20 stable 0 elapsed 294.0
+NATIVE_PIN mismatch 21 stable 0 elapsed 309.0
+NATIVE_PIN mismatch 22 stable 0 elapsed 323.9
+NATIVE_PIN mismatch 23 stable 0 elapsed 339.0
+NATIVE_PIN mismatch 24 stable 0 elapsed 354.0
+NATIVE_PIN mismatch 25 stable 0 elapsed 369.1
+NATIVE_PIN mismatch 26 stable 0 elapsed 384.1
+NATIVE_PIN mismatch 27 stable 0 elapsed 399.0
+NATIVE_PIN match 28 stable 0.0 elapsed 410.2
+NATIVE_PIN match 29 stable 15.0 elapsed 425.2
+NATIVE_PIN match 30 stable 30.0 elapsed 440.2
+NATIVE_PIN match 31 stable 45.0 elapsed 455.2
+NATIVE_PIN match 32 stable 60.0 elapsed 470.2
+NATIVE_PIN match 33 stable 75.1 elapsed 485.2
+NATIVE_PIN match 34 stable 90.1 elapsed 500.2
+NATIVE_PIN match 35 stable 105.1 elapsed 515.2
+NATIVE_PIN match 36 stable 120.0 elapsed 530.1
+NATIVE_PIN match 37 stable 135.0 elapsed 545.2
+NATIVE_READINESS_PASS 57565048
