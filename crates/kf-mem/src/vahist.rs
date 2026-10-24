@@ -545,21 +545,28 @@ impl Recorder {
                 first_ms: t_ms,
             };
             sp.runs = sp.runs.saturating_add(1);
-            match op {
+            // ★ A refused or withheld run is re-emitted by every walk (acked FAILED): it reaches the
+            // last-runs ring only the FIRST time, so it cannot push real history out (seen
+            // 2026-10-24 in host run 5220 at rev 75f22f78: a user space's privileged leaves filled
+            // all 64 entries; pinned by tests/vahist.rs).
+            let first = match op {
                 Op::Refused => {
-                    fresh_refusal |= push_sticky(&mut sp.refused, e, &mut sp.sticky_evicted);
+                    let new = push_sticky(&mut sp.refused, e, &mut sp.sticky_evicted);
+                    fresh_refusal |= new;
+                    new
                 }
-                Op::Withheld => {
-                    push_sticky(&mut sp.withheld, e, &mut sp.sticky_evicted);
-                }
-                Op::Map | Op::WalkRefused => {}
+                Op::Withheld => push_sticky(&mut sp.withheld, e, &mut sp.sticky_evicted),
+                Op::Map | Op::WalkRefused => true,
                 Op::Unmap | Op::UnmapRefused | Op::Held | Op::Unknown => {
                     if push_coalesced(&mut sp.absent, ABSENCE_EVENTS, e) {
                         sp.absent_evicted = sp.absent_evicted.saturating_add(1);
                     }
+                    true
                 }
+            };
+            if first {
+                push_coalesced(&mut sp.last, LAST_RUNS, e);
             }
-            push_coalesced(&mut sp.last, LAST_RUNS, e);
         }
         if walk_refused_mask != 0 {
             let e = Ev {
