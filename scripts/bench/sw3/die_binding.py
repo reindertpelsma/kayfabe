@@ -1,0 +1,91 @@
+"""Bind an operator run to native RM facts and the product's derived die names."""
+
+import csv
+import json
+from pathlib import Path
+import re
+import sys
+
+SCOPE = {"GA104", "GA106", "GA102", "TU106", "TU116", "AD103", "AD106"}
+
+
+class BindingRefused(ValueError):
+    """The native binding or its authenticated transport proof is inconsistent."""
+
+
+def bind(probe, binding, die_source, arch_source, pin):
+    identity = pin["identity"]
+    expected = identity.get("expected_fingerprint")
+    if not (
+        pin.get("ssh_verified") is True
+        and identity.get("state") == "match"
+        and expected
+        and identity.get("fingerprint") == expected
+        and expected in identity.get("fingerprints", [])
+    ):
+        raise BindingRefused("real SSH/console identity failure")
+    if not isinstance(probe, str) or len(probe.encode()) > 65536:
+        raise BindingRefused("probe type or size")
+    candidates = [line for line in probe.splitlines() if line.startswith("host_driver=")]
+    if len(candidates) != 1:
+        raise BindingRefused("one complete native RM identity required")
+    match = re.fullmatch(
+        r"host_driver=([0-9]{3}\.[0-9]{1,3}\.[0-9]{1,2}) "
+        r"arch=\(([0-9]+), ([0-9]+), ([0-9]+)\)", candidates[0]
+    )
+    if match is None or probe.splitlines().count(
+        "PASS native read-only timer map/read/drop x3"
+    ) != 1:
+        raise BindingRefused("malformed/incomplete native probe")
+    driver = match[1]
+    architecture, implementation, revision = map(int, match.groups()[1:])
+    if any(value > 0xFFFFFFFF for value in (architecture, implementation, revision)):
+        raise BindingRefused("native tuple exceeds u32")
+    rows = list(csv.reader(binding.splitlines(), skipinitialspace=True))
+    if len(rows) != 1 or len(rows[0]) != 3:
+        raise BindingRefused("one bound adapter required")
+    name, bound_driver, pci = (value.strip() for value in rows[0])
+    if not re.fullmatch(r"[A-Za-z0-9_. -]{1,120}", name):
+        raise BindingRefused("malformed product name")
+    if not (
+        re.fullmatch(r"0x[0-9A-Fa-f]{8}", pci)
+        and pci.lower().endswith("10de")
+        and bound_driver == driver == pin["driver"]
+        and pci.lower() == pin["pci"].lower()
+        and [architecture, implementation] == pin["arch_impl"]
+    ):
+        raise BindingRefused("inconsistent native binding")
+    arches = dict(re.findall(r"pub const (\w+): u32 = (0x[0-9A-Fa-f]+);", arch_source))
+    table = re.search(r"pub const DIE_NAMES:.*?= &\[(.*?)\n\];", die_source, re.S)
+    if table is None:
+        raise BindingRefused("derived die table missing")
+    names = {}
+    for arch, impl, die in re.findall(
+        r'\(arch::(\w+), (0x[0-9a-f]+), "([A-Z0-9]+)"\)', table[1]
+    ):
+        key = (int(arches[arch], 16), int(impl, 16))
+        if key in names:
+            raise BindingRefused("ambiguous derived die tuple")
+        names[key] = die
+    die = names.get((architecture, implementation))
+    if die not in SCOPE:
+        raise BindingRefused("unknown or out-of-scope native tuple")
+    # Original operator forecast predicate, preserved until its regression is RED.
+    if die != "GA106":
+        raise BindingRefused("operator forecast expected GA106")
+    return {"die": die, "architecture": architecture, "implementation": implementation,
+            "revision": revision, "driver": driver, "pci": pci, "product_name": name}
+
+
+def main():
+    probe, binding, root, plan = map(Path, sys.argv[1:])
+    result = bind(
+        probe.read_text(), binding.read_text(),
+        (root / "crates/kf-chip/src/die.rs").read_text(),
+        (root / "crates/kf-chip/src/lib.rs").read_text(), json.loads(plan.read_text())
+    )
+    print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
