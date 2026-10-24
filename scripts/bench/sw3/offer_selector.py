@@ -6,6 +6,8 @@ class OfferRefused(ValueError):
 
 
 def require_offer(offer, blacklisted):
+    if offer.get("verification") != "verified":
+        raise OfferRefused("verified offers only; OWNER_RULINGS T.12")
     if offer.get("vms_enabled") is not True or offer.get("num_gpus") != 1:
         raise OfferRefused("one VM-capable GPU required")
     if offer.get("is_vm_deverified") is not False:
