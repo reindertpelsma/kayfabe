@@ -1,18 +1,18 @@
 # SW5 die sweep
 
-STATUS: CLOSED, 2026-10-25 UTC (2026-10-26 CET). Three qualified Linux cells; TU106 excluded under the frozen native Xid policy.
+STATUS: CLOSED, 2026-10-25 UTC (2026-10-26 CET). Three qualified Linux cells; TU106 excluded under the frozen native Xid policy; mirror6564dd597 UNRUN after the late addition and exhausted lease allowance.
 
 MEASURED (2026-10-25 UTC; leases57723513/57726516/57731910, their `result.json` files below): GA102, GA106 and AD106 each passed native gates9/9+gate10, bare30/30, fast30/30 and the USER birth census. Host and host-mode Linux guest are595.91.07 open, kernel6.8.0-59; production714ec29d3. Hardware n1 per cell; no performance, long-run or broader compatibility claim.
 
-| Actual die | OS; host / guest | Product; flags | Verdict | Evidence |
-| --- | --- | --- | --- | --- |
-| GA102 | Linux6.8.0-59;595.91.07 open /595.91.07 open |714ec29d3;KF_DEVICE=kf3,KF_FROM_HOST=1,KF3_FB_MB=8192 | PASS native9+10,bare30,fast30,USER; n1 | [lease57723513](ga102_57723513/result.json) |
-| GA106 | Linux6.8.0-59;595.91.07 open /595.91.07 open |714ec29d3;KF_DEVICE=kf3,KF_FROM_HOST=1,KF3_FB_MB=8192 | PASS native9+10,bare30,fast30,USER; n1 | [lease57726516](ga106_57726516/result.json) |
-| TU106 | Native Linux595.91.07 open; guest UNRUN |714ec29d3 instruments; guest binary UNBUILT;4096MiB planned | EXCLUDED: native Xid refusal; guest0arms | [lease57729990](tu106_57729990/result.json) |
-| AD106 | Linux6.8.0-59;595.91.07 open /595.91.07 open |714ec29d3;KF_DEVICE=kf3,KF_FROM_HOST=1,KF3_FB_MB=8192 | PASS native9+10,bare30,fast30,USER; n1 | [lease57731910](ad106_57731910/result.json) |
-| TU116 candidate | Linux planned | None executed | UNRUN; marketed GTX1660S offer had6CPU, below the inherited8CPU floor | [market summary](market_summary.json) |
-| AD103 | Linux planned | None executed | UNRUN; no eligible offer in retained snapshots; four leases exhausted | [market summary](market_summary.json) |
-| All SW5 targets | Windows | None executed | UNRUN | Linux-only sweep |
+| Actual die | OS; host / guest | Product; flags | Verdict | mirror 6564dd597 | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| GA102 | Linux6.8.0-59;595.91.07 open /595.91.07 open |714ec29d3;KF_DEVICE=kf3,KF_FROM_HOST=1,KF3_FB_MB=8192 | PASS native9+10,bare30,fast30,USER; n1 | UNRUN; no retained lease | [lease57723513](ga102_57723513/result.json) |
+| GA106 | Linux6.8.0-59;595.91.07 open /595.91.07 open |714ec29d3;KF_DEVICE=kf3,KF_FROM_HOST=1,KF3_FB_MB=8192 | PASS native9+10,bare30,fast30,USER; n1 | UNRUN; no retained lease | [lease57726516](ga106_57726516/result.json) |
+| TU106 | Native Linux595.91.07 open; guest UNRUN |714ec29d3 instruments; guest binary UNBUILT;4096MiB planned | EXCLUDED: native Xid refusal; guest0arms | UNRUN; native refused | [lease57729990](tu106_57729990/result.json) |
+| AD106 | Linux6.8.0-59;595.91.07 open /595.91.07 open |714ec29d3;KF_DEVICE=kf3,KF_FROM_HOST=1,KF3_FB_MB=8192 | PASS native9+10,bare30,fast30,USER; n1 | UNRUN; no retained lease | [lease57731910](ad106_57731910/result.json) |
+| TU116 candidate | Linux planned | None executed | UNRUN; marketed GTX1660S offer had6CPU, below the inherited8CPU floor | UNRUN; no retained lease | [market summary](market_summary.json) |
+| AD103 | Linux planned | None executed | UNRUN; no eligible offer in retained snapshots; four leases exhausted | UNRUN; no retained lease | [market summary](market_summary.json) |
+| All SW5 targets | Windows | None executed | UNRUN | UNRUN; no retained lease | Linux-only sweep |
 
 MEASURED (2026-10-25 UTC; leases57723513/57726516/57731910, linked results): each completed suite has161/161 USER births and90 CUDA posture records; gates12/12 USER. Host Xids0→10 equal exactly5native plus5guest source-approved controls, unexpected0. Host BAR1 is256MiB on all four boxes, without resize. The three executed QEMU binaries share SHA256 `9e99b20f7b98b79af8c8661a0b313fcf1fea8915fbe6e55d869660d059f2cfed` under `kf3-bins/714ec29d`.
 
@@ -49,3 +49,11 @@ Raw captures contain text only and remain in the private lane capture store. Pub
 CODE READ (public EXPECTED RED logs): traceback filenames are normalized to repository-relative paths; the private originals retain the exact output.
 
 MEASURED (2026-10-25 UTC; [claims](claims.log), [diff scan](final_diff_scan.json)): claims existing-debt3758/new0/resolved0; added branch lines contain no credential, IP, board UUID or private host path matches, and new code lines stay within100columns. No debt entry or guard was waived.
+
+CODE READ (2026-10-25 UTC; [mirror addition](mirror_addition_receipt.json), source rev6564dd597): the addition was written23:17:53UTC, after the final lease API absence23:11:32UTC. It retains the existing limits; four leases were already exhausted. The requested mirror fast suites are UNRUN on every die. No mirror counter or Xid-delta value was measured, and no fifth lease was created.
+
+CODE READ (source rev6564dd597, `tsgmirror.rs::enabled` and `Stats::summary`): mirror defaults ON unless `KF3_TSG_MIRROR=0`; the status fragment carries `groups` and `ctx_unknown`. The requested Linux values0/0 are expectations, not results. MEASURED (2026-10-25 UTC; mirror_addition_receipt.json): the trusted reference binary hash matches its manifest, `82a806eeacbfc3df5f42e1575fd4b242d7fda7d3f4781f8fe0f708398c0a658a`; SW5 did not execute that binary.
+
+Owner recommendation for the addition: keep mirror6564dd597 unqualified on these dies. A separate allocation is needed for fresh same-box native/production/mirror qualification; the linked receipt contains the exact source, binary hash, fixed180s oracle, counter checks and falsifiers.
+
+CODE READ (2026-10-25 UTC; mirror_addition_receipt.json and cost.json): only1.063509112USD remains below the lane stop under the retained guard. Three fresh leases would reserve at least1.50USD in unchanged nonruntime margins before compute or transfer, and the four-lease limit is already exhausted. No existing limit was extended for the addition.

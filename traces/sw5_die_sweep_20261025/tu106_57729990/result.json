@@ -82,5 +82,14 @@
   },
   "capture_limit": "Extensionless XID_STOP marker omitted by inherited capture extension filter; original KF_XID_REFUSED, blocked-arm logs and full kernel were retained.",
   "n_native": 1,
-  "n_guest": 0
+  "n_guest": 0,
+  "mirror_6564dd597": {
+    "status": "UNRUN",
+    "source_revision": "6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4",
+    "fast_arms_run": 0,
+    "mirror_groups": null,
+    "mirror_ctx_unknown": null,
+    "host_xid_delta": null,
+    "reason": "Native qualification refused"
+  }
 }

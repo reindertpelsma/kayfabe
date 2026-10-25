@@ -80,5 +80,14 @@
     "watch_cancelled_after_absence": true,
     "watch_pid_gone": true
   },
-  "windows": "UNRUN"
+  "windows": "UNRUN",
+  "mirror_6564dd597": {
+    "status": "UNRUN",
+    "source_revision": "6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4",
+    "fast_arms_run": 0,
+    "mirror_groups": null,
+    "mirror_ctx_unknown": null,
+    "host_xid_delta": null,
+    "reason": "Addition arrived after exact-ID teardown; four-lease allowance exhausted"
+  }
 }
