@@ -25,7 +25,7 @@ function logCreateFailed(status, klass, r) {
 }
 export class Vast {
   constructor(fetcher, cfg, key) {
-    this.fetcher = fetcher;
+    this.fetcher = (...args) => fetcher(...args);
     this.cfg = cfg;
     this.headers = { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' };
     if (!key) refuse();
