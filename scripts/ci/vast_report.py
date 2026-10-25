@@ -308,6 +308,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+USER_AGENT = "kayfabe-vast-box/7"
+
+
 class HttpsTransport:
     """HTTPS POST to one fixed URL; no proxies, no redirects; token only in that header."""
 
@@ -329,7 +332,13 @@ class HttpsTransport:
 
     def post(self, url, body):
         """Return (status, parsed JSON or None); status None means no HTTP answer."""
-        headers = {"Content-Type": "application/json", "Authorization": "Bearer " + self.token}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + self.token,
+            # Cloudflare answers Python's default urllib User-Agent with 403 error 1010 before
+            # Access sees the request (measured on a real box, 2026-10-25).
+            "User-Agent": USER_AGENT,
+        }
         headers.update(self.access)
         request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
