@@ -1541,7 +1541,15 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 std::thread::sleep(std::time::Duration::from_millis(ms));
             }
             let t_apply = std::time::Instant::now();
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): "held across unmap" is
+            // evaluated HERE, before the host sees any run of this diff, and the diff is logged
+            // when its apply ends. Changes no decision.
+            let gl_ticket = crate::gatelog::enabled()
+                .then(|| crate::gatelog::global().begin_apply(key.0, batch.id, &e.runs));
             let a = apply_entry(&space.target, &e.runs, &cfg);
+            if let Some(tk) = gl_ticket {
+                crate::gatelog::global().end_apply(tk);
+            }
             let apply_ns = ns_since(t_apply);
             if crate::maplog::on() {
                 // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,

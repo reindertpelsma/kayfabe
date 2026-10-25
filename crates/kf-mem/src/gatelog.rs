@@ -36,8 +36,6 @@
 //! **Hostile guest:** every number recorded is a number the host parsed or counted; a guest-chosen
 //! GP_PUT outside the ring is ignored; storage is capped whatever the guest does.
 
-#![allow(unused_variables, unused_mut, dead_code, unused_imports)]
-
 use crate::apply::DiffRun;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -89,8 +87,7 @@ pub const WHY_SPLIT_RUNNING: u8 = 8;
 /// `true` only for exactly `"1"` (the `KF3_DIAG_*` rule: never "any value is on").
 #[must_use]
 pub fn flag_on(v: Option<&str>) -> bool {
-    let _ = v;
-    false
+    v == Some("1")
 }
 
 /// Is the diagnostic on (`KF3_DIAG_GATELOG=1`)? Read once.
@@ -134,13 +131,24 @@ impl<T: Clone> Ring<T> {
 
     /// Append `v`; when full it replaces the oldest and counts an overflow.
     pub fn push(&mut self, v: T) {
-        let _ = v;
+        if self.buf.len() < self.cap {
+            self.buf.push(v);
+            return;
+        }
+        if let Some(slot) = self.buf.get_mut(self.next) {
+            *slot = v;
+        }
+        self.next = self.next.saturating_add(1);
+        if self.next >= self.cap {
+            self.next = 0;
+        }
+        self.overflow = self.overflow.saturating_add(1);
     }
 
     /// Records held.
     #[must_use]
     pub fn len(&self) -> usize {
-        0
+        self.buf.len()
     }
 
     /// No record yet.
@@ -152,19 +160,32 @@ impl<T: Clone> Ring<T> {
     /// Records overwritten so far.
     #[must_use]
     pub fn overflow(&self) -> u64 {
-        0
+        self.overflow
     }
 
     /// Every record, newest first, without copying.
     pub fn newest_first(&self) -> impl Iterator<Item = &T> + '_ {
-        std::iter::empty()
+        let len = self.buf.len();
+        (0..len).filter_map(move |k| {
+            let back = len.saturating_sub(1).saturating_sub(k);
+            let phys = self.next.saturating_add(back).checked_rem(len).unwrap_or(0);
+            self.buf.get(phys)
+        })
     }
 
     /// The newest `n` records, oldest first.
     #[must_use]
     pub fn last_n(&self, n: usize) -> Vec<T> {
-        let _ = n;
-        Vec::new()
+        let len = self.buf.len();
+        let take = n.min(len);
+        let mut out = Vec::with_capacity(take);
+        for i in len.saturating_sub(take)..len {
+            let phys = self.next.saturating_add(i).checked_rem(len).unwrap_or(0);
+            if let Some(v) = self.buf.get(phys) {
+                out.push(v.clone());
+            }
+        }
+        out
     }
 }
 
@@ -172,15 +193,21 @@ impl<T: Clone> Ring<T> {
 /// outside the ring: the relay refuses those, and the log must not invent entries from them).
 #[must_use]
 pub fn put_advance(last: u32, put: u32, entries: u32) -> u32 {
-    let _ = (last, put, entries);
-    0
+    if entries == 0 || put >= entries || last >= entries {
+        return 0;
+    }
+    if put >= last {
+        put.wrapping_sub(last)
+    } else {
+        entries.wrapping_sub(last).wrapping_add(put)
+    }
 }
 
 /// Do two VA ranges `(va, len)` share a byte? Half-open, saturating.
 #[must_use]
 pub fn ranges_overlap(a: (u64, u64), b: (u64, u64)) -> bool {
-    let _ = (a, b);
-    false
+    let (ae, be) = (a.0.saturating_add(a.1), b.0.saturating_add(b.1));
+    a.1 != 0 && b.1 != 0 && a.0 < be && b.0 < ae
 }
 
 /// Could the walks applied during a hold have changed what the held work touches?
@@ -238,7 +265,10 @@ impl Overlap {
     /// The hold stopped work no applied diff could have changed.
     #[must_use]
     pub fn unrelated(self) -> bool {
-        false
+        matches!(
+            self,
+            Overlap::NoWalk | Overlap::SpaceUntouched | Overlap::VaDisjoint
+        )
     }
 }
 
@@ -252,8 +282,23 @@ pub fn classify_overlap(
     targets: Option<&[(u64, u64)]>,
     changed: &[(u64, u64)],
 ) -> Overlap {
-    let _ = (walks, space_touched, targets, changed);
-    Overlap::NoWalk
+    if walks == 0 {
+        return Overlap::NoWalk;
+    }
+    if !space_touched {
+        return Overlap::SpaceUntouched;
+    }
+    let Some(targets) = targets else {
+        return Overlap::SpaceTouched;
+    };
+    let hit = targets
+        .iter()
+        .any(|&t| changed.iter().any(|&c| ranges_overlap(t, c)));
+    if hit {
+        Overlap::VaOverlap
+    } else {
+        Overlap::VaDisjoint
+    }
 }
 
 /// Where the gate held the channel.
@@ -474,8 +519,7 @@ impl ChanLog {
     /// The newest `n` records, oldest first.
     #[must_use]
     pub fn last(&self, n: usize) -> Vec<Rec> {
-        let _ = n;
-        Vec::new()
+        self.ring.last_n(n)
     }
 
     /// Records in the ring and records overwritten.
@@ -500,21 +544,75 @@ impl ChanLog {
     /// (seen); a value outside the ring, or no change, announces nothing. Returns the entries
     /// added.
     pub fn put_seen(&mut self, t: u64, put: u32) -> u32 {
-        let _ = (t, put);
-        0
+        let n = put_advance(self.last_put, put, self.entries);
+        if n == 0 {
+            return 0;
+        }
+        let prev = self.last_put;
+        self.last_put = put;
+        let held = self.hold.is_some();
+        if self.pend.len() >= PEND_CHUNKS {
+            if let Some(back) = self.pend.back_mut() {
+                back.n = back.n.saturating_add(n);
+                back.held |= held;
+            }
+        } else {
+            self.pend.push_back(Chunk {
+                t_ns: t,
+                first: prev,
+                n,
+                held,
+            });
+        }
+        self.pend_n = self.pend_n.saturating_add(u64::from(n));
+        self.stats.announced = self.stats.announced.saturating_add(u64::from(n));
+        self.ring.push(Rec {
+            t_ns: t,
+            kind: Kind::PutAdvance,
+            a: put,
+            b: u64::from(prev),
+            c: u64::from(n),
+        });
+        n
     }
 
     /// The relay loaded GP entry `entry` of `slot` at `t`.
     pub fn entry_seen(&mut self, t: u64, slot: u32, entry: u64) {
-        let _ = (t, slot, entry);
+        self.stats.seen = self.stats.seen.saturating_add(1);
+        self.ring.push(Rec {
+            t_ns: t,
+            kind: Kind::Seen,
+            a: slot,
+            b: entry,
+            c: self.pend_n,
+        });
     }
 
     /// The gate held the channel at `t`. The first call of a stretch opens a hold (and marks every
     /// announced entry as held); later calls inside it are counted, not recorded. Returns `true`
     /// when a hold was opened.
     pub fn gate(&mut self, t: u64, g: Gate) -> bool {
-        let _ = (t, g);
-        false
+        if self.hold.is_some() {
+            self.stats.regates = self.stats.regates.saturating_add(1);
+            return false;
+        }
+        self.hold = Some(Hold { t_ns: t, gate: g });
+        self.stats.holds = self.stats.holds.saturating_add(1);
+        for c in &mut self.pend {
+            c.held = true;
+        }
+        let point = match g.point {
+            Point::Put => 0u32,
+            Point::Publish => 1u32,
+        };
+        self.ring.push(Rec {
+            t_ns: t,
+            kind: Kind::GateStart,
+            a: u32::from(g.reason) | (point << 8),
+            b: g.space,
+            c: g.walk,
+        });
+        true
     }
 
     /// The gate let the channel through at `t` (`walk` = last diff id applied). Closes the open
@@ -527,15 +625,30 @@ impl ChanLog {
         ch: &Changes,
         targets: Option<&[(u64, u64)]>,
     ) -> Option<u64> {
-        let _ = (t, walk, ch, targets);
-        None
+        let h = self.hold.take()?;
+        let ns = t.saturating_sub(h.t_ns);
+        let ov = classify_overlap(ch.walks, ch.space_touched, targets, &ch.extents);
+        self.stats.hold_ns = self.stats.hold_ns.saturating_add(ns);
+        self.stats.hold_ns_max = self.stats.hold_ns_max.max(ns);
+        if ov.unrelated() {
+            self.stats.unrelated_holds = self.stats.unrelated_holds.saturating_add(1);
+            self.stats.unrelated_hold_ns = self.stats.unrelated_hold_ns.saturating_add(ns);
+        }
+        self.ring.push(Rec {
+            t_ns: t,
+            kind: Kind::GateEnd,
+            a: ov.code(),
+            b: ns,
+            c: walk,
+        });
+        Some(ns)
     }
 
     /// One entry reached the private host ring at `t`: the oldest announced one. Returns its age
     /// in ns (0 when none was announced: the log never saw its `GP_PUT`).
     pub fn published(&mut self, t: u64) -> u64 {
-        let _ = t;
-        0
+        self.stats.published = self.stats.published.saturating_add(1);
+        self.pop_one(t, false)
     }
 
     /// Resync with the relay's cursor at `t`: the entries from `cursor` up to the last `GP_PUT`
@@ -543,8 +656,16 @@ impl ChanLog {
     /// without a publish hook seeing it. They are removed (recorded as inferred, not counted as
     /// published). Returns how many.
     pub fn reconcile(&mut self, t: u64, cursor: u32) -> u64 {
-        let _ = (t, cursor);
-        0
+        if self.entries == 0 || cursor >= self.entries {
+            return 0;
+        }
+        let expect = u64::from(put_advance(cursor, self.last_put, self.entries));
+        let mut n = 0u64;
+        while self.pend_n > expect && !self.pend.is_empty() {
+            self.pop_one(t, true);
+            n = n.saturating_add(1);
+        }
+        n
     }
 
     fn pop_one(&mut self, t: u64, inferred: bool) -> u64 {
@@ -589,15 +710,32 @@ impl ChanLog {
     /// What is waiting at `t`.
     #[must_use]
     pub fn held_now(&self, t: u64) -> Held {
-        let _ = t;
-        Held::default()
+        Held {
+            count: self.pend_n,
+            oldest_age_ns: self.pend.front().map_or(0, |c| t.saturating_sub(c.t_ns)),
+            in_hold: self.hold.is_some(),
+            hold_age_ns: self.hold.map_or(0, |h| t.saturating_sub(h.t_ns)),
+        }
     }
 
     /// A VA-manager unmap (diff `walk`) found `held` here at `t`. Recorded only when work was
     /// waiting. Returns whether it was.
     pub fn note_unmap(&mut self, t: u64, held: Held, walk: u64) -> bool {
-        let _ = (t, held, walk);
-        false
+        if !held.any() {
+            return false;
+        }
+        self.stats.held_across_unmap = self.stats.held_across_unmap.saturating_add(1);
+        let count = u32::try_from(held.count)
+            .unwrap_or(u32::MAX)
+            .min(!UNMAP_IN_HOLD);
+        self.ring.push(Rec {
+            t_ns: t,
+            kind: Kind::Unmap,
+            a: count | if held.in_hold { UNMAP_IN_HOLD } else { 0 },
+            b: held.oldest_age_ns,
+            c: walk,
+        });
+        true
     }
 
     /// The channel was freed at `t`.
@@ -785,8 +923,28 @@ impl Recorder {
         vas: u64,
         entries: u32,
     ) -> bool {
-        let _ = (t, host_token, client, handle, vas, entries);
-        false
+        let mut st = lock(&self.st);
+        Self::forget(&mut st, host_token);
+        if st.chans.len() >= MAX_CHANS {
+            let victim = st.order.iter().copied().find(|tok| {
+                st.chans
+                    .get(tok)
+                    .is_some_and(|c| lock(c).freed_ns.is_some())
+            });
+            match victim {
+                Some(tok) => Self::forget(&mut st, tok),
+                None => {
+                    st.untracked = st.untracked.saturating_add(1);
+                    return false;
+                }
+            }
+        }
+        let c = ChanLog::new(host_token, client, handle, vas, entries, t);
+        st.chans.insert(host_token, Arc::new(Mutex::new(c)));
+        st.by_key.insert((client, handle), host_token);
+        st.by_space.entry(vas).or_default().push(host_token);
+        st.order.push_back(host_token);
+        true
     }
 
     /// Drop the record of `token` (reuse or eviction), folding its totals into the evicted sum.
@@ -810,7 +968,21 @@ impl Recorder {
 
     /// The channel `(client, handle)` was freed at `t`: it can no longer hold work.
     pub fn chan_free(&self, t: u64, client: u32, handle: u32) {
-        let _ = (t, client, handle);
+        let mut st = lock(&self.st);
+        let Some(&token) = st.by_key.get(&(client, handle)) else {
+            return;
+        };
+        let Some(c) = st.chans.get(&token).cloned() else {
+            return;
+        };
+        let vas = {
+            let mut l = lock(&c);
+            l.freed(t);
+            l.vas
+        };
+        if let Some(v) = st.by_space.get_mut(&vas) {
+            v.retain(|x| *x != token);
+        }
     }
 
     /// The log of a tracked channel.
@@ -829,8 +1001,21 @@ impl Recorder {
     /// Diffs applied after id `after`, as the changes a hold of a channel in `vas` saw.
     #[must_use]
     pub fn changes_since(&self, after: u64, vas: u64) -> Changes {
-        let _ = (after, vas);
-        Changes::default()
+        let st = lock(&self.st);
+        let mut ch = Changes::default();
+        for w in st.walks.newest_first() {
+            if w.walk <= after {
+                break;
+            }
+            ch.walks = ch.walks.saturating_add(1);
+            if w.space == vas {
+                ch.space_touched = true;
+                if ch.extents.len() < CHANGED_MAX {
+                    ch.extents.push((w.lo, w.hi.saturating_sub(w.lo)));
+                }
+            }
+        }
+        ch
     }
 
     /// The VA thread begins applying one diff: the unmap evaluation ("held across unmap") is made
@@ -841,15 +1026,35 @@ impl Recorder {
 
     /// [`Self::begin_apply`] at an explicit time `t` (ns).
     pub fn begin_apply_at(&self, t: u64, space: u64, walk: u64, runs: &[DiffRun]) -> Ticket {
-        let _ = (t, runs);
+        self.applying_space.store(space, Ordering::Release);
+        self.applying_walk.store(walk, Ordering::Release);
+        let (mut lo, mut hi, mut unmaps, mut maps) = (u64::MAX, 0u64, 0u32, 0u32);
+        let mut head: Vec<(u64, u64)> = Vec::new();
+        for r in runs {
+            lo = lo.min(r.va);
+            hi = hi.max(r.va.saturating_add(r.len));
+            if r.unmap {
+                unmaps = unmaps.saturating_add(1);
+                if head.len() < UNMAP_RUNS {
+                    head.push((r.va, r.len));
+                }
+            } else {
+                maps = maps.saturating_add(1);
+            }
+        }
+        if lo == u64::MAX {
+            lo = 0;
+        }
+        let rec =
+            (unmaps > 0).then(|| self.eval_unmap(t, space, walk, (maps, unmaps), (lo, hi), head));
         Ticket {
             walk,
             space,
-            runs: 0,
-            unmaps: 0,
-            lo: 0,
-            hi: 0,
-            rec: None,
+            runs: u32::try_from(runs.len()).unwrap_or(u32::MAX),
+            unmaps,
+            lo,
+            hi,
+            rec,
         }
     }
 
@@ -916,36 +1121,77 @@ impl Recorder {
 
     /// [`Self::end_apply`] at an explicit time `t` (ns).
     pub fn end_apply_at(&self, t: u64, tk: Ticket) {
-        let _ = (t, tk);
+        let mut st = lock(&self.st);
+        st.walks.push(WalkRec {
+            walk: tk.walk,
+            space: tk.space,
+            t_end_ns: t,
+            runs: tk.runs,
+            unmaps: tk.unmaps,
+            lo: tk.lo,
+            hi: tk.hi,
+        });
+        if let Some(mut r) = tk.rec {
+            r.t_end_ns = t;
+            st.unmaps.push(r);
+        }
+        drop(st);
+        self.last_walk.fetch_max(tk.walk, Ordering::AcqRel);
+        self.applying_space.store(0, Ordering::Release);
+        self.applying_walk.store(0, Ordering::Release);
     }
 }
 
 impl Handle {
     /// `GP_PUT` read as `put`.
     pub fn put_seen(&self, put: u32) {
-        let _ = put;
+        let t = self.rec.now();
+        lock(&self.chan).put_seen(t, put);
     }
 
     /// GP entry `entry` of `slot` loaded.
     pub fn entry_seen(&self, slot: u32, entry: u64) {
-        let _ = (slot, entry);
+        let t = self.rec.now();
+        lock(&self.chan).entry_seen(t, slot, entry);
     }
 
     /// The gate held the channel (`reason` = `WHY_*` bits).
     pub fn gate(&self, reason: u8, point: Point) {
-        let _ = (reason, point);
+        let t = self.rec.now();
+        let g = Gate {
+            reason,
+            point,
+            space: self.rec.applying_space.load(Ordering::Acquire),
+            walk: self.rec.last_walk(),
+        };
+        lock(&self.chan).gate(t, g);
     }
 
     /// The gate let the channel through: close an open hold.
-    pub fn pass(&self) {}
+    pub fn pass(&self) {
+        let Some((walk0, vas)) = ({
+            let l = lock(&self.chan);
+            l.hold_gate().map(|g| (g.walk, l.vas))
+        }) else {
+            return;
+        };
+        let ch = self.rec.changes_since(walk0, vas);
+        let (t, walk) = (self.rec.now(), self.rec.last_walk());
+        lock(&self.chan).pass(t, walk, &ch, None);
+    }
 
     /// Resync with the relay's cursor (end of a turn).
     pub fn reconcile(&self, cursor: u32) {
-        let _ = cursor;
+        let t = self.rec.now();
+        lock(&self.chan).reconcile(t, cursor);
     }
 
     /// An entry was published (a gate that held the channel is over).
-    pub fn published(&self) {}
+    pub fn published(&self) {
+        self.pass();
+        let t = self.rec.now();
+        lock(&self.chan).published(t);
+    }
 }
 
 fn cap(mut s: String) -> String {
@@ -970,8 +1216,54 @@ fn ms(ns: u64) -> u64 {
 /// One record as a line.
 #[must_use]
 pub fn rec_text(token: u32, r: &Rec) -> String {
-    let _ = (token, r);
-    String::new()
+    let body = match r.kind {
+        Kind::PutAdvance => format!("put={} prev={} added={}", r.a, r.b, r.c),
+        Kind::Seen => format!("slot={} entry={:#018x} pending={}", r.a, r.b, r.c),
+        Kind::GateStart => format!(
+            "why={:#x} point={} applying_space={} last_walk#={}",
+            r.a & 0xff,
+            if (r.a >> 8) & 1 == 0 {
+                "put"
+            } else {
+                "publish"
+            },
+            if r.b == 0 {
+                "none".to_string()
+            } else {
+                pair(r.b)
+            },
+            r.c
+        ),
+        Kind::GateEnd => format!(
+            "overlap={} hold_ns={} last_walk#={}",
+            Overlap::from_code(r.a).name(),
+            r.b,
+            r.c
+        ),
+        Kind::Published => format!(
+            "slot={} age_ns={} held_by_gate={}",
+            if r.a == u32::MAX {
+                "unseen".to_string()
+            } else {
+                r.a.to_string()
+            },
+            r.b,
+            r.c
+        ),
+        Kind::Unmap => format!(
+            "pending={} oldest_age_ns={} in_hold={} walk#={}",
+            r.a & !UNMAP_IN_HOLD,
+            r.b,
+            u8::from(r.a & UNMAP_IN_HOLD != 0),
+            r.c
+        ),
+    };
+    cap(format!(
+        "kf3: GATELOG REC token={token:#x} t_ns={} t_ms={} {} {body}",
+        r.t_ns,
+        ms(r.t_ns),
+        r.kind.name()
+    ))
 }
 
 impl Recorder {
@@ -984,8 +1276,124 @@ impl Recorder {
     /// ★ One bounded dump (a host Xid naming `chid`/`va`, or `why = "shutdown"`): at most
     /// [`DUMP_LINES_MAX`] lines of at most [`LINE_MAX`] bytes, [`DUMPS_MAX`] per process.
     pub fn dump(&self, why: &str, t: u64, chid: Option<u32>, va: Option<u64>) -> Vec<String> {
-        let _ = (why, t, chid, va);
-        Vec::new()
+        let mut st = lock(&self.st);
+        if st.dumps >= DUMPS_MAX {
+            return vec![cap(format!(
+                "kf3: GATELOG DUMP capped: {DUMPS_MAX} dump(s) already printed; why={why} not \
+                dumped"
+            ))];
+        }
+        st.dumps = st.dumps.saturating_add(1);
+        let n = st.dumps;
+        let chid_text = chid.map_or("none".to_string(), |c| format!("{c:#x}"));
+        let va_text = va.map_or("none".to_string(), |v| format!("{v:#x}"));
+        let mut facts: Vec<Facts> = st.chans.values().map(|c| Facts::of(&lock(c))).collect();
+        let mut fleet = st.evicted;
+        for f in &facts {
+            fleet.fold(&f.stats);
+        }
+        let mut out = vec![cap(format!(
+            "kf3: GATELOG DUMP #{n} why={why} t_ms={} t_ns={t} t0_unix_ms={} chid={chid_text} \
+            va={va_text} chans={} untracked={} walks_kept={} walks_overflow={} unmaps_kept={} \
+            unmaps_overflow={}",
+            ms(t),
+            self.t0_unix_ms,
+            st.chans.len(),
+            st.untracked,
+            st.walks.len(),
+            st.walks.overflow(),
+            st.unmaps.len(),
+            st.unmaps.overflow()
+        ))];
+        out.push(cap(format!(
+            "kf3: GATELOG FLEET holds={} regates={} hold_ms={} unrelated_holds={} \
+            unrelated_hold_ms={} longest_hold_ms={} announced={} published={} published_held={} \
+            held_across_unmap={}",
+            fleet.holds,
+            fleet.regates,
+            ms(fleet.hold_ns),
+            fleet.unrelated_holds,
+            ms(fleet.unrelated_hold_ns),
+            ms(fleet.hold_ns_max),
+            fleet.announced,
+            fleet.published,
+            fleet.published_held,
+            fleet.held_across_unmap
+        )));
+        // 1. the faulting channel(s): newest first, matched by the Xid's channel id like VAHIST
+        let mut hit: Vec<&Facts> = facts
+            .iter()
+            .filter(|f| chid.is_some_and(|x| f.token & 0xffff == x))
+            .collect();
+        hit.sort_by_key(|f| std::cmp::Reverse(f.born_ns));
+        hit.truncate(2);
+        for f in &hit {
+            out.push(chan_text(f));
+            if let Some(c) = st.chans.get(&f.token) {
+                for r in lock(c).last(DUMP_LAST) {
+                    out.push(rec_text(f.token, &r));
+                }
+            }
+        }
+        if chid.is_some() && hit.is_empty() {
+            out.push(cap(format!(
+                "kf3: GATELOG CHAN none tracked with chid={chid_text} (untracked={})",
+                st.untracked
+            )));
+        }
+        // 2. the unmapping applies of the faulting channel's space that cover the fault VA
+        for f in &hit {
+            let mut shown = 0usize;
+            for u in st.unmaps.newest_first() {
+                if shown >= DUMP_UNMAPS {
+                    break;
+                }
+                if u.space != f.vas || !va.is_none_or(|v| u.covers(v)) {
+                    continue;
+                }
+                shown = shown.saturating_add(1);
+                out.push(unmap_text(f.token, u));
+            }
+        }
+        // 3. "held across unmap" per space
+        let mut spaces: Vec<(u64, SpaceCnt)> = st.spaces.iter().map(|(&k, &v)| (k, v)).collect();
+        spaces.sort_by_key(|&(k, v)| (std::cmp::Reverse(v.with_held), k));
+        let total = spaces
+            .iter()
+            .fold(0u64, |a, (_, v)| a.saturating_add(v.with_held));
+        out.push(format!(
+            "kf3: GATELOG SPACES spaces={} untracked={} held_across_unmap_total={total}",
+            spaces.len(),
+            st.spaces_untracked
+        ));
+        for (k, v) in spaces.iter().take(DUMP_SPACES) {
+            out.push(cap(format!(
+                "kf3: GATELOG SPACE {} unmaps={} held_across_unmap={} chan_events={} entries={}",
+                pair(*k),
+                v.unmaps,
+                v.with_held,
+                v.chan_events,
+                v.entries
+            )));
+        }
+        // 4. the channels the gate stopped longest
+        facts.sort_by_key(|f| (std::cmp::Reverse(f.stats.hold_ns), f.token));
+        for f in facts.iter().take(DUMP_TOP).filter(|f| f.stats.holds > 0) {
+            out.push(cap(format!(
+                "kf3: GATELOG HOLDTOP token={:#x} vas={} holds={} hold_ms={} unrelated_hold_ms={} \
+                longest_hold_ms={}",
+                f.token,
+                pair(f.vas),
+                f.stats.holds,
+                ms(f.stats.hold_ns),
+                ms(f.stats.unrelated_hold_ns),
+                ms(f.stats.hold_ns_max)
+            )));
+        }
+        bound_lines(&mut out);
+        let lines = out.len().saturating_add(1);
+        out.push(format!("kf3: GATELOG END #{n} lines={lines}"));
+        out
     }
 }
 
@@ -993,7 +1401,7 @@ impl Recorder {
 /// on records, unmaps, spaces and channels already keep a dump below it; this is the guard that
 /// holds if one of them is raised.
 pub fn bound_lines(out: &mut Vec<String>) {
-    let _ = out;
+    out.truncate(DUMP_LINES_MAX.saturating_sub(1));
 }
 
 /// A channel's facts copied out under its lock.

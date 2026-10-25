@@ -5768,6 +5768,12 @@ impl ChanPlane {
                     {
                         eprintln!("{l}");
                     }
+                    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the channel can no
+                    // longer hold work; its log stays for a dump.
+                    if t.user_ring && kf_mem::gatelog::enabled() {
+                        let rec = kf_mem::gatelog::global();
+                        rec.chan_free(rec.now(), c, h);
+                    }
                     // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
                     // host RM really freed the channel. A refused free leaves it counted — the
                     // space can then never become a guest-KERNEL space, where privileged leaves

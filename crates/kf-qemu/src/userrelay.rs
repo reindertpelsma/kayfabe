@@ -771,6 +771,19 @@ impl Birth {
         {
             eprintln!("{line}");
         }
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the channel's gate log starts here
+        // (on this act thread, never a vCPU; nothing is printed).
+        if kf_mem::gatelog::enabled() {
+            let rec = kf_mem::gatelog::global();
+            rec.chan_birth(
+                rec.now(),
+                chan.token,
+                a.client,
+                a.handle,
+                (u64::from(a.vaspace_client) << 32) | u64::from(a.vaspace.unwrap_or(0)),
+                a.entries,
+            );
+        }
         // No fast-register path: every ring wakes a worker, including first use.
         Ok(format!(
             "Windows USER ring chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{} declared_subdevice={:x?} native_scan_subdevice={native_id:#x}",

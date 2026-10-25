@@ -2325,7 +2325,21 @@ impl Inbox {
     /// as `kf_mem::gatelog::WHY_*` bits (0 = the gate is open). Decides nothing.
     #[must_use]
     pub fn walk_busy_why(&self) -> u8 {
-        0
+        use kf_mem::gatelog::{WHY_SPLIT_QUEUED, WHY_SPLIT_RUNNING, WHY_UNSETTLED, WHY_VA_BUSY};
+        let mut why = 0;
+        if self.walk_busy.load(Ordering::Acquire) {
+            why |= WHY_VA_BUSY;
+        }
+        if !self.all_settled() {
+            why |= WHY_UNSETTLED;
+        }
+        if self.splits.lock().is_ok_and(|q| !q.is_empty()) {
+            why |= WHY_SPLIT_QUEUED;
+        }
+        if self.split_tokens.lock().is_ok_and(|m| !m.is_empty()) {
+            why |= WHY_SPLIT_RUNNING;
+        }
+        why
     }
 
     /// The VA thread, at the end of every loop: whether it has a walk in flight or pending.

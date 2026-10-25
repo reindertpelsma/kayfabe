@@ -524,6 +524,22 @@ struct Aux {
     sync_carried: u64,
     /// Measurement only: when the last Pointer-mode backstop wake was counted (ms since the first).
     pointer_backstop_ms: Option<u64>,
+    /// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): this channel's gate-log hooks.
+    gl: Option<kf_mem::gatelog::Handle>,
+    /// Lookups of `gl` made so far (it is registered at birth; a few tries, then none).
+    gl_tries: u8,
+}
+
+/// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the channel's gate-log hooks, found
+/// once (the caller checks `gatelog::enabled()` first). Changes no decision.
+fn gl_of<'a>(aux: &'a mut Aux, r: &userrelay::Record) -> Option<&'a kf_mem::gatelog::Handle> {
+    if aux.gl.is_none() && aux.gl_tries < 8 {
+        aux.gl_tries = aux.gl_tries.saturating_add(1);
+        aux.gl = r
+            .chan
+            .and_then(|c| kf_mem::gatelog::global().handle(c.token));
+    }
+    aux.gl.as_ref()
 }
 
 struct Segment {
@@ -576,6 +592,14 @@ fn publish_guarded(
 ) -> Turn<()> {
     if me.inbox.walk_busy() {
         me.inbox.wait_walk(r.idx);
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the publication gate held this channel.
+        if kf_mem::gatelog::enabled()
+            && let Some(h) = r
+                .chan
+                .and_then(|c| kf_mem::gatelog::global().handle(c.token))
+        {
+            h.gate(me.inbox.walk_busy_why(), kf_mem::gatelog::Point::Publish);
+        }
         return Err(Failure::Retry);
     }
     let userd = r.userd.clone();
@@ -676,6 +700,37 @@ struct PumpIo<'a> {
     aux: &'a mut Aux,
 }
 
+impl PumpIo<'_> {
+    /// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the walk gate held this channel before it read
+    /// `GP_PUT`. Opens (or extends) the hold, and LOOKS at `GP_PUT` once so the entry the doorbell
+    /// announced is seen at the moment it is held (the relay itself reads nothing while held). The
+    /// look is a plain `USERD` read like `gp_put`'s, its failure is ignored, and nothing is
+    /// published or decided from it.
+    fn gatelog_hold(&mut self) {
+        if !kf_mem::gatelog::enabled() {
+            return;
+        }
+        let (me, r) = (self.me, self.r);
+        let Some(h) = gl_of(self.aux, r) else {
+            return;
+        };
+        h.gate(me.inbox.walk_busy_why(), kf_mem::gatelog::Point::Put);
+        let mut put = [0u8; 4];
+        if r.userd
+            .read(
+                me,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut put,
+            )
+            .is_ok()
+        {
+            h.put_seen(u32::from_le_bytes(put));
+        }
+    }
+}
+
 impl kf_chan::user_turn::Io for PumpIo<'_> {
     fn hw_words(&mut self) -> Turn<(u32, u32)> {
         let storage = self
@@ -711,7 +766,14 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         let (me, r) = (self.me, self.r);
         if me.inbox.walk_busy() {
             me.inbox.wait_walk(r.idx);
+            self.gatelog_hold();
             return true;
+        }
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the gate lets this channel through.
+        if kf_mem::gatelog::enabled()
+            && let Some(h) = gl_of(self.aux, r)
+        {
+            h.pass();
         }
         false
     }
@@ -735,6 +797,12 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 kf_rm::memory_list::AccessError::Gone => Failure::Retry,
                 e => access_error(e, "USER_RING_PUT_READ"),
             })?;
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the relay saw this `GP_PUT`.
+        if kf_mem::gatelog::enabled()
+            && let Some(h) = gl_of(self.aux, r)
+        {
+            h.put_seen(u32::from_le_bytes(put));
+        }
         Ok(Some(u32::from_le_bytes(put)))
     }
     fn begin_entry(&mut self, _put: u32) {
@@ -782,6 +850,13 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                     .map_err(|_| "USER_RING_GP_SNAPSHOT_SIZE")?,
             );
             self.aux.source = Some(source);
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the relay loaded this GP entry.
+            let entry = self.aux.entry;
+            if kf_mem::gatelog::enabled()
+                && let Some(h) = gl_of(self.aux, r)
+            {
+                h.entry_seen(slot, entry);
+            }
         }
         Ok(if hi {
             (self.aux.entry >> 32) as u32
@@ -882,6 +957,12 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             },
         )?;
         *self.source_admitted = true;
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the entry reached the private host ring.
+        if kf_mem::gatelog::enabled()
+            && let Some(h) = gl_of(self.aux, self.r)
+        {
+            h.published();
+        }
         Ok(())
     }
     fn publish_gate(
@@ -1862,11 +1943,27 @@ impl Pump {
     /// ★ 2026-10-14 (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.2): a turn ends in a
     /// [`Need`](kf_chan::user_loop::Need) -- progress (`Again`), nothing (`Idle`), or what it waits
     /// for. No tick: the caller arms the wake ([`ChanPlane::user_ring_serve`]).
+    /// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): a guest entry reached the private host ring.
+    fn gatelog_published(&mut self, r: &userrelay::Record) {
+        if kf_mem::gatelog::enabled()
+            && let Some(h) = gl_of(&mut self.aux, r)
+        {
+            h.published();
+        }
+    }
+
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         use kf_chan::user_loop::Need;
         self.core.need = Need::Idle;
         self.core.again = false;
         let out = self.turn_body(me, r);
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): resync the log's unpublished count with the
+        // relay's own cursor, so an entry no publish hook saw cannot read as held forever.
+        if kf_mem::gatelog::enabled()
+            && let Some(h) = gl_of(&mut self.aux, r)
+        {
+            h.reconcile(self.core.cursor);
+        }
         self.report_lifecycle_notices();
         self.core.sync_tally();
         {
@@ -2282,6 +2379,7 @@ impl Pump {
                     storage.publish_put(put)
                 },
             )?;
+            self.gatelog_published(r);
             let (cursor, entry, n) = (self.core.cursor, s.entry, s.words.len());
             let (cin, cout) = (self.core.scan.carried(), next.carried());
             self.trace_slots(|| {
@@ -2364,6 +2462,9 @@ impl Pump {
                 storage.publish_put(put)
             },
         )?;
+        if !s.staged {
+            self.gatelog_published(r);
+        }
         let (at, entry, staged) = (s.at, s.entry, s.staged);
         self.trace_slots(|| {
             let mut v = Vec::new();
