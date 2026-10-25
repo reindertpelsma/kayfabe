@@ -211,19 +211,44 @@ class Budget(unittest.TestCase):
 try:
     from execution import arm_network
 except ImportError:
-    def arm_network(*args):raise ValueError('network wiring absent')
+
+    def arm_network(*args):
+        raise ValueError("network wiring absent")
 
 
 class NetworkWiring(unittest.TestCase):
     def test_watch_ready_precedes_provisioning(self):
-        text='trap cleanup_controller EXIT\nbash /fixture/provision_box.sh\n'
-        data=arm_network(text,'/fixture/network_guard.py','/fixture/evidence')
-        self.assertLess(data.index('network_armed.json'),data.index('provision_box.sh'))
+        text = "trap cleanup_controller EXIT\nbash /fixture/provision_box.sh\n"
+        data = arm_network(text, "/fixture/network_guard.py", "/fixture/evidence")
+        self.assertLess(data.index("network_armed.json"), data.index("provision_box.sh"))
+
     def test_ready_required_and_guard_alive(self):
-        text='trap cleanup_controller EXIT\nbash /fixture/provision_box.sh\n'
-        data=arm_network(text,'/fixture/network_guard.py','/fixture/evidence')
-        self.assertIn('kill -0 "$bw8_network_pid"',data)
-        self.assertIn('[ -f /fixture/evidence/network_armed.json ]',data)
+        text = "trap cleanup_controller EXIT\nbash /fixture/provision_box.sh\n"
+        data = arm_network(text, "/fixture/network_guard.py", "/fixture/evidence")
+        self.assertIn('kill -0 "$bw8_network_pid"', data)
+        self.assertIn("[ -f /fixture/evidence/network_armed.json ]", data)
+
+
+class ParserReceiptShell(unittest.TestCase):
+    def check(self, text):
+        import os
+        import shlex
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);fake=root/'python3'
+            fake.write_text("#!/bin/sh\nprintf '%s' "+shlex.quote(text)+"\n")
+            fake.chmod(0o700)
+            data=wire_arm(ARM)
+            preflight=data[data.index('python3 -E'):data.index('enable_cmd=')]
+            script='set -e\nready_tool=unused; W=unused; run=fixture; readiness='+shlex.quote(str(root/'ready.json'))+'\n'+preflight
+            return subprocess.run(['bash','-c',script],env=dict(os.environ,PATH=str(root)+':'+os.environ['PATH']),capture_output=True).returncode
+    def test_parser_lf_receipt(self):self.assertEqual(self.check('BW8_PARSER_GREEN=1\n'),0)
+    def test_parser_windows_crlf_receipt(self):self.assertEqual(self.check('BW8_PARSER_GREEN=1\r\n'),0)
+    def test_parser_windows_crlf_with_prior_output(self):self.assertEqual(self.check('fixture\r\nBW8_PARSER_GREEN=1\r\n'),0)
+    def test_parser_wrong_numeric_value(self):self.assertNotEqual(self.check('BW8_PARSER_GREEN=10\n'),0)
+    def test_parser_marker_suffix(self):self.assertNotEqual(self.check('BW8_PARSER_GREEN=1junk\n'),0)
 
 
 class Wiring(unittest.TestCase):
