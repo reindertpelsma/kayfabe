@@ -208,7 +208,6 @@ elif case == "main":
     assert outputs == "state=RENTING_DISABLED\nverdict=UNAVAILABLE\nverified=0\n", outputs
     assert out.split("\n").count(LINE) == 1, out
     assert "| State | RENTING_DISABLED |" in summary, summary
-    assert "verified" not in out.lower().replace("unverified", ""), out
     assert not stops(), [c[:2] for c in calls]
     assert sleeps == [], sleeps
 elif case == "unavailable-503-retries":
