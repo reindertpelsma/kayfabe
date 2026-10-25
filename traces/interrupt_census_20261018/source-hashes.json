@@ -1,0 +1,16 @@
+{
+  "run": "pf1-host-tests-20261025",
+  "sha256": {
+    "crates/kf-qemu/Cargo.toml": "ccfef8b6428586ee753940891ed30d8a8ac998bca7865a42a09e483a61df493c",
+    "crates/kf-qemu/src/intrdiag.rs": "ba7ced6cabac8759d2e8da031b73a732f9114d6fe1dd3f0873d4d2527979cb71",
+    "crates/kf-qemu/src/chan.rs": "ff8643193635dbfc0d0ce5f9e1ed78adb6749085a13a9e0156ce475464ac3d8d",
+    "crates/kf-qemu/src/device.rs": "409f4b950a2646127acbe1ba1fb94cc96cc906fd98a189bf9e3ea9b1dc3c78ab",
+    "crates/kf-qemu/src/lib.rs": "a5c3ad13489b2f062d5faba44a2aeddd32026c842e9ad7944898941b29062b42",
+    "crates/kf-qemu/src/userpump.rs": "0e857782558a4aaf25146ffabf213f920283a96887aa48587c7941a403818b88",
+    "crates/kf-qemu/tests/interrupt_census.rs": "fcb87a1eb6eb104264de6e18d1c62e0f059227c999633d24539bb5ea98b4b58c",
+    "crates/kf-qemu/tests/interrupt_census_wiring.rs": "95ef0e523c2fc45d6e52dc822eb4f5b4459f21ac12c8f36ec32b87d217e8f8ff",
+    "scripts/bench/build_kf3.sh": "fdcf4ae760145ad2bddae8b9f7b1fcc87ff3cebec508ed8fffc192d1e17a6320",
+    "scripts/bench/interrupt_census/mutate.py": "d94820fe0330706e185e06c0c707b8503f3ddcf52c195b5e73c253a4aa1e1bc9"
+  },
+  "definition": "Local files match the final host test/clippy source copies."
+}

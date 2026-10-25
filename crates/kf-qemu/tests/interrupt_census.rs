@@ -1,3 +1,4 @@
+//! Deterministic PF1 counter and simulation contracts; no GPU or eventfd is needed.
 #![cfg(feature = "diag-intr")]
 
 use kf_qemu::intrdiag::{Census, Marker, Source};
@@ -67,6 +68,67 @@ fn repeated_edges_are_counted_even_without_a_guest_raise() {
     assert_eq!(count(&d, "edge_engine_v64"), 7);
     assert_eq!(count(&d, "edge_fifo_v512"), 7);
     assert_eq!(count(&d, "messages"), 0);
+}
+
+#[test]
+fn a_frame_window_observes_every_counter_family() {
+    let d = Census::new();
+    let t = armed();
+    let before = d.snapshot(1);
+    for kind in [Marker::Gate, Marker::Batch, Marker::Staged] {
+        d.marker(kind, true);
+        d.marker(kind, false);
+    }
+    d.host_edge(Source::Engine, Some(64));
+    d.host_edge(Source::Fifo, Some(128));
+    d.latch(&t, 64, Source::Engine, 10);
+    d.latch(&t, 128, Source::Fifo, 20);
+    d.delivery(true);
+    d.delivery(true);
+    for reg in [
+        Reg::LeafEnClear(2),
+        Reg::LeafEnClear(4),
+        Reg::TopEnClear,
+        Reg::Leaf(2),
+        Reg::Leaf(4),
+        Reg::LeafEnSet(2),
+        Reg::LeafEnSet(4),
+        Reg::TopEnSet,
+    ] {
+        d.write(&t, reg, 0xff, 30);
+        d.read(reg);
+    }
+    let delta = d.snapshot(100).since(&before);
+    for kind in ["gate", "batch", "staged"] {
+        for payload in ["nsi", "plain"] {
+            assert_eq!(delta.get(&format!("marker_{kind}_{payload}")), 1);
+        }
+    }
+    for key in [
+        "edge_engine_v64",
+        "edge_fifo_v128",
+        "raise_v64",
+        "raise_v128",
+        "merge_candidates",
+        "isr_cycles",
+        "first_tree_writes",
+    ] {
+        assert_eq!(delta.get(key), 1, "{key}");
+    }
+    assert_eq!(delta.get("isr_ns"), 20);
+    assert_eq!(delta.get("first_write_ns"), 20);
+    for key in [
+        "messages",
+        "eventfd_v0",
+        "write_en_set",
+        "write_en_clear",
+        "write_w1c",
+        "read_en_set",
+        "read_en_clear",
+        "read_w1c",
+    ] {
+        assert_eq!(delta.get(key), 2, "{key}");
+    }
 }
 
 #[test]
@@ -155,13 +217,26 @@ fn trapped_tree_accesses_keep_the_register_classes() {
     let d = Census::new();
     let t = tree();
     for r in [
-        Reg::LeafEnSet(2), Reg::LeafEnClear(2), Reg::TopEnSet, Reg::TopEnClear,
-        Reg::Leaf(2), Reg::Trigger, Reg::Top,
+        Reg::LeafEnSet(2),
+        Reg::LeafEnClear(2),
+        Reg::TopEnSet,
+        Reg::TopEnClear,
+        Reg::Leaf(2),
+        Reg::Trigger,
+        Reg::Top,
     ] {
         d.write(&t, r, 0, 1);
         d.read(r);
     }
-    for name in ["en_set", "en_clear", "top_set", "top_clear", "w1c", "trigger", "top"] {
+    for name in [
+        "en_set",
+        "en_clear",
+        "top_set",
+        "top_clear",
+        "w1c",
+        "trigger",
+        "top",
+    ] {
         assert_eq!(count(&d, &format!("write_{name}")), 1);
         assert_eq!(count(&d, &format!("read_{name}")), 1);
     }
@@ -190,7 +265,11 @@ fn overdue_enabled_pending_is_loud_and_counted_once_per_flight() {
     let t = armed();
     d.latch(&t, 64, Source::Engine, 1);
     d.sample(&t, 1_000_001);
-    assert_eq!(count(&d, "stranded"), 0, "strictly more than one millisecond");
+    assert_eq!(
+        count(&d, "stranded"),
+        0,
+        "strictly more than one millisecond"
+    );
     d.sample(&t, 1_000_002);
     d.sample(&t, 2_000_000);
     assert_eq!(count(&d, "stranded"), 1);
@@ -230,6 +309,37 @@ fn only_the_exact_runtime_opt_in_allocates_an_observer() {
 }
 
 #[test]
+fn runtime_off_does_no_observation_work_on_the_simulation() {
+    let d = Census::from_setting(None);
+    let t = armed();
+    let mut clock_calls = 0;
+    for _ in 0..10 {
+        let result = if let Some(diag) = &d {
+            clock_calls += 1;
+            diag.latch(&t, 64, Source::Engine, clock_calls)
+        } else {
+            t.latch(64)
+        };
+        assert_eq!(result, Raise::Message);
+    }
+    assert_eq!(clock_calls, 0);
+}
+
+#[test]
+fn unmasks_with_several_pending_vectors_count_one_physical_message() {
+    let d = Census::new();
+    let t = tree();
+    d.latch(&t, 64, Source::Engine, 1);
+    d.latch(&t, 128, Source::Fifo, 2);
+    d.write(&t, Reg::LeafEnSet(2), 1, 3);
+    d.write(&t, Reg::LeafEnSet(4), 1, 4);
+    assert_eq!(d.write(&t, Reg::TopEnSet, 0xff, 5), Raise::Message);
+    assert_eq!(count(&d, "messages"), 1);
+    assert_eq!(count(&d, "raise_v64"), 1);
+    assert_eq!(count(&d, "raise_v128"), 1);
+}
+
+#[test]
 fn reset_closes_flights_without_erasing_cumulative_evidence() {
     let d = Census::new();
     let t = armed();
@@ -254,6 +364,21 @@ fn counters_normalize_over_the_same_time_and_frame_window() {
     assert_eq!(delta.per_frame("marker_batch_nsi", 10), Some(3.0));
     assert_eq!(delta.per_frame("marker_batch_nsi", 0), None);
     assert_eq!(before.since(&before).per_second("messages"), None);
+}
+
+#[test]
+fn status_rates_use_the_previous_heartbeat_and_print_zero_stranded() {
+    let d = Census::new();
+    let first = d.status_json(1_000_000_000);
+    assert!(first.contains("\"stranded\":0"));
+    for _ in 0..30 {
+        d.marker(Marker::Batch, true);
+    }
+    let second = d.status_json(3_000_000_000);
+    assert!(second.contains("\"marker_batch_nsi\":15.000000"));
+    assert!(second.contains("\"marker_batch_nsi\":30,"));
+    let third = d.status_json(5_000_000_000);
+    assert!(third.contains("\"marker_batch_nsi\":0.000000"));
 }
 
 #[test]

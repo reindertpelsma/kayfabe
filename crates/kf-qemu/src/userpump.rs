@@ -910,6 +910,10 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             },
         )?;
         *self.source_admitted = true;
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.me.intr_diag {
+            diag.marker(crate::intrdiag::Marker::Gate, true);
+        }
         Ok(count)
     }
     fn publish_marker(
@@ -934,6 +938,10 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             },
         )?;
         Stats::bump(&self.me.relay_stats.markers);
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.me.intr_diag {
+            diag.marker(crate::intrdiag::Marker::Batch, true);
+        }
         Ok(())
     }
     fn event(&mut self, e: kf_chan::user_turn::Ev) {
@@ -2364,6 +2372,10 @@ impl Pump {
                 storage.publish_put(put)
             },
         )?;
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &me.intr_diag {
+            diag.marker(crate::intrdiag::Marker::Staged, true);
+        }
         let (at, entry, staged) = (s.at, s.entry, s.staged);
         self.trace_slots(|| {
             let mut v = Vec::new();

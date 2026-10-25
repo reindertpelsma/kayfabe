@@ -1,0 +1,110 @@
+[
+  {
+    "mutant": "markers",
+    "exit": 101,
+    "killing_tests": [
+      "markers_separate_kind_and_interrupt_payload",
+      "counters_are_atomic_across_producers",
+      "a_frame_window_observes_every_counter_family",
+      "marker_totals_are_window_local",
+      "counters_normalize_over_the_same_time_and_frame_window",
+      "status_rates_use_the_previous_heartbeat_and_print_zero_stranded"
+    ]
+  },
+  {
+    "mutant": "host_edge_vectors",
+    "exit": 101,
+    "killing_tests": [
+      "host_edges_keep_source_vector_and_unmapped_notifications",
+      "repeated_edges_are_counted_even_without_a_guest_raise",
+      "a_frame_window_observes_every_counter_family",
+      "counters_are_atomic_across_producers"
+    ]
+  },
+  {
+    "mutant": "guest_raise_vectors",
+    "exit": 101,
+    "killing_tests": [
+      "guest_raises_keep_logical_vector_and_eventfd_outcome",
+      "a_frame_window_observes_every_counter_family"
+    ]
+  },
+  {
+    "mutant": "eventfd_success",
+    "exit": 101,
+    "killing_tests": [
+      "a_frame_window_observes_every_counter_family",
+      "guest_raises_keep_logical_vector_and_eventfd_outcome",
+      "counters_are_atomic_across_producers"
+    ]
+  },
+  {
+    "mutant": "isr_cycles",
+    "exit": 101,
+    "killing_tests": [
+      "an_isr_cycle_ends_at_the_root_unmask",
+      "repeated_messages_do_not_restart_the_cycle_clock",
+      "a_frame_window_observes_every_counter_family"
+    ]
+  },
+  {
+    "mutant": "isr_duration",
+    "exit": 101,
+    "killing_tests": [
+      "an_isr_cycle_ends_at_the_root_unmask",
+      "repeated_messages_do_not_restart_the_cycle_clock",
+      "a_frame_window_observes_every_counter_family"
+    ]
+  },
+  {
+    "mutant": "merge_candidates",
+    "exit": 101,
+    "killing_tests": [
+      "a_second_message_before_a_tree_write_is_a_merge_candidate",
+      "reads_do_not_end_the_merge_window",
+      "a_frame_window_observes_every_counter_family"
+    ]
+  },
+  {
+    "mutant": "first_tree_write",
+    "exit": 101,
+    "killing_tests": [
+      "a_second_message_before_a_tree_write_is_a_merge_candidate",
+      "a_frame_window_observes_every_counter_family"
+    ]
+  },
+  {
+    "mutant": "tree_writes",
+    "exit": 101,
+    "killing_tests": [
+      "a_frame_window_observes_every_counter_family",
+      "trapped_tree_accesses_keep_the_register_classes",
+      "repeated_register_accesses_and_window_deltas_are_exact"
+    ]
+  },
+  {
+    "mutant": "tree_reads",
+    "exit": 101,
+    "killing_tests": [
+      "a_frame_window_observes_every_counter_family",
+      "trapped_tree_accesses_keep_the_register_classes",
+      "repeated_register_accesses_and_window_deltas_are_exact"
+    ]
+  },
+  {
+    "mutant": "stranded_pending",
+    "exit": 101,
+    "killing_tests": [
+      "the_first_tree_write_checks_overdue_bits_before_closing_the_flight",
+      "overdue_enabled_pending_is_loud_and_counted_once_per_flight"
+    ]
+  },
+  {
+    "mutant": "runtime_default",
+    "exit": 101,
+    "killing_tests": [
+      "only_the_exact_runtime_opt_in_allocates_an_observer",
+      "runtime_off_does_no_observation_work_on_the_simulation"
+    ]
+  }
+]

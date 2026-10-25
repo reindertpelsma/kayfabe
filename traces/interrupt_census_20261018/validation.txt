@@ -1,0 +1,41 @@
+PF1 validation, run pf1-host-tests-20261025, 2026-10-25.
+Base: 6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4.
+Tests-only EXPECTED RED commit: 0a586ede8225688c92fdd21d6a5cd445705683ec.
+
+All compilation/tests ran on the host, nice -n 19, release, -j2.
+No GPU, benchmark, or VM was used for these checks.
+
+Before implementation: 0 passed, 2 failed wiring tests (expected-red.txt).
+Feature on:
+  cargo test -j2 --release -p kf-qemu -p kf-trap
+    --features kf-qemu/diag-intr --no-fail-fast
+  576 passed, 0 failed, 0 ignored; exit 0.
+Feature off:
+  cargo test -j2 --release -p kf-qemu -p kf-trap --no-fail-fast
+  551 passed, 0 failed, 0 ignored; exit 0.
+
+New feature-on tests: 24 runtime contracts and 3 wiring contracts.
+Simulation: 19,999 seeded operations, identical Raise and full shadow at each step.
+Atomic totals: four concurrent producers.
+Mutations: 12/12 killed by >=2 distinct tests each; see mutation-results.json.
+The mutation runner's restored-source tests passed; final exit 0.
+
+Clippy scope: kf-qemu and kf-trap, --all-targets --release,
+  --features kf-qemu/diag-intr --locked --message-format=json.
+Clippy compilation: exit 0.
+clippy: existing-debt=253 new=0 resolved=279
+No debt-ledger entries changed. This is a subset, not full-workspace clippy.
+
+cargo fmt --all --check: exit 0.
+bash -n scripts/bench/build_kf3.sh: exit 0.
+Mutation runner Python syntax: pass.
+Changed/new code line length <=100: pass.
+Source/test/build files matched the host copies: see source-hashes.json.
+
+An intermediate post-mutation invocation reused a stale mutant artifact after
+archive extraction restored older source mtimes. Two runtime-default failures
+caught it. Extraction then refreshed mtimes; the full feature-on suite passed.
+No failed test was accepted. The runner now tests the restored source explicitly.
+
+Hardware validation was not performed; no workload frame normalization or
+performance conclusion follows from these simulation results.

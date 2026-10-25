@@ -2322,6 +2322,9 @@ pub struct ChanPlane {
     user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
     /// ★ 2026-10-14 (`kf_chan::user_loop`): the USER-ring relays' bounded production counters.
     pub relay_stats: kf_chan::user_loop::Stats,
+    /// Optional PF1 observer; no storage or hooks in a production build.
+    #[cfg(feature = "diag-intr")]
+    pub intr_diag: Option<Box<crate::intrdiag::Census>>,
     /// Summary lines printed when the last USER-ring relay went away.
     relay_reports: AtomicU64,
     // Bounded ownership for every native attempt, including errors whose legacy
@@ -3019,6 +3022,11 @@ impl ChanPlane {
             user_births,
             user_rings: Mutex::new(HashMap::new()),
             relay_stats: kf_chan::user_loop::Stats::default(),
+            #[cfg(feature = "diag-intr")]
+            intr_diag: crate::intrdiag::Census::from_setting(
+                std::env::var("KF3_DIAG_INTR").ok().as_deref(),
+            )
+            .map(Box::new),
             relay_reports: AtomicU64::new(0),
             user_birth_holds: Mutex::new(Vec::new()),
             memory_access: Arc::default(),
@@ -3229,6 +3237,10 @@ impl ChanPlane {
         } else {
             None
         };
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.intr_diag {
+            diag.host_edge(crate::intrdiag::Source::Fifo, vector);
+        }
         let verdict = self.nsi.edge(
             kf_chan::ptnsi::EdgeKind::Fifo,
             armed,
@@ -3266,6 +3278,10 @@ impl ChanPlane {
         deliver: impl FnOnce(u32),
     ) -> kf_chan::ptnsi::Verdict {
         let armed = self.nsi_armed(e.slot);
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.intr_diag {
+            diag.host_edge(crate::intrdiag::Source::Engine, e.vector);
+        }
         let verdict = self.nsi.edge(
             kf_chan::ptnsi::EdgeKind::Engine,
             armed,

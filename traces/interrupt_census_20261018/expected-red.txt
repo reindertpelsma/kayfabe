@@ -1,0 +1,24 @@
+
+running 2 tests
+test real_publications_and_delivery_have_observer_hooks ... FAILED
+test the_measurement_is_explicitly_opt_in ... FAILED
+
+failures:
+
+---- real_publications_and_delivery_have_observer_hooks stdout ----
+
+thread 'real_publications_and_delivery_have_observer_hooks' (3927796) panicked at crates/kf-qemu/tests/interrupt_census_wiring.rs:14:5:
+eventfd outcome is unobserved
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_measurement_is_explicitly_opt_in stdout ----
+
+thread 'the_measurement_is_explicitly_opt_in' (3927797) panicked at crates/kf-qemu/tests/interrupt_census_wiring.rs:6:5:
+missing default-off interrupt census
+
+
+failures:
+    real_publications_and_delivery_have_observer_hooks
+    the_measurement_is_explicitly_opt_in
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

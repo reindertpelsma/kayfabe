@@ -21,7 +21,12 @@ BUILD="${2:-$(dirname "$QEMU")/qemu-build-kf3}"
 [ -f "$QEMU/VERSION" ] || { echo "⊘ $QEMU is not a QEMU source tree"; exit 1; }
 command -v cargo >/dev/null || { echo "⊘ cargo not on PATH (export PATH=\$HOME/.cargo/bin:\$PATH)"; exit 127; }
 echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD)"
-( cd "$REPO" && cargo build --release -p kf-qemu )
+KF3_CARGO_FEATURES=()
+# PF1's hooks are absent from ordinary binaries. Runtime opt-in remains independent.
+if [[ "${KF3_BUILD_DIAG_INTR:-0}" == 1 ]]; then
+  KF3_CARGO_FEATURES=(--features diag-intr)
+fi
+( cd "$REPO" && cargo build --release -p kf-qemu "${KF3_CARGO_FEATURES[@]}" )
 TARGET=${CARGO_TARGET_DIR:-$REPO/target}
 [[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"
 ARCHIVE="$TARGET/release/libkf_qemu.a"

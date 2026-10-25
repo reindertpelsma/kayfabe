@@ -25,6 +25,8 @@ pub mod gop;
 pub mod gpucopy;
 pub mod gpuuid;
 pub mod hostfacts;
+#[cfg(feature = "diag-intr")]
+pub mod intrdiag;
 pub mod latejoin;
 pub mod mem;
 pub mod memreset;

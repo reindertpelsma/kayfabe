@@ -25,6 +25,16 @@ use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
+// Ordinary builds expand to the original call, including its original argument.
+macro_rules! latch_from {
+    ($device:ident, $vector:expr, $source:ident) => {{
+        #[cfg(feature = "diag-intr")]
+        $device.latch_diagnostic($vector, crate::intrdiag::Source::$source);
+        #[cfg(not(feature = "diag-intr"))]
+        $device.latch_and_deliver($vector);
+    }};
+}
+
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
 pub const PROM_BASE: u64 = 0x0030_0000;
 /// The PROM window's size.
@@ -1427,6 +1437,12 @@ impl Device {
             };
         };
         self.reset.touched();
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.chans.intr_diag
+            && let Some(reg) = self.intr.decode(off)
+        {
+            diag.read(reg);
+        }
         let v = self.bar0_read_served(off, width);
         // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off.
         self.chans.bar0trace.note(
@@ -1631,6 +1647,13 @@ impl Device {
             && let Some(r) = self.intr.decode(off)
         {
             self.irq_counts.writes.fetch_add(1, Ordering::Relaxed);
+            #[cfg(feature = "diag-intr")]
+            let raise = if let Some(diag) = &self.chans.intr_diag {
+                diag.write(&self.intr, r, val as u32, diag.now_ns())
+            } else {
+                self.intr.write(r, val as u32)
+            };
+            #[cfg(not(feature = "diag-intr"))]
             let raise = self.intr.write(r, val as u32);
             self.intr
                 .shadow(r, |o, v| self.shadow_store(o, u64::from(v), 4));
@@ -1753,7 +1776,11 @@ impl Device {
     fn deliver(&self, raise: kf_trap::cpuintr::Raise) {
         match raise {
             kf_trap::cpuintr::Raise::Message => {
-                let _ = self.irq_lines[0].signal();
+                let _result = self.irq_lines[0].signal();
+                #[cfg(feature = "diag-intr")]
+                if let Some(diag) = &self.chans.intr_diag {
+                    diag.delivery(_result.is_ok());
+                }
                 self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
             }
             kf_trap::cpuintr::Raise::None => {}
@@ -1836,6 +1863,16 @@ impl Device {
 
     /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
     pub fn latch_and_deliver(&self, vector: u32) {
+        #[cfg(feature = "diag-intr")]
+        if self.chans.intr_diag.is_some() {
+            let source = match vector {
+                kf_rm::authored::DISP_STALL_VECTOR => crate::intrdiag::Source::Display,
+                kf_rm::authored::GSP_STALL_VECTOR => crate::intrdiag::Source::Gsp,
+                _ => crate::intrdiag::Source::Other,
+            };
+            self.latch_diagnostic(vector, source);
+            return;
+        }
         let raise = self.intr.latch(vector);
         self.intr
             .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
@@ -1843,6 +1880,22 @@ impl Device {
             self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
         }
         self.deliver(raise);
+    }
+
+    #[cfg(feature = "diag-intr")]
+    fn latch_diagnostic(&self, vector: u32, source: crate::intrdiag::Source) {
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.chans.intr_diag {
+            let raise = diag.latch(&self.intr, vector, source, diag.now_ns());
+            self.intr
+                .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
+            if raise == kf_trap::cpuintr::Raise::None {
+                self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
+            }
+            self.deliver(raise);
+        } else {
+            self.latch_and_deliver(vector);
+        }
     }
 
     /// The eventfd of MSI-X vector `v`, for the C device to register as a KVM irqfd.
@@ -2745,6 +2798,20 @@ impl Device {
     #[must_use]
     pub fn status_line(&self) -> String {
         let line = self.status_line_inner();
+        #[cfg(feature = "diag-intr")]
+        let line = if let Some(diag) = &self.chans.intr_diag {
+            let now = diag.now_ns();
+            diag.sample(&self.intr, now);
+            let unix_ns = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos());
+            format!(
+                "{line} DIAG_INTR unix_ns={unix_ns} {}",
+                diag.status_json(now)
+            )
+        } else {
+            line
+        };
         if self.reset.requested() == 0 {
             line
         } else {
@@ -3629,7 +3696,7 @@ impl Device {
                 // ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH`): the relayed twins' GP_GET first, so the
                 // guest's handler reads the engine's value (nothing with the switch off).
                 let _ = self.chans.relay_refresh_all("a host non-stall wake");
-                self.latch_and_deliver(v);
+                latch_from!(self, v, Engine);
             });
             if kf_mem::maplog::on() || wake <= 8 || wake.is_power_of_two() {
                 eprintln!(
@@ -3655,11 +3722,11 @@ impl Device {
                 // on CE0's — measured at f589ab23, bare metal) — raised on a vector whose service
                 // fires the guest's own FIFO_EVENT_MTHD (`host_notify_vector`), if the guest armed
                 // it. Never dropped.
-                let _ = self.chans.nsi_fifo_edge(|v| self.latch_and_deliver(v));
+                let _ = self.chans.nsi_fifo_edge(|v| latch_from!(self, v, Fifo));
             },
             // The relay's timer: what optional pacing owes goes out even if no edge comes.
             &|| {
-                self.chans.nsi_tick(|v| self.latch_and_deliver(v))
+                self.chans.nsi_tick(|v| latch_from!(self, v, Tick))
                     || self.chans.user_ring_poll_due()
             },
             // ★ 2026-10-14: the USER-ring relays' event hooks (spin / event / safety-net looks) and
@@ -3771,6 +3838,10 @@ impl crate::reset::Owners for Device {
             drop(g);
             let dropped = self.plane.ring.discard_all();
             self.intr.reset();
+            #[cfg(feature = "diag-intr")]
+            if let Some(diag) = &self.chans.intr_diag {
+                diag.reset();
+            }
             if let Some(f) = &self.fsp {
                 f.reset();
             }
@@ -3809,6 +3880,10 @@ impl crate::reset::Owners for Device {
             st.new_boot();
         }
         self.intr.reset();
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.chans.intr_diag {
+            diag.reset();
+        }
         if let Some(f) = &self.fsp {
             f.reset();
         }
@@ -3870,6 +3945,10 @@ impl crate::reset::Owners for Device {
         // ⊘ Again, now that every owner has stopped: a completion edge or a display event that
         // latched between the Drainer stage and the owners' acknowledgements is the old life's.
         self.intr.reset();
+        #[cfg(feature = "diag-intr")]
+        if let Some(diag) = &self.chans.intr_diag {
+            diag.reset();
+        }
         self.hotplug_pending.store(0, Ordering::Release);
         self.restore_shadow();
         // An interrupt raised for the old life and still counted in a vector's eventfd (QEMU's
@@ -4017,7 +4096,7 @@ impl HostOps for Device {
         // vector, here on the worker, never a vCPU. ⊘ The relay itself is NOT yet measured: no
         // run has retired GR-tier work in a guest (run32's GR segment was refused).
         if let Some((v, name, n, rings)) = self.chans.take_gr_relay() {
-            self.latch_and_deliver(v);
+            latch_from!(self, v, GrRelay);
             // Bounded: the first 16 relays, then each power of two.
             if n <= 16 || n.is_power_of_two() {
                 eprintln!(
@@ -4028,7 +4107,7 @@ impl HostOps for Device {
         // ★ 2026-10-07 (`KF3_TRANSLATED_CE_RELAY`, default off): the same relay for a Translated
         // copy-engine ring, to the vector of the ring's own guest engine, after its host fence.
         self.chans.for_each_ce_relay(|v, name, n| {
-            self.latch_and_deliver(v);
+            latch_from!(self, v, CeRelay);
             if n <= 16 || n.is_power_of_two() {
                 eprintln!(
                     "kf3: NSI RELAY host non-stall (FIFO_EVENT_MTHD) -> guest {name} vector {v}: a Translated copy-engine ring retired work after its host fence (relay #{n})"

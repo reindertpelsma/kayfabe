@@ -28,6 +28,10 @@ kf-chan.workspace = true
 kf-rm.workspace = true
 kf-trap.workspace = true
 
+[features]
+# Compile-time removal of every PF1 observer hook in ordinary builds.
+diag-intr = []
+
 # ★ DELIBERATELY NOT `[lints] workspace = true` — this is the hypervisor FFI crate (extern "C"
 # entry points, pointers QEMU owns). Every `unsafe` lives in a `*_unsafe.rs` file and carries a
 # `// SAFETY:` naming its invariant; the safe composition lives beside it.

@@ -3,7 +3,10 @@
 #[test]
 fn the_measurement_is_explicitly_opt_in() {
     let chan = include_str!("../src/chan.rs");
-    assert!(chan.contains("KF3_DIAG_INTR"), "missing default-off interrupt census");
+    assert!(
+        chan.contains("KF3_DIAG_INTR"),
+        "missing default-off interrupt census"
+    );
     assert!(chan.contains("Census::from_setting"));
 }
 
@@ -11,7 +14,10 @@ fn the_measurement_is_explicitly_opt_in() {
 fn real_publications_and_delivery_have_observer_hooks() {
     let device = include_str!("../src/device.rs");
     let pump = include_str!("../src/userpump.rs");
-    assert!(device.contains("diag.delivery("), "eventfd outcome is unobserved");
+    assert!(
+        device.contains("diag.delivery("),
+        "eventfd outcome is unobserved"
+    );
     assert_eq!(pump.matches("diag.marker(").count(), 3);
 }
 
