@@ -1,0 +1,51 @@
+make: Entering directory 'HOST_SOURCE/tools/windows-capture/tests'
+mkdir -p HOST_TEST_OUT
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_main.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o HOST_TEST_OUT/test_main
+test_main.c: In function ‘recent_setup’:
+test_main.c:607:11: error: ‘kfwc_config’ has no member named ‘recent_table_pa’
+  607 |     h->cfg.recent_table_pa = h->s.table_pa;
+      |           ^
+test_main.c: In function ‘t_recent_moved_table_is_found_before_bulk_delay’:
+test_main.c:634:14: error: ‘kfwc_config’ has no member named ‘recent_window_bytes’
+  634 |         h.cfg.recent_window_bytes = 4u << 20;
+      |              ^
+test_main.c:635:14: error: ‘kfwc_config’ has no member named ‘recent_window_ticks’
+  635 |         h.cfg.recent_window_ticks = 1000;
+      |              ^
+test_main.c: In function ‘t_recent_window_skips_pages_outside_ram’:
+test_main.c:650:10: error: ‘kfwc_config’ has no member named ‘recent_table_pa’
+  650 |     h.cfg.recent_table_pa = h.m.base[0] + h.m.len[0] - KFWC_PAGE; /* last valid page, no table */
+      |          ^
+test_main.c:651:10: error: ‘kfwc_config’ has no member named ‘recent_window_bytes’
+  651 |     h.cfg.recent_window_bytes = 1u << 20;
+      |          ^
+test_main.c:652:10: error: ‘kfwc_config’ has no member named ‘recent_window_ticks’
+  652 |     h.cfg.recent_window_ticks = 100;
+      |          ^
+test_main.c: In function ‘t_recent_window_expires_and_does_not_accept_stale_queues’:
+test_main.c:668:10: error: ‘kfwc_config’ has no member named ‘recent_window_bytes’
+  668 |     h.cfg.recent_window_bytes = 4096;
+      |          ^
+test_main.c:669:10: error: ‘kfwc_config’ has no member named ‘recent_window_ticks’
+  669 |     h.cfg.recent_window_ticks = 3;
+      |          ^
+test_main.c: In function ‘t_recent_requires_scan_and_ram_validation’:
+test_main.c:726:10: error: ‘kfwc_config’ has no member named ‘recent_table_pa’
+  726 |     h.cfg.recent_table_pa = RAM_BYTES + 4096u;
+      |          ^
+test_main.c: In function ‘t_recent_seed_requires_both_old_queues_to_have_wrapped’:
+test_main.c:739:11: error: implicit declaration of function ‘kfwc_engine_recent_table’; did you mean ‘kfwc_engine_events’? [-Wimplicit-function-declaration]
+  739 |     CHECK(kfwc_engine_recent_table(h.e) == 0);
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~
+test_main.c:12:15: note: in definition of macro ‘CHECK’
+   12 |         if (!(cond)) {                                                                         \
+      |               ^~~~
+test_main.c:745:41: error: comparison of integer expressions of different signedness: ‘int’ and ‘kfwc_u64’ {aka ‘long long unsigned int’} [-Werror=sign-compare]
+  745 |     CHECK(kfwc_engine_recent_table(h.e) == h.s.table_pa);
+      |                                         ^~
+test_main.c:12:15: note: in definition of macro ‘CHECK’
+   12 |         if (!(cond)) {                                                                         \
+      |               ^~~~
+cc1: all warnings being treated as errors
+make: *** [Makefile:16: HOST_TEST_OUT/test_main] Error 1
+make: Leaving directory 'HOST_SOURCE/tools/windows-capture/tests'

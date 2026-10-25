@@ -599,6 +599,173 @@ static void t_stat_header_pending(void)
 }
 
 /* ===================================================================================== */
+static void recent_setup(harness *h, kfwc_u32 layout, int scan)
+{
+    hn_init(h, layout, 1, scan);
+    h->m.mailbox0 = h->m.mailbox1 = 0;
+    h->cfg.scan_delay_ticks = 5000;
+    h->cfg.recent_table_pa = h->s.table_pa;
+    kfwc_engine_init(h->e, &h->plat, &h->sink, &h->cfg);
+}
+
+static void t_recent_empty_epoch(void)
+{
+    harness h;
+    recent_setup(&h, 1, 1);
+    hn_steps(&h, 1);
+    CHECK(h.e->state == KFWC_ST_ATTACHED);
+    CHECK(h.e->stats.method == 3); /* distinct evidence from a whole-RAM scan */
+    CHECK(h.e->stats.scan_bytes == 0);
+    CHECK(h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_recent_moved_table_is_found_before_bulk_delay(void)
+{
+    kfwc_u32 layout;
+    for (layout = 1; layout <= 2; layout++) {
+        harness h;
+        synth next;
+        recent_setup(&h, layout, 1);
+        h.s.q[0].seq = h.s.q[1].seq = 99;
+        sy_post(&h.s, 0, 76, 16); sy_post(&h.s, 1, 76, 16);
+        sy_init(&next, &h.m, layout, 0x500000, 0x40000, 0x40000, 1);
+        sy_post(&next, 0, 72, 32);
+        sy_post(&next, 1, 65, 32);
+        h.cfg.recent_window_bytes = 4u << 20;
+        h.cfg.recent_window_ticks = 1000;
+        h.cfg.scan_bytes_per_step = 1u << 20;
+        kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+        hn_steps(&h, 6);
+        CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4);
+        CHECK(h.e->bind.table_pa == next.table_pa);
+        CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
+        hn_free(&h);
+    }
+}
+
+static void t_recent_window_skips_pages_outside_ram(void)
+{
+    harness h;
+    recent_setup(&h, 1, 1);
+    /* Last valid page, no table. */
+    h.cfg.recent_table_pa = h.m.base[0] + h.m.len[0] - KFWC_PAGE;
+    h.cfg.recent_window_bytes = 1u << 20;
+    h.cfg.recent_window_ticks = 100;
+    h.cfg.scan_bytes_per_step = 1u << 20;
+    kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+    hn_steps(&h, 3);
+    CHECK(h.e->state == KFWC_ST_SEARCHING && h.e->stats.attaches == 0);
+    CHECK(h.e->stats.scan_bytes == 3u * KFWC_PAGE);
+    CHECK(h.m.refused == 0 && h.m.stores == 0);
+    hn_free(&h);
+}
+
+static void t_recent_window_expires_and_does_not_accept_stale_queues(void)
+{
+    harness h;
+    recent_setup(&h, 1, 1);
+    h.s.q[0].seq = h.s.q[1].seq = 99;
+    sy_post(&h.s, 0, 76, 16); sy_post(&h.s, 1, 76, 16);
+    h.cfg.recent_window_bytes = 4096;
+    h.cfg.recent_window_ticks = 3;
+    kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+    hn_steps(&h, 10);
+    CHECK(h.e->state == KFWC_ST_SEARCHING && h.e->stats.attaches == 0);
+    CHECK(h.e->stats.scan_bytes > 0 && h.e->stats.scan_bytes <= 3u * 4096u);
+    CHECK(h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_recent_sequence_zero_prefix(void)
+{
+    kfwc_u32 layout;
+    for (layout = 1; layout <= 2; layout++) {
+        harness h;
+        msgs cmd, stat;
+        recent_setup(&h, layout, 1);
+        sy_post(&h.s, 0, 72, 8000); /* sequence zero spans several elements */
+        sy_post(&h.s, 1, 65, 32);
+        hn_steps(&h, 3);
+        CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.scan_bytes == 0);
+        cmd = sb_messages(&h.sb, 0);
+        stat = sb_messages(&h.sb, 1);
+        CHECK(cmd.n == 1 && stat.n == 1);
+        if (cmd.n) CHECK(msg_is(&cmd.m[0], layout, 0, 72, 8000));
+        if (stat.n) CHECK(msg_is(&stat.m[0], layout, 0, 65, 32));
+        CHECK(sb_losses(&h.sb) == 0);
+        msgs_free(&cmd);
+        msgs_free(&stat);
+        hn_free(&h);
+    }
+}
+
+static void t_recent_stale_and_partial_epochs(void)
+{
+    kfwc_u32 d;
+    for (d = 0; d < 2; d++) {
+        harness h;
+        recent_setup(&h, 1, 1);
+        h.s.q[d].seq = 99; /* retained old traffic; the prior queue already wrapped */
+        sy_post(&h.s, d, 76, 32);
+        sy_post(&h.s, 1u - d, 72, 32);
+        hn_steps(&h, 2);
+        CHECK(h.e->state == KFWC_ST_SEARCHING);
+        CHECK(h.e->stats.attaches == 0 && h.sb.n == 0);
+        CHECK(h.e->stats.scan_bytes == 0 && h.m.stores == 0);
+        hn_free(&h);
+    }
+}
+
+static void t_recent_requires_scan_and_ram_validation(void)
+{
+    harness h;
+    recent_setup(&h, 1, 0);
+    hn_steps(&h, 1);
+    CHECK(h.e->stats.attaches == 0 && h.sb.n == 0);
+    hn_free(&h);
+    recent_setup(&h, 1, 1);
+    h.cfg.recent_table_pa = RAM_BYTES + 4096u;
+    kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+    hn_steps(&h, 1);
+    CHECK(h.e->stats.attaches == 0 && h.m.refused == 0 && h.m.stores == 0);
+    hn_free(&h);
+}
+
+static void t_recent_seed_requires_both_old_queues_to_have_wrapped(void)
+{
+    harness h;
+    kfwc_u32 i;
+    hn_init(&h, 1, 1, 0);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    for (i = 0; i < 100; i++) sy_post(&h.s, 0, 76, 16);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    for (i = 0; i < 100; i++) sy_post(&h.s, 1, 76, 16);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == h.s.table_pa);
+    kfwc_engine_stop(h.e);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    hn_free(&h);
+}
+
+static void t_recent_corrupt_prefix_is_not_accepted(void)
+{
+    harness h;
+    kfwc_u8 *byte;
+    recent_setup(&h, 1, 1);
+    sy_post(&h.s, 0, 72, 8000);
+    byte = sy_region(&h.s, h.s.q[0].off + 4096u + 128u);
+    *byte ^= 1;
+    hn_steps(&h, 1);
+    CHECK(h.e->stats.attaches == 0 && h.sb.n == 0);
+    *byte ^= 1;
+    hn_steps(&h, 1);
+    CHECK(h.e->state == KFWC_ST_ATTACHED);
+    hn_free(&h);
+}
+
 static void t_scan_discovery(void)
 {
     harness h;
@@ -1092,12 +1259,130 @@ static void t_end_record(void)
     hn_free(&h);
 }
 
+
+/* Source: ogkm 595.91.07 nv_ref.h architecture bits and GH100 FSP boot args.
+ * The queue bytes are produced independently by synth.h from msgq/message_queue_priv.h. */
+static void t_family_boot_capabilities(void)
+{
+    static const kfwc_u32 arch[] = {0x16, 0x17, 0x19, 0x18, 0x1a, 0x1b};
+    static const kfwc_u32 fam[] = {1, 2, 3, 4, 5, 6};
+    kfwc_u32 i;
+    for (i = 0; i < 6; i++) {
+        kfwc_capabilities c;
+        kfwc_family_decode((arch[i] << 24) | (7u << 20) | 0xa1u, &c);
+        CHECK(c.family == fam[i] && c.architecture == arch[i]);
+        CHECK(c.implementation == 7);
+        CHECK(c.boot_path == (i < 3 ? KFWC_BOOT_LIBOS : KFWC_BOOT_FSP));
+    }
+    {
+        kfwc_capabilities c;
+        /* Architecture bit 5 lives at BOOT_0 bit 8; never alias a future GPU. */
+        kfwc_family_decode(0x1b000100u, &c);
+        CHECK(c.architecture == 0x3b && c.family == KFWC_FAMILY_UNKNOWN);
+        CHECK(c.boot_path == KFWC_BOOT_UNKNOWN);
+        kfwc_family_decode(0xffffffffu, &c);
+        CHECK(c.family == KFWC_FAMILY_UNKNOWN);
+    }
+}
+
+static void t_fsp_mailbox_is_not_a_libos_pointer(void)
+{
+    harness h;
+    kfwc_mb_diag d;
+    kfwc_u32 i;
+    hn_init(&h, 1, 1, 1);
+    for (i = 0x1a; i <= 0x1b; i++) {
+        kfwc_u64 reads = h.m.ram_reads;
+        h.m.boot0 = (i << 24) | 0x2000a1u;
+        /* Even a convincing old mailbox chain must not be mistaken for FSP args. */
+        CHECK(kfwc_discover_mailbox(&h.plat, &h.e->tmp, &d) != 0);
+        CHECK(d.status == KFWC_MB_FSP && d.caps.boot_path == KFWC_BOOT_FSP);
+        CHECK(h.m.ram_reads == reads);
+    }
+    hn_free(&h);
+}
+
+static void t_gb20x_live_geometry_and_loss(void)
+{
+    harness h;
+    kfwc_u32 i;
+    msgs c, s;
+    hn_init(&h, 1, 1, 1);
+    h.m.boot0 = 0x1b2000a1u;
+    h.m.mailbox0 = h.m.mailbox1 = 0;
+    /* Public msgq supports independently sized queues; no GB202 constant. */
+    sy_init(&h.s, &h.m, 1, 0x100000, 0x20000, 0x40000, 1);
+    for (i = 0; i < 5; i++) {
+        sy_post(&h.s, 0, 76, 16);
+        sy_post(&h.s, 1, 76, 8192);
+    }
+    hn_steps(&h, 12);
+    CHECK(h.e->stats.family == KFWC_FAMILY_BLACKWELL_CONSUMER);
+    CHECK(h.e->stats.boot_path == KFWC_BOOT_FSP);
+    CHECK(h.e->stats.attaches == 1 && h.e->stats.method == KFWC_METHOD_SCAN);
+    CHECK(h.e->stats.cmd_bytes == 0x20000 && h.e->stats.stat_bytes == 0x40000);
+    CHECK(h.e->stats.region_pages == 97 && h.e->stats.element_bytes == 4096);
+    c = sb_messages(&h.sb, 0);
+    s = sb_messages(&h.sb, 1);
+    CHECK(c.n == 5 && s.n == 5 && sb_losses(&h.sb) == 0);
+    CHECK(h.e->stats.seq_gap_messages == 0 && h.m.stores == 0);
+    for (i = 0; i < c.n; i++) CHECK(msg_is(&c.m[i], 1, i, 76, 16));
+    for (i = 0; i < s.n; i++) CHECK(msg_is(&s.m[i], 1, i, 76, 8192));
+    msgs_free(&c);
+    msgs_free(&s);
+    hn_free(&h);
+}
+
+static void t_family_report_without_attach(void)
+{
+    harness h;
+    hn_init(&h, 1, 1, 0);
+    h.m.boot0 = 0x1b5000a1u;
+    h.m.mailbox0 = h.m.mailbox1 = 0;
+    hn_steps(&h, 3);
+    CHECK(h.e->state == KFWC_ST_SEARCHING && h.e->stats.attaches == 0);
+    CHECK(h.e->stats.family == KFWC_FAMILY_BLACKWELL_CONSUMER);
+    CHECK(h.e->stats.boot_path == KFWC_BOOT_FSP);
+    CHECK(h.e->stats.architecture == 0x1b && h.e->stats.implementation == 5);
+    CHECK(h.e->stats.mailbox_status == KFWC_MB_FSP);
+    hn_free(&h);
+}
+
+static void t_family_scan_without_mailbox(void)
+{
+    harness h;
+    hn_init(&h, 1, 0, 1);
+    h.m.boot0 = 0x1b3000a1u;
+    hn_steps(&h, 12);
+    CHECK(h.e->stats.attaches == 1 && h.e->stats.family == 6);
+    CHECK(h.e->stats.boot_path == KFWC_BOOT_FSP && h.e->stats.mailbox_reads == 0);
+    CHECK(h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_unknown_family_uses_no_mailbox_pointer(void)
+{
+    harness h;
+    hn_init(&h, 1, 1, 0);
+    h.m.boot0 = 0x1b000100u;
+    hn_steps(&h, 3);
+    CHECK(h.e->stats.attaches == 0 && h.e->stats.family == 0);
+    CHECK(h.e->stats.boot_path == 0 && h.e->stats.mailbox_status == KFWC_MB_UNKNOWN);
+    hn_free(&h);
+}
+
 /* ===================================================================================== */
 typedef void (*test_fn)(void);
 
 int main(int argc, char **argv)
 {
     static const struct { const char *name; test_fn fn; } tests[] = {
+        {"family_boot_capabilities", t_family_boot_capabilities},
+        {"fsp_mailbox_is_not_libos", t_fsp_mailbox_is_not_a_libos_pointer},
+        {"gb20x_geometry_loss", t_gb20x_live_geometry_and_loss},
+        {"family_report_without_attach", t_family_report_without_attach},
+        {"family_scan_without_mailbox", t_family_scan_without_mailbox},
+        {"unknown_family_no_mailbox", t_unknown_family_uses_no_mailbox_pointer},
         {"record_format", t_record_format},
         {"file_header", t_file_header},
         {"elements", t_elements},
@@ -1114,6 +1399,15 @@ int main(int argc, char **argv)
         {"walker_unpublished_and_budget", t_unpublished_and_budget},
         {"walker_status_header_pending", t_stat_header_pending},
         {"scan_discovery_rate_limited", t_scan_discovery},
+        {"recent_empty_epoch", t_recent_empty_epoch},
+        {"recent_moved_table_early", t_recent_moved_table_is_found_before_bulk_delay},
+        {"recent_window_expires", t_recent_window_expires_and_does_not_accept_stale_queues},
+        {"recent_window_ram_edges", t_recent_window_skips_pages_outside_ram},
+        {"recent_sequence_zero_prefix", t_recent_sequence_zero_prefix},
+        {"recent_stale_and_partial_epochs", t_recent_stale_and_partial_epochs},
+        {"recent_requires_scan_and_ram_validation", t_recent_requires_scan_and_ram_validation},
+        {"recent_seed_requires_wrapped_queues", t_recent_seed_requires_both_old_queues_to_have_wrapped},
+        {"recent_corrupt_prefix_is_refused", t_recent_corrupt_prefix_is_not_accepted},
         {"scan_gated_by_mailbox", t_scan_gated_by_mailbox_zero},
         {"events_and_mailbox_cross_check", t_events_and_xcheck},
         {"detach_and_reattach", t_detach_and_reattach},
