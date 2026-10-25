@@ -37,6 +37,15 @@ CODE READ: the Worker never reads Access headers, it only injects the pair as `K
 `KF_ACCESS_SECRET`: `src/index.js:92-93`, `src/index.js:882-883`. The payload loses the pair, but it
 runs as root from the same SHA and can read `/run/kf-ci/env` (`scripts/ci/README.md`).
 
+What a malicious box can and cannot do. OWNER: the GPU-free tests run first on GitHub's official CI,
+so a box cannot forge GPU-free results. The box only runs an already-trusted, already-reviewed
+codebase and returns a binary pass/fail verdict for the GPU checks. At most it gives a wrong
+pass/fail bit for GPU checks on trusted code. It cannot alter the code under test, the built
+binaries or any release artifact, so the verdict is not security-sensitive for the resulting
+binaries; release gating on it is a correctness signal, not an integrity one. CODE READ: the
+`gpu-vast` workflow does not itself `needs:` the GPU-free CI (a separate workflow), so that
+ordering is a repository process fact, not enforced in `gpu-vast.yml`.
+
 ## 3. `bad-machine:` entries never expire
 
 OWNER: by design, no expiry. CODE READ: the Worker writes `bad-machine:<machine_id>` on the KVM
