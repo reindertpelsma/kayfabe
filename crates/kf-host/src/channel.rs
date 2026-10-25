@@ -121,15 +121,17 @@ pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
 /// because a sparse reservation absorbs the access to a plain-invalid VA that real hardware faults.
 #[must_use]
 pub fn guest_reserve_flags(sparse_diag: bool) -> u32 {
-    let _ = sparse_diag;
-    NVOS32_RESERVE_FLAGS
+    if sparse_diag {
+        NVOS32_RESERVE_FLAGS | NVOS32_ALLOC_FLAGS_SPARSE
+    } else {
+        NVOS32_RESERVE_FLAGS
+    }
 }
 
 /// The experiment switch from the value of `KF3_DIAG_SPARSE_RESV`: only `1` turns it on.
 #[must_use]
 pub fn sparse_resv_diag_from(value: Option<&str>) -> bool {
-    let _ = value;
-    false
+    value == Some("1")
 }
 
 /// Whether the sparse-reservation experiment is requested (`KF3_DIAG_SPARSE_RESV=1`).
@@ -776,7 +778,12 @@ impl HostRm {
                 if reserve_guest {
                     let ranges = GUEST_VA_RANGES.iter().copied().chain(start.low_range());
                     for (slot, (lo, hi)) in vas.guest.iter_mut().zip(ranges) {
-                        match self.reserve_va(space, lo, hi - lo) {
+                        match self.reserve_va_flags(
+                            space,
+                            lo,
+                            hi - lo,
+                            guest_reserve_flags(sparse_resv_diag()),
+                        ) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
                             Err(e) => eprintln!(
                                 "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"
@@ -798,6 +805,20 @@ impl HostRm {
     /// # Errors
     /// The host's refusal.
     pub fn reserve_va(&self, space: u32, at: u64, len: u64) -> Result<u32, RmError> {
+        self.reserve_va_flags(space, at, len, NVOS32_RESERVE_FLAGS)
+    }
+
+    /// [`HostRm::reserve_va`] with explicit `NVOS32_ALLOC_FLAGS_*` ([`guest_reserve_flags`]).
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn reserve_va_flags(
+        &self,
+        space: u32,
+        at: u64,
+        len: u64,
+        flags: u32,
+    ) -> Result<u32, RmError> {
         let mut p = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
             owner: self.client.raw(),
@@ -810,7 +831,7 @@ impl HostRm {
         }
         .encode_into(&mut p)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        p[8..12].copy_from_slice(&NVOS32_RESERVE_FLAGS.to_le_bytes());
+        p[8..12].copy_from_slice(&flags.to_le_bytes());
         p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
         p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
         let want = self.mint();

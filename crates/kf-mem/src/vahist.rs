@@ -48,6 +48,7 @@
 
 use crate::apply::DiffRun;
 use crate::refusal_dump::{aperture, decode, field, index_at, path_to};
+use crate::sparse::classify_leaf;
 use kf_cuda::abi::{
     KF_DIRS, KF_PS_NONE, KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KfFormat,
 };
@@ -1212,8 +1213,9 @@ pub fn probe_pte(
             Some((a, r)) => {
                 let _ = write!(
                     s,
-                    " big@{a:#x}={r:#x} big_valid={} ({})",
+                    " big@{a:#x}={r:#x} big_valid={} leaf={} ({})",
                     bit(r, fmt.valid_bit),
+                    classify_leaf(fmt, r).name(),
                     decode(fmt, r)
                 );
             }
@@ -1232,8 +1234,9 @@ pub fn probe_pte(
             Some((a, r)) => {
                 let _ = write!(
                     s,
-                    " small@{a:#x}={r:#x} small_valid={} ({})",
+                    " small@{a:#x}={r:#x} small_valid={} leaf={} ({})",
                     bit(r, fmt.valid_bit),
+                    classify_leaf(fmt, r).name(),
                     decode(fmt, r)
                 );
             }
