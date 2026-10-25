@@ -40,8 +40,7 @@ runs as root from the same SHA and can read `/run/kf-ci/env` (`scripts/ci/README
 ## 3. `bad-machine:` entries never expire
 
 OWNER: by design, no expiry. CODE READ: the Worker writes `bad-machine:<machine_id>` on the KVM
-boot-failure signature, flag `bootFailure.confirmed` (`src/index.js:296-313`). `evaluate()` lists at most 257 and refuses when
-there are more than 256 (`src/offers.js:132-133`), a bare `UNAVAILABLE` 503 with no reason code
+boot-failure signature (`src/index.js:296-313`). `evaluate()` lists at most 257 and refuses when there are more than 256 (`src/offers.js:132-133`), a bare `UNAVAILABLE` 503 with no reason code
 (`src/policy.js:13-15`). Pruning does not touch them (`expire()`, `src/ledger.js:119-143`).
 
 OWNER: reaching the cap is intended to stop everything. It means something is badly wrong, probably
