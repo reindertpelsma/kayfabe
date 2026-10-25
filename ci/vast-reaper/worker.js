@@ -5,6 +5,8 @@ export function createReaper({
   report = (x) => console.log(JSON.stringify(x)),
 } = {}) {
   async function sweep(env) {
+    // Only local static stages reach the report; never inspect a caught provider error.
+    let reason = 'configuration';
     const integer = (name, fallback, lo, hi) => {
       const value = env[name] ?? String(fallback);
       if (!/^[1-9][0-9]{0,3}$/.test(value) || Number(value) < lo || Number(value) > hi)
@@ -20,6 +22,7 @@ export function createReaper({
       )
         throw Error('configuration');
       const request = async (path, method = 'GET') => {
+        reason = 'transport';
         const response = await fetcher('https://console.vast.ai' + path, {
           method,
           redirect: 'error',
@@ -29,20 +32,26 @@ export function createReaper({
             Accept: 'application/json',
           },
         });
+        reason = 'http_refusal';
         if (response.status !== 200 || response.redirected) {
           await response.body?.cancel();
           throw Error('provider');
         }
+        reason = 'invalid_response';
         const reader = response.body?.getReader();
         if (!reader) throw Error('provider');
         const chunks = [];
         let size = 0;
         try {
           while (true) {
+            reason = 'transport';
             const { done, value } = await reader.read();
             if (done) break;
             size += value.length;
-            if (size > 262144) throw Error('provider');
+            if (size > 262144) {
+              reason = 'invalid_response';
+              throw Error('provider');
+            }
             chunks.push(value);
           }
         } finally {
@@ -54,10 +63,12 @@ export function createReaper({
           bytes.set(value, offset);
           offset += value.length;
         }
+        reason = 'invalid_json';
         return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
       };
       const list = async () => {
         const data = await request('/api/v1/instances/?limit=100');
+        reason = data == null ? 'malformed_list' : 'incomplete_list';
         if (
           data.success !== true ||
           !Array.isArray(data.instances) ||
@@ -66,6 +77,7 @@ export function createReaper({
           data.next
         )
           throw Error('incomplete list');
+        reason = 'malformed_list';
         const ids = new Set();
         for (const row of data.instances) {
           if (!Number.isSafeInteger(row?.id) || row.id <= 0 || ids.has(row.id))
@@ -113,7 +125,7 @@ export function createReaper({
       }
       report({ event: 'reaper_complete', deleted, unconfirmed, failed });
     } catch {
-      report({ event: 'reaper_unavailable' });
+      report({ event: 'reaper_unavailable', reason });
     }
   }
   return {

@@ -122,7 +122,14 @@ for (const [label, page] of [
   test('R05 an incomplete or invalid list aborts the sweep: ' + label, async () => {
     const r = await reaper(() => page);
     assert.deepEqual(r.deletes, []);
-    assert.deepEqual(r.logs, [{ event: 'reaper_unavailable' }]);
+    assert.deepEqual(r.logs, [
+      {
+        event: 'reaper_unavailable',
+        reason: ['duplicate id', 'invalid id'].includes(label)
+          ? 'malformed_list'
+          : 'incomplete_list',
+      },
+    ]);
   });
 test('R05 a complete 99-row list is accepted', async () => {
   const rows = Array.from({ length: 99 }, (_, i) => old(i + 1));
@@ -133,7 +140,7 @@ for (const margin of ['14', '1', '0'])
   test('R06 a margin below 15 minutes refuses the whole sweep ' + margin, async () => {
     const r = await reaper(() => listed([old(1)]), { REAPER_MARGIN_MINUTES: margin });
     assert.deepEqual(r.calls, []);
-    assert.deepEqual(r.logs, [{ event: 'reaper_unavailable' }]);
+    assert.deepEqual(r.logs, [{ event: 'reaper_unavailable', reason: 'configuration' }]);
   });
 test('R06 the 15-minute margin floor itself is accepted', async () => {
   const r = await reaper((n) => listed(n === 3 ? [] : [old(1)]), { REAPER_MARGIN_MINUTES: '15' });
