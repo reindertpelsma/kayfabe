@@ -1,0 +1,84 @@
+{
+  "lease_id": 57723513,
+  "die": "GA102",
+  "os": "Linux",
+  "host_driver": "595.91.07",
+  "host_module": "open",
+  "guest_driver": "595.91.07",
+  "guest_module": "open",
+  "guest_kernel": "6.8.0-59-generic",
+  "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "qemu_sha256": "9e99b20f7b98b79af8c8661a0b313fcf1fea8915fbe6e55d869660d059f2cfed",
+  "native_rm_binding": {
+    "architecture": 368,
+    "die": "GA102",
+    "driver": "595.91.07",
+    "implementation": 2,
+    "pci": "0x220410DE",
+    "product_name": "NVIDIA GeForce RTX 3090",
+    "revision": 161
+  },
+  "native": {
+    "gates_pass": 9,
+    "gates_fail": 0,
+    "gate10": "PASS",
+    "gate_user_births": 12,
+    "bare_pass": 30,
+    "bare_fail": 0,
+    "bare_crash": 0
+  },
+  "guest": {
+    "pass": 30,
+    "fail": 0,
+    "crash": 0,
+    "unrun": 0,
+    "arms": 30,
+    "oracle_seconds": 180,
+    "user_births": 161,
+    "births": 161,
+    "cuda_posture_records": 90
+  },
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "8192"
+  },
+  "host_bar1_mib": 256,
+  "bar1_resized": false,
+  "verdict": "PASS",
+  "n": 1,
+  "performance_claim": false,
+  "xids": {
+    "initial": 0,
+    "final": 10,
+    "native_source_approved": 5,
+    "guest_source_approved": 5,
+    "unexpected": 0,
+    "final_equals_source_accepted": true
+  },
+  "cost": {
+    "id": 57723513,
+    "elapsed_seconds": 1672.581092,
+    "runtime_estimate_usd": 0.2090726365,
+    "transfer_liability_usd": 0.16927083333333334,
+    "nonruntime_margin_usd": 0.5,
+    "retained_usd": 0.8783434698333333,
+    "settled_invoice": false
+  },
+  "capture": {
+    "sha256": "db3c1340ef1da0eee67b368c9ca3b8cce204629efac19208aaaf15dc459d4481",
+    "bytes": 870315,
+    "files": 178,
+    "verified_utc": "2026-10-25T21:47:17.980690+00:00"
+  },
+  "teardown": {
+    "created_utc": "2026-10-25T21:19:27.667303+00:00",
+    "api_absent_utc": "2026-10-25T21:47:20.248395+00:00",
+    "watch_armed_utc": "2026-10-25T21:19:27.558256+00:00",
+    "fixed_deadline_utc": "2026-10-25T22:49:04.558256+00:00",
+    "capture_verified_before_destroy": true,
+    "watch_cancelled_after_absence": true,
+    "watch_pid_gone": true
+  },
+  "windows": "UNRUN"
+}

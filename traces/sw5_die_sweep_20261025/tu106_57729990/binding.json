@@ -1,0 +1,9 @@
+{
+  "architecture": 352,
+  "die": "TU106",
+  "driver": "595.91.07",
+  "implementation": 6,
+  "pci": "0x1F0610DE",
+  "product_name": "NVIDIA GeForce RTX 2060 SUPER",
+  "revision": 161
+}

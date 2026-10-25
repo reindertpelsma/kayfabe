@@ -1,0 +1,32 @@
+BARE_SUITE_STARTED=2026-10-25T22:42:50+00:00 arms=30 budget=180s
+BARE_CELL_ARM arm=timer verdict=PASS secs=3 ms=2413 rc=0 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=engines verdict=PASS secs=2 ms=2594 rc=0 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=3 ms=2682 rc=0 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=2 ms=2395 rc=0 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=6 ms=5608 rc=0 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=concurrency verdict=PASS secs=7 ms=6541 rc=0 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=defer-liveness verdict=FAIL secs=14 ms=14578 rc=6 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=blockage-coverage verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=alias-two-vas verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=alias-unmap-observe verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=map-propagation verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=late-map-race verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=missing-page-fault verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=uvm-invalidate verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=uvm-mean verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=executor-vas verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=guest-ring-channel verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=dictated-ring verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=dictated-ring-negative verdict=FAIL secs=0 ms=9 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=ce-client verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=ce-client-guest-ram verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=guest-ram-pin verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=bar1-crossing verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=atomics-probe verdict=FAIL secs=0 ms=9 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=pce-mask-probe verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=gpga-reserve-probe verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=map-stress verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=concurrent-fuzz verdict=FAIL secs=0 ms=10 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=cross-client-leak verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_CELL_ARM arm=rpc-mixed-allocs verdict=FAIL secs=0 ms=8 rc=7 pci_dev=0x1F0610DE drv=595.91.07 kmod=open cc=7.5 rev=714ec29d
+BARE_SUITE_PASS=6 BARE_SUITE_FAIL=24 BARE_SUITE_CRASH=0 ARMS=30

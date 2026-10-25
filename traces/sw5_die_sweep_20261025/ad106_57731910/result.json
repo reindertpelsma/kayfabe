@@ -1,0 +1,84 @@
+{
+  "lease_id": 57731910,
+  "die": "AD106",
+  "os": "Linux",
+  "host_driver": "595.91.07",
+  "host_module": "open",
+  "guest_driver": "595.91.07",
+  "guest_module": "open",
+  "guest_kernel": "6.8.0-59-generic",
+  "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "qemu_sha256": "9e99b20f7b98b79af8c8661a0b313fcf1fea8915fbe6e55d869660d059f2cfed",
+  "native_rm_binding": {
+    "architecture": 400,
+    "die": "AD106",
+    "driver": "595.91.07",
+    "implementation": 6,
+    "pci": "0x280310DE",
+    "product_name": "NVIDIA GeForce RTX 4060 Ti",
+    "revision": 161
+  },
+  "native": {
+    "gates_pass": 9,
+    "gates_fail": 0,
+    "gate10": "PASS",
+    "gate_user_births": 12,
+    "bare_pass": 30,
+    "bare_fail": 0,
+    "bare_crash": 0
+  },
+  "guest": {
+    "pass": 30,
+    "fail": 0,
+    "crash": 0,
+    "unrun": 0,
+    "arms": 30,
+    "oracle_seconds": 180,
+    "user_births": 161,
+    "births": 161,
+    "cuda_posture_records": 90
+  },
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "8192"
+  },
+  "host_bar1_mib": 256,
+  "bar1_resized": false,
+  "verdict": "PASS",
+  "n": 1,
+  "performance_claim": false,
+  "xids": {
+    "initial": 0,
+    "final": 10,
+    "native_source_approved": 5,
+    "guest_source_approved": 5,
+    "unexpected": 0,
+    "final_equals_source_accepted": true
+  },
+  "cost": {
+    "id": 57731910,
+    "elapsed_seconds": 1516.256339,
+    "runtime_estimate_usd": 0.18840888953129628,
+    "transfer_liability_usd": 0.15234375,
+    "nonruntime_margin_usd": 0.5,
+    "retained_usd": 0.8407526395312963,
+    "settled_invoice": false
+  },
+  "capture": {
+    "sha256": "9fdbad771616ce7fb40b44e37e743c254f59b021ac26f737aa8104c05df4ec22",
+    "bytes": 852191,
+    "files": 178,
+    "verified_utc": "2026-10-25T23:11:30.515774+00:00"
+  },
+  "teardown": {
+    "created_utc": "2026-10-25T22:46:16.621412+00:00",
+    "api_absent_utc": "2026-10-25T23:11:32.877751+00:00",
+    "watch_armed_utc": "2026-10-25T22:46:16.508685+00:00",
+    "fixed_deadline_utc": "2026-10-26T00:18:11.508685+00:00",
+    "capture_verified_before_destroy": true,
+    "watch_cancelled_after_absence": true,
+    "watch_pid_gone": true
+  },
+  "windows": "UNRUN"
+}

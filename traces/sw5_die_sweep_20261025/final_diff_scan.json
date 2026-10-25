@@ -1,0 +1,14 @@
+{
+  "base": "93091106d",
+  "scope": "all added branch lines in SW5 code, matrix and evidence",
+  "pattern_hits": {
+    "private_key": 0,
+    "token_assignment": 0,
+    "forbidden_address": 0,
+    "board_uuid": 0,
+    "private_paths": 0
+  },
+  "ipv4_values": [],
+  "new_code_lines_over_100": [],
+  "clear": true
+}
