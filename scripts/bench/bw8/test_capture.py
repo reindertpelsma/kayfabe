@@ -12,6 +12,42 @@ except ImportError:
     pack = verify_archive = missing
 
 
+try:
+    from capture import verify_pulled
+except ImportError:
+    def verify_pulled(*args): raise ValueError('receipt verification absent')
+
+
+class PulledReceipts(unittest.TestCase):
+    def fixture(self, root):
+        folder=root/'box';folder.mkdir();(folder/'private.log').write_bytes(b'private')
+        return [dict(run='box',verified=1,failed=[],not_pulled=[],files={
+            'private.log':dict(sha256=hashlib.sha256(b'private').hexdigest())})]
+    def test_verified_original_pull(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);self.assertTrue(verify_pulled(self.fixture(p),p))
+    def test_verified_second_pull(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);rows=self.fixture(p);rows[0]['run']='on_fix';(p/'box').rename(p/'on_fix')
+            self.assertTrue(verify_pulled(rows,p))
+    def test_changed_file_before_destroy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);rows=self.fixture(p);(p/'box/private.log').write_bytes(b'changed')
+            with self.assertRaises(ValueError):verify_pulled(rows,p)
+    def test_second_changed_file_before_destroy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);rows=self.fixture(p);rows[0]['files']['private.log']['sha256']='0'*64
+            with self.assertRaises(ValueError):verify_pulled(rows,p)
+    def test_failed_pull_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);rows=self.fixture(p);rows[0]['failed']=['private.log']
+            with self.assertRaises(ValueError):verify_pulled(rows,p)
+    def test_partial_pull_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);rows=self.fixture(p);rows[0]['not_pulled']=['private.log']
+            with self.assertRaises(ValueError):verify_pulled(rows,p)
+
+
 class Capture(unittest.TestCase):
     def test_pack_and_verify(self):
         with tempfile.TemporaryDirectory() as tmp:
