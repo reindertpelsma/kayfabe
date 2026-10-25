@@ -151,7 +151,7 @@ class HsceAdmission(unittest.TestCase):
 
     def test_hsce_native_non_ce_client_refuses(self):
         with self.assertRaises(G.GuardRefused):
-            self.native_approve(self.native_journal.replace("HUBCLIENT_HSCE0", "HUBCLIENT_ESC"))
+            self.native_approve(self.native_journal.replace("HUBCLIENT_HSCE", "HUBCLIENT_ESC"))
 
     def test_hsce_guest_non_ce_client_refuses(self):
         lines = [line.replace("HUBCLIENT_HSCE", "HUBCLIENT_ESC") for line in self.guest_lines]
