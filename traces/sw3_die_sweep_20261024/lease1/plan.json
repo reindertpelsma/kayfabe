@@ -1,0 +1,13 @@
+{
+  "armed_utc": "2026-10-24T21:09:07.043472+00:00",
+  "deadline_utc": "2026-10-24T23:39:07.043472+00:00",
+  "seconds": 9000,
+  "quoted_rate": 0.2413888888888889,
+  "rate_bound": 0.3413888888888889,
+  "reservation_usd": 1.3534722222222222,
+  "credit_after_reservation": 22.370747995637743,
+  "stop_usd": 2.5,
+  "cap_usd": 3.0,
+  "reserve_usd": 8.0,
+  "leases_authorized": 1
+}
