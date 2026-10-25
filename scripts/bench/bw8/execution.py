@@ -13,7 +13,7 @@ def number(value):
 
 
 def limits(grant):
-    if grant == "grant5":
+    if grant in {"grant5", "grant6"}:
         return 1.4, 3.0, 3.5
     if grant == "":
         return 1.0, 2.0, 2.5
@@ -23,8 +23,8 @@ def limits(grant):
 def config_grant(config):
     grant = config.get("grant", "")
     limits(grant)
-    if grant == "grant5" and not any(
-        name.endswith("/BW8_GRANT5.txt") for name in config.get("grant_locks", {})
+    if grant in {"grant5", "grant6"} and not any(
+        name.endswith("/BW8_" + grant.upper() + ".txt") for name in config.get("grant_locks", {})
     ):
         raise ValueError("fresh grant5 source receipt required")
     return grant

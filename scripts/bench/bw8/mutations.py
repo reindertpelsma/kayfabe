@@ -8,6 +8,39 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 MUTANTS = {
+    "preupload_console_capture_lost": (
+        "backend.py",
+        'if not row.get("work_started"):',
+        "if False:",
+    ),
+    "preupload_marked_remote_work": (
+        "backend.py",
+        'for name in ("upload.py", "parallel_eight.py"):',
+        'row["work_started"] = True\n            provider.save(ledger, [row])\n'
+        '            for name in ("upload.py", "parallel_eight.py"):',
+    ),
+    "upload_relative_paths_accepted": (
+        "upload_wiring.py",
+        "if not path.is_absolute():",
+        "if False:",
+    ),
+    "upload_current_ledger_lost": (
+        "upload_wiring.py",
+        "read.func.value = path_value(ledger)",
+        "pass",
+    ),
+    "upload_current_kit_lost": (
+        "upload_wiring.py",
+        "single(matches, name).value = path_value(value)",
+        'single(matches, name).value = path_value(value) if name != "K" '
+        "else single(matches, name).value",
+    ),
+    "upload_extras_lost": (
+        "upload_wiring.py",
+        "tree.body.insert(tree.body.index(bundle), update)",
+        "pass",
+    ),
+    "upload_anchor_guard_lost": ("upload_wiring.py", "if len(nodes) != 1:", "if False:"),
     "grant5_limits_ignored": ("execution.py", "return 1.4, 3.0, 3.5", "return 1, 2, 2.5"),
     "unknown_grant_accepted": (
         "execution.py",
@@ -16,7 +49,7 @@ MUTANTS = {
     ),
     "fresh_grant5_ignored": (
         "execution.py",
-        'if grant == "grant5" and not any(',
+        'if grant in {"grant5", "grant6"} and not any(',
         "if False and not any(",
     ),
     "actual_rate_guard_removed": (

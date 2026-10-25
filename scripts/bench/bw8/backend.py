@@ -227,8 +227,6 @@ def backend_type(provider):
             (self.workspace / "observation_authority.json").write_text(
                 json.dumps(authority, indent=2) + "\n"
             )
-            row["work_started"] = True
-            provider.save(ledger, [row])
             for name in ("upload.py", "parallel_eight.py"):
                 result = subprocess.run(
                     [sys.executable, str(self.workspace / name)],
@@ -243,6 +241,9 @@ def backend_type(provider):
                     raise ValueError(
                         "bounded upload/controller launch refused; private errors kept"
                     )
+                if name == "upload.py":
+                    row["work_started"] = True
+                    provider.save(ledger, [row])
             counter = 0
             while dt.datetime.now(dt.timezone.utc) < end - dt.timedelta(seconds=300):
                 if self.watch.poll() is not None:
@@ -275,7 +276,7 @@ def backend_type(provider):
 
         def capture(self, iid):
             row = json.loads((self.evidence / "owned.json").read_text())[0]
-            if not row.get("ssh_ready_utc"):
+            if not row.get("work_started"):
                 return super().capture(iid)
             packed = self.ssh("bash " + self.config["remote_kit"] + "/pack_box.sh")
             (self.evidence / "pack_box.log").write_text(packed)

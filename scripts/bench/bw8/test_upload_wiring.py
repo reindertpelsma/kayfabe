@@ -149,3 +149,19 @@ class UploadBindings(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
                 relocate_upload(SOURCE + "\nK = W\n", **self.fixture(Path(tmp)))
+
+
+class AbsolutePaths(unittest.TestCase):
+    def test_relative_workspace_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = UploadBindings().fixture(Path(tmp))
+            paths["D"] = Path("relative")
+            with self.assertRaises(ValueError):
+                relocate_upload(SOURCE, **paths)
+
+    def test_relative_kit_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = UploadBindings().fixture(Path(tmp))
+            paths["K"] = Path("relative")
+            with self.assertRaises(ValueError):
+                relocate_upload(SOURCE, **paths)

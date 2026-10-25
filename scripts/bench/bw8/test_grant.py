@@ -115,3 +115,25 @@ class Amendment(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             config_grant({"grant": "grant5"})
+
+
+class Grant6(unittest.TestCase):
+    plan = Amendment.plan
+
+    def test_new_plan(self):
+        self.assertEqual(self.plan(grant="grant6")["stop_usd"], 3)
+
+    def test_second_new_plan(self):
+        self.assertEqual(self.plan(1.295, grant="grant6")["cap_usd"], 3.5)
+
+    def test_new_authority_required(self):
+        from execution import config_grant
+
+        with self.assertRaises(ValueError):
+            config_grant({"grant": "grant6", "grant_locks": {}})
+
+    def test_prior_authority_insufficient(self):
+        from execution import config_grant
+
+        with self.assertRaises(ValueError):
+            config_grant({"grant": "grant6", "grant_locks": {"/fixture/BW8_GRANT5.txt": "hash"}})
