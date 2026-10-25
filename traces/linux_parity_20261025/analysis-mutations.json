@@ -1,0 +1,43 @@
+[
+  {
+    "mutant": "inverse_ratio",
+    "rc": 1,
+    "kills": [
+      "test_extreme_ratio_has_explicit_range",
+      "test_throughput_ratio_direction"
+    ]
+  },
+  {
+    "mutant": "inclusive_spike_boundary",
+    "rc": 1,
+    "kills": [
+      "test_distribution",
+      "test_spike_boundary_is_strict"
+    ]
+  },
+  {
+    "mutant": "admit_too_few_pairs",
+    "rc": 1,
+    "kills": [
+      "test_no_parity_claim_below_five",
+      "test_single_pair_cannot_claim_parity"
+    ]
+  },
+  {
+    "mutant": "accept_nonfinite",
+    "rc": 1,
+    "kills": [
+      "test_empty_and_invalid_are_unmeasured",
+      "test_infinite_timing_is_rejected",
+      "test_nan_timing_is_rejected"
+    ]
+  },
+  {
+    "mutant": "drop_content_guard",
+    "rc": 1,
+    "kills": [
+      "test_bad_content_is_rejected",
+      "test_corrupt_stream_content_is_rejected"
+    ]
+  }
+]

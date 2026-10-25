@@ -63,6 +63,28 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(row["ratio_range"], [0.5, 0.5])
         self.assertEqual(row["ratio_ci95"], [0.5, 0.5])
 
+    def test_nan_timing_is_rejected(self):
+        with self.assertRaises(ValueError):
+            distribution([1, math.nan])
+
+    def test_infinite_timing_is_rejected(self):
+        with self.assertRaises(ValueError):
+            distribution([1, math.inf])
+
+    def test_single_pair_cannot_claim_parity(self):
+        with self.assertRaises(ValueError):
+            paired([1], [1])
+
+    def test_low_frame_percentiles(self):
+        row = distribution([10, 20])
+        self.assertAlmostEqual(row["p99_ms"], 19.9)
+        self.assertAlmostEqual(row["one_percent_low_per_s"], 1000 / 19.9)
+
+    def test_corrupt_stream_content_is_rejected(self):
+        text = "BWITER mib=64 i=1 submit_ms=1 sync_ms=2 total_ms=3 bad=2\n"
+        with self.assertRaises(ValueError):
+            parse(text)
+
     def test_surface_gpu_passes(self):
         text = "SURFACE_FRAME 0,10.0,2.5,1.5,0.25\n"
         data = parse(text)["surface"]
