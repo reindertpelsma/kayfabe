@@ -1,0 +1,78 @@
+{
+  "checked_utc": "2026-10-25T18:15:04.242735+00:00",
+  "authority": "GRANT4 amendment of GRANT/GRANT2/GRANT3",
+  "authority_sha256": "0954fad713c1b2f1fb0c03598ed27a8921be54980aa385fa48366797f53ca4eb",
+  "result": "UNRUN_PROVISIONING_ESTIMATE_DOES_NOT_FIT",
+  "new_leases": 0,
+  "new_spend_usd": 0,
+  "amended_rate_ceiling_usd_per_hour": 1.4,
+  "stop_usd": 2,
+  "cap_usd": 2.5,
+  "nonruntime_margin_usd": 0.5,
+  "teardown_seconds": 60,
+  "estimated_seconds": 4931,
+  "rate_bound_formula": "max(requested_180gb_rate * 1.15, requested_180gb_rate + 0.10)",
+  "cost_seconds_formula": "int((2.00 - 0.50 - transfer_liability) * 3600 / rate_bound) - 60",
+  "transfer_formula": "12 * inet_down_cost + inet_up_cost",
+  "estimate_provenance": "Retained BW6 create-to-bind 1715.064893 seconds, doubled plus unchanged 1500-second postprovision guard, rounded up. Phases overlap; not summed twice.",
+  "offers": [
+    {
+      "offer_id": 56638594,
+      "machine_id": 53347,
+      "host_id": 79466,
+      "requested_180gb_rate": 1.295,
+      "rate_bound": 1.4892499999999997,
+      "transfer_liability_usd": 0.05078125,
+      "maximum_seconds": 3443,
+      "refusals": [
+        "retained provisioning/observation/teardown estimate does not fit unchanged stop/margins"
+      ]
+    },
+    {
+      "offer_id": 52870669,
+      "machine_id": 28666,
+      "host_id": 79466,
+      "requested_180gb_rate": 1.3833333333333333,
+      "rate_bound": 1.590833333333333,
+      "transfer_liability_usd": 0.05078125,
+      "maximum_seconds": 3219,
+      "refusals": [
+        "retained provisioning/observation/teardown estimate does not fit unchanged stop/margins"
+      ]
+    },
+    {
+      "offer_id": 54642865,
+      "machine_id": 153274,
+      "host_id": 728996,
+      "requested_180gb_rate": 1.4866666666666668,
+      "rate_bound": 1.7096666666666667,
+      "transfer_liability_usd": 0.03515625,
+      "maximum_seconds": 3024,
+      "refusals": [
+        "rate exceeds amended 1.40 ceiling",
+        "retained provisioning/observation/teardown estimate does not fit unchanged stop/margins"
+      ]
+    },
+    {
+      "offer_id": 55276777,
+      "machine_id": 18855,
+      "host_id": 110302,
+      "requested_180gb_rate": 1.5,
+      "rate_bound": 1.7249999999999999,
+      "transfer_liability_usd": 0.05078125,
+      "maximum_seconds": 2964,
+      "refusals": [
+        "rate exceeds amended 1.40 ceiling",
+        "retained provisioning/observation/teardown estimate does not fit unchanged stop/margins"
+      ]
+    }
+  ],
+  "earlier_uk_offers_currently_absent": [
+    48425037,
+    41357769
+  ],
+  "H1_T": "UNRESOLVED",
+  "H1_G": "UNRESOLVED",
+  "H2_delivery": "UNRESOLVED",
+  "precreate_rehearsal_refreshed": false
+}

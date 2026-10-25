@@ -98,3 +98,10 @@ including requested 180 GB storage (quotes 1.09–1.50 USD/hour). No additional 
 spend, enable or observation; H1-T/H1-G/H2 remain UNRESOLVED. The earlier provider
 refusal and its retained charge are unchanged. The additional grant required a
 different machine and host; previous machine56897/host292781 remained excluded.
+
+2026-10-25 grant4 check: MEASURED fresh quotes in `grant4_result.json` at18:15:04Z
+include two verified VM offers within the amended1.40 USD/hour ceiling. The cheapest
+quote1.295 USD/hour allows3443 seconds after unchanged stop/margins, below the retained
+BW6-based4931-second provisioning/observation estimate. Earlier UK offers disappeared.
+No lease created; UNRUN because the estimate does not fit, as required by the amendment.
+H1-T/H1-G/H2 remain UNRESOLVED; no fresh rehearsal or hardware result is claimed.
