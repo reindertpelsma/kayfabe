@@ -142,3 +142,32 @@ fn stale_translation_model_detects_early_unpin_and_reuse() {
     rm.invalidate().unwrap();
     assert_eq!(rm.gpu_access(VA), Ok(None));
 }
+
+#[test]
+fn an_empty_retry_refresh_finishes_pending_batch_retirement() {
+    let sim = Sim::new(space(VA, VA + 16 * P));
+    let m = SimMirror::new(&sim, true, true);
+    batch(&m, false);
+    m.unmap_range(VA, 8 * P, true).unwrap();
+    let ram = |off, _len| Some(off);
+    let out = apply_entry(&m, &[], &cfg(&ram));
+    assert!(
+        out.invalidated,
+        "pending pins require an invalidate without new rows"
+    );
+    assert!(sim.0.borrow().objs.is_empty());
+    assert!(sim.0.borrow().premature_frees.is_empty());
+}
+
+#[test]
+fn an_empty_retry_refresh_finishes_pending_micro_retirement() {
+    let sim = Sim::new(space(VA + 32 * P, VA + 64 * P));
+    let m = SimMirror::new(&sim, true, true);
+    batch(&m, true);
+    m.unmap_range(VA, 8 * P, true).unwrap();
+    let ram = |off, _len| Some(off);
+    let out = apply_entry(&m, &[], &cfg(&ram));
+    assert!(out.invalidated);
+    assert!(sim.0.borrow().resv.is_empty());
+    assert!(sim.0.borrow().premature_frees.is_empty());
+}
