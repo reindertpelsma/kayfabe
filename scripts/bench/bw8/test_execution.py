@@ -14,7 +14,7 @@ except ImportError:
 NOW = dt.datetime(2026, 10, 25, 16, tzinfo=dt.timezone.utc)
 END = NOW + dt.timedelta(hours=3)
 ARM = 'for f in verify_stage580.ps1 "$enable_script" bw8_enable_observe.ps1 diag_min.ps1 init_state.ps1; do\n done\nenable_cmd="existing once command"\n'
-CONTROLLER = 'bash /root/sweep2/arm.sh on "$run" "$binary" "$source" || arm_rc=$?\n bash /root/sweep2/collect_bw.sh "$run"\n'
+CONTROLLER = 'mapfile -t plan < <(list_plan)\nbash /fixture/arm.sh on "$run" "$binary" "$source" || arm_rc=$?\n bash /fixture/collect_bw.sh "$run"\n'
 READY = 'if mode == "rent":\n    create()\nelif mode == "ready":\n    C.settle_pin(rescan, console)\nelif mode == "destroy":\n    destroy()\n'
 
 
@@ -108,6 +108,12 @@ class Wiring(unittest.TestCase):
         self.assertLess(data.index('BW8_PARSER_GREEN=1'), data.index('enable_cmd='))
     def test_parser_error_receipt_preserved(self):
         self.assertIn('parser.txt', wire_arm(ARM))
+    def test_exact_qemu_digest_gates_arm(self):
+        self.assertIn('05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448',
+                      wire_controller(CONTROLLER))
+    def test_qemu_digest_checked_before_plan_launch(self):
+        data=wire_controller(CONTROLLER)
+        self.assertLess(data.index('sha256'),data.index('mapfile -t plan'))
     def test_completion_overlay_selected(self):
         self.assertIn('arm_bw8.sh on', wire_controller(CONTROLLER))
     def test_no_collection_boot(self):
