@@ -304,6 +304,9 @@ pub struct Device {
     irq_lines: Vec<Notifier>,
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
+    /// Optional accepted GPU PTE-kind census, shared with the VA manager.
+    #[cfg(feature = "diag-kindstat")]
+    kindstat: Option<std::sync::Arc<kf_mem::kindstat::Census>>,
     pub(crate) stop: AtomicBool,
     /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
     /// still owes the guest (set by the display worker, taken by the drainer).
@@ -1098,6 +1101,11 @@ impl Device {
                 "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
             );
         }
+        #[cfg(feature = "diag-kindstat")]
+        let kindstat = kf_mem::kindstat::Census::from_setting(
+            std::env::var("KF3_DIAG_KINDSTAT").ok().as_deref(),
+        )
+        .map(std::sync::Arc::new);
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
@@ -1115,6 +1123,10 @@ impl Device {
         // mirror, guest-kernel spaces included (`V3_WINDOW_EXPOSURE_REVIEW.md` row 6); count-only
         // only under the positive control `KF3_NEGCTL_CARVE`.
         .with_carve(carve_base, carve_refuse);
+        #[cfg(feature = "diag-kindstat")]
+        {
+            va = va.with_kindstat(kindstat.clone());
+        }
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -1230,6 +1242,8 @@ impl Device {
                 .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
                 .collect::<Result<Vec<_>, _>>()?,
             irq_counts: IrqCounts::default(),
+            #[cfg(feature = "diag-kindstat")]
+            kindstat,
             drainer_efd,
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
@@ -2798,6 +2812,15 @@ impl Device {
     #[must_use]
     pub fn status_line(&self) -> String {
         let line = self.status_line_inner();
+        #[cfg(feature = "diag-kindstat")]
+        let line = if let Some(diag) = &self.kindstat {
+            let unix_ns = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos());
+            format!("{line} KINDSTAT unix_ns={unix_ns} {}", diag.report())
+        } else {
+            line
+        };
         #[cfg(feature = "diag-intr")]
         let line = if let Some(diag) = &self.chans.intr_diag {
             let now = diag.now_ns();
@@ -3603,6 +3626,12 @@ impl Device {
 
     /// Stop the device's threads.
     pub fn stop(&self) {
+        #[cfg(feature = "diag-kindstat")]
+        if let Some(diag) = &self.kindstat
+            && let Some(summary) = diag.shutdown()
+        {
+            eprintln!("kf3: KINDSTAT SUMMARY {summary}");
+        }
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
         let rs = &self.chans.relay_stats;

@@ -1,0 +1,22 @@
+PF1 KINDSTAT, run pf1-kindstat-tests-20261025, 2026-10-25.
+Parent counter publication: 29cb1360b81925da7db31b81f026cbf084376f26.
+EXPECTED RED: b6a563076, two failing source-hook tests; runtime contracts preceded module.
+All compilation/tests: host only, nice -n 19, release, -j2. No GPU or VM used.
+
+Feature on: cargo test -j2 --release -p kf-mem -p kf-qemu
+  --features kf-qemu/diag-kindstat --no-fail-fast -- --test-threads=1
+  [655, 0, 3] = [passed, failed, ignored], exit 0.
+Feature off: same command without --features, --test-threads=1.
+  [641, 0, 3] = [passed, failed, ignored], exit 0.
+New tests: 14 runtime contracts and two wiring contracts.
+11/11 counter mutants killed by >=2 distinct tests each; restored-source check passed.
+Clippy: kf-mem and kf-qemu, all targets, release, diag-kindstat enabled, locked.
+clippy: existing-debt=248 new=0 resolved=284
+No debt-ledger changes. Full workspace clippy was not run.
+
+The initial parallel full test invocation failed the existing process-wide RSS
+assertion in batch::tests::the_aggregate_extent_of_the_batches_of_a_space_is_capped
+(RSS 8 -> 72 MiB). The entire suite passed serially; no limit or assertion changed.
+All runtime counter tests also passed in the parallel invocation.
+Source copies matched host-tested files (source-hashes.json).
+No hardware measurement is represented by this receipt.

@@ -920,6 +920,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     usermode: Option<kf_chip::usermode::UsermodeMmio>,
     /// ★★ The host can place a per-map PTE kind ([`VaManager::with_per_map_kind`]).
     per_map_kind: bool,
+    #[cfg(feature = "diag-kindstat")]
+    kindstat: Option<std::sync::Arc<crate::kindstat::Census>>,
     /// ★ P1+P2 inc A: the firmware carve-out's base and whether a GPU-target leaf into it is
     /// refused ([`VaManager::with_carve`]); `store_bytes` (no bound) until set.
     carve: u64,
@@ -950,6 +952,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             page_grain: SMALL_PAGE,
             usermode: None,
             per_map_kind: true,
+            #[cfg(feature = "diag-kindstat")]
+            kindstat: None,
             carve: store_bytes,
             carve_refuse: false,
             stats: VaStats::default(),
@@ -964,6 +968,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     pub fn with_carve(mut self, carve: u64, refuse: bool) -> Self {
         self.carve = carve.min(self.store_bytes);
         self.carve_refuse = refuse;
+        self
+    }
+
+    /// Attach a per-device observer; no mapping decision depends on it.
+    #[cfg(feature = "diag-kindstat")]
+    #[must_use]
+    pub fn with_kindstat(mut self, diag: Option<std::sync::Arc<crate::kindstat::Census>>) -> Self {
+        self.kindstat = diag;
         self
     }
 
@@ -1541,6 +1553,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 std::thread::sleep(std::time::Duration::from_millis(ms));
             }
             let t_apply = std::time::Instant::now();
+            #[cfg(feature = "diag-kindstat")]
+            let a = if let Some(diag) = self.kindstat.as_deref() {
+                crate::apply::apply_entry_observed(&space.target, &e.runs, &cfg, Some(diag))
+            } else {
+                apply_entry(&space.target, &e.runs, &cfg)
+            };
+            #[cfg(not(feature = "diag-kindstat"))]
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);
             if crate::maplog::on() {

@@ -13,3 +13,6 @@ kf-chip.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+diag-kindstat = []

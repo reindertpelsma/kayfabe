@@ -26,6 +26,9 @@ KF3_CARGO_FEATURES=()
 if [[ "${KF3_BUILD_DIAG_INTR:-0}" == 1 ]]; then
   KF3_CARGO_FEATURES=(--features diag-intr)
 fi
+if [[ "${KF3_BUILD_DIAG_KINDSTAT:-0}" == 1 ]]; then
+  KF3_CARGO_FEATURES+=(--features diag-kindstat)
+fi
 ( cd "$REPO" && cargo build --release -p kf-qemu "${KF3_CARGO_FEATURES[@]}" )
 TARGET=${CARGO_TARGET_DIR:-$REPO/target}
 [[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"

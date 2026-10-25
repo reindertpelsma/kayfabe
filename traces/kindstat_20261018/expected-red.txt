@@ -1,0 +1,24 @@
+
+running 2 tests
+test successful_gpu_rows_have_a_kind_observer ... FAILED
+test status_and_shutdown_have_default_off_kindstat_hooks ... FAILED
+
+failures:
+
+---- successful_gpu_rows_have_a_kind_observer stdout ----
+
+thread 'successful_gpu_rows_have_a_kind_observer' (3963542) panicked at crates/kf-mem/tests/kindstat_wiring.rs:6:5:
+missing mapping census
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- status_and_shutdown_have_default_off_kindstat_hooks stdout ----
+
+thread 'status_and_shutdown_have_default_off_kindstat_hooks' (3963541) panicked at crates/kf-mem/tests/kindstat_wiring.rs:13:5:
+missing runtime opt-in
+
+
+failures:
+    status_and_shutdown_have_default_off_kindstat_hooks
+    successful_gpu_rows_have_a_kind_observer
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

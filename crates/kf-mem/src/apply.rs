@@ -748,6 +748,33 @@ impl Applied {
 /// crossing the extent is placed up to it.
 #[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    apply_entry_impl(
+        target,
+        runs,
+        cfg,
+        #[cfg(feature = "diag-kindstat")]
+        None,
+    )
+}
+
+/// Apply the same diff with optional diagnostic accounting; never changes a verdict.
+#[cfg(feature = "diag-kindstat")]
+pub fn apply_entry_observed(
+    target: &dyn MapTarget,
+    runs: &[DiffRun],
+    cfg: &ApplyCfg<'_>,
+    diag: Option<&crate::kindstat::Census>,
+) -> Applied {
+    apply_entry_impl(target, runs, cfg, diag)
+}
+
+#[allow(clippy::too_many_lines)]
+fn apply_entry_impl(
+    target: &dyn MapTarget,
+    runs: &[DiffRun],
+    cfg: &ApplyCfg<'_>,
+    #[cfg(feature = "diag-kindstat")] diag: Option<&crate::kindstat::Census>,
+) -> Applied {
     // ★ Review item 4: one walker entry is one refresh — the target's per-refresh host-call budget.
     target.begin_refresh();
     let n = runs.len();
@@ -1082,6 +1109,14 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             }
         } else if held_any[i] && placed[i].is_empty() && kept[i].is_empty() {
             out.codes[i] = KFWR_ACK_HELD;
+        }
+    }
+    #[cfg(feature = "diag-kindstat")]
+    if net && let Some(diag) = diag {
+        for &(i, row) in &pending {
+            if !failed[i] && placed[i].contains(&(row.va, row.len)) {
+                diag.record_mapping(runs[i].kind, row.kind, row.ram, runs[i].leaf, row.len);
+            }
         }
     }
     if out
