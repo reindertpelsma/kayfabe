@@ -3,7 +3,7 @@
 Worker text is display-only. No checkout, cache, binary/artifact input or upload.
 """
 
-import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, urllib.parse
+import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, traceback, urllib.parse
 from pathlib import Path
 
 MAX_RESPONSE = 262144
@@ -64,6 +64,19 @@ def reply_line(status, content_type):
         + str(code)
         + ", content-type "
         + clean(content_type or "none")
+    )
+
+
+def rejected_line(error):
+    """The one trusted line for a 200 reply that failed the runner's own check.
+
+    Only the line number of the raise inside runner.py (an int taken from the traceback of our
+    own code): never a field name, value, header or body.
+    """
+    frames = traceback.extract_tb(error.__traceback__)
+    number = frames[-1].lineno if frames else None
+    return "runner: Worker reply rejected by runner.py check at line " + str(
+        number if type(number) is int else 0
     )
 
 
@@ -818,7 +831,15 @@ class Runner:
                 request["preferences"] = self.ctx["preferences"]
             code, data = self.retry_read("/rent", "POST", request)
             for attempt in range(600):
-                data = validate_status(data, self.ctx, self.manifest, code)
+                try:
+                    data = validate_status(data, self.ctx, self.manifest, code)
+                except Diagnosed:
+                    raise
+                except Invalid as error:
+                    # Emitted now, before the /stop the caller sends, so the job log keeps it
+                    # even when the run ends right after.
+                    self.emit(rejected_line(error) + "\n")
+                    raise
                 if code != 200:
                     if self.infrastructure_failure:
                         time.sleep(20)
