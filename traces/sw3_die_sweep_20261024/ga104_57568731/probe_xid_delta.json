@@ -1,0 +1,10 @@
+{
+  "lease_id": 57568731,
+  "scope": "driver setup and read-only native timer probe only",
+  "before_xid_lines": [],
+  "after_xid_lines": [],
+  "source_capture_sha256": "e15a3524dea282bac36efbd4dc21dc06dec13cc64a6a1f4d85a05be698459a93",
+  "gates": "UNRUN",
+  "bare": "UNRUN",
+  "guest": "UNRUN"
+}

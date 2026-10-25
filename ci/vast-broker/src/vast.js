@@ -2,9 +2,30 @@
 import {fetchJson,fetchBounded,readBounded,refuse,IMAGE} from './policy.js';
 // prettier-ignore
 import {sha256Hex} from './tokens.js';
+// Log-only trace of a failed create (owner diagnostics, never sent to the runner): the HTTP
+// status, a fixed class and a short excerpt of the provider's own error text. The excerpt is
+// restricted to a plain character set and dropped whole if it could carry a credential.
+// Nothing else (headers, key, body sent, onstart, env, the response) is ever logged.
+function providerError(r) {
+  const text = r && typeof r === 'object' ? (typeof r.error === 'string' ? r.error : r.msg) : '';
+  if (typeof text !== 'string') return '';
+  const clean = text.replace(/[^A-Za-z0-9 _.,:;'()/=-]/g, '').slice(0, 120);
+  const risky = (v) => /bearer/i.test(v) || /[A-Za-z0-9_-]{24}/.test(v);
+  return risky(text) || risky(clean) ? '' : clean;
+}
+function logCreateFailed(status, klass, r) {
+  console.log(
+    JSON.stringify({
+      event: 'create_failed',
+      status: Number.isSafeInteger(status) ? status : null,
+      class: klass,
+      provider_error: providerError(r),
+    }),
+  );
+}
 export class Vast {
   constructor(fetcher, cfg, key) {
-    this.fetcher = fetcher;
+    this.fetcher = (...args) => fetcher(...args);
     this.cfg = cfg;
     this.headers = { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' };
     if (!key) refuse();
@@ -68,30 +89,43 @@ export class Vast {
       target_state: 'running',
       cancel_unavail: true,
     };
-    const response = await this.fetcher('https://console.vast.ai/api/v0/asks/' + offer.id + '/', {
-      method: 'PUT',
-      headers: this.headers,
-      body: JSON.stringify(body),
-      redirect: 'manual',
-      signal: AbortSignal.timeout(8000),
-    });
+    let response;
+    try {
+      response = await this.fetcher('https://console.vast.ai/api/v0/asks/' + offer.id + '/', {
+        method: 'PUT',
+        headers: this.headers,
+        body: JSON.stringify(body),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (error) {
+      logCreateFailed(null, 'transport');
+      throw error;
+    }
     let r;
     try {
       r = JSON.parse(
         new TextDecoder('utf-8', { fatal: true }).decode(await readBounded(response, 262144)),
       );
     } catch {
+      logCreateFailed(response.status, 'unparsable');
       refuse();
     }
+    const ok = response.status >= 200 && response.status < 300 && !response.redirected;
     if (
       !response.redirected &&
       [200, 400, 404, 410].includes(response.status) &&
       r.success === false &&
       r.new_contract === undefined
-    )
+    ) {
+      logCreateFailed(response.status, 'success_false', r);
       refuse('CREATE_REFUSED', 503);
-    if (r.success !== true || !Number.isSafeInteger(r.new_contract) || r.new_contract <= 0)
+    }
+    if (r.success !== true || !Number.isSafeInteger(r.new_contract) || r.new_contract <= 0) {
+      const klass = !ok ? 'http_refusal' : r.success === false ? 'success_false' : 'no_contract';
+      logCreateFailed(response.status, klass, r);
       refuse();
+    }
     return String(r.new_contract);
   }
   async reconcile(record) {
