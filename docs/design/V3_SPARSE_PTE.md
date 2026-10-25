@@ -104,4 +104,39 @@ These are owner decisions (reservation layout; walker ABI), so this branch does 
    choose between two authored actions)?
 3. D3: VER3 PDE-level sparse (PCF 1 or 3 at 5:3) is not honoured by the walker (ratchet test).
 
-Hardware validation plan: section 6 (added with the last commit of the branch).
+## 6. Hardware validation plan (NOT RUN)
+
+Pinning: every claim carries the source revision of the binary (`build_kf3.sh` installs it under
+`kf3-bins/<rev>/`). Use the head of branch `claude/sparse-pte-20261025` for the experiment; the
+control is `b4c5e3023` (the logging-only parent). Strictly serial, one box, bare metal first.
+
+1. **Bare metal, no kayfabe (does real hardware absorb the write?).** New probe, not yet written:
+   a Vulkan program (`sparseBinding`, `sparseResidencyBuffer`) that binds a 64 KiB tile, unbinds it
+   with `vkQueueBindSparse`, then submits a copy-engine write into the unbound tile
+   (`vkCmdFillBuffer` or `vkCmdCopyBuffer` on a transfer-only queue family, which uses a CE). Expect:
+   no Xid, no `VK_ERROR_DEVICE_LOST`, and a read of the tile gives zeros. Also record whether a
+   value written through the sparse tile is visible to a second process's sparse read (the shared
+   debug page, section 3). This is the falsifier of H6's hardware half: an Xid 31 here means a
+   real GPU faults on this write and H6 is wrong.
+2. **Linux guest under kayfabe, same probe, product flags.** Gate `scripts/bench/gpu_fault_containment.sh`
+   style harness (host Xid admission: exact channel, exact VA, `FAULT_PTE`, CE client). Expected on
+   the PRODUCT build: an Xid 31 at the unbound tile (the bug, reproduced in a unit of one tile).
+   This is the deterministic reproducer that Windows run 5227 was not (the Windows fault is about 1
+   in 2 boots). With `KF3_DIAG_SPARSE_RESV=1` the Xid disappears (H6 supported) and the
+   negative-control arm of `gpu_fault_containment.sh` stops faulting (expected; proves the flag is
+   not a fix).
+3. **Windows SPECviewperf, only after (2) reproduces.** Enscape 07 and 08 in the full nine-workload
+   order, production flags (run 4501 set), VAHIST lookup mode on. Pass criterion for any fix: five
+   consecutive full-order boots without Xid 31 at 07/08 (the base rate is about 50 percent per
+   boot, so fewer boots prove nothing). A captured VAHIST PTE line now prints `leaf=sparse`.
+4. **Regression set after any selective-sparse change:** `v3_gates.sh` 9/9, `fast_suite.sh` 30/30,
+   `gpu_fault_containment.sh` (the plain-invalid negative control must still fault), the app matrix,
+   and `broker_lane.sh` per the retest rule.
+
+## 7. Side finding
+
+CODE READ: `kf_slot_sparse` (`kf_walk.cu:359-364`) tests only VOLATILE on VER2, so NV4K (`0x28`)
+would count in `sparse_slots` unless an earlier branch excludes it. `classify_leaf` additionally
+requires PRIVILEGE clear. Nothing consumes the census for decisions today; check before a sparse run
+kind is added to the kernel.
+
