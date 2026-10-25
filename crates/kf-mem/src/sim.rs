@@ -40,7 +40,7 @@ use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_HELD};
 use kf_host::channel::GuestVaRange;
 use kf_host::{MapPerm, VaSpace};
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The model's page.
 pub const P: u64 = 0x1000;
@@ -130,6 +130,18 @@ pub struct SimRm {
     /// Batch objects: page → backing.
     pub objs: BTreeMap<u32, Vec<Backing>>,
     next_obj: u32,
+    /// Explicitly warmed GPU translations, retained until a successful invalidate.
+    pub tlb: BTreeMap<u64, (u32, u32, Backing)>,
+    /// Frees observed while a warmed translation still names the object or reservation.
+    pub premature_frees: Vec<u32>,
+    /// Model a VMM discard and host reuse as soon as the last batch pin is released.
+    pub reuse_on_free: bool,
+    /// Backing pages released and reused outside this guest's authority.
+    pub reused: BTreeSet<Backing>,
+    /// Inject a refused invalidate: warmed translations must survive it.
+    pub refuse_invalidate: bool,
+    /// Successfully completed explicit invalidates.
+    pub invalidates: u64,
     /// Mirror verbs that removed or split a foreign mapping.
     pub violations: Vec<String>,
     /// Unchanged VAs found unmapped (or re-pointed) after a host call.
@@ -281,6 +293,12 @@ impl Sim {
             resv: BTreeMap::new(),
             objs: BTreeMap::new(),
             next_obj: 0x1000,
+            tlb: BTreeMap::new(),
+            premature_frees: Vec::new(),
+            reuse_on_free: false,
+            reused: BTreeSet::new(),
+            refuse_invalidate: false,
+            invalidates: 0,
             violations: Vec::new(),
             transient: Vec::new(),
             transient_va: Vec::new(),
@@ -525,7 +543,21 @@ impl SimRm {
         if self.resv.contains_key(&h) && self.ext_hit(1) {
             return Err(format!("free {h:#x}: refused (injected)"));
         }
-        if self.objs.remove(&h).is_some() {
+        if self
+            .tlb
+            .values()
+            .any(|&(obj, hdma, _)| obj == h || hdma == h)
+        {
+            self.premature_frees.push(h);
+        }
+        if let Some(pages) = self.objs.remove(&h) {
+            if self.reuse_on_free {
+                for page in pages {
+                    if !self.objs.values().any(|other| other.contains(&page)) {
+                        self.reused.insert(page);
+                    }
+                }
+            }
             while let Some(m) = self.maps.iter().find(|m| m.obj == h).cloned() {
                 self.n.rm_unmap -= 1; // part of the free, not a separate ioctl
                 let _ = self.unmap_whole_in(m.hdma, m.va, true);
@@ -597,6 +629,40 @@ impl SimRm {
             STORE_OBJ | FOREIGN_OBJ => (false, o),
             h => *self.objs.get(&h)?.get(usize::try_from(o / P).ok()?)?,
         })
+    }
+
+    /// Warm a translation before changing its PTE, as a GPU may do independently of the CPU.
+    pub fn warm_tlb(&mut self, va: u64) {
+        let m = self
+            .maps
+            .iter()
+            .find(|m| !m.broken && m.owner == Owner::Mirror && m.va <= va && va < m.va + m.len)
+            .expect("warm a mapped VA");
+        let backing = self.translate(va, Owner::Mirror).unwrap();
+        self.tlb.insert(va, (m.obj, m.hdma, backing));
+    }
+
+    /// A GPU access can use its old TLB entry until invalidate completion.
+    pub fn gpu_access(&self, va: u64) -> Result<Option<Backing>, &'static str> {
+        let backing = self
+            .tlb
+            .get(&va)
+            .map(|t| t.2)
+            .or_else(|| self.translate(va, Owner::Mirror));
+        if backing.is_some_and(|p| self.reused.contains(&p)) {
+            return Err("stale translation reached a page reused outside the guest");
+        }
+        Ok(backing)
+    }
+
+    /// A refused invalidate changes nothing; success is the completion boundary, not submission.
+    pub fn invalidate(&mut self) -> Result<(), String> {
+        if self.refuse_invalidate {
+            return Err("invalidate refused (injected)".into());
+        }
+        self.tlb.clear();
+        self.invalidates += 1;
+        Ok(())
     }
 
     /// Mirror mappings whose PTEs are gone while RM still lists them.
@@ -977,7 +1043,7 @@ impl MapTarget for SimMirror<'_> {
         res
     }
     fn invalidate(&self) -> Result<(), String> {
-        Ok(())
+        self.sim().0.borrow_mut().invalidate()
     }
     fn own_view(&self, va: u64, end: u64) -> Option<crate::ledger::OwnView> {
         Some(self.bv.own_view(va, end))
@@ -1309,3 +1375,6 @@ mod adversarial;
 mod fuzz;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod retirement;
