@@ -11,6 +11,7 @@ import sys
 import time
 
 from capture import verify_pulled
+from execution import actual_rate
 
 
 def source_lock(files):
@@ -200,9 +201,7 @@ def backend_type(provider):
                 or status.get("host_id") != self.offer["host_id"]
             ):
                 raise ValueError("actual provider machine/host changed")
-            rate = float(status["dph_total"])
-            if not 0 < rate <= min(1.0, self.plan["rate_bound"]):
-                raise ValueError("actual requested-disk rate exceeds reservation")
+            rate = actual_rate(status["dph_total"], self.plan)
             row["observed_dph_total"] = rate
             provider.save(ledger, [row])
             self.report(

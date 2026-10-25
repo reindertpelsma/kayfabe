@@ -9,7 +9,7 @@ import shutil
 import sys
 
 from backend import backend_type, load, source_lock
-from execution import fit_plan, require_offer
+from execution import fit_plan, require_offer, config_grant
 from rehearse import complete_receipt
 
 FIELDS = (
@@ -27,6 +27,7 @@ def main():
     config = json.loads(args.config.read_text())
     source_lock(json.loads(Path(config["source_locks"]).read_text()))
     source_lock(config["grant_locks"])
+    grant = config_grant(config)
     receipt = json.loads(Path(config["rehearsal"]).read_text())
     if not complete_receipt(receipt):
         raise ValueError("complete inherited rehearsal not green")
@@ -65,7 +66,7 @@ def main():
     selected = {k: selected.get(k) for k in FIELDS}
     if (selected["machine_id"], selected["host_id"]) != tuple(config["machine_host"]):
         raise ValueError("selected offer machine/host changed")
-    rate = require_offer(selected, set(config["blacklisted"]))
+    rate = require_offer(selected, set(config["blacklisted"]), grant=grant)
     credit = float(provider.api(["show", "user"])["credit"])
     live = provider.api(["show", "instances"])
     if any(
@@ -83,6 +84,7 @@ def main():
         deadline=deadline,
         estimated_seconds=config["estimated_seconds"],
         shared_remaining=config["shared_remaining"],
+        grant=grant,
     )
     config["plan"] = plan
     Path(config["runtime_config"]).write_text(json.dumps(config, indent=2) + "\n")

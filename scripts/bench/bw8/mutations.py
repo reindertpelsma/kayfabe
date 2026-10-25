@@ -8,6 +8,27 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 MUTANTS = {
+    "grant5_limits_ignored": ("execution.py", "return 1.4, 3.0, 3.5", "return 1, 2, 2.5"),
+    "unknown_grant_accepted": (
+        "execution.py",
+        'raise ValueError("unknown lease grant")',
+        "return 1.4, 3, 3.5",
+    ),
+    "fresh_grant5_ignored": (
+        "execution.py",
+        'if grant == "grant5" and not any(',
+        "if False and not any(",
+    ),
+    "actual_rate_guard_removed": (
+        "execution.py",
+        'not 0 < rate <= min(plan.get("rate_ceiling", 1.0), plan["rate_bound"])',
+        "False",
+    ),
+    "ready_amendment_lost": (
+        "execution.py",
+        'SimpleNamespace(STOP_USD=plan["stop_usd"], MAX_RATE=plan.get("rate_ceiling", 1.0))',
+        "SimpleNamespace(STOP_USD=2, MAX_RATE=1)",
+    ),
     "parser_windows_eol_rejected": (
         "execution.py",
         "BW8_PARSER_GREEN=1[[:space:]]*$",
@@ -45,13 +66,13 @@ MUTANTS = {
         "False",
     ),
     "offer_resources_removed": ("execution.py", "number(offer.get(field)) < floor", "False"),
-    "offer_storage_rate_removed": ("execution.py", "not 0 < rate <= 1", "False"),
+    "offer_storage_rate_removed": ("execution.py", "not 0 < rate <= ceiling", "False"),
     "invalid_numbers_accepted": (
         "execution.py",
         "type(value) not in (int, float) or not math.isfinite(value) or value < 0",
         "False",
     ),
-    "plan_rate_removed": ("execution.py", "not 0 < hourly <= 1", "False"),
+    "plan_rate_removed": ("execution.py", "not 0 < hourly <= ceiling", "False"),
     "plan_clock_removed": (
         "execution.py",
         "now.utcoffset() is None or deadline.utcoffset() is None",
@@ -71,8 +92,8 @@ MUTANTS = {
     ),
     "plan_cap_ceiling_raised": (
         "execution.py",
-        "min(2.5, number(shared_remaining))",
-        "min(3.5, number(shared_remaining))",
+        "min(grant_cap, number(shared_remaining))",
+        "min(99, number(shared_remaining))",
     ),
     "parser_not_staged": (
         "execution.py",

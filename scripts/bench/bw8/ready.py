@@ -11,7 +11,7 @@ import sys
 import time
 from types import SimpleNamespace
 
-from execution import ready_body
+from execution import ready_body, ready_budget
 
 PIN = "169f99eef6216e2ff0b69185877af20f3cc74794a875b73158c7495812b8208f"
 OPS = "aa48a2fab7d4ae2c401f02f163087e456c668f92c168128238b396d2dff16733"
@@ -45,7 +45,7 @@ def main():
         temporary.write_text(json.dumps(rows, indent=2) + "\n")
         temporary.replace(L)
 
-    BO = SimpleNamespace(STOP_USD=config["plan"]["stop_usd"], MAX_RATE=1.0)
+    BO = ready_budget(config["plan"])
     environment = dict(globals(), D=D, L=L, C=C, P=P, PE=PE, api=api, now=now, save=save, BO=BO)
     exec(compile(ready_body(legacy.read_text()), "inherited_ready", "exec"), environment)
 

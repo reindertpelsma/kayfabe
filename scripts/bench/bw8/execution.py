@@ -12,7 +12,39 @@ def number(value):
     return float(value)
 
 
-def require_offer(offer, blacklisted):
+def limits(grant):
+    if grant == "grant5":
+        return 1.4, 3.0, 3.5
+    if grant == "":
+        return 1.0, 2.0, 2.5
+    raise ValueError("unknown lease grant")
+
+
+def config_grant(config):
+    grant = config.get("grant", "")
+    limits(grant)
+    if grant == "grant5" and not any(
+        name.endswith("/BW8_GRANT5.txt") for name in config.get("grant_locks", {})
+    ):
+        raise ValueError("fresh grant5 source receipt required")
+    return grant
+
+
+def actual_rate(rate, plan):
+    rate = number(rate)
+    if not 0 < rate <= min(plan.get("rate_ceiling", 1.0), plan["rate_bound"]):
+        raise ValueError("actual requested-disk rate exceeds reservation")
+    return rate
+
+
+def ready_budget(plan):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(STOP_USD=plan["stop_usd"], MAX_RATE=plan.get("rate_ceiling", 1.0))
+
+
+def require_offer(offer, blacklisted, *, grant=""):
+    ceiling, _, _ = limits(grant)
     if offer.get("verification") != "verified":
         raise ValueError("verified offers only")
     if offer.get("vms_enabled") is not True or offer.get("is_vm_deverified") is not False:
@@ -34,18 +66,21 @@ def require_offer(offer, blacklisted):
         if number(offer.get(field)) < floor:
             raise ValueError("resource floor refusal")
     rate = number(offer["dph_base"]) + number(offer["storage_cost"]) * 180 / 720
-    if not 0 < rate <= 1:
+    if not 0 < rate <= ceiling:
         raise ValueError("compute plus requested storage exceeds rate ceiling")
     number(offer["inet_down_cost"])
     number(offer["inet_up_cost"])
     return rate
 
 
-def fit_plan(*, hourly, credit, now, transfer, deadline, estimated_seconds, shared_remaining):
+def fit_plan(
+    *, hourly, credit, now, transfer, deadline, estimated_seconds, shared_remaining, grant=""
+):
+    ceiling, stop, grant_cap = limits(grant)
     hourly, credit, transfer = number(hourly), number(credit), number(transfer)
-    if not 0 < hourly <= 1 or now.utcoffset() is None or deadline.utcoffset() is None:
+    if not 0 < hourly <= ceiling or now.utcoffset() is None or deadline.utcoffset() is None:
         raise ValueError("rate or clock not admitted")
-    stop, cap = 2.0, min(2.5, number(shared_remaining))
+    cap = min(grant_cap, number(shared_remaining))
     if not stop < cap:
         raise ValueError("shared liability does not fit")
     bound = max(hourly * 1.15, hourly + 0.10)
@@ -62,6 +97,7 @@ def fit_plan(*, hourly, credit, now, transfer, deadline, estimated_seconds, shar
         deadline_utc=(now + dt.timedelta(seconds=seconds)).isoformat(),
         seconds=seconds,
         quoted_rate=hourly,
+        rate_ceiling=ceiling,
         rate_bound=bound,
         credit_before=credit,
         reservation_usd=reservation,
