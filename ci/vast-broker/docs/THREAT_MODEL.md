@@ -37,14 +37,19 @@ CODE READ: the Worker never reads Access headers, it only injects the pair as `K
 `KF_ACCESS_SECRET`: `src/index.js:92-93`, `src/index.js:882-883`. The payload loses the pair, but it
 runs as root from the same SHA and can read `/run/kf-ci/env` (`scripts/ci/README.md`).
 
-What a malicious box can and cannot do. OWNER: the GPU-free tests run first on GitHub's official CI,
-so a box cannot forge GPU-free results. The box only runs an already-trusted, already-reviewed
-codebase and returns a binary pass/fail verdict for the GPU checks. At most it gives a wrong
-pass/fail bit for GPU checks on trusted code. It cannot alter the code under test, the built
-binaries or any release artifact, so the verdict is not security-sensitive for the resulting
-binaries; release gating on it is a correctness signal, not an integrity one. CODE READ: the
-`gpu-vast` workflow does not itself `needs:` the GPU-free CI (a separate workflow), so that
-ordering is a repository process fact, not enforced in `gpu-vast.yml`.
+What a malicious box can and cannot do. OWNER: (1) the box runs the code of the owner-approved SHA. For a
+PR that code is untrusted until reviewed and merged, and the owner's approval of the SHA is the gate
+(the Worker checks `triggering_actor == owner`, `src/github.js:100`; a required reviewer on the
+`gpu-vast` environment would be an additional control, not verifiable from code). (2) The box holds
+only low-value material: the run-scoped token, the static Access pair and the broker URL, never the
+Vast key. Its verdict and logs are untrusted data and cannot change the PR's code, the built binaries
+or the repository. (3) The realistic risks are abuse of the rented machine (mining, spend, proxying),
+bounded by the spend caps, the hard deadline, the bad-machine controls and the approval gate, not the
+integrity of our artifacts. (4) Hostile PR CI on GitHub runners is a separate, GitHub-level risk
+covered by GitHub's fork-PR rules (no secrets, approval for first-time contributors) and is out of
+scope for the Worker. Passing tests is not a security signal. CODE READ: `gpu-vast.yml` has no `needs:`
+on the GPU-free CI (a separate workflow), so "GPU-free tests run first" is a process fact the
+workflow does not enforce.
 
 ## 3. `bad-machine:` entries never expire
 
