@@ -22,6 +22,24 @@ fork heads refused, `src/github.js:84-100`. Run token claims run, attempt, sha, 
 and `src/index.js:876-886`. NOT VERIFIABLE FROM CODE: whether the `gpu-vast` environment has a
 required reviewer in GitHub settings; the code enforces the actor check only.
 
+## Why a Worker (and when not)
+
+OWNER, 2026-10-25: the Worker is test infrastructure (`docs/OWNER_RULINGS.md` §AN), used because:
+
+- the Vast key lives in the Worker, outside GitHub;
+- the caps are stateful (a ledger), which a workflow cannot keep;
+- the teardown cron runs independent of Actions;
+- GitHub OIDC means no spend-capable token is stored in GitHub;
+- waiting minutes on a public repository are free and unlimited;
+- it costs nothing and needs no maintenance when dormant, whereas GitHub disables scheduled workflows after 60
+  days of inactivity and PATs expire.
+
+The alternative is a private repository. It needs a dispatch token or polling, gives 2000 free private minutes per
+month, and still needs a log relay and a teardown cron.
+
+Split: the Worker serves CI and releases; `scripts/ci/vast_simple` (SSH pull, no Worker, draft PR #137) serves
+manual private sweeps.
+
 ## 2. Cloudflare Access is a noise gate
 
 OWNER: Access (service-token pair A for the runner, B for boxes, hostname-wide) is an anti-bot and
@@ -105,3 +123,17 @@ OWNER: it uses the host-supplied `offer.geolocation`, which a malicious host can
   re-run, so a re-run of the same SHA does not rent.
 - Concurrency slots are held by open ledger records until they close, which for a box that never
   reports is its boot deadline (`src/index.js:769-773`, 40 minutes in `defaults.json:8`).
+
+## 8. Pitfalls (live debugging, MEASURED 2026-10-25)
+
+- Workers reject `fetch` with `redirect: 'error'` (observed 2026-10-25).
+- An injected `fetch` must not be called as a method of another object (`Illegal invocation`, observed 2026-10-25).
+- Cloudflare error 1010 blocks Python urllib's default User-Agent (observed 2026-10-25); the box reporter sends
+  `kayfabe-vast-box/7` (PR #135).
+- `vm: true` Vast instances receive env in `/etc/environment` (observed 2026-10-25, see section 7).
+- A provider can report `running` while the VM never starts: read `vastai logs <id>`, the console alone does not
+  show it (observed 2026-10-25).
+- `vastai show instances` is deprecated; use `instances-v1` (observed 2026-10-25).
+- A repeated SHA is refused for 24 h, and a failed attempt still reserves a `DAILY_RENTALS` slot (observed
+  2026-10-25).
+- `deploy.mjs` only allows listed public vars; `BOOT_LIMIT_MINUTES` is not one (observed 2026-10-25).
