@@ -156,7 +156,7 @@ test('workerd admission is transactional without shared service state', async (t
     [
       'same attempt nonce',
       { maxConcurrent: 4 },
-      [record(1), record(1, { runnerNonce: 'other' })],
+      [record(1), record(1, { runnerNonce: 'other', sha: 'e'.repeat(40) })],
       'UNAVAILABLE_BUDGET',
     ],
     [
@@ -170,6 +170,18 @@ test('workerd admission is transactional without shared service state', async (t
       { maxConcurrent: 4 },
       [record(1, { attempt: '2' }), record(2, { attempt: '2', sha: record(1).sha })],
       'UNAVAILABLE_BUDGET',
+    ],
+    [
+      'older branch discovered',
+      { maxConcurrent: 4 },
+      [record(1), record(2, { branch: record(1).branch })],
+      'BUSY',
+    ],
+    [
+      'older branch cross profile',
+      { maxConcurrent: 4 },
+      [record(1), record(2, { branch: record(1).branch, profile: 'sweep' })],
+      'BUSY',
     ],
     [
       'same machine',
@@ -212,6 +224,28 @@ test('workerd admission is transactional without shared service state', async (t
       assert.equal(rows.filter(([k]) => k.startsWith('open:')).length, cap);
     });
   }
+  for (const i of [1, 2]) {
+    await t.test('newer branch discovered ' + i, async (t) => {
+      const { call } = await runtime(t, { MAX_CONCURRENT_RENTALS: '4' });
+      const newer = record(10 + i, { branch: record(i).branch });
+      await call('/seed', [
+        ['open:' + newer.key, true],
+        ['record:' + newer.key, newer],
+      ]);
+      const response = await call('/reserve', { record: record(i) });
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { state: 'NOT_ELIGIBLE' });
+    });
+    await t.test('configured bad machine ' + i, async (t) => {
+      const { call } = await runtime(t);
+      const response = await call('/reserve', {
+        record: record(i),
+        config: { badMachines: [record(i).machineId] },
+      });
+      assert.equal(response.status, 503);
+      assert.deepEqual(await response.json(), { state: 'UNAVAILABLE' });
+    });
+  }
   for (const count of [1, 2, 257, 258]) {
     await t.test('bad-machine entries ' + count, async (t) => {
       const { call } = await runtime(t);
@@ -229,6 +263,14 @@ test('workerd admission is transactional without shared service state', async (t
         (await (await call('/snapshot')).json()).filter(([k]) => k.startsWith('cost:')).length,
         0,
       );
+    });
+  }
+  for (const failAt of ['sha:', 'cost:']) {
+    await t.test('intent rollback at ' + failAt, async (t) => {
+      const { call } = await runtime(t);
+      const response = await call('/reserve', { record: record(1), failAt });
+      assert.equal(response.status, 500);
+      assert.deepEqual(await (await call('/snapshot')).json(), []);
     });
   }
   for (const cap of [1, 2]) {

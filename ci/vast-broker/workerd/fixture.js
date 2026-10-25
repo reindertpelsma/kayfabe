@@ -23,9 +23,19 @@ export class AdmissionFixture {
       return Response.json([...(await this.ctx.storage.list())]);
     }
     if (path === '/reserve') {
-      const { record, config, cost = 0.1, credit = 20 } = await request.json();
+      const { record, config, cost = 0.1, credit = 20, failAt } = await request.json();
+      const failing = (storage) => ({
+        get: (...args) => storage.get(...args),
+        list: (...args) => storage.list(...args),
+        delete: (...args) => storage.delete(...args),
+        put: async (key, value) => {
+          await storage.put(key, value);
+          if (key.startsWith(failAt)) throw Error('injected storage failure');
+        },
+        transaction: (action) => storage.transaction((txn) => action(failing(txn))),
+      });
       try {
-        await new Ledger(this.ctx.storage).reserve(record, {
+        await new Ledger(failAt ? failing(this.ctx.storage) : this.ctx.storage).reserve(record, {
           cfg: { ...configuration(this.env), ...config },
           now: record.started,
           cost,
