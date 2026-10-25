@@ -48,6 +48,21 @@ class AnalysisTests(unittest.TestCase):
         )
         self.assertEqual(parse(text)["cuda-spin-N16"]["cpu_ms"], [2])
 
+    def test_duplicate_frame_is_rejected(self):
+        line = "SURFACE_FRAME 0,10.0,2.5,1.5,0.25\n"
+        with self.assertRaises(ValueError):
+            parse(line + line)
+
+    def test_duplicate_cuda_iteration_is_rejected(self):
+        line = "ITER N=16 i=1 launch_ms=2 bad=0\n"
+        with self.assertRaises(ValueError):
+            parse("LX2_BEGIN cuda-spin\n" + line + line)
+
+    def test_extreme_ratio_has_explicit_range(self):
+        row = paired([10] * 6, [5] * 6)
+        self.assertEqual(row["ratio_range"], [0.5, 0.5])
+        self.assertEqual(row["ratio_ci95"], [0.5, 0.5])
+
     def test_surface_gpu_passes(self):
         text = "SURFACE_FRAME 0,10.0,2.5,1.5,0.25\n"
         data = parse(text)["surface"]

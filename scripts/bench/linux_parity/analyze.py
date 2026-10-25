@@ -27,6 +27,9 @@ def distribution(values):
         "median_ms": med,
         "p90_ms": percentile(values, 0.9),
         "p99_ms": percentile(values, 0.99),
+        "p999_ms": percentile(values, 0.999),
+        "one_percent_low_per_s": 1000 / percentile(values, 0.99),
+        "point_one_percent_low_per_s": 1000 / percentile(values, 0.999),
         "min_ms": min(values),
         "max_ms": max(values),
         "over_33_ms_fraction": sum(x > 33 for x in values) / len(values),
@@ -61,12 +64,17 @@ def paired(native, guest):
 
 def parse(text):
     result = {}
+    seen = {}
     workload = ""
     for line in text.splitlines():
         if line.startswith("LX2_BEGIN "):
             workload = line.split(" ", 1)[1]
         if line.startswith("SURFACE_FRAME "):
             frame, mono, cpu, render, sample = line.split(" ", 1)[1].split(",")
+            frame_id = int(frame)
+            if frame_id in seen.setdefault("surface", set()):
+                raise ValueError("duplicate surface frame")
+            seen["surface"].add(frame_id)
             row = result.setdefault(
                 "surface",
                 {
@@ -92,6 +100,10 @@ def parse(text):
             else:
                 key = "stream-" + fields["mib"] + "MiB"
                 latency = float(fields["total_ms"])
+            iteration_id = int(fields["i"])
+            if iteration_id in seen.setdefault(key, set()):
+                raise ValueError("duplicate CUDA iteration")
+            seen[key].add(iteration_id)
             result.setdefault(key, {"cpu_ms": []})["cpu_ms"].append(latency)
     return result
 
