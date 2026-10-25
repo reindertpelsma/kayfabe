@@ -1,0 +1,38 @@
+{
+  "machine_id": 34087,
+  "host_id": 79466,
+  "machine_blacklist": [
+    11908,
+    18856,
+    24044,
+    42636,
+    44906,
+    54516,
+    55691,
+    56883,
+    69146,
+    91962,
+    145861,
+    150531,
+    152912
+  ],
+  "host_blacklist": [],
+  "sources": [
+    "ci/vast-broker/defaults.json",
+    "traces/sw3_die_sweep_20261024/known_bad_machines.json"
+  ],
+  "country_iso": "CA",
+  "denied_countries": [
+    "CU",
+    "IR",
+    "KP",
+    "SY",
+    "CN",
+    "HK",
+    "MO"
+  ],
+  "verification": "verified",
+  "is_vm_deverified": false,
+  "confirmation_utc": "2026-10-24T21:44:55.230784+00:00",
+  "timing": "New coordinator message arrived during allocation; broader published host/machine lists checked immediately afterward, before SSH/GPU work. Existing lane blacklist checked before allocation."
+}

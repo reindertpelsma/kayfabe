@@ -1,5 +1,8 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
+> **STATUS: LIVE UPDATE, 2026-10-24 — SW3 exact GA104 Linux cell.**
+> MEASURED (lease57568731, production `714ec29d3`, [SW3 evidence](../../traces/sw3_die_sweep_20261024/README.md)): native RM architecture `0x170` / implementation `4` identifies GA104 despite the RTX3060 product name. Host and host-mode Linux guest are both **595.91.07 open**, kernel6.8.0-59; native binding, gates9/9+gate10, bare30/30 and kf3 fast30/30 passed, n1. USER births12/12 gates and161/161 suite; host Xids0→10 were exactly5 native plus5 guest source-approved controls, unexpected0. QEMU `kf3-bins/714ec29d` SHA256 `9e99b20f7b98b79af8c8661a0b313fcf1fea8915fbe6e55d869660d059f2cfed`; flags `KF_DEVICE=kf3 KF_FROM_HOST=1`, host BAR1256MiB, no resize. This is one exact cell; Windows and other die/driver pairs remain unverified by SW3. The historical walk below retains its own revisions and limits.
+
 > **2026-09-30 check — can more driver versions still be added after the display, CDP and UVM work?
 > Yes; everything version-specific is keyed on the exact tag and fails closed.** Adding a tag:
 > `tools/drivermatrix/tags.txt` + `regen.sh` (≈2 min per tag; 29 measured, 535.309.01 … 615.71.09).

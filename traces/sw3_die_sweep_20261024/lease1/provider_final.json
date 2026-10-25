@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-24T21:10:57.743027+00:00",
+  "instance": {
+    "id": 57565088,
+    "machine_id": 54516,
+    "label": "codex-sw3-ga102-20261024T210907",
+    "actual_status": "created",
+    "intended_status": "running",
+    "status_msg": "Waiting for SSH pubkey from server. If message persists, check that SSH pubkey is set on instance.",
+    "dph_total": 0.29000000000000004
+  }
+}
