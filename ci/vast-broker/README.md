@@ -17,7 +17,7 @@ The ledger reserves liability before rental and applies daily and rolling budget
 
 ## Current setup and further reading
 
-Renting is off in the committed [Worker configuration](wrangler.toml): `RENTING_ENABLED=false`. Keep it off until the owner/controller completes acceptance. Historical local smoke results do not establish acceptance of the current hosted workflow and protocol-7 payload together. Deployment, secrets and independent cleanup are managed through the [owner deployment guide](DEPLOY.md).
+Renting is off in the committed [Worker configuration](wrangler.toml): `RENTING_ENABLED=false`. Keep it off until the owner/controller completes acceptance. Historical local smoke results do not establish acceptance of the current hosted workflow and protocol-7 payload together. `RUN_TOKEN_SECRET` signs run capabilities, and `OWNER_STOP_TOKEN` controls emergency cleanup. Deployment, secrets and independent cleanup are managed through the [owner deployment guide](DEPLOY.md).
 
 - [Box protocol](docs/BOX_PROTOCOL.md): bootstrap environment, callbacks and result contract.
 - [Placement decision](docs/PLACEMENT.md): US/Canada offer preference and the proposed ledger location.
