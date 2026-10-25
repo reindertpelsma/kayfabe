@@ -144,3 +144,54 @@ zero OOM, unchanged binary/policy/kernel/initrd identities, target still deleted
 The control journal contains eight admitted own-PID PTE read-fault records only.
 No other campaign task ran. Recommendation remains no promotion on incomplete
 evidence; the prior PDE admission question remains unresolved.
+
+## Matched PDE-fixture controls — 2026-10-25
+
+STATUS: REQUESTED CONTROLS COMPLETE; campaign stopped for the owner admission decision.
+This section supersedes the earlier UNRUN matched-control entries and fixture ambiguity.
+
+CODE READ HM1_CONTROL2 instruction (2026-10-25): run the same
+`missing-page-fault` fixture n=1 each, mirror OFF, HP1 plain 6d, then mirror ON
+repeat, with PTE-only admission unchanged. Falsifier: PDE absent in plain 6d.
+
+MEASURED HM1 matched controls (rev `6564dd597`, `control2/results.json`):
+the four outcomes are shown below. Mirror-capable rows use
+`kf3-bins/6564dd59/qemu-system-x86_64`; the plain row uses
+`kf3-bins/714ec29d/qemu-system-x86_64`, revision `714ec29d3`.
+
+| missing-page-fault arm (n=1 each) | Revision | PDE records | Guard / shutdown | Raw assertion |
+|---|---|---:|---|---|
+| Original mirror ON | 6564dd597 | 1 | Rejected; QMP powerdown, exit 0 | PASS |
+| Mirror OFF control | 6564dd597 | 1 | Rejected; QMP powerdown, exit 0 | PASS |
+| Plain 6d control | 714ec29d3 | 1 | Rejected; QMP powerdown, exit 0 | PASS |
+| Mirror ON repeat | 6564dd597 | 1 | Rejected; QMP powerdown, exit 0 | PASS |
+
+MEASURED HM1 matched control records (`control2/results.json`, rev `6564dd597`):
+each fault is own-PID Xid31, CE0/HUBCLIENT_CE1, FAULT_PDE VIRT_WRITE at the
+declared victim VA. Each guard rejected only the fault-kind mismatch.
+Raw control/content assertions passed, client rc=0 and DONE; these are diagnostic
+outcomes, not admitted campaign-gate passes. The ON repeat reproduces the original.
+
+MEASURED HM1 matched-control methods (`control2/plans.json`, 2026-10-25):
+39 admission tests and two targeted guard tests passed before boots. All plans
+preceded the series; per-run preregistration and argv parity checks preceded launch.
+Only the mirror switch changes for OFF versus original ON; only the executable
+changes between OFF and plain 6d. The ON repeat restores the original configuration.
+The same journal-cursor guard, kernel/initrd, budget and QMP-only shutdown apply.
+Every PDE still stopped its arm. Only the explicitly requested isolated diagnostic
+controls followed that stop; no other campaign task ran. Policy bytes unchanged.
+
+INFERRED from HM1 `control2/results.json`: the requested falsifier is not observed.
+The same PDE occurs without the mirror, including plain 6d, satisfying the
+instruction's fixture-property branch for this reproducer. These n=1 controls
+establish no general fault rate, compatibility or cross-VM isolation claim.
+
+Owner question required by HM1_CONTROL2: admit the own-PID CE FAULT_PDE victim
+write at the declared VA from this deliberate missing-page-fault walk, or keep
+rejecting it? The rule remains PTE-only pending that decision. No product fix
+or admission expansion was made. Promotion remains unsupported by incomplete gates.
+
+MEASURED HM1 matched-control cleanup (`control2/final-audit.json`, 2026-10-25
+19:20:48 UTC): no QEMU/controller, lock released, GPU idle, GDM active, no OOM,
+target deleted, executable/policy/kernel/initrd hashes unchanged. The new journal
+contains exactly the three recorded PDE writes and no additional Xid.
