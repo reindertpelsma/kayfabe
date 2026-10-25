@@ -1,7 +1,8 @@
 # Placement: why the Worker prefers US offers (and a US ledger)
 
-STATUS: LIVE for the offer preference (2026-10-24, owner ruling). DESIGN-ONLY for the ledger
-location (not implemented; waiting for the owner's nod).
+STATUS: LIVE for the offer preference (2026-10-24, owner ruling). Ledger source implementation
+tested locally on 2026-10-25; NOT DEPLOYED, owner acceptance pending. Live ledger placement
+remains unmeasured. Local evidence: [WD2](../../../traces/worker_placement_20261018/WD2.md).
 
 This is a decision record. It exists so that a reader who has not seen the conversation can
 argue for the US preference, or argue it away, from the evidence below. Each claim is tagged
@@ -15,8 +16,9 @@ tested) or a dated run record where one exists.
 2. Do not reject an offer because it is outside the US or Canada. The only location filter is
    the denied-country list (CU, IR, KP, SY, CN, HK, MO), which is an ownership/abuse rule and not
    a performance rule.
-3. (Proposed, not built) Create the Durable Object ledger in eastern North America with a
-   `locationHint`, for the same reason: the traffic that matters is US-centred.
+3. Request initial placement of a new Durable Object ledger in eastern North America with
+   `locationHint: 'enam'`, for the same reason: the traffic that matters is US-centred.
+   This branch implements that request in source; it has not changed the live Worker.
 
 ## What the code does today
 
@@ -61,15 +63,24 @@ reject bad paths; the rank only decides between offers that all passed them.
   preference (set `PREFERRED_COUNTRIES` to `[]`; no code change).
 - If the download sources move to a non-US CDN, change the order, not the mechanism.
 
-## Ledger location (proposal)
+## Ledger location (source implemented; deployment pending)
 
-- `CODE` The ledger object is addressed with `idFromName('owner-shared-vast-account')` and no
-  location hint, so it lives wherever Cloudflare first created it, near whoever made the first
-  request after deploy. Which location that was is not visible in the logs.
-- A `locationHint` only applies when an object is first created, so the existing object cannot
-  be moved. The fix is a new object name with `locationHint: 'enam'` (eastern North America,
-  closest to GitHub's runners). The old ledger holds no rentals yet, so the cost is one source
-  change, a new bundle hash in `deployment.json` and a redeploy. After the first rental the
-  ledger holds spend counters and the move would need a migration, so do it before renting.
+- `CODE READ` Before this branch, both HTTP forwarding and cron addressed
+  `idFromName('owner-shared-vast-account')` without a location hint. Its actual placement
+  remains unmeasured; this task did not contact Cloudflare or query either live ledger.
+- `CODE READ` The shared `placedLedger` accessor in `src/index.js` now selects
+  `owner-shared-vast-account-enam-v1` with `locationHint: 'enam'` for both HTTP and scheduled
+  cleanup. The binding, class and storage schema are unchanged. There is no fallback to the
+  old identity, deletion of its contents or migration in this change.
+- A `locationHint` applies to initial creation; it cannot move the existing ledger's contents.
+  It requests eastern North America, rather than proving an actual runtime location or latency.
+- `OWNER REVIEW REQUIRED` Before deployment, the owner/controller must review the old ledger
+  for active state and spend and decide how to handle any remaining liabilities. The earlier
+  assertion that it held no rentals is withdrawn: emptiness is not established by this task.
+  Do not deploy the new identity on an assumption that the old ledger is empty. No live review,
+  reset or migration was performed here. Renting remains disabled in the prepared configuration.
+- `MEASURED` Local gateway/cron tests and mutation checks are recorded in
+  [WD2 evidence](../../../traces/worker_placement_20261018/WD2.md). These establish source behavior
+  against fake namespace bindings; deployment, owner acceptance and live placement remain pending.
 - `INFERRED` A European object adds roughly 80-100 ms to every authenticated call. Correctness
   does not depend on it; only latency of `/availability`, `/status` polling and box reports.
