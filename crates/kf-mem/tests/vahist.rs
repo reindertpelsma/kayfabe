@@ -546,6 +546,39 @@ fn the_guest_pte_probe_walks_the_descriptor_and_prints_raw_words() {
     assert!(probe_pte(&fmt, pd3, va, &mut refused).contains("read refused"));
 }
 
+/// ★ H6 (`docs/design/V3_SPARSE_PTE.md`): the probe names the leaf state, so a lookup taken at an
+/// Xid says SPARSE for the word run 5227 read (`0x8` in the big table) and INVALID for an absent
+/// one, instead of leaving the reader to decode `vol=1`.
+#[test]
+fn the_guest_pte_probe_names_a_sparse_big_leaf() {
+    let fmt = kf_cuda::abi::kf_format_ver2();
+    let va: u64 = 0x2_d75e_5000;
+    let probe = |big_word: u64| {
+        let mut mem: HashMap<u64, u64> = HashMap::new();
+        let pde = |addr: u64| (1u64 << 1) | ((addr >> 12) << 8);
+        let (pd3, pd2, pd1, pd0, bt) = (0x10_0000u64, 0x20_0000, 0x30_0000, 0x40_0000, 0x50_0000);
+        let idx = |k: usize| (va >> fmt.dir[k].va_lo) & (u64::from(fmt.dir[k].entries) - 1);
+        mem.insert(pd3 + idx(1) * 8, pde(pd2));
+        mem.insert(pd2 + idx(2) * 8, pde(pd1));
+        mem.insert(pd1 + idx(3) * 8, pde(pd0));
+        // dual entry: the big half names a big table (address in bits 4.., shift 8); small half 0
+        let big_pde = (1u64 << 1) | ((bt >> 8) << 4);
+        mem.insert(pd0 + idx(4) * 16, big_pde);
+        mem.insert(pd0 + idx(4) * 16 + 8, 0);
+        let bi = (va >> fmt.big_va_lo) & (u64::from(fmt.big_entries) - 1);
+        mem.insert(bt + bi * 8, big_word);
+        let mut read8 = |a: u64| Some(mem.get(&a).copied().unwrap_or(0));
+        probe_pte(&fmt, pd3, va, &mut read8)
+    };
+    let sparse = probe(0x8);
+    assert!(sparse.contains("big_valid=0"), "{sparse}");
+    assert!(sparse.contains("leaf=sparse"), "{sparse}");
+    let absent = probe(0);
+    assert!(absent.contains("big_valid=0"), "{absent}");
+    assert!(absent.contains("leaf=invalid"), "{absent}");
+    assert!(!absent.contains("leaf=sparse"), "{absent}");
+}
+
 /// ★ Found on the first hardware run (5220, 2026-10-24): a user space's privileged leaves are
 /// re-emitted WITHHELD by every walk, and they flooded the last-runs ring. A re-emitted refused or
 /// withheld run must not push real history out: it is counted in its de-duplicated ring only.

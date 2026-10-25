@@ -111,6 +111,34 @@ const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 /// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
 const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
 
+/// `NVOS32_ALLOC_FLAGS_SPARSE` (`nvos.h:1468`): the reservation is sparsified when allocated and an
+/// unmap inside it returns to SPARSE (`gpu_vaspace.c:1399-1426, 2074-2080`). A property of the whole
+/// reservation, so it cannot be applied to only the ranges a guest declares sparse.
+pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
+
+/// The flags of a guest-range reservation. `sparse_diag` is the measurement-only experiment
+/// (`KF3_DIAG_SPARSE_RESV`, `docs/design/V3_SPARSE_PTE.md` section 3); the product passes `false`,
+/// because a sparse reservation absorbs the access to a plain-invalid VA that real hardware faults.
+#[must_use]
+pub fn guest_reserve_flags(sparse_diag: bool) -> u32 {
+    let _ = sparse_diag;
+    NVOS32_RESERVE_FLAGS
+}
+
+/// The experiment switch from the value of `KF3_DIAG_SPARSE_RESV`: only `1` turns it on.
+#[must_use]
+pub fn sparse_resv_diag_from(value: Option<&str>) -> bool {
+    let _ = value;
+    false
+}
+
+/// Whether the sparse-reservation experiment is requested (`KF3_DIAG_SPARSE_RESV=1`).
+#[must_use]
+pub fn sparse_resv_diag() -> bool {
+    let v = std::env::var("KF3_DIAG_SPARSE_RESV").ok();
+    sparse_resv_diag_from(v.as_deref())
+}
+
 impl VaSpace {
     /// ★ **STATUS (2026-10-09): this is the ONE-handle form; a straddling row is no longer refused
     /// by the map/unmap verbs — they split it with [`VaSpace::dma_pieces`].** `[measured, run 225,
