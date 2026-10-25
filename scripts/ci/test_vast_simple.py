@@ -95,6 +95,7 @@ class FakeVast:
         self.create_error_with_instance = set()
         self.create_400_body = {}
         self.label_swap = {}
+        self.inspect_swap = {}
         self.list_override = None
         self.pages = None
         self.loop_token = False
@@ -124,7 +125,9 @@ class FakeVast:
 
         self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = "http://127.0.0.1:%d" % self.httpd.server_address[1]
-        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread = threading.Thread(
+            target=self.httpd.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        )
         self.thread.start()
 
     def close(self):
@@ -174,7 +177,9 @@ class FakeVast:
             if inst is None or inst["deleted"]:
                 return 200, {"instances": None}
             inst["polls"] += 1
-            return 200, {"instances": self.view(inst)}
+            view = self.view(inst)
+            view["label"] = self.inspect_swap.get(inst["id"], view["label"])
+            return 200, {"instances": view}
         if method == "PUT" and parts[:4] == ["api", "v0", "instances", "request_logs"]:
             return 200, {"success": False}
         if method == "DELETE" and parts[:3] == ["api", "v0", "instances"]:
@@ -305,8 +310,8 @@ class Base(unittest.TestCase):
 
 
 class OfferRules(unittest.TestCase):
-    def cfg(self, **kw):
-        cfg = simple_offers.make_config(simple_offers.load_defaults(DEFAULTS))
+    def cfg(self, bad_machines=(), **kw):
+        cfg = simple_offers.make_config(simple_offers.load_defaults(DEFAULTS), bad_machines)
         cfg.update(kw)
         return cfg
 
@@ -331,7 +336,8 @@ class OfferRules(unittest.TestCase):
             "die": good_offer(10, 10, gpu_name="RTX 4060 Ti", compute_cap=890),
             "nonnumber": good_offer(13, 13, cpu_ghz=True),
         }
-        self.assertEqual(self.pick(list(bad.values())), [])
+        sibling = good_offer(99, 99)
+        self.assertEqual([o["id"] for o in self.pick(list(bad.values()) + [sibling])], [99])
 
     def test_price_must_include_storage(self):
         offer = good_offer(1, 1)
@@ -357,9 +363,9 @@ class OfferRules(unittest.TestCase):
         self.assertEqual([o["id"] for o in self.pick(offers)], [3, 2, 1])
 
     def test_sweep_uses_the_sweep_dies(self):
-        other = good_offer(1, 1, gpu_name="RTX 4090", compute_cap=890)
+        other = good_offer(1, 1, gpu_name="RTX 5090", compute_cap=1200)
         self.assertEqual(self.pick([other], "check"), [])
-        self.assertEqual([o["die"] for o in self.pick([other], "sweep")], ["AD102"])
+        self.assertEqual([o["die"] for o in self.pick([other], "sweep")], ["GB202"])
 
 
 class HappyPath(Base):
@@ -416,6 +422,16 @@ class HappyPath(Base):
         self.assertEqual(self.go(profile="everything"), 2)
         self.assertEqual(self.vast.requests, [])
 
+    def test_denied_country_offer_is_never_rented(self):
+        self.vast.offers = [good_offer(11, 1, geolocation="Shanghai, CN")]
+        self.assertEqual(self.go(), 2)
+        self.assertEqual(self.created(), [])
+
+    def test_unverified_offer_is_never_rented(self):
+        self.vast.offers = [good_offer(11, 1, 0.1, verified=False), good_offer(12, 2, 0.3)]
+        self.assertEqual(self.go(), 0, self.stdout.getvalue())
+        self.assertEqual(self.vast.instances[1000]["offer"], 12)
+
     def test_no_offer_means_unavailable_and_no_create(self):
         self.vast.offers = []
         self.assertEqual(self.go(), 2)
@@ -431,8 +447,16 @@ class BootFailures(Base):
         self.assertLess(self.vast.deleted_calls().index(1000), len(self.created()) + 1)
         self.assert_all_destroyed()
         first_delete = next(i for i, r in enumerate(self.vast.requests) if r[0] == "DELETE")
-        second_create = [i for i, r in enumerate(self.vast.requests) if r[0] == "PUT"][1]
+        creates = [i for i, r in enumerate(self.vast.requests) if "/asks/" in r[1]]
+        second_create = creates[1]
         self.assertLess(first_delete, second_create)
+
+    def test_stuck_instance_is_destroyed_before_the_retry_is_rented(self):
+        self.vast.never_running = {1000}
+        self.go()
+        order = [r[0] + (":asks" if "/asks/" in r[1] else "") for r in self.vast.requests]
+        creates = [i for i, o in enumerate(order) if o == "PUT:asks"]
+        self.assertLess(order.index("DELETE"), creates[1])
 
     def test_boot_deadline_is_fifteen_minutes(self):
         ssh = FakeSsh(answers=lambda host, port: False)
@@ -475,19 +499,34 @@ class Verdicts(Base):
     def test_nonzero_exit_overrides_a_claimed_pass(self):
         self.assertEqual(self.go(ssh=FakeSsh(payload_rc=3)), 1)
 
-    def test_skips_or_zero_passes_or_unknown_hardware_are_not_a_pass(self):
-        bad = [
-            dict(GOOD_RESULT, suites=[{"name": "x", "pass": 5, "fail": 0, "skip": 1}]),
-            dict(GOOD_RESULT, suites=[{"name": "x", "pass": 0, "fail": 0, "skip": 0}]),
-            dict(GOOD_RESULT, suites=[]),
-            dict(GOOD_RESULT, hardware={"gpu_name": "unknown", "compute_cap": 0}),
-            dict(GOOD_RESULT, hardware={"gpu_name": "x", "compute_cap": 700}),
-            dict(GOOD_RESULT, verdict="pass"),
-        ]
-        for result in bad:
+    def not_a_pass(self, *results):
+        for result in results:
             self.vast.instances.clear()
             self.assertEqual(self.go(ssh=FakeSsh(result=result)), 1, result)
             self.assert_all_destroyed()
+
+    def suites(self, **row):
+        return dict(
+            GOOD_RESULT, suites=[dict({"name": "x", "pass": 5, "fail": 0, "skip": 0}, **row)]
+        )
+
+    def test_skips_are_not_a_pass(self):
+        self.not_a_pass(self.suites(skip=1))
+
+    def test_suite_failures_are_not_a_pass(self):
+        self.not_a_pass(self.suites(fail=1))
+
+    def test_zero_passes_are_not_a_pass(self):
+        self.not_a_pass(self.suites(**{"pass": 0}), dict(GOOD_RESULT, suites=[]))
+
+    def test_unknown_hardware_is_not_a_pass(self):
+        self.not_a_pass(dict(GOOD_RESULT, hardware={"gpu_name": "unknown", "compute_cap": 890}))
+
+    def test_low_compute_cap_is_not_a_pass(self):
+        self.not_a_pass(dict(GOOD_RESULT, hardware={"gpu_name": "x", "compute_cap": 700}))
+
+    def test_verdict_text_must_be_exactly_pass(self):
+        self.not_a_pass(dict(GOOD_RESULT, verdict="pass"), dict(GOOD_RESULT, verdict="PASS "))
 
     def test_missing_or_invalid_result_is_a_failure(self):
         for result in (None, "not json", "[]"):
@@ -555,6 +594,29 @@ class Teardown(Base):
         self.assertEqual(self.go(), 3)
         self.assertEqual(self.vast.deleted_calls(), [])
 
+    def test_swapped_to_another_runs_label_is_a_leak_and_not_deleted(self):
+        self.vast.inspect_swap = {1000: "kf-ci-simple-1700000000-aaaaaaaa"}
+        self.assertEqual(self.go(), 3)
+        self.assertEqual(self.vast.deleted_calls(), [])
+
+    def test_listing_error_during_teardown_is_a_leak(self):
+        self.vast.list_override = {"success": False, "instances": []}
+        self.assertEqual(self.go(), 3)
+
+    def test_api_destroy_refuses_foreign_even_when_the_caller_names_it(self):
+        self.vast.add_instance("owner-manual-box", 7)
+        api = vast_api.VastApi(KEY, self.vast.url)
+        with self.assertRaises(vast_api.ApiError):
+            api.destroy(7, "owner-manual-box")
+        self.assertEqual(self.vast.deleted_calls(), [])
+
+    def test_api_destroy_refuses_a_different_simple_label(self):
+        self.vast.add_instance("kf-ci-simple-1700000000-aaaaaaaa", 7)
+        api = vast_api.VastApi(KEY, self.vast.url)
+        with self.assertRaises(vast_api.ApiError):
+            api.destroy(7, "kf-ci-simple-1700000001-bbbbbbbb")
+        self.assertEqual(self.vast.deleted_calls(), [])
+
     def test_api_destroy_refuses_other_labels(self):
         self.vast.add_instance("owner-manual-box", 7)
         self.vast.add_instance("kf-ci-simple", 8)
@@ -597,6 +659,15 @@ class Secrets(Base):
             self.assertNotIn("space in it", self.stdout.getvalue())
         self.assertEqual(self.vast.requests, [])
 
+    def test_the_runner_refuses_a_foreign_api_base_before_any_request(self):
+        self.assertEqual(self.go("--api-base", "https://evil.invalid"), 2)
+        self.assertIn("configuration refused", self.stdout.getvalue())
+        self.assertEqual(self.vast.requests, [])
+
+    def test_box_log_file_has_no_key(self):
+        self.go(ssh=FakeSsh(chatter="leak " + KEY + "\n"))
+        self.assertIn("leak ***", (self.out / "box.log").read_text())
+
     def test_api_base_is_https_vast_or_loopback_only(self):
         for base in (
             "http://evil.example",
@@ -606,6 +677,40 @@ class Secrets(Base):
             with self.assertRaises(vast_api.ApiError):
                 vast_api.VastApi(KEY, base)
         vast_api.VastApi(KEY, "https://console.vast.ai")
+
+
+class SshArgv(unittest.TestCase):
+    def argv(self):
+        return simple_run.SshTransport("203.0.113.5", 41234, "/k/id", "root").argv("echo hi")
+
+    def test_direct_address_user_and_one_quoted_command(self):
+        argv = self.argv()
+        self.assertEqual(argv[:3], ["ssh", "-p", "41234"])
+        self.assertEqual(argv[-2:], ["root@203.0.113.5", "bash -c 'echo hi'"])
+
+    def test_agent_forwarding_is_off(self):
+        argv = self.argv()
+        self.assertIn("ForwardAgent=no", argv)
+        self.assertNotIn("-A", argv)
+
+    def test_never_interactive_and_only_the_named_identity(self):
+        argv = self.argv()
+        self.assertIn("BatchMode=yes", argv)
+        self.assertIn("IdentitiesOnly=yes", argv)
+        self.assertEqual(argv[argv.index("-i") + 1], "/k/id")
+
+    def test_option_set_is_exact(self):
+        argv = self.argv()
+        opts = sorted(argv[i + 1] for i, a in enumerate(argv) if a == "-o")
+        want = [
+            "BatchMode=yes", "ConnectTimeout=15", "ForwardAgent=no", "IdentitiesOnly=yes",
+            "LogLevel=ERROR", "ServerAliveInterval=30", "StrictHostKeyChecking=no",
+            "UserKnownHostsFile=/dev/null",
+        ]  # fmt: skip
+        self.assertEqual(opts, want)
+
+    def test_the_provider_key_is_unknown_to_the_transport(self):
+        self.assertNotIn(KEY, " ".join(self.argv()))
 
 
 class CloneScript(unittest.TestCase):
@@ -681,23 +786,43 @@ class Reaper(Base):
         self.assertEqual(self.reap("--dry-run"), 0)
         self.assertEqual(self.vast.deleted_calls(), [])
 
-    def test_malformed_lists_fail_closed_and_delete_nothing(self):
-        row = {"id": 1, "label": self.label(99999)}
-        bad = [
-            [],
-            {"success": False, "instances": [row]},
-            {"success": True},
-            {"success": True, "instances": {"1": row}},
+    def fail_closed(self, *listings):
+        self.vast.add_instance(self.label(99999), 1)
+        for listing in listings:
+            self.vast.list_override = listing
+            self.assertEqual(self.reap(), 2, listing)
+        self.assertEqual(self.vast.deleted_calls(), [])
+
+    ROW = {"id": 1, "label": "kf-ci-simple-1799900000-aaaaaaaa"}
+
+    def test_malformed_listing_shapes_fail_closed(self):
+        self.fail_closed([], {"success": True}, {"success": True, "instances": {"1": self.ROW}})
+
+    def test_unsuccessful_listing_fails_closed(self):
+        self.fail_closed({"success": False, "instances": [self.ROW]})
+
+    def test_malformed_rows_fail_closed(self):
+        row = self.ROW
+        self.fail_closed(
             {"success": True, "instances": [dict(row, id="1")]},
             {"success": True, "instances": [dict(row, id=True)]},
             {"success": True, "instances": [row, "junk"]},
             {"success": True, "instances": [dict(row, label=5)]},
-            {"success": True, "instances": [row, dict(row)], "next_token": None},
-        ]
-        self.vast.add_instance(self.label(99999), 1)
-        for listing in bad:
-            self.vast.list_override = listing
-            self.assertEqual(self.reap(), 2, listing)
+        )
+
+    def test_duplicate_rows_fail_closed(self):
+        self.fail_closed({"success": True, "instances": [self.ROW, dict(self.ROW)]})
+
+    def test_reaper_refuses_without_a_usable_key(self):
+        for key in (None, "short"):
+            argv = ["--defaults", DEFAULTS, "--api-base", self.vast.url]
+            self.assertEqual(simple_reaper.main(argv, self.deps_r, {"VAST_API_KEY": key}), 2)
+        self.assertEqual(self.vast.requests, [])
+
+    def test_foreign_only_listing_exits_zero(self):
+        self.vast.add_instance("owner-manual-box", 1)
+        self.vast.add_instance(None, 2)
+        self.assertEqual(self.reap(), 0, self.stdout.getvalue())
         self.assertEqual(self.vast.deleted_calls(), [])
 
     def test_pagination_is_followed_and_looping_tokens_fail_closed(self):
