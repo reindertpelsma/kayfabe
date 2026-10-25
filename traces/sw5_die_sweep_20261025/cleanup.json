@@ -9,10 +9,11 @@
   "all_api_absent": true,
   "watchdogs_gone": true,
   "own_local_cargo_targets_created": false,
-  "own_gpu_locks_acquired": false,
   "leases_used": 4,
   "provider_retries_used": 0,
   "identity_refusals": 0,
   "credit_usd": 31.95717215326033,
-  "reserve_usd": 8
+  "reserve_usd": 8,
+  "local_or_trusted_host_gpu_lock_acquired": false,
+  "rental_harness_locks_scope": "owned leased VMs; all four deleted"
 }

@@ -22,7 +22,7 @@ CODE READ ([source provenance](source_provenance.json), retained `native_xid_gua
 
 CODE READ (inherited capture collector, lease57729990 result): the extensionless `XID_STOP` file was omitted by the inherited capture filter. Original `KF_XID_REFUSED`, blocked-arm logs and the full final kernel were captured privately; the refusal evidence above is retained. No claim about the omitted marker contents is made.
 
-MEASURED (2026-10-25 UTC; [cleanup](cleanup.json), linked capture receipts in every result): all4owned IDs are API-absent; every final text capture was pulled and SHA256-verified before exact-ID destruction, then each starttime-pinned watchdog was cancelled and verified gone. No own Cargo target or GPU lock was created; no fifth lease or provider retry occurred.
+MEASURED (2026-10-25 UTC; [cleanup](cleanup.json), linked capture receipts in every result): all4owned IDs are API-absent; every final text capture was pulled and SHA256-verified before exact-ID destruction, then each starttime-pinned watchdog was cancelled and verified gone. No local Cargo target or trusted-host GPU lock was created; rental harness locks belonged to the deleted VMs. No fifth lease or provider retry occurred.
 
 | Lease | Runtime estimate USD | Retained transfer liability USD | Nonruntime margin USD | Conservative retained USD |
 | --- | ---: | ---: | ---: | ---: |
