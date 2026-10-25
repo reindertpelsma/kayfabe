@@ -10,12 +10,14 @@ const env = {
   REAPER_HARD_MINUTES: '180',
   REAPER_MARGIN_MINUTES: '15',
 };
-const edgeFetcher = (respond, seen) => async (input, init = {}) => {
-  if (init.redirect !== 'follow' && init.redirect !== 'manual' && init.redirect !== undefined)
-    throw new TypeError('Invalid redirect value, must be one of "follow" or "manual"');
-  seen.push({ url: String(input), redirect: init.redirect, method: init.method });
-  return respond(new URL(input));
-};
+const edgeFetcher =
+  (respond, seen) =>
+  async (input, init = {}) => {
+    if (init.redirect !== 'follow' && init.redirect !== 'manual' && init.redirect !== undefined)
+      throw new TypeError('Invalid redirect value, must be one of "follow" or "manual"');
+    seen.push({ url: String(input), redirect: init.redirect, method: init.method });
+    return respond(new URL(input));
+  };
 
 test('list request uses a redirect mode the Workers runtime accepts', async () => {
   const seen = [],
