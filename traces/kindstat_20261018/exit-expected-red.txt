@@ -1,0 +1,28 @@
+MEASURED: run pf1-kindstat-exit-tests-20261025, before exit hook; cargo exit 101.
+running 4 tests
+test status_and_shutdown_have_default_off_kindstat_hooks ... ok
+test normal_process_exit_registers_the_kindstat_summary ... FAILED
+test device_unplug_and_process_exit_share_the_once_guard ... FAILED
+test successful_gpu_rows_have_a_kind_observer ... ok
+
+failures:
+
+---- normal_process_exit_registers_the_kindstat_summary stdout ----
+
+thread 'normal_process_exit_registers_the_kindstat_summary' (4011254) panicked at crates/kf-mem/tests/kindstat_wiring.rs:27:5:
+assertion failed: c.contains("s->kindstat_exit.notify = kf3_kindstat_exit;")
+
+---- device_unplug_and_process_exit_share_the_once_guard stdout ----
+
+thread 'device_unplug_and_process_exit_share_the_once_guard' (4011253) panicked at crates/kf-mem/tests/kindstat_wiring.rs:38:5:
+assertion failed: c.contains("qemu_add_exit_notifier(&s->kindstat_exit);")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    device_unplug_and_process_exit_share_the_once_guard
+    normal_process_exit_registers_the_kindstat_summary
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-mem --test kindstat_wiring`

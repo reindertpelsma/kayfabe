@@ -33,8 +33,10 @@ stripped bytes. Compressible classification comes from `kf-chip`'s source-derive
 uncompressed-kind table. Divide stripped bytes by all mapped bytes for exposure,
 and by compressible bytes for the fraction of compressible mappings stripped.
 
-`KINDSTAT SUMMARY` is emitted at most once on a shutdown request. This is a
-shutdown-request snapshot, not a claim that all producer threads were quiescent.
+`KINDSTAT SUMMARY` is emitted at most once on device shutdown or normal QEMU
+process exit. Both paths share the same once guard; the exit notifier is registered
+only when opted in. Rust prints the summary without the C status buffer limit.
+This is a shutdown-request snapshot, not a claim that all producer threads were quiescent.
 Snapshots are independently atomic and may straddle concurrent mapping activity.
 No counter or formatting work runs on the vCPU path.
 
@@ -43,3 +45,9 @@ source-hook tests before implementation, in tests-only commit `b6a563076`.
 Runtime contracts were included before the optional module existed. Validation
 and mutation receipts are in `validation.txt` and `mutation-results.json`.
 Every listed mutant has at least two killing tests. Hardware results stay private.
+
+MEASURED, run `pf1-kindstat-exit-tests-20261025`: `exit-expected-red.txt` records
+both normal-exit wiring tests failing in tests-only commit `95120c5fc`.
+`exit-mutation-results.json` records three wiring mutants, each killed by both
+added tests. The final full feature-on/off suites and seam checks are recorded in
+`validation.txt`. These source wiring checks do not substitute for a real exit log.

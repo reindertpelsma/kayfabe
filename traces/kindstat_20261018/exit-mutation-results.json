@@ -1,0 +1,26 @@
+[
+  {
+    "mutant": "normal_exit_registration",
+    "exit": 101,
+    "killing_tests": [
+      "device_unplug_and_process_exit_share_the_once_guard",
+      "normal_process_exit_registers_the_kindstat_summary"
+    ]
+  },
+  {
+    "mutant": "C_summary_forwarding",
+    "exit": 101,
+    "killing_tests": [
+      "normal_process_exit_registers_the_kindstat_summary",
+      "device_unplug_and_process_exit_share_the_once_guard"
+    ]
+  },
+  {
+    "mutant": "Rust_summary_forwarding",
+    "exit": 101,
+    "killing_tests": [
+      "normal_process_exit_registers_the_kindstat_summary",
+      "device_unplug_and_process_exit_share_the_once_guard"
+    ]
+  }
+]

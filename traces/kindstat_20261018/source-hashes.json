@@ -5,9 +5,12 @@
   "crates/kf-mem/src/kindstat.rs": "ec61fb6d5b56128a411b8124427c0e55b6adc93aa9f56fd60a38437ad64bf047",
   "crates/kf-mem/src/vasmgr.rs": "add8b808267ecc131476915c80bc63cb84f26b50e7f2318ba264fc09deeafec5",
   "crates/kf-mem/tests/kindstat.rs": "033f6c91201161999caba0236665d469237a8e885c246224ff3a65d66b00fcd4",
-  "crates/kf-mem/tests/kindstat_wiring.rs": "b8fccfd46b3b9c07fd6615ad49dc157095c75c2424b6242aabc71d95b0226fa7",
+  "crates/kf-mem/tests/kindstat_wiring.rs": "a77931fb2a038d66b2a0316e973243c58228fac9029fb00106df2bde527b9cd8",
   "crates/kf-qemu/Cargo.toml": "5897ce566ea2d183f720de370bb8da592a5f24789c41e16d3b7c8f7959637de7",
-  "crates/kf-qemu/src/device.rs": "3d7e61489a9d54c126c623b2377847fe6770764d3d3ec0ad241e864bf2048d6a",
+  "crates/kf-qemu/src/device.rs": "5c37474f59bc821a70b41c6138a0a15e092646484d021b3f45b21fd9653fe188",
   "scripts/bench/build_kf3.sh": "d809a2fd4484eaceed6d7be74e37dc43920e4551421428eb2e696f6e8a91746f",
-  "scripts/bench/kindstat/mutate.py": "5cff2fe7d242e2d3418981fba9dfc86ee1d8444fe128ed3000225dcfda30a97a"
+  "scripts/bench/kindstat/mutate.py": "5cff2fe7d242e2d3418981fba9dfc86ee1d8444fe128ed3000225dcfda30a97a",
+  "crates/kf-qemu/src/ffi_unsafe.rs": "ecaee80da915aabbbc579de1f593fad20b05a3cf99395c9c8319f83b51f1a812",
+  "qemu/hw/misc/kf3/kf3.c": "a7ba5fd90d31a944ab60c355be843d8e8afaf3b04ebf00f33cf43f711365c282",
+  "qemu/hw/misc/kf3/kf3.h": "565f6c0021dd9ecef963f2c9d32b69a71b6e0a5ba3172059717aaea900f59b81"
 }

@@ -3624,14 +3624,27 @@ impl Device {
         }
     }
 
-    /// Stop the device's threads.
-    pub fn stop(&self) {
+    /// Whether the optional mapping census requested a normal-process-exit report.
+    pub fn kindstat_on(&self) -> bool {
+        #[cfg(feature = "diag-kindstat")]
+        return self.kindstat.is_some();
+        #[cfg(not(feature = "diag-kindstat"))]
+        false
+    }
+
+    /// Share the census's once guard between device unplug and normal process exit.
+    pub fn kindstat_finish(&self) {
         #[cfg(feature = "diag-kindstat")]
         if let Some(diag) = &self.kindstat
             && let Some(summary) = diag.shutdown()
         {
             eprintln!("kf3: KINDSTAT SUMMARY {summary}");
         }
+    }
+
+    /// Stop the device's threads.
+    pub fn stop(&self) {
+        self.kindstat_finish();
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
         let rs = &self.chans.relay_stats;

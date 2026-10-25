@@ -20,3 +20,16 @@ assertion in batch::tests::the_aggregate_extent_of_the_batches_of_a_space_is_cap
 All runtime counter tests also passed in the parallel invocation.
 Source copies matched host-tested files (source-hashes.json).
 No hardware measurement is represented by this receipt.
+
+Exit-path follow-up, run pf1-kindstat-exit-tests-20261025:
+EXPECTED RED commit 95120c5fc: two additional wiring tests fail before the exit hook.
+Normal QEMU process exit does not require PCI unrealize, so a default-off exit
+notifier shares the existing Census::shutdown once guard with device stop.
+An intermediate C/Rust bool signature was rejected by three existing wire-mirror
+checks; the final seam uses the established uint32_t/u32 representation.
+Final full serial feature-on suite: [657, 0, 3], feature-off: [643, 0, 3].
+Final targeted wire_mirror: 4 passed, 0 failed; host source hashes matched 14 files.
+Final all-target clippy: existing-debt=248 new=0 resolved=284.
+Three exit-wiring mutants each killed by both added tests; restored source passed.
+The wiring tests inspect source connections; runtime once-guard contracts are in
+kindstat.rs, and real normal-exit emission remains a host-run verification item.

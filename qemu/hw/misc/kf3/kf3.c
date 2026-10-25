@@ -227,6 +227,8 @@ struct Kf3State {
     bool diag;
     char tr_name[40];
     Notifier tr_exit;
+    bool kindstat_on;
+    Notifier kindstat_exit;
     char *gsp_observer_path;         /* property x-gsp-observer (vfio-pci's name) */
     uint32_t gsp_observer_seconds;   /* property x-gsp-observer-seconds (vfio-pci: 300) */
 #ifdef KF3_GSP_OBSERVER
@@ -950,6 +952,13 @@ static void kf3_msi_user_off(struct Kf3State *s)
             s->vec[i].s = NULL;
         }
     }
+}
+
+/* Optional mapping census: normal QEMU exit need not unplug the PCI device. */
+static void kf3_kindstat_exit(Notifier *n, void *data)
+{
+    struct Kf3State *s = container_of(n, struct Kf3State, kindstat_exit);
+    kf3_kindstat_finish(s->h);
 }
 
 static void kf3_trace_exit(Notifier *n, void *data)
@@ -1823,6 +1832,11 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         s->tr_exit.notify = kf3_trace_exit;
         qemu_add_exit_notifier(&s->tr_exit);
     }
+    s->kindstat_on = kf3_kindstat_on(s->h);
+    if (s->kindstat_on) {
+        s->kindstat_exit.notify = kf3_kindstat_exit;
+        qemu_add_exit_notifier(&s->kindstat_exit);
+    }
     return;
 
 fail:
@@ -1852,6 +1866,10 @@ static void kf3_dev_exit(PCIDevice *pci)
                     s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed,
                     s->db_sites_added, s->db_sites_removed);
         memory_listener_unregister(&s->listener);
+        if (s->kindstat_on) {
+            qemu_remove_exit_notifier(&s->kindstat_exit);
+            kf3_kindstat_exit(&s->kindstat_exit, NULL);
+        }
         /* ★ ABI 24, DIAGNOSTIC: the report now, and nothing traced or observed after this */
         if (s->tr_on) {
             qemu_remove_exit_notifier(&s->tr_exit);

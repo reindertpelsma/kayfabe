@@ -492,6 +492,20 @@ pub unsafe extern "C" fn kf3_status(h: *mut c_void, buf: *mut c_char, len: usize
     write_err(buf, len, &s);
 }
 
+/// Whether this device requested the optional mapping census's exit notifier.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_kindstat_on(h: *mut c_void) -> u32 {
+    u32::from(dev(h).is_some_and(Device::kindstat_on))
+}
+
+/// Emit the mapping census at most once, without a fixed C buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_kindstat_finish(h: *mut c_void) {
+    if let Some(d) = dev(h) {
+        d.kindstat_finish();
+    }
+}
+
 /// The host usermode window (§53.1 disposition C): `*ptr`, `*len`. Returns 0, or -1 if the session
 /// has none. The pages live as long as the device (which lives for the process).
 ///
