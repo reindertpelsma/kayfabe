@@ -1,6 +1,6 @@
 # GB202 enable-to-idle regression preparation
 
-STATUS: RESEARCH, 2026-10-25. Full inherited rehearsal GREEN; hardware and probe UNRUN.
+STATUS: RESEARCH, 2026-10-25. One rebuilt-parent probe lease refused at provider startup; probe UNRUN.
 
 CODE READ: [BW6, lease 57556167](https://github.com/reindertpelsma/kayfabe/blob/2cf144fa259c5574275e57d16a8401352e5cb5a7/traces/blackwell_ab_20261023/ROUND_B1r_bw6/REPORT.md)
 records Code 0 followed by 0x141 and fatal 0x113 before its timed hold began.
@@ -65,12 +65,25 @@ use a private fixture repository and remove inherited Git environment overrides.
 The BW8 suite now has 122 passing tests and 35 source mutants with at least two distinct
 killing tests each; see [fixture_mutation_kills.json](fixture_mutation_kills.json).
 
-CODE READ (BW6 retained provisioning receipt): its sealed parent image digest is
-`d038f948bf93724b94e1928d2a155becff94f8570399ae311d838730f3c38575`.
-The receipt was recovered, but the image artifact was not found in the retained BW6
-kit/captures or searched local artifact roots. An installer recreated from the same media
-would not establish identity with that sealed parent. Hardware remains UNRUN pending a
-verifiable required image artifact; no lease or product result is claimed.
+MEASURED (2026-10-25; [execution_result.json](execution_result.json)): one verified VM-capable
+RTX 5090 lease, 57694407, ended with `provider_host_error` after 408 seconds of startup.
+No SSH identity was admitted, parent rebuilt, product enabled or probe run. Console capture
+was one newline, hash-verified before exact-ID destruction; API absence and both timer exits
+were independently rechecked. The provider-status refusal receipt stays private.
+
+CODE READ: a reviewed amendment permitted rebuilding BW6's unavailable sealed parent through
+the same pinned provisioning pipeline, recording a new digest and differences. That permission
+resolved the artifact blocker. This lease never reached provisioning, so no parent digest or
+new hardware result exists. H1-T/H1-G/H2 remain UNRESOLVED. This is an operator/provider
+refusal, not a product RED; the single-lease allowance was consumed without retry.
+
+MEASURED (2026-10-25, synthetic/operator checks; execution_result.json): 216 BW8 tests and 11 unchanged
+cost/watch checks pass, in addition to all 574 inherited checks. All 68 source mutants have
+at least two distinct killing tests; see [execution_mutation_kills.json](execution_mutation_kills.json).
+The adapter rehearsal used fake provider/SSH transports and upload/media subprocess fixtures.
+It exercised the actual settled admission, capture/hash, owned-ID teardown and timer ordering.
+The binary digest gates the product arm; PowerShell parsing must pass before enable. Actual
+PowerShell/process/binary/flag admission and the 60s/600s observations remain UNRUN.
 
 Reproduce the local checks without a GPU:
 

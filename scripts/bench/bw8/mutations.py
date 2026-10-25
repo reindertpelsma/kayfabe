@@ -8,6 +8,126 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 MUTANTS = {
+    "parser_windows_eol_rejected": (
+        "execution.py",
+        "BW8_PARSER_GREEN=1[[:space:]]*$",
+        "BW8_PARSER_GREEN=1$",
+    ),
+    "parser_marker_prefix_accepted": (
+        "execution.py",
+        "BW8_PARSER_GREEN=1[[:space:]]*$",
+        "BW8_PARSER_GREEN=1",
+    ),
+    "network_arm_removed": ("execution.py", "anchor + launch", "anchor"),
+    "offer_verification_removed": (
+        "execution.py",
+        'offer.get("verification") != "verified"',
+        "False",
+    ),
+    "offer_vm_removed": (
+        "execution.py",
+        'offer.get("vms_enabled") is not True or offer.get("is_vm_deverified") is not False',
+        "False",
+    ),
+    "offer_gpu_removed": (
+        "execution.py",
+        'offer.get("gpu_name") != "RTX 5090" or offer.get("num_gpus") != 1',
+        "False",
+    ),
+    "offer_country_removed": (
+        "execution.py",
+        'not country or country[1] in {"CU", "IR", "KP", "SY", "CN", "HK", "MO"}',
+        "False",
+    ),
+    "offer_blacklist_removed": (
+        "execution.py",
+        'offer.get("machine_id") in blacklisted or offer.get("host_id") in blacklisted',
+        "False",
+    ),
+    "offer_resources_removed": ("execution.py", "number(offer.get(field)) < floor", "False"),
+    "offer_storage_rate_removed": ("execution.py", "not 0 < rate <= 1", "False"),
+    "invalid_numbers_accepted": (
+        "execution.py",
+        "type(value) not in (int, float) or not math.isfinite(value) or value < 0",
+        "False",
+    ),
+    "plan_rate_removed": ("execution.py", "not 0 < hourly <= 1", "False"),
+    "plan_clock_removed": (
+        "execution.py",
+        "now.utcoffset() is None or deadline.utcoffset() is None",
+        "False",
+    ),
+    "plan_shared_liability_removed": ("execution.py", "not stop < cap", "False"),
+    "plan_fit_removed": ("execution.py", "seconds < estimated_seconds or seconds <= 0", "False"),
+    "plan_reserve_removed": (
+        "execution.py",
+        "reservation >= stop or credit - reservation < 8",
+        "False",
+    ),
+    "plan_runtime_ceiling_removed": (
+        "execution.py",
+        "min(6300, cost_seconds, wall_seconds)",
+        "min(99999, cost_seconds, wall_seconds)",
+    ),
+    "plan_cap_ceiling_raised": (
+        "execution.py",
+        "min(2.5, number(shared_remaining))",
+        "min(3.5, number(shared_remaining))",
+    ),
+    "parser_not_staged": (
+        "execution.py",
+        '"bw8_enable_observe.ps1 bw8_parser.ps1 diag_min.ps1"',
+        '"bw8_enable_observe.ps1 diag_min.ps1"',
+    ),
+    "parser_gate_removed": ("execution.py", "preflight + anchors[0]", "anchors[0]"),
+    "execution_anchor_removed": ("execution.py", "if text.count(old) != 1:", "if False:"),
+    "qemu_admission_removed": ("execution.py", "pin + plans[0]", "plans[0]"),
+    "settled_pin_requirement_removed": (
+        "execution.py",
+        'if "C.settle_pin(" not in body:',
+        "if False:",
+    ),
+    "execution_source_hash_ignored": (
+        "backend.py",
+        "hashlib.sha256(Path(name).read_bytes()).hexdigest() != expected",
+        "False",
+    ),
+    "create_retry_allowed": (
+        "backend.py",
+        'with attempt.open("x") as stream:',
+        'with attempt.open("w") as stream:',
+    ),
+    "create_without_watchdog": (
+        "backend.py",
+        (
+            "if self.watch.poll() is not None:\n                "
+            'raise ValueError("precreate watchdog absent")'
+        ),
+        'if False:\n                raise ValueError("precreate watchdog absent")',
+    ),
+    "owned_id_not_reported": ("backend.py", 'if receipt.get("id"):', "if False:"),
+    "capture_recheck_removed": ("capture.py", 'actual != item["sha256"]', "False"),
+    "partial_pull_accepted": (
+        "capture.py",
+        'row["failed"] or row["not_pulled"] or row["verified"] != len(row["files"])',
+        "False",
+    ),
+    "archive_hash_ignored": ("capture.py", "actual != expected", "False"),
+    "archive_size_bounds_removed": (
+        "capture.py",
+        "len(files) > max_files or sum(p.stat().st_size for p, _ in files) > max_bytes",
+        "False",
+    ),
+    "archive_member_path_ignored": (
+        "capture.py",
+        'not member.isfile() or name.is_absolute() or ".." in name.parts',
+        "False",
+    ),
+    "archive_root_ignored": (
+        "capture.py",
+        'not name.parts or name.parts[0] not in ("evidence", "vm_logs", "bench")',
+        "False",
+    ),
     "static_failures_ignored": (
         "rehearse.py",
         'body.get("static") == []',

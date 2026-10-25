@@ -15,9 +15,21 @@ except ImportError:
 
 NOW = dt.datetime(2026, 10, 25, 16, tzinfo=dt.timezone.utc)
 END = NOW + dt.timedelta(hours=3)
-ARM = 'for f in verify_stage580.ps1 "$enable_script" bw8_enable_observe.ps1 diag_min.ps1 init_state.ps1; do\n done\nenable_cmd="existing once command"\n'
-CONTROLLER = 'mapfile -t plan < <(list_plan)\nbash /fixture/arm.sh on "$run" "$binary" "$source" || arm_rc=$?\n bash /fixture/collect_bw.sh "$run"\n'
-READY = 'if mode == "rent":\n    create()\nelif mode == "ready":\n    C.settle_pin(rescan, console)\nelif mode == "destroy":\n    destroy()\n'
+ARM = (
+    'for f in verify_stage580.ps1 "$enable_script" bw8_'
+    "enable_observe.ps1 diag_min.ps1 init_state.ps1; do"
+    '\n done\nenable_cmd="existing once command"\n'
+)
+CONTROLLER = (
+    "mapfile -t plan < <(list_plan)\nbash /fixture/arm.s"
+    'h on "$run" "$binary" "$source" || arm_rc=$?\n bash'
+    ' /fixture/collect_bw.sh "$run"\n'
+)
+READY = (
+    'if mode == "rent":\n    create()\nelif mode == "read'
+    'y":\n    C.settle_pin(rescan, console)\nelif mode =='
+    ' "destroy":\n    destroy()\n'
+)
 
 
 def offer():
@@ -236,19 +248,40 @@ class ParserReceiptShell(unittest.TestCase):
         import subprocess
         import tempfile
         from pathlib import Path
+
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);fake=root/'python3'
-            fake.write_text("#!/bin/sh\nprintf '%s' "+shlex.quote(text)+"\n")
+            root = Path(tmp)
+            fake = root / "python3"
+            fake.write_text("#!/bin/sh\nprintf '%s' " + shlex.quote(text) + "\n")
             fake.chmod(0o700)
-            data=wire_arm(ARM)
-            preflight=data[data.index('python3 -E'):data.index('enable_cmd=')]
-            script='set -e\nready_tool=unused; W=unused; run=fixture; readiness='+shlex.quote(str(root/'ready.json'))+'\n'+preflight
-            return subprocess.run(['bash','-c',script],env=dict(os.environ,PATH=str(root)+':'+os.environ['PATH']),capture_output=True).returncode
-    def test_parser_lf_receipt(self):self.assertEqual(self.check('BW8_PARSER_GREEN=1\n'),0)
-    def test_parser_windows_crlf_receipt(self):self.assertEqual(self.check('BW8_PARSER_GREEN=1\r\n'),0)
-    def test_parser_windows_crlf_with_prior_output(self):self.assertEqual(self.check('fixture\r\nBW8_PARSER_GREEN=1\r\n'),0)
-    def test_parser_wrong_numeric_value(self):self.assertNotEqual(self.check('BW8_PARSER_GREEN=10\n'),0)
-    def test_parser_marker_suffix(self):self.assertNotEqual(self.check('BW8_PARSER_GREEN=1junk\n'),0)
+            data = wire_arm(ARM)
+            preflight = data[data.index("python3 -E") : data.index("enable_cmd=")]
+            script = (
+                "set -e\nready_tool=unused; W=unused; run=fixture; readiness="
+                + shlex.quote(str(root / "ready.json"))
+                + "\n"
+                + preflight
+            )
+            return subprocess.run(
+                ["bash", "-c", script],
+                env=dict(os.environ, PATH=str(root) + ":" + os.environ["PATH"]),
+                capture_output=True,
+            ).returncode
+
+    def test_parser_lf_receipt(self):
+        self.assertEqual(self.check("BW8_PARSER_GREEN=1\n"), 0)
+
+    def test_parser_windows_crlf_receipt(self):
+        self.assertEqual(self.check("BW8_PARSER_GREEN=1\r\n"), 0)
+
+    def test_parser_windows_crlf_with_prior_output(self):
+        self.assertEqual(self.check("fixture\r\nBW8_PARSER_GREEN=1\r\n"), 0)
+
+    def test_parser_wrong_numeric_value(self):
+        self.assertNotEqual(self.check("BW8_PARSER_GREEN=10\n"), 0)
+
+    def test_parser_marker_suffix(self):
+        self.assertNotEqual(self.check("BW8_PARSER_GREEN=1junk\n"), 0)
 
 
 class Wiring(unittest.TestCase):
