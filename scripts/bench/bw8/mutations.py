@@ -8,6 +8,47 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 MUTANTS = {
+    "static_failures_ignored": (
+        "rehearse.py",
+        'body.get("static") == []',
+        "True",
+    ),
+    "budget_timer_witness_ignored": (
+        "rehearse.py",
+        'budget.get("absence_receipt") is True\n        and budget.get("destroy_called") is True',
+        "True",
+    ),
+    "precreate_timer_witness_ignored": (
+        "rehearse.py",
+        'precreate.get("state") == "ARMED"\n'
+        '        and precreate.get("result") == "no contract before deadline"',
+        "True",
+    ),
+    "rehearsal_count_unchecked": (
+        "rehearse.py",
+        "len(rows) != len(SUITES)",
+        "False",
+    ),
+    "rehearsal_suite_set_unchecked": (
+        "rehearse.py",
+        '{r["suite"] for r in rows} != set(SUITES)',
+        "False",
+    ),
+    "rehearsal_failures_ignored": (
+        "rehearse.py",
+        'r["ok"] is True',
+        "True",
+    ),
+    "rehearsal_zero_tests_accepted": (
+        "rehearse.py",
+        'r["ran"] > 0',
+        "True",
+    ),
+    "git_context_leaks_to_temporary_repositories": (
+        "rehearse.py",
+        'if not key.startswith("GIT_")',
+        "if True",
+    ),
     "overlay_hashes_binary_instead_of_operator": (
         "prepare.py",
         "pathlib.Path(sys.argv[5]).read_bytes()",

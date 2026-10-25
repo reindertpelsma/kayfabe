@@ -1,6 +1,6 @@
 # GB202 enable-to-idle regression preparation
 
-STATUS: RESEARCH, 2026-10-25. READY for controller review; production and probe UNRUN.
+STATUS: RESEARCH, 2026-10-25. Full inherited rehearsal GREEN; hardware and probe UNRUN.
 
 CODE READ: [BW6, lease 57556167](https://github.com/reindertpelsma/kayfabe/blob/2cf144fa259c5574275e57d16a8401352e5cb5a7/traces/blackwell_ab_20261023/ROUND_B1r_bw6/REPORT.md)
 records Code 0 followed by 0x141 and fatal 0x113 before its timed hold began.
@@ -45,14 +45,32 @@ The tests-first commits are synthetic EXPECTED RED checkpoints, never a producti
 MEASURED (BW8 inherited guard replay; validation.json): 115 unchanged identity/watchdog/budget/native-template
 checks pass with fake clocks/providers. These checks create no lease and prove no hardware result.
 
-CODE READ: future planning is one lease, stop $2.25/cap $2.75, at most $1/hour and two hours,
+CODE READ: the original preparation proposed one lease, stop $2.25/cap $2.75, at most $1/hour and two hours,
 with $8 reserve. Cost guards can shorten that duration. This is not rental authorization.
 Retain verified-only VM offers, country/blacklist checks, unchanged BW6 identity admission,
 precreate watchdog, spend checks, hash-verified capture before destroy, exact-id teardown and
 API absence before timer cancellation. BW7 staged admission remains native-template-only.
 Prefer machine 152098/host 702330; no retry after real refusal and no SW3 authority reuse.
 Historical kit authorities and unverified-offer exceptions confer no BW8 permission.
-The private unexecuted kit awaits a separate controller grant after review.
+The preparation inventory preserves its historical planning inputs; it is not live authority.
+
+
+MEASURED (2026-10-25, reconstructed fixture closure;
+[fixture_rehearsal.json](fixture_rehearsal.json)): all 27 inherited suites pass, 574 tests,
+both fake-provider timer teardown paths pass, and the inherited static check reports zero
+problems. No suite is replaced or skipped. Fixture sources are restored from the pinned
+BW6 execution history and provider history; admission logic is unchanged. Historical ledgers
+remain evidence, with a separate empty ledger for fake-provider rehearsals. Git operations
+use a private fixture repository and remove inherited Git environment overrides.
+The BW8 suite now has 122 passing tests and 35 source mutants with at least two distinct
+killing tests each; see [fixture_mutation_kills.json](fixture_mutation_kills.json).
+
+CODE READ (BW6 retained provisioning receipt): its sealed parent image digest is
+`d038f948bf93724b94e1928d2a155becff94f8570399ae311d838730f3c38575`.
+The receipt was recovered, but the image artifact was not found in the retained BW6
+kit/captures or searched local artifact roots. An installer recreated from the same media
+would not establish identity with that sealed parent. Hardware remains UNRUN pending a
+verifiable required image artifact; no lease or product result is claimed.
 
 Reproduce the local checks without a GPU:
 

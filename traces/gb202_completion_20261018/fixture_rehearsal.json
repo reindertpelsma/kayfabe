@@ -1,0 +1,204 @@
+{
+  "checked_utc": "2026-10-25T11:37:15.304941+00:00",
+  "hardware": "UNRUN",
+  "historical_execution_source": "4e990f69d4c0491e90b1c6b4b73ffb2edb8df51a",
+  "inherited_suites": [
+    {
+      "ok": true,
+      "ran": 11,
+      "rc": 0,
+      "suite": "test_saved_xid32_watch_loop"
+    },
+    {
+      "ok": true,
+      "ran": 4,
+      "rc": 0,
+      "suite": "test_phase_watch_loop"
+    },
+    {
+      "ok": true,
+      "ran": 63,
+      "rc": 0,
+      "suite": "test_windows_observation"
+    },
+    {
+      "ok": true,
+      "ran": 41,
+      "rc": 0,
+      "suite": "test_saved_xid32_observation"
+    },
+    {
+      "ok": true,
+      "ran": 4,
+      "rc": 0,
+      "suite": "test_saved_observation_hold"
+    },
+    {
+      "ok": true,
+      "ran": 22,
+      "rc": 0,
+      "suite": "test_phase_xid_guard"
+    },
+    {
+      "ok": true,
+      "ran": 19,
+      "rc": 0,
+      "suite": "test_precreate_watchdog"
+    },
+    {
+      "ok": true,
+      "ran": 13,
+      "rc": 0,
+      "suite": "test_fuzz_findings"
+    },
+    {
+      "ok": true,
+      "ran": 6,
+      "rc": 0,
+      "suite": "test_fuzz_fixture"
+    },
+    {
+      "ok": true,
+      "ran": 5,
+      "rc": 0,
+      "suite": "test_native_findings_wrapper"
+    },
+    {
+      "ok": true,
+      "ran": 7,
+      "rc": 0,
+      "suite": "test_media_wait"
+    },
+    {
+      "ok": true,
+      "ran": 20,
+      "rc": 0,
+      "suite": "test_console_pin"
+    },
+    {
+      "ok": true,
+      "ran": 7,
+      "rc": 0,
+      "suite": "test_console_pin_types"
+    },
+    {
+      "ok": true,
+      "ran": 23,
+      "rc": 0,
+      "suite": "test_round_budget"
+    },
+    {
+      "ok": true,
+      "ran": 23,
+      "rc": 0,
+      "suite": "test_init_observer"
+    },
+    {
+      "ok": true,
+      "ran": 23,
+      "rc": 0,
+      "suite": "test_readiness"
+    },
+    {
+      "ok": true,
+      "ran": 31,
+      "rc": 0,
+      "suite": "test_provider_retry"
+    },
+    {
+      "ok": true,
+      "ran": 37,
+      "rc": 0,
+      "suite": "test_box_fetch"
+    },
+    {
+      "ok": true,
+      "ran": 14,
+      "rc": 0,
+      "suite": "test_b1r_budget"
+    },
+    {
+      "ok": true,
+      "ran": 13,
+      "rc": 0,
+      "suite": "test_box_fetch_retry"
+    },
+    {
+      "ok": true,
+      "ran": 24,
+      "rc": 0,
+      "suite": "test_console_pin_settle"
+    },
+    {
+      "ok": true,
+      "ran": 7,
+      "rc": 0,
+      "suite": "test_b1r_pin"
+    },
+    {
+      "ok": true,
+      "ran": 18,
+      "rc": 0,
+      "suite": "test_b1r_ops"
+    },
+    {
+      "ok": true,
+      "ran": 35,
+      "rc": 0,
+      "suite": "test_die_pair_table"
+    },
+    {
+      "ok": true,
+      "ran": 84,
+      "rc": 0,
+      "suite": "test_b1r_kit"
+    },
+    {
+      "ok": true,
+      "ran": 5,
+      "rc": 0,
+      "suite": "test_b1r_snippets"
+    },
+    {
+      "ok": true,
+      "ran": 15,
+      "rc": 0,
+      "suite": "test_b1r_legacy_ops"
+    }
+  ],
+  "inherited_tests": 574,
+  "lane_tests": 122,
+  "minimum_distinct_killing_tests": 2,
+  "mutants": 35,
+  "new_leases": 0,
+  "new_spend_usd": 0,
+  "operator": {
+    "budget_watch": {
+      "absence_receipt": true,
+      "destroy_called": true,
+      "rc": 0,
+      "ready_marker": true
+    },
+    "precreate_watchdog": {
+      "rc": 0,
+      "result": "no contract before deadline",
+      "state": "ARMED"
+    }
+  },
+  "passed": true,
+  "provider_fixture_source": "d53cfd9f44d7bdbc87887c2e19fb3431545d84b5",
+  "scope": "historical fixtures and fake providers; no production or hardware execution",
+  "sealed_parent_artifact": "not found in retained kit/capture or searched local artifact roots",
+  "sealed_parent_sha256": "d038f948bf93724b94e1928d2a155becff94f8570399ae311d838730f3c38575",
+  "source_sha256": {
+    "scripts/bench/bw8/mutations.py": "db501e0a0cacaacebdb3a2ff94806b3841a3b00c5445863a015ba17c028ffb0d",
+    "scripts/bench/bw8/observer.py": "0b8df24c9dba66508baba8a4d839598545bb61f0a8d76220d7b041cffbc028f2",
+    "scripts/bench/bw8/prepare.py": "52301cfc0a7269cc0dda476a9bed0864de62751b0adbbd78fe3da58bb5e10a32",
+    "scripts/bench/bw8/rehearse.py": "783526bcaff1b7ebe05d3c1d40e3a71ca5037b707747c48b76b95622f316030b",
+    "scripts/bench/bw8/test_kit.py": "4ea08df941a7b6500da0d5c6b263ae601b95a5f6185e79b1fe7010d4a44eb1f5",
+    "scripts/bench/bw8/test_observer.py": "a7c553136944c4352a0e1f72aac399dcd720ab95fa311e83a612999a57970929",
+    "scripts/bench/bw8/test_rehearse.py": "a3384fb398fff18ec73fa7c1cb63eb3420d3bb17367f79fbc6ab0ed6fe1fe260",
+    "scripts/bench/bw8/test_replay.py": "fe89e900bf6174f65cfb6ac5d9507bdbd1e6204264f84e512605c2f1878037c5"
+  },
+  "static_problems": []
+}

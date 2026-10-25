@@ -10,9 +10,11 @@ except ModuleNotFoundError:
     def assert_green(rows):
         return False
 
+
 try:
     from rehearse import isolated_environment
 except ImportError:
+
     def isolated_environment(env):
         return dict(env)
 
@@ -91,14 +93,20 @@ class CompleteRehearsal(unittest.TestCase):
 try:
     from rehearse import complete_receipt
 except ImportError:
+
     def complete_receipt(body):
         return False
 
 
 def receipt():
-    return {"suites": rows(), "static": [], "operator": {
-        "budget_watch": {"absence_receipt": True, "destroy_called": True},
-        "precreate_watchdog": {"state": "ARMED", "result": "no contract before deadline"}}}
+    return {
+        "suites": rows(),
+        "static": [],
+        "operator": {
+            "budget_watch": {"absence_receipt": True, "destroy_called": True},
+            "precreate_watchdog": {"state": "ARMED", "result": "no contract before deadline"},
+        },
+    }
 
 
 class CompleteReceipt(unittest.TestCase):

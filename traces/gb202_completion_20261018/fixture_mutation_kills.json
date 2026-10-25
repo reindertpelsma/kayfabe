@@ -1,0 +1,261 @@
+{
+  "application_provider_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_application_other_provider",
+      "test_observer.ObserverTests.test_wrong_channel_cannot_be_bugcheck"
+    ],
+    "tests": 122
+  },
+  "baseline_channel_cursors_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_missing_baseline_cursor",
+      "test_observer.ObserverTests.test_system_baseline_cursor_missing"
+    ],
+    "tests": 122
+  },
+  "baseline_hash_overwrites_overlay_hash": {
+    "killers": [
+      "test_kit.KitTests.test_overlay_receipt_names_baseline_hash",
+      "test_kit.KitTests.test_receipt_distinguishes_operator_revision",
+      "test_kit.KitTests.test_receipt_records_operator_bytes"
+    ],
+    "tests": 122
+  },
+  "binary_hash_unchecked": {
+    "killers": [
+      "test_kit.KitTests.test_baseline_binary_changed",
+      "test_kit.KitTests.test_process_binary_changed"
+    ],
+    "tests": 122
+  },
+  "boot_identity_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_boot_change",
+      "test_observer.ObserverTests.test_boot_missing"
+    ],
+    "tests": 122
+  },
+  "budget_timer_witness_ignored": {
+    "killers": [
+      "test_rehearse.CompleteReceipt.test_budget_absence_missing_refused",
+      "test_rehearse.CompleteReceipt.test_budget_destroy_missing_refused"
+    ],
+    "tests": 122
+  },
+  "code0_invented": {
+    "killers": [
+      "test_observer.ObserverTests.test_no_code0",
+      "test_observer.ObserverTests.test_second_hold_without_code0"
+    ],
+    "tests": 122
+  },
+  "code0_loss_ignored": {
+    "killers": [
+      "test_observer.ObserverTests.test_code_lost",
+      "test_observer.ObserverTests.test_final_code_lost"
+    ],
+    "tests": 122
+  },
+  "coverage_clock_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_heartbeat_gap",
+      "test_observer.ObserverTests.test_second_heartbeat_gap"
+    ],
+    "tests": 122
+  },
+  "device_harness_configuration_unchecked": {
+    "killers": [
+      "test_kit.KitTests.test_device_config_changed",
+      "test_kit.KitTests.test_harness_changed"
+    ],
+    "tests": 122
+  },
+  "disabled_start_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_baseline_not_disabled",
+      "test_observer.ObserverTests.test_initial_device_missing"
+    ],
+    "tests": 122
+  },
+  "driver_identity_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_driver_changed",
+      "test_observer.ObserverTests.test_second_driver_change"
+    ],
+    "tests": 122
+  },
+  "dump_generation_ignored": {
+    "killers": [
+      "test_observer.ObserverTests.test_replaced_dump_is_new_generation",
+      "test_observer.ObserverTests.test_reused_fatal_filename_is_new_generation"
+    ],
+    "tests": 122
+  },
+  "effective_flags_unchecked": {
+    "killers": [
+      "test_kit.KitTests.test_baseline_flag_missing",
+      "test_kit.KitTests.test_unexpected_effective_flag"
+    ],
+    "tests": 122
+  },
+  "event_cursor_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_application_cursor_rollback",
+      "test_observer.ObserverTests.test_application_cursor_stale"
+    ],
+    "tests": 122
+  },
+  "git_context_leaks_to_temporary_repositories": {
+    "killers": [
+      "test_rehearse.CompleteRehearsal.test_git_directory_does_not_escape_into_fixture_repositories",
+      "test_rehearse.CompleteRehearsal.test_git_worktree_and_index_do_not_escape_into_fixture_repositories"
+    ],
+    "tests": 122
+  },
+  "inherited_readiness_wait_removed": {
+    "killers": [
+      "test_kit.KitTests.test_overlay_readiness_failure_propagates",
+      "test_kit.KitTests.test_overlay_waits_for_inherited_absolute_readiness"
+    ],
+    "tests": 122
+  },
+  "inventory_inputs_unchecked": {
+    "killers": [
+      "test_kit.KitTests.test_authority_cannot_be_added",
+      "test_kit.KitTests.test_budget_cap_cannot_grow",
+      "test_kit.KitTests.test_lease_count_cannot_grow",
+      "test_kit.KitTests.test_no_new_binary",
+      "test_kit.KitTests.test_no_new_source",
+      "test_kit.KitTests.test_no_second_probe",
+      "test_kit.KitTests.test_probe_cannot_be_off"
+    ],
+    "tests": 122
+  },
+  "new_fatal_dump_ignored": {
+    "killers": [
+      "test_observer.ObserverTests.test_early_113_before_hold",
+      "test_observer.ObserverTests.test_early_141_before_code0",
+      "test_observer.ObserverTests.test_replaced_dump_is_new_generation",
+      "test_observer.ObserverTests.test_reused_fatal_filename_is_new_generation",
+      "test_replay.ReplayTests.test_bw6_engine_timeout_metadata",
+      "test_replay.ReplayTests.test_bw6_fatal_dump_metadata"
+    ],
+    "tests": 122
+  },
+  "overlay_anchor_check_removed": {
+    "killers": [
+      "test_kit.KitTests.test_overlay_duplicate_export_refused",
+      "test_kit.KitTests.test_overlay_missing_export_refused"
+    ],
+    "tests": 122
+  },
+  "overlay_hashes_binary_instead_of_operator": {
+    "killers": [
+      "test_kit.KitTests.test_overlay_receipt_hashes_actual_operator",
+      "test_kit.KitTests.test_receipt_distinguishes_operator_revision",
+      "test_kit.KitTests.test_receipt_records_operator_bytes"
+    ],
+    "tests": 122
+  },
+  "partial_jsonl_accepted": {
+    "killers": [
+      "test_observer.ObserverTests.test_full_stream_without_final_newline",
+      "test_observer.ObserverTests.test_partial_jsonl"
+    ],
+    "tests": 122
+  },
+  "partial_queries_accepted": {
+    "killers": [
+      "test_observer.ObserverTests.test_partial_final_query",
+      "test_observer.ObserverTests.test_partial_query"
+    ],
+    "tests": 122
+  },
+  "precreate_timer_witness_ignored": {
+    "killers": [
+      "test_rehearse.CompleteReceipt.test_precreate_exit_missing_refused",
+      "test_rehearse.CompleteReceipt.test_precreate_not_armed_refused"
+    ],
+    "tests": 122
+  },
+  "readiness_deadline_removed": {
+    "killers": [
+      "test_observer.ObserverTests.test_late_first_code0",
+      "test_observer.ObserverTests.test_late_readiness"
+    ],
+    "tests": 122
+  },
+  "rehearsal_count_unchecked": {
+    "killers": [
+      "test_rehearse.CompleteRehearsal.test_extra_first_suite_refused",
+      "test_rehearse.CompleteRehearsal.test_extra_last_suite_refused"
+    ],
+    "tests": 122
+  },
+  "rehearsal_failures_ignored": {
+    "killers": [
+      "test_rehearse.CompleteRehearsal.test_failed_first_suite_refused",
+      "test_rehearse.CompleteRehearsal.test_failed_last_suite_refused"
+    ],
+    "tests": 122
+  },
+  "rehearsal_suite_set_unchecked": {
+    "killers": [
+      "test_rehearse.CompleteRehearsal.test_duplicate_suite_refused",
+      "test_rehearse.CompleteRehearsal.test_unknown_suite_refused"
+    ],
+    "tests": 122
+  },
+  "rehearsal_zero_tests_accepted": {
+    "killers": [
+      "test_rehearse.CompleteRehearsal.test_empty_loader_at_end_is_not_green",
+      "test_rehearse.CompleteRehearsal.test_zero_tests_is_not_green"
+    ],
+    "tests": 122
+  },
+  "sixty_second_hold_removed": {
+    "killers": [
+      "test_observer.ObserverTests.test_just_under_sixty",
+      "test_observer.ObserverTests.test_short_hold"
+    ],
+    "tests": 122
+  },
+  "static_failures_ignored": {
+    "killers": [
+      "test_rehearse.CompleteReceipt.test_first_static_problem_refused",
+      "test_rehearse.CompleteReceipt.test_other_static_problem_refused"
+    ],
+    "tests": 122
+  },
+  "stream_topology_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_repeated_enable_at_end",
+      "test_observer.ObserverTests.test_second_enable"
+    ],
+    "tests": 122
+  },
+  "system_bugcheck_reboot_ignored": {
+    "killers": [
+      "test_observer.ObserverTests.test_eventlog_reboot",
+      "test_observer.ObserverTests.test_kernel_power",
+      "test_observer.ObserverTests.test_system_bugcheck_at_end",
+      "test_observer.ObserverTests.test_system_bugcheck_before_code0",
+      "test_replay.ReplayTests.test_bw6_system_bugcheck_metadata"
+    ],
+    "tests": 122
+  },
+  "unclassified_dump_accepted": {
+    "killers": [
+      "test_observer.ObserverTests.test_unknown_dump",
+      "test_observer.ObserverTests.test_unknown_fatal_classification"
+    ],
+    "tests": 122
+  },
+  "wall_clock_unchecked": {
+    "killers": [
+      "test_observer.ObserverTests.test_forward_utc_jump",
+      "test_observer.ObserverTests.test_utc_rollback"
+    ],
+    "tests": 122
+  }
+}
