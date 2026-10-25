@@ -577,6 +577,8 @@ class Runner:
         self.display_dropped = 0
         self.infrastructure_failure = False
         self.rent_busy = False
+        # A configured RENTING_DISABLED refusal of /rent: terminal, the Worker never touched Vast.
+        self.renting_disabled = False
         # Edits4 F1: sticky for the whole /rent sequence. Once any /rent reply was ambiguous
         # (5xx, timeout, connection error, garbled page) a box may exist for this run.
         self.rent_ambiguous = False
@@ -658,6 +660,13 @@ class Runner:
                     self.diagnostic = line
                     self.rent_ambiguous |= route == "/rent"
                     raise
+                if route == "/rent" and code == 503 and data["state"] == "RENTING_DISABLED":
+                    # A deliberate setting, not an outage: the Worker did not touch Vast, so
+                    # nothing is ambiguous and nothing is owed. Static text, no Worker string.
+                    self.renting_disabled = True
+                    self.infrastructure_failure = False
+                    self.diagnostic = "runner: renting is disabled on the Worker"
+                    return code, data
                 transient = code in {429, 500, 502, 503, 504} or (
                     code == 409 and data["state"] == "BUSY"
                 )
@@ -849,12 +858,14 @@ class Runner:
             # Edits4 F1: give-up after an ambiguous /rent reply with nothing admitted as far as
             # the runner knows: a box may exist for this run, so ask the Worker to stop it
             # (harmless 404 when nothing exists).
+            # A configured RENTING_DISABLED refusal needs no stop: the Worker never touched Vast
+            # (unless an earlier /rent reply of this run was ambiguous).
             if (
                 terminal
                 or final
                 or not self.infrastructure_failure
                 or (self.rent_ambiguous and not admitted)
-            ):
+            ) and not (self.renting_disabled and not self.rent_ambiguous):
                 try:
                     self.read("/stop/" + self.ctx["run"], "POST")
                 except Exception:
