@@ -37,6 +37,14 @@ class CompleteRehearsal(unittest.TestCase):
     def test_green_complete_bundle(self):
         self.assertTrue(assert_green(rows()))
 
+    def test_extra_first_suite_refused(self):
+        data = rows()
+        self.assertFalse(assert_green(data + data[:1]))
+
+    def test_extra_last_suite_refused(self):
+        data = rows()
+        self.assertFalse(assert_green(data + data[-1:]))
+
     def test_missing_first_suite_refused(self):
         self.assertFalse(assert_green(rows()[1:]))
 
@@ -78,6 +86,64 @@ class CompleteRehearsal(unittest.TestCase):
         if data:
             data[-1]["ran"] = 0
         self.assertFalse(assert_green(data))
+
+
+try:
+    from rehearse import complete_receipt
+except ImportError:
+    def complete_receipt(body):
+        return False
+
+
+def receipt():
+    return {"suites": rows(), "static": [], "operator": {
+        "budget_watch": {"absence_receipt": True, "destroy_called": True},
+        "precreate_watchdog": {"state": "ARMED", "result": "no contract before deadline"}}}
+
+
+class CompleteReceipt(unittest.TestCase):
+    def test_complete_receipt_passes(self):
+        self.assertTrue(complete_receipt(receipt()))
+
+    def test_first_static_problem_refused(self):
+        body = receipt()
+        body["static"] = [["module", 1, "undefined"]]
+        self.assertFalse(complete_receipt(body))
+
+    def test_other_static_problem_refused(self):
+        body = receipt()
+        body["static"] = [["operator", 99, "unresolved attribute"]]
+        self.assertFalse(complete_receipt(body))
+
+    def test_budget_absence_missing_refused(self):
+        body = receipt()
+        body["operator"]["budget_watch"]["absence_receipt"] = False
+        self.assertFalse(complete_receipt(body))
+
+    def test_budget_destroy_missing_refused(self):
+        body = receipt()
+        body["operator"]["budget_watch"]["destroy_called"] = False
+        self.assertFalse(complete_receipt(body))
+
+    def test_precreate_not_armed_refused(self):
+        body = receipt()
+        body["operator"]["precreate_watchdog"]["state"] = "STOPPED"
+        self.assertFalse(complete_receipt(body))
+
+    def test_precreate_exit_missing_refused(self):
+        body = receipt()
+        body["operator"]["precreate_watchdog"]["result"] = "unknown"
+        self.assertFalse(complete_receipt(body))
+
+    def test_omitted_operator_refused(self):
+        body = receipt()
+        body.pop("operator")
+        self.assertFalse(complete_receipt(body))
+
+    def test_empty_operator_refused(self):
+        body = receipt()
+        body["operator"] = {}
+        self.assertFalse(complete_receipt(body))
 
 
 if __name__ == "__main__":
