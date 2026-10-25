@@ -1,0 +1,73 @@
+{
+  "checked_utc": "2026-10-25T17:48:44.588699+00:00",
+  "authority": "BW8_GRANT3; one additional lease only on a different machine and host",
+  "authority_sha256": "e5afca84136b7b195c23b5ecbf0518b78dd7efcb4a23fb20aed937b3fd3ccb2f",
+  "result": "UNRUN_NO_ADMISSIBLE_OFFER",
+  "new_leases": 0,
+  "new_spend_usd": 0,
+  "previous_retained_charge_usd": 0.71404659375,
+  "rate_ceiling_including_requested_180gb_usd_per_hour": 1.0,
+  "excluded_previous_machine_host": [
+    56897,
+    292781
+  ],
+  "verified_vm_rtx5090_offers": 6,
+  "admitted_offers": 0,
+  "offers": [
+    {
+      "offer_id": 52870669,
+      "machine_id": 28666,
+      "host_id": 79466,
+      "requested_180gb_rate": 1.3833333333333333,
+      "reliability": 0.9960216,
+      "refusal": "compute plus requested storage exceeds rate ceiling"
+    },
+    {
+      "offer_id": 56638594,
+      "machine_id": 53347,
+      "host_id": 79466,
+      "requested_180gb_rate": 1.295,
+      "reliability": 0.9926064,
+      "refusal": "compute plus requested storage exceeds rate ceiling"
+    },
+    {
+      "offer_id": 55276777,
+      "machine_id": 18855,
+      "host_id": 110302,
+      "requested_180gb_rate": 1.5,
+      "reliability": 0.9970553,
+      "refusal": "compute plus requested storage exceeds rate ceiling"
+    },
+    {
+      "offer_id": 54642865,
+      "machine_id": 153274,
+      "host_id": 728996,
+      "requested_180gb_rate": 1.4866666666666668,
+      "reliability": 0.9905159,
+      "refusal": "compute plus requested storage exceeds rate ceiling"
+    },
+    {
+      "offer_id": 48425037,
+      "machine_id": 34351,
+      "host_id": 166946,
+      "requested_180gb_rate": 1.09,
+      "reliability": 0.9928055,
+      "refusal": "compute plus requested storage exceeds rate ceiling"
+    },
+    {
+      "offer_id": 41357769,
+      "machine_id": 33614,
+      "host_id": 166946,
+      "requested_180gb_rate": 1.1066666666666667,
+      "reliability": 0.9951206,
+      "refusal": "compute plus requested storage exceeds rate ceiling"
+    }
+  ],
+  "live_owned_instances": 0,
+  "enable_count": 0,
+  "H1_T": "UNRESOLVED",
+  "H1_G": "UNRESOLVED",
+  "H2_delivery": "UNRESOLVED",
+  "full_rehearsal_refreshed": false,
+  "reason": "No offer passed the unchanged hourly rate guard; precreate rehearsal/watchdog/create were not entered."
+}

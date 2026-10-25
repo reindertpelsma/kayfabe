@@ -91,3 +91,10 @@ Reproduce the local checks without a GPU:
 python3 -B -m unittest discover -s scripts/bench/bw8 -v
 python3 -B scripts/bench/bw8/mutations.py
 ```
+
+2026-10-25 grant3 market check: MEASURED in `grant3_result.json` at 17:48:44Z,
+none of six verified VM-capable RTX 5090 offers met the unchanged 1 USD/hour guard,
+including requested 180 GB storage (quotes 1.09–1.50 USD/hour). No additional lease,
+spend, enable or observation; H1-T/H1-G/H2 remain UNRESOLVED. The earlier provider
+refusal and its retained charge are unchanged. The additional grant required a
+different machine and host; previous machine56897/host292781 remained excluded.
