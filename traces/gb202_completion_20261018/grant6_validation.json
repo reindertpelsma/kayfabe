@@ -1,0 +1,49 @@
+{
+  "scope": "synthetic/replay/fake-host checks, not hardware qualification",
+  "lane_tests": 256,
+  "mutants": 80,
+  "minimum_distinct_killing_tests": 2,
+  "expected_red_heads": [
+    "2266462e9",
+    "c477642fc"
+  ],
+  "tested_source_head": "09791f7f83fe55227fc0a32818a8b730a54aeab5",
+  "original_failed_upload_replayed_on_fake_provider": true,
+  "original_replay_error": "StopIteration",
+  "real_upload_fakehost": {
+    "passed": true,
+    "files": 119,
+    "current_ledger_kit_parser_probe_arm_verified": true,
+    "bundle_and_extracted_file_hashes_verified": true,
+    "upload_subprocess_stubbed": false,
+    "media_transport_subprocess_stubbed": true
+  },
+  "inherited_suites": 27,
+  "inherited_tests": 574,
+  "inherited_static_problems": 0,
+  "inherited_fake_timer_paths_passed": true,
+  "code_source_hashes": {
+    "scripts/bench/bw8/capture.py": "a8bb0fb4acca9364473644b5a7afcca5f94a1153f8d0913bf62e3b8c72e61836",
+    "scripts/bench/bw8/test_replay.py": "fe89e900bf6174f65cfb6ac5d9507bdbd1e6204264f84e512605c2f1878037c5",
+    "scripts/bench/bw8/test_execution.py": "508cf723e8a246e133b6660287fd301e451c3eb78dcd71cf94a016d391aae2d1",
+    "scripts/bench/bw8/test_upload_wiring.py": "55e07e7a04f64effbce22652ea230128c1d4b01610383015a0ce2c8498afb1ab",
+    "scripts/bench/bw8/test_capture.py": "0401785817811f179fd47af21d0f701d700405c8891476fc6080bb029e994af3",
+    "scripts/bench/bw8/test_kit.py": "4ea08df941a7b6500da0d5c6b263ae601b95a5f6185e79b1fe7010d4a44eb1f5",
+    "scripts/bench/bw8/run.py": "e4ac3f9d5300f07747980d45ac841fdd44c306462cec3e701ca80f507c854a0b",
+    "scripts/bench/bw8/test_backend.py": "a6c7004a4e4554af7e7c473a14971fff367542fb6cf635e88fa6b052b3bb51ae",
+    "scripts/bench/bw8/observer.py": "0b8df24c9dba66508baba8a4d839598545bb61f0a8d76220d7b041cffbc028f2",
+    "scripts/bench/bw8/parser_preflight.ps1": "ffe4a40d63fd4c4871a6478acaa73de53b696f21b33330a4a81cb62bafb510d6",
+    "scripts/bench/bw8/upload_wiring.py": "4445803bfae65bd91ebce581a5c9a47f98e04773ae27275a5602fcd2998f1f01",
+    "scripts/bench/bw8/rehearse.py": "783526bcaff1b7ebe05d3c1d40e3a71ca5037b707747c48b76b95622f316030b",
+    "scripts/bench/bw8/enable_observe.ps1": "dee52a7d1c519344c9373383bf23af3cd0a2b8d860191e3cf002351d925ad38b",
+    "scripts/bench/bw8/test_observer.py": "a7c553136944c4352a0e1f72aac399dcd720ab95fa311e83a612999a57970929",
+    "scripts/bench/bw8/test_rehearse.py": "a3384fb398fff18ec73fa7c1cb63eb3420d3bb17367f79fbc6ab0ed6fe1fe260",
+    "scripts/bench/bw8/ready.py": "46bcf03a27092cd2a250ef58781e0067386983b36349bbb919bbb5a6de471664",
+    "scripts/bench/bw8/test_preupload_capture.py": "b09c7586885d335460958f5aa0470da82478e2d255dffde4d9566536040d55bc",
+    "scripts/bench/bw8/backend.py": "8846fe64ec50ce7632450207646bcc4cea832bcb0fff4435bf1605f61b23dd47",
+    "scripts/bench/bw8/mutations.py": "578d65e2a6a3f981dd6af73e3c2795d06943d183820dee8861a5a5ae4f6b64a4",
+    "scripts/bench/bw8/test_grant.py": "537e5e37c4850bc097e86a43fc35de4020c337f322106bd94dded137032faea8",
+    "scripts/bench/bw8/prepare.py": "52301cfc0a7269cc0dda476a9bed0864de62751b0adbbd78fe3da58bb5e10a32",
+    "scripts/bench/bw8/execution.py": "2169a40c5ee09e8aef390dc3df0b3839624f309442dcb7fd3714b8e68445855a"
+  }
+}
