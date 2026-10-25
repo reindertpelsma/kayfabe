@@ -130,7 +130,7 @@ test('V4 default bounds and cron liability', () => {
     BOOT_LIMIT_MINUTES: undefined,
   });
   assert.equal(cfg.ttl, 180 * 60000);
-  assert.equal(cfg.provision, 40 * 60000);
+  assert.equal(cfg.provision, 75 * 60000);
   assert.equal(cfg.grace, 5 * 60000);
   assert.equal(cfg.cronPeriod, 60000);
   for (const patch of [

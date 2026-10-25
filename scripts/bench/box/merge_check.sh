@@ -30,7 +30,18 @@ git -C "$SOURCE" fetch -q origin "$B"
 REV=$(git -C "$SOURCE" rev-parse 'FETCH_HEAD^{commit}')
 mkdir -p "$BENCH_DIR/verify-worktrees"
 CHECKOUT=$(mktemp -d "$BENCH_DIR/verify-worktrees/$T.XXXXXX")
-git -C "$SOURCE" worktree add --detach "$CHECKOUT" "$REV"
+# ⊘ [2026-10-26] The Vast onstart checks out a SPARSE tree (ci/vast-broker/src/onstart.js) and the
+# payload points `origin` at that checkout, which never held the excluded blobs. A linked worktree
+# must therefore be sparse too: git < 2.36 (the box image has 2.34) does not copy the patterns, and
+# a full checkout would ask `origin` -- this very repository -- for blobs it does not have.
+git -C "$SOURCE" worktree add --detach --no-checkout "$CHECKOUT" "$REV"
+SPARSE_SRC=$(git -C "$SOURCE" rev-parse --absolute-git-dir)/info/sparse-checkout
+if [ -f "$SPARSE_SRC" ]; then
+    SPARSE_DST=$(git -C "$CHECKOUT" rev-parse --absolute-git-dir)/info/sparse-checkout
+    mkdir -p "$(dirname "$SPARSE_DST")"
+    cp "$SPARSE_SRC" "$SPARSE_DST"
+fi
+git -C "$CHECKOUT" reset -q --hard "$REV"
 cd "$CHECKOUT"
 echo "HEAD=$REV CHECKOUT=$CHECKOUT"
 pk=()
