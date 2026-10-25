@@ -1,0 +1,72 @@
+[
+  {
+    "mutant": "arm",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "pid",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "class",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "engine",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "client",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "kind",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "access",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "va",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "marker",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "count",
+    "killing_tests": 2,
+    "exit": 1
+  },
+  {
+    "mutant": "oom",
+    "killing_tests": 3,
+    "exit": 1
+  },
+  {
+    "mutant": "parse",
+    "killing_tests": 3,
+    "exit": 1
+  },
+  {
+    "mutant": "xid_filter",
+    "killing_tests": 25,
+    "exit": 1
+  },
+  {
+    "mutant": "exit_reason",
+    "killing_tests": 2,
+    "exit": 1
+  }
+]

@@ -58,3 +58,47 @@ owned Cargo target deleted, zero OOM records. QEMU exited 0 after QMP powerdown.
 Recommendation: **do not promote on HM1 evidence**. Required validation is
 incomplete. The standing common lane rule requires stopping after an agent's
 own safety check blocks a step; the lane was parked without changing that rule.
+
+## Authorized continuation — 2026-10-25
+
+STATUS: PARKED after the continuation admission rule rejected FAULT_PDE.
+This section supersedes the prior current-status counts. Subject remains revision
+`6564dd597`, binary `kf3-bins/6564dd59/qemu-system-x86_64`, unchanged hash.
+
+CODE READ coordinator continuation ruling (2026-10-25): intentional negative
+controls may emit own-QEMU-PID Xid31 CE0/HUBCLIENT_CE1 FAULT_PTE virtual read/write
+at declared primed VAs. Count distinct primed VAs, so a repeat is not an extra prime.
+Other types, PIDs, VAs, noninducing arms and excess primes still stop the lane.
+
+MEASURED HM1 admission tests at commit `53ef1c854`: 36 cases, eight failures
+against the unchanged blanket guard, committed EXPECTED RED before the fix.
+MEASURED HM1 admission tests at commit `3003ba3c1`: 39/39 PASS on dev box and host;
+14 policy mutants each killed by two tests or more, as recorded in
+[admission-mutations.json](admission-mutations.json). The original stop-reason
+regression also passes. This changes only the HM1 harness, not the candidate.
+The continuation controller uses a fresh kernel journal cursor for each owned VM.
+
+MEASURED HM1 continuation (rev `6564dd597`, `continuation/corrected-fast-result.json`):
+`defer-liveness`, `blockage-coverage`, `alias-two-vas`, `alias-unmap-observe`,
+`map-propagation` and `late-map-race` passed. The first admitted four own-PID
+CE/PTE records at three declared primed VAs. Combined with the six retained
+passes, the complete suite has **12 accepted passes, one admission stop,
+17 unrun arms**; there is no 30/30 claim.
+
+MEASURED HM1 (rev `6564dd597`), `hm1c_missing-page-fault/fault-admission.json`: the stopped arm
+emitted one own-PID Xid31 CE0/HUBCLIENT_CE1 **FAULT_PDE** VIRT_WRITE at its declared
+victim VA. Admission rejected the fault kind because the ruling permits PTE only.
+MEASURED HM1 stopped-arm serial/exit receipts: raw containment assertions PASS,
+client rc=0 and DONE; QMP system_powerdown; QEMU exited 0. This is a HOST_FAULT
+admission stop at 6.780 seconds, with no timeout misclassification.
+CODE READ candidate `crates/kayfabe-rm-ladder/src/main.rs`, `missing_page_fault`:
+the fixture deliberately accesses a never-mapped VA and checks bystander survival.
+No mirror regression or wider fault admission follows from the passing raw assertion.
+
+MEASURED HM1 final continuation audit (`continuation/final-audit.json`,
+2026-10-25 17:54:46 UTC): no QEMU/controller, lock released, GPU idle, GDM active,
+no OOM, target remains deleted, source clean and candidate hash unchanged.
+The continuation journal contains four admitted PTE records and the one rejected
+PDE record. All task 2 Linux lanes and Windows tasks 3–6 remain UNRUN.
+Recommendation remains **no promotion on incomplete evidence**. No admission
+expansion or product fix was attempted after the PDE stop.
