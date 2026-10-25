@@ -363,6 +363,74 @@ dispatch workflow; the gate then needs its trigger rule restated.
 
 ## First watched rental (checklist)
 
+### Current checklist — correction 2026-10-25
+
+[CODE READ: master `a9105acb6`, `scripts/ci/vast_payload.sh`, `scripts/ci/vast_payload.py`,
+`scripts/ci/vast_report.py`, `scripts/ci/vast_onstart.sh`] The payload is present on master.
+`payload_missing` remains a fail-closed fallback for a tested checkout without the shell entry
+point; it is not the expected result for current master. This checklist supersedes the older
+checklist retained below. These are owner/controller acceptance instructions, not a record of
+deployment, secret configuration or a successful hosted run.
+
+1. Keep `RENTING_ENABLED=false`. Use only reviewed master code and the deploy helper's
+   `deployment.json` bundle-hash check for the initial deployment. Branch work is not deployment
+   authority; the owner/controller must accept and merge any required changes first.
+2. Require GitHub environment `gpu-vast` to allow **master only**; a required reviewer is
+   optional at the owner's discretion.
+   Check its deployment-branch policy read-only with
+   `gh api repos/<repo>/environments/gpu-vast`; branch workflows must not bind its secrets.
+3. Review the scoped main Vast key against [Vast key scope](#vast-key-scope), and configure the
+   Worker secrets listed [above](#worker-and-github-secrets), including bare-origin WORKER_URL.
+   With hostname-wide Access, require both runner token A secrets and both box token B secrets
+   before renting; see [Cloudflare Access](#cloudflare-access-is-dashboard-only). Keep the two
+   tokens distinct and credentials out of logs and payloads.
+4. Deploy the [independent reaper](#independent-reaper) with its separate list+delete key,
+   compatible hard limit and `*/5 * * * *` schedule. Before renting, observe an application
+   `reaper_complete` event with `deleted: 0` on a successful, complete provider list with no
+   overdue matching instances. Do not create an overdue instance to test deletion. Cron
+   invocation outcome `ok` alone is insufficient: `worker.js` catches failures and emits
+   `reaper_unavailable`, which leaves this gate unmet. A no-delete observation establishes the
+   list path only; live deletion remains untested.
+5. Obtain owner acceptance of [ledger placement](docs/PLACEMENT.md)
+   before enabling admission. Master `src/index.js` still addresses
+   `owner-shared-vast-account` without a location hint. The new `owner-shared-vast-account-enam-v1` identity
+   with an `enam` hint is branch-only [PR #123](https://github.com/reindertpelsma/kayfabe/pull/123), not live.
+   Review the old ledger's active runs, pending cleanup and retained spend/commit rows while
+   renting is off; do not assume the placement proposal's historical “no rentals yet” premise
+   still holds. A new name does not move those rows. Resolve liabilities and preserve cap/gap
+   accounting, or require an explicit migration decision, before switching identities; retain
+   the namespace and migration history.
+6. Set **`DAILY_RENTALS=1` and `MAX_CONCURRENT_RENTALS=1`** explicitly in the vars file
+   (optionally lower `MAX_PRICE_USD_HOUR`) and deploy with renting still off. Pause agent and
+   owner pushes, PR updates and merges that use the owner's credentials throughout the watch:
+   eligible owner-triggered events can authorize another rental.
+7. Have `stop-all` ready with the owner stop token and an Access service token for the whole
+   hostname. The owner/controller must watch the single rental and be able to stop it.
+8. Only after all gates above, the owner/controller sets `RENTING_ENABLED=true` through the
+   reviewed deploy path and triggers **exactly one** run. Check OIDC admission, box Access
+   callbacks, progress/heartbeats and the structured result/log delivery.
+9. During that rental, read its exact instance row once, read-only, and inspect the V2 fields
+   `dph_base`, `dph_total`, `storage_cost`, `inet_up_cost` and `inet_down_cost` for presence and
+   consistency; see [V2 acceptance check](#v2-acceptance-check-contract-recheck). If inconsistent
+   or missing, use `stop-all` and obtain the owner's decision; no pricing-policy relaxation is
+   implied.
+10. Inspect the actual payload suite rows and failure diagnostics, rather than presuming PASS
+    or `FAIL(payload_missing)`. The runner attempts immediate stop after the final log fetch;
+    grace, main cron and reaper remain fallbacks. On failure or unavailable reporting, use the
+    ready stop path and reconcile cleanup.
+11. After the watch, set `RENTING_ENABLED=false` again through the reviewed deploy path and
+    confirm the exact rented instance ID is absent at the provider and its ledger cost row is
+    settled. A result or stop acknowledgement alone is insufficient. Keep renting off pending
+    owner acceptance of the outcome and any further rollout. Resume paused activity only once
+    renting is off and cleanup is reconciled; retain the one-rental caps until the owner
+    explicitly approves changing them.
+
+### Superseded checklist — retained history
+
+[SUPERSEDED 2026-10-25 by the current checklist above: the unverified reaper-schedule-only
+gate, implicit placement assumption, automatic cap restoration and expected
+`payload_missing` outcome below are not current acceptance instructions.]
+
 [CODE READ: final review 2026-10-23 section 8 (c); owner rulings 2026-10-24] Before the first
 rental with `RENTING_ENABLED=true`, in this order:
 
@@ -401,6 +469,26 @@ before this round cannot burn a boot window. Earlier (v1/v2) run capabilities ar
 tokens are HS256 JWTs since protocol 7. Disable admission and drain existing rentals before
 upgrading, and keep the ledger namespace.
 
+[CODE READ: master `a9105acb6`, `scripts/ci/vast_payload.sh`, `scripts/ci/vast_payload.py`,
+`scripts/ci/vast_report.py`] Correction 2026-10-25: the shell entry point restores setup assets,
+then executes the Python payload at the tested checkout. The payload checks disk/KVM readiness
+and the approved SHA, then runs provision, native CUDA ladder, merge bar and guest CUDA ladder
+under the soft deadline and host-Xid guards. It persists suite counts and hardware, retaining
+completed rows when a later stage fails. The reporter binds SHA, nonce and runner nonce and
+refuses PASS for missing/invalid results, timeouts, failed/skipped/empty suite rows or unknown
+hardware; exit status and log text cannot supply PASS. These are source contracts, not hosted
+or hardware acceptance evidence.
+
+Follow the [current checklist](#current-checklist--correction-2026-10-25): renting-off deployment,
+master-only environment, scoped keys and both Access pairs, successful reaper list/no-delete
+observation, owner placement acceptance with old-ledger accounting review, stop readiness, one
+watched rental with both one-rental caps, V2 inspection and exact-ID absence/cost settlement.
+Keep renting off afterward. The placement change in PR #123 requires owner review and merge
+before deployment; preserving the namespace alone does not transfer state to a new object name.
+
+[SUPERSEDED 2026-10-25: the paragraph below predates the payload on master. Schedule confirmation
+alone does not establish the reaper list path; use the application event gate above. No hosted,
+provider or hardware success follows from mocks or source inspection.]
 [INFERRED: unexercised infrastructure] Deploy with renting off first, deploy the reaper and confirm
 its schedule, verify owner stop and bundle metadata, then do hosted acceptance: OIDC claims, the
 V2 instance-row check, the box Access pair (set before renting) and one watched rental. The payload
