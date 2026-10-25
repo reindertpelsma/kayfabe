@@ -1,0 +1,202 @@
+{
+  "scope": "synthetic/replay/fake-transport checks; not hardware qualification",
+  "lane_tests": 236,
+  "mutants": 73,
+  "minimum_distinct_killing_tests": 2,
+  "inherited_suites": [
+    {
+      "suite": "test_saved_xid32_watch_loop",
+      "ran": 11,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_phase_watch_loop",
+      "ran": 4,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_windows_observation",
+      "ran": 63,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_saved_xid32_observation",
+      "ran": 41,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_saved_observation_hold",
+      "ran": 4,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_phase_xid_guard",
+      "ran": 22,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_precreate_watchdog",
+      "ran": 19,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_fuzz_findings",
+      "ran": 13,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_fuzz_fixture",
+      "ran": 6,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_native_findings_wrapper",
+      "ran": 5,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_media_wait",
+      "ran": 7,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_console_pin",
+      "ran": 20,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_console_pin_types",
+      "ran": 7,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_round_budget",
+      "ran": 23,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_init_observer",
+      "ran": 23,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_readiness",
+      "ran": 23,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_provider_retry",
+      "ran": 31,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_box_fetch",
+      "ran": 37,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_b1r_budget",
+      "ran": 14,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_box_fetch_retry",
+      "ran": 13,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_console_pin_settle",
+      "ran": 24,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_b1r_pin",
+      "ran": 7,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_b1r_ops",
+      "ran": 18,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_die_pair_table",
+      "ran": 35,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_b1r_kit",
+      "ran": 84,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_b1r_snippets",
+      "ran": 5,
+      "ok": true,
+      "rc": 0
+    },
+    {
+      "suite": "test_b1r_legacy_ops",
+      "ran": 15,
+      "ok": true,
+      "rc": 0
+    }
+  ],
+  "inherited_tests": 574,
+  "inherited_static": [],
+  "inherited_utc": "2026-10-25T19:46:28.610809+00:00",
+  "inherited_fake_budget_timer_absence": true,
+  "inherited_fake_precreate_timer": "ARMED",
+  "adapter_passed": true,
+  "adapter_upload_media_subprocess_boundaries_stubbed": true,
+  "actual_upload_assembly_qualified": false,
+  "cost_watch_tests": 11,
+  "tested_source_head": "b42d6f2dd6bc5ef8762be61f5baf263a109df160",
+  "expected_red_head": "1763d67f6",
+  "code_source_hashes": {
+    "scripts/bench/bw8/capture.py": "a8bb0fb4acca9364473644b5a7afcca5f94a1153f8d0913bf62e3b8c72e61836",
+    "scripts/bench/bw8/test_replay.py": "fe89e900bf6174f65cfb6ac5d9507bdbd1e6204264f84e512605c2f1878037c5",
+    "scripts/bench/bw8/test_execution.py": "508cf723e8a246e133b6660287fd301e451c3eb78dcd71cf94a016d391aae2d1",
+    "scripts/bench/bw8/test_capture.py": "0401785817811f179fd47af21d0f701d700405c8891476fc6080bb029e994af3",
+    "scripts/bench/bw8/test_kit.py": "4ea08df941a7b6500da0d5c6b263ae601b95a5f6185e79b1fe7010d4a44eb1f5",
+    "scripts/bench/bw8/run.py": "e4ac3f9d5300f07747980d45ac841fdd44c306462cec3e701ca80f507c854a0b",
+    "scripts/bench/bw8/test_backend.py": "a6c7004a4e4554af7e7c473a14971fff367542fb6cf635e88fa6b052b3bb51ae",
+    "scripts/bench/bw8/observer.py": "0b8df24c9dba66508baba8a4d839598545bb61f0a8d76220d7b041cffbc028f2",
+    "scripts/bench/bw8/parser_preflight.ps1": "ffe4a40d63fd4c4871a6478acaa73de53b696f21b33330a4a81cb62bafb510d6",
+    "scripts/bench/bw8/rehearse.py": "783526bcaff1b7ebe05d3c1d40e3a71ca5037b707747c48b76b95622f316030b",
+    "scripts/bench/bw8/enable_observe.ps1": "dee52a7d1c519344c9373383bf23af3cd0a2b8d860191e3cf002351d925ad38b",
+    "scripts/bench/bw8/test_observer.py": "a7c553136944c4352a0e1f72aac399dcd720ab95fa311e83a612999a57970929",
+    "scripts/bench/bw8/test_rehearse.py": "a3384fb398fff18ec73fa7c1cb63eb3420d3bb17367f79fbc6ab0ed6fe1fe260",
+    "scripts/bench/bw8/ready.py": "46bcf03a27092cd2a250ef58781e0067386983b36349bbb919bbb5a6de471664",
+    "scripts/bench/bw8/backend.py": "6dc540799591b70bade9cede283f106ddea6fafb77a5733d27d66f7f2ff5c69e",
+    "scripts/bench/bw8/mutations.py": "083c5610eab0edb6a5ad1992763d62344973af08b0a1643348462cd33974e2a7",
+    "scripts/bench/bw8/test_grant.py": "3d191208f4b0b75ee20af7c59f237429cf402cd8496f1c8579d83f61151c40d2",
+    "scripts/bench/bw8/prepare.py": "52301cfc0a7269cc0dda476a9bed0864de62751b0adbbd78fe3da58bb5e10a32",
+    "scripts/bench/bw8/execution.py": "c0b611606ff8b91829b6f17a84daf57c92c3d785c90c72641169fac7239eb0b6"
+  }
+}
