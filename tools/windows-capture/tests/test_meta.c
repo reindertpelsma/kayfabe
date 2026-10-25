@@ -53,6 +53,11 @@ int main(void)
     m.n_events = 1;
     n = kfwc_meta_format(out, sizeof(out), &m);
     CHECK(n > 100 && n == strlen(out));
+    CHECK(strstr(out, "\"family\": \"unknown\"") != NULL);
+    CHECK(strstr(out, "\"boot_path\": \"unknown\"") != NULL);
+    CHECK(strstr(out, "\"method_name\": \"none\"") != NULL);
+    CHECK(strstr(out, "\"cmd_bytes\": 0") != NULL);
+    CHECK(strstr(out, "\"events_lost\": 0") != NULL);
     CHECK(kfwc_meta_format(small, sizeof(small), &m) == 0);   /* never a silent truncation */
     /* every key in the output is on the allow-list: the injected "uuid" key could not appear */
     for (i = 0; i + 1 < n; i++) {
@@ -87,6 +92,24 @@ int main(void)
     CHECK(kfwc_json_escape(esc, sizeof(esc), "ab\"c") == 0 && !strcmp(esc, "ab\\\"c"));
     CHECK(kfwc_json_escape(esc, sizeof(esc), "a\nb") == 1 && !strcmp(esc, "ab"));
     CHECK(kfwc_json_escape(esc, 4, "abcdef") == 1 && strlen(esc) == 3);
+    m.stats.engine.family = KFWC_FAMILY_BLACKWELL_CONSUMER;
+    m.stats.engine.boot_path = KFWC_BOOT_FSP;
+    m.stats.engine.method = KFWC_METHOD_NEARBY;
+    m.stats.engine.cmd_bytes = 131072;
+    m.stats.engine.stat_bytes = 262144;
+    m.stats.engine.region_pages = 97;
+    m.stats.engine.element_bytes = 4096;
+    m.stats.engine.seq_gap_messages = 7;
+    m.stats.engine.events_lost = 9;
+    CHECK(kfwc_meta_format(out, sizeof(out), &m) > 0);
+    CHECK(strstr(out, "\"family\": \"blackwell-consumer\"") != NULL);
+    CHECK(strstr(out, "\"boot_path\": \"fsp\"") != NULL);
+    CHECK(strstr(out, "\"method_name\": \"nearby\"") != NULL);
+    CHECK(strstr(out, "\"cmd_bytes\": 131072") != NULL);
+    CHECK(strstr(out, "\"stat_bytes\": 262144") != NULL);
+    CHECK(strstr(out, "\"region_pages\": 97") != NULL);
+    CHECK(strstr(out, "\"seq_gap_messages\": 7") != NULL);
+    CHECK(strstr(out, "\"events_lost\": 9") != NULL);
     printf("test_meta: %d checks, %d failed\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }
