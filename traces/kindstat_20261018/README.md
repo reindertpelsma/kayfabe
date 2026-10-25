@@ -21,7 +21,7 @@ The two fixed atomic arrays total 10 MiB, allocated only when opted in.
 The apply hook excludes CPU views, held/refused rows, and newly placed pieces
 rolled back by a failed linked run. Batch success and per-row fallback use the
 same accounting path. It counts mapping activity: aliases and remaps count again;
-it is neither unique resident VRAM nor measured DRAM traffic. Kept mappings that
+it does not count unique resident VRAM or DRAM traffic. Kept mappings that
 need no new placement do not increment the histogram. A workload with no mappings
 in a selected interval therefore has no interval exposure denominator.
 
