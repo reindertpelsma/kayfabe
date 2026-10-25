@@ -3,14 +3,14 @@
 STATUS: RESEARCH, 2026-10-25. Probe UNRUN. The additional grant5 lease failed in operator
 upload before provisioning; its remote capture also failed. H1/H2 remain UNRESOLVED.
 
-MEASURED in [grant5_result.json](grant5_result.json), lease57714244: settled SSH admission
+MEASURED (2026-10-25, lease 57714244) in [grant5_result.json](grant5_result.json), lease57714244: settled SSH admission
 passed, then upload raised StopIteration while reading the historical rehearsal ledger.
 No kit upload, native qualification, parent rebuild, product boot, enable or sample occurred.
 The absent remote kit also prevented capture. Safety teardown verified exact API absence;
 the remaining timer was cancelled afterward with PID identity checks. Local error hashes
 are preserved privately; no verified remote capture before destroy is claimed.
 
-MEASURED in [grant5_validation.json](grant5_validation.json), BW8 synthetic checks:236 tests,
+MEASURED (2026-10-25, BW8 synthetic run) in [grant5_validation.json](grant5_validation.json), BW8 synthetic checks:236 tests,
 73 mutants with at least two killers each, fresh574 inherited tests across27 suites and
 both fake timer paths were green before create. The adapter rehearsal stubbed upload/media
 subprocess boundaries, so it missed the real upload ledger/kit relocation defect. The
