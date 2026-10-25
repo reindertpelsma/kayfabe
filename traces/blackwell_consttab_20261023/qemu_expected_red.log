@@ -1,0 +1,2 @@
+error[E0599]: no associated function or constant named `caps_for` found for struct `DisplayPlane` in the current scope
+error: could not compile `kf-qemu` (test "precomp_serving") due to 1 previous error

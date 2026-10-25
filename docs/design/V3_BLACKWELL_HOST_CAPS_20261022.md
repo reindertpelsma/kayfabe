@@ -1,5 +1,7 @@
 **STATUS: RESEARCH, 2026-10-22.** Public access candidate; whole-PRECOMP guest overlay HELD after owner-directed tier audit. Hardware n=0; no rental.
 
+2026-10-23 AMENDMENT: H1 field-only sufficiency failed on GB202/57310491. The owner now approves a separate tier3 consttab topic using new privileged GB202/GB206 READ32 measurements, with explicit provisional inheritance forGB203/205/207. See [V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md](V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md). This supersedes the field-only guest PRECOMP rule only for that approved scope. The historical whole-word T2 overlay in PR85 remains held; physical declaration provenance and colour/FVLUT implementation coverage remain separate questions.
+
 2026-10-22 owner-guidance correction: derive each field from public/generated sources and the
 virtual implementation before considering host facts. The whole-word T2 override described below
 is the current code, not the approved final design: it can overwrite existing T1 rules and advertise

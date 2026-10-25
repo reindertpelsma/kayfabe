@@ -1868,6 +1868,29 @@ pub struct DisplayPlane {
 }
 
 impl DisplayPlane {
+    /// 2026-10-23: capability construction shared by production and GPU-free tests.
+    ///
+    /// # Errors
+    /// Missing public vocabulary, incomplete constants or unsupported host scope refuse.
+    pub fn caps_for(
+        context: &kf_rm::precomp::Context<'_>,
+        sdr: bool,
+        host: &kf_disp::capsderive::HostFacts,
+    ) -> Result<kf_disp::capsderive::Derived, kf_disp::caps::Missing> {
+        let branch = context.table.version.split('.').next().unwrap_or("");
+        let derived = kf_disp::capsderive::derive(
+            context.table,
+            context.regs,
+            context.row,
+            context.die,
+            sdr,
+            kf_disp::capsderive::shipped_rows(),
+            kf_disp::capsderive::shipped_measured(),
+            branch,
+            host,
+        )?;
+        kf_rm::precomp::apply(derived, context)
+    }
     /// ★ Something other than the firmware console may write store `[0, G)` now (a guest RM life
     /// began, the seed retired): the boot layer is not shown until a scrub completes. Never waits.
     pub fn boot_tainted(&self) {
@@ -1994,10 +2017,11 @@ impl DisplayPlane {
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
     pub fn build(
-        (row, die, host_caps): (
+        (row, die, host_caps, host_driver): (
             &'static kf_chip::display::DisplayRow,
             kf_disp::capsderive::Die,
             kf_disp::capsderive::HostFacts,
+            &str,
         ),
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
@@ -2060,15 +2084,15 @@ impl DisplayPlane {
                 .map_err(|e| format!("display=on: caps page: {}", e.0))?
         } else {
             let branch = version.split('.').next().unwrap_or("").to_string();
-            let d = kf_disp::capsderive::derive(
-                t,
-                &regs,
-                row,
-                die,
+            let d = Self::caps_for(
+                &kf_rm::precomp::Context {
+                    table: t,
+                    regs: &regs,
+                    row,
+                    die,
+                    host_driver,
+                },
                 sdr_color,
-                kf_disp::capsderive::shipped_rows(),
-                kf_disp::capsderive::shipped_measured(),
-                &branch,
                 &host_caps,
             )
             .map_err(|e| format!("display=on: caps page: {}", e.0))?;

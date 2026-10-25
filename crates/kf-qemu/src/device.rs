@@ -933,7 +933,7 @@ impl Device {
                     };
                     let host_caps = crate::rmfacts::display_precomp(rm, row, die);
                     crate::display::DisplayPlane::build(
-                        (row, die, host_caps),
+                        (row, die, host_caps, rm.driver_version()),
                         table,
                         &bdf,
                         fd,

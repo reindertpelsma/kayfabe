@@ -2,6 +2,10 @@
 //! ★ The DERIVED display capabilities page (`NV_PDISP_FE_SW`, BAR0 `0x640000`), by tier —
 //! `docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md`.
 //!
+//! 2026-10-23: this module builds the lower-tier page and legacy unnamed rows.
+//! Production GB20x construction then applies the approved complete PRECOMP table
+//! through `kf_rm::precomp`; see V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md.
+//!
 //! The page a die presents is built from three kinds of source, and every word of it records which:
 //!
 //! - **T1, a rule** over the family's class header (`data/classes-*.tsv`, generated from ogkm) and the

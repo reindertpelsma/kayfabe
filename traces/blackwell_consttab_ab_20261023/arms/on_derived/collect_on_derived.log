@@ -1,0 +1,2 @@
+COLLECT_START run=on_derived (standard VGA, no kf3 device) 2026-10-23T06:11:46+00:00
+[2026-10-23T06:11:46Z] detached: tag=on_derived_collect, log logs/on_derived_collect_run.log (stdout logs/on_derived_collect_run.out)

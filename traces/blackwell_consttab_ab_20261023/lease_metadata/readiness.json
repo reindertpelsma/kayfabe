@@ -1,0 +1,1 @@
+{"box": 57324106, "policy": {"banner_query": 100, "factor": 10, "first_query": 100, "handshake": 202, "observer_total": 360, "readiness_total": 900, "ssh_stage": 600, "steady_query": 25, "verify_stage": 240}, "probe_seconds": 56.54592699500017}

@@ -1,5 +1,7 @@
 **STATUS: RESEARCH, 2026-10-22.** Owner-directed derivation-first review; documentation/evidence only. Whole-PRECOMP publication in draft PR85 is HELD pending a field-level revision. No hardware or rental.
 
+2026-10-23 AMENDMENT: H1 field-only sufficiency failed on GB202/57310491. The owner now approves a separate tier3 consttab topic using new privileged GB202/GB206 READ32 measurements, with explicit provisional inheritance forGB203/205/207. See [V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md](V3_BLACKWELL_PRECOMP_CONSTTAB_20261023.md). This supersedes the field-only guest PRECOMP rule only for that approved scope. The historical whole-word T2 overlay in PR85 remains held; physical declaration provenance and colour/FVLUT implementation coverage remain separate questions.
+
 2026-10-22 update (CODE READ, `V3_BLACKWELL_FIELD_PHASE_20261022.md`): the field-level correction
 is now implemented in draft PR93 at revision `6e3fd3fd6`, with an independent early-Code0 observer
 in draft PR95. The whole-word publication topic in PR85 remains held. CPU receipts are in

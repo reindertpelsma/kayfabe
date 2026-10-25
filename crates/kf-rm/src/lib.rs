@@ -37,6 +37,7 @@ pub mod memory_access;
 pub mod memory_list;
 pub mod osevent;
 pub mod pmsr;
+pub mod precomp;
 pub mod preempt_bind_probe;
 pub mod rmgraph;
 pub mod rmrpc;
