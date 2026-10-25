@@ -14,3 +14,7 @@ python3 -m unittest -v test_analyze
 ```
 
 The missing analyzer import in the tests-only EXPECTED RED commit establishes the new harness contract; it is not a claim about an existing product defect. Production source and defaults are unchanged.
+
+`power_button.c` is a diskless-guest shutdown helper: it checks for QEMU DMI, waits for the guest ACPI power-button event, and invokes guest poweroff. It is never run by the native benchmark suite. This supports QMP `system_powerdown`; failure retains the lease and is reported. Kernel and driver source are unchanged.
+
+`cupti_trace.c` is optional CUDA activity collection for separate diagnostic passes. Build against matching CUPTI/runtime/compiler SDK headers and libcupti, then use the documented `CUDA_INJECTION64_PATH` mechanism with a new `LX2_CUPTI_OUT` file. It records driver and concurrent-kernel activity, callback drop counts and collector failures. This collector is compile-checked only: hardware operation remains unverified. CUPTI tracing can perturb short kernels and does not belong in primary parity data; see [NVIDIA's CUPTI usage documentation](https://docs.nvidia.com/cupti/main/main.html).
