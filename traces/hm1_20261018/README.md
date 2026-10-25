@@ -102,3 +102,45 @@ The continuation journal contains four admitted PTE records and the one rejected
 PDE record. All task 2 Linux lanes and Windows tasks 3–6 remain UNRUN.
 Recommendation remains **no promotion on incomplete evidence**. No admission
 expansion or product fix was attempted after the PDE stop.
+
+## Requested controls — 2026-10-25
+
+STATUS: CONTROL COMPLETE; broader campaign remains parked.
+
+CODE READ HM1_CONTROL instruction (2026-10-25): run `defer-liveness` n=1
+with the mirror binary OFF, then HP1 plain 6d, without changing the PTE-only guard.
+The prior rejected PDE victim write belongs to `missing-page-fault`.
+A fixture clarification was requested; these runs follow the explicitly named
+`defer-liveness` fixture and do not substitute it for the missing-page fixture.
+
+MEASURED HM1 control (rev `6564dd597`, `control/results.json`):
+all three same-fixture outcomes follow. Mirror-capable rows use
+`kf3-bins/6564dd59/qemu-system-x86_64`; the plain row uses
+`kf3-bins/714ec29d/qemu-system-x86_64`, revision `714ec29d3`.
+
+| defer-liveness arm (n=1) | Revision | Result | Kernel records |
+|---|---|---|---|
+| mirror-ON reference | 6564dd597 | PASS | 4 PTE reads, 3 VAs, 0 PDE |
+| mirror-OFF control | 6564dd597 | PASS | 4 PTE reads, 3 VAs, 0 PDE |
+| plain-6d control | 714ec29d3 | PASS | 4 PTE reads, 3 VAs, 0 PDE |
+
+MEASURED HM1 control (`control/plans.json`, rev `6564dd597`): preregistration
+preceded each run. The mirror switch is the only behavior delta for OFF;
+the executable is the only further delta for plain 6d, with the inert OFF
+environment retained. Kernel/initrd, budget, policy and guest arguments match;
+argv parity is asserted before launch, allowing owned output identities to differ.
+The guard remains byte-identical; 39 admission tests and two targeted guard tests
+passed before the controls. No product edit or rebuild.
+
+INFERRED from HM1 `control/results.json`: the stated absence-in-both-controls
+falsifier is observed for the requested defer-liveness fixture. None of its
+ON/OFF/plain arms emitted PDE. This does not discriminate the different
+missing-page-fault fixture: its ON arm has one rejected PDE victim write,
+and its OFF/plain arms remain UNRUN. No mirror-specific PDE finding follows.
+
+MEASURED HM1 control cleanup (`control/final-audit.json`, 2026-10-25
+18:21:11 UTC): no QEMU/controller, lease released, GPU idle, GDM active,
+zero OOM, unchanged binary/policy/kernel/initrd identities, target still deleted.
+The control journal contains eight admitted own-PID PTE read-fault records only.
+No other campaign task ran. Recommendation remains no promotion on incomplete
+evidence; the prior PDE admission question remains unresolved.
