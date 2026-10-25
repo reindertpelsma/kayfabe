@@ -10,12 +10,27 @@ except ModuleNotFoundError:
     def assert_green(rows):
         return False
 
+try:
+    from rehearse import isolated_environment
+except ImportError:
+    def isolated_environment(env):
+        return dict(env)
+
 
 def rows():
     return [{"suite": name, "ran": 30, "ok": True} for name in SUITES]
 
 
 class CompleteRehearsal(unittest.TestCase):
+    def test_git_directory_does_not_escape_into_fixture_repositories(self):
+        env = isolated_environment({"GIT_DIR": "shared", "PATH": "tools"})
+        self.assertNotIn("GIT_DIR", env)
+        self.assertEqual(env["PATH"], "tools")
+
+    def test_git_worktree_and_index_do_not_escape_into_fixture_repositories(self):
+        env = isolated_environment({"GIT_WORK_TREE": "shared", "GIT_INDEX_FILE": "shared"})
+        self.assertFalse(any(key.startswith("GIT_") for key in env))
+
     def test_exactly_twenty_seven_inherited_suites(self):
         self.assertEqual(len(SUITES), 27)
 
