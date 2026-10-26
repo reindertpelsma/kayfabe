@@ -1,0 +1,4 @@
+RUN tag=r2-off-sparse-1 bin=<lane>/kf3-bins/59f09133/qemu-system-x86_64 sha=... run=one env='KF3_SPARSE_TWIN=0 KF3_DIAG_SPARSE_RESV=0 KF3_DIAG_VAHIST=1' start=2026-10-26T12:05:59Z xid_before=3
+END tag=r2-off-sparse-1 xid_after=4 delta=1 end=2026-10-26T12:06:13Z
+H6_VKERR sparse_h6.c:226 vkWaitForFences(dev, 1, &fence, VK_TRUE, 5000000000ull) = -4 (DEVICE_LOST)
+NVRM: Xid (PCI:0000:01:00): 31, pid=40935, name=qemu-system-x86, channel 0x02000026, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0xdf_7def0000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE

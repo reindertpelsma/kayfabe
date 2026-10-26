@@ -55,3 +55,26 @@ is sparse intent inside a populated normal block, the counted closed fallback (i
 No Windows run (follow-up, owner's one-boot SPEC sequence). Shader (SM) loads through a sparse tile are untested; the CE
 data-channel check E2 is bare metal only. The committed PTX was built by SPR1 on the host (SHA-256 equal to the host copy);
 SPR2 did not rebuild it.
+
+## Round 2 (2026-10-26): plain maps are never refused (owner ruling), re-validated on Linux
+
+Trigger: the first Windows campaign at `a5d709d5` (flag ON) failed 3 of 3 boots at the start of `catia-07` with a refused map
+followed by Xid 31 (coordinator report, evidence on the host in the coordinator's campaign directory, not in this
+repository). Cause (CODE READ, `crates/kf-host/src/sparse.rs`, rev `a5d709d5`): the map path ran `Reservations::normal()` and
+refused the map when that refinement was declined (per-space object budget spent, a populated coarse block, an RM refusal).
+The same declines also incremented `overflow` once per attempt, which is why it read 8.3 M.
+
+Fix at `59f09133d`: `Reservations::route_map` makes refinement best-effort and places the map in the coarse block as with the
+twin OFF; `overflow` counts declined SPARSE admissions only (a declined admission is now unhonoured, not an error); the new
+`coarse_maps` counts plain maps placed unrefined; micro reservations no longer count against the session cap; routing
+survives a poisoned layout. Tests: EXPECTED RED `118cdbeb2` (12 of 130 kf-host unit tests fail), green at `59f09133d`
+(143 tests after the follow-up commit). `plain-map-mutations.json`: 13 mutants, each killed by at least 2 tests.
+
+MEASURED on 2026-10-26 (RTX 4070, rev `59f09133d`, files in `round2/`): `gates-flag0.txt` and `gates-flag1.txt` 9/9 with 0 Xids;
+`h6-r2-off-sparse-*.txt` Xid 31 and `DEVICE_LOST` (2 of 2), `h6-r2-on-full-*.txt` absorbed with 0 Xids (3 of 3),
+`h6-r2-on-invalid-*.txt` and `h6-r2-off-invalid-*.txt` the plain-invalid control faults (4 of 4);
+`fast-suite-flag0.txt` and `fast-suite-flag1.txt` 30/30; every `/dev/null` check before and after each host step read a
+character device (`DEVNULL_CHAR_OK` in the session log). Counters in `fast-flag1-sparse-counters.txt` and the reproducer
+files: `refused=0 overflow=0 coarse_maps=0`. The Linux runs never reach the block budget, so they do NOT exercise the
+fixed path (`coarse_maps=0`); that path is covered by the GPU-free catia-like simulation (64 distinct 2 MiB regions against a
+budget of 4 to 10, byte-identical to the twin-OFF mapping through map and unmap). The Windows campaign is the hardware proof.
