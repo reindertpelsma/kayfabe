@@ -1,0 +1,77 @@
+name: Site
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - '.github/workflows/site.yml'
+  push:
+    branches: [master]
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      root_ref:
+        description: Root landing source (docs always include every version)
+        type: choice
+        options: [latest, master]
+        default: latest
+        required: false
+  schedule:
+    - cron: '23 5 * * 1'
+
+permissions: {}
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          # Tag workflows still fetch master scripts/configs, never run tagged tooling.
+          # PRs review the candidate tooling without any deployment permission.
+          ref: ${{ github.event_name == 'pull_request' && github.sha || 'master' }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Snapshot published release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --slurp \
+            > "$RUNNER_TEMP/site-releases.json"
+      - name: Test version selection and render every version
+        env:
+          ROOT_REF: ${{ inputs.root_ref || 'latest' }}
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s site -p 'test_build.py'
+          python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" \
+            --releases-json "$RUNNER_TEMP/site-releases.json" --root-ref "$ROOT_REF"
+          python3 site/test_output.py
+          python3 site/report.py >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: site/public
+  deploy:
+    needs: build
+    if: >-
+      ${{ github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/master' ||
+           startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
