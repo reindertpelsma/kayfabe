@@ -1,4 +1,4 @@
-STATUS: PARTIAL, 2026-10-26 — TU116 native580.88 has two complete startup oracles and eight exact-question values; other Turing Windows dies remain unmeasured. Free watch for another die continues through20:24UTC.
+STATUS: PARTIAL, 2026-10-26 — TU116 native580.88 has two complete startup oracles and eight exact-question values; other Turing Windows dies remain unmeasured. The watch closed at20:24UTC with no additional eligible die in the recorded snapshots.
 
 # Turing Windows reference and die table
 
@@ -127,3 +127,7 @@ MEASURED (lease `57852545`, `traces/wc1_20261026/round3/tu116/vs_ga104.tsv`, `vs
 MEASURED (lease `57852545`, `traces/wc1_20261026/round3/tu116/native_alloc_classes.tsv`, `class_deltas.json`): both startups request the same 31 distinct GSP allocation class IDs, sharing 18 with each 33-class Blackwell reference. The 13 TU116-only and 15 Blackwell-only IDs are listed explicitly; CPU-side allocations are outside this census. CODE READ (`traces/wc1_20261026/round3/tu116/class_source_coverage.tsv`, public ogkm 595.91.07): 29 of the 31 observed IDs match the explicit TU116 source registry. IDs 95a1 and b297 are outside that indexed registry and were not found by the current-tag SDK numeric search. Their public coverage remains open, with no claim of absence across all tags.
 
 CODE READ (public ogkm 595.91.07, `traces/wc1_20261026/round3/tu116/control_source_coverage.tsv`, `source_coverage.json`): 130 of 172 native control IDs have a direct numeric control macro match in this tag. The artifact retains source file/line citations and leaves Windows layout and meaning unestablished by numeric equality. The original 727 reference-control annotations and 513 class-registration rows remain scoped to their source inventories; their 98 candidate IDs per Turing die do not supply physical values for the unmeasured dies.
+
+## Round3b watch close
+
+MEASURED (2026-10-26, `traces/wc1_20261026/round3/availability.json`): the five-hour watch closed with 13 snapshots between 15:27:33 and 20:24:20 UTC. Poll 8 supplied the TU116 offer used for lease57852545. The watch paused during that native capture, resumed after verified teardown, and excluded the completed machine from further admission. No additional Turing die was listed in the remaining snapshots. The final two snapshots contained no Turing offers. The native capture is complete; TU102, TU104, TU106 and TU117 remain unmeasured. No paid resource or polling process remains.

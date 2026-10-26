@@ -183,10 +183,24 @@
         "total_offers": 8,
         "turing_offers": 0,
         "single_gpu_review_candidates": 0
+      },
+      {
+        "utc": "2026-10-26T20:22:32.174333+00:00",
+        "status": "ok",
+        "total_offers": 10,
+        "turing_offers": 0,
+        "single_gpu_review_candidates": 0
+      },
+      {
+        "utc": "2026-10-26T20:24:20.000097+00:00",
+        "status": "ok",
+        "total_offers": 10,
+        "turing_offers": 0,
+        "single_gpu_review_candidates": 0
       }
     ],
-    "status": "watching",
-    "next_poll_utc": "2026-10-26T20:22:32.174231+00:00",
+    "status": "deadline-no-additional-eligible-offer",
+    "next_poll_utc": null,
     "capture_authority": "Native conversion after archived Linux pre-reference; Windows startup oracle+D3D are the post-reference; no kayfabe verdict.",
     "scope_renewal": "Round3a post-SSH VFIO limit remains historical; round3b authorizes native-conversion capture on an eligible Turing offer.",
     "completed_capture": {
@@ -194,6 +208,10 @@
       "lease": 57852545,
       "machine": 54666
     },
-    "cadence_note": "Watch paused after candidate poll8 while native lease57852545 ran; resumed poll9 after capture archived and exact-id/API-absence teardown. Completed machine excluded from further admission; subsequent free snapshots remain25min until original deadline."
+    "cadence_note": "Watch paused after candidate poll8 while native lease57852545 ran; resumed poll9 after capture archived and exact-id/API-absence teardown. Completed machine excluded from further admission; subsequent free snapshots remain25min until original deadline.",
+    "closing_snapshot_utc": "2026-10-26T20:24:20.000097+00:00",
+    "watch_exit_verified_utc": "2026-10-26T20:25:39.835814+00:00",
+    "native_capture_count": 1,
+    "completion": "TU116 captured; no additional die admitted; Windows cells of other dies unmeasured"
   }
 }
