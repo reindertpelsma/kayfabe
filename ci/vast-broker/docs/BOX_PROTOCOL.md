@@ -35,8 +35,10 @@ each side refuses the other version).
 Protocol 7 (2026-10-23): the box sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` on every
 broker request when the Worker injected the pair (Worker secrets `BOX_ACCESS_ID` /
 `BOX_ACCESS_SECRET`, both set). The Worker passes the pair through only; Cloudflare Access
-checks it at the edge, and the Worker never reads Access headers or JWTs. The payload never
-sees the pair (it is removed from the payload environment like the run token).
+checks it at the edge, and the Worker never reads Access headers or JWTs. The payload process
+does not get the pair (it is removed from its environment like the run token), but the box
+code from the tested SHA runs as root and can read `/run/kf-ci/env`, so it does hold the pair.
+That is accepted; see the [threat model](THREAT_MODEL.md).
 
 CODE READ: Vast create `env` is a JSON object mapping variable names to string values; values use a restricted shell-safe alphabet. Repo scripts write the environment to root-only `/run/kf-ci/env`. No Vast key, owner stop token, signing secret or private-repository token reaches a box. Its operator can inspect its own scoped capability.
 
@@ -54,14 +56,13 @@ the protocol-6 Worker; the Worker is protocol 7 (it still supplies every optiona
 field).
 [CODE READ: scripts/ci/README.md, scripts/ci/vast_report.py; PR #104 e63af44dd] The payload writes `/workspace/kf-result.json` containing `{verdict,suites,hardware?}`. Each suite has `{name,pass,fail,skip}`; hardware has `{gpu_name,compute_cap,driver_version}` with integer capability (8.6 becomes 860). The reporter adds SHA, nonce and runner nonce from the validated environment. Conflicting bindings in the file fail closed. Both reporter and Worker refuse PASS without valid hardware. The protocol-6 Worker supplies every optional deadline/grace field too.
 
-[SUPERSEDED in part 2026-10-24, final review D1] "The Worker injects no Cloudflare Access
-credential into a box" in the next paragraph is wrong since box protocol 7 (owner ruling
-2026-10-23 21:45): when both Worker secrets `BOX_ACCESS_ID` / `BOX_ACCESS_SECRET` are set, the
-Worker injects them as `KF_ACCESS_ID` / `KF_ACCESS_SECRET` (pair B, see above). The rest holds.
+[SUPERSEDED 2026-10-25, history kept] The sentence "The Worker injects no Cloudflare Access
+credential into a box." was removed from the next paragraph. It was wrong since box protocol 7
+(owner ruling 2026-10-23 21:45): when both Worker secrets `BOX_ACCESS_ID` / `BOX_ACCESS_SECRET`
+are set, the Worker injects them as `KF_ACCESS_ID` / `KF_ACCESS_SECRET` (pair B, see above).
 [CODE READ: src/index.js, src/routes.js; owner ruling 2026-10-23 19:10] There is no hold, manual or
 owner timer-extension mode: a run ends at its result grace, heartbeat, boot or hard deadline, by
-owner stop/stop-all or by `kf-box-kill`. The Worker injects no Cloudflare Access credential into a
-box. Worker caps remain 20 requests/10 seconds, 2000 requests and 4 MiB per run.
+owner stop/stop-all or by `kf-box-kill`. Worker caps remain 20 requests/10 seconds, 2000 requests and 4 MiB per run.
 
 [SUPERSEDED in part 2026-10-24, final review D1] In the next paragraph, "protocol-4 metadata
 field" reads status protocol 6 (`country` is still the one optional status key; the status

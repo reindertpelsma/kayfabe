@@ -17,8 +17,9 @@ The ledger reserves liability before rental and applies daily and rolling budget
 
 ## Current setup and further reading
 
-Renting is off in the committed [Worker configuration](wrangler.toml): `RENTING_ENABLED=false`. Keep it off until the owner/controller completes acceptance. Historical local smoke results do not establish acceptance of the current hosted workflow and protocol-7 payload together. `RUN_TOKEN_SECRET` signs run capabilities, and `OWNER_STOP_TOKEN` controls emergency cleanup. Deployment, secrets and independent cleanup are managed through the [owner deployment guide](DEPLOY.md).
+Renting is enabled by the deployed vars file, which is kept outside the repository ([deployment guide](DEPLOY.md)); `RENTING_ENABLED=false` in the committed [Worker configuration](wrangler.toml) is only the safe default. `RUN_TOKEN_SECRET` signs run capabilities and `OWNER_STOP_TOKEN` controls emergency cleanup. As of 2026-10-25 acceptance of the current hosted workflow with the protocol-7 payload is still open; historical local smoke results do not establish it.
 
+- [Threat model](docs/THREAT_MODEL.md): who is trusted, and which behaviours are intended design rather than vulnerabilities.
 - [Box protocol](docs/BOX_PROTOCOL.md): bootstrap environment, callbacks and result contract.
 - [Placement decision](docs/PLACEMENT.md): US/Canada offer preference and the proposed ledger location.
 - [Evidence summary](../../traces/vast_broker_summary/README.md): recorded runs, retained evidence and its limitations.
