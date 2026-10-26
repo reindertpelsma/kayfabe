@@ -1117,11 +1117,10 @@ impl HostRm {
         let shared = backing == MapBacking::SharedSlice;
         if let Some(a) = at
             && let Some(result) = self.with_sparse(space.space, |tree, ops| {
-                tree.normal(ops, a, len)?;
-                let pieces = tree.pieces(space.range, a, len)?;
-                // Conservatively retain occupancy after a refused map or rollback. A
-                // later successful exact unmap clears it; it can never free live PTEs.
-                tree.mark(a, len, true);
+                // Occupancy is recorded before the host call and conservatively retained
+                // after a refused map or rollback. A later successful exact unmap clears
+                // it; it can never free live PTEs.
+                let pieces = tree.route_map(ops, space.range, a, len)?;
                 map_piece_list(
                     self,
                     &pieces,

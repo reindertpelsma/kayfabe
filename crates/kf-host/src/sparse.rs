@@ -419,6 +419,21 @@ impl Reservations {
         Ok(())
     }
 
+    /// Route a plain (backed) map: refine the geometry around it, then name the host
+    /// reservation handle of every piece. Occupancy is recorded before the host call.
+    pub(crate) fn route_map(
+        &mut self,
+        ops: &dyn Ops,
+        range: u32,
+        va: u64,
+        len: u64,
+    ) -> Result<Vec<(u32, u64, u64)>, RmError> {
+        self.normal(ops, va, len)?;
+        let pieces = self.pieces(range, va, len)?;
+        self.mark(va, len, true);
+        Ok(pieces)
+    }
+
     pub(crate) fn pieces(
         &self,
         range: u32,
