@@ -1,0 +1,52 @@
+[
+  {
+    "version": "580.159.04",
+    "path": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+    "sha256": "49f2c0a9100f778736cf1f06b976d4d33b9acdc6c7d29746e0f2819ba3290eef"
+  },
+  {
+    "version": "580.159.04",
+    "path": "src/nvidia/generated/g_kernel_channel_nvoc.c",
+    "sha256": "d87347643ab742971b4f3799ce118303010b91930d9026f695d010f57943d2e4"
+  },
+  {
+    "version": "580.159.04",
+    "path": "src/nvidia/generated/g_subdevice_nvoc.c",
+    "sha256": "53570da27b08609f294186eebdfecfda03ebbde2a0e7ba3b497bd18426ac7da3"
+  },
+  {
+    "version": "580.159.04",
+    "path": "src/nvidia/generated/g_device_nvoc.c",
+    "sha256": "1651cb4d8efa902f0b69e6ce3936e8e0ef1cba6084ff3451f0a41fa009afef44"
+  },
+  {
+    "version": "580.159.04",
+    "path": "src/nvidia/generated/g_deferred_api_nvoc.c",
+    "sha256": "70814ff770bf476b17327646e5e9cf863bb16f41c67c2058e177e16235c5a684"
+  },
+  {
+    "version": "595.84",
+    "path": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+    "sha256": "ee0ea4ff587a482707360cd15a611ed8ffa9f9603e2853ec6aedeb2b9ee5ab80"
+  },
+  {
+    "version": "595.84",
+    "path": "src/nvidia/generated/g_kernel_channel_nvoc.c",
+    "sha256": "c9641046f3f81774e587b56fb977642d192ef6e144a4ffd269a8ac3e40e02c2c"
+  },
+  {
+    "version": "595.84",
+    "path": "src/nvidia/generated/g_subdevice_nvoc.c",
+    "sha256": "7210ad97a0096d804d2f4a1a9d4f4b46b12d6e5376e1da774a7db5ae741f56b0"
+  },
+  {
+    "version": "595.84",
+    "path": "src/nvidia/generated/g_device_nvoc.c",
+    "sha256": "8deed5442f04fdc679b4ec9cefc910f74a58b58e05226d9c68748968795492d6"
+  },
+  {
+    "version": "595.84",
+    "path": "src/nvidia/generated/g_deferred_api_nvoc.c",
+    "sha256": "47d65781baa0d1af437e47b2bf8602c07420754ad11cfd7e4bf8d844a2cc5673"
+  }
+]

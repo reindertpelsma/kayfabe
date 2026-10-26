@@ -1,0 +1,152 @@
+[
+  {
+    "path": "traces/windows_code43_walls_20261007/run65-chan-facts.txt",
+    "revision": "6564dd597",
+    "sha256": "b94e460c5b6a10a31621aaac681ff01054ec64987df0da4a2b146d748f971f11",
+    "bytes": 8321
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run64-census-births-facts.txt",
+    "revision": "6564dd597",
+    "sha256": "43fa22d8c3d879c64f692f64a55e4d887594e6ac1c8c986c1139bfd0f784ecd3",
+    "bytes": 38399
+  },
+  {
+    "path": "traces/tsg_mirror_20261018/evidence/run3014_tsg_mirror_lines_head.txt",
+    "revision": "6564dd597",
+    "sha256": "66bb02a0f8bb99a113c79ecaadf5d7e507f187512d43e2745df7f03d6e68dcec",
+    "bytes": 17074
+  },
+  {
+    "path": "traces/windows_matrix_20261011/gravity-vulkan/user-memory-access/linux-result/bench/fast_codexMemoryAccess_uvm-mean_qemu.log",
+    "revision": "6564dd597",
+    "sha256": "c64bb5e1bc4f91f9153dc6a32a23b295b3ced4305031aa0a34ba02845e7c88d0",
+    "bytes": 123919
+  },
+  {
+    "path": "traces/real_windows_20261014/census/C/census.controls.tsv",
+    "revision": "6564dd597",
+    "sha256": "49cdb586e6bdf421137630c61d196e1cc69ffb2a441a4b86acbda185fd76122a",
+    "bytes": 21650
+  },
+  {
+    "path": "traces/real_windows_20261014/census/E/census.controls.tsv",
+    "revision": "6564dd597",
+    "sha256": "f6914f577833d512dc3f61bc5459646e129f7755b15bfee439e99d2b7e57b575",
+    "bytes": 22179
+  },
+  {
+    "path": "traces/real_windows_20261014/census/F/census.controls.tsv",
+    "revision": "6564dd597",
+    "sha256": "669bc57f767de6c54f830458c5543d0ccf40581bbe0efe14930b43819ada884c",
+    "bytes": 7069
+  },
+  {
+    "path": "traces/wc1_20261026/lease2_native_controls.tsv",
+    "revision": "1eedda417",
+    "sha256": "a03b8c4fe7639273ea8620779222ebe063846c62095eebd03985880aae14c2e0",
+    "bytes": 18285
+  },
+  {
+    "path": "traces/wc1_20261026/round2/gb205/native_controls.tsv",
+    "revision": "1eedda417",
+    "sha256": "4de6375ea64922a06817a563afcd0912c5240531c6a4e356f8bb48c96289904d",
+    "bytes": 18193
+  },
+  {
+    "path": "traces/wc1_20261026/round2/gb206/native_controls.tsv",
+    "revision": "1eedda417",
+    "sha256": "b06be4f55abe12e1b6c7cff8fb79b817a3740844219104e40ccd8057160ce2ca",
+    "bytes": 18269
+  },
+  {
+    "path": "traces/windows_reset_20261009/late-tsg-joiner/vfio-boot3-tsg-channel-timeline.txt",
+    "revision": "6564dd597",
+    "sha256": "4f3e00c7536914d0205a2ca3ab99e4a83a3a17db85223a55887fcefeab3095ad",
+    "bytes": 16523
+  },
+  {
+    "path": "traces/v3_candidates/cand2_20261004/apps_guest/workspace/apps/results/cand2/simpleStreams.kf3.log",
+    "revision": "6564dd597",
+    "sha256": "2df3a0a84436b42a664cde89f66c0223e431d6c676a74fc67704b69af1b90da6",
+    "bytes": 87527
+  },
+  {
+    "path": "traces/real_windows_20261014/census/C/census.functions.tsv",
+    "revision": "6564dd597",
+    "sha256": "7e36c4743e923840c0f50f25d1ae43f47fb820ae6f9f1bf8dac42c58211ffb84",
+    "bytes": 970
+  },
+  {
+    "path": "traces/real_windows_20261014/census/E/census.functions.tsv",
+    "revision": "6564dd597",
+    "sha256": "0fd24941e457157969135b816bd096431f88d0c27b859c2885bff6dbc492b4e4",
+    "bytes": 1140
+  },
+  {
+    "path": "traces/real_windows_20261014/census/F/census.functions.tsv",
+    "revision": "6564dd597",
+    "sha256": "61200425540bb694694414d4c4e7c5157477409e48f4c2df2cb1ab6f6bc1258a",
+    "bytes": 718
+  },
+  {
+    "path": "traces/wc1_20261026/lease2_native_functions.tsv",
+    "revision": "1eedda417",
+    "sha256": "183f0b49cf28711f65bee018420bae7ebd63d50bdc61347c37f8b8cc2a085d85",
+    "bytes": 967
+  },
+  {
+    "path": "traces/wc1_20261026/round2/gb205/native_functions.tsv",
+    "revision": "1eedda417",
+    "sha256": "bdad3a1321d60e9f06745a65800f83ee9790cf62daea09d610c41b0c03bd347e",
+    "bytes": 967
+  },
+  {
+    "path": "traces/wc1_20261026/round2/gb206/native_functions.tsv",
+    "revision": "1eedda417",
+    "sha256": "4f9c9139cdd6ac3c13e2a0d5e3362f7c7dbdaf5645a2bd827176a2328881894d",
+    "bytes": 967
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run18-requests.log",
+    "revision": "6564dd597",
+    "sha256": "5505e53a0a7f787e0f3fb257b68c96ff48e1818dafab6ee62496cd4397cbd120",
+    "bytes": 2644
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run19-requests.log",
+    "revision": "6564dd597",
+    "sha256": "8b9ad87e56a50d2ce20e81209357cc05b535702110921f1eff05e7c1c22eef59",
+    "bytes": 1988
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run53-requests.log",
+    "revision": "6564dd597",
+    "sha256": "bf5b222064a7e651951298c410b01c304bc93a787c6808beb3ccf942a3aa7c44",
+    "bytes": 198658
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run53-probe-window.log",
+    "revision": "6564dd597",
+    "sha256": "a6e025367863d425dc1d92e58a586f47c243c2fc38587ed2f904282d7c2348c6",
+    "bytes": 308088
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run55-probe-window.log",
+    "revision": "6564dd597",
+    "sha256": "38c6e731f96dd29828872162d0a3fbe5a3c66e92dac7e90214a86fbdc203a184",
+    "bytes": 341565
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run78-timeline.txt",
+    "revision": "6564dd597",
+    "sha256": "95910dd98148f478427601bf75fd96329f7fe20789307ade636998935e93780c",
+    "bytes": 64695
+  },
+  {
+    "path": "traces/windows_code43_walls_20261007/run79-timeline.txt",
+    "revision": "6564dd597",
+    "sha256": "4ce9d0f5d168c933c22cf01a4e7f1ff29c9dcfd1cb448b411104847dc1afdbd5",
+    "bytes": 64525
+  }
+]

@@ -1,0 +1,386 @@
+{
+  "audit_date": "2026-10-26",
+  "audit_base": "6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4",
+  "wc_input_revision": "1eedda417",
+  "ogkm580_commit": "b81d58ee0224d1d290bef1c080592b619e184042",
+  "ogkm595_tag": "595.84",
+  "ogkm595_tar_sha256": "750163b631cac7676ebd8927b54a6e17fc3f6c87174f206a5b202731ebc324eb",
+  "source_hashes": [
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-host/src/channel.rs",
+      "sha256": "e06be7c77a8af5a53401964ed9075408fc6a1c35e41467cd3b0694259be77d03"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-qemu/src/tsgmirror.rs",
+      "sha256": "754f520412dc7da00675001c17b9b63b6123ffb7cb6432f56a16d7336ce4256e"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-qemu/src/chan.rs",
+      "sha256": "dfa5de9cafe859f623857cae54ca14296328dc31c614fa0ca5fdeecf6810481c"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-rm/src/chanlink.rs",
+      "sha256": "253134e39adc3e68fee43ef924da4ab05d5424bb721cfa841fb07d734d0e19df"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-abi/src/submit.rs",
+      "sha256": "f58f03f222f8397cf1fcd79b529354df06670f90227f69f9fd2dcfbb169d6393"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-abi/src/fifoctl.rs",
+      "sha256": "43bc55b8d2a818d82b4afc61030b5ca07120db18dfcedb3c00a2a40f4ec1179a"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-qemu/src/userpump.rs",
+      "sha256": "067f97805eae5c3ea678533df0bd7abf2ff745ed0b94e9d2c0a8c308175ea9c5"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-qemu/src/userrelay.rs",
+      "sha256": "1370a2bc3429ffe968ecbce886582ea5deb465c00ba1c2e5c6c44ee22d2f3b92"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-qemu/src/defapi.rs",
+      "sha256": "f32b92435284a0cbdbb16f4d11c304afdf7f9a868717007efc82d91f159b0f09"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-abi/src/defapi.rs",
+      "sha256": "04da5a142feb1a3f31de0ebcdf6787e75faef5310909ba95ec69f7777447fda1"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-rm/src/lib.rs",
+      "sha256": "b0c343a9b97000e33a5ca7a1f5f44fd8077e80258527cb555c606790d68a9f93"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-gsp/src/rpc.rs",
+      "sha256": "1ea1befc250e5441264b6cc3462599c6abea07e1e5f49cee03c3adb217df4a8b"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-rm/src/rmrpc/mod.rs",
+      "sha256": "ebf2a4bba268657eee631478d6cab9f7fdf8bc9d0001d3414f8593f65828d2e7"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-census/src/report.rs",
+      "sha256": "3c80448ab411f9720fb57b4656f4ffa2190d1ed06009dd7cc24e6457d8d05314"
+    },
+    {
+      "version": "kayfabe-6564dd597",
+      "path": "crates/kf-census/src/analyze.rs",
+      "sha256": "587bac4dba1b01d04e296b3054b19ce54cbd6f6f92c0efdd57ad86ed1079efa8"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/nvos.h",
+      "sha256": "07f9f453afbf080750663abc9e04e2d3b55500887303ba03bd6855916d2405bd"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/alloc/alloc_channel.h",
+      "sha256": "f0211fbc8bf3f80841f699bf4ccb776d32517308782dfb3c8e99c7652986b5ab"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+      "sha256": "e3a92aa6db7774e5cbf1f672089532e5e3ce05d22dc54e330c8132889171a11f"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrla06f.h",
+      "sha256": "a29cc15aa67af2439fbb35ca3ba981f40b9726a063e6278c7490e9135adbfd68"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+      "sha256": "fcd28f0c3a18d81f29f17ae4719405c94e5f1a5d55ebc6aeb7d719fe778b4eaf"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+      "sha256": "65beb713f2dfe4edc5a4590f5ecd1e29ebd021522e2156d486feb5772787091c"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+      "sha256": "634217ccd88d4063b6cd78e2a0a5ea1b963c76bb4e46fc79dd65c4b8fd6a2de3"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "sha256": "1e9963a06da571064476c173eb2bdc7ce790aefae19425d8787c17615a2ba9cf"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+      "sha256": "ce72807696292bca15c31c453d5d71c922fcdb809920007a9a9cf5e18f9ee0ca"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/sdk/nvidia/inc/rs_access.h",
+      "sha256": "ee3174aa565a08594f66c325b06d24bd8e798d933bf74ff12c803cf3614bb117"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/rmapi/resource_list.h",
+      "sha256": "19f365cf1c4492483a02172c1298f7ba54ae0571b156ac4b58c0c7522ba729b8"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/rmapi/resource.c",
+      "sha256": "97d2faff44b579da4d5cb16058611051ff6c6668d671fbfa45894b55ebc1f818"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/rmapi/control.c",
+      "sha256": "e6c44a621928620a1016f113a9dfd2a299d9e778d77bd5ff24822b22c1701513"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/rmapi/client_resource.c",
+      "sha256": "201009702385c9855ad4dad9886de8ae6f8c404e838739fd60c6894cfeeacf05"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/inc/kernel/rmapi/control.h",
+      "sha256": "aefe3a884d17c52e8e2ec7541b97937b79059d7e4eefbb0fc915e6f0f9d86897"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/libraries/resserv/src/rs_access_rights.c",
+      "sha256": "f6a545e421ee012ff7f0fcaa2f787bb46e9485e48515d4bb3813ae494f9a0702"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/libraries/resserv/src/rs_access_map.c",
+      "sha256": "a4468c06cfb94de2c186eedfd3e6f2f3dbd111b03cc4d26dfedbd5765f03b5f0"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/libraries/resserv/src/rs_server.c",
+      "sha256": "f6648e9ce46deaf59ea47540a23c12dd67a4a4778a8449bd7f58e3330956443f"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_channel.c",
+      "sha256": "d95a23a923f87703f052879f894940d005d56f6d5c3ed860e00950bacb6aa8ff"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_ctxshare.c",
+      "sha256": "5202fdc72f2d46e03ade0c15fdd38422ca28273415bf3b008a2ca6affad6cc52"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_channel_group.c",
+      "sha256": "cc9831b4833cf5b7621cbaf0f731b4003b788b0a3457558b3328f81dd6670801"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c",
+      "sha256": "178a8257ff27f9e370e443bf83a2937daa204d6ade51aa8f22e9f1891470eed2"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c",
+      "sha256": "db6f1c1ffb7a096d37827d4ebfd1d8e65ce4a77f34914e1e99c1ed999010cc23"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_fifo_gv100.c",
+      "sha256": "ae8be3a0e9162fa8fea2cd2e8be687615ee0de6da9d53820ffa368438991826a"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/generated/g_kernel_fifo_nvoc.h",
+      "sha256": "af91672f16598cf665a083e50267d7790c3cb77167e56a37e07bd8ac37dce57c"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/common/inc/swref/published/volta/gv100/dev_ram.h",
+      "sha256": "4bf142fbd4fdefa85d90f6050fcb17eca37be75a767e7e7b8be88e1087d8462d"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/src/kernel/gpu/deferred_api.c",
+      "sha256": "7f1691356d5d39afb64decd1c730b664ea7d979c93adc3a96856d6c96f2c43b0"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h",
+      "sha256": "2b248005ba15ca6785e55b770579bbac6c5f4409e14fa3399615989d4e50f4f1"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "kernel-open/nvidia/os-interface.c",
+      "sha256": "0d02a34c9ccd28e1b349db3cdd2a24c45c237a97c2504de2c79dca20d1f94092"
+    },
+    {
+      "version": "ogkm-580.159.04",
+      "path": "kernel-open/common/inc/nv-linux.h",
+      "sha256": "67f528ecdfe34fb692f42812467698db81f58a97b5869d84856806e2318eaa44"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/nvos.h",
+      "sha256": "5786e4c046f08dd627f13760474599624d578325938fe269cb4321c2e3502c02"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/alloc/alloc_channel.h",
+      "sha256": "f0211fbc8bf3f80841f699bf4ccb776d32517308782dfb3c8e99c7652986b5ab"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+      "sha256": "e3a92aa6db7774e5cbf1f672089532e5e3ce05d22dc54e330c8132889171a11f"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrla06f.h",
+      "sha256": "a29cc15aa67af2439fbb35ca3ba981f40b9726a063e6278c7490e9135adbfd68"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+      "sha256": "fcd28f0c3a18d81f29f17ae4719405c94e5f1a5d55ebc6aeb7d719fe778b4eaf"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+      "sha256": "11228344ef57ddb8e648b95b774eb3aaf6da3675c918f0d0dd1353fc12faf6da"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+      "sha256": "23e6eb351162dca855327906756b94517dffc3bfe8200ab6e5bbb042cb539a6d"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "sha256": "bf3134db0c8e91c6bd8bb7d3b9dc98291d5dd9ba6f65367b97a3dabd21b58154"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+      "sha256": "ce72807696292bca15c31c453d5d71c922fcdb809920007a9a9cf5e18f9ee0ca"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/sdk/nvidia/inc/rs_access.h",
+      "sha256": "ee3174aa565a08594f66c325b06d24bd8e798d933bf74ff12c803cf3614bb117"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/rmapi/resource_list.h",
+      "sha256": "c1b97739068af98c4360bf75dff014a8503b572fd4a5b223db2f103e936c1c6a"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/rmapi/resource.c",
+      "sha256": "97d2faff44b579da4d5cb16058611051ff6c6668d671fbfa45894b55ebc1f818"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/rmapi/control.c",
+      "sha256": "0c686e045845dda879194024c09f33434563b586bfddf9a435db36d5a4f38ff1"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/rmapi/client_resource.c",
+      "sha256": "267664e4a8b05766c0cd29f4c2a396b882d234c46fb8d06df27d2254aa4fe8a8"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/inc/kernel/rmapi/control.h",
+      "sha256": "97ad0672655e41a8599c5f7ca74dc90b6fbac7df809507239f0d180cc0684bfa"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/libraries/resserv/src/rs_access_rights.c",
+      "sha256": "f6a545e421ee012ff7f0fcaa2f787bb46e9485e48515d4bb3813ae494f9a0702"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/libraries/resserv/src/rs_access_map.c",
+      "sha256": "a4468c06cfb94de2c186eedfd3e6f2f3dbd111b03cc4d26dfedbd5765f03b5f0"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/libraries/resserv/src/rs_server.c",
+      "sha256": "f3a6d704d784601b662d496f48ff12192cb6683e5c06d08f8f8e050831c350b7"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_channel.c",
+      "sha256": "f54a3360b7528f357ba9eea0759814079af9dcaef9ca5d49559fbbf94ab5227c"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_ctxshare.c",
+      "sha256": "5202fdc72f2d46e03ade0c15fdd38422ca28273415bf3b008a2ca6affad6cc52"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_channel_group.c",
+      "sha256": "83c5c49287cfe3f0e930092bf339d7a3593c0a18fad9a0f9a26fd5bfae1596ee"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c",
+      "sha256": "7554c2879e3b943010281c3717a88ad8a2d2bb0f6318270d45e8a088c7709b9e"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c",
+      "sha256": "f5365a19ead390126d67040f56033545580b684c975fac0a75c49ff73803f3de"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_fifo_gv100.c",
+      "sha256": "ae8be3a0e9162fa8fea2cd2e8be687615ee0de6da9d53820ffa368438991826a"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/generated/g_kernel_fifo_nvoc.h",
+      "sha256": "997e5e5ac7c68cd15e22ade11421ea2bb381a7d507d08e1c23843d66f922c5d9"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/common/inc/swref/published/volta/gv100/dev_ram.h",
+      "sha256": "4bf142fbd4fdefa85d90f6050fcb17eca37be75a767e7e7b8be88e1087d8462d"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/src/kernel/gpu/deferred_api.c",
+      "sha256": "7f1691356d5d39afb64decd1c730b664ea7d979c93adc3a96856d6c96f2c43b0"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "src/nvidia/inc/kernel/vgpu/rpc_global_enums.h",
+      "sha256": "f2849c57238dbdaa4265bcf003e3f142b10e2b9088d2769d7f08119887c4dc98"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "kernel-open/nvidia/os-interface.c",
+      "sha256": "65755a3fc4d3d642bc19b03d1cd5f9654f1905814a5b903929adad970be235d7"
+    },
+    {
+      "version": "ogkm-595.84",
+      "path": "kernel-open/common/inc/nv-linux.h",
+      "sha256": "476714964238ef482678d645d9f322e7bcc4109ac153ed93f969fc3778a433a5"
+    }
+  ],
+  "ogkm595_tag_peeled_commit": "722ae84526a09ed672fbe75448e2909834ba4cce"
+}

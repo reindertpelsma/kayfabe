@@ -1,0 +1,21 @@
+PF1 report-only validation, 2026-10-26
+Audit base: 6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4
+WC retained inputs: 1eedda417
+
+PASS: all JSON documents parse; TSV rows have complete matching columns.
+PASS: 25 retained input hashes match their pinned Git objects.
+PASS: 75 source hashes recorded; 15 kayfabe source files match the audit-base Git objects.
+PASS: selected 31 export flags and right masks agree across OGKM580.159.04 and595.84.
+PASS: interleave flags0x10028/right mask2; ctxsw getter NON_PRIVILEGED/right mask0.
+PASS: selected short-RPC command counts are zero in each retained table.
+      Partial E/F capture silence is not an absence claim.
+PASS: local Markdown links resolve; all parity table rows have eight columns.
+PASS: additions contain no absolute private paths, private-host IPs or credential-pattern hits.
+      Repository-relative saved filenames can contain workspace/apps as ordinary path components.
+PASS: git diff --cached --check.
+PASS: python3 scripts/ci/debt.py claims
+      claims: existing-debt=3755 new=0 resolved=3
+
+No runtime code edit, unit test, mutant, cargo/clippy/rustfmt, build, host/GPU operation,
+UID1000 capability probe, VM, rental or host lock in this report-only task.
+This validation does not establish effective runtime quantum/modes or causal performance effects.

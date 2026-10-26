@@ -1,0 +1,106 @@
+[
+  {
+    "source": "traces/windows_code43_walls_20261007/run18-requests.log",
+    "control_trace_records": 1,
+    "identified_host_tsg_births": 1,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 1,
+      "unobserved_host_birth_order": 0
+    },
+    "successful_host_setter_logs": 0,
+    "host_setter_us_histogram": {},
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  },
+  {
+    "source": "traces/windows_code43_walls_20261007/run19-requests.log",
+    "control_trace_records": 1,
+    "identified_host_tsg_births": 1,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 1,
+      "unobserved_host_birth_order": 0
+    },
+    "successful_host_setter_logs": 1,
+    "host_setter_us_histogram": {
+      "4000": 1
+    },
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  },
+  {
+    "source": "traces/windows_code43_walls_20261007/run53-requests.log",
+    "control_trace_records": 18,
+    "identified_host_tsg_births": 0,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 0,
+      "unobserved_host_birth_order": 18
+    },
+    "successful_host_setter_logs": 0,
+    "host_setter_us_histogram": {},
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  },
+  {
+    "source": "traces/windows_code43_walls_20261007/run53-probe-window.log",
+    "control_trace_records": 5,
+    "identified_host_tsg_births": 5,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 5,
+      "unobserved_host_birth_order": 0
+    },
+    "successful_host_setter_logs": 5,
+    "host_setter_us_histogram": {
+      "400": 5
+    },
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  },
+  {
+    "source": "traces/windows_code43_walls_20261007/run55-probe-window.log",
+    "control_trace_records": 5,
+    "identified_host_tsg_births": 5,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 5,
+      "unobserved_host_birth_order": 0
+    },
+    "successful_host_setter_logs": 5,
+    "host_setter_us_histogram": {
+      "400": 5
+    },
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  },
+  {
+    "source": "traces/windows_code43_walls_20261007/run78-timeline.txt",
+    "control_trace_records": 11,
+    "identified_host_tsg_births": 9,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 11,
+      "unobserved_host_birth_order": 0
+    },
+    "successful_host_setter_logs": 0,
+    "host_setter_us_histogram": {},
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  },
+  {
+    "source": "traces/windows_code43_walls_20261007/run79-timeline.txt",
+    "control_trace_records": 11,
+    "identified_host_tsg_births": 9,
+    "order": {
+      "before_identified_host_birth": 0,
+      "after_identified_host_birth": 11,
+      "unobserved_host_birth_order": 0
+    },
+    "successful_host_setter_logs": 0,
+    "host_setter_us_histogram": {},
+    "host_get_timeslice_readback": "unobserved",
+    "scope": "bounded historical extract; not the current workload or complete boot"
+  }
+]

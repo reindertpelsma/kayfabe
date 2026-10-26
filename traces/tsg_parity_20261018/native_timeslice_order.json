@@ -1,0 +1,13 @@
+{
+  "source": "traces/windows_reset_20261009/late-tsg-joiner/vfio-boot3-tsg-channel-timeline.txt",
+  "counts": {
+    "tsg_alloc_records": 38,
+    "set_timeslice_records": 57,
+    "after_first_guest_channel": 57,
+    "before_first_guest_channel": 0,
+    "unknown_tsg_prefix": 0
+  },
+  "host_birth_order": "unobserved: native capture has no kayfabe host births",
+  "timeslice_values": "unobserved: extract omits the eight parameter bytes",
+  "caveat": "guest allocation order is not host-birth evidence; no workload-wide claim"
+}

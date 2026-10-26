@@ -1,0 +1,14 @@
+{
+  "source": "traces/v3_candidates/cand2_20261004/apps_guest/workspace/apps/results/cand2/simpleStreams.kf3.log",
+  "scope": "older Linux CUDA simpleStreams run; pre-mirror topology",
+  "timeslice_us": [
+    "2048"
+  ],
+  "ctxsw": [
+    [
+      "0x1",
+      "0",
+      "2"
+    ]
+  ]
+}
