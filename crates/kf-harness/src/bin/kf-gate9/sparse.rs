@@ -19,12 +19,13 @@ fn tree(v3: bool, big: bool, raw: u64, stale_small: bool) -> (Image, u64, u64) {
     let sp = img.alloc(4096, 4096);
     img.put64(parent, if v3 { ver3::pde(bp) } else { big_pde(bp) });
     img.put64(parent + 8, if v3 { ver3::pde(sp) } else { pde(sp) });
+    let backing = if raw == 1 { 0 } else { DATA };
     for i in 0..2 {
         let word = if raw & 1 != 0 {
             if v3 {
-                ver3::pte(DATA + i * 0x10000)
+                ver3::pte(backing + i * 0x10000)
             } else {
-                pte(DATA + i * 0x10000)
+                pte(backing + i * 0x10000)
             }
         } else {
             raw
@@ -72,7 +73,10 @@ fn scenario(l: &mut Checks, v3: bool, big: bool, enabled: bool) -> Result<(), St
     let class = RF_PS.put(u32::from(if big { fmt.big_ps } else { fmt.small_ps }));
     let valid = if v3 { ver3::pte(DATA) } else { pte(DATA) };
     let mut model = Committed::default();
-    for (step, raw) in [valid, 8, 8, 0, 8, valid, 0x28, 0].into_iter().enumerate() {
+    for (step, raw) in [valid, 8, 8, 0, 8, valid, 1, 8, 1, 0x28, 0]
+        .into_iter()
+        .enumerate()
+    {
         let (t, root, _) = tree(v3, big, raw, enabled && big && raw == 8);
         k.write_image(&img, t.origin, &t.mem[..t.used()])
             .map_err(|e| e.to_string())?;
@@ -117,10 +121,11 @@ fn wanted(fmt: KfFormat, raw: u64, ps: u64, class: u32, enabled: bool) -> Vec<Kf
     if raw & 1 == 0 && !(enabled && sparse) {
         return vec![];
     }
+    let backing = if raw == 1 { 0 } else { DATA };
     if sparse || ps == 0x10000 {
         return vec![KfMapRun {
             va: 0,
-            gpga: if sparse { 0 } else { DATA },
+            gpga: if sparse { 0 } else { backing },
             len: 2 * ps,
             flags: class | if sparse { SPARSE } else { 0 },
             op: KFWR_OP_MAP,
@@ -130,7 +135,7 @@ fn wanted(fmt: KfFormat, raw: u64, ps: u64, class: u32, enabled: bool) -> Vec<Kf
     (0..2)
         .map(|i| KfMapRun {
             va: i * ps,
-            gpga: if sparse { 0 } else { DATA + i * 0x10000 },
+            gpga: if sparse { 0 } else { backing + i * 0x10000 },
             len: ps,
             flags: class | if sparse { SPARSE } else { 0 },
             op: KFWR_OP_MAP,
