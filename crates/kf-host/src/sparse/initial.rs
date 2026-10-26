@@ -49,7 +49,10 @@ mod tests {
             fail,
         };
         assert_eq!(
-            reserve_initial(&rm, &[(65536, 1048576), (1 << 40, 1 << 47)]),
+            reserve_initial(
+                &rm,
+                &[(65536, 1048576), (1 << 40, 1 << 47), (1 << 32, 1 << 33)]
+            ),
             Err(RmError::NoMemory)
         );
         assert!(rm.blocks.borrow().is_empty());
@@ -61,6 +64,10 @@ mod tests {
     #[test]
     fn a_refused_high_root_releases_the_low_root_before_context_birth() {
         refusal(2);
+    }
+    #[test]
+    fn a_refused_third_root_releases_both_preceding_roots() {
+        refusal(3);
     }
     #[test]
     fn an_initially_full_session_budget_cannot_create_another_object() {
