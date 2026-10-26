@@ -847,3 +847,5 @@ fn only_sparse_bookkeeping_stops_on_a_poisoned_layout() {
 include!("breaker_tests.rs");
 include!("breaker_model.rs");
 include!("breaker_model_tests.rs");
+include!("breaker_cost.rs");
+include!("breaker_more.rs");
