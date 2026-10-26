@@ -1,0 +1,7 @@
+STATUS: ANSWERED, 2026-10-22. Runtime permission result for own lease57280677, verified5090 offer55630686/machine41833; actualGB202 arch0x1b0/impl2, host595.91.07, helper/product revision6e3fd3fd6. Windows cells remain pending at this H0 receipt.
+
+MEASURED at 2026-10-22 22:15:01UTC, lease57280677: CAP_SYS_ADMIN-cleared PRECOMP control0x20800122 returned0x1f/Other31, helperexit2, no page. Kernel gpuValidateRegOffset_IMPL explicitly denies non-admin access to register0x640780. See lease_metadata/precomp_runtime.txt and precomp_kernel_permission.json. No privileged retry, BAR read, captured fallback or new tier3 measurement. Together with GB206 lease57273215 this denies the full runtime page route in two exact595.91.07 cells; other driver builds remain unmeasured.
+
+Owner tier verdict for lease57280677 on 2026-10-22: tier2 does not provide the PRECOMP page on this driver. Tier3/privileged measurement remains the route for physical values per the constant strategy; public derivation covers the authored virtual fields. Existing captured values are validation evidence only. Fourteen unresolved fields remain unclaimed; the two precision declarations remain inferred. The refusal does not authorize a captured page or change published virtual support.
+
+MEASURED at 2026-10-22 22:15:22UTC, lease57280677/product6e3fd3fd6: gates9/9,gate10PASS,USERbirths12/12. Raw30/30,CUDA4/4, corrected native GRfixture618f04318 and Windows580.88/B1 are pending. The previously auditedGB202 tier2/ZBC/8162/nativecaps groups are subtracted, not remeasured.

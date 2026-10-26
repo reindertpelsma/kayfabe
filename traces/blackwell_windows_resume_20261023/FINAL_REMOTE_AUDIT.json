@@ -1,0 +1,17 @@
+{
+  "utc": "2026-10-23T03:22:35.436921+00:00",
+  "native_xid_count": 5,
+  "exact_ordered_five": true,
+  "XID_STOP": false,
+  "qemu_count": 0,
+  "controller_exited": true,
+  "gpu_lock_released": true,
+  "clean_sources": {
+    "product": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+    "readiness": "9ff51a6e9432ed4d5f51636c7606360728de5b6c",
+    "native_fixture": "618f0431815d037d4226b642ae37e76967353e90",
+    "tier3": "a6456796e4af84d3b0c8bcb3558b63c2e85df42e",
+    "b1": "c130aa98ac2b922202282cd793f2a6d64be1f091"
+  },
+  "no_more_product_arms": true
+}

@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-22T21:34:25.067822+00:00",
+  "qemu_pids": [],
+  "windows_installed": false,
+  "windows_bind_started": false,
+  "windows_arm_started": [],
+  "fatal_marker": false,
+  "controller_exit_tail": [
+    "V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS",
+    "SWEEP_BUILD_READY source=6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b 2026-10-22T21:29:31+00:00",
+    "SWEEP_PROVISION_EXIT rc=1 2026-10-22T21:31:28+00:00"
+  ]
+}

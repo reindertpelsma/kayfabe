@@ -1,0 +1,21 @@
+{
+  "utc": "2026-10-22T01:20:29.877988+00:00",
+  "lease_id": 57132969,
+  "state": "CLOSED_WITH_WINDOWS_ARMS_UNRUN",
+  "failed_step": "immediate zero-qemu census following bind shutdown",
+  "bind_driver": "32.0.15.8088",
+  "bind_code": 22,
+  "native_verdict": "PASS",
+  "windows_arms": {
+    "on_precision": "UNRUN",
+    "off_c": "UNRUN",
+    "on_b1": "UNRUN"
+  },
+  "later_read_only_audit": "zero qemu-system processes; five approved source-matched native31; no XID_STOP",
+  "cause": "exit-window race is inferred, not measured at the failed census",
+  "auto_destroy_expiry_utc": "2026-10-22T03:16:37Z",
+  "optional_merge": "2add71e8ca8ebb80c419ed2fdb0427dfcdc0ccd4 pushed on separate own branch; scanner review verified sole hit already present in both inputs; no new path disclosed",
+  "pending": "old recheck/resume request is moot after destruction; no second lease authorized",
+  "destroyed_api_absent_utc": "2026-10-22T01:30:18.160966+00:00",
+  "closure_reason": "no required resume decision by announced01:30UTC idle cutoff; own lease destroyed under standing teardown authority"
+}

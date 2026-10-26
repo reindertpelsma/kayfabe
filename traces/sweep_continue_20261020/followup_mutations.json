@@ -1,0 +1,46 @@
+{
+  "mutants": [
+    {
+      "name": "oracle_no_family_bindings",
+      "rc": 101,
+      "compiled": true,
+      "killers": [
+        "fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture",
+        "fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects",
+        "fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family"
+      ],
+      "log_sha256": "fdb10d67291ed876e34990bbf7935e8cb2cd02f88a034ffe9ac1cf26d5c3439a"
+    },
+    {
+      "name": "oracle_legacy_i2m",
+      "rc": 101,
+      "compiled": true,
+      "killers": [
+        "fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects",
+        "fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family"
+      ],
+      "log_sha256": "bfd5c2dafbe706b770bf51efcd034cdca384a3990a22ce2e2f0ecf03c1fb15e4"
+    },
+    {
+      "name": "olut_skip_ca73",
+      "rc": 101,
+      "compiled": true,
+      "killers": [
+        "every_virtual_tile_advertises_exactly_the_supported_output_lut",
+        "advertised_capacity_programs_a_real_supported_color_decoder_extent"
+      ],
+      "log_sha256": "abbf8507964f7eb3184bcd809c901c85e6e8e943314f036f60daab377ceca643"
+    },
+    {
+      "name": "olut_includes_header_as_samples",
+      "rc": 101,
+      "compiled": true,
+      "killers": [
+        "every_virtual_tile_advertises_exactly_the_supported_output_lut",
+        "advertised_capacity_programs_a_real_supported_color_decoder_extent"
+      ],
+      "log_sha256": "4c1ce4b7f676849d76db4b1874bddb58d9ad65dc9f2fb22b105ec4670551afa3"
+    }
+  ],
+  "source_restored": true
+}

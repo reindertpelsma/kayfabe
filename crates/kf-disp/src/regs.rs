@@ -213,9 +213,17 @@ impl Regs {
 /// The derived table for a guest driver version, or `None` when this tree has not derived it.
 #[must_use]
 pub fn table_for(version: &str) -> Option<&'static RegTable> {
+    static V580_94_02: OnceLock<RegTable> = OnceLock::new();
+
     static V580_159_04: OnceLock<RegTable> = OnceLock::new();
     static V580_65_06: OnceLock<RegTable> = OnceLock::new();
+    static V595_91_07: OnceLock<RegTable> = OnceLock::new();
+    static V590_48_01: OnceLock<RegTable> = OnceLock::new();
     match version {
+        "580.94.02" => Some(
+            V580_94_02.get_or_init(|| RegTable::parse(include_str!("../data/regs-580.94.02.tsv"))),
+        ),
+
         "580.159.04" => Some(
             V580_159_04
                 .get_or_init(|| RegTable::parse(include_str!("../data/regs-580.159.04.tsv"))),
@@ -225,6 +233,12 @@ pub fn table_for(version: &str) -> Option<&'static RegTable> {
         // identical to 580.159.04's apart from VERSION.
         "580.65.06" => Some(
             V580_65_06.get_or_init(|| RegTable::parse(include_str!("../data/regs-580.65.06.tsv"))),
+        ),
+        "590.48.01" => Some(
+            V590_48_01.get_or_init(|| RegTable::parse(include_str!("../data/regs-590.48.01.tsv"))),
+        ),
+        "595.91.07" => Some(
+            V595_91_07.get_or_init(|| RegTable::parse(include_str!("../data/regs-595.91.07.tsv"))),
         ),
         _ => None,
     }

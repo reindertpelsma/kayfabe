@@ -17,9 +17,9 @@ fn parse_row(row: &str) -> Result<Vec<consttab::Row>, String> {
 #[test]
 fn published_rows_validate_with_existing_evidence() {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let rows = consttab::table().expect("published table");
+    let rows = consttab::parse(consttab::TABLE_TSV).expect("observation table");
     assert_eq!(rows.len(), 95);
-    consttab::validate_evidence(rows, |path| repo.join(path).exists())
+    consttab::validate_evidence(&rows, |path| repo.join(path).exists())
         .expect("every citation exists");
     for row in rows {
         assert!(matches!(row.source, SourceTag::Measured { .. }));

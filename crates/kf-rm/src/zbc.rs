@@ -15,7 +15,14 @@
 //! a clear is written as pixels. ⊘ The day real compression lands (comptag backing on the store),
 //! this decision re-opens: the guest's indices would then have to be the hardware's.
 //!
-//! ## What a fresh table holds
+//! ## ⊘ CORRECTION 2026-10-15 (F-1): the defaults are PER DIE
+//!
+//! The paragraph below describes ONE GA102 capture, which this module used to serve to every die. A sweep of 13 dies on idle rentals
+//! (`traces/constants_measure_20261014b/tier2/`, `KF_PROBE_ZBC=1`) showed it right for Ampere, Ada and Blackwell and WRONG for Turing
+//! (colour formats 1/2/4 and a non-zero colorDS). The defaults now come from the published table per die (`zbc.*` rows, branch `*`: host
+//! hardware state), and a die without a measured row starts with an EMPTY table, counted and logged by name (`defaults`).
+//!
+//! ## What a fresh table holds (the GA102 capture - historical, see the correction above)
 //!
 //! The defaults a real GSP's physical RM installs, `[measured vgfx 2026-09-26, RTX 3080 Ti
 //! GA102, 580.159.04]` by `GET_ZBC_CLEAR_TABLE_ENTRY` on an idle host: color 1 = 0, 2 = all-ones,
@@ -68,29 +75,48 @@ impl Table {
     }
 }
 
-/// The measured defaults (module docs).
-fn defaults(t: TableType) -> Vec<ZbcValue> {
-    let c = |fb: u32| ZbcValue {
-        color_fb: [fb; 4],
-        format: 0,
-        ..ZbcValue::default()
+/// ★ F-1 (matrix `V3_CONSTANT_MATRIX_20261014.md` 5.3.5): the defaults the host's physical RM installs, measured PER DIE and published in
+/// `kf_rm::consttab` (`zbc.color` / `zbc.depth` / `zbc.stencil`, 11 words per entry: `colorFB[4] colorDS[4] depth stencil format`).
+/// The old code served ONE capture (a GA102's) to every die; Turing differs (formats 1/2/4, colorDS non-zero). A die with no measured row
+/// gets an EMPTY default table (`valid = 0` everywhere - nothing is claimed; RM adds entries on demand), counted and logged by name.
+fn defaults(t: TableType, die: kf_chip::DieId) -> Vec<ZbcValue> {
+    let key = match t {
+        TableType::Color => "zbc.color",
+        TableType::Depth => "zbc.depth",
+        TableType::Stencil => "zbc.stencil",
     };
-    let d = |depth: u32| ZbcValue {
-        depth,
-        format: 1,
-        ..ZbcValue::default()
-    };
-    let s = |stencil: u32| ZbcValue {
-        stencil,
-        format: 1,
-        ..ZbcValue::default()
-    };
-    match t {
-        TableType::Color => vec![c(0), c(0xffff_ffff), c(0x3f80_0000)],
-        TableType::Depth => vec![d(0), d(0x3f80_0000)],
-        TableType::Stencil => vec![s(0), s(1), s(0xff)],
+    match crate::consttab::lookup(key, die, 0) {
+        Ok(row) => row
+            .body()
+            .as_chunks::<44>()
+            .0
+            .iter()
+            .map(|c| {
+                let w = |i: usize| {
+                    u32::from_le_bytes([c[4 * i], c[4 * i + 1], c[4 * i + 2], c[4 * i + 3]])
+                };
+                ZbcValue {
+                    color_fb: [w(0), w(1), w(2), w(3)],
+                    color_ds: [w(4), w(5), w(6), w(7)],
+                    depth: w(8),
+                    stencil: w(9),
+                    format: w(10),
+                }
+            })
+            .collect(),
+        Err(e) => {
+            ZBC_DEFAULTS_REFUSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            eprintln!(
+                "W349REFUSE zbc defaults ({key}) die={die}: {e}; the ZBC table starts EMPTY (valid=0, nothing claimed)"
+            );
+            Vec::new()
+        }
     }
 }
+
+/// How many (table, die) default sets were refused for want of a measured row (counted clean fallback).
+pub static ZBC_DEFAULTS_REFUSED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// ★ The link. Seated with the answering links; claims only `GSP_RM_CONTROL` ids `0x9096xxxx`.
 pub struct ZbcPolicy {
@@ -113,11 +139,12 @@ impl ZbcPolicy {
     pub fn new(
         driver: kf_abi::versions::DriverAbiTable,
         sizes: Option<[(u32, u32); 3]>,
+        die: kf_chip::DieId,
     ) -> ZbcPolicy {
         let tables = sizes.map(|s| {
             TableType::ALL.map(|t| {
                 let (start, end) = s[t.wire() as usize - 1];
-                Table::new(start, end, &defaults(t))
+                Table::new(start, end, &defaults(t, die))
             })
         });
         ZbcPolicy {
@@ -275,7 +302,11 @@ mod tests {
     fn policy() -> ZbcPolicy {
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
         // `[measured vgfx 2026-09-26]` the GA102 host's ranges: color 1..30, depth/stencil 1..15.
-        ZbcPolicy::new(abi, Some([(1, 30), (1, 15), (1, 15)]))
+        ZbcPolicy::new(
+            abi,
+            Some([(1, 30), (1, 15), (1, 15)]),
+            kf_chip::DieId::new(kf_chip::arch::GA100, 2),
+        )
     }
     fn entry(p: &mut ZbcPolicy, t: TableType, idx: u32) -> (bool, [u32; 14]) {
         let mut q = vec![0u8; z::GET_ENTRY_PARAMS_SIZE];
@@ -365,7 +396,8 @@ mod tests {
         );
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
         assert_eq!(
-            ZbcPolicy::new(abi, None).answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 12]),
+            ZbcPolicy::new(abi, None, kf_chip::DieId::new(kf_chip::arch::GA100, 2))
+                .answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 12]),
             Err(NV_ERR_NOT_SUPPORTED)
         );
     }

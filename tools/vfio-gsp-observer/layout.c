@@ -4,6 +4,7 @@
 #include "nvtypes.h"
 #include "libos_init_args.h"
 #include "gsp_init_args.h"
+#include "gspifpub.h"
 #include "dev_gsp.h"
 #include "dev_falcon_v4.h"
 #define RANGE_BASE(range) (0 ? range)
@@ -12,7 +13,8 @@ int main(void) {
            "\"libos_kind\":%zu,\"libos_location\":%zu,\"sysmem\":%u,\"contiguous\":%u,"
            "\"mq_bytes\":%zu,\"mq_pa\":%zu,\"mq_pages\":%zu,\"mq_cmd\":%zu,\"mq_stat\":%zu,"
            "\"mailbox0\":%u,\"mailbox1\":%u,\"doorbell0\":%u,\"doorbell_stride\":%u,\"doorbells\":%u,"
-           "\"irq_clear\":%u,\"irq_status\":%u}\n",
+           "\"irq_clear\":%u,\"irq_status\":%u,"
+           "\"fmc_target\":%zu,\"fmc_libos\":%zu,\"fmc_coherent\":%u,\"fmc_noncoherent\":%u}\n",
            sizeof(LibosMemoryRegionInitArgument),offsetof(LibosMemoryRegionInitArgument,pa),
            offsetof(LibosMemoryRegionInitArgument,size),offsetof(LibosMemoryRegionInitArgument,kind),
            offsetof(LibosMemoryRegionInitArgument,loc),LIBOS_MEMORY_REGION_LOC_SYSMEM,
@@ -24,6 +26,9 @@ int main(void) {
            NV_PGSP_FALCON_MAILBOX0,NV_PGSP_FALCON_MAILBOX1,NV_PGSP_QUEUE_HEAD(0),
            NV_PGSP_QUEUE_HEAD(1)-NV_PGSP_QUEUE_HEAD(0),NV_PGSP_QUEUE_HEAD__SIZE_1,
            RANGE_BASE(NV_PGSP)+NV_PFALCON_FALCON_IRQSCLR,
-           RANGE_BASE(NV_PGSP)+NV_PFALCON_FALCON_IRQSTAT);
+           RANGE_BASE(NV_PGSP)+NV_PFALCON_FALCON_IRQSTAT,
+           offsetof(GSP_FMC_BOOT_PARAMS,gspRmParams.target),
+           offsetof(GSP_FMC_BOOT_PARAMS,gspRmParams.bootArgsOffset),
+           GSP_DMA_TARGET_COHERENT_SYSTEM,GSP_DMA_TARGET_NONCOHERENT_SYSTEM);
     return 0;
 }

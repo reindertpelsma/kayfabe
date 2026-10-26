@@ -12,6 +12,7 @@
 pub mod birth;
 pub mod channel;
 pub mod event;
+pub mod precomp;
 pub mod tier;
 pub mod timer;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
@@ -2152,6 +2153,20 @@ impl HostRm {
     #[must_use]
     pub fn supported_class_ids(&self) -> &[u32] {
         &self.supported_class_ids
+    }
+
+    /// The RM handle of this session's device object (`NV0080`), for a caller that probes
+    /// controls on it with [`HostRm::raw_control_opaque`]. A handle, not a capability: the host
+    /// still applies its own privilege checks to whatever is asked.
+    #[must_use]
+    pub fn device_handle(&self) -> u32 {
+        self.device
+    }
+
+    /// The RM handle of this session's subdevice object (`NV2080`); see [`HostRm::device_handle`].
+    #[must_use]
+    pub fn subdevice_handle(&self) -> u32 {
+        self.subdevice
     }
 
     /// The host driver version string this session gated on (the driver-version axis).

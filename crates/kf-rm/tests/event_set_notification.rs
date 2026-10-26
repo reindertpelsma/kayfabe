@@ -833,7 +833,7 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
         indices,
         vec![
             1, 2, 4, 7, 12, 23, 24, 26, 120, 122, 33, 34, 45, 139, 43, 44, 113, 157, 158, 178, 182,
-            197
+            197, 196
         ]
     );
     let mut p = policy();
@@ -874,4 +874,29 @@ fn the_ruled_list_is_pinned_cited_disjoint_and_served() {
             "{ev}"
         );
     }
+}
+
+/// ★ `[measured 2026-10-20, GB202 / Windows 580.88 / ABI 580.65.06, own lease 56909569,
+/// traces/blackwell_resume_20261020/arms/fix1d_off_1]` once the public CFB0 and CFFA
+/// constructors are admitted, the Blackwell Windows driver's 13th subdevice arming in a row is
+/// `NV2080_NOTIFIERS_USE_GC6_REDUCED_THRESHOLD` (196, REPEAT) — the index Ada's Windows order
+/// (`code43_startdevice_batch.rs`) never arms. Refusing it (0x56) is followed at once by teardown
+/// and Code 43. GC6 thresholds are host power management (owner ruling §S.1, the PSTATE_CHANGE
+/// precedent): armed silently, never posted.
+#[test]
+fn blackwell_windows_gc6_reduced_threshold_arming_is_a_ruled_stub() {
+    let mut p = policy();
+    assert_eq!(
+        p.respond(&arming_of(196)).expect("served").rpc_result,
+        0,
+        "USE_GC6_REDUCED_THRESHOLD is ruled and must be served"
+    );
+    // The public index exists only from 570.86.15 (generated nv2080_notifiers runs).
+    let v565 = kf_abi::DriverVersion {
+        major: 565,
+        minor: 57,
+        patch: 1,
+    };
+    assert!(!kf_abi::eventnotify::is_ruled_notifier(v565, 196));
+    assert!(kf_abi::eventnotify::is_ruled_notifier(BENCH_DRIVER, 196));
 }

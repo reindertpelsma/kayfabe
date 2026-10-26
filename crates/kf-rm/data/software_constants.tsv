@@ -1,0 +1,3 @@
+# CODE READ: software state from the merged Blackwell branch; source in row.
+key	die	branch	size	inputs	words	source	evidence
+cudart.0x20802209	*	*	4	-	0x5	rule:ogkm-595.84 src/nvidia/src/kernel/gpu/rc/kernel_rc_watchdog_ctrl.c:30-60 reports RM software state (watchdog INITIALIZED 0x4 | DISABLED 0x1), not a die fact; GA106 580.159.04 bare metal answered 0x5 (cudartinit.rs)	crates/kf-abi/src/cudartinit.rs

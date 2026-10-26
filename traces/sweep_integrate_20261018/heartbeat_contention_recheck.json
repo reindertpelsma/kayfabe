@@ -1,0 +1,14 @@
+[
+  {
+    "mutant": "HB_wait_on_gsp_lock",
+    "exit": 101,
+    "killing_tests": [
+      "heartbeat::tests::busy_gsp_state_never_enters_clock_read",
+      "heartbeat::tests::busy_gsp_state_returns_without_waiting"
+    ],
+    "kill_count": 2,
+    "passed": true,
+    "fixed_sha256": "921b30651359670c515d23729b50edb9fc964b039b0df9072a10b6f2bae4de37",
+    "log_sha256": "18e3dd51112429ff4ff31f8e37bd143f5d468d78952361f37876855168799960"
+  }
+]

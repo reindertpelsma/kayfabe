@@ -1,0 +1,33 @@
+{
+  "run": "bw_on_m1",
+  "readonly": true,
+  "reports": [
+    {
+      "path": "ReportQueue/Kernel_50_76bef02040a5de72b2b53e6a55c6ab2c5e229a1e_00000000_2e4767dd-4c42-4d18-b962-90cb747827b1/Report.wer",
+      "source_sha256": "4bff7e6c5076ca02dae8dcc751257cb099df5d827a3d08427c73b7f5b101b988",
+      "event_utc": "2026-10-21T12:51:49.675571+00:00",
+      "fields": {
+        "EventType": "BlueScreen",
+        "EventTime": "134370607096755714",
+        "ReportIdentifier": "2e4767dd-4c42-4d18-b962-90cb747827b1",
+        "Sig[0].Name": "Code",
+        "Sig[0].Value": "50",
+        "Sig[1].Name": "Parameter 1",
+        "Sig[1].Value": "ffffdb047809fcc7",
+        "Sig[2].Name": "Parameter 2",
+        "Sig[2].Value": "2",
+        "Sig[3].Name": "Parameter 3",
+        "Sig[3].Value": "fffff80735efa1b0",
+        "Sig[4].Name": "Parameter 4",
+        "Sig[4].Value": "2",
+        "Sig[5].Name": "OS version",
+        "Sig[5].Value": "10_0_26100",
+        "Sig[6].Name": "Service Pack",
+        "Sig[6].Value": "0_0",
+        "Sig[7].Name": "Product",
+        "Sig[7].Value": "256_1"
+      }
+    }
+  ],
+  "note": "Corrected noncapturing suffix projection; exact FILETIME retained; ISO resolution1microsecond. Original broken1601/null projection invalid."
+}

@@ -1,0 +1,218 @@
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    --> crates/kf-gsp/src/boot.rs:2797:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    --> crates/kf-gsp/src/boot.rs:2915:5
+     |
+     | |_____________________________^
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^
+    |
+    |     ^^^^^^^
+    |
+    |     ^^^^^^^
+    |
+    |         ^^^^^^^
+    |
+    |         ^^^^^^^^^
+    |
+    |         ^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |    ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^
+    |
+    |         ^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |                ^^^^^^^^^^^^^^^^^
+    |
+    |                ^^^^^^^^^
+    |
+    |                           ^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    | ^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    --> crates/kf-cuda/src/driver_unsafe.rs:1873:9
+     |
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+    |
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+    |
+    |            ---- fields in this struct
+    |                ^^^^^^^^^^
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:5
+     |
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+    |
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+    |
+    |
+    |
+    |                 ^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+    |
+    |                            ^^^^^^^^^
+    |
+    |                 ^^^^^^^^^
+    |
+    |                      ^^^^^^^^^^^^^^
+    |
+    |                                      ^^^^^^^^^
+    |
+    |                                                 ^^^^^^^^
+    Finished `release` profile [optimized] target(s) in 0.57s
+     Running unittests src/bin/kf-gr-tier.rs (/workspace/bw-follow-target/release/deps/kf_gr_tier-90c5179479ea0a26)
+running 7 tests
+test fixture_tests::an_unallocated_graphics_object_refuses_the_oracle_fixture ... ok
+test fixture_tests::blackwell_fixture_selects_its_own_i2m_3d_and_compute_objects ... ok
+test fixture_tests::native_ce_fixture_refuses_a_graphics_class ... FAILED
+test fixture_tests::blackwell_ce_fixture_changes_only_the_class_operand ... FAILED
+test fixture_tests::native_ce_fixture_uses_the_allocated_class_for_every_family ... FAILED
+test fixture_tests::native_ce_fixture_refuses_a_zero_class ... FAILED
+test fixture_tests::native_fixture_only_binds_graphics_objects_allocated_for_that_family ... ok
+failures:
+---- fixture_tests::native_ce_fixture_refuses_a_graphics_class stdout ----
+thread 'fixture_tests::native_ce_fixture_refuses_a_graphics_class' (2634882) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:852:9:
+assertion failed: ce_segment(0x902d).is_err()
+---- fixture_tests::blackwell_ce_fixture_changes_only_the_class_operand stdout ----
+thread 'fixture_tests::blackwell_ce_fixture_changes_only_the_class_operand' (2634880) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:837:9:
+assertion `left == right` failed
+  left: 51125
+ right: 51893
+---- fixture_tests::native_ce_fixture_uses_the_allocated_class_for_every_family stdout ----
+thread 'fixture_tests::native_ce_fixture_uses_the_allocated_class_for_every_family' (2634884) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:820:17:
+assertion `left == right` failed: Turing: native bind must select its allocated host object
+  left: 51125
+ right: 50613
+---- fixture_tests::native_ce_fixture_refuses_a_zero_class stdout ----
+thread 'fixture_tests::native_ce_fixture_refuses_a_zero_class' (2634883) panicked at crates/kf-harness/src/bin/kf-gr-tier.rs:847:9:
+assertion failed: ce_segment(0).is_err()
+failures:
+    fixture_tests::blackwell_ce_fixture_changes_only_the_class_operand
+    fixture_tests::native_ce_fixture_refuses_a_graphics_class
+    fixture_tests::native_ce_fixture_refuses_a_zero_class
+    fixture_tests::native_ce_fixture_uses_the_allocated_class_for_every_family
+test result: FAILED. 3 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p kf-harness --bin kf-gr-tier`

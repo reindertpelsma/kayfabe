@@ -1,0 +1,47 @@
+{
+  "source": "26691c14a",
+  "test_source_note": "Doc-only mutation plan committed while the immutable full test run was active; direct cargo/tool exit0 verified.",
+  "counts_pass_fail_ignore": {
+    "kf-abi": [
+      608,
+      0,
+      0
+    ],
+    "kf-chan": [
+      532,
+      0,
+      3
+    ],
+    "kf-chip": [
+      86,
+      0,
+      0
+    ],
+    "kf-disp": [
+      290,
+      0,
+      5
+    ],
+    "kf-harness": [
+      15,
+      0,
+      0
+    ],
+    "kf-qemu": [
+      407,
+      0,
+      0
+    ],
+    "kf-rm": [
+      812,
+      0,
+      0
+    ]
+  },
+  "total": [
+    2750,
+    0,
+    8
+  ],
+  "log_sha256": "646fa64b122667932e718bd38d271ebdf6a568fdcf1b545663b73d16ad383482"
+}

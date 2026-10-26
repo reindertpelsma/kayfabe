@@ -1,0 +1,210 @@
+{
+  "die": "GB202",
+  "driver": "Windows580.88/8088",
+  "source": "af8bdcda4c700d8b40163ee3bf27feb7cfa6539c",
+  "run": "bw_off_m1",
+  "n": 1,
+  "flags": "P19+RPC1/BODY1/DIAG_PROGRESS1000; displayOFF/GOPoff/emptyROM approved",
+  "Code0_observed_utc": "2026-10-21T13:42:23.6440579Z",
+  "verdict": "FAIL: actualCode0 then141reports/0x116 before600secondhold",
+  "bugcheck": "0x116",
+  "fault_dump_SystemTime_utc": "2026-10-21T13:42:45.709353+00:00",
+  "QMP_panic_utc": "2026-10-21T13:42:46.316353+00:00",
+  "new_host_Xids": [
+    {
+      "id": 32,
+      "utc": "2026-10-21T13:42:27.205488+00:00",
+      "channel": "0x0000000c",
+      "intr": "00200000"
+    },
+    {
+      "id": 32,
+      "utc": "2026-10-21T13:42:27.234361+00:00",
+      "channel": "0x0e000007",
+      "intr": "00200000"
+    }
+  ],
+  "actual_PROGRESS_STRAND_lines": 0,
+  "rpc_records": 3921,
+  "unparsed_rpc_records": 0,
+  "teardown_start": 3624,
+  "unload_ordinals": [
+    3920
+  ],
+  "last_nonfree_before_teardown": [
+    [
+      3621,
+      "76",
+      "RmControl",
+      "0",
+      "0x20801211",
+      "0x0"
+    ],
+    [
+      3622,
+      "76",
+      "RmControl",
+      "0",
+      "0x20801211",
+      "0x0"
+    ],
+    [
+      3623,
+      "76",
+      "RmControl",
+      "0",
+      "0x50800101",
+      "0x0"
+    ]
+  ],
+  "forty_second_window": {
+    "start": "2026-10-21T13:42:05.709353+00:00",
+    "end": "2026-10-21T13:42:45.709353+00:00",
+    "clock": "RPC observation UTC, not generation; fault time from public Microsoft header",
+    "records": 2740,
+    "first_ordinal": 1181,
+    "last_ordinal": 3920,
+    "last12": [
+      {
+        "ordinal": 3909,
+        "observed_utc": "2026-10-21T13:42:35.964181+00:00",
+        "observer_monotonic_ns": 6869119911835,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20800ab4",
+        "trace_result": "none",
+        "file_offset_after": 1181219
+      },
+      {
+        "ordinal": 3910,
+        "observed_utc": "2026-10-21T13:42:35.964339+00:00",
+        "observer_monotonic_ns": 6869120064476,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1181457
+      },
+      {
+        "ordinal": 3911,
+        "observed_utc": "2026-10-21T13:42:35.964422+00:00",
+        "observer_monotonic_ns": 6869120152568,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1181527
+      },
+      {
+        "ordinal": 3912,
+        "observed_utc": "2026-10-21T13:42:35.964488+00:00",
+        "observer_monotonic_ns": 6869120216224,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1181597
+      },
+      {
+        "ordinal": 3913,
+        "observed_utc": "2026-10-21T13:42:35.964547+00:00",
+        "observer_monotonic_ns": 6869120267510,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20800a38",
+        "trace_result": "0x0",
+        "file_offset_after": 1181708
+      },
+      {
+        "ordinal": 3914,
+        "observed_utc": "2026-10-21T13:42:35.964594+00:00",
+        "observer_monotonic_ns": 6869120322451,
+        "function": 70,
+        "kind": "UpdateBarPde",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1181791
+      },
+      {
+        "ordinal": 3915,
+        "observed_utc": "2026-10-21T13:42:35.964685+00:00",
+        "observer_monotonic_ns": 6869120406535,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1182017
+      },
+      {
+        "ordinal": 3916,
+        "observed_utc": "2026-10-21T13:42:35.964745+00:00",
+        "observer_monotonic_ns": 6869120464602,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1182087
+      },
+      {
+        "ordinal": 3917,
+        "observed_utc": "2026-10-21T13:42:35.964797+00:00",
+        "observer_monotonic_ns": 6869120516888,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1182157
+      },
+      {
+        "ordinal": 3918,
+        "observed_utc": "2026-10-21T13:42:35.964849+00:00",
+        "observer_monotonic_ns": 6869120569054,
+        "function": 10,
+        "kind": "Free",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1182227
+      },
+      {
+        "ordinal": 3919,
+        "observed_utc": "2026-10-21T13:42:35.964893+00:00",
+        "observer_monotonic_ns": 6869120612794,
+        "function": 76,
+        "kind": "RmControl",
+        "sequence": 0,
+        "selector": "0x20800afe",
+        "trace_result": "none",
+        "file_offset_after": 1182339
+      },
+      {
+        "ordinal": 3920,
+        "observed_utc": "2026-10-21T13:42:35.964964+00:00",
+        "observer_monotonic_ns": 6869120684166,
+        "function": 47,
+        "kind": "UnloadingGuestDriver",
+        "sequence": 0,
+        "selector": "-",
+        "trace_result": "0x0",
+        "file_offset_after": 1182491
+      }
+    ]
+  },
+  "interpretation": [
+    "M is insufficient to prevent this Windows TDR; no actual USER strand was reported, which does not rule out Translated/parked-worker defects.",
+    "The earlier1GB live dump is code0x193, NOT a141 engine dump. Its SystemTime13:41:56.862995UTC precedesCode0/Xids. WEREventTime is post-reboot report creation, not fault onset. First141 time/engine remainsUNVERIFIED.",
+    "No observedNoCeObject/poisoned channel in the exported census; optional95e23 CE branch not merged or run.",
+    "Census taken after guest teardown is not a timeout-time completion proof; GP_GET alone does not prove GPU completion.",
+    "NewXid guard stops furtherGPUwork on thisbox. Linux guest regression UNRUN after this stop.",
+    "CDBpublic-symbol rerun remainsSTOPPED pending ownerapproval for same-guest imagepaths; PDBonlyproxy refusedEXE/DLL downloads, no relaxation/bypass."
+  ]
+}

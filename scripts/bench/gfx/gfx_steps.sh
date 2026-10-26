@@ -27,7 +27,7 @@ MS=$($SUDO cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo abs
 CARDS=$(ls /dev/dri 2>/dev/null | tr '\n' ' ')
 echo "GFX_S1_MODESET=$MS"; echo "GFX_S1_DRI=$CARDS"
 $SUDO dmesg 2>/dev/null | grep -i 'nvidia-drm\|nvidia-modeset\|nvkms\|displayless' | tail -8 | sed 's/^/  dmesg: /'
-if [ "$MS" = Y ] && echo "$CARDS" | grep -q card && echo "$CARDS" | grep -q renderD; then echo "GFX_S1=PASS"
+if [ "$MS" = Y ] && grep -q card <<<"$CARDS" && grep -q renderD <<<"$CARDS"; then echo "GFX_S1=PASS"
 else echo "GFX_S1=FAIL"; fi
 # the render node must be usable by this (unprivileged) user for the UMDs
 ls -la /dev/dri/ 2>/dev/null | sed 's/^/  dri: /'
@@ -43,14 +43,14 @@ echo "GFX_VULKANINFO_RC=$VIRC"
 VC=$(cd /tmp && timeout "$T" "$OUT/vk_gfx" compute 2>&1); VCRC=$?
 echo "$VC" | sed 's/^/  /'; echo "$VC" | grep -E '^VKC_(HASH|BAD)='
 echo "GFX_VKC_RC=$VCRC"
-if [ "$VIRC" -eq 0 ] && echo "$VI" | grep -q 'deviceName.*NVIDIA' && echo "$VC" | grep -q '^VKC_BAD=0$'; then echo "GFX_S2=PASS"
+if [ "$VIRC" -eq 0 ] && grep -q 'deviceName.*NVIDIA' <<<"$VI" && grep -q '^VKC_BAD=0$' <<<"$VC"; then echo "GFX_S2=PASS"
 else echo "GFX_S2=FAIL"; fi
 
 # ── S3: Vulkan offscreen render with depth ──────────────────────────────────────────────────
 VR=$(cd /tmp && timeout "$T" "$OUT/vk_gfx" render "/tmp/vkr_$ROLE" 2>&1); VRRC=$?
 echo "$VR" | sed 's/^/  /'; echo "$VR" | grep -E '^VKR_(HASH_[AZB]|REF_FAILS)='
 echo "GFX_VKR_RC=$VRRC"
-if echo "$VR" | grep -q '^VKR_REF_FAILS=0$'; then echo "GFX_S3=PASS"; else echo "GFX_S3=FAIL"; fi
+if grep -q '^VKR_REF_FAILS=0$' <<<"$VR"; then echo "GFX_S3=PASS"; else echo "GFX_S3=FAIL"; fi
 
 # ── S4: EGL headless GL ─────────────────────────────────────────────────────────────────────
 EI=$(timeout "$T" eglinfo -B 2>&1); EIRC=$?
@@ -59,7 +59,7 @@ echo "GFX_EGLINFO_RC=$EIRC"
 ER=$(cd /tmp && timeout "$T" "$OUT/egl_gfx" 2>&1); ERRC=$?
 echo "$ER" | sed 's/^/  /'; echo "$ER" | grep -E '^EGLR_(HASH_[AZB]|REF_FAILS)=|^EGL_RENDERER='
 echo "GFX_EGLR_RC=$ERRC"
-if echo "$ER" | grep -q '^EGLR_REF_FAILS=0$' && echo "$ER" | grep -q '^EGL_RENDERER=.*NVIDIA'; then echo "GFX_S4=PASS"
+if grep -q '^EGLR_REF_FAILS=0$' <<<"$ER" && grep -q '^EGL_RENDERER=.*NVIDIA' <<<"$ER"; then echo "GFX_S4=PASS"
 else echo "GFX_S4=FAIL"; fi
 
 # ── S5: headless desktop — Xvfb + VirtualGL with the EGL back end ──────────────────────────
@@ -78,7 +78,7 @@ else
     echo "$GX" | sed 's/^/  /'; echo "$GX" | grep -E '^GLXR_(HASH_[AZB]|REF_FAILS)=|^GLX_RENDERER='
     echo "GFX_GLXR_RC=$GXRC"
     kill $XP 2>/dev/null; wait $XP 2>/dev/null
-    if echo "$GI" | grep -qi 'renderer string.*NVIDIA' && echo "$GX" | grep -q '^GLXR_REF_FAILS=0$' \
-       && echo "$GX" | grep -q '^GLX_RENDERER=.*NVIDIA'; then echo "GFX_S5=PASS"; else echo "GFX_S5=FAIL"; fi
+    if grep -qi 'renderer string.*NVIDIA' <<<"$GI" && grep -q '^GLXR_REF_FAILS=0$' <<<"$GX" \
+       && grep -q '^GLX_RENDERER=.*NVIDIA' <<<"$GX"; then echo "GFX_S5=PASS"; else echo "GFX_S5=FAIL"; fi
 fi
 echo "GFX_STEPS_END role=$ROLE at $(date -Is)"

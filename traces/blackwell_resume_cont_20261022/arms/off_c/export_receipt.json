@@ -1,0 +1,198 @@
+{
+  "arm_off_c_start_receipt.json": {
+    "rental_path": "/root/prov/arm_off_c_start_receipt.json",
+    "original_bytes": 580,
+    "original_sha256": "65d59ad80c9998e4da3036fd50626f0cd3fb260c33c3cbc5e3b2264399afb95c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "65d59ad80c9998e4da3036fd50626f0cd3fb260c33c3cbc5e3b2264399afb95c"
+  },
+  "arm_off_c_process_receipt.json": {
+    "rental_path": "/root/prov/arm_off_c_process_receipt.json",
+    "original_bytes": 1280,
+    "original_sha256": "439f3d59e2e9d03836b8626f07813690940a6d084867751d404482a9b6e566c0",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "439f3d59e2e9d03836b8626f07813690940a6d084867751d404482a9b6e566c0"
+  },
+  "arm_off_c_pre_enable.txt": {
+    "rental_path": "/root/prov/arm_off_c_pre_enable.txt",
+    "original_bytes": 426,
+    "original_sha256": "516bc701a01fd2bb19a606c486aed13d58c3a53c48b782dcd12e88ceed7cdb47",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "cdee624c5cc561d87591a5ed32e908ecd12a84513fc6f1d666915892bd2c6bab"
+  },
+  "arm_off_c_enable.txt": {
+    "rental_path": "/root/prov/arm_off_c_enable.txt",
+    "original_bytes": 503,
+    "original_sha256": "331654d45654b7cd83e4b04e4fce6598a1b4728d19c528332775d28d86be1d81",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f91e3e2be22f4889e7760cac6089f18d67c0647dece7d8fe3b68255d15156d8c"
+  },
+  "arm_off_c_diag.txt": {
+    "rental_path": "/root/prov/arm_off_c_diag.txt",
+    "original_bytes": 48,
+    "original_sha256": "138644feac9a90519ea062e71704f2087a623470d9f991db9110943552fec422",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "885ee5ee9e1af63b26d9152a8cd3421bc71ef38a5944b14a015e501bda0b0cf3"
+  },
+  "arm_off_c_cleanup_started.txt": {
+    "rental_path": "/root/prov/arm_off_c_cleanup_started.txt",
+    "original_bytes": 26,
+    "original_sha256": "28cbfefa8654f279f1d73b2aa95be469cbc8d8ce8a6f7fd001722f504779b89f",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "28cbfefa8654f279f1d73b2aa95be469cbc8d8ce8a6f7fd001722f504779b89f"
+  },
+  "arm_off_c.log": {
+    "rental_path": "/root/prov/arm_off_c.log",
+    "original_bytes": 2048,
+    "original_sha256": "593a467eff38aa5d2e34e03bde06a698cb2658adb4e037e10a32619fbdd70d39",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "dd0d361ae0789a85ac0556388e653541dc73fdedc6c5cc4aa010fc81874cd0c1"
+  },
+  "collect_off_c.txt": {
+    "rental_path": "/root/prov/collect_off_c.txt",
+    "original_bytes": 2923,
+    "original_sha256": "56ac5e6a8f3c2200c24a6e713a12d0143c177c5aef9329fb3032664c884d6244",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "4a51cc73be528712153a3f18f7c11698621d4b1e4521f3e7728b1c9707e5f067"
+  },
+  "collect_off_c.log": {
+    "rental_path": "/root/prov/collect_off_c.log",
+    "original_bytes": 553,
+    "original_sha256": "0aa0e43cb80c17fbd2ec726327494c853c7d5849e9b2d591e88b04bd03a7483c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "739ec46b1efb3403ec85131168b1b67a969a01c342a65faa3ac1756400702262"
+  },
+  "api.tsv": {
+    "rental_path": "/root/prov/arms/off_c/api.tsv",
+    "original_bytes": 109889,
+    "original_sha256": "bcf18c65f8146cf60cd6997e8a037d6c2b49ed6a535e67c0fa81a4599ef7790b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "bcf18c65f8146cf60cd6997e8a037d6c2b49ed6a535e67c0fa81a4599ef7790b"
+  },
+  "allocations.jsonl": {
+    "rental_path": "/root/prov/arms/off_c/allocations.jsonl",
+    "original_bytes": 208926,
+    "original_sha256": "87bbcfd8653a278e220f538cfebc029a91374393e65d96d52ffba1c96d8db49b",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "87bbcfd8653a278e220f538cfebc029a91374393e65d96d52ffba1c96d8db49b"
+  },
+  "allocations.receipt.json": {
+    "rental_path": "/root/prov/arms/off_c/allocations.receipt.json",
+    "original_bytes": 490,
+    "original_sha256": "2714a03f1f56e0e55085578282ccbe290b19bf4f9d94be4076eac7d58393044a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "2714a03f1f56e0e55085578282ccbe290b19bf4f9d94be4076eac7d58393044a"
+  },
+  "summary.json": {
+    "rental_path": "/root/prov/arms/off_c/summary.json",
+    "original_bytes": 51819,
+    "original_sha256": "2650543737a96a1b0438ca116ef684cad26dc02726c38404cdc7035d0bfe5119",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "2650543737a96a1b0438ca116ef684cad26dc02726c38404cdc7035d0bfe5119"
+  },
+  "abort_context.txt": {
+    "rental_path": "/root/prov/arms/off_c/abort_context.txt",
+    "original_bytes": 42627,
+    "original_sha256": "e82aabe6df3e8f1eee7afdfe1391697279ccc2dff1530d3189c1388dae5529b4",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e82aabe6df3e8f1eee7afdfe1391697279ccc2dff1530d3189c1388dae5529b4"
+  },
+  "kf_line_census.txt": {
+    "rental_path": "/root/prov/arms/off_c/kf_line_census.txt",
+    "original_bytes": 7584,
+    "original_sha256": "fd8fd06ff26801279282c757950314a3080b6a674a35f84e34e78bcf4ba917f0",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f3dda01b1016f5d5bdbe816fcc53d1621a4b4bfa04ae8452909399978c9ddb13"
+  },
+  "channel_state.tsv": {
+    "rental_path": "/root/prov/arms/off_c/channel_state.tsv",
+    "original_bytes": 36988,
+    "original_sha256": "f7071e55bc84f7404e4f07e2621aaa8833b582a8c33654d08e3ddbf3a5f426e3",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f7071e55bc84f7404e4f07e2621aaa8833b582a8c33654d08e3ddbf3a5f426e3"
+  },
+  "state_receipt.json": {
+    "rental_path": "/root/prov/arms/off_c/state_receipt.json",
+    "original_bytes": 452,
+    "original_sha256": "9d254e621b55ac6bd4e382517ae573a8b04919dbe5e9a0c9db6669a042928a8a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "9d254e621b55ac6bd4e382517ae573a8b04919dbe5e9a0c9db6669a042928a8a"
+  },
+  "rpc_timing.jsonl": {
+    "rental_path": "/root/prov/arms/off_c/rpc_timing.jsonl",
+    "original_bytes": 863685,
+    "original_sha256": "f5e2deded48ddb6c8ad4c6bd3460d8d1c5c445e15dd000b6b9be2261d37c2213",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "f5e2deded48ddb6c8ad4c6bd3460d8d1c5c445e15dd000b6b9be2261d37c2213"
+  },
+  "rpc_timing.receipt.json": {
+    "rental_path": "/root/prov/arms/off_c/rpc_timing.receipt.json",
+    "original_bytes": 396,
+    "original_sha256": "97a58ebf7e4464426aac0bca1f006ef74993d429483fb66700bd8fc0f9d91073",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "97a58ebf7e4464426aac0bca1f006ef74993d429483fb66700bd8fc0f9d91073"
+  },
+  "rpc_timing_controller.log": {
+    "rental_path": "/root/prov/arms/off_c/rpc_timing_controller.log",
+    "original_bytes": 0,
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "host_kernel.log": {
+    "rental_path": "/root/prov/arms/off_c/host_kernel.log",
+    "original_bytes": 375,
+    "original_sha256": "007e26706597b39e93363698586504a59554eaabb33cc98f49621ab18793866e",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "007e26706597b39e93363698586504a59554eaabb33cc98f49621ab18793866e"
+  },
+  "keylines.jsonl": {
+    "rental_path": "/root/prov/arms/off_c/keylines.jsonl",
+    "original_bytes": 943190,
+    "original_sha256": "54832fb37dff15873a3a709e8e8c4d3761dfe089c1758896a554966f22116f9e",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "54832fb37dff15873a3a709e8e8c4d3761dfe089c1758896a554966f22116f9e"
+  },
+  "xid_policy.json": {
+    "rental_path": "/root/prov/arms/off_c/xid_policy.json",
+    "original_bytes": 492,
+    "original_sha256": "3c5be4302e90895e0b6714e9375f7a0014c5c93c86b556bdb38ece7c4fd2f9e3",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "3c5be4302e90895e0b6714e9375f7a0014c5c93c86b556bdb38ece7c4fd2f9e3"
+  },
+  "dump_headers.jsonl": {
+    "rental_path": "/root/prov/arms/off_c/dump_headers.jsonl",
+    "original_bytes": 553,
+    "original_sha256": "7590925f4ca3a60add5839e7d0e84b09b2537173236fbfb60d38d943d16be3df",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "7590925f4ca3a60add5839e7d0e84b09b2537173236fbfb60d38d943d16be3df"
+  },
+  "display_driver.json": {
+    "rental_path": "/root/prov/arms/off_c/display_driver.json",
+    "original_bytes": 144,
+    "original_sha256": "6d441b302422474302b6c77cc151641d5a694d0338a518ea5352f884a41d3fcd",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "90aa4e85891b0e2c4e8e18dc1ca2c6f471e5ecd48ae64e8b1ff71ea711cca6d1"
+  },
+  "minidump_sha256.txt": {
+    "rental_path": "/root/prov/arms/off_c/minidump_sha256.txt",
+    "original_bytes": 118,
+    "original_sha256": "17d4ea5ab4ce21821b64f4c9effd4c3191906c02f3e1f254b30ef455906f9e2c",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "17d4ea5ab4ce21821b64f4c9effd4c3191906c02f3e1f254b30ef455906f9e2c"
+  },
+  "wer_times_off_c.txt": {
+    "rental_path": "/root/prov/wer_times_off_c.txt",
+    "original_bytes": 832,
+    "original_sha256": "5fd6b25da9262b222c1d5cc60f3f040740f325e10524aeb285389f41b6810e2a",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "c6e130caea12c5fec0f5f3a1a47a2ea3df44dc3d2f930f494b22e9266a7d0ad0"
+  },
+  "dump_hdr_off_c.txt": {
+    "rental_path": "/root/prov/dump_hdr_off_c.txt",
+    "original_bytes": 16201,
+    "original_sha256": "105659ddb811d8f0d048e666765a44e4165ca5d8a1806469417ff74610ced177",
+    "normalization": "trailing whitespace and newline only",
+    "export_sha256": "bea1ceb3f17d02487544b0c41f7a3a50d7de3633c557b4916e59eb80f4c7c9f2"
+  }
+}

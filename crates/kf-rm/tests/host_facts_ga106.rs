@@ -190,6 +190,7 @@ fn the_name_derived_from_the_real_ga106_is_the_hosts_own_string() {
 fn every_host_fact_states_where_it_comes_from() {
     let HostFacts {
         family: _,
+        die: _,
         has_c2c: _,
         ce_caps: _,
         engines: _,
@@ -230,6 +231,7 @@ fn every_host_fact_states_where_it_comes_from() {
     } = ga106::host_facts();
     let fields = [
         "family",
+        "die",
         "has_c2c",
         "ce_caps",
         "engines",

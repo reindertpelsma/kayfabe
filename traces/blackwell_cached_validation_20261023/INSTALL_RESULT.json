@@ -1,0 +1,30 @@
+{
+  "utc": "2026-10-22T23:49:02.247666+00:00",
+  "own_id": 57285340,
+  "source": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "install_started_utc": "2026-10-22T23:20:58Z",
+  "install_boot_end_utc": "2026-10-22T23:43:10Z",
+  "check_and_seal_end_utc": "2026-10-22T23:45:52Z",
+  "checks": {
+    "WIN_EDITION": "PASS",
+    "WIN_SECUREBOOT": "PASS",
+    "WIN_DB_HAS_KAYFABE": "PASS",
+    "WIN_TPM": "PASS",
+    "WIN_TPM_EK": "INFO",
+    "WIN_BITLOCKER": "PASS",
+    "WIN_VBS": "PASS",
+    "WIN_VIRTIO": "PASS",
+    "WIN_PNP_CLEAN": "PASS",
+    "WIN_DISPLAY": "INFO",
+    "WIN_SERVICES": "PASS",
+    "WIN_WU_OFF": "PASS",
+    "WIN_NO_HIBER": "PASS",
+    "WIN_SAC_OFF": "PASS",
+    "WIN_FIRSTLOGON": "PASS"
+  },
+  "check_failures": 0,
+  "base_sealed_readonly": true,
+  "scope": "standardVGA generic preparation only; NVIDIA580.88 bind/ON pending",
+  "nvidia_code0": null,
+  "guest_secret_material_returned": false
+}

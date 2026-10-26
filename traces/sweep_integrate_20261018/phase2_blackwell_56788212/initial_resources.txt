@@ -1,0 +1,18 @@
+2026-10-19T20:54:33+00:00
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+30
+               total        used        free      shared  buff/cache   available
+Mem:           49739         659       48408           1         671       48576
+Swap:              0           0           0
+KVM_PRESENT
+/dev/nvidia-uvm
+/dev/nvidia-uvm-tools
+/dev/nvidia0
+/dev/nvidiactl
+
+/dev/nvidia-caps:
+nvidia-cap1
+nvidia-cap2
+No devices were found
+6.8.0-59-generic

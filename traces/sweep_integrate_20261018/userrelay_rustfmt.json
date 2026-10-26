@@ -1,0 +1,75 @@
+{
+  "changed_topic_lines_formatted": true,
+  "inherited_formatting_hunks_preserved": [
+    {
+      "source_lines": [
+        120,
+        120
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        167,
+        171
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        209,
+        209
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        488,
+        488
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        504,
+        513
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        858,
+        864
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        893,
+        893
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        895,
+        895
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        898,
+        898
+      ],
+      "new_topic_overlap": false
+    },
+    {
+      "source_lines": [
+        938,
+        944
+      ],
+      "new_topic_overlap": false
+    }
+  ]
+}

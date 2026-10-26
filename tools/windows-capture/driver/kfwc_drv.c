@@ -4,7 +4,8 @@
  *
  * A legacy (non-PnP) WDM driver, loaded on demand on a machine we own, that
  *   1. finds the NVIDIA display device through PCI configuration space reads,
- *   2. maps the first 1.1 MiB of its BAR0 read-only (MmMapIoSpaceEx, PAGE_READONLY),
+ *   2. maps the BAR0 prefix through the fixed display-caps page read-only
+ *      (MmMapIoSpaceEx, PAGE_READONLY); only whitelisted registers may be read,
  *   3. runs the platform independent engine (lib/): boot-args mailbox discovery, RAM scan
  *      fallback, queue walker, loss accounting, on a PASSIVE_LEVEL system thread with a bounded
  *      per-iteration budget,
@@ -44,6 +45,7 @@ typedef const volatile UCHAR *KFWC_MMIO;
 
 C_ASSERT(KFWC_IOCTL_INFO == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_ACCESS));
 C_ASSERT(KFWC_IOCTL_STOP == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_READ_ACCESS));
+C_ASSERT(KFWC_IOCTL_DISPLAY_CAPS == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_READ_ACCESS));
 
 typedef struct GPU {
     ULONG bus, dev, fn;
@@ -68,6 +70,10 @@ typedef struct STATE {
     ULONG range_count;
     GPU gpus[MAX_GPUS];
     ULONG gpu_count, gpu_sel;
+    /* Only this module can seed rediscovery; no ioctl accepts a physical address. */
+    kfwc_u64 recent_table_pa;
+    GPU recent_gpu;
+    BOOLEAN recent_valid;
     ULONG bar_state;
     KFWC_MMIO bar0;             /* the only way registers are touched */
     PVOID bar0_map;             /* the same mapping, kept untyped ONLY to hand back to MmUnmapIoSpace */
@@ -319,7 +325,9 @@ static VOID Worker(PVOID context)
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
     while (!stopping(s)) {
         kfwc_u32 n;
+        kfwc_u64 recent;
         ULONG wait_us;
+        BOOLEAN early_scan;
         LARGE_INTEGER delay;
         ExAcquireFastMutex(&s->lock);
         if (!s->gpu_count && (ULONGLONG)KeQueryPerformanceCounter(NULL).QuadPart - last_pci > (ULONGLONG)s->qpc_freq.QuadPart) {
@@ -327,6 +335,16 @@ static VOID Worker(PVOID context)
             pci_find_gpus(s);
         }
         n = kfwc_engine_step(s->engine);
+        early_scan = (BOOLEAN)kfwc_engine_recent_scan_due(s->engine);
+        recent = kfwc_engine_recent_table(s->engine);
+        if (recent && s->gpu_sel < s->gpu_count) {
+            /* Both old rings have advanced beyond retaining sequence zero. A
+             * later revisit can therefore distinguish that old epoch from a
+             * newly zeroed/published queue at the same validated RAM location. */
+            s->recent_table_pa = recent;
+            s->recent_gpu = s->gpus[s->gpu_sel];
+            s->recent_valid = TRUE;
+        }
         if (s->engine->state == KFWC_ST_SEARCHING && s->req.use_scan)
             /* scan steps at the scan cadence; in a back-off pause (or before the scan delay
              * ends) only the mailbox is read, and the engine reads it every 10 ms at most */
@@ -336,7 +354,7 @@ static VOID Worker(PVOID context)
             wait_us = s->req.poll_us;
         s->loops++;
         ExReleaseFastMutex(&s->lock);
-        if (n && ++burst < 16) /* more may be waiting: a bounded burst, then yield */
+        if ((n || early_scan) && ++burst < 16) /* bounded early scan/message burst, then yield */
             continue;
         burst = 0;
         delay.QuadPart = -(LONGLONG)wait_us * 10;
@@ -395,6 +413,16 @@ static NTSTATUS capture_start(STATE *s, const kfwc_start_req *req)
     cfg.layout = r.layout;
     cfg.use_mailbox = r.use_mailbox ? 1 : 0;
     cfg.use_scan = r.use_scan ? 1 : 0;
+    if (s->recent_valid && s->gpu_sel < s->gpu_count) {
+        const GPU *g = &s->gpus[s->gpu_sel];
+        const GPU *old = &s->recent_gpu;
+        if (g->bus == old->bus && g->dev == old->dev && g->fn == old->fn &&
+            g->vendor == old->vendor && g->device == old->device && g->revision == old->revision) {
+            cfg.recent_table_pa = s->recent_table_pa;
+            cfg.recent_window_bytes = 1ull << 30;
+            cfg.recent_window_ticks = 15u * (kfwc_u64)s->qpc_freq.QuadPart;
+        }
+    }
     cfg.scan_bytes_per_step = r.scan_bytes_per_step;
     cfg.max_msgs_per_step = r.max_msgs_per_step;
     cfg.scan_delay_ticks = (kfwc_u64)r.scan_delay_ms * (kfwc_u64)s->qpc_freq.QuadPart / 1000u;
@@ -525,6 +553,22 @@ NTSTATUS KfwcDispatch(PDEVICE_OBJECT device, PIRP irp)
             ExReleaseFastMutex(&s->lock);
             info = sizeof(*i);
             status = STATUS_SUCCESS;
+        } else if (code == KFWC_IOCTL_DISPLAY_CAPS && in_len == 0 && out_len >= sizeof(kfwc_display_caps_out)) {
+            kfwc_display_caps_out *o = (kfwc_display_caps_out *)buf;
+            RtlZeroMemory(o, sizeof(*o));
+            ExAcquireFastMutex(&s->lock);
+            if (!s->gpu_count)
+                pci_find_gpus(s);
+            status = STATUS_DEVICE_NOT_READY;
+            if (s->gpu_sel < s->gpu_count &&
+                !kfwc_display_caps_read(&s->plat, o->words, KFWC_DISPLAY_CAPS_WORDS)) {
+                o->pci_vendor_id = s->gpus[s->gpu_sel].vendor;
+                o->pci_device_id = s->gpus[s->gpu_sel].device;
+                o->word_count = KFWC_DISPLAY_CAPS_WORDS;
+                info = sizeof(*o);
+                status = STATUS_SUCCESS;
+            }
+            ExReleaseFastMutex(&s->lock);
         } else if (code == KFWC_IOCTL_STATS && in_len == 0 && out_len >= sizeof(kfwc_stats_out)) {
             kfwc_stats_out *o = (kfwc_stats_out *)buf;
             ExAcquireFastMutex(&s->lock);
@@ -552,7 +596,7 @@ NTSTATUS KfwcDispatch(PDEVICE_OBJECT device, PIRP irp)
             capture_stop(s);
             status = STATUS_SUCCESS;
         } else if (code == KFWC_IOCTL_INFO || code == KFWC_IOCTL_STATS || code == KFWC_IOCTL_EVENTS ||
-                   code == KFWC_IOCTL_START || code == KFWC_IOCTL_STOP) {
+                   code == KFWC_IOCTL_START || code == KFWC_IOCTL_STOP || code == KFWC_IOCTL_DISPLAY_CAPS) {
             status = STATUS_BUFFER_TOO_SMALL;
         }
         break;

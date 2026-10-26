@@ -1,0 +1,11 @@
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] BINARY kf3-bin-rev:0452613b  (/workspace/bench/kf3-bins/0452613b/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] host dmesg watermark: 1247 lines
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] booting (extra args: none)
+KF_GUEST_PROFILE image=/workspace/bench/guest-595.91.07.qcow2 source=receipt version=595.91.07
+== kf3 binary: /workspace/bench/kf3-bins/0452613b/qemu-system-x86_64 (rev 24906bf3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=595.91.07
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] guest is up after 39s
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] module unloaded and ring buffer cleared; loading cold
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] opening the device (this is what runs RmInitAdapter)
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] captured 35 dmesg lines, 32 NVRM, 0 adapter → /workspace/bench/run_cl_sweep_c4_ad102_g595_cup2_1_dmesg.log
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] --- the verdict lines ---
+[boot_capture:cl_sweep_c4_ad102_g595_cup2_1] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/cup2_hook_deadline.sh

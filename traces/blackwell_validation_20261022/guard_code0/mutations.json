@@ -1,0 +1,39 @@
+{
+  "mutants": [
+    {
+      "mutant": "watcher_bypasses_code0_gate",
+      "exit_code": 1,
+      "distinct_killers": [
+        "test_progress_while_windows_reports_code43_stops",
+        "test_progress_without_any_windows_code0_stops"
+      ]
+    },
+    {
+      "mutant": "another_vm_life_can_supply_code0",
+      "exit_code": 1,
+      "distinct_killers": [
+        "test_another_arm_cannot_supply_code0",
+        "test_another_pid_cannot_supply_code0"
+      ]
+    },
+    {
+      "mutant": "writer_accepts_nonzero_or_wrong_driver",
+      "exit_code": 1,
+      "distinct_killers": [
+        "test_code43_cannot_record_or_retain_an_old_code0",
+        "test_disabled_code22_cannot_record_or_retain_an_old_code0",
+        "test_observed_tdr_cannot_record_clean_init",
+        "test_wrong_driver_cannot_record_code0"
+      ]
+    },
+    {
+      "mutant": "earlier_progress_or_code0_can_excuse_fault",
+      "exit_code": 1,
+      "distinct_killers": [
+        "test_code0_does_not_excuse_fault_before_prefix_was_observed",
+        "test_late_code0_cannot_retroactively_excuse_an_earlier_fault"
+      ]
+    }
+  ],
+  "source_restored_sha256": "7ced94eba617d3ef772d67c4cddbffc4cd6ea35d0cf691f05274f3dc87d412a4"
+}

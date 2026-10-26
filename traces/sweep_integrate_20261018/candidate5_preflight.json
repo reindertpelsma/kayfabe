@@ -1,0 +1,14 @@
+{
+  "current_line": "f8f9d1a5f0aae58fc8ccf0da740cf12682cd284e",
+  "incoming": "1cb0486100a0c9b434ae56880ca6f23971e9a34a",
+  "tree": "fa45a4e257bc863d4c195e6e0e29d6efa3055b2b",
+  "applied": false,
+  "conflicts": [
+    "CONFLICT (content): Merge conflict in crates/kf-chan/src/user_loop.rs",
+    "CONFLICT (content): Merge conflict in crates/kf-chan/tests/user_loop_model.rs",
+    "CONFLICT (content): Merge conflict in crates/kf-qemu/src/device.rs",
+    "CONFLICT (content): Merge conflict in crates/kf-qemu/src/mem.rs",
+    "CONFLICT (content): Merge conflict in crates/kf-qemu/src/userpump.rs",
+    "CONFLICT (content): Merge conflict in docs/STATUS_AND_HANDOFF.md"
+  ]
+}

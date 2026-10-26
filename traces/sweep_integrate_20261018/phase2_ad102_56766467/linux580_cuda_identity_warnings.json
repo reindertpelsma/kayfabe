@@ -1,0 +1,49 @@
+[
+  {
+    "rung": "cup2",
+    "driver_receipts": [
+      "[boot_capture:cl_sweep249_ad102_g580_cup2_1] BINARY kf3-bin-rev:24906bf3  (/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64)  \u21d2 every claim from this boot cites THIS revision",
+      "== kf3 binary: /workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 (rev 24906bf3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04",
+      "| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |"
+    ],
+    "guest_heartbeat_timeout_lines_captured": 0,
+    "guest_xid_lines_captured": 0,
+    "guest_flip_timeout_lines_captured": 0
+  },
+  {
+    "rung": "cup3",
+    "driver_receipts": [
+      "[boot_capture:cl_sweep249_ad102_g580_cup3_1] BINARY kf3-bin-rev:24906bf3  (/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64)  \u21d2 every claim from this boot cites THIS revision",
+      "== kf3 binary: /workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 (rev 24906bf3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04",
+      "| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |",
+      "    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.580.159.04"
+    ],
+    "guest_heartbeat_timeout_lines_captured": 0,
+    "guest_xid_lines_captured": 0,
+    "guest_flip_timeout_lines_captured": 0
+  },
+  {
+    "rung": "cup8",
+    "driver_receipts": [
+      "[boot_capture:cl_sweep249_ad102_g580_cup8_1] BINARY kf3-bin-rev:24906bf3  (/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64)  \u21d2 every claim from this boot cites THIS revision",
+      "== kf3 binary: /workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 (rev 24906bf3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04",
+      "| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |",
+      "    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.580.159.04"
+    ],
+    "guest_heartbeat_timeout_lines_captured": 0,
+    "guest_xid_lines_captured": 0,
+    "guest_flip_timeout_lines_captured": 0
+  },
+  {
+    "rung": "cup8bench",
+    "driver_receipts": [
+      "[boot_capture:cl_sweep249_ad102_g580_cup8bench_1] BINARY kf3-bin-rev:24906bf3  (/workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64)  \u21d2 every claim from this boot cites THIS revision",
+      "== kf3 binary: /workspace/bench/kf3-bins/24906bf3/qemu-system-x86_64 (rev 24906bf3)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04",
+      "| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |",
+      "    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.580.159.04"
+    ],
+    "guest_heartbeat_timeout_lines_captured": 0,
+    "guest_xid_lines_captured": 0,
+    "guest_flip_timeout_lines_captured": 0
+  }
+]

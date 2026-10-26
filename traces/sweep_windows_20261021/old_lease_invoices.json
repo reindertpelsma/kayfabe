@@ -1,0 +1,42 @@
+{
+  "utc": "2026-10-21T11:28:10.822548+00:00",
+  "invoices_api_rows": [
+    {
+      "instance_id": 56949833,
+      "amount": "2.086",
+      "quantity": "1.955",
+      "rate": "1.0667",
+      "timestamp": 1792454400,
+      "type": "charge"
+    },
+    {
+      "instance_id": 56949833,
+      "amount": "0.103",
+      "quantity": "2.053",
+      "rate": "0.0500",
+      "timestamp": 1792454400,
+      "type": "charge"
+    },
+    {
+      "instance_id": 56964717,
+      "amount": "2.704",
+      "quantity": "2.897",
+      "rate": "0.9333",
+      "timestamp": 1792540800,
+      "type": "charge"
+    },
+    {
+      "instance_id": 56964717,
+      "amount": "0.098",
+      "quantity": "2.941",
+      "rate": "0.0333",
+      "timestamp": 1792540800,
+      "type": "charge"
+    }
+  ],
+  "totals_by_own_id": {
+    "56949833": 2.189,
+    "56964717": 2.802
+  },
+  "scope": "Old overnight leases only; new task6 stretch has no rentals yet."
+}

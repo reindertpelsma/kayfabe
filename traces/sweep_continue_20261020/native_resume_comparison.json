@@ -1,0 +1,2781 @@
+{
+  "native_ref": "0bbf3c55fe7679dd0d82fe8ff8de3dcbf5a83216",
+  "virtual_ref": "df87431d5",
+  "native_metadata_sha256": "03c4117d3b0f1dcf5bfd18162c35ae6e756ef274770dd0dabf95389347ce3d4c",
+  "virtual_metadata_sha256": "00520bbaf10825ba7064e8eebcae3fae41c06c9fe07bcc800fbc4cba5d7c7afe",
+  "native_commands": 3804,
+  "native_status": 3863,
+  "native_zero_loss_complete": true,
+  "virtual_rpcs": 3965,
+  "first_policy_divergence": {
+    "ordinal": "100",
+    "function": "76",
+    "kind": "RmControl",
+    "rpc_sequence": "0",
+    "control_or_class": "0x20809064",
+    "trace_result": "0x56"
+  },
+  "relevant_refusals": [
+    {
+      "selector": "0x20809064",
+      "virtual_nonzero": [
+        {
+          "ordinal": "100",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3442",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3448",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3487",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3489",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3496",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3498",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3588",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3589",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3602",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3610",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3640",
+          "function": "76",
+          "kind": "RmControl",
+          "rpc_sequence": "0",
+          "control_or_class": "0x20809064",
+          "trace_result": "0x56"
+        }
+      ],
+      "native_cmd": [
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "251",
+          "dir": "cmd",
+          "element_sequence": "118",
+          "function": "0x4c",
+          "rpc_result": "0xffffffff",
+          "rpc_result_private": "0xffffffff",
+          "rpc_sequence": "0",
+          "kind": "control",
+          "control_or_class": "0x20809064",
+          "control_status": "0x0",
+          "declared_params_bytes": "520",
+          "decode": "ok"
+        }
+      ],
+      "native_status": [
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "259",
+          "dir": "status",
+          "element_sequence": "136",
+          "function": "0x4c",
+          "rpc_result": "0x0",
+          "rpc_result_private": "0x0",
+          "rpc_sequence": "0",
+          "kind": "control",
+          "control_or_class": "0x20809064",
+          "control_status": "0x0",
+          "declared_params_bytes": "520",
+          "decode": "ok"
+        }
+      ]
+    },
+    {
+      "selector": "0x402c",
+      "virtual_nonzero": [
+        {
+          "ordinal": "436",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "446",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "456",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "466",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "488",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "504",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "519",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "541",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "569",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "579",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "589",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "599",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "609",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "619",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "629",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "639",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "649",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "659",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "669",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "679",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "689",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "699",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "709",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "719",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "729",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "739",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "749",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "759",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "769",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "779",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "789",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "799",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "809",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "819",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "829",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "839",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "849",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "859",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "869",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "879",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "889",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "899",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "909",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "919",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "929",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "939",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "949",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "959",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "969",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "979",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "989",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "999",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1009",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1019",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1029",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1039",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1049",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1059",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1069",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1079",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1089",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1099",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1109",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1119",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1129",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1139",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1149",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1159",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1169",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1179",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1189",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1199",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1209",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1219",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1229",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1239",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1249",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1259",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1269",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1279",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1289",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1299",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1309",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1319",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1329",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1339",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1349",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1359",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1369",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1379",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1389",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1399",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1409",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1419",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1429",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1439",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1449",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1459",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1469",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1479",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1489",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1499",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1509",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1519",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1529",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1539",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1549",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1559",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1569",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1579",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1589",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1599",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1609",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1619",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1629",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1639",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1649",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1659",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1669",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1679",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1689",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1699",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1709",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1719",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1729",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1739",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1749",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1759",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1769",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1779",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1789",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1799",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1809",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1819",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1829",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1839",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1849",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1859",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1869",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1879",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1889",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1899",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1909",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1919",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1929",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1939",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1949",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1959",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1969",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1979",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1989",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "1999",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2009",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2019",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2029",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2039",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2049",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2059",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2069",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2079",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2089",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2099",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2109",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2119",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2129",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2139",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2149",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2159",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2169",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2179",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2189",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2199",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2209",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2219",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2229",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2239",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2249",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2259",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2269",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2279",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2289",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2299",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2309",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2319",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2329",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2339",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2349",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2359",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2369",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2379",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2389",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2399",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2409",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2419",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2429",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2439",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2449",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2459",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2469",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2479",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2489",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2499",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2509",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2519",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2529",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2539",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2549",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2559",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2569",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2579",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2589",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2599",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2609",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2619",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2629",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2639",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2649",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2659",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2669",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2679",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2689",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2699",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2709",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2719",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2729",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2739",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2749",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2759",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2769",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2779",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2789",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2799",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2809",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2819",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2829",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2839",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2849",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2859",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2869",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2879",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2889",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2899",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2909",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2919",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2929",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2939",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2949",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2959",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2969",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2979",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2989",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "2999",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3009",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3019",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3029",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3039",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3049",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3059",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3069",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3079",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3089",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3099",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3109",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3119",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3129",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3139",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3149",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3159",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3169",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3179",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3189",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3199",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3209",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3219",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3229",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3239",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3249",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3259",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3269",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3279",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3289",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3299",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3309",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3319",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3329",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3339",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3349",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3359",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3369",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3379",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3389",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3399",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3409",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3419",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3430",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3440",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3457",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3459",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3471",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3472",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3483",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3484",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3548",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3549",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3560",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        },
+        {
+          "ordinal": "3561",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0x402c",
+          "trace_result": "0x56"
+        }
+      ],
+      "native_cmd": [
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "5608",
+          "dir": "cmd",
+          "element_sequence": "2775",
+          "function": "0x67",
+          "rpc_result": "0xffffffff",
+          "rpc_result_private": "0xffffffff",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0x402c",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        },
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "5636",
+          "dir": "cmd",
+          "element_sequence": "2791",
+          "function": "0x67",
+          "rpc_result": "0xffffffff",
+          "rpc_result_private": "0xffffffff",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0x402c",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        }
+      ],
+      "native_status": [
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "5615",
+          "dir": "status",
+          "element_sequence": "2832",
+          "function": "0x67",
+          "rpc_result": "0x0",
+          "rpc_result_private": "0x0",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0x402c",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        },
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "5643",
+          "dir": "status",
+          "element_sequence": "2848",
+          "function": "0x67",
+          "rpc_result": "0x0",
+          "rpc_result_private": "0x0",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0x402c",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        }
+      ]
+    },
+    {
+      "selector": "0xcbcb",
+      "virtual_nonzero": [
+        {
+          "ordinal": "141",
+          "function": "103",
+          "kind": "RmAlloc",
+          "rpc_sequence": "0",
+          "control_or_class": "0xcbcb",
+          "trace_result": "0x56"
+        }
+      ],
+      "native_cmd": [
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "350",
+          "dir": "cmd",
+          "element_sequence": "166",
+          "function": "0x67",
+          "rpc_result": "0xffffffff",
+          "rpc_result_private": "0xffffffff",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0xcbcb",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        },
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "4519",
+          "dir": "cmd",
+          "element_sequence": "2252",
+          "function": "0x67",
+          "rpc_result": "0xffffffff",
+          "rpc_result_private": "0xffffffff",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0xcbcb",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        }
+      ],
+      "native_status": [
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "359",
+          "dir": "status",
+          "element_sequence": "184",
+          "function": "0x67",
+          "rpc_result": "0x0",
+          "rpc_result_private": "0x0",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0xcbcb",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        },
+        {
+          "source": "1",
+          "instance": "1",
+          "ordinal": "4526",
+          "dir": "status",
+          "element_sequence": "2270",
+          "function": "0x67",
+          "rpc_result": "0x0",
+          "rpc_result_private": "0x0",
+          "rpc_sequence": "0",
+          "kind": "alloc",
+          "control_or_class": "0xcbcb",
+          "control_status": "-",
+          "declared_params_bytes": "0",
+          "decode": "ok"
+        }
+      ]
+    }
+  ],
+  "native_unsolicited_or_reply_function_census": {
+    "0x101c": 30,
+    "0x100c": 2,
+    "0x1020": 26,
+    "0x1001": 1,
+    "0x1": 1,
+    "0x41": 1,
+    "0x67": 427,
+    "0x4c": 3312,
+    "0x46": 1,
+    "0xa": 57,
+    "0x4": 1,
+    "0x47": 2,
+    "0x1003": 2
+  },
+  "limitations": [
+    "Native trace is complete and zero loss, but a different owned GB202 and a native headless environment.",
+    "Virtual api.tsv covers command dispatch status; selected posted-allocation replies are separate. It is NOT a complete unsolicited-event trace.",
+    "No all-event reply-payload-size comparison or identification of an absent quiet event can be claimed from these screened artifacts.",
+    "First policy divergence20809064 is already insufficient as a sole Code43 cause: virtual OFF reaches Code0 while refusing it.",
+    "Logical WDDM node/engine ordinals must come from public-symbol dump data or public APIs; cannot infer a timed-out engine from the terminal bugcheck alone."
+  ]
+}

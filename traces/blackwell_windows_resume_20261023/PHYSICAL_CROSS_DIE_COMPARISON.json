@@ -1,0 +1,11 @@
+{
+  "utc_date": "2026-10-23",
+  "scope": "physical measured evidence only; no product input or family proof",
+  "GB202_lease": 57310491,
+  "GB206_lease": 57302449,
+  "driver": "595.91.07",
+  "common_field_keys": 328,
+  "only_GB202": [],
+  "only_GB206": [],
+  "differing_fields": []
+}

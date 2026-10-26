@@ -1,0 +1,44 @@
+{
+  "utc": "2026-10-21T11:42:47.619985+00:00",
+  "source_code": "d93cf38e54eb50f07e35446ef10ea95bd335af48",
+  "tested_head": "982f962a6",
+  "accepted_gpu_free": true,
+  "release_pass_fail_ignore": [
+    2875,
+    0,
+    9
+  ],
+  "no_count_drop_vs_both_parents": true,
+  "clippy_base_M_merged": [
+    583,
+    585
+  ],
+  "M_only_delta": 2,
+  "clippy_added": 0,
+  "clippy_note": "2duplicated unused-self records are inherited from unchanged sweep-parent inittables.rs, exact previous raw receipt match; rawM-onlydelta retained, no lint suppression.",
+  "selected_M_mutants": 3,
+  "mutants": [
+    {
+      "name": "handoff_released_never_rings",
+      "killers": 2,
+      "tests": "['lost_and_released_compose_the_micro_steps', 'real_threads_never_lose_a_wake']"
+    },
+    {
+      "name": "worker_ignores_unannounced",
+      "killers": 2,
+      "tests": "['pin_the_loop_evaluates_after_every_pass_and_before_it_decides_to_block', 'pin_the_worker_spins_on_an_unannounced_obligation_before_it_may_park']"
+    },
+    {
+      "name": "userpump_loser_does_not_register",
+      "killers": 3,
+      "tests": "['chan::userpump::tests::a_relay_that_loses_a_lock_registers_with_the_holder_before_giving_up', 'pin_a_contended_relay_registers_before_giving_up_and_no_look_rings_for_contention', 'pin_user_ring_serve_order_is_the_models']"
+    }
+  ],
+  "owned_stack_mutants": 13,
+  "owned_mutant_note": "Prior9+4 compiling mutants/2+killers retained for byte-unchanged owned fixes, receipts in sweep_continue_20261020.",
+  "source_restored_and_focused_green": true,
+  "restored_log_sha256": "34226d718f175d21e03582329ee4b78ec5914e061ac2d6faaeb5fc27ab0a6deb",
+  "rustfmt": "Three owned Rust topic files pass; incoming M source preserved unchanged; no new authored Rust resolution.",
+  "inherited_model_scope": "38historical cases keep checking historical helpers, explicitly listed in merge_receipt.json; no assertion removed by us.",
+  "hardware": "UNRUN on merged revision; native GR/SOUND/gates required before Windows."
+}

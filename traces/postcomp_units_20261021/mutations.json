@@ -1,0 +1,31 @@
+{
+  "fixed_source_sha256": "0d2d0f8e694e707135e3a264b7500e05bab553e71d863398edc4e769d30515ee",
+  "restored_source_sha256": "0d2d0f8e694e707135e3a264b7500e05bab553e71d863398edc4e769d30515ee",
+  "mutants": [
+    {
+      "mutant": "zero_units",
+      "rc": 101,
+      "killing_tests": [
+        "caps::tests::postcomp_units_follow_the_generated_register_and_field_layout",
+        "caps::tests::postcomp_units_match_public_nvkms_for_every_family"
+      ]
+    },
+    {
+      "mutant": "omit_final_output",
+      "rc": 101,
+      "killing_tests": [
+        "caps::tests::postcomp_units_match_public_nvkms_for_every_family",
+        "caps::tests::postcomp_units_follow_the_generated_register_and_field_layout"
+      ]
+    },
+    {
+      "mutant": "hardcode_bit_layout",
+      "rc": 101,
+      "killing_tests": [
+        "caps::tests::postcomp_units_refuse_a_missing_public_field",
+        "caps::tests::postcomp_units_follow_the_generated_register_and_field_layout"
+      ]
+    }
+  ],
+  "restored_focused": "3passed/0failed"
+}

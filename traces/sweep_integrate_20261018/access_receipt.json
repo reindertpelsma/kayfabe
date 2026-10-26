@@ -1,0 +1,13 @@
+{
+  "observed_utc": "2026-10-18T20:31:52.508366+00:00",
+  "created_ids": [],
+  "destroyed_ids": [],
+  "incremental_spend_usd": 0,
+  "prior_owned_id": 56326220,
+  "user": {
+    "credit": 18.559771576861976,
+    "balance": 0
+  },
+  "shared_account_instance_ids": [],
+  "prior_owned_id_absent": true
+}

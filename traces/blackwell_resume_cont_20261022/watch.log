@@ -1,0 +1,13 @@
+20:44:54 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|SWEEP_PROVISION_START own_instance=57108853 2026-10-21T20:44:40+00:00|LANE_START 2026-10-21T20:44:40+00:00|
+20:48:56 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|HEAD is now at 2c30a158c DIAGNOSTIC (do not merge): KF3_DIAG_CAPS_PAGE_FILE replaces the derived caps page with the box'|LANE_START 2026-10-21T20:44:40+00:00|
+20:52:58 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS|LANE_START 2026-10-21T20:44:40+00:00|
+20:57:00 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|SWEEP_BUILD_READY source=2c30a158c170a66baa37b77c19000993af1546a6 2026-10-21T20:56:40+00:00|LANE_START 2026-10-21T20:44:40+00:00|
+20:59:02 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=1 2026-10-21T20:57:57+00:00|LANE_START 2026-10-21T20:44:40+00:00|LANE_EXIT rc=50 2026-10-21T20:58:10+00:00|
+--- resumed controller after native fuzz flake 21:00:23
+21:00:25 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|GR_TIER_VERDICT=PASS|LANE_START 2026-10-21T21:00:06+00:00|
+21:38:48 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|RESUME_EXIT rc=0 2026-10-21T21:37:41+00:00|LANE_START 2026-10-21T21:00:06+00:00|ARM_BEGIN on_a 2026-10-21T21:38:07+00:00|
+21:42:50 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|RESUME_EXIT rc=0 2026-10-21T21:37:41+00:00|ARM_RC on_a rc=255|LANE_EXIT rc=60 2026-10-21T21:42:00+00:00|
+--- watcher restarted 21:49:39
+21:49:40 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|RESUME_EXIT rc=0 2026-10-21T21:37:41+00:00|LANE_START 2026-10-21T21:43:30+00:00|ARM_BEGIN on_b 2026-10-21T21:47:17+00:00|
+21:53:42 Warning: Permanently added 'bwlane-57108853' (ED25519) to the list of known hosts.|RESUME_EXIT rc=0 2026-10-21T21:37:41+00:00|LANE_STOP_XID after on_b|LANE_EXIT rc=61 2026-10-21T21:52:15+00:00|
+--- LANE STOPPED by XID policy (Xid32 pair in on_b, outside the off_c exception); collecting evidence only 21:54:07

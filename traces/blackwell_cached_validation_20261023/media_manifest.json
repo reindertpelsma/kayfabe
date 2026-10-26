@@ -1,0 +1,52 @@
+{
+  "utc": "2026-10-22T22:43:01.351839+00:00",
+  "source_revision": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "official_original_urls_only": true,
+  "all_verified": true,
+  "files": [
+    {
+      "file": "OpenSSH-Win64-v10.0.0.0.msi",
+      "url": "https://github.com/PowerShell/Win32-OpenSSH/releases/download/10.0.0.0p2-Preview/OpenSSH-Win64-v10.0.0.0.msi",
+      "started_utc": "2026-10-22T22:40:01.341338+00:00",
+      "finished_utc": "2026-10-22T22:40:01.826774+00:00",
+      "sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+      "expected_sha256": "ddec9c53864280759cf9f74791cefd387100e3946aa849a1c138a4ed1b96b7d9",
+      "bytes": 6586368,
+      "expected_bytes": 6586368,
+      "status": "VERIFIED"
+    },
+    {
+      "file": "580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "url": "https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe",
+      "started_utc": "2026-10-22T22:40:01.343328+00:00",
+      "finished_utc": "2026-10-22T22:40:15.998054+00:00",
+      "sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "expected_sha256": "90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9",
+      "bytes": 890807536,
+      "expected_bytes": 890807536,
+      "status": "VERIFIED"
+    },
+    {
+      "file": "virtio-win-0.1.302.iso",
+      "url": "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso",
+      "started_utc": "2026-10-22T22:40:01.338712+00:00",
+      "finished_utc": "2026-10-22T22:40:57.679695+00:00",
+      "sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+      "expected_sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+      "bytes": 877373440,
+      "expected_bytes": 877373440,
+      "status": "VERIFIED"
+    },
+    {
+      "file": "win11_ltsc_2024_eval_x64_en-us.iso",
+      "url": "https://go.microsoft.com/fwlink/?linkid=2289029&clcid=0x409&culture=en-us&country=us",
+      "started_utc": "2026-10-22T22:40:01.335374+00:00",
+      "finished_utc": "2026-10-22T22:43:01.343868+00:00",
+      "sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+      "expected_sha256": "67cec5865eaa037a72ddc633a717a10a2bed50778862267223ddb9c60ef5da68",
+      "bytes": 5112850432,
+      "expected_bytes": 5112850432,
+      "status": "VERIFIED"
+    }
+  ]
+}

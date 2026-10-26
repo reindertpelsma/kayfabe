@@ -1,0 +1,26 @@
+{
+  "primary_code_commit": "ab91b4acc9ab80d0755fe3542299858406dcfd30",
+  "base_commit": "4460f3433",
+  "rustfmt_changed_files_pass": [
+    "crates/kf-disp/src/capsderive.rs",
+    "crates/kf-disp/src/hostcaps.rs",
+    "crates/kf-disp/src/lib.rs",
+    "crates/kf-disp/tests/host_precomp.rs",
+    "crates/kf-host/src/lib.rs",
+    "crates/kf-host/src/precomp.rs",
+    "crates/kf-host/src/precomp_layout.rs",
+    "crates/kf-host/tests/precomp_read.rs",
+    "crates/kf-qemu/examples/precomp_host_read.rs",
+    "crates/kf-qemu/src/device.rs",
+    "crates/kf-qemu/src/display.rs",
+    "crates/kf-qemu/src/rmfacts.rs"
+  ],
+  "layout_generator_reproduced": true,
+  "protected_files_identical_to_base": {
+    "crates/kf-qemu/src/userrelay.rs": "7dd12a1adeddebe5853397a4e1c16c590c827c8b8193db1b3db36f5f213f3bbe"
+  },
+  "new_unsafe": false,
+  "new_captured_product_words": false,
+  "hardware_validation_n": 0,
+  "new_instances_created": 0
+}

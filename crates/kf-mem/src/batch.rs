@@ -3992,6 +3992,11 @@ mod tests {
     /// booked extent is capped too; the room returns as batches empty.
     #[test]
     fn the_aggregate_extent_of_the_batches_of_a_space_is_capped() {
+        if run_rss_test_in_child(
+            "batch::tests::the_aggregate_extent_of_the_batches_of_a_space_is_capped",
+        ) {
+            return;
+        }
         use std::os::fd::AsFd;
         let host = NullHost::new(u64::MAX);
         let bv = BatchedVas::with_low_reserve(&host, true);
@@ -4260,6 +4265,11 @@ mod tests {
     /// review]`; now a batch beyond `BATCH_MAX_EXTENT` is refused by name and allocates nothing.
     #[test]
     fn a_batch_extent_beyond_the_cap_is_refused_before_its_bitmap_is_allocated() {
+        if run_rss_test_in_child(
+            "batch::tests::a_batch_extent_beyond_the_cap_is_refused_before_its_bitmap_is_allocated",
+        ) {
+            return;
+        }
         use std::os::fd::AsFd;
         let host = NullHost::new(u64::MAX);
         let bv = BatchedVas::with_low_reserve(&host, true);
@@ -4304,6 +4314,29 @@ mod tests {
             })
             .collect();
         assert_eq!(bv.place(f.as_fd(), &ok, true), Ok(()));
+    }
+
+    // RSS belongs to the process: another concurrently running model test can allocate hundreds of
+    // MiB between our samples. Run each memory-bound oracle alone in a fresh test process, keeping
+    // the allocation/refusal assertions and the measured bound unchanged.
+    fn run_rss_test_in_child(name: &str) -> bool {
+        const CHILD: &str = "KF_MEM_RSS_TEST_CHILD";
+        if std::env::var(CHILD).as_deref() == Ok(name) {
+            return false;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", name, "--nocapture"])
+            .env(CHILD, name)
+            .output()
+            .expect("start isolated RSS test");
+        assert!(
+            output.status.success(),
+            "isolated {name}: {}\n{}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        true
     }
 
     /// The act-thread wait the test above allows: ~one chunk plus one host call plus scheduling in a

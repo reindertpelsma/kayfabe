@@ -1,0 +1,173 @@
+
+running 3 tests
+test precision_uses_generated_addresses_and_fields_including_the_final_window ... ok
+test precision_does_not_advertise_blackwell_function_luts_or_unity_clamping ... ok
+test declared_csc_stages_report_public_precision_in_every_display_cell ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:842:5
+    |
+842 | /     fn on_read(
+843 | |         &self,
+844 | |         _model: &dyn GspModel,
+845 | |         _bar: u8,
+...   |
+848 | |         _state: &ArchBootState,
+849 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:971:5
+    |
+971 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2797:5
+     |
+2797 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2915:5
+     |
+2915 | /     pub fn post_event(
+2916 | |         &mut self,
+2917 | |         ram: &mut dyn GuestRam,
+2918 | |         rpc: &OutgoingRpc,
+2919 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: `kf-gsp` (lib) generated 2 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+1196 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+   Compiling kf-disp v0.1.0 (<own-checkout>/crates/kf-disp)
+warning: unused import: `crate::tick::Handoff`
+   --> crates/kf-disp/src/pace.rs:943:9
+    |
+943 |     use crate::tick::Handoff;
+    |         ^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `head` is never used
+   --> crates/kf-disp/src/pace.rs:945:8
+    |
+945 |     fn head(h: u32, period_ns: u64) -> HeadMode {
+    |        ^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `sent` is never used
+    --> crates/kf-disp/src/pace.rs:1477:8
+     |
+1477 |     fn sent(digest: u64) -> Sent {
+     |        ^^^^
+
+warning: `kf-disp` (lib) generated 3 warnings (run `cargo fix --lib -p kf-disp` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 6.06s
+     Running tests/precomp_csc_precision.rs (<own-target>/release/deps/precomp_csc_precision-18986023a2b46f89)

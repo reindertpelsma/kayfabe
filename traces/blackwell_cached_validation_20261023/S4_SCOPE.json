@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-22T22:49:10.417470+00:00",
+  "s4_public_tree": "50737c9a5f61db9d15ecf70994bf57cd9278d699",
+  "full_tree_not_truncated": true,
+  "precomp_tier3_kit_found": false,
+  "native_route_kit": "scripts/bench/diesweep/native_sweep_proof.py",
+  "kit_exit": "explicit3 after collection; independent runtime CLIENT unresolved",
+  "kit_precondition": "zero-Xid journal; repeats native defer/missing controls",
+  "scope_question_pending": true,
+  "approved_windows_independent": true,
+  "no_dependent_s4_execution": true
+}

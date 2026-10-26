@@ -1,0 +1,222 @@
+{
+  "runs": 16,
+  "distinct_variants": 15,
+  "minimum_killers": 2,
+  "results": [
+    {
+      "mutant": "observer_noop",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event",
+        "a_guest_that_waived_its_notifier_still_gets_the_routed_error",
+        "a_guests_own_post_stop_write_is_rebaselined_never_reported",
+        "a_pending_host_error_cannot_be_replaced_by_later_host_words",
+        "a_stop_expectation_does_not_hide_a_different_host_error",
+        "an_xid32_record_written_by_the_host_is_observed_exactly_once",
+        "a_half_written_record_is_not_an_event_until_its_status_lands",
+        "changing_bytes_after_a_report_does_not_make_a_second_record",
+        "hostile_guest_bytes_never_become_a_host_error",
+        "info16_without_status_cannot_turn_into_an_xid",
+        "only_one_complete_guest_stop_record_is_suppressed",
+        "publication_writes_status_last_before_returning_the_event",
+        "refusal_at_each_guest_word_retains_the_original_host_error",
+        "repeated_wakes_do_not_republish_or_deliver_a_second_event",
+        "the_guest_notifier_contains_the_observed_xid_and_the_declared_engine",
+        "the_host_token_does_not_replace_the_guest_chid_or_guest_engine",
+        "the_status_store_never_exposes_old_metadata_to_a_guest_poller",
+        "unrelated_channels_and_their_notifiers_are_untouched"
+      ],
+      "killers": 18,
+      "product_revision": "1166dc3d4",
+      "variant": "observer_noop"
+    },
+    {
+      "mutant": "partial_status_accepted",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "a_half_written_record_is_not_an_event_until_its_status_lands",
+        "only_one_complete_guest_stop_record_is_suppressed",
+        "partial_record_and_repeated_baseline_never_write_guest_memory",
+        "info16_without_status_cannot_turn_into_an_xid"
+      ],
+      "killers": 4,
+      "product_revision": "1166dc3d4",
+      "variant": "partial_status_accepted"
+    },
+    {
+      "mutant": "one_shot_latch_ignored",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event",
+        "an_xid32_record_written_by_the_host_is_observed_exactly_once",
+        "changing_bytes_after_a_report_does_not_make_a_second_record",
+        "repeated_wakes_do_not_republish_or_deliver_a_second_event"
+      ],
+      "killers": 4,
+      "product_revision": "1166dc3d4",
+      "variant": "one_shot_latch_ignored"
+    },
+    {
+      "mutant": "pending_error_lost_on_write_refusal",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event",
+        "a_pending_host_error_cannot_be_replaced_by_later_host_words",
+        "refusal_at_each_guest_word_retains_the_original_host_error"
+      ],
+      "killers": 3,
+      "product_revision": "1166dc3d4",
+      "variant": "pending_error_lost_on_write_refusal"
+    },
+    {
+      "mutant": "host_engine_replaces_guest_engine",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "hostile_guest_bytes_never_become_a_host_error",
+        "publication_writes_status_last_before_returning_the_event",
+        "the_guest_notifier_contains_the_observed_xid_and_the_declared_engine"
+      ],
+      "killers": 3,
+      "product_revision": "1166dc3d4",
+      "variant": "host_engine_replaces_guest_engine"
+    },
+    {
+      "mutant": "host_token_replaces_guest_chid",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event",
+        "a_guest_that_waived_its_notifier_still_gets_the_routed_error",
+        "the_host_token_does_not_replace_the_guest_chid_or_guest_engine"
+      ],
+      "killers": 3,
+      "product_revision": "1166dc3d4",
+      "variant": "host_token_replaces_guest_chid"
+    },
+    {
+      "mutant": "native_birth_notifier_unarmed",
+      "file": "crates/kf-chan/src/host.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "private_ring_birth_carries_the_error_context_in_both_layouts",
+        "the_rc_context_is_never_replaced_by_a_memory_handle_or_ring_address"
+      ],
+      "killers": 2,
+      "product_revision": "1166dc3d4",
+      "variant": "native_birth_notifier_unarmed"
+    },
+    {
+      "mutant": "status_published_first",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "publication_writes_status_last_before_returning_the_event",
+        "the_status_store_never_exposes_old_metadata_to_a_guest_poller"
+      ],
+      "killers": 2,
+      "product_revision": "1166dc3d4",
+      "variant": "status_published_first"
+    },
+    {
+      "mutant": "metadata_read_before_status",
+      "file": "crates/kf-chan/src/rc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "private_snapshot_cannot_pair_a_new_status_with_old_info32",
+        "snapshot_waits_for_status_and_rejects_a_record_changed_while_reading"
+      ],
+      "killers": 2,
+      "product_revision": "1166dc3d4",
+      "variant": "metadata_read_before_status"
+    },
+    {
+      "mutant": "retired_post_allowed",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::tests::a_retired_allocation_cannot_post_even_with_a_retained_queue_reference",
+        "chanrc::tests::reusing_a_chid_does_not_revive_the_old_allocations_event"
+      ],
+      "killers": 2,
+      "product_revision": "1166dc3d4",
+      "variant": "retired_post_allowed"
+    },
+    {
+      "mutant": "firmware_heap_gate_removed",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::tests::a_record_straddling_the_heap_end_is_refused_whole",
+        "chanrc::tests::the_firmware_carveout_is_never_a_guest_notifier_destination"
+      ],
+      "killers": 2,
+      "product_revision": "1166dc3d4",
+      "variant": "firmware_heap_gate_removed"
+    },
+    {
+      "mutant": "ram_generation_refreshed_on_write",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::ram_tests::ram_revocation_cannot_redirect_a_pending_rc_into_replacement_backing",
+        "chanrc::ram_tests::ram_topology_change_mid_publication_never_writes_status_or_posts_an_event"
+      ],
+      "killers": 2,
+      "product_revision": "1166dc3d4",
+      "variant": "ram_generation_refreshed_on_write"
+    },
+    {
+      "mutant": "ram_final_word_bulk_copy",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::ram_tests::ram_pollers_observe_guest_engine_before_error_status",
+        "chanrc::ram_tests::ram_final_status_word_does_not_rely_on_an_atomic_byte_copy"
+      ],
+      "killers": 2,
+      "product_revision": "8f7049e84",
+      "variant": "ram_final_word_bulk_copy"
+    },
+    {
+      "mutant": "ram_status_before_engine",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::ram_tests::ram_final_status_word_does_not_rely_on_an_atomic_byte_copy",
+        "chanrc::ram_tests::ram_pollers_observe_guest_engine_before_error_status"
+      ],
+      "killers": 2,
+      "product_revision": "8f7049e84",
+      "variant": "ram_status_before_engine"
+    },
+    {
+      "mutant": "ram_generation_refreshed_after_status_split",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::ram_tests::ram_revocation_cannot_redirect_a_pending_rc_into_replacement_backing",
+        "chanrc::ram_tests::ram_topology_change_mid_publication_never_writes_status_or_posts_an_event"
+      ],
+      "killers": 2,
+      "product_revision": "8f7049e84",
+      "variant": "ram_generation_refreshed_on_write"
+    },
+    {
+      "mutant": "posting_permit_dropped_before_queue_write",
+      "file": "crates/kf-qemu/src/chanrc.rs",
+      "exit_code": 101,
+      "failed_tests": [
+        "chanrc::tests::a_concurrent_retirement_cannot_enter_during_the_queue_post",
+        "chanrc::tests::the_posting_permit_covers_the_actual_queue_write"
+      ],
+      "killers": 2,
+      "product_revision": "d8c1e65ef",
+      "variant": "posting_permit_dropped_before_queue_write"
+    }
+  ]
+}

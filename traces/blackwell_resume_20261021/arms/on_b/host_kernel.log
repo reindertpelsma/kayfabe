@@ -1,0 +1,6 @@
+2026-10-21T21:47:57.170839+0000 ubuntu kernel: NVRM:unknown NVRM ioctl command: 0xf0
+2026-10-21T21:50:35.188023+0000 ubuntu kernel: x86/PAT: kf3-vamgr:97503 freeing invalid memtype [mem 0x3800640000-0x380083ffff]
+2026-10-21T21:50:35.188553+0000 ubuntu kernel: x86/PAT: kf3-vamgr:97503 freeing invalid memtype [mem 0x3800840000-0x3800a3ffff]
+2026-10-21T21:51:12.791151+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=97461, name=qemu-system-x86, channel 0x00000014 intr 00200000
+2026-10-21T21:51:12.836811+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=97461, name=qemu-system-x86, channel 0x0e00000b intr 00200000
+2026-10-21T21:51:20.565815+0000 ubuntu kernel: x86/PAT: kf3-vamgr:97503 freeing invalid memtype [mem 0x3800b70000-0x3800bbffff]

@@ -1,0 +1,32 @@
+FF.F....
+======================================================================
+FAIL: test_a_clean_b1_arm_after_the_prior_off_pair_may_run_apps (test_arm_history.ArmHistory.test_a_clean_b1_arm_after_the_prior_off_pair_may_run_apps)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_arm_history.py", line 5, in test_a_clean_b1_arm_after_the_prior_off_pair_may_run_apps
+    def test_a_clean_b1_arm_after_the_prior_off_pair_may_run_apps(self):self.assertTrue(may_run_apps(['native31'],['native31','off32a','off32b'],['native31','off32a','off32b']))
+                                                                        ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_a_clean_sibling_after_one_prior_diagnostic_fault_may_run_apps (test_arm_history.ArmHistory.test_a_clean_sibling_after_one_prior_diagnostic_fault_may_run_apps)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_arm_history.py", line 6, in test_a_clean_sibling_after_one_prior_diagnostic_fault_may_run_apps
+    def test_a_clean_sibling_after_one_prior_diagnostic_fault_may_run_apps(self):self.assertTrue(may_run_apps(['native31'],['native31','old32'],['native31','old32']))
+                                                                                 ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_a_lost_prior_record_cannot_turn_this_arm_green (test_arm_history.ArmHistory.test_a_lost_prior_record_cannot_turn_this_arm_green)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "scripts/bench/blackwell/test_arm_history.py", line 9, in test_a_lost_prior_record_cannot_turn_this_arm_green
+    def test_a_lost_prior_record_cannot_turn_this_arm_green(self):self.assertFalse(may_run_apps(['native31'],['native31','old32'],['native31']))
+                                                                  ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.001s
+
+FAILED (failures=3)

@@ -1,0 +1,18 @@
+{
+  "utc": "2026-10-21T23:28:27.314958+00:00",
+  "full_journal_sha256": "7a6e9c29a3716dd0c37fdef65812dc5165f6d0f6689230d0c3f85d3c61893a42",
+  "xid_lines": [
+    "2026-10-21T22:19:22.893065+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90288, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-21T22:19:25.941745+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90288, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE3 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-21T22:19:28.954788+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90288, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-21T22:19:32.023751+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90288, name=kayfabe-rm-ladd, channel 0x00000002, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE2 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-21T22:19:36.126811+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 31, pid=90327, name=kayfabe-rm-ladd, channel 0x00000003, intr 00000000. MMU Fault: ENGINE GR_HOST0 HUBCLIENT_ESC0 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+    "2026-10-21T22:20:19.302750+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=90663, name=kf-gr-tier, channel 0x0d00000a intr1 00000010 HCE_DBG0 00000000 HCE_DBG1 0000c7b5",
+    "2026-10-21T22:57:19.237021+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=95251, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+    "2026-10-21T22:57:19.268682+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=95251, name=qemu-system-x86, channel 0x0e00000b intr 00200000",
+    "2026-10-21T23:04:07.866094+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96254, name=qemu-system-x86, channel 0x00000014 intr 00200000",
+    "2026-10-21T23:04:07.904674+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96254, name=qemu-system-x86, channel 0x0e00000b intr 00200000",
+    "2026-10-21T23:07:37.411873+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96783, name=qemu-system-x86, channel 0x0000000c intr 00200000",
+    "2026-10-21T23:07:37.425634+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:08): 32, pid=96783, name=qemu-system-x86, channel 0x0e000007 intr 00200000"
+  ]
+}

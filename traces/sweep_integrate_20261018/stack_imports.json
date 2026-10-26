@@ -1,0 +1,1035 @@
+{
+  "records": [
+    {
+      "source": "59ea4dbaac2966b336361b16d07059fd4b5e0b33",
+      "subject": "kf-mem: isolate process RSS oracles from concurrent model allocations",
+      "new_commit": "c8bed2be94a78e06a1481163d32db1a8c971056f",
+      "paths": [
+        "crates/kf-mem/src/batch.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "6f072e9d36ea6f1b424d69a39e02bca4bd66622c",
+      "subject": "bench: derive the fat guest ABI profile from its verified staging receipt",
+      "new_commit": "74b7b723371ec99937e940267fcf41200f059ab6",
+      "paths": [
+        "crates/kf-mem/src/batch.rs",
+        "scripts/bench/boot_nvkvm.sh",
+        "scripts/bench/guest_profile.sh",
+        "scripts/bench/provision_bench_tree.sh",
+        "scripts/bench/tests/test_guest_profile.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "62cc97897dab14809a646d153dc0e254a8f76de1",
+      "subject": "bench: select the thin guest ABI from its packed NVIDIA module",
+      "new_commit": "fbf5475fbd9dc3b132dee76c1e7d28117a392bea",
+      "paths": [
+        "scripts/bench/guest_profile.sh",
+        "scripts/bench/tests/test_guest_profile.py",
+        "scripts/fastguest/build_fast_guest.sh",
+        "scripts/fastguest/run_fast_guest.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "67a4bc9538676716503c947a3ab42d1e5e8ea43a",
+      "subject": "bench: pin Windows binary default and persist VM identity",
+      "new_commit": "4b6725b918eb5324d29934cfbfa2a670e915ae49",
+      "paths": [
+        "scripts/bench/diesweep/win_die.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "1ba3e359e7b707166638279a6bb6890fa6d6c340",
+      "subject": "abi: reproduce missing production host GID control inventory",
+      "new_commit": "abd0e791beb38ff122680723bd8e35a6dadaea51",
+      "paths": [
+        "crates/kf-abi/src/hostabi.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "fcc5968d1854d9145b0be90be4b95a7d4cc55b94",
+      "subject": "abi: derive and register host GPU GID layout at all30 measured tags",
+      "new_commit": "6752cba0d97e228b615aecf23ed85645300457ac",
+      "paths": [
+        "crates/kf-abi/src/generated/matrix.rs",
+        "crates/kf-abi/src/hostabi.rs",
+        "tools/drivermatrix/consumed.txt"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "f6d96614dfdd7444e1f268e0cce3c465f26ce7a0",
+      "subject": "style: retain formatted generated ABI table",
+      "new_commit": "0241185736b9d305ae29b10070e0e6b929cc9135",
+      "paths": [
+        "crates/kf-abi/src/generated/matrix.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "b31f126545acd884611c0f610c6208f8820cd972",
+      "subject": "test: require the Turing display vocabulary and complete realize path",
+      "new_commit": "3ad2d86d7dbdcf7916cf702fdb64d3bf2b5013ca",
+      "paths": [
+        "crates/kf-disp/src/engine/tests.rs",
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "37e9e6c24e9c46281217cc2c8cdb5ad41f5c1598",
+      "subject": "kf-disp: derive the shared 32-bit display semaphore model from class methods",
+      "new_commit": "5a3feaf58c88656d648c1686680258aaeca5ee44",
+      "paths": [
+        "crates/kf-disp/src/engine.rs",
+        "crates/kf-disp/src/engine/tests.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "b5ad64f7d0f6f7036cd5c9afb66ecbd0a87c4ff4",
+      "subject": "kf-disp: prefer separate semaphore controls when legacy names coexist",
+      "new_commit": "8f4e639b089a617d4f7c375ff4793e3eb9973202",
+      "paths": [
+        "crates/kf-disp/src/engine.rs",
+        "crates/kf-disp/src/engine/tests.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "f1d4c8737f2c8fefb5142136495299ee5ddb0f56",
+      "subject": "sweep: preserve Turing failing-first, regression and mutation evidence",
+      "new_commit": "ca62119715c62a1e19dd0c27525c88381a03e497",
+      "paths": [
+        "crates/kf-disp/src/engine.rs",
+        "crates/kf-disp/src/engine/tests.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "432da9dfdc17baadb9fff9aa423094ca3ff03574",
+      "subject": "display: reproduce missing exact595 guest vocabulary in all-family tests",
+      "new_commit": "e50e59853209ccc97b0fe61a57bda907b47bd48d",
+      "paths": [
+        "crates/kf-disp/src/engine/tests.rs",
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "42483a475902b83acbaabe98756f5680b14e705c",
+      "subject": "display: register compiler-derived exact595 class and register tables",
+      "new_commit": "be85ccd0294fc63969a696f768435c18c4216d93",
+      "paths": [
+        "crates/kf-disp/data/classes-595.91.07.tsv",
+        "crates/kf-disp/data/regs-595.91.07.tsv",
+        "crates/kf-disp/src/class.rs",
+        "crates/kf-disp/src/regs.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "dd9d81c2c248681de3dc4943f20d5f1b909e58ab",
+      "subject": "bench: refuse interrupted Windows image chunks and verify full SHA256",
+      "new_commit": "ee3a55e280969c453e6a68b15cffecfd0feee6cd",
+      "paths": [
+        "scripts/bench/diesweep/push_image.sh",
+        "scripts/bench/tests/test_push_image.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "432fcab9944457eb73547771c35671219e0c702c",
+      "subject": "measurement: add a fixed read-only Windows display-capabilities snapshot",
+      "new_commit": "f114a07deceb766a47d28d568941be1efc6c856b",
+      "paths": [
+        "tools/windows-capture/driver/kfwc_drv.c",
+        "tools/windows-capture/driver/kfwc_ioctl.h",
+        "tools/windows-capture/lib/kfwc_platform.h",
+        "tools/windows-capture/lib/kfwc_wire.h",
+        "tools/windows-capture/tests/Makefile",
+        "tools/windows-capture/tests/test_display_caps.c",
+        "tools/windows-capture/user/kfwc_collect.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "32973658ae1600a133ddbe40e19478fa118b3d50",
+      "subject": "measurement: validate display capabilities as a page rather than scalar mailboxes",
+      "new_commit": "6293c924fb3b06b4df0fed0725bbd78ec47e01d3",
+      "paths": [
+        "tools/windows-capture/lib/kfwc_platform.h",
+        "tools/windows-capture/tests/test_display_caps.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "4ff31a249b9de01c552232611059b128d202c040",
+      "subject": "census: build the existing capture scrubber on native Windows",
+      "new_commit": "6fc042ec13ca7f43f353047b2716da2b74a6acd4",
+      "paths": [
+        "crates/kf-census/src/main.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "54b6c5a285ffeb7aa16d6f0a209e091b0ee455fa",
+      "subject": "bench: fail Windows phases when QGA evidence or driver binding fails",
+      "new_commit": "32f8bbf466f9fc93e0a0276054a3ad9e54e700d7",
+      "paths": [
+        "scripts/bench/diesweep/die_run.sh",
+        "scripts/bench/tests/test_die_run.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "c314c17930348e666ee2028139b34ef4c8e33ad3",
+      "subject": "test: require an exact native AD102 Windows580 caps measurement",
+      "new_commit": "3f73d7af6631f79ad108a46e270836ccbf8b8c9c",
+      "paths": [
+        "crates/kf-disp/tests/caps_derive.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "5a8045475fdff503ab17c64c3121a1310fd48ab8",
+      "subject": "display: add exact AD102 Windows580 caps scalar from native measurement",
+      "new_commit": "9918cca5acad964fc18a9a23a5be5f15b727e1c7",
+      "paths": [
+        "crates/kf-disp/data/caps_measured.tsv"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "e38685f13eb8caf68f1d52e9c42f17c74aa63f38",
+      "subject": "test: key AD102 Windows580 small controls to their exact questions",
+      "new_commit": "561e310c1ab9b4050f138e74db6d18589a5bf443",
+      "paths": [
+        "crates/kf-rm/tests/gpu_types_wiring.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "0fec676dc3171c8770d442c5bc05824590b98f8d",
+      "subject": "rm: serve exact AD102 Windows580 small-control measurements",
+      "new_commit": "69c5c973325d5ba25e3741431afaba8a314ff6c6",
+      "paths": [
+        "crates/kf-rm/data/measured_constants.tsv"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "6835e5f6af9fb81a5d552ca6c58f34173f80fc6d",
+      "subject": "test: require Blackwell armed-window scanout vocabulary",
+      "new_commit": "111d3cb4af5a053846324d1d1fd593b27c9fd275",
+      "paths": [
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "4e053083eb212e8012971cd83357bf6890ee86fc",
+      "subject": "display: decode address-named ISO surfaces and bound their scanout",
+      "new_commit": "b97a07d0410538448ea5f260323af02a85dc4af2",
+      "paths": [
+        "crates/kf-disp/src/engine.rs",
+        "crates/kf-disp/src/engine/tests.rs",
+        "crates/kf-disp/src/scanout.rs",
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "4b492e670bc6ffc6eebb956c7969fe1fcd4851ff",
+      "subject": "test: cover Blackwell ISO latching and hostile address bounds",
+      "new_commit": "c2e3c3245dab25960c563699b6953cee71881d27",
+      "paths": [
+        "crates/kf-disp/src/engine/tests.rs",
+        "crates/kf-disp/src/scanout.rs",
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "102c4c582bf706a2b8ab27be208956eb348fe4f1",
+      "subject": "test: exercise address-named RGB and YUV compositor planning",
+      "new_commit": "7c391439589e86920ccac48c9119463f2ce13b14",
+      "paths": [
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "28cc27ade589dffdc3e5b772a4ba904a3d09e417",
+      "subject": "test: distinguish ISO enable from retained CAX address bits",
+      "new_commit": "3f6e7b9a4b02027aa8a66006f073b3be3d0716d5",
+      "paths": [
+        "crates/kf-disp/src/engine/tests.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "fc40d00170a3747bd0936740157226df01863140",
+      "subject": "display: honor CAX ISO ENABLE when gating and completing flips",
+      "new_commit": "36435cdcbb082c5b11b4f6b58a42770d2079b4ad",
+      "paths": [
+        "crates/kf-disp/src/engine.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "56f32dc0e62a971f7c852b9104522cc729dc5ab5",
+      "subject": "test: reconcile the RM wiring inventory with the two measured AD102 rows",
+      "new_commit": "128728cc1bba2c85bee96c6696dbfafebbab6266",
+      "paths": [
+        "crates/kf-rm/tests/gpu_types_wiring.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "7116d7380d524158367cc1f523e6522cd9a3c86b",
+      "subject": "bench: stream exact image ranges without seeking on a pipe",
+      "new_commit": "2cfa1cb8edd44622ae6f7093450bf2098a546852",
+      "paths": [
+        "scripts/bench/diesweep/push_image.sh",
+        "scripts/bench/diesweep/stream_image_range.py",
+        "scripts/bench/tests/test_image_range.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "8ed41e8abc79bc394dd6db164049cb54f58b3502",
+      "subject": "bench: provision fresh-kernel headers and the independent guest package",
+      "new_commit": "2b7ff9aff223ca0e0e80c5dfa55df8571514457e",
+      "paths": [
+        "scripts/bench/provision_bench_tree.sh",
+        "scripts/bench/provision_host_driver.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "ce626be45a5a3590949e475d494f5cf80c882ed2",
+      "subject": "bench: enable QEMU zstd image decoding and provision its library",
+      "new_commit": "c3924ce8c63c32fd96be2d9e21a221544ac708ab",
+      "paths": [
+        "scripts/bench/build_kf3.sh",
+        "scripts/bench/provision_bench_tree.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "9a3dcce7f4a5e0f4e22c2e672a9a3edbb6f35fd5",
+      "subject": "bench: grade graphics output without an early-exit producer pipeline",
+      "new_commit": "3a070cc42eb44237406c56e94df4d61c3034ad7a",
+      "paths": [
+        "scripts/bench/gfx/gfx_steps.sh",
+        "scripts/bench/tests/test_gfx_grade.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "e0995b9c414c5b64fde8d5cd3dbab212b03581c9",
+      "subject": "bench: avoid early consumer pipes in every graphics predicate",
+      "new_commit": "2a2726c0687190ab8da17fe6ef707343994fe180",
+      "paths": [
+        "scripts/bench/gfx/gfx_steps.sh",
+        "scripts/bench/tests/test_gfx_grade.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "08df63aadc9e0ed51b13c5ff153e395695e1dc84",
+      "subject": "bench: provision graphics in the selected driver image",
+      "new_commit": "509637f140f7c04de5401ebdb8a7c1c3bebd25c5",
+      "paths": [
+        "scripts/bench/provision_guest_gfx.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "0f984fc1697e96f7f1f92b33620e338f78614516",
+      "subject": "bench: accept an intentionally disabled cloud-init in graphics staging",
+      "new_commit": "4dfe7e41f88bb97cf13747e1bf46bdac52dc5b07",
+      "paths": [
+        "scripts/bench/provision_guest_gfx.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "96fb9d3264ad47df4242a627aa51340ed8e19f47",
+      "subject": "bench: select and record the explicit Windows guest-driver profile",
+      "new_commit": "e7d242c2a4521fb75072ce8947038e686afadc5f",
+      "paths": [
+        "scripts/bench/diesweep/win_die.sh",
+        "scripts/bench/tests/test_win_profile.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "b075da45891fc78f20f842ed954b32a6497569c3",
+      "subject": "test: require exact590 display vocabulary and590595 physical layouts",
+      "new_commit": "047922d67112535107e7807d6ce30cbf39a90d34",
+      "paths": [
+        "crates/kf-disp/src/engine/tests.rs",
+        "crates/kf-disp/src/layout.rs",
+        "crates/kf-qemu/src/display.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "6ed084ca1f5edfcbbf1d7c8d6e9c49f6c87eef7a",
+      "subject": "derive: omit controls removed from the exact public driver headers",
+      "new_commit": "93487db6945da31908613c4657b7815bb112f4fe",
+      "paths": [
+        "crates/kf-disp/src/layout.rs",
+        "tools/derive_display_layouts.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "471966ff5d4e8bb4a09f3d80e832aa2b695ce443",
+      "subject": "display: register compiler-derived590 vocabulary and590595 wire layouts",
+      "new_commit": "f1b00d28a57fa0cbee1d11da58aa0c92a13417d6",
+      "paths": [
+        "crates/kf-disp/data/classes-590.48.01.tsv",
+        "crates/kf-disp/data/layouts-590.48.01.tsv",
+        "crates/kf-disp/data/layouts-595.91.07.tsv",
+        "crates/kf-disp/data/regs-590.48.01.tsv",
+        "crates/kf-disp/src/class.rs",
+        "crates/kf-disp/src/layout.rs",
+        "crates/kf-disp/src/regs.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "8149f0b53290f09a53e3d5a02e5509c41d5931fc",
+      "subject": "style: format the new exact-layout regressions",
+      "new_commit": "9a11bf6026288288ad2abd0256b15aec126ce868",
+      "paths": [
+        "crates/kf-disp/src/layout.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "deb945de666985cc617411ebf5805c2ca5b837c0",
+      "subject": "test: require exact Turing580 native caps and initialization questions",
+      "new_commit": "db54d96b4764fef41ec1db1c7ecdd0043bd76fe0",
+      "paths": [
+        "crates/kf-disp/tests/caps_derive.rs",
+        "crates/kf-rm/tests/gpu_types_wiring.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "76a8cc9cb508a6c8464972c87e0def868a95361c",
+      "subject": "bench: let every NVIDIA family reach host-derived v3 gates",
+      "new_commit": "fff983df5fb2b390003206a8cc4d5c2e6f01082b",
+      "paths": [
+        "scripts/bench/host_preflight.sh",
+        "scripts/bench/tests/test_host_family.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "b8d092b0c8a765636f70fbd859e4f45ea52ab82f",
+      "subject": "display: register native-measured TU106580 caps and exact scalar questions",
+      "new_commit": "d533efb5ea5bc00f9e1f600fbe4a209086772683",
+      "paths": [
+        "crates/kf-disp/data/caps_measured.tsv",
+        "crates/kf-disp/tests/caps_derive.rs",
+        "crates/kf-rm/data/measured_constants.tsv",
+        "crates/kf-rm/tests/gpu_types_wiring.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "c266772aa7af5e6127a3f64a0282e3510da840d3",
+      "subject": "docs: inventory exact TU106580 residue and preserve unknown-cell scope",
+      "new_commit": "b66e25d3651cedd069b22397e730642a19b288c1",
+      "paths": [
+        "crates/kf-disp/tests/caps_derive.rs",
+        "crates/kf-rm/tests/gpu_types_wiring.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "08f25dd9d2be3c4bc6f14bc9fb8e9d64cba27069",
+      "subject": "bench: preserve Windows suite with strict log and driver checks",
+      "new_commit": "e8156e1ade0a88bc320224e8eb497b5f82bb8b40",
+      "paths": [
+        "scripts/bench/diesweep/windows_validate.ps1"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "cf822a7bd024d3586ac3dade60177f6199e9f289",
+      "subject": "bench: exclude native Windows driver updates before scheduling the pinned installer",
+      "new_commit": "d55ec487782666ff57cf58861b72e77b22513158",
+      "paths": [
+        "tools/windows-capture/install/prepare-native-installer.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "2230a1764f7d158b0625ab4258c7667db67ab108",
+      "subject": "bench: make native capture reject tool/decode failures and preserve all aggregates",
+      "new_commit": "483cc2f84dde0e0a80366324a8109f79d221fdaa",
+      "paths": [
+        "scripts/bench/diesweep/native_capture.ps1"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "43ef0c38ca71aadd0ae3ac83031b2332e2ab751f",
+      "subject": "bench: time-box Blackwell late-capture replay with mailbox-only discovery before enable",
+      "new_commit": "5ddac817af670ea33e741fef2cb87ac518247d9a",
+      "paths": [
+        "scripts/bench/diesweep/native_capture.ps1"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "d8afb5a347f14407ba31d13643193eebb0984ec0",
+      "subject": "test: require an exact Blackwell580 caps measurement; never borrow neighbouring rows",
+      "new_commit": "aa93c588fbdb6c1d56c7005db048ffa3f55a1f66",
+      "paths": [
+        "crates/kf-disp/tests/caps_derive.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "c2092cf7b0856a68e91031b2bf32cf433629e467",
+      "subject": "disp: serve exact measured GB206580 caps word102 after unprivileged die confirmation",
+      "new_commit": "679cb779fb2315af95356fccb960198323bcc39a",
+      "paths": [
+        "crates/kf-disp/data/caps_measured.tsv"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "ef8cd9ddaf734c27ccc1fd48d5599203366cd14e",
+      "subject": "test: keep the unmeasured-die negative fixture on GB205 after measuring GB206",
+      "new_commit": "ae506bc844367086e80f50fb0b28d4c17139d8b5",
+      "paths": [
+        "crates/kf-disp/tests/caps_derive.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "10339185b078756d5328cd77ead4c3ce9560cd8f",
+      "subject": "test: reproduce lost Windows guest command results on transient QGA status timeout",
+      "new_commit": "cc2dbc96058200d50bda5ae1e107fa45e9c335d9",
+      "paths": [
+        "scripts/bench/tests/test_qga_exec.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "a4534e391dc5cb23234bc46a0fee6977acd5c080",
+      "subject": "fix: recover Windows QGA command results without replaying guest execution",
+      "new_commit": "19647aa82d2c01171e8099b8358ecb9a9382a8ec",
+      "paths": [
+        "scripts/bench/tests/test_qga_exec.py",
+        "scripts/bench/windows/qmp.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "95e88500b17f504783228646971fc973892ca932",
+      "subject": "test: expose missing FMC mailbox bootstrap in shared observer",
+      "new_commit": "3a8ab7bec845bd47952b03bacfdcd925da799ef3",
+      "paths": [
+        "tools/vfio-gsp-observer/tests/core_test.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "3934a089550c8f6673d1bb26f8c0670e4385fa41",
+      "subject": "fix: follow bounded FMC mailbox indirection in shared GSP observer",
+      "new_commit": "5c75cd823471160fad0017d4abbad32f0961b992",
+      "paths": [
+        "tools/vfio-gsp-observer/README.md",
+        "tools/vfio-gsp-observer/check-layout.py",
+        "tools/vfio-gsp-observer/core/observer.c",
+        "tools/vfio-gsp-observer/layout-580.json",
+        "tools/vfio-gsp-observer/layout.c"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "18806cefd6405a169f25c16c4d07725cb98a298d",
+      "subject": "docs: record Blackwell observer prefixes and strict census failure",
+      "new_commit": "e6cfe2a6dc9ee6024fa6a3b6b9a87b50b8f22a5b",
+      "paths": [
+        "tools/vfio-gsp-observer/README.md"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "0078952a90949949637beabfb9e00a7485952799",
+      "subject": "test: reproduce truncated GSP alignment and hidden unmatched teardown calls",
+      "new_commit": "5c95734d321ffc9e2fa531c0f10edd7119e0dc9f",
+      "paths": [
+        "tools/align_metadata.py",
+        "tools/tests/test_align_metadata.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "bc7f3ade527db86202c89171057745d0b9636a6b",
+      "subject": "fix: align complete GSP sequences and retain unmatched commands",
+      "new_commit": "35bd4b53c089c1143588000a1cf5f196e7c4ad4f",
+      "paths": [
+        "tools/align_metadata.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "27c52e111e730650306a69849bc45fe79079ad7b",
+      "subject": "test: require bounded diagnostics of actually posted GSP reply bodies",
+      "new_commit": "a59c7302014cdb34af83f55d2c1f51d8d31d78ab",
+      "paths": [
+        "crates/kf-gsp/src/boot.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "04951ab4659007b1080141daeb934a6662b33515",
+      "subject": "feat: capture bounded posted GSP display reply bodies for diagnostics",
+      "new_commit": "09fcf0ea02266a3c7fc7862eaa101b49c15c2439",
+      "paths": [
+        "crates/kf-gsp/src/boot.rs",
+        "crates/kf-gsp/src/lib.rs",
+        "crates/kf-gsp/src/replytrace.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "84290d19dff7c33d2062384aeb98a5d25ff9218a",
+      "subject": "fix: include diagnostic lifetime state in GSP clone and reset checks",
+      "new_commit": "26d1a5d4d179e6e278bb2d7615e5de9b73e7d016",
+      "paths": [
+        "crates/kf-gsp/src/boot.rs",
+        "crates/kf-gsp/src/replytrace.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "b3f204ef6b0810e30a09c0b24686bbb546d17a54",
+      "subject": "test: reproduce long Windows probe truncated by QGA default deadline",
+      "new_commit": "05536f2ad127676fa2a9c308166b3cee6ba9c8c1",
+      "paths": [
+        "scripts/bench/tests/test_qga_exec.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "3eb021bff86035c520bbd0fed65c00a48be23652",
+      "subject": "fix: pass requested Windows lane deadline into QGA execution",
+      "new_commit": "e7038625f3003790d465d943d6fbe886de884d72",
+      "paths": [
+        "scripts/bench/diesweep/win_die.sh",
+        "scripts/bench/windows/qmp.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "48f3cdeefdd28d2bf90980da88314e72e8ac9a15",
+      "subject": "test: expose fastguest startup kills and forced cleanup termination",
+      "new_commit": "7fd65c994aaad5e820558b08d62a1e23ce3fb27d",
+      "paths": [
+        "scripts/bench/tests/test_fastguest_stop.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "babe7d898211c8819def0a5c65533dc98dc41768",
+      "subject": "bench: refuse existing fast guests and allow SIGTERM cleanup without SIGKILL",
+      "new_commit": "dd8f6276dc398cadcb9f282957d2b30eae1fecb2",
+      "paths": [
+        "scripts/fastguest/run_fast_guest.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "787f557289c8c817f0ea14a10e6871d6c185e368",
+      "subject": "test: reproduce GSP heartbeat using the system-offset timer epoch",
+      "new_commit": "38c9aa6b7f64af1376ffc44a734e5ad72283d6aa",
+      "paths": [
+        "crates/kf-qemu/src/device.rs",
+        "crates/kf-qemu/src/heartbeat.rs",
+        "crates/kf-qemu/src/lib.rs"
+      ],
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
+    },
+    {
+      "source": "277e5d895fbbb273e4585940f85ee031c8d5063f",
+      "subject": "fix: publish GSP heartbeat in the validated guest timer epoch",
+      "new_commit": "23d1135e6ff1e1d127739e4db9cc82eedebca479",
+      "paths": [
+        "crates/kf-host/src/timer.rs",
+        "crates/kf-qemu/src/device.rs",
+        "crates/kf-qemu/src/heartbeat.rs"
+      ],
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
+    },
+    {
+      "source": "60ad041ac3cf62fce9f1385e256e30158c688ea7",
+      "subject": "test: reproduce the offset present in both native GPU system clocks",
+      "new_commit": "a49af3f9a51388b578a1f0904979c382350ddd4c",
+      "paths": [
+        "crates/kf-qemu/src/heartbeat.rs"
+      ],
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
+    },
+    {
+      "source": "304ca9adb10528ac73d809636174625199f40ba1",
+      "subject": "fix: remove the guest fn72 system offset from GSP heartbeat",
+      "new_commit": "b81577435c77b2a8e357dcee30286c480e26f9aa",
+      "paths": [
+        "crates/kf-qemu/src/device.rs",
+        "crates/kf-qemu/src/heartbeat.rs"
+      ],
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
+    },
+    {
+      "source": "a954ac468300d3a085317ed90bdd84f0785d9efc",
+      "subject": "docs: clarify heartbeat offset rounding and separate it from GOP wiring",
+      "new_commit": "2d078b732dd861eb0d3f4a3b830e6b8d9ed51922",
+      "paths": [
+        "crates/kf-qemu/src/gop.rs",
+        "crates/kf-qemu/src/heartbeat.rs"
+      ],
+      "disposition": "approved2026-10-19; reimplemented as isolated nonblocking heartbeat series with fresh EXPECTED RED and mutation proof, rather than reapplying the blocking proposal",
+      "prior_disposition": "held after import at protected drainer boundary; corrective commit 32d1128b4; proposal only",
+      "replacement_series": [
+        "f041ceab3",
+        "16e80e802",
+        "32eebb3ab",
+        "4e0e0b645",
+        "39b11e805",
+        "d99c2367b",
+        "3cf12a4b9"
+      ]
+    },
+    {
+      "source": "c450af0782724f6c764f33780076d7456078d244",
+      "subject": "test: expose unbounded metadata RPC trace across guest policy recreation",
+      "new_commit": "ef85dbc9b7a0805f874ca015dd108ea0095054f8",
+      "paths": [
+        "crates/kf-rm/tests/rpc_trace_budget.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "f2477d5b48ade0c91e2092c9cde1158168fa4f4d",
+      "subject": "test: construct the metadata fixture reply with the actual public fields",
+      "new_commit": "0d1dd662b69620001f53056e8e073c95ef49382c",
+      "paths": [
+        "crates/kf-rm/tests/rpc_trace_budget.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "79d43368d35af2635ad745072d210e7a4d9c8ea2",
+      "subject": "fix: bound metadata RPC diagnostics across all guest policy lifetimes",
+      "new_commit": "1a601f835420589c252f62f00b4c67d666f57e8d",
+      "paths": [
+        "crates/kf-rm/src/census.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "615249ed13fabbec12058552f59c0a83c9838297",
+      "subject": "test: expose broker guest ABI mismatch and property injection",
+      "new_commit": "3ceb514ad7f4f5ab459166bdc6b85762aa51f8b2",
+      "paths": [
+        "scripts/bench/tests/test_interactive_guest_driver.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "18bab2f3399dab53f5cc0520134d934a0966023e",
+      "subject": "bench: select broker guest ABI independently from the host",
+      "new_commit": "403e85c458ee98bd32152dad0b7805ecb0937249",
+      "paths": [
+        "scripts/bench/display/interactive.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "acd47e805227d07686a31e2e91be451a5ecc594e",
+      "subject": "test: require owned interactive shutdown and complete TERM cleanup",
+      "new_commit": "c142b06fe53dcc49d9ce07c66853d9956ad8dcba",
+      "paths": [
+        "scripts/bench/tests/test_interactive_stop.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "2bf2af16342ca71c6f72282f6e02896884defdb6",
+      "subject": "bench: stop owned interactive QEMU with powerdown and bounded TERM cleanup",
+      "new_commit": "2a088d8a912f1c4a0533208410b898fa50144511",
+      "paths": [
+        "scripts/bench/display/interactive.sh",
+        "scripts/bench/display/owned_qemu.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "7d1be8882a45b50b1371d3acc80cf2c64ed53a91",
+      "subject": "test: exercise the actual interactive cleanup against a slow owned child",
+      "new_commit": "9e419d615bdb0dc42fd1171e8c254aee8eee5cfe",
+      "paths": [
+        "scripts/bench/tests/test_interactive_stop.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "a8ad89c4760e66d36822d136ea46d63deb82c4d5",
+      "subject": "bench: select the matching driver disk when provisioning the broker desktop",
+      "new_commit": "711ab3bc7168637656bf49315c4643af7b36f476",
+      "paths": [
+        "scripts/bench/display/interactive.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "24dc2e5159196d0a60b1e3a006c5c278ec384db9",
+      "subject": "test: expose stale QGA file staging handshake without replaying writes",
+      "new_commit": "328d2b6129ccf64440bf623080b72836dc2d816a",
+      "paths": [
+        "scripts/bench/diesweep/qga_file_put.py",
+        "scripts/bench/tests/test_qga_file_put.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "570cd6b464138c9237046a1d059d3ee4f9926ba0",
+      "subject": "bench: reset and synchronize bounded QGA file staging before writing",
+      "new_commit": "22493f8cefccb9345237b589609dfb83fb239067",
+      "paths": [
+        "scripts/bench/diesweep/qga_file_put.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "09a178025bde5870d8bd6745f4cc1291c01fa861",
+      "subject": "test: forbid replay of an uncertain QGA file close",
+      "new_commit": "6d1146c9f605b53fecf3b183f1297513e7f2b19c",
+      "paths": [
+        "scripts/bench/tests/test_qga_file_put.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "d5bc7df448e350395364fa4d4a5961163af8f05a",
+      "subject": "bench: never replay an uncertain QGA file close",
+      "new_commit": "7920f48c20bfb9e41ac20a77257db45cae3ede10",
+      "paths": [
+        "scripts/bench/diesweep/qga_file_put.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "6265b980f985aab4d6cbb6f0cbbb97e818f4d90f",
+      "subject": "bench: reap the owned provisioning QEMU before starting the broker guest",
+      "new_commit": "cfcb98899dc425e2833cbe3a6feb7003f3faed78",
+      "paths": [
+        "scripts/bench/display/interactive.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "8851fb8c22082c7d04ac743772b011b25b08a6d6",
+      "subject": "bench: reconnect only the read-only QGA synchronization before file staging",
+      "new_commit": "6e35b1cc2d9cba68da7f1ed06e7e327fe362bd99",
+      "paths": [
+        "scripts/bench/diesweep/qga_file_put.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "c50805ad333d45e9d65301936814f5d8d46c5257",
+      "subject": "test: recover a lost read-only QGA handshake before opening a file",
+      "new_commit": "0cea917e263d49754d9d73491b654646aef085ed",
+      "paths": [
+        "scripts/bench/tests/test_qga_file_put.py"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "9161b1589d936e4d57644b508fd8f1f0dc71f158",
+      "subject": "test: require virtual Blackwell display tiles and a required IMP assignment",
+      "new_commit": "e3e5958f71d3330eba206b9c153651673d242e72",
+      "paths": [
+        "crates/kf-disp/data/layouts-580.159.04.tsv",
+        "crates/kf-disp/src/caps.rs",
+        "crates/kf-disp/src/model.rs",
+        "tools/derive_display_layouts.sh"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "afcf44745eb8b06926cb6859c27e3d4ea394c68b",
+      "subject": "fix: derive Blackwell virtual tiles and bounded required IMP assignments",
+      "new_commit": "ff962a799a0daf3e32f0dcc916dc22e290a01770",
+      "paths": [
+        "crates/kf-disp/data/caps_family_pages.tsv",
+        "crates/kf-disp/data/layouts-580.65.06.tsv",
+        "crates/kf-disp/src/caps.rs",
+        "crates/kf-disp/src/model.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "36d134bc578b052072718573cff19fa2cb08388b",
+      "subject": "derive: extend virtual-tiling fields to registered590 and595 ABI layouts",
+      "new_commit": "da87c3e33fe7e1d3189176a90002a86e2417b0b1",
+      "paths": [
+        "crates/kf-disp/data/layouts-590.48.01.tsv",
+        "crates/kf-disp/data/layouts-595.91.07.tsv",
+        "crates/kf-disp/src/model.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "f51c10df5189fd37a2ead348a3c4de55f865f927",
+      "subject": "test: isolate default-off CMC log-buffer refusal probe",
+      "new_commit": "88e4298a604106066add57e12dbc3f635f6ca768",
+      "paths": [
+        "crates/kf-rm/src/cmc_log_probe.rs",
+        "crates/kf-rm/src/lib.rs",
+        "crates/kf-rm/tests/cmc_log_probe.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "e1bd2df4df520fbbd204b22dcb133d15bf845067",
+      "subject": "probe: bound pure-In CMC log registration echo behind host flag",
+      "new_commit": "9ea90a6f575a376b6e6a94fa14d01f03f85d80c6",
+      "paths": [
+        "crates/kf-rm/src/cmc_log_probe.rs",
+        "crates/kf-rm/src/lib.rs",
+        "crates/kf-rm/tests/cmc_log_probe.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "4a50ae1fecb12e54614aa574c2d976d9715afc47",
+      "subject": "test: require the measured GB205595 capability word without cross-die fallback",
+      "new_commit": "742c75ab158614f0150359e74b3c959aed89c748",
+      "paths": [
+        "crates/kf-disp/tests/gb205_caps_word.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "e389ce3b5332f7a5c825ee72abe9fdeda6ac554a",
+      "subject": "data: admit the measured GB205595 unnamed capability word",
+      "new_commit": "01b094cd6835ca28aa1b6e85803c1963b030935d",
+      "paths": [
+        "crates/kf-disp/data/caps_measured.tsv"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "7f0bb98a092343a3c3e1343c7590a5756301e231",
+      "subject": "test: require the separately measured GB205 Windows580 capability word",
+      "new_commit": "a9c38d961c435a7c1f8d1c2759cc3063a4dfe01d",
+      "paths": [
+        "crates/kf-disp/tests/gb205_caps_word.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "5b8dd3a5ff43c73d8434b7cae52e96ab5bc1d9b0",
+      "subject": "data: admit the independently measured GB205 Windows580 capability word",
+      "new_commit": "030288f876b95bdb591618e9643997eacdd035af",
+      "paths": [
+        "crates/kf-disp/data/caps_measured.tsv"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "85f606b097854a0c1ad8ca5760f2cbb6c784a8f5",
+      "subject": "test: keep unknown-die refusal cases after independent GB205 admission",
+      "new_commit": "2f683ce45ee9f0289ec0d9ee83b9dd169235793b",
+      "paths": [
+        "crates/kf-disp/tests/caps_derive.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "6e5f08a8168a0850ae6286387b6cd84a05764097",
+      "subject": "test: require exact display tables for the public Windows581.51 twin",
+      "new_commit": "52e231479d8e484018b1cdff72a4cf9d90a06f83",
+      "paths": [
+        "crates/kf-disp/tests/abi_5809402.rs"
+      ],
+      "disposition": "imported"
+    },
+    {
+      "source": "98b49a1a4fb6f13bd8bad8214f63039dffa81d42",
+      "subject": "abi: derive exact580.94.02 display vocabulary for Windows581.51",
+      "new_commit": "7d1fd1d2c9ef5c54f4044c701759899060c6abbf",
+      "paths": [
+        "crates/kf-disp/data/classes-580.94.02.tsv",
+        "crates/kf-disp/data/layouts-580.94.02.tsv",
+        "crates/kf-disp/data/regs-580.94.02.tsv",
+        "crates/kf-disp/src/class.rs",
+        "crates/kf-disp/src/layout.rs",
+        "crates/kf-disp/src/regs.rs"
+      ],
+      "disposition": "imported"
+    }
+  ],
+  "conflicts": [],
+  "historical_red_commits_not_rerun_during_import": true
+}

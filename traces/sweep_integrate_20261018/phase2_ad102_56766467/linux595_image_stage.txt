@@ -1,0 +1,10 @@
+[2026-10-19T20:28:09+00:00] fat 595.91.07: guest up; installed now: 580.159.04
+[2026-10-19T20:28:12+00:00] fat 595.91.07: guest kernel compiler: x86_64-linux-gnu-gcc-13 (env CC=x86_64-linux-gnu-gcc-13)
+[2026-10-19T20:28:12+00:00] fat 595.91.07: uninstall the previous .run install, install 595.91.07 (open modules)
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
+NVRUN_RC=0
+[2026-10-19T20:30:06+00:00] fat 595.91.07: guest modinfo=595.91.07 libcuda=595.91.07
+[2026-10-19T20:30:37+00:00] fat 595.91.07: check boot: ssh + settled in 22s, modinfo=595.91.07
+[2026-10-19T20:30:41+00:00] fat 595.91.07: STAGED ✔ /workspace/bench/guest-595.91.07.qcow2

@@ -1,0 +1,16 @@
+# Predecessor final handoff reconciled
+
+STATUS: LIVE, 2026-10-20 20:42UTC; read HANDOFF_CODEX.md completely at origin/claude/blackwell-resume-20261020@df87431d5 BEFORE our first new rental. Both predecessor leases destroyed/API-absent, last20:36:03UTC;6.146USD predecessor spend is separate from our new15USDstretch.
+
+MEASURED predecessor fix4 OFF71588cecb: Code0 but0x116 persists around40seconds,3965RPCs/teardown~3700; GRtoken3 dead=None andGET=PUT2,33methods; copytoken80f GET=PUT2968,19352forwarded/1296submissions; GR0/CE4NSI fire. This falsifies GRreport admission as the soleTDR cause while confirming it removes a real wall. Retirement is not a time-of-TDR snapshot. System1001/minidump and3WER141engine timeouts precede116;4101 absent. Dump binaries were destroyed and were not analysed. Do not infer an engine from pointers alone or call absent4101 zeroTDR.
+
+MEASURED predecessor fix5 ON048c28b9c: sameCode43/cursor4ordinal275/384RPCs despite45authoredwords. H-POSTCOMP-DERIVED sixCAPApresencefields is falsified as sufficient. Next source investigation: CA73POSTCOMP_CAPB uses OLUT_SZ rather than legacyOLUT_LOGSZ; derive only from the virtual LUT implementation/public code, not nativevalues. One-variable candidate remains to be written/tested; unclaimedwidths stayunclaimed.
+
+## Revised falsifiers before a NEW run
+
+- OFF-TDR-STATE: use the current stack with existing default-off COMPLETION_PROBE=1000, PT_STALL_SNAPSHOT=1 and TCENSUS diagnostics, preserving P19/driver/parent/settings. Falsifier of a pendingtranslatedcompletion cause: each relevant translatedkernelchannel has realfence/GET/semaphore complete before141/116, while an independentlyidentifiedotherengine timesout. Collect all pendingchannel/state/IRQs, not only retiredcounters. No diagnosis fromSSHlossalone. Dump/Systemcollection boot uses owncrashedchild withoutkf3.
+- USER-RELAY: only if state points there, at most the ONE authorized extra arm on a hardware-readyhead withDIAG_PROGRESS1000. Latestheaddiff/currentproduct ancestry must be reviewed before any arm. No relaymerge; if it cannot be tested without a protected integration dependency, STOPthatarm with exactdependency and continue other work.
+- POSTCOMP-OLUT: test a PUBLIC-derived CAPB field translation matching virtualLUT support, after failing-first CPUtests andmutation>=2. Falsifier: displayON still aborts atcursor4. Code0+TDR supports initialization only. BaselineON andcandidateON max2attempts; neveroverlay capturedpages or guesswidths.
+- Copy paging: existingoptionalCE2branch staysunmerged; use only if pre-TDRstate identifies its exactimplicit-binding gap. A recovery-onlyimprovement is not zeroTDR acceptance.
+
+Initial mutation-runner corrections are recorded, not counted as extra successfulmutants: cargo's expected error:testfailed was initially misclassified as a compiler error, then integrationtargets were cut short without--no-fail-fast. Completed receipts require affirmative runtimefailures>=2and source-restored; no test/threshold relaxed. Initial clippy557→558 exposed a single-elementloop in the inheritedneighbor-scope test; its equivalentbinding preserves everyassertion, focused16/0/2, final557→557/added0.

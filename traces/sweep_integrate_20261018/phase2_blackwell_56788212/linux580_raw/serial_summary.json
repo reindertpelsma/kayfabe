@@ -1,0 +1,402 @@
+{
+  "classification": "MEASURED full30raw serial captures, no silenttruncation",
+  "source": "24906bf334665c9000b16b271005593daa3586c7",
+  "actual_guest": "580.159.04",
+  "files": [
+    {
+      "file": "fast_sweep249_gb202_raw580_alias-two-vas_serial.log",
+      "bytes": 10973,
+      "sha256": "b670fe46a5e62b23a2dfe3c8fde539c092a7c6d591e08d32b9d5e41611f00328",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    6.389054] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_alias-unmap-observe_serial.log",
+      "bytes": 10913,
+      "sha256": "a4c349e8a39eeefdafd28deb527738ed5433a8297b9809cf299cbb2af2932793",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   24.729409] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_atomics-probe_serial.log",
+      "bytes": 11979,
+      "sha256": "2aefd7646a31ed74b9dcdd980a6fc2b1828a1f586f8fe4d78fa30c7ea9f3bf95",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    8.457131] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_bar1-crossing_serial.log",
+      "bytes": 10493,
+      "sha256": "7d6d36f8a29716d3331f11cc86657ffb7479de097ccbf3576306303beebb0027",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.831350] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_blockage-coverage_serial.log",
+      "bytes": 11430,
+      "sha256": "b7e85f5012cf919fb696d0ab159db3b1a470badd09b6cd6b3eb177507c0a2348",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   19.682318] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_bus-info-sweep_serial.log",
+      "bytes": 15531,
+      "sha256": "b013bd76162710b61fad28cc8ede979543ccd89235faa2fe75a48efa3010b882",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   14.110297] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_ce-client-guest-ram_serial.log",
+      "bytes": 9316,
+      "sha256": "5f54238e3e7b6cba226c38cf9e409c8f5b8a9e56c3bd760da3b693b26c4f2122",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    8.345785] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_ce-client_serial.log",
+      "bytes": 21215,
+      "sha256": "162a1551b95a4b2558ada5884e4b63d66d52e695693d4b615e87e5948e8228cf",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.606639] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_concurrency_serial.log",
+      "bytes": 12515,
+      "sha256": "83f42ba3b05902f1695a322c2bf7083742ef18c7bb0edfa1b3f57254cc3be0de",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.355924] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_concurrent-fuzz_serial.log",
+      "bytes": 148367,
+      "sha256": "df9e4f5e7523ece44093cfd6150e5f832d166406a277ea33f0441bedc7bc9b9c",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   10.348308] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_cross-client-leak_serial.log",
+      "bytes": 11464,
+      "sha256": "cea334a23dcf693705a77dda9b50cafd84cef0b9e137f415202f9e3078a5ae05",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.163040] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_defer-liveness_serial.log",
+      "bytes": 22633,
+      "sha256": "1537ad073e4bea7348576d0c2d884bc687b4c8324ec8f2d612d029126ad7148c",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   19.593423] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_dictated-ring-negative_serial.log",
+      "bytes": 9026,
+      "sha256": "a4eb872446b21d5122d2a04dc41375be6c0e535ab08b2676c8bdb6ded5635a22",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   20.000040] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_dictated-ring_serial.log",
+      "bytes": 9399,
+      "sha256": "09dc1368a3a48b878136d355d3a98f441836c54f4baa3b5955e3c37397d14485",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   17.820374] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_doorbell-census_serial.log",
+      "bytes": 39853,
+      "sha256": "c2ca971dbbd9cb85e2676d8c1ba617d2a31970662a553bd263b644ed68a8cfa0",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   12.768391] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_engines_serial.log",
+      "bytes": 17135,
+      "sha256": "238bb12aa3e95c885caa589ed3410ac959139a234521ba98f37e979369bee8b4",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.408834] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_executor-vas_serial.log",
+      "bytes": 10340,
+      "sha256": "95d109f0a326662483df0cdabf339a186b55ca2e4049d6f8782f29522df777dd",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   20.721112] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_gpga-reserve-probe_serial.log",
+      "bytes": 9910,
+      "sha256": "3f9669d919c2047086edf6d0f49f0b23b848de2b8cf75363d024bf3e730da2de",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   10.107424] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_gpu-info-sweep_serial.log",
+      "bytes": 12892,
+      "sha256": "01e3f89fd17c381c8929344d133d6e04713e71e77e35b165c6570f557f4f6caf",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   12.245237] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_guest-ram-pin_serial.log",
+      "bytes": 9052,
+      "sha256": "f9842addd397102c9fd22e5694e846e8861a27bb2c13ffc022b28dd5437503a2",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    9.254278] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_guest-ring-channel_serial.log",
+      "bytes": 10549,
+      "sha256": "0782bb1e7119b9e6e49696ec5f70a0aba973528e38602e94cf8423fd9f68adb8",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   15.989531] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_late-map-race_serial.log",
+      "bytes": 10892,
+      "sha256": "5c215e32253ad22edfc1ffd1f44552deac6b5aafee0e9d3d3fbb025937371c86",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   21.444943] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_map-propagation_serial.log",
+      "bytes": 9928,
+      "sha256": "59fa0c41098f14d658782ac287fe64f5a561194906432e66383e5c31fbc41afc",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   21.999362] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_map-stress_serial.log",
+      "bytes": 62072,
+      "sha256": "b29afad7607998b55f5c17d490ce58363345040ae0f9be6437c220369f02c33a",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    8.958255] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_missing-page-fault_serial.log",
+      "bytes": 10777,
+      "sha256": "45f11ea2a29a49a723579322a0d150bc924fd51aeaf4cd9d374a81089bfa2126",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   15.319116] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_pce-mask-probe_serial.log",
+      "bytes": 9102,
+      "sha256": "c50b0cc84cd947efe41ce87b0ca13695e22c347ae82d854b6215c7a2beb55fd0",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[    7.281772] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_rpc-mixed-allocs_serial.log",
+      "bytes": 19986,
+      "sha256": "cf61d152b84beb7519804a4c280892f4d52accb7da3a8b2950666028f28681c5",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   11.352760] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_timer_serial.log",
+      "bytes": 9997,
+      "sha256": "1f80d2da2e91ceefcc9b8fe9065b54c6732dc0ef730fbdf760bf05acb1595941",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   13.102139] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_uvm-invalidate_serial.log",
+      "bytes": 9749,
+      "sha256": "a42076a943b75dca5e271e859cd897b41b0d7d4350d2e3650ba60d0e988bdf79",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   17.349887] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    },
+    {
+      "file": "fast_sweep249_gb202_raw580_uvm-mean_serial.log",
+      "bytes": 24280,
+      "sha256": "8d7a9555e9ac7c4137d436fef8bea1a0a9b3848672215e34c1c92c105eca186c",
+      "heartbeat_warnings": 0,
+      "raw_heartbeat_values": [],
+      "nonzero_heartbeat_warnings": 0,
+      "xid": 0,
+      "flip_timeout": 0,
+      "driver_markers": [
+        "[   16.346033] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (root@ubuntu)  Mon Oct 19 21:04:34 UTC 2026"
+      ]
+    }
+  ],
+  "total_heartbeat_warnings": 0,
+  "nonzero_heartbeat_warnings": 0,
+  "xid_total": 0,
+  "flip_timeout_total": 0,
+  "limit": "Raw30pass does not imply warning-free heartbeat or graphics/broker acceptance"
+}

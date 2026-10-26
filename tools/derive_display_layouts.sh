@@ -121,6 +121,16 @@ FIELDS=(
   NVC370_CTRL_GET_ACCL_PARAMS:channelInstance
   NVC370_CTRL_GET_ACCL_PARAMS:accelerators
   NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:bIsPossible
+  NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:numHeads
+  NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:head
+  NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:numTilingAssignments
+  NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:tilingAssignments
+  NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:tileList
+  NVC372_CTRL_IMP_HEAD:headIndex
+  NVC372_CTRL_IMP_HEAD:bEnableDsc
+  NVC372_TILING_ASSIGNMENT:numTiles
+  NVC372_TILE_ENTRY:head
+  NVC372_TILE_ENTRY:headDscSlices
   NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:minImpVPState
   NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:minPState
   NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS:minRequiredBandwidthKBPS
@@ -232,7 +242,16 @@ CONSTS=(
     echo "  printf(\"CONST\\tCAP_${c}_BYTE\\t0x%llx\\n\", (unsigned long long)(1?NV0073_CTRL_SYSTEM_CAPS_${c}));"
     echo "  printf(\"CONST\\tCAP_${c}_MASK\\t0x%llx\\n\", (unsigned long long)(0?NV0073_CTRL_SYSTEM_CAPS_${c}));"
   done
-  for c in "${CONSTS[@]}"; do echo "  printf(\"CONST\\t$c\\t0x%llx\\n\", (unsigned long long)($c));"; done
+  for c in "${CONSTS[@]}"; do
+    # Removed controls must be absent from this version's claimed set.
+    if [[ "$c" == *_CTRL_CMD_* ]]; then echo "#ifdef $c"; fi
+    echo "  printf(\"CONST\\t$c\\t0x%llx\\n\", (unsigned long long)($c));"
+    if [[ "$c" == *_CTRL_CMD_* ]]; then
+      echo '#else'
+      echo "  fputs(\"MISSING\\tCONST\\t$c\\n\", stderr);"
+      echo '#endif'
+    fi
+  done
   for f in AUDIO_OPTIMAL ACTIVE_SOR_NOT_AUDIO_CAPABLE_YES; do
     range=${f%_*}
     echo "  printf(\"CONST\\tASSIGN_SOR_FLAGS_${f}_MASK\\t0x%llx\\n\", (unsigned long long)(NV0073_CTRL_DFP_ASSIGN_SOR_FLAGS_${f} << (0?NV0073_CTRL_DFP_ASSIGN_SOR_FLAGS_${range})));"

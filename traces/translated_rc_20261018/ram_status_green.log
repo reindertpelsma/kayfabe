@@ -1,0 +1,17 @@
+running 14 tests
+test chanrc::ram_tests::ram_final_status_word_does_not_rely_on_an_atomic_byte_copy ... ok
+test chanrc::ram_tests::ram_pollers_observe_guest_engine_before_error_status ... ok
+test chanrc::ram_tests::ram_revocation_cannot_redirect_a_pending_rc_into_replacement_backing ... ok
+test chanrc::ram_tests::transient_ram_contention_retries_the_original_error_before_its_event ... ok
+test chanrc::ram_tests::ram_target_rejects_offsets_outside_the_notifier_before_the_authority_is_called ... ok
+test chanrc::ram_tests::ram_topology_change_mid_publication_never_writes_status_or_posts_an_event ... ok
+test chanrc::tests::a_busy_retirement_lock_keeps_the_event_for_retry_without_posting ... ok
+test chanrc::tests::a_record_straddling_the_heap_end_is_refused_whole ... ok
+test chanrc::tests::a_notifier_may_cross_a_page_without_truncating_its_record ... ok
+test chanrc::tests::a_retired_allocation_cannot_post_even_with_a_retained_queue_reference ... ok
+test chanrc::tests::hostile_overflow_unaligned_and_out_of_store_offsets_are_refused ... ok
+test chanrc::tests::reusing_a_chid_does_not_revive_the_old_allocations_event ... ok
+test chanrc::tests::the_firmware_carveout_is_never_a_guest_notifier_destination ... ok
+test chanrc::tests::the_posting_permit_covers_the_actual_queue_write ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 400 filtered out; finished in 0.00s

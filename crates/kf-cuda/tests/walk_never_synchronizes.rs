@@ -90,6 +90,20 @@ fn the_known_positive_is_found() {
     );
 }
 
+// Retain candidate-4's original test name and its single-probe invariant after
+// excluding only the explicit store barrier authorized and pinned by candidate 5.
+#[test]
+fn only_the_probe_synchronizes() {
+    let store = body_of(WALK_RS, "pub fn sync_store").expect("explicit worker barrier");
+    let rest = WALK_RS.replacen(store, "", 1);
+    assert_eq!(code_only(&rest).matches("ctx_synchronize()").count(), 1);
+    assert!(
+        body_of(WALK_RS, "pub fn probe_failed_launch")
+            .unwrap()
+            .contains("ctx_synchronize()")
+    );
+}
+
 #[test]
 fn only_the_probe_and_store_completion_synchronize() {
     assert!(

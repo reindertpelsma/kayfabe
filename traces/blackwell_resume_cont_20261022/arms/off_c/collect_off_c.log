@@ -1,0 +1,12 @@
+COLLECT_START run=off_c (standard VGA, no kf3 device) 2026-10-21T23:08:21+00:00
+[2026-10-21T23:08:21Z] detached: tag=off_c_collect, log logs/off_c_collect_run.log (stdout logs/off_c_collect_run.out)
+KF_SSH_UP
+CLOCK host=2026-10-21T23:09:45.622082517 guest=2026-10-21T23:09:52.6720974Z
+COLLECT_DONE
+COLLECT_METADATA_READY 2026-10-21T23:10:14+00:00
+WER_TIMES_DONE
+HDR_DONE
+COLLECT_ALL_DONE 2026-10-21T23:10:58+00:00
+[2026-10-21T23:10:58Z] stopping kfwin (pid 97196)
+[2026-10-21T23:11:18Z] stopped
+COLLECT_EXIT run=off_c rc=0 2026-10-21T23:11:18+00:00

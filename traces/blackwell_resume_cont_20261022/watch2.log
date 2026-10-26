@@ -1,0 +1,12 @@
+--- lease 57117614 22:06:24
+22:06:25 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_START own_instance=57117614 2026-10-21T22:06:14+00:00|LANE_START 2026-10-21T22:06:14+00:00|
+22:10:27 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|HEAD is now at 2c30a158c DIAGNOSTIC (do not merge): KF3_DIAG_CAPS_PAGE_FILE replaces the derived caps page with the box'|LANE_START 2026-10-21T22:06:14+00:00|
+22:14:29 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS|LANE_START 2026-10-21T22:06:14+00:00|
+22:20:33 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|GR_TIER_VERDICT=PASS|LANE_START 2026-10-21T22:06:14+00:00|
+22:52:52 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|LANE_START 2026-10-21T22:06:14+00:00|ARM_BEGIN on_c0 2026-10-21T22:51:15+00:00|
+22:54:56 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|VERDICT on_c0 types=- -> PANIC50 rpcs=278|ARM_BEGIN on_c1 2026-10-21T22:54:23+00:00|
+22:58:58 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|VERDICT on_c1 types=0,1,2 -> FIXED rpcs=4542|ARM_BEGIN on_c2 2026-10-21T22:58:03+00:00|
+23:03:01 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|VERDICT on_c2 types=0,1 -> PANIC50 rpcs=278|ARM_BEGIN on_c3 2026-10-21T23:01:08+00:00|
+23:05:02 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|BISECT_RESULT minimal_candidate=2 arms_used=3|ARM_BEGIN off_c 2026-10-21T23:04:52+00:00|
+23:09:04 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|ARM_BEGIN off_c 2026-10-21T23:04:52+00:00|ARM_RC off_c rc=255|
+23:13:07 Warning: Permanently added 'bwlane-57117614' (ED25519) to the list of known hosts.|SWEEP_PROVISION_EXIT rc=0 2026-10-21T22:51:00+00:00|LANE_DONE 2026-10-21T23:11:18+00:00|LANE_EXIT rc=0 2026-10-21T23:11:18+00:00|

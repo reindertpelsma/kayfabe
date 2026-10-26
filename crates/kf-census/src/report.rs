@@ -1,5 +1,8 @@
 //! Census output: TSV tables and one JSON document. Only counts, sizes, ids and statuses are
 //! written - never message bytes (the capture files are host-only; the census may be shared).
+//! The one exception is [`bodies_tsv`], which exists only for scrubbed sources: it writes the
+//! bodies the scrub's allow-list kept, and nothing else (`main` refuses it for any source that
+//! did not go through the scrub).
 
 use crate::analyze::Report;
 use crate::capture::Dir;
@@ -27,6 +30,27 @@ fn dir_name(d: Dir) -> &'static str {
         Dir::Cmd => "cmd",
         Dir::Status => "status",
     }
+}
+
+/// Distinct allow-listed control bodies (scrubbed sources only), one row per
+/// `(cmd, dir, status, body)`: `cmd dir status size count sha256 hex`. `None` when bodies were
+/// not collected.
+#[must_use]
+pub fn bodies_tsv(r: &Report) -> Option<String> {
+    let b = r.bodies.as_ref()?;
+    let mut s = String::from("cmd\tdir\tstatus\tsize\tcount\tsha256\thex\n");
+    for ((cmd, dir, st, body), n) in b {
+        let h = kf_util::sha256::sha256(body);
+        let _ = writeln!(
+            s,
+            "{cmd:#010x}\t{}\t{st:#x}\t{}\t{n}\t{}\t{}",
+            dir_name(*dir),
+            body.len(),
+            h.iter().map(|x| format!("{x:02x}")).collect::<String>(),
+            body.iter().map(|x| format!("{x:02x}")).collect::<String>()
+        );
+    }
+    Some(s)
 }
 
 /// Per-control census as TSV (one header line, one row per control id).

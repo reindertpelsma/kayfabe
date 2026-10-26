@@ -1,0 +1,18 @@
+# Public POSTCOMP unit-width contract
+
+STATUS: LIVE, 2026-10-21. GPU-free isolated topic on codex/sweep-postcomp-units-20261021; hardware UNRUN. This is not an identified cause of either Windows crash.
+
+CODE READ: public OGKM580.159.04 @b81d58ee0224d1d290bef1c080592b619e184042, nvkms-evo3.c:5858-5863, requires POSTCOMP UNIT_WIDTH=16 for every usable output. Turing calls the common parser directly; Ampere/Ada call it through C6; CA calls C6 from nvkms-evo4.c:1849. Source receipt includes exact file hashes. This is one shared class invariant, not a per-die measured value. The existing page advertised0.
+
+Change: author16 for active heads/tiles using generated POSTCOMP_HEAD_HDR_CAPA or POSTCOMP_HDR_CAPA register/field definitions. Inactive outputs stay zero. The generated family table was regenerated with tools/derive_display_caps.sh against the pinned public headers (193rows). No caps_measured.tsv change, copied capability page, new feature-presence claim, timer, GPU completion or protected relay/lifecycle change.
+
+MEASURED release kf-disp: before290passed/0failed/5ignored; after293/0/5. Three new tests fail on the parent in test-only EXPECTED RED commit d0c0d22c3d447144ee2a52eeae9e8e9ae428d847: five versions/all four display families with active/inactive outputs; relocated generated register/field layout; missing-field refusal. Full tests passed after correction and fixture regeneration. Three mutants each have two killing tests; mutations.json lists exact names and verifies identical restored source hash. Restored focused tests3/0; rustfmt clean. Clippy77diagnostics before and77after, added0/removed0 under code/message/primary-source-text comparison (line shifts ignored); no warning suppressed.
+
+Existing assertion changes, fully disclosed:
+- caps::tests::nvkms_reads_four_heads_eight_windows_and_real_clocks previously required the entire GA10x POSTCOMP_CAPA word0 as its no-scaler check. It now requires exactly the generated UNIT_WIDTH16 encoding and separately SCLR_PRESENT0; all other bits remain required zero.
+- Integration case ada_page_gains_no_postcomp_word is renamed ada_page_gains_no_postcomp_features. Its whole-word pin now permits exactly UNIT_WIDTH16 and no other bits; an explicit scaler-absent assertion is added. This does change Ada's advertised numeric unit width from0to16; it does not admit the Blackwell pipe feature bits. The new all-family test covers this intentionally.
+- The committed derived-family-row equality test is unchanged; its generated data is updated by the normal tool. No test is removed/ignored or assertion deleted to hide a failure. Intermediate failures and their causes are retained in validation hashes; they were the two whole-word assumptions and then the stale derived fixture.
+
+Hardware hypothesis, stated before any future arm: this public class invariant may affect the ON initialization path. Falsifier: the same frozen sibling/driver/flags still faults after the fourth cursor allocation with only this topic changed. A public-source contract correction remains distinct from a proven Windows repair. No new arm has run, and the active Ada rental still uses frozen1ce11cf4d (product equal to af8). Keep this topic draft and separate pending review/hardware measurement.
+
+Primary sources: [common parser](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/b81d58ee0224d1d290bef1c080592b619e184042/src/nvidia-modeset/src/nvkms-evo3.c#L5858), [CA parser](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/b81d58ee0224d1d290bef1c080592b619e184042/src/nvidia-modeset/src/nvkms-evo4.c#L1840).

@@ -36,6 +36,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// The table as published in the repository.
 pub const TABLE_TSV: &str = include_str!("../data/measured_constants.tsv");
 
+/// Privileged PRECOMP observations from the Blackwell branch.
+pub const PRECOMP_TSV: &str = include_str!("../data/precomp_measured.tsv");
+
+/// Source-derived software state, separate from the 95 captured observation rows.
+pub const SOFTWARE_TSV: &str = include_str!("../data/software_constants.tsv");
+
 /// Which die a row answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DieScope {
@@ -509,7 +515,12 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
 /// [`Refusal::TableInvalid`] if the published file breaks a rule (the tests make that a red build).
 pub fn table() -> Result<&'static [Row], Refusal> {
     static T: OnceLock<Result<Vec<Row>, String>> = OnceLock::new();
-    match T.get_or_init(|| parse(TABLE_TSV)) {
+    match T.get_or_init(|| {
+        let mut rows = parse(TABLE_TSV)?;
+        rows.extend(parse(PRECOMP_TSV)?);
+        rows.extend(parse(SOFTWARE_TSV)?);
+        Ok(rows)
+    }) {
         Ok(v) => Ok(v.as_slice()),
         Err(e) => Err(Refusal::TableInvalid(e.clone())),
     }
@@ -920,9 +931,6 @@ mod tests {
     #[test]
     fn the_ga106_rows_equal_the_old_captured_rows() {
         for &(cmd, size, words) in kf_abi::cudartinit::SERVED {
-            if cmd == 0x2080_2209 {
-                continue;
-            } // software-state rule is not observation data
             let r = lookup(&cudart_key(cmd), GA106, 580).expect("GA106 row");
             assert_eq!(r.size, size, "{cmd:#x}");
             assert_eq!(r.words, words, "{cmd:#x}");

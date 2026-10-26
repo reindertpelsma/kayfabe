@@ -1,0 +1,87 @@
+relation	native_command_sequence	native_status_sequence	function	control_or_class	native_effective_result	virtual_ordinal	virtual_effective_result	effective_status_equal	matching_block_length	native_envelope	native_control_status	virtual_envelope	virtual_control_status	api_key_repeated	native_pair_basis	virtual_pair_basis	next_native_function	next_native_control_or_class
+match	235	254	0x4c	0x20808159	0x0	200	0x0	1	7	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x730250
+match	280	299	0x4c	0x730116	0x0	201	0x0	1	6	0x0	0x0	0x0	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	281	300	0x4c	0x730285	0x1f	202	0x56	0	6	0x0	0x1f	-	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	282	301	0x4c	0x730285	0x1f	203	0x56	0	6	0x0	0x1f	-	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	283	302	0x4c	0x730285	0x1f	204	0x56	0	6	0x0	0x1f	-	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x730285
+match	284	303	0x4c	0x730285	0x1f	205	0x56	0	6	0x0	0x1f	-	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x730108
+match	285	304	0x4c	0x730108	0x0	206	0x0	1	6	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x73011d
+virtual_only	-	-	0x4c	0x730245	-	207	0x0	unknown	0	-	-	0x0	-	0	-	pretty trace; body unavailable	-	-
+match	2247	2266	0x4c	0x730109	0x0	208	0x0	1	1	0x0	0x0	0x0	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20801110
+virtual_only	-	-	0x4c	0x73012c	-	209	0x0	unknown	0	-	-	0x0	-	0	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x67	0xb297	-	210	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x67	0xb297	-	211	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x4	-	-	212	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x4c	0x20800a38	-	213	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x4c	0x20800a3a	-	214	0x56	unknown	0	-	-	-	-	0	-	pretty trace; body unavailable	-	-
+match	2248	2267	0x4c	0x20801110	0x0	215	0x56	0	1	0x0	0x0	-	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xcbcb
+virtual_only	-	-	0x67	0xb297	-	216	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x67	0xb297	-	217	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+virtual_only	-	-	0x4	-	-	218	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	2254	2273	0x67	0x4	0x0	219	0x0	1	58	0x0	-	0x0	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x0
+match	2255	2274	0x67	0x0	0x0	220	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x80
+match	2256	2275	0x67	0x80	0x0	221	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x2080
+match	2257	2276	0x67	0x2080	0x0	222	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0xa	-
+match	2258	2277	0xa	-	0x0	223	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0xa	-
+match	2259	2278	0xa	-	0x0	224	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0xa	-
+match	2260	2279	0xa	-	0x0	225	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x2080080b
+match	2261	2280	0x4c	0x2080080b	0x0	226	0x56	0	58	0x0	0x0	-	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x70
+match	2262	2281	0x67	0x70	0x0	227	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x90f1
+match	2263	2282	0x67	0x90f1	0x0	228	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x90f10106
+match	2264	2283	0x4c	0x90f10106	0x0	229	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0xa	-
+match	2265	2284	0xa	-	0x0	230	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x70
+match	2266	2285	0x67	0x70	0x0	231	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca70
+match	2267	2286	0x67	0xca70	0x0	232	0x0	1	58	0x0	-	0x0	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x50700709
+match	2268	2287	0x4c	0x50700709	0x0	233	0x0	1	58	0x0	0x0	0x0	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x50700117
+match	2269	2288	0x4c	0x50700117	0x0	234	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2270	2289	0x4c	0x20800a58	0x0	235	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7d
+match	2271	2290	0x67	0xca7d	0x0	236	0x0	1	58	0x0	-	0x0	-	0	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2272	2291	0x4c	0x20800a58	0x0	237	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2273	2292	0x67	0xca7e	0x0	238	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2274	2293	0x4c	0x20800a58	0x0	239	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2275	2294	0x67	0xca7e	0x0	240	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2276	2295	0x4c	0x20800a58	0x0	241	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2277	2296	0x67	0xca7e	0x0	242	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2278	2297	0x4c	0x20800a58	0x0	243	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2279	2298	0x67	0xca7e	0x0	244	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2280	2299	0x4c	0x20800a58	0x0	245	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2281	2300	0x67	0xca7e	0x0	246	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2282	2301	0x4c	0x20800a58	0x0	247	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2283	2302	0x67	0xca7e	0x0	248	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2284	2303	0x4c	0x20800a58	0x0	249	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2285	2304	0x67	0xca7e	0x0	250	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2286	2305	0x4c	0x20800a58	0x0	251	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7e
+match	2287	2306	0x67	0xca7e	0x0	252	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2288	2307	0x4c	0x20800a58	0x0	253	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2289	2308	0x67	0xca7b	0x0	254	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2290	2309	0x4c	0x20800a58	0x0	255	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2291	2310	0x67	0xca7b	0x0	256	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2292	2311	0x4c	0x20800a58	0x0	257	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2293	2312	0x67	0xca7b	0x0	258	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2294	2313	0x4c	0x20800a58	0x0	259	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2295	2314	0x67	0xca7b	0x0	260	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2296	2315	0x4c	0x20800a58	0x0	261	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2297	2316	0x67	0xca7b	0x0	262	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2298	2317	0x4c	0x20800a58	0x0	263	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2299	2318	0x67	0xca7b	0x0	264	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2300	2319	0x4c	0x20800a58	0x0	265	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2301	2320	0x67	0xca7b	0x0	266	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2302	2321	0x4c	0x20800a58	0x0	267	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7b
+match	2303	2322	0x67	0xca7b	0x0	268	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2304	2323	0x4c	0x20800a58	0x0	269	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7a
+match	2305	2324	0x67	0xca7a	0x0	270	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2306	2325	0x4c	0x20800a58	0x0	271	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7a
+match	2307	2326	0x67	0xca7a	0x0	272	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2308	2327	0x4c	0x20800a58	0x0	273	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7a
+match	2309	2328	0x67	0xca7a	0x0	274	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x20800a58
+match	2310	2329	0x4c	0x20800a58	0x0	275	0x0	1	58	0x0	0x0	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0xca7a
+match	2311	2330	0x67	0xca7a	0x0	276	0x0	1	58	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x73010c
+virtual_only	-	-	0x4c	0x50700117	-	277	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	2393	2412	0xa	-	0x0	278	0x0	1	1	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x90f1
+virtual_only	-	-	0x4c	0x50700117	-	279	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	2396	2415	0xa	-	0x0	280	0x0	1	1	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x90f1
+virtual_only	-	-	0x4c	0x50700117	-	281	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	2399	2418	0xa	-	0x0	282	0x0	1	1	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x67	0x0
+virtual_only	-	-	0x4c	0x50700117	-	283	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-
+match	2975	3029	0xa	-	0x0	284	0x0	1	1	0x0	-	0x0	-	1	function FIFO; keys agree; handles/bodies unavailable	pretty trace; body unavailable	0x4c	0x73010c
+virtual_only	-	-	0x4c	0x50700117	-	285	0x0	unknown	0	-	-	0x0	-	1	-	pretty trace; body unavailable	-	-

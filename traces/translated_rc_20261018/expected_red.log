@@ -1,0 +1,136 @@
+running 16 tests
+test a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event ... FAILED
+test a_guests_own_post_stop_write_is_rebaselined_never_reported ... FAILED
+test a_half_written_record_is_not_an_event_until_its_status_lands ... FAILED
+test a_record_that_was_already_nonzero_at_arming_is_a_baseline_not_an_event ... ok
+test a_stop_expectation_does_not_hide_a_different_host_error ... FAILED
+test an_xid32_record_written_by_the_host_is_observed_exactly_once ... FAILED
+test changing_bytes_after_a_report_does_not_make_a_second_record ... FAILED
+test hostile_guest_bytes_never_become_a_host_error ... FAILED
+test info16_without_status_cannot_turn_into_an_xid ... FAILED
+test partial_record_and_repeated_baseline_never_write_guest_memory ... ok
+test publication_writes_status_last_before_returning_the_event ... FAILED
+test repeated_wakes_do_not_republish_or_deliver_a_second_event ... FAILED
+test the_guest_notifier_contains_the_observed_xid_and_the_declared_engine ... FAILED
+test the_host_token_does_not_replace_the_guest_chid_or_guest_engine ... FAILED
+test unrelated_channels_and_their_notifiers_are_untouched ... FAILED
+test a_pending_host_error_cannot_be_replaced_by_later_host_words ... FAILED
+
+failures:
+
+---- a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event stdout ----
+
+thread 'a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event' (2636065) panicked at crates/kf-chan/tests/translated_ring_rc.rs:117:5:
+assertion `left == right` failed
+  left: Ok(None)
+ right: Err("write refused")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_guests_own_post_stop_write_is_rebaselined_never_reported stdout ----
+
+thread 'a_guests_own_post_stop_write_is_rebaselined_never_reported' (2636066) panicked at crates/kf-chan/tests/translated_ring_rc.rs:65:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+---- a_half_written_record_is_not_an_event_until_its_status_lands stdout ----
+
+thread 'a_half_written_record_is_not_an_event_until_its_status_lands' (2636067) panicked at crates/kf-chan/tests/translated_ring_rc.rs:50:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+---- a_stop_expectation_does_not_hide_a_different_host_error stdout ----
+
+thread 'a_stop_expectation_does_not_hide_a_different_host_error' (2636070) panicked at crates/kf-chan/tests/translated_ring_rc.rs:208:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+---- an_xid32_record_written_by_the_host_is_observed_exactly_once stdout ----
+
+thread 'an_xid32_record_written_by_the_host_is_observed_exactly_once' (2636071) panicked at crates/kf-chan/tests/translated_ring_rc.rs:33:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+---- changing_bytes_after_a_report_does_not_make_a_second_record stdout ----
+
+thread 'changing_bytes_after_a_report_does_not_make_a_second_record' (2636072) panicked at crates/kf-chan/tests/translated_ring_rc.rs:214:5:
+assertion failed: w.observe(record(32, 0xffff)).is_some()
+
+---- hostile_guest_bytes_never_become_a_host_error stdout ----
+
+thread 'hostile_guest_bytes_never_become_a_host_error' (2636073) panicked at crates/kf-chan/tests/translated_ring_rc.rs:174:5:
+assertion failed: publish(&mut d, record(32, 0xffff), &mut guest).is_some()
+
+---- info16_without_status_cannot_turn_into_an_xid stdout ----
+
+thread 'info16_without_status_cannot_turn_into_an_xid' (2636074) panicked at crates/kf-chan/tests/translated_ring_rc.rs:201:5:
+assertion `left == right` failed
+  left: None
+ right: Some(ObservedRc { except_type: 32 })
+
+---- publication_writes_status_last_before_returning_the_event stdout ----
+
+thread 'publication_writes_status_last_before_returning_the_event' (2636076) panicked at crates/kf-chan/tests/translated_ring_rc.rs:129:5:
+assertion failed: d.poll(record(32, 0xffff),
+            |off, word|
+                {
+                    writes.push((off, word));
+                    Ok::<_, ()>(())
+                }).unwrap().is_some()
+
+---- repeated_wakes_do_not_republish_or_deliver_a_second_event stdout ----
+
+thread 'repeated_wakes_do_not_republish_or_deliver_a_second_event' (2636077) panicked at crates/kf-chan/tests/translated_ring_rc.rs:148:5:
+assertion `left == right` failed
+  left: (0, 0)
+ right: (1, 4)
+
+---- the_guest_notifier_contains_the_observed_xid_and_the_declared_engine stdout ----
+
+thread 'the_guest_notifier_contains_the_observed_xid_and_the_declared_engine' (2636078) panicked at crates/kf-chan/tests/translated_ring_rc.rs:105:5:
+assertion `left == right` failed
+  left: 0
+ right: 32
+
+---- the_host_token_does_not_replace_the_guest_chid_or_guest_engine stdout ----
+
+thread 'the_host_token_does_not_replace_the_guest_chid_or_guest_engine' (2636079) panicked at crates/kf-chan/tests/translated_ring_rc.rs:95:5:
+assertion `left == right` failed
+  left: None
+ right: Some(RoutedRc { route: RcRoute { chid: 234881047, engine: 1, host_token: 43 }, except_type: 32 })
+
+---- unrelated_channels_and_their_notifiers_are_untouched stdout ----
+
+thread 'unrelated_channels_and_their_notifiers_are_untouched' (2636080) panicked at crates/kf-chan/tests/translated_ring_rc.rs:158:5:
+assertion failed: publish(&mut a, record(32, 0xffff), &mut ga).is_some()
+
+---- a_pending_host_error_cannot_be_replaced_by_later_host_words stdout ----
+
+thread 'a_pending_host_error_cannot_be_replaced_by_later_host_words' (2636068) panicked at crates/kf-chan/tests/translated_ring_rc.rs:181:5:
+assertion `left == right` failed
+  left: Ok(None)
+ right: Err("blocked")
+
+
+failures:
+    a_guest_notifier_write_failure_keeps_one_pending_error_without_an_event
+    a_guests_own_post_stop_write_is_rebaselined_never_reported
+    a_half_written_record_is_not_an_event_until_its_status_lands
+    a_pending_host_error_cannot_be_replaced_by_later_host_words
+    a_stop_expectation_does_not_hide_a_different_host_error
+    an_xid32_record_written_by_the_host_is_observed_exactly_once
+    changing_bytes_after_a_report_does_not_make_a_second_record
+    hostile_guest_bytes_never_become_a_host_error
+    info16_without_status_cannot_turn_into_an_xid
+    publication_writes_status_last_before_returning_the_event
+    repeated_wakes_do_not_republish_or_deliver_a_second_event
+    the_guest_notifier_contains_the_observed_xid_and_the_declared_engine
+    the_host_token_does_not_replace_the_guest_chid_or_guest_engine
+    unrelated_channels_and_their_notifiers_are_untouched
+
+test result: FAILED. 2 passed; 14 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-chan --test translated_ring_rc`
