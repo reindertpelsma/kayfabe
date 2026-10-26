@@ -41,6 +41,8 @@ class IdentityCheckpointTests(unittest.TestCase):
             line = '[1.1.1.1]:2222 ssh-ed25519 ' + self.public_key + '\n'
             return subprocess.CompletedProcess(args, 0, line, '')
         if args[:2] == ['vastai', 'logs']:
+            self.assertTrue((self.root / 'pin-state.json').exists(),
+                            'Checkpoint must precede fallible console I/O')
             raise subprocess.CalledProcessError(1, args, '', 'synthetic console API failure')
         raise AssertionError('Unexpected request: ' + repr(args))
 
@@ -68,6 +70,32 @@ class IdentityCheckpointTests(unittest.TestCase):
         self.now = 1400.0
         with self.assertRaisesRegex(ValueError, 'REFUSED native identity deadline'):
             self.invoke()
+
+    def seed_verified_progress(self):
+        state = dict(first_mono=100.0, first_utc='synthetic', host='1.1.1.1', port=2222,
+                     stable_since=100.0, previous=self.module.fp(self.public_key), consecutive=1)
+        (self.root / 'pin-state.json').write_text(json.dumps(state))
+        self.now = 210.0
+
+    def test_console_failure_invalidates_previous_match_progress(self):
+        self.seed_verified_progress()
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.invoke()
+        state = json.loads((self.root / 'pin-state.json').read_text())
+        self.assertEqual(state['first_mono'], 100.0)
+        self.assertIsNone(state['stable_since'])
+        self.assertIsNone(state['previous'])
+        self.assertEqual(state['consecutive'], 0)
+
+    def test_console_failure_requires_a_new_full_stability_period(self):
+        self.seed_verified_progress()
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.invoke()
+        state = json.loads((self.root / 'pin-state.json').read_text())
+        key = self.module.fp(self.public_key)
+        admitted, stable = self.module.advance(state, 220.0, key, key, key)
+        self.assertFalse(admitted)
+        self.assertEqual(stable, 0)
 
 
 if __name__ == '__main__':
