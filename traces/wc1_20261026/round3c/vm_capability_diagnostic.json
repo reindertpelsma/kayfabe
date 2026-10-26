@@ -1,0 +1,41 @@
+{
+  "run": "WC1-round3c-TU106-capability-diagnostic-20261026",
+  "utc": "2026-10-26T21:36:25.252344+00:00",
+  "source": "Read-only market query; availability/capability flags, no lease",
+  "machine": 13058,
+  "host": 79466,
+  "offers": [
+    {
+      "id": 57797049,
+      "machine_id": 13058,
+      "host_id": 79466,
+      "gpu_name": "RTX 2060S",
+      "num_gpus": 1,
+      "dph_total": 0.12333333333333335,
+      "verification": "verified",
+      "vms_enabled": true,
+      "is_vm_deverified": true,
+      "rentable": false,
+      "rented": false,
+      "reliability": 0.9735071
+    },
+    {
+      "id": 57797050,
+      "machine_id": 13058,
+      "host_id": 79466,
+      "gpu_name": "RTX 2060S",
+      "num_gpus": 2,
+      "dph_total": 0.23,
+      "verification": "verified",
+      "vms_enabled": true,
+      "is_vm_deverified": true,
+      "rentable": true,
+      "rented": false,
+      "reliability": 0.9735071
+    }
+  ],
+  "admission": "REFUSED paid admission: is_vm_deverified=true; no create attempted",
+  "scope": "Owner cleared reliability; no ruling clearing VM-deverification supplied",
+  "action": "Paid work parked; existing free watch retains verified-VM criteria",
+  "cybersecurity_notice": false
+}

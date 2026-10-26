@@ -25,5 +25,6 @@
   "maximum_new_lease_bound_usd": 1.2,
   "daily_cap_usd": 12,
   "reserve_usd": 8,
-  "family_rules_admitted": 0
+  "family_rules_admitted": 0,
+  "required_gpu_count": 1
 }
