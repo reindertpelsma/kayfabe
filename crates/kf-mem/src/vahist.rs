@@ -403,6 +403,7 @@ struct State {
     chan_lines_dropped: u64,
     manual_dumps: u32,
     auto_dumps: u32,
+    auto_recent: Vec<Vec<String>>,
     auto_keys: Vec<u64>,
     trig_polled: Option<Instant>,
     trig_last: Option<Vec<u8>>,
@@ -498,6 +499,7 @@ impl Recorder {
                 chan_lines_dropped: 0,
                 manual_dumps: 0,
                 auto_dumps: 0,
+                auto_recent: Vec::new(),
                 auto_keys: Vec::new(),
                 trig_polled: None,
                 trig_last: None,
@@ -661,14 +663,14 @@ impl Recorder {
     #[must_use]
     pub fn auto_dump(&self, key: u64, why: &str) -> Vec<String> {
         let mut st = self.st();
-        if st.auto_dumps >= AUTO_DUMPS || st.auto_keys.contains(&key) {
-            return Vec::new();
-        }
+        let emit = st.auto_dumps < AUTO_DUMPS && !st.auto_keys.contains(&key);
         let Some(sp) = st.spaces.get(&key).cloned() else {
             return Vec::new();
         };
-        st.auto_dumps = st.auto_dumps.saturating_add(1);
-        st.auto_keys.push(key);
+        if emit {
+            st.auto_dumps = st.auto_dumps.saturating_add(1);
+            st.auto_keys.push(key);
+        }
         let n = st.auto_dumps;
         let t_ms = Self::ms(&st);
         let t0 = st.t0_unix_ms;
@@ -714,7 +716,17 @@ impl Recorder {
         }
         let lines = out.len().saturating_add(1);
         out.push(format!("kf3: VAHIST END #{n} auto lines={lines}"));
-        out
+        crate::recent::retain(&mut self.st().auto_recent, out.clone());
+        if let Some(text) = out.first() {
+            crate::recent::note(crate::recent::Kind::Vahist, text);
+        }
+        if emit { out } else { Vec::new() }
+    }
+
+    /// Initial four and latest twelve automatic captures, even after print budgets fill.
+    #[must_use]
+    pub fn recent_auto(&self) -> Vec<String> {
+        self.st().auto_recent.iter().flatten().cloned().collect()
     }
 
     /// ★ A space retired: its record moves to the retired ring with its row extents (VA-sorted

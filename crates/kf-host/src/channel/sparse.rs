@@ -69,9 +69,24 @@ impl HostRm {
                     .saturating_sub(before.unhonoured_bytes),
                 after.retained_bytes.saturating_sub(before.retained_bytes),
                 after.coarse_maps.saturating_sub(before.coarse_maps),
+                after.admit_calls.saturating_sub(before.admit_calls),
+                after.admit_hard_err.saturating_sub(before.admit_hard_err),
+                after.admit_decline.saturating_sub(before.admit_decline),
+                after.admit_ns_total.saturating_sub(before.admit_ns_total),
+                0,
+                after.negative_hits.saturating_sub(before.negative_hits),
+                after
+                    .negative_evicted
+                    .saturating_sub(before.negative_evicted),
+                after
+                    .occupancy_capped
+                    .saturating_sub(before.occupancy_capped),
+                0,
             ]) {
                 let _ = counter.try_update(Relaxed, Relaxed, |n| Some(n.saturating_add(delta)));
             }
+            self.sparse_totals[11].fetch_max(after.admit_ns_max, Relaxed);
+            self.sparse_totals[15].fetch_max(after.peak_blocks, Relaxed);
             if tree.poisoned && !self.layout_poisoned.swap(true, AcqRel) {
                 eprintln!("kf-host: sparse layout repair failed; further RM placements refused");
             }
@@ -150,6 +165,15 @@ impl HostRm {
             unhonoured_bytes: self.sparse_totals[4].load(Relaxed),
             retained_bytes: self.sparse_totals[5].load(Relaxed),
             coarse_maps: self.sparse_totals[6].load(Relaxed),
+            admit_calls: self.sparse_totals[7].load(Relaxed),
+            admit_hard_err: self.sparse_totals[8].load(Relaxed),
+            admit_decline: self.sparse_totals[9].load(Relaxed),
+            admit_ns_total: self.sparse_totals[10].load(Relaxed),
+            admit_ns_max: self.sparse_totals[11].load(Relaxed),
+            negative_hits: self.sparse_totals[12].load(Relaxed),
+            negative_evicted: self.sparse_totals[13].load(Relaxed),
+            occupancy_capped: self.sparse_totals[14].load(Relaxed),
+            peak_blocks: self.sparse_totals[15].load(Relaxed),
         }
     }
 

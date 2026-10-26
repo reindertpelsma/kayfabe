@@ -1,4 +1,4 @@
-//! Optional ENS3 counters; this module authors no GPU operation.
+//! CPU timing counters: RM/admission always on; nested ENS3 phases opt in. No GPU operation.
 
 use std::cell::Cell;
 use std::sync::OnceLock;
@@ -111,22 +111,31 @@ impl Drop for Scope {
             return;
         };
         let ns = u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX);
-        COUNTERS.with(|cell| {
-            let mut s = cell.get();
-            let c = &mut s.costs[phase as usize];
-            c.calls = c.calls.saturating_add(1);
-            c.ns = c.ns.saturating_add(ns);
-            c.work = c.work.saturating_add(work);
-            c.last_ns = ns;
-            c.max_ns = c.max_ns.max(ns);
-            cell.set(s);
-        });
+        record(phase, ns, work);
     }
+}
+
+fn record(phase: Phase, ns: u64, work: u64) {
+    COUNTERS.with(|cell| {
+        let mut s = cell.get();
+        let c = &mut s.costs[phase as usize];
+        c.calls = c.calls.saturating_add(1);
+        c.ns = c.ns.saturating_add(ns);
+        c.work = c.work.saturating_add(work);
+        c.last_ns = ns;
+        c.max_ns = c.max_ns.max(ns);
+        cell.set(s);
+    });
+}
+
+/// Admission timing reuses the caller's existing clock; cheap counters are always on.
+pub(crate) fn admission(ns: u64) {
+    record(Phase::Admission, ns, 0);
 }
 
 /// Time precisely the supplied ioctl; result and errors pass through unchanged.
 pub(crate) fn rm<T>(invalidate: bool, f: impl FnOnce() -> T) -> T {
-    rm_with(enabled(), invalidate, f)
+    rm_with(true, invalidate, f)
 }
 
 fn rm_with<T>(active: bool, invalidate: bool, f: impl FnOnce() -> T) -> T {

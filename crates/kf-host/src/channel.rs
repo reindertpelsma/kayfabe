@@ -418,19 +418,59 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
     map_piece_list(v, &pieces, row, rollback_flags)
 }
 
+struct MapFailure {
+    error: RmError,
+    rolled_back: bool,
+}
 fn map_piece_list<V: DmaVerbs + ?Sized>(
     v: &V,
     pieces: &[(u32, u64, u64)],
     row: MapPiece,
     rollback_flags: u32,
 ) -> Result<u64, RmError> {
+    map_piece_list_checked(v, pieces, row, rollback_flags).map_err(|e| e.error)
+}
+fn map_tree<V: DmaVerbs + ?Sized>(
+    v: &V,
+    tree: &mut crate::sparse::Reservations,
+    ops: &dyn crate::sparse::Ops,
+    range: u32,
+    row: MapPiece,
+    rollback_flags: u32,
+    refine: bool,
+) -> Result<u64, RmError> {
+    let pieces = tree.prepare_map(ops, range, row.at, row.len, refine)?;
+    let undo = tree.map_undo(row.at, row.len);
+    tree.mark(row.at, row.len, true);
+    match map_piece_list_checked(v, &pieces, row, rollback_flags) {
+        Ok(va) => Ok(va),
+        Err(e) => {
+            // Uncertain rollback retains occupancy; freeing a possibly live page is forbidden.
+            let _ = (e.rolled_back, undo);
+            Err(e.error)
+        }
+    }
+}
+
+fn map_piece_list_checked<V: DmaVerbs + ?Sized>(
+    v: &V,
+    pieces: &[(u32, u64, u64)],
+    row: MapPiece,
+    rollback_flags: u32,
+) -> Result<u64, MapFailure> {
     if let [(h, _, len)] = pieces {
-        return v.map_one(*h, MapPiece { len: *len, ..row });
+        return v
+            .map_one(*h, MapPiece { len: *len, ..row })
+            .map_err(|error| MapFailure {
+                error,
+                rolled_back: true,
+            });
     }
     // Checked once, so no piece offset below can overflow (`piece.va - at < len`).
-    row.offset
-        .checked_add(row.len)
-        .ok_or(RmError::Other(VA_ROW_WRAPS))?;
+    row.offset.checked_add(row.len).ok_or(MapFailure {
+        error: RmError::Other(VA_ROW_WRAPS),
+        rolled_back: true,
+    })?;
     for (i, &(h, va, len)) in pieces.iter().enumerate() {
         let piece = MapPiece {
             offset: row.offset + (va - row.at),
@@ -439,15 +479,20 @@ fn map_piece_list<V: DmaVerbs + ?Sized>(
             ..row
         };
         if let Err(e) = v.map_one(h, piece) {
+            let mut rolled_back = true;
             for &(h0, va0, _) in pieces[..i].iter().rev() {
                 if let Err(r) = v.unmap_one(h0, va0, 0, rollback_flags) {
+                    rolled_back = false;
                     eprintln!(
                         "kf-host: split map {:#x}+{:#x}: piece {va:#x} refused ({e:?}); rolling back piece {va0:#x} was refused too ({r:?})",
                         row.at, row.len
                     );
                 }
             }
-            return Err(e);
+            return Err(MapFailure {
+                error: e,
+                rolled_back,
+            });
         }
     }
     Ok(row.at)
@@ -1124,16 +1169,14 @@ impl HostRm {
         let shared = backing == MapBacking::SharedSlice;
         if let Some(a) = at
             && let Some(result) = self.with_sparse_route(space.space, |tree, ops| {
-                // Occupancy is recorded before the host call and conservatively retained
-                // after a refused map or rollback. A later successful exact unmap clears
-                // it; it can never free live PTEs.
                 let refine = !self
                     .layout_poisoned
                     .load(std::sync::atomic::Ordering::Acquire);
-                let pieces = tree.route_map(ops, space.range, a, len, refine)?;
-                map_piece_list(
+                map_tree(
                     self,
-                    &pieces,
+                    tree,
+                    ops,
+                    space.range,
                     MapPiece {
                         memory,
                         offset,
@@ -1144,6 +1187,7 @@ impl HostRm {
                         kind: u32::from(kind),
                     },
                     unmap_flags(defer),
+                    refine,
                 )
             })
         {
@@ -4070,3 +4114,7 @@ mod tsg_mirror_tests {
         assert_eq!(&s[8..12], &0u32.to_le_bytes());
     }
 }
+
+#[cfg(test)]
+#[path = "channel/ens5_tests.rs"]
+mod ens5_mapping_tests;

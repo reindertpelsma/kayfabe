@@ -716,7 +716,7 @@ fn a_sparse_run_over_the_block_budget_is_unhonoured_not_refused() {
 }
 
 #[test]
-fn ens3_admission_cost_probe_counts_clone_and_restore_without_rm_calls() {
+fn ens5_admission_budget_probe_avoids_clone_and_restore_without_rm_calls() {
     let (mut t, r) = (tree(BLOCK_LIMIT), Rm::new());
     t.blocks = (0..BLOCK_LIMIT)
         .map(|i| {
@@ -728,7 +728,7 @@ fn ens3_admission_cost_probe_counts_clone_and_restore_without_rm_calls() {
                     hi: lo + NORMAL_GRAIN,
                     handle: i as u32 + 1,
                     sparse: false,
-                    live: [0; 8],
+                    live: Live::default(),
                     wanted: [0; 8],
                 },
             )
@@ -743,8 +743,8 @@ fn ens3_admission_cost_probe_counts_clone_and_restore_without_rm_calls() {
     assert_eq!(r.calls.get(), 0);
     if crate::diag::enabled() {
         assert_eq!(delta.costs[2].calls, 1);
-        assert_eq!(delta.costs[3].work, BLOCK_LIMIT as u64);
-        assert_eq!(delta.costs[4].work, BLOCK_LIMIT as u64 * 512);
+        assert_eq!(delta.costs[3].work, 0);
+        assert_eq!(delta.costs[4].work, 0);
         eprintln!(
             "ENS3_ADMISSION_PROBE blocks={} block_bytes={} clone_ns={} \
             restore_pages={} restore_ns={} admission_ns={} rm_calls=0",
@@ -756,7 +756,9 @@ fn ens3_admission_cost_probe_counts_clone_and_restore_without_rm_calls() {
             delta.costs[2].ns
         );
     } else {
-        assert_eq!(delta, crate::diag::Snapshot::default());
+        assert_eq!(delta.costs[2].calls, 1);
+        assert_eq!(delta.costs[3].work, 0);
+        assert_eq!(delta.costs[4].work, 0);
     }
 }
 #[test]

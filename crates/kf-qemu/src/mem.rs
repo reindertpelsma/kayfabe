@@ -1689,6 +1689,13 @@ impl MapTarget for GpuMirror {
     fn begin_refresh(&self) {
         self.bv.begin_refresh();
         if let Err(e) = self.bv.vas.rm.retry_sparse(self.bv.vas.space) {
+            kf_mem::recent::note(
+                kf_mem::recent::Kind::SparseRetry,
+                &format!(
+                    "sparse retry space={:#x} refused: {e:?}",
+                    self.bv.vas.space.space
+                ),
+            );
             static LOGGED: AtomicU64 = AtomicU64::new(0);
             if LOGGED
                 .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {

@@ -850,6 +850,8 @@ pub struct VaTiming {
     pub plan_ns: u64,
     /// Sum of the host verbs (maps, unmaps, the invalidate).
     pub apply_ns: u64,
+    /// Default-on slow apply accounting and bounded snapshot trigger.
+    pub slow: crate::recent::Slow,
     /// ★ DIFF runs in the last report (all spaces) — no longer the walk's leaf count.
     pub leaves_last: u64,
     /// Host verbs issued (maps + unmaps + invalidates).
@@ -870,6 +872,7 @@ impl VaTiming {
             gpu_us: self.gpu_us.saturating_sub(prev.gpu_us),
             plan_ns: self.plan_ns.saturating_sub(prev.plan_ns),
             apply_ns: self.apply_ns.saturating_sub(prev.apply_ns),
+            slow: self.slow.clone(),
             leaves_last: self.leaves_last,
             host_calls: self.host_calls.saturating_sub(prev.host_calls),
         }
@@ -878,9 +881,8 @@ impl VaTiming {
 
 impl VaStats {
     fn refuse(&mut self, why: String) {
-        if self.refusals.len() < 16 {
-            self.refusals.push(why);
-        }
+        crate::recent::note(crate::recent::Kind::Refusal, &why);
+        crate::recent::retain(&mut self.refusals, why);
     }
     fn outcome(&mut self, o: ClearOutcome) {
         match o {
@@ -1559,6 +1561,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 crate::gatelog::global().ens3_begin(key.0, batch.id, &e.runs);
                 (kf_host::diag::snapshot(), kf_host::diag::thread_cpu_ns())
             });
+            let cost_before = kf_host::diag::snapshot();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             if let Some((before, cpu_before)) = ens3_before {
                 crate::gatelog::global().ens3_end(
@@ -1578,6 +1581,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 crate::gatelog::global().end_apply(tk);
             }
             let apply_ns = ns_since(t_apply);
+            let cost = kf_host::diag::snapshot().since(cost_before);
+            let first_slow = self.stats.timing.slow.observe(
+                apply_ns,
+                [
+                    cost.costs.get(2).map_or(0, |c| c.ns),
+                    cost.costs.first().map_or(0, |c| c.ns),
+                    walk_elapsed_ns,
+                    cost.costs.get(1).map_or(0, |c| c.ns),
+                ],
+            );
             if crate::maplog::on() {
                 // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,
                 // so a host fault VA can be matched against what the guest's tables said, when,
@@ -1617,6 +1630,27 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     };
                     for line in rec.auto_dump(key.0, why) {
                         eprintln!("{line}");
+                    }
+                }
+            }
+            if let Some(label) = first_slow {
+                eprintln!(
+                    "kf3: ENS5 FIRST_SLOW_APPLY space={key:?} walk={} runs={} \
+                    apply_ns={apply_ns} dominant_pipeline_timer={label} costs={cost:?}",
+                    batch.id,
+                    e.runs.len()
+                );
+                for text in crate::recent::snapshot() {
+                    eprintln!("kf3: ENS5 RECENT {text}");
+                }
+                if crate::vahist::recording() {
+                    for text in crate::vahist::global()
+                        .recent_auto()
+                        .into_iter()
+                        .rev()
+                        .take(64)
+                    {
+                        eprintln!("{text}");
                     }
                 }
             }
@@ -1874,6 +1908,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     (None, _) if again => requeue.push((*w, *at)),
                     (None, Some(k)) => {
                         self.stats.splits_unsettled = self.stats.splits_unsettled.saturating_add(1);
+                        crate::recent::note(
+                            crate::recent::Kind::Unsettled,
+                            &format!("UNSETTLED {k:?} ticket={ticket} pdb={pdb:x?}"),
+                        );
                         if self.stats.splits_unsettled <= 64 {
                             eprintln!(
                                 "kf-mem: split {pdb:x?} (ticket {ticket}) completed over UNSETTLED {k:?} — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them"

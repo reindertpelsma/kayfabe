@@ -2847,11 +2847,25 @@ impl Device {
             tm.leaves_last,
             tm.host_calls,
         );
+        let slow = &tm.slow;
+        let timing = timing
+            + &format!(
+                " ens5[apply_ns_max={} walks_per_beat={} slow_apply={} \
+            dominant_pipeline_timer={} by_cost={:?} {}]",
+                slow.apply_ns_max,
+                tm.walks,
+                slow.slow,
+                slow.last_cost,
+                slow.by_cost,
+                kf_mem::recent::summary(),
+            );
         let sparse = if self.rm.sparse_twin() {
             let s = self.rm.sparse_totals();
             format!(
                 " sparse[placed={} retired={} unhonoured={} retained={} made={} freed={} \
-                 refused={} overflow={} coarse_maps={}]",
+                 refused={} overflow={} coarse_maps={} admit_calls={} admit_hard_err={} \
+                 admit_decline={} admit_ns_total={} admit_ns_max={} negative_hits={} \
+                 negative_evicted={} occupancy_capped={} peak_blocks={}]",
                 va.sparse_placed,
                 va.sparse_retired,
                 va.sparse_unhonoured_bytes,
@@ -2861,6 +2875,15 @@ impl Device {
                 s.refused,
                 s.overflow,
                 s.coarse_maps,
+                s.admit_calls,
+                s.admit_hard_err,
+                s.admit_decline,
+                s.admit_ns_total,
+                s.admit_ns_max,
+                s.negative_hits,
+                s.negative_evicted,
+                s.occupancy_capped,
+                s.peak_blocks,
             )
         } else {
             String::new()
