@@ -620,3 +620,26 @@ fn held_sparse_retirement_failure_blocks_vidmem() {
 fn held_sparse_retirement_failure_blocks_dma() {
     held_sparse_retirement_refusal(true);
 }
+
+fn unflagged_aperture_four(flags: u32) {
+    let t = Target::new(false);
+    let d = PermPolicy::default().diff_run(&KfMapRun {
+        va: VA,
+        len: L,
+        gpga: 0,
+        flags,
+        op: 1,
+        pdb_index: 0,
+    });
+    let out = apply(&t, &[d]);
+    assert_eq!(out.codes, [KFWR_ACK_FAILED]);
+    assert!(t.calls.borrow().is_empty());
+}
+#[test]
+fn an_unflagged_reserved_aperture_is_not_sparse() {
+    unflagged_aperture_four(4);
+}
+#[test]
+fn an_unflagged_reserved_aperture_with_a_kind_is_not_sparse() {
+    unflagged_aperture_four(4 | (5 << 16));
+}
