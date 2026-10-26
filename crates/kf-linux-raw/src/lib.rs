@@ -291,6 +291,8 @@ pub mod page_size;
 pub mod scratch;
 mod signal_unsafe;
 mod sysconf_unsafe;
+mod thread_time_unsafe;
+pub use thread_time_unsafe::thread_cpu_ns;
 pub mod udmabuf_gate;
 mod unixsock_unsafe;
 mod vcpu_unsafe;
