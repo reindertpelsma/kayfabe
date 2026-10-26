@@ -1,0 +1,3 @@
+RUN tag=final-off-invalid-1 bin=<lane>/kf3-bins/0053c83b/qemu-system-x86_64 sha=... run=negl env='KF3_SPARSE_TWIN=0 KF3_DIAG_SPARSE_RESV=0 KF3_DIAG_VAHIST=1' start=2026-10-26T08:41:29Z xid_before=48
+END tag=final-off-invalid-1 xid_after=49 delta=1 end=2026-10-26T08:41:44Z
+NVRM: Xid (PCI:0000:01:00): 31, pid=298039, name=qemu-system-x86, channel 0x00000021, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x20_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE

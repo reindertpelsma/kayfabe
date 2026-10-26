@@ -1,0 +1,3 @@
+OLD binary (162a72a6a, SPR1 build) kf-gate4, KF3_SPARSE_TWIN=0:
+CHECK teardown_is_ranges_and_frees_the_batch FAIL unmapped=191 ranges=2 unmap_verbs=2 booked=0 frees=0 rows_left=0
+GATE4_VERDICT=FAIL
