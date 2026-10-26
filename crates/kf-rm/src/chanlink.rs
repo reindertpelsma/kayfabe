@@ -1408,11 +1408,13 @@ impl ChannelPolicy {
             ),
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
             userd_source: self.abi.decode_channel_userd(params).ok().flatten(),
-            // ⊘⊘ P5b: the pid sentinel is reachable from guest userspace (`[measured p5bd]` the
-            // raw client's sandboxed-isolate client `0xc1d0000c` declared `KERNEL_PID`), so it is
+            // CODE READ: docs/design/V3_P5_PORT_MAP.md, Q7's p5bd account, reports that
+            // the raw client's sandboxed-isolate client `0xc1d0000c` declared `KERNEL_PID`.
+            // The pid sentinel is therefore reachable from guest userspace, so it is
             // recorded (`declared_kernel_pid`), never trusted. ★ P6 (Q7, PROPOSED): the route's
-            // kernel test is `kernel_channel` — RM's own `internalFlags.PRIVILEGE = KERNEL` stamp
-            // or RM's internal-handle range. A user channel classed kernel would be Translated,
+            // kernel test is `kernel_channel` — RM's own `internalFlags.PRIVILEGE = KERNEL` stamp.
+            // The client handle is caller-chosen and supplies no privilege. A user channel classed
+            // kernel would be Translated,
             // and the Translated route REWRITES physical CE operands onto the store / guest-RAM
             // windows (guest userspace reaching guest-kernel memory); the converse fails safe.
             kernel_client: kernel_channel(h.client, privilege),
@@ -2388,36 +2390,27 @@ pub fn engine_class_kind(class: u32) -> Option<kf_chip::classes::Kind> {
 /// `RS_CLIENT_INTERNAL_HANDLE_BASE` (`ogkm-580: inc/libraries/resserv/resserv.h:138`).
 pub const RS_CLIENT_INTERNAL_HANDLE_BASE: u32 = 0xC1E0_0000;
 
-/// ★ Is `h_client` one of the guest RM's OWN internal clients — the guest's own classification,
-/// `serverIsClientInternal` (`ogkm-580: libraries/resserv/src/rs_server.c:2618-2623`).
+/// Whether the handle is in the documented internal-client range (not a privilege witness).
 ///
-/// `[measured p5a]` the PMA scrubber's client (`0xc1e00006` on that boot) was NOT marked kernel by
-/// the root alloc's pid sentinel, so the pid rule alone under-reports RM's internal channels. The
-/// handle is the guest RM's own statement: a client that asks for a fixed handle is RE-ENCODED
-/// onto the user base `0xC1D00000` (`rs_server.c:3267-3271`), so no guest process can hold one in
-/// this range — only the guest kernel's RM makes them.
+/// CODE READ: `RS_CLIENT_HANDLE_MAX` is 0x100000. The shipped driver's compatibility
+/// mode accepts caller-chosen handles, so this range is never evidence of privilege.
 #[must_use]
 pub const fn is_rm_internal_client(h_client: u32) -> bool {
-    h_client & RS_CLIENT_INTERNAL_HANDLE_BASE == RS_CLIENT_INTERNAL_HANDLE_BASE
+    h_client & 0xFFF0_0000 == RS_CLIENT_INTERNAL_HANDLE_BASE
 }
 
-/// ★★★ **The Q7 identity rule (PROPOSED, pending the owner's approval)** — a channel is the guest
-/// KERNEL's iff a fact guest userspace cannot produce says so:
+/// Authorize guest-kernel work only from CPU-RM's channel privilege stamp.
 ///
-/// 1. the guest's CPU-RM stamped `internalFlags.PRIVILEGE = KERNEL` on its alloc
-///    ([`kf_abi::notifier::ChannelPrivilege`] carries the ogkm proof), or
-/// 2. its client is in the guest RM's internal-handle range ([`is_rm_internal_client`]).
-///
-/// ⊘ Everything else — including `ADMIN` (guest root userspace) — is a user channel: it is
-/// Passthrough, where a physical operand faults on the unprivileged host twin (a failure, never an
-/// escalation). Misclassing a user channel as kernel would put it on the Translated route, whose
-/// `fbAliasVA` rewrite turns a physical operand into a store/guest-RAM window address.
+/// [`kf_abi::notifier::ChannelPrivilege`] documents how CPU-RM clears the caller's
+/// internal flags and reconstructs this stamp from the call's security context.
+/// A caller-chosen client handle, a PID, ADMIN privilege, or a missing stamp never
+/// authorizes the Translated route's whole-guest-memory windows.
 #[must_use]
 pub fn kernel_channel(
-    h_client: u32,
+    _h_client: u32,
     privilege: Option<kf_abi::notifier::ChannelPrivilege>,
 ) -> bool {
-    is_rm_internal_client(h_client) || privilege.is_some_and(|p| p.is_kernel())
+    privilege.is_some_and(|p| p.is_kernel())
 }
 
 /// ★ The guest's own channel id, off `NV_CHANNEL_ALLOC_PARAMS.flags` — the guest kernel allocates
@@ -3500,10 +3493,10 @@ mod tests {
         );
     }
 
-    /// ★ Q7: only `PRIVILEGE = KERNEL` (or the internal range) is kernel; `ADMIN`, `USER`, a bare
+    /// ★ Q7: only `PRIVILEGE = KERNEL` is kernel; `ADMIN`, `USER`, a bare
     /// `UVM_OWNED` bit and an undecodable alloc are not.
     #[test]
-    fn only_a_kernel_stamp_or_the_internal_range_is_kernel() {
+    fn only_a_kernel_stamp_is_kernel() {
         use kf_abi::notifier::ChannelPrivilege as P;
         let user = 0xc1d0_0001;
         assert!(
@@ -3525,9 +3518,10 @@ mod tests {
             "undefined level"
         );
         assert!(!kernel_channel(user, None), "undecodable is never kernel");
+        assert!(!kernel_channel(0xc1e0_0006, None), "a handle is not privilege");
         assert!(
-            kernel_channel(0xc1e0_0006, None),
-            "RM's own internal client"
+            kernel_channel(0xc1e0_0006, Some(P::from_internal_flags(0x16))),
+            "the internal scrubber's recorded KERNEL stamp"
         );
     }
 
