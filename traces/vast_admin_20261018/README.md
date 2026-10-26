@@ -2,7 +2,17 @@
 
 STATUS: LIVE local test evidence, 2026-10-26; no deployment or live Vast acceptance.
 
-## Integration update: master 737402577 (PR #141)
+## Current integration: master 3cb9469aa (PRs #144 and #145)
+
+CODE READ (merge comparisons, `merge2-checks.txt`): `index.js` is unchanged from the prior UI1 head, so the admin routes remain isolated in `BrokerLedger.fetch`. Ledger, sanitizer and runner exactly match master. Only the manifest/TOML hash fields conflicted; no implementation adjustment was needed.
+
+MEASURED (2026-10-26, [merge2-checks.txt](merge2-checks.txt)): the bundle test first reported the expected mismatch against master's base hash and supplied the combined module hash. After updating both pins, all 2,042 broker Node tests, 37 workerd tests with `MINIFLARE_ASSERT_BODIES_CONSUMED=true`, and 50 admin Worker tests pass with no failures/skips. All 24 admin mutants still fail at least two tests each, and the restored source passes all 83 focused tests. Formatting, the UI1 100-column audit, whitespace and credential/private-path checks pass. The credential audit reviewed two synthetic scrub vectors inherited from master without printing their values. The current reviewed hash supersedes both older integration hashes below:
+
+```text
+700463eb10f57c3bfc88f4c2d49101649bc53bee85bbeeae0016142660468062
+```
+
+## Previous integration: master 737402577 (PR #141)
 
 MEASURED (2026-10-26 merge validation, [merge-checks.txt](merge-checks.txt)): merging master into UI1 preserves the admin class byte-for-byte and keeps the ledger/bootstrap exactly as master. Only the two bundle-hash fields conflicted; both now name the combined dry-run bundle. No history is rewritten and no deployment is performed.
 

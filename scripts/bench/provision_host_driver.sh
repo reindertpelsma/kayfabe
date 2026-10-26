@@ -73,6 +73,81 @@ wait_for_dpkg() {
 }
 wait_for_dpkg || { echo "DRIVER_SWAP_DONE rc=5 (dpkg lock never cleared)"; exit 5; }
 
+# ⊘⊘ [2026-10-26] A SWAP THAT PRINTS rc=0 CAN LEAVE NO USABLE GPU. `[measured 2026-10-26, gate run
+# 40255723206 (RTX 3090) and probe box 57755545, same image]` the old script ended `DRIVER_SWAP_DONE
+# rc=0` and provision_full.sh printed `NOT_READY driver=No devices were found` 20 minutes later.
+# Mechanism, reproduced on the probe: purging the 575 packages removes the only nouveau blacklist
+# on the template. Any udev "add" event for the GPU while no nvidia module is loaded (the swap
+# unloads them all) then lets nouveau claim it. `rmmod nouveau; modprobe nvidia` afterwards loads
+# the module (rc 0, /proc/driver/nvidia/version present, OPEN_MODULE=yes, VERSION_MATCH=yes) but
+# RmInitAdapter fails ("the GPU is likely in a bad state and may need to be reset") and nvidia-smi
+# says "No devices were found". A PCI function-level reset plus a module reload repairs it.
+# Prevention: a blacklist that udev has been told to re-read (without `udevadm control --reload`
+# udev kept its old module config and nouveau still loaded). Repair: gpu_settle.
+# Test seams (the real paths are the defaults): KF_SYSFS_PCI, KF_MODPROBE_D, KF_RECOVER_SLEEP.
+# KF_GPU_SETTLE_BEGIN
+KF_SYSFS_PCI=${KF_SYSFS_PCI:-/sys/bus/pci/devices}
+KF_MODPROBE_D=${KF_MODPROBE_D:-/etc/modprobe.d}
+KF_RECOVER_TRIES=${KF_RECOVER_TRIES:-3}
+KF_RECOVER_SLEEP=${KF_RECOVER_SLEEP:-2}
+nouveau_guard() {
+  mkdir -p "$KF_MODPROBE_D"
+  printf 'blacklist nouveau\noptions nouveau modeset=0\nalias nouveau off\n' \
+    > "$KF_MODPROBE_D/kf-blacklist-nouveau.conf"
+  udevadm control --reload 2>/dev/null
+  if lsmod | grep -q '^nouveau '; then rmmod nouveau 2>/dev/null; fi
+  echo "nouveau_guard: blacklisted, udev told to reload; nouveau loaded now:" \
+    "$(lsmod | grep -c '^nouveau ')"
+}
+unload_nvidia() {
+  local m
+  for m in nvidia_uvm nvidia_drm nvidia_modeset nvidia nouveau; do rmmod "$m" 2>/dev/null; done
+}
+kf_gpu_bdfs() {  # NVIDIA display-class functions only: not the audio function, not other vendors
+  local d
+  for d in "$KF_SYSFS_PCI"/*; do
+    [ "$(cat "$d/vendor" 2>/dev/null)" = 0x10de ] || continue
+    case "$(cat "$d/class" 2>/dev/null)" in 0x03*) basename "$d";; esac
+  done
+}
+kf_pci_reset() { echo 1 > "$KF_SYSFS_PCI/$1/reset"; }
+gpu_ok() {  # the listing must NAME a GPU: nvidia-smi can exit 0 and still print its complaint
+  GPU_SMI_OUT=$(timeout 60 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>&1)
+  GPU_SMI_RC=$?
+  GPU_SMI_OUT=$(printf '%s\n' "$GPU_SMI_OUT" | head -n 3 | cut -c1-200)
+  [ "$GPU_SMI_RC" -eq 0 ] && printf '%s\n' "$GPU_SMI_OUT" | grep -qE '^[^,]+, [0-9]+\.[0-9]+'
+}
+gpu_recover() {
+  local bdf
+  systemctl stop nvidia-persistenced 2>/dev/null
+  unload_nvidia
+  for bdf in $(kf_gpu_bdfs); do kf_pci_reset "$bdf"; done
+  sleep "$KF_RECOVER_SLEEP"
+  modprobe nvidia 2>/dev/null; modprobe nvidia_uvm 2>/dev/null
+  nvidia-modprobe -c 0 -u 2>/dev/null
+  true
+}
+gpu_settle() {  # 0: nvidia-smi names the GPU (after <= KF_RECOVER_TRIES recoveries); 8: it does not
+  local n=0
+  while :; do
+    if gpu_ok; then
+      echo "GPU_SETTLE ok recoveries=$n: $(printf '%s\n' "$GPU_SMI_OUT" | head -n 1)"
+      return 0
+    fi
+    echo "GPU_SETTLE not usable (recoveries so far $n): nvidia-smi rc=$GPU_SMI_RC:" \
+      "$(printf '%s\n' "$GPU_SMI_OUT" | head -n 1)"
+    [ "$n" -lt "$KF_RECOVER_TRIES" ] || break
+    n=$((n + 1)); echo "GPU_SETTLE recovery $n: unload, PCI reset, reload"
+    gpu_recover
+  done
+  echo "GPU_SETTLE FAILED after $n recoveries; nvidia-smi rc=$GPU_SMI_RC said: $GPU_SMI_OUT"
+  echo "last NVRM kernel lines (at most 20):"
+  dmesg 2>/dev/null | grep -a NVRM | tail -n 20 | cut -c1-200
+  return 8
+}
+# KF_GPU_SETTLE_END
+nouveau_guard
+
 HELD=$(apt-mark showhold | tr '\n' ' ')
 echo "held packages: ${HELD:-<none>}"
 if [ -n "$HELD" ]; then apt-mark unhold $HELD; echo "unhold_rc=$?"; fi
@@ -204,4 +279,8 @@ for n in ("/dev/nvidiactl","/dev/nvidia0","/dev/nvidia-uvm"):
         print(f"open {n}: FAILED {e.errno} {e.strerror}")
 PY
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>&1 | head -3
+# ★ [2026-10-26] A loaded module is not a working GPU (see the ⊘⊘ above): repair it or rc 8.
+# KF_GPU_SETTLE_CALL_BEGIN
+gpu_settle || { echo "DRIVER_SWAP_DONE rc=8 (GPU unusable after the swap) $(date -Is)"; exit 8; }
 echo "DRIVER_SWAP_DONE rc=0 $(date -Is)"
+# KF_GPU_SETTLE_CALL_END
