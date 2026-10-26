@@ -1,0 +1,130 @@
+[
+  {
+    "timestamp": 1793035598986,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035582660,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035574439,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035570123,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035567813,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035566470,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035481602,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035465245,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035456901,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035452522,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035450180,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035448744,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 503,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035423748,
+    "type": "fetch",
+    "route": "rent",
+    "method": "POST",
+    "status": 409,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035423370,
+    "type": "fetch",
+    "route": "rent",
+    "method": "POST",
+    "status": 409,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035422901,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 200,
+    "outcome": "ok"
+  },
+  {
+    "timestamp": 1793035422341,
+    "type": "fetch",
+    "route": "availability",
+    "method": "GET",
+    "status": 200,
+    "outcome": "ok"
+  }
+]

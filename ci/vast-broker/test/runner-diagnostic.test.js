@@ -171,7 +171,10 @@ const cases = [
 for (const c of cases)
   test('runner diagnostic: ' + c.name, () => {
     const r = run(c.args);
-    assert.deepEqual(diagnostics(r), [c.line]);
+    const lines = diagnostics(r);
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].split(' phase=')[0], c.line);
+    assert.match(lines[0], / phase=[a-z]+ state=[A-Z_]+ http=(?:none|[1-5]xx)/);
     assert.ok(!outside(r).includes(SENTINEL), 'a sentinel value reached the output');
     assert.ok(!outside(r).includes('quiet-tenant'), 'the Worker host reached the output');
     assert.ok(!outside(r).includes('unit-path-only'), 'the Worker path reached the output');

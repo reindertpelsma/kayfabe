@@ -12,7 +12,10 @@ import { spawnSync } from 'node:child_process';
 // after the /stop (or on a good reply), carries any Worker-provided text, or the run's state,
 // verdict or /stop behaviour differs from before.
 const MARKER = 'SeNtInEl9f3a7c1d';
-const LINE = /^runner: Worker reply rejected by runner\.py check at line (\d+)$/;
+const LINE = new RegExp(
+  String.raw`^runner: Worker reply rejected by runner\.py check at line (\d+)` +
+    String.raw` phase=(?:rent|status) state=[A-Z_]+ http=2xx status=200$`,
+);
 const run = (args) => {
   const p = spawnSync(
     'python3',

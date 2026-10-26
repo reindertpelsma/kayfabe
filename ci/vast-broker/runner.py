@@ -85,6 +85,31 @@ def rejected_line(error):
     )
 
 
+def diagnostic_line(line, phase, state="UNAVAILABLE", status=None):
+    """Exactly one bounded trusted line; phase/state/status never come from raw text."""
+    phases = {
+        "setup",
+        "manifest",
+        "event",
+        "preferences",
+        "access",
+        "availability",
+        "rent",
+        "status",
+        "logs",
+        "result",
+        "summary",
+        "output",
+        "oidc",
+    }
+    phase = phase if phase in phases else "setup"
+    state = state if type(state) is str and state in STATES else "UNAVAILABLE"
+    code = status if type(status) is int and 100 <= status <= 599 else None
+    suffix = " phase=" + phase + " state=" + state + " http="
+    suffix += str(code // 100) + "xx status=" + str(code) if code else "none"
+    return re.sub(r"[^\x20-\x7e]", "?", line)[:800] + suffix + "\n"
+
+
 def setting_line(name, reason):
     return "runner: setting rejected before any request: " + name + " " + reason
 
@@ -718,6 +743,9 @@ class Runner:
         self.until = time.monotonic() + 600 * 20
         # The newest unrecovered failure of a Worker call, as one trusted line (see Diagnosed).
         self.diagnostic = None
+        self.phase = "setup"
+        self.http_status = None
+        self.reply_state = "UNAVAILABLE"
 
     def read(self, route, method="GET", body=None):
         return self.decode(self.client(route, method, body))
@@ -732,6 +760,11 @@ class Runner:
 
     def retry_read(self, route, method="GET", body=None):
         last = None
+        self.phase = (
+            "availability"
+            if route.startswith("/availability?")
+            else "rent" if route == "/rent" else "logs" if route.startswith("/logs/") else "status"
+        )
         for attempt in range(6):
             if time.monotonic() >= self.until:
                 self.infrastructure_failure = True
@@ -752,7 +785,9 @@ class Runner:
                 body["remaining_seconds"] = remaining
                 self.rent_busy = False
             try:
+                self.http_status = None
                 reply = self.client(route, method, body)
+                self.http_status = reply.status
                 if route.startswith(("/status/", "/logs/")) and reply.status != 200:
                     # Infrastructure error bodies are not a protocol or cleanup instruction.
                     code, data = 503, {
@@ -777,6 +812,10 @@ class Runner:
                 if attempt == 5:
                     raise
             else:
+                state = data.get("state") if isinstance(data, dict) else None
+                self.reply_state = (
+                    state if type(state) is str and state in STATES else "UNAVAILABLE"
+                )
                 if code == 200:
                     self.infrastructure_failure = False
                     self.diagnostic = None
@@ -987,7 +1026,7 @@ class Runner:
                 except Invalid as error:
                     # Emitted now, before the /stop the caller sends, so the job log keeps it
                     # even when the run ends right after.
-                    self.emit(rejected_line(error) + "\n")
+                    self.diagnostic = rejected_line(error)
                     raise
                 if code != 200:
                     if self.infrastructure_failure:
@@ -997,6 +1036,14 @@ class Runner:
                             route, "GET" if admitted else "POST", None if admitted else request
                         )
                         continue
+                    if data["state"] != "RENTING_DISABLED":
+                        self.diagnostic = "runner: Worker refused request " + data["state"]
+                    if data.get("reason") in {
+                        "NO_ALLOWED_OFFERS",
+                        "NO_ALLOWED_PREFERENCE",
+                        "RUNNER_TIME",
+                    }:
+                        self.diagnostic += " reason=" + data["reason"]
                     if data["state"] == "UNAVAILABLE_BUDGET":
                         line = "runner: Worker rejected rental: UNAVAILABLE_BUDGET"
                         if data.get("reason") in BUDGET_REASONS:
@@ -1009,7 +1056,7 @@ class Runner:
                                     for k, v in sorted(data["budget"].items())
                                 )
                             )
-                        self.emit(line + "\n")
+                        self.diagnostic = line
                     self.show(data["log_tail_sanitised"])
                     result["state"] = data["state"]
                     break
@@ -1019,6 +1066,7 @@ class Runner:
                 if final:
                     if self.cursor != data["log_cursor"] or self.hash != data["log_sha256"]:
                         raise Invalid()
+                    self.phase = "result"
                     self.metadata = data
                     terminal = True
                     result = {"state": data["state"], "verdict": data["verdict"], "verified": 1}
@@ -1029,11 +1077,33 @@ class Runner:
                 time.sleep(20)
                 code, data = self.retry_read("/status/" + self.ctx["run"])
         except WaitBudget:
+            self.diagnostic = "runner: remaining wait budget cannot hold a rental"
             self.show("BUSY until the remaining budget could no longer hold a run: not renting")
             result = {"state": "BUSY", "verdict": "UNAVAILABLE", "verified": 0}
-        except (Invalid, ValueError, KeyError, TypeError, UnicodeError, OSError, TimeoutError):
+        except Exception as error:
+            if self.diagnostic is None:
+                self.diagnostic = (
+                    error.line
+                    if isinstance(error, Diagnosed)
+                    else (
+                        rejected_line(error)
+                        if isinstance(error, Invalid)
+                        else "runner: execution failed"
+                    )
+                )
+            if isinstance(error, Diagnosed) and getattr(error, "phase", None):
+                self.phase = error.phase
             result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         finally:
+            if not (result["verified"] == 1 and result["verdict"] == "PASS"):
+                self.emit(
+                    diagnostic_line(
+                        self.diagnostic or "runner: Worker run did not pass",
+                        self.phase,
+                        result["state"] if result["state"] != "UNAVAILABLE" else self.reply_state,
+                        self.http_status,
+                    )
+                )
             # Owner ruling 2026-10-24 item 4: with the verified final result in hand, stop the box
             # now (best effort; the Worker's grace timer is the fallback). Edits2 D: an announced
             # result whose final fetch failed (hash, cursor or read) is stopped too. Only an
@@ -1056,8 +1126,6 @@ class Runner:
         safe, dropped = scrub(
             "".join(self.raw), max_bytes=65536, redactions=self.ctx.get("redactions", ())
         )
-        if self.diagnostic and result["verified"] != 1:
-            self.emit(self.diagnostic + "\n")
         self.emit("::group::Final bounded log: UNTRUSTED Worker/box output\n")
         self.show_tail()
         self.emit(
@@ -1066,6 +1134,7 @@ class Runner:
             + " bytes dropped by runner display budget]\n::endgroup::\n"
         )
         if self.summary is not None:
+            self.phase = "summary"
             # Every interpolated Worker text passed the local allow-list. All
             # decision fields below are locally validated enums/expected values.
             self.summary.write(
@@ -1201,10 +1270,20 @@ def https_request(url, method="GET", headers=None, body=None):
 
 
 def main():
-    output = os.environ["GITHUB_OUTPUT"]
-    summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+    output = os.environ.get("GITHUB_OUTPUT")
+    phase, controller, diagnostic, diagnosed = "setup", None, None, False
+
+    def emit(text):
+        nonlocal diagnosed
+        if text.startswith("runner: "):
+            diagnosed = True
+        print(text, end="", flush=True)
+
     result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
     try:
+        output = os.environ["GITHUB_OUTPUT"]
+        summary_path = os.environ["GITHUB_STEP_SUMMARY"]
+        phase = "manifest"
         manifest = strict_json(Path(sys.argv[1]).read_bytes())
         if (
             set(manifest) != {"protocol_version", "worker_version", "bundle_sha256"}
@@ -1214,6 +1293,7 @@ def main():
             or not hex_value(manifest["bundle_sha256"], 64)
         ):
             raise Invalid()
+        phase = "event"
         event = strict_json(Path(os.environ["GITHUB_EVENT_PATH"]).read_bytes())
         repo = os.environ["GITHUB_REPOSITORY"]
         base = os.environ["GITHUB_SHA"]
@@ -1248,6 +1328,7 @@ def main():
         run = os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]
         if not re.fullmatch("[1-9][0-9]{0,19}-[1-9][0-9]{0,19}", run):
             raise Invalid()
+        phase = "setup"
         origin = os.environ.get("WORKER_URL", "").rstrip("/")
         prefix = os.environ.get("WORKER_PATH", "")
         if not origin:
@@ -1281,6 +1362,7 @@ def main():
             + manifest["bundle_sha256"],
             flush=True,
         )
+        phase = "preferences"
         preferences = event.get("inputs", {}).get(
             "preferences", "rotate" if profile == "sweep" else ""
         )
@@ -1307,6 +1389,7 @@ def main():
             ],
         }
 
+        phase = "access"
         access = access_headers(os.environ)
         for value in access.values():
             ctx["redactions"].append(value)
@@ -1328,18 +1411,29 @@ def main():
                 )
             except Diagnosed:
                 # A redirect from the token endpoint is not a Worker reply.
-                raise Invalid() from None
-            token_data = strict_json(token_reply.body)
-            if (
-                token_reply.status != 200
-                or set(token_data) != {"value"}
-                or not isinstance(token_data["value"], str)
-                or not re.fullmatch(
-                    r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token_data["value"]
-                )
-                or len(token_data["value"]) > 8192
-            ):
-                raise Invalid()
+                error = Diagnosed("runner: OIDC reply rejected")
+                error.phase = "oidc"
+                raise error from None
+            except OSError as cause:
+                error = Diagnosed(network_line(cause))
+                error.phase = "oidc"
+                raise error from None
+            try:
+                token_data = strict_json(token_reply.body)
+                if (
+                    token_reply.status != 200
+                    or set(token_data) != {"value"}
+                    or not isinstance(token_data["value"], str)
+                    or not re.fullmatch(
+                        r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", token_data["value"]
+                    )
+                    or len(token_data["value"]) > 8192
+                ):
+                    raise Invalid()
+            except Invalid:
+                error = Diagnosed("runner: OIDC reply rejected")
+                error.phase = "oidc"
+                raise error from None
             token = token_data["value"]
             ctx["redactions"].append(token)
             print("::add-mask::" + token, flush=True)
@@ -1355,20 +1449,34 @@ def main():
                 None if body is None else json.dumps(body, separators=(",", ":")).encode(),
             )
 
+        phase = "summary"
         with open(summary_path, "a", encoding="utf-8") as summary:
-            result = Runner(
-                ctx, manifest, client, emit=lambda s: print(s, end="", flush=True), summary=summary
-            ).execute()
+            controller = Runner(ctx, manifest, client, emit=emit, summary=summary)
+            result = controller.execute()
     except Diagnosed as error:
-        # Reached only by a setting rejected in this function (a setting NAME and a fixed
-        # reason, see setting_line); Worker calls run inside Runner.execute.
-        print(error.line, flush=True)
+        diagnostic = error.line
     except Exception:
-        pass  # Raw exceptions may contain endpoint/Worker input.
-    with open(output, "a", encoding="ascii") as outputs:
-        for key in ["state", "verdict", "verified"]:
-            outputs.write(key + "=" + str(result[key]) + "\n")
-    return 0 if result["verified"] == 1 and result["verdict"] == "PASS" else 1
+        diagnostic = "runner: controller setup or output failed"
+    try:
+        with open(output, "a", encoding="ascii") as outputs:
+            for key in ["state", "verdict", "verified"]:
+                outputs.write(key + "=" + str(result[key]) + "\n")
+    except Exception:
+        diagnostic = diagnostic or "runner: Actions output could not be written"
+        if not diagnosed:
+            phase, controller = "output", None
+        result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
+    success = result["verified"] == 1 and result["verdict"] == "PASS"
+    if not success and not diagnosed:
+        emit(
+            diagnostic_line(
+                diagnostic or "runner: Worker run did not pass",
+                controller.phase if controller else phase,
+                result["state"],
+                controller.http_status if controller else None,
+            )
+        )
+    return 0 if success else 1
 
 
 if __name__ == "__main__":
