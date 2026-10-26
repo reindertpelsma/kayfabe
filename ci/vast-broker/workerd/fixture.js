@@ -36,7 +36,7 @@ export class AdmissionFixture {
       });
       try {
         await new Ledger(failAt ? failing(this.ctx.storage) : this.ctx.storage).reserve(record, {
-          cfg: { ...configuration(this.env), ...config },
+          cfg: { ...configuration(this.env), profile: record.profile ?? 'check', ...config },
           now: record.started,
           cost,
           credit,

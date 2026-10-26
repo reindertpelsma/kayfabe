@@ -77,8 +77,18 @@ async function runtime(t, extra = {}) {
 
 test('workerd admission is transactional without shared service state', async (t) => {
   for (const [name, config, candidates, expected, cost, credit] of [
-    ['account slots', { maxConcurrent: 1 }, [record(1), record(2)], 'BUSY'],
-    ['account slots four', { maxConcurrent: 2 }, [1, 2, 3, 4].map((i) => record(i)), 'BUSY'],
+    [
+      'account slots',
+      { maxConcurrent: 1, maxConcurrentProfile: { check: 1, sweep: 1 } },
+      [record(1), record(2, { profile: 'sweep' })],
+      'BUSY',
+    ],
+    [
+      'account slots four',
+      { maxConcurrent: 2, maxConcurrentProfile: { check: 2, sweep: 2 } },
+      [1, 2, 3, 4].map((i) => record(i, { profile: i % 2 ? 'check' : 'sweep' })),
+      'BUSY',
+    ],
     [
       'profile slots',
       { maxConcurrent: 4, maxConcurrentProfile: { check: 1 } },
@@ -225,6 +235,24 @@ test('workerd admission is transactional without shared service state', async (t
     });
   }
   for (const i of [1, 2]) {
+    await t.test('attempt row survives record retention ' + i, async (t) => {
+      const { call } = await runtime(t);
+      const candidate = record(i);
+      const costRow = {
+        started: instant - 86400000,
+        ended: instant - 86300000,
+        price: 0.2,
+        ttl: 1200000,
+        profile: 'check',
+      };
+      await call('/seed', [['cost:' + candidate.key, costRow]]);
+      const response = await call('/reserve', { record: candidate });
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { state: 'UNAVAILABLE_BUDGET' });
+      assert.deepEqual(await (await call('/snapshot')).json(), [
+        ['cost:' + candidate.key, costRow],
+      ]);
+    });
     await t.test('newer branch discovered ' + i, async (t) => {
       const { call } = await runtime(t, { MAX_CONCURRENT_RENTALS: '4' });
       const newer = record(10 + i, { branch: record(i).branch });
