@@ -25,7 +25,7 @@ export function createReaper({
         reason = 'transport';
         const response = await fetcher('https://console.vast.ai' + path, {
           method,
-          redirect: 'error',
+          redirect: 'manual',
           signal: AbortSignal.timeout(8000),
           headers: {
             Authorization: 'Bearer ' + env.REAPER_VAST_API_KEY,
@@ -64,7 +64,9 @@ export function createReaper({
           offset += value.length;
         }
         reason = 'invalid_json';
-        return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        return JSON.parse(
+          new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes),
+        );
       };
       const list = async () => {
         const data = await request('/api/v1/instances/?limit=100');

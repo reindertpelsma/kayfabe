@@ -8,3 +8,6 @@ crons = ["*/5 * * * *"]
 [vars]
 REAPER_HARD_MINUTES = "180"
 REAPER_MARGIN_MINUTES = "15"
+[observability]
+enabled = true
+head_sampling_rate = 1
