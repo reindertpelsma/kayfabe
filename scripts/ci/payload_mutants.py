@@ -357,6 +357,105 @@ CASES += [
         ),
         "vast_report.py",
     ),
+    (
+        "summary-not-printed-on-failure",
+        scoped(
+            "execute_stages",
+            '            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)\n            print_final_summary(result)',
+            '            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)',
+        ),
+    ),
+    (
+        "summary-not-printed-on-pass",
+        scoped(
+            "execute_stages",
+            "    persist_result(destination, result)\n    print_final_summary(result)\n    return 0",
+            "    persist_result(destination, result)\n    return 0",
+        ),
+    ),
+    (
+        "summary-printed-before-the-failure-line",
+        scoped(
+            "execute_stages",
+            '            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)\n            print_final_summary(result)',
+            '            print_final_summary(result)\n            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)',
+        ),
+    ),
+    (
+        "summary-missing-after-preflight-failure",
+        replace(
+            '        print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)\n        print_final_summary(result)',
+            '        print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)',
+        ),
+    ),
+    (
+        "summary-ignores-the-progress-file",
+        replace(
+            'files = [*stage["progress"], stage["output"], *stage.get("detail", [])]',
+            'files = [stage["output"]]',
+        ),
+    ),
+    (
+        "summary-budget-removed",
+        scoped(
+            "final_summary", "budget = SUMMARY_LIMIT - len(begin)", "budget = 10**9 - len(begin)"
+        ),
+    ),
+    (
+        "summary-failure-queued-behind-passes",
+        scoped(
+            "final_summary",
+            '[("stage", i, s) for i, s in enumerate(stage_rows) if i in failed]\n        + [("fail"',
+            '[]\n        + [("fail"',
+        ),
+    ),
+    (
+        "summary-line-not-cut",
+        scoped(
+            "printable",
+            'return line if len(line) <= limit else line[: limit - 3] + "..."',
+            "return line",
+        ),
+    ),
+    (
+        "summary-keeps-control-characters",
+        scoped("printable", 'c if " " <= c <= "~" else', "c if True else"),
+    ),
+    (
+        "summary-first-red-line-is-the-last",
+        scoped(
+            "first_failing_line",
+            "            if is_failing(line):\n                return printable(line)",
+            "            if is_failing(line):\n                last = line",
+        ),
+    ),
+    (
+        "summary-cause-from-the-wrong-end",
+        scoped("step_cause", "lines[-3:]", "lines[:3]"),
+    ),
+    (
+        "summary-timeout-not-marked",
+        scoped("execute_stages", 'result="TIMEOUT" if rc == 124 else "FAIL"', 'result="FAIL"'),
+    ),
+    (
+        "cargo-quiet-not-exported",
+        replace('            CARGO_TERM_QUIET="true",\n', ""),
+    ),
+    (
+        "cargo-colour-not-disabled",
+        replace('            CARGO_TERM_COLOR="never",\n', ""),
+    ),
+    (
+        "cargo-progress-not-disabled",
+        replace('            CARGO_TERM_PROGRESS_WHEN="never",\n', ""),
+    ),
+    (
+        "rustflags-weakened-by-the-payload",
+        replace(
+            '            CARGO_TERM_QUIET="true",\n',
+            '            CARGO_TERM_QUIET="true",\n            RUSTFLAGS="-A warnings",\n',
+        ),
+    ),
 ]
 
 COLLECT = """import io,json,unittest,importlib.util
@@ -402,6 +501,7 @@ def main():
             "test_vast_payload_diagnostics.py",
             "test_vast_payload_guest_guard.py",
             "test_vast_payload_result_logs.py",
+            "test_vast_payload_summary.py",
             "test_vast_box.py",
             "vast_report.py",
         ]:
@@ -424,6 +524,8 @@ def main():
         assert not baseline["killers"], baseline
         for case in CASES:
             name, source = case[:2]
+            if len(sys.argv) > 1 and sys.argv[1] not in name:
+                continue
             shared = len(case) == 3 and case[2] == "native_xid_guard.py"
             shell = len(case) == 3 and case[2] == "vast_payload_hooks.sh"
             reporter = len(case) == 3 and case[2] == "vast_report.py"

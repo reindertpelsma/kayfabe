@@ -282,6 +282,7 @@ class V7Tests(unittest.TestCase):
         legacy_client=None,
         initial_hardware=None,
         required_profile=None,
+        probe=None,
     ):
         from types import SimpleNamespace
 
@@ -310,6 +311,8 @@ class V7Tests(unittest.TestCase):
             original_bounded_text = self.m.bounded_text
 
             def runner(command, deadline, output, progress):
+                if probe:
+                    probe(dict(os.environ))
                 if required_profile:
                     self.assertEqual(os.environ.get("KF_PROVISION_PROFILE"), required_profile)
                 self.assertEqual(

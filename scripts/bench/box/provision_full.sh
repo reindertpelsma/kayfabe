@@ -18,7 +18,16 @@ bash scripts/bench/provision_host_driver.sh > /root/prov/driver.log 2>&1; echo "
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
 df -h / | tail -1
 bash scripts/bench/provision_bench_tree.sh > /root/prov/tree.log 2>&1; TREE_RC=$?; echo "TREE_RC=$TREE_RC"; tail -2 /root/prov/tree.log
-cargo build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder; echo "LADDER_RC=$?"
+# KF_LADDER_BUILD_BEGIN
+# ⊘ [2026-10-26] `-q` does NOT silence rustc warnings (checked: `cargo build -q` and CARGO_TERM_QUIET both
+# print them), and crates/kayfabe-linux-raw's `-W missing-docs` flooded the Vast job log, which can show
+# only a bounded part of the box output. Output goes to a file; the RC line stays exact and a FAILED
+# build prints its error lines and the tail of the file, so nothing that explains a failure is hidden.
+# Flags and lint level are unchanged.
+cargo build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder > /root/prov/ladder.log 2>&1; LADDER_RC=$?
+echo "LADDER_RC=$LADDER_RC"
+[ "$LADDER_RC" -eq 0 ] || { grep -a '^error' /root/prov/ladder.log | head -n 20; tail -n 40 /root/prov/ladder.log; }
+# KF_LADDER_BUILD_END
 bash scripts/fastguest/build_fast_guest.sh /workspace/bench/guest.qcow2 /workspace/bench/fastguest > /root/prov/fg.log 2>&1; FG_RC=$?; echo "FG_RC=$FG_RC"; tail -2 /root/prov/fg.log
 bash scripts/bench/build_kf3.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build-kf3 > /root/prov/kf3.log 2>&1; KF3_RC=$?; echo "KF3_RC=$KF3_RC"; tail -1 /root/prov/kf3.log
 V=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader)
