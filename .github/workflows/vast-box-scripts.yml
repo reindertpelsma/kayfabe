@@ -51,3 +51,5 @@ jobs:
         run: python3 scripts/ci/vast_box_mutants.py --jobs 4
       - name: Gate-visibility mutations (runner display, quiet ladder build) require two killers each
         run: python3 scripts/ci/visibility_mutants.py
+      - name: Driver-swap repair mutations (nouveau guard, GPU recovery, NOT_READY) require two killers each
+        run: python3 scripts/ci/gpu_swap_mutants.py

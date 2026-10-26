@@ -154,6 +154,17 @@ class NouveauGuard(unittest.TestCase):
         _, _, conf, _ = self.guard()
         self.assertRegex(conf or "", r"(?m)^options nouveau modeset=0$")
 
+    def test_the_blacklist_file_is_exactly_the_three_expected_lines(self):
+        _, _, conf, _ = self.guard()
+        self.assertEqual(
+            (conf or "").splitlines(),
+            ["blacklist nouveau", "options nouveau modeset=0", "alias nouveau off"],
+        )
+
+    def test_the_guard_is_called_exactly_once_at_top_level(self):
+        text = DRIVER.read_text()
+        self.assertEqual(len(re.findall(r"(?m)^nouveau_guard$", text)), 1)
+
     def test_udev_is_told_to_reload_its_module_rules(self):
         # Measured: without the reload, udev kept using the old (blacklist-free) module config
         # and nouveau still claimed the GPU.
@@ -182,9 +193,11 @@ class NouveauGuard(unittest.TestCase):
 
     def test_the_guard_runs_before_the_old_driver_is_removed(self):
         text = DRIVER.read_text()
-        call = re.search(r"(?m)^nouveau_guard\b", text)
-        purge = text.find("apt-get purge")
-        unload = text.find("for m in nvidia_uvm")
+        call = re.search(r"(?m)^nouveau_guard$", text)
+        purge = text.find("DEBIAN_FRONTEND=noninteractive apt-get purge")
+        unload = text.find("nvidia; do rmmod $m")
+        self.assertGreater(purge, 0)
+        self.assertGreater(unload, 0)
         self.assertIsNotNone(call, "provision_host_driver.sh never calls nouveau_guard")
         self.assertLess(call.start(), purge)
         self.assertLess(call.start(), unload)
@@ -267,6 +280,40 @@ class Recovery(unittest.TestCase):
             self.assertEqual((fake.sysfs / "0000:00:07.0" / "reset").read_text(), "")
             self.assertEqual((fake.sysfs / "0000:00:03.0" / "reset").read_text(), "")
 
+    def test_nouveau_is_unloaded_by_the_recovery_too(self):
+        _, calls = self.settle("1")
+        self.assertIn("rmmod nouveau", calls)
+
+    def test_the_persistence_daemon_is_stopped_before_any_unload(self):
+        _, calls = self.settle("1")
+        first_rmmod = min(i for i, c in enumerate(calls) if c.startswith("rmmod "))
+        self.assertLess(calls.index("systemctl stop nvidia-persistenced"), first_rmmod)
+
+    def test_the_driver_is_reloaded_after_the_reset(self):
+        _, calls = self.settle("1")
+        self.assertLess(calls.index("reset 0000:00:08.0"), calls.index("modprobe nvidia"))
+
+    def test_a_second_reset_attempt_writes_the_same_one(self):
+        with tempfile.TemporaryDirectory() as d:
+            fake = Fake(d)
+            with_gpu(fake)
+            fake.set("smi", "bad")
+            fake.set("healthy_after_resets", "never")
+            fake.run(block(DRIVER, "GPU_SETTLE") + "\ngpu_settle\n", {"KF_RECOVER_TRIES": "2"})
+            self.assertEqual((fake.sysfs / "0000:00:08.0" / "reset").read_text(), "1\n")
+
+    def test_an_nvml_complaint_with_exit_zero_is_not_a_listing(self):
+        def hook(fake):
+            fake.set("smi_rc_bad", "0")
+            fake.command(
+                "nvidia-smi",
+                'echo "Failed to initialize NVML: No supported GPUs were found"; exit 0',
+            )
+
+        out, calls = self.settle("never", tries=1, fake_hook=hook)
+        self.assertIn("RC=8", out)
+        self.assertEqual(sum(c.startswith("reset ") for c in calls), 1)
+
     def test_recovery_is_bounded_and_the_verdict_is_eight(self):
         out, calls = self.settle("never", tries=3)
         self.assertIn("RC=8", out)
@@ -286,20 +333,31 @@ class Recovery(unittest.TestCase):
         self.assertEqual(sum(c.startswith("reset ") for c in calls), 2)
 
     def test_failure_prints_the_smi_error_and_the_last_twenty_nvrm_lines(self):
-        lines = "".join("[%d.0] NVRM: line %d\n" % (i, i) for i in range(1, 41))
+        lines = "".join(
+            "[%d.0] NVRM: line %d %s\n[%d.5] usb noise\n" % (i, i, "z" * (900 if i == 40 else 0), i)
+            for i in range(1, 41)
+        )
         out, _ = self.settle("never", tries=1, dmesg=lines)
         self.assertIn(SMI_BAD, out)
         self.assertIn("NVRM: line 40", out)
         self.assertIn("NVRM: line 21", out)
-        self.assertNotIn("NVRM: line 20\n", out)
-        self.assertLessEqual(len(re.findall(r"NVRM: line \d+", out)), 20)
+        self.assertNotIn("NVRM: line 20 ", out)
+        self.assertEqual(len(re.findall(r"NVRM: line \d+", out)), 20)
+        self.assertLessEqual(max(len(line) for line in out.splitlines()), 300)
 
     def test_only_nvrm_lines_are_shown_and_each_is_cut(self):
         noise = "[1.0] usb 1-1: new device\n" * 30
         long = "[2.0] NVRM: " + "x" * 900 + "\n"
         out, _ = self.settle("never", tries=1, dmesg=noise + long)
         self.assertNotIn("usb 1-1", out)
+        self.assertIn("NVRM: xxx", out)
         self.assertLessEqual(max(len(line) for line in out.splitlines()), 300)
+
+    def test_failure_diagnostics_stay_short_on_a_huge_log(self):
+        lines = "".join("[%d.0] NVRM: busy %d\n" % (i, i) for i in range(1, 2001))
+        out, _ = self.settle("never", tries=1, dmesg=lines)
+        self.assertLessEqual(len(re.findall(r"NVRM: busy", out)), 20)
+        self.assertLessEqual(len(out.splitlines()), 40)
 
     def test_success_prints_no_failure_diagnostics(self):
         lines = "[1.0] NVRM: some line\n"
@@ -330,6 +388,9 @@ class SettleCall(unittest.TestCase):
         self.assertRegex(out, r"(?m)^DRIVER_SWAP_DONE rc=8\b")
         self.assertIn("EXIT_STATUS=8", out)
 
+    def test_a_dead_gpu_is_not_a_generic_failure(self):
+        self.assertNotIn("EXIT_STATUS=1", self.tail(8))
+
     def test_a_dead_gpu_never_prints_rc_zero(self):
         self.assertNotRegex(self.tail(8), r"DRIVER_SWAP_DONE rc=0")
 
@@ -349,7 +410,7 @@ class SettleCall(unittest.TestCase):
 class DriverGate(unittest.TestCase):
     """provision_full.sh stops before the 15-minute builds when the swap left a dead GPU."""
 
-    def gate(self, driver_rc):
+    def gate(self, driver_rc, dmesg="[1.0] NVRM: GPU is in a bad state\n"):
         with tempfile.TemporaryDirectory() as d:
             fake = Fake(d)
             prov = fake.root / "prov"
@@ -360,11 +421,11 @@ class DriverGate(unittest.TestCase):
                 + block(FULL, "DRIVER_GATE").replace("/root/prov", str(prov))
                 + "\necho REACHED_THE_BUILDS\n"
             )
-            fake.set("dmesg", "[1.0] NVRM: GPU is in a bad state\n")
+            fake.set("dmesg", dmesg)
             fake.set("smi", "bad")
             fake.set("healthy_after_resets", "never")
             rc, out = fake.run(script)
-            return rc, out, prov
+            return rc, out, (prov / "READY").exists()
 
     def test_rc_eight_stops_before_the_builds(self):
         rc, out, _ = self.gate(8)
@@ -377,8 +438,8 @@ class DriverGate(unittest.TestCase):
         self.assertIn(SMI_BAD, out)
 
     def test_rc_eight_never_leaves_a_ready_marker(self):
-        _, _, prov = self.gate(8)
-        self.assertFalse((prov / "READY").exists())
+        _, _, ready = self.gate(8)
+        self.assertFalse(ready)
 
     def test_rc_zero_goes_on_to_the_builds(self):
         rc, out, _ = self.gate(0)
@@ -386,11 +447,34 @@ class DriverGate(unittest.TestCase):
         self.assertIn("REACHED_THE_BUILDS", out)
         self.assertNotIn("NOT_READY", out)
 
-    def test_other_driver_failures_keep_their_old_behaviour(self):
+    def other_code(self, code):
         # A stock driver can still be READY after e.g. a failed download (rc 3).
-        for code in (3, 4, 7):
-            rc, out, _ = self.gate(code)
-            self.assertIn("REACHED_THE_BUILDS", out, code)
+        rc, out, _ = self.gate(code)
+        self.assertEqual(rc, 0)
+        self.assertIn("REACHED_THE_BUILDS", out)
+
+    def test_a_failed_download_keeps_going(self):
+        self.other_code(3)
+
+    def test_a_swap_that_did_not_take_keeps_going(self):
+        self.other_code(4)
+
+    def test_a_version_mismatch_keeps_going(self):
+        self.other_code(7)
+
+    def test_rc_eight_prints_the_smi_status_and_the_nvrm_tail(self):
+        _, out, _ = self.gate(8)
+        self.assertRegex(out, r"(?m)^NVIDIA_SMI_RC=6$")
+        self.assertIn("NVRM: GPU is in a bad state", out)
+
+    def test_rc_eight_bounds_its_dmesg_tail(self):
+        _, out, _ = self.gate(8, "".join("[%d.0] NVRM: n %d\n" % (i, i) for i in range(1, 60)))
+        self.assertEqual(len(re.findall(r"NVRM: n \d+", out)), 20)
+        self.assertIn("NVRM: n 59", out)
+
+    def test_rc_eight_cuts_long_dmesg_lines(self):
+        _, out, _ = self.gate(8, "[1.0] NVRM: " + "q" * 4000 + "\n")
+        self.assertLessEqual(max(len(line) for line in out.splitlines()), 300)
 
     def test_the_gate_sits_between_the_driver_step_and_the_tree_build(self):
         text = FULL.read_text()
@@ -423,23 +507,21 @@ class ReadyCheck(unittest.TestCase):
                 + "\necho AFTER_BLOCK\n"
             )
             rc, out = fake.run(script)
-            return out, prov
+            return out, (prov / "READY").exists()
 
     def test_ready_when_driver_and_builds_are_right(self):
-        out, prov = self.verdict(smi="ok")
+        out, ready = self.verdict(smi="ok")
         self.assertIn("READY driver=580.159.04", out)
-        self.assertTrue((prov / "READY").exists())
+        self.assertTrue(ready)
 
     def test_ready_prints_no_diagnostics(self):
         out, _ = self.verdict(smi="ok", dmesg="[1.0] NVRM: noise\n")
         self.assertNotIn("NVRM", out)
 
     def test_not_ready_keeps_the_machine_readable_line(self):
-        out, prov = self.verdict()
-        self.assertRegex(
-            out, r"(?m)^NOT_READY driver=No devices were found KF3_RC=0 FG_RC=0$"
-        )
-        self.assertFalse((prov / "READY").exists())
+        out, ready = self.verdict()
+        self.assertRegex(out, r"(?m)^NOT_READY driver=No devices were found KF3_RC=0 FG_RC=0$")
+        self.assertFalse(ready)
 
     def test_not_ready_prints_the_nvidia_smi_status(self):
         out, _ = self.verdict()
@@ -458,9 +540,14 @@ class ReadyCheck(unittest.TestCase):
         self.assertLessEqual(max(len(line) for line in out.splitlines()), 300)
 
     def test_not_ready_for_a_failed_build_with_a_good_driver_is_still_not_ready(self):
-        out, prov = self.verdict(smi="ok", kf3="2")
+        out, ready = self.verdict(smi="ok", kf3="2")
         self.assertRegex(out, r"(?m)^NOT_READY driver=580\.159\.04 KF3_RC=2 FG_RC=0$")
-        self.assertFalse((prov / "READY").exists())
+        self.assertFalse(ready)
+
+    def test_a_killed_kf3_build_is_not_ready(self):
+        out, ready = self.verdict(smi="ok", kf3="137")
+        self.assertRegex(out, r"(?m)^NOT_READY driver=580\.159\.04 KF3_RC=137 FG_RC=0$")
+        self.assertFalse(ready)
 
     def test_a_missing_initrd_is_not_ready(self):
         out, _ = self.verdict(smi="ok", initrd=False)
