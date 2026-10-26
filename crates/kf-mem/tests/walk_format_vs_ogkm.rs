@@ -260,25 +260,26 @@ fn the_ver3_descriptor_is_every_ver3_die_groups_dev_mmu_h() {
     check(&f, "VER3", &VER3, &ver3_rows());
 }
 
-/// ★ RATCHET — the VER3 PDE sparse encodings the walker does not honour (inventory, page-table
-/// gaps): the PDE's PCF is `5:3` (not the PTE's `7:3`), and sparse is `1` **or** `3`. The walker's
-/// sparse census reads the PTE field and matches `1` only. When that is fixed, this fails: update the
-/// test and the inventory row.
+/// PDE PCF has its own width; both sparse encodings are census-only in SPR1 v1.
 #[test]
-fn ratchet_the_ver3_pde_pcf_is_narrower_than_the_field_the_walker_reads() {
+fn ver3_pde_sparse_metadata_matches_every_die_groups_header() {
     let f = kf_format_ver3();
     for g in VER3 {
-        assert_eq!(range(g, "NV_MMU_VER3_PDE_PCF"), (5, 3), "{g:?}");
-        assert_ne!(
+        assert_eq!(
             field(g, "NV_MMU_VER3_PDE_PCF", 0),
-            ours(f.pcf),
-            "fixed? update the ratchet (inventory)"
+            (u64::from(f.pcf.lo), u64::from(f.pde_pcf_bits)),
+            "{g:?}"
         );
-        assert_eq!(val(g, "NV_MMU_VER3_PDE_PCF_SPARSE_ATS_ALLOWED"), 1, "{g:?}");
+        assert_ne!(f.pde_pcf_bits, f.pcf.bits, "PDE and leaf PCF are distinct");
+        assert_eq!(
+            val(g, "NV_MMU_VER3_PDE_PCF_SPARSE_ATS_ALLOWED"),
+            u64::from(f.pcf_sparse),
+            "{g:?}"
+        );
         assert_eq!(
             val(g, "NV_MMU_VER3_PDE_PCF_SPARSE_ATS_NOT_ALLOWED"),
-            3,
-            "{g:?}: the sparse value the walker misses"
+            u64::from(f.pde_sparse_no_ats),
+            "{g:?}"
         );
     }
 }
