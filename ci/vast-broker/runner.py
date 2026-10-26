@@ -151,6 +151,27 @@ def strict_json(raw):
     return value
 
 
+# A run of 32+ [A-Za-z0-9_-] characters is blanked as a possible token, EXCEPT a snake_case test name
+# (2026-10-26, gate run 40263112941: libtest prints `<name> --- FAILED` and 60-character names were
+# blanked, leaving `[redacted] --- FAILED`). Kept only if: lowercase words joined by `_`, at least
+# three, each at most 20 characters, at most 128 characters in all, at most one digit in five. Hex,
+# base64url, mixed-case, hyphenated and digit-heavy strings still match the generic rule; configured
+# secrets and token families are replaced by value or pattern regardless. src/sanitize.js and
+# scripts/ci/vast_payload.py (is_test_identifier) hold the same grammar; test/fixtures/scrub-vectors.json
+# pins all three.
+SNAKE_NAME = re.compile(r"[a-z][a-z0-9]{0,19}(?:_[a-z0-9]{1,20}){2,}")
+
+
+def blank_run(match):
+    run = match[0]
+    keep = (
+        len(run) <= 128
+        and SNAKE_NAME.fullmatch(run)
+        and sum(c.isdigit() for c in run) * 5 <= len(run)
+    )
+    return run if keep else "[redacted]"
+
+
 def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
     """Allow TAB/LF, printable ASCII and precomposed Latin letters U+00C0..FF
     excluding multiplication/division signs. No other Unicode is displayed.
@@ -177,7 +198,7 @@ def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
     text = re.sub(
         r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "[redacted]", text
     )
-    text = re.sub(r"[A-Za-z0-9_-]{32,}", "[redacted]", text)
+    text = re.sub(r"[A-Za-z0-9_-]{32,}", blank_run, text)
     text = re.sub(
         r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
     ).replace("##[", "# [")
