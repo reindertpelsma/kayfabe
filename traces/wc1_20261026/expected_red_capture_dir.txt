@@ -1,0 +1,4 @@
+FAIL creates_warm
+FAIL creates_startup1
+FAIL rejects_existing
+ok preserves_existing
