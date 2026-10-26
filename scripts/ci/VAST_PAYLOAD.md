@@ -38,3 +38,21 @@ root-only env file. [Recovery evidence](../../traces/vast_payload_v7_20261018/PR
 queried again before grading provisioning, including its failure path. The live run exposed
 both integration defects; their fixes have red/green and mutation coverage but no fresh VM run.
 [Final live evidence](../../traces/vast_payload_v7_20261018/LIVE_RUN.md).
+
+[MEASURED: 2026-10-26, run 40241597724, PR 130 head c9d33b724] The live gate ran end to end on
+an RTX 3060 (setup cache restored in 17 s, `BOX_RC=0`) and ended GRACE/FAIL, but the job log held
+only the first ~25 KB of box output: the unredirected `cargo build -q` of provision_full.sh
+prints every rustc warning (`-q` and CARGO_TERM_QUIET do not silence them), and the runner's
+display budget (65000 bytes, 200 lines) was spent on the first lines.
+[CODE READ: vast_payload.py final_summary, runner.py show_head/show_tail, vast_report.py
+_fit_tail] Four changes make the verdict visible: the payload ends with one bounded
+`KF_FINAL_SUMMARY_BEGIN .. END` block (stage rc/duration, suite rows, first failing line, the
+provisioning step log tail; <= 4 KiB); the runner shows the head (24000 bytes/100 lines) and the
+tail (16000 bytes/70 lines) of the box log with `[N bytes dropped from the middle]`; the box
+reporter drops the oldest unsent text, never the newest, and reserves posts, bytes and requests
+for the end of the log; the ladder build writes warnings to /root/prov/ladder.log and prints
+errors. GPU-free checks: test_vast_payload_summary.py, test_vast_quiet_cargo.py, the Reporter
+tests of test_vast_box.py, ci/vast-broker/test/runner-head-tail.test.js, and the mutation
+harnesses payload_mutants.py, vast_box_mutants.py, visibility_mutants.py (two killers each).
+The runner is the PR's base runner on its own check run, so the display change takes effect
+only after merge.

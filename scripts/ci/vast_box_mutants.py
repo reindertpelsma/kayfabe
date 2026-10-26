@@ -29,6 +29,7 @@ FILES = [
 ]
 R, E, K, D = "vast_report.py", "EnvValidation.", "Kill.", "Daemon."
 RP, FR, ON = "Reporter.", "FinalResult.", "Onstart."
+BO, CK = "BufferOverflow.", "CapsKeepTheEnd."
 V = "vast_onstart.sh"
 
 CASES = [
@@ -444,17 +445,23 @@ CASES = [
         "caps",
         "post-cap-off",
         R,
-        "self.posts >= limits.max_posts",
+        "self.posts + posts >= limits.max_posts",
         "False",
-        [RP + "test_post_count_cap_omits_excess_and_still_sends_result"],
+        [
+            CK + "test_post_cap_keeps_the_last_lines",
+            CK + "test_the_gap_is_marked_before_the_tail",
+        ],
     ),
     (
         "caps",
         "byte-cap-off",
         R,
-        "or self.bytes + body_size > limits.max_bytes",
+        "or self.bytes + body_size + size > limits.max_bytes",
         "or False",
-        [RP + "test_byte_cap_bounds_the_total_log_body_bytes"],
+        [
+            CK + "test_byte_cap_keeps_the_last_lines",
+            CK + "test_byte_cap_delivers_head_and_tail",
+        ],
     ),
     (
         "caps",
@@ -482,6 +489,89 @@ CASES = [
             RP + "test_post_count_cap_omits_excess_and_still_sends_result",
             RP + "test_byte_cap_bounds_the_total_log_body_bytes",
         ],
+    ),
+    # Gate visibility (2026-10-26): when a cap binds, the END of the log survives.
+    (
+        "tail-kept",
+        "drops-newest-not-oldest",
+        R,
+        "kept = raw[len(raw) - keep :].decode",
+        "kept = raw[:keep].decode",
+        [
+            BO + "test_overflow_drops_the_oldest_unsent_text",
+            CK + "test_post_cap_keeps_the_last_lines",
+            RP + "test_post_cap_keeps_the_last_bytes",
+        ],
+    ),
+    (
+        "tail-kept",
+        "post-reserve-off",
+        R,
+        "posts = min(limits.tail_posts, limits.max_posts // 2) if reserve else 0",
+        "posts = 0",
+        [CK + "test_post_cap_keeps_the_last_lines", CK + "test_the_gap_is_marked_before_the_tail"],
+    ),
+    (
+        "tail-kept",
+        "byte-reserve-off",
+        R,
+        "size = min(limits.tail_posts * (limits.chunk + 256), limits.max_bytes // 4) if reserve else 0",
+        "size = 0",
+        [CK + "test_byte_cap_keeps_the_last_lines", CK + "test_byte_cap_delivers_head_and_tail"],
+    ),
+    (
+        "tail-kept",
+        "request-reserve-off",
+        R,
+        "requests = min(limits.tail_requests, limits.max_requests // 4) if reserve else 0",
+        "requests = 0",
+        [
+            CK + "test_request_cap_keeps_the_last_lines",
+            CK + "test_request_cap_delivers_head_and_tail",
+        ],
+    ),
+    (
+        "tail-kept",
+        "fit-tail-off",
+        R,
+        "        if self.finishing:\n            self._fit_tail()",
+        "        if self.finishing:\n            pass",
+        [
+            CK + "test_byte_cap_keeps_the_last_lines",
+            RP + "test_post_cap_keeps_the_last_bytes",
+            RP + "test_byte_cap_keeps_the_last_bytes",
+        ],
+    ),
+    (
+        "tail-kept",
+        "gap-marker-off",
+        R,
+        'prefix = GAP_MARK % self.gap if self.gap else ""',
+        'prefix = ""',
+        [
+            BO + "test_overflow_gap_is_marked_in_the_next_post",
+            CK + "test_the_gap_is_marked_before_the_tail",
+            RP + "test_a_gap_in_the_log_is_marked",
+        ],
+    ),
+    (
+        "tail-kept",
+        "dropped-bytes-not-counted",
+        R,
+        "        self.omitted += dropped\n        self.gap += dropped",
+        "        self.gap += dropped",
+        [
+            BO + "test_overflow_is_counted_as_omitted",
+            CK + "test_omitted_bytes_are_still_reported_in_the_result_note",
+        ],
+    ),
+    (
+        "tail-kept",
+        "head-starved-by-reserve",
+        R,
+        "posts = min(limits.tail_posts, limits.max_posts // 2) if reserve else 0",
+        "posts = limits.max_posts if reserve else 0",
+        [CK + "test_the_head_is_still_delivered", CK + "test_the_gap_is_marked_before_the_tail"],
     ),
     (
         "result-schema",

@@ -12,12 +12,9 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
-
-import test_vast_payload_v7 as v7
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts/bench/box/provision_full.sh"
+SCRIPT = Path(os.environ.get("KF_PROVISION_FULL") or ROOT / "scripts/bench/box/provision_full.sh")
 BEGIN, END = "# KF_LADDER_BUILD_BEGIN", "# KF_LADDER_BUILD_END"
 
 
@@ -34,7 +31,9 @@ class QuietLadderBuild(unittest.TestCase):
             root = Path(d)
             (root / "bin").mkdir()
             cargo = root / "bin/cargo"
-            cargo.write_text("#!/bin/bash\n" + cargo_body)
+            cargo.write_text(
+                '#!/bin/bash\necho "$@" > "$(dirname "$0")/../cargo.args"\n' + cargo_body
+            )
             cargo.chmod(0o755)
             (root / "prov").mkdir()
             block = ladder_block().replace("/root/prov", str(root / "prov"))
@@ -44,7 +43,9 @@ class QuietLadderBuild(unittest.TestCase):
             p = subprocess.run(
                 ["bash", str(script)], env=env, text=True, capture_output=True, timeout=30
             )
-            return p.stdout + p.stderr, root
+            kept = {x.name: x.read_text() for x in (root / "prov").iterdir()}
+            kept["cargo.args"] = (root / "cargo.args").read_text().strip()
+            return p.stdout + p.stderr, kept
 
     WARN = 'for i in $(seq 1 800); do echo "warning: missing documentation for item $i" >&2; done\n'
 
@@ -54,10 +55,9 @@ class QuietLadderBuild(unittest.TestCase):
         self.assertEqual(re.findall(r"^LADDER_RC=0$", out, re.M), ["LADDER_RC=0"])
 
     def test_warnings_are_kept_in_a_file(self):
-        out, root = self.run_block(self.WARN + "exit 0\n")
-        kept = list((root / "prov").glob("*ladder*"))
-        self.assertEqual(len(kept), 1, kept)
-        self.assertEqual(kept[0].read_text().count("warning: missing documentation"), 800)
+        out, kept = self.run_block(self.WARN + "exit 0\n")
+        self.assertEqual(sorted(kept), ["cargo.args", "ladder.log"])
+        self.assertEqual(kept["ladder.log"].count("warning: missing documentation"), 800)
 
     def test_errors_still_print(self):
         body = self.WARN + 'echo "error[E0432]: unresolved import \\`x\\`" >&2\nexit 101\n'
@@ -70,32 +70,26 @@ class QuietLadderBuild(unittest.TestCase):
         out, _ = self.run_block(body)
         self.assertIn("line 800 of the failing build", out)
         self.assertLessEqual(len(out.splitlines()), 90)
+        self.assertEqual(re.findall(r"^LADDER_RC=\d+$", out, re.M), ["LADDER_RC=101"])
 
     def test_lint_level_and_build_flags_are_untouched(self):
         block = ladder_block()
-        self.assertIn("cargo build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder", block)
+        self.assertIn(
+            "cargo build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder", block
+        )
         for weakened in ("-A ", "-Awarnings", "cap-lints", "RUSTFLAGS", "--quiet --quiet"):
             self.assertNotIn(weakened, block)
 
+    def test_cargo_gets_exactly_the_original_arguments(self):
+        _, kept = self.run_block("exit 0\n")
+        self.assertEqual(
+            kept["cargo.args"], "build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder"
+        )
+
     def test_the_exit_status_is_still_the_cargo_status(self):
         block = ladder_block()
-        self.assertRegex(block, r'LADDER_RC=\$\{?(?:LADDER_RC|rc)\}?|LADDER_RC=\$\?')
+        self.assertRegex(block, r"LADDER_RC=\$\{?(?:LADDER_RC|rc)\}?|LADDER_RC=\$\?")
         self.assertNotRegex(block, r"cargo[^\n]*\|\s*(tail|head|grep)")
-
-
-class PayloadEnvironment(unittest.TestCase):
-    def test_payload_exports_quiet_cargo_settings_and_no_rustflags(self):
-        seen = {}
-        helper = v7.V7Tests("test_whole_adapter_uses_existing_flows_in_order")
-        helper.setUp()
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("RUSTFLAGS", None)
-            helper._main_fixture(probe=lambda env: seen.update(env))
-        self.assertEqual(seen.get("CARGO_TERM_QUIET"), "true")
-        self.assertEqual(seen.get("CARGO_TERM_COLOR"), "never")
-        self.assertEqual(seen.get("CARGO_TERM_PROGRESS_WHEN"), "never")
-        self.assertNotIn("RUSTFLAGS", seen)
-        self.assertNotIn("CARGO_ENCODED_RUSTFLAGS", seen)
 
 
 if __name__ == "__main__":

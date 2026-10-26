@@ -6,12 +6,16 @@ on:
       - 'scripts/ci/**'
       - 'scripts/bench/**'
       - 'scripts/fastguest/**'
+      - 'ci/vast-broker/runner.py'
+      - 'ci/vast-broker/test/runner_head_tail_fixture.py'
       - '.github/workflows/vast-box-scripts.yml'
   pull_request:
     paths:
       - 'scripts/ci/**'
       - 'scripts/bench/**'
       - 'scripts/fastguest/**'
+      - 'ci/vast-broker/runner.py'
+      - 'ci/vast-broker/test/runner_head_tail_fixture.py'
       - '.github/workflows/vast-box-scripts.yml'
   workflow_dispatch:
 
@@ -45,3 +49,5 @@ jobs:
         run: python3 scripts/ci/setup_cache_mutants.py
       - name: Canonical box-script mutations
         run: python3 scripts/ci/vast_box_mutants.py --jobs 4
+      - name: Gate-visibility mutations (runner display, quiet ladder build) require two killers each
+        run: python3 scripts/ci/visibility_mutants.py

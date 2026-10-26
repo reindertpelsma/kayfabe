@@ -12,8 +12,10 @@ import io
 import json
 import re
 import tempfile
+import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import test_vast_payload_v7 as v7
 
@@ -139,11 +141,56 @@ class SummaryTests(unittest.TestCase):
         )
 
     def test_a_failed_stage_without_a_red_line_still_names_its_last_line(self):
-        specs = [dict(name="provision", rc=1, text="one\nthe last thing printed\n", fail="provision")]
+        specs = [
+            dict(name="provision", rc=1, text="one\nthe last thing printed\n", fail="provision")
+        ]
         _, out, _ = self.stages_run(specs)
         first = [s for s in self.block(out) if s.startswith("first_fail")]
         self.assertEqual(len(first), 1)
         self.assertIn("the last thing printed", first[0])
+
+    def test_step_cause_reads_the_log_of_the_failing_step(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "driver.log").write_text("l1\nl2\n\nl3\nPURGE FAILED (rc=7)\n")
+            self.assertEqual(self.m.step_cause(d, "DRIVER_RC=6"), "l2 | l3 | PURGE FAILED (rc=7)")
+            self.assertEqual(self.m.step_cause(d, "TREE_RC=1"), "")
+            self.assertEqual(self.m.step_cause(d, "NOT_READY driver=575.51.03"), "")
+
+    def test_non_ascii_never_reaches_the_summary(self):
+        specs = [dict(name="bad", rc=1, text="\u202eerror: boom\u200b \u00e9\n", fail="bad")]
+        _, out, _ = self.stages_run(specs)
+        block = "\n".join(self.block(out))
+        self.assertTrue(all(" " <= c <= "~" or c == "\n" for c in block), block)
+        self.assertIn("error: boom", block)
+
+    def test_summary_keeps_the_failure_when_it_must_drop_lines(self):
+        specs = [
+            dict(name="stage%03d" % i, rows=[self.m.row("suite%03d" % i, 1)]) for i in range(90)
+        ]
+        specs.append(dict(name="bad", rc=1, text="DRIVER_RC=6\n", fail="bad"))
+        _, out, _ = self.stages_run(specs)
+        block = self.block(out)
+        self.assertLessEqual(len(("\n".join(block) + "\n").encode()), 4096)
+        self.assertIn("first_fail stage=bad line=DRIVER_RC=6", block)
+        self.assertIn("suite name=bad pass=0 fail=1 skip=0", block)
+        self.assertTrue(any(s.startswith("truncated lines=") for s in block))
+
+    def test_provision_failure_summary_carries_the_step_log_tail(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "driver.log").write_text("x\ny\na\nb\nPURGE FAILED (rc=6)\n")
+            specs = [
+                dict(
+                    name="provision",
+                    rc=1,
+                    progress_text="BOX_RC=0\nDRIVER_RC=6\n",
+                    fail="provision",
+                )
+            ]
+            with patch.object(self.m, "PROV_DIR", d):
+                _, out, _ = self.stages_run(specs)
+        block = self.block(out)
+        self.assertIn("first_fail stage=provision line=DRIVER_RC=6", block)
+        self.assertIn("cause stage=provision log_tail=a | b | PURGE FAILED (rc=6)", block)
 
     def test_timeout_is_marked(self):
         specs = [dict(name="merge_bar", rc=124, text="start\n", fail="merge_bar")]
@@ -152,7 +199,7 @@ class SummaryTests(unittest.TestCase):
         self.assertRegex(stage, r"^stage name=merge_bar rc=124 duration_ms=\d+ result=TIMEOUT")
 
     def test_summary_is_bounded_to_4_kib(self):
-        specs = [dict(name="s%02d" % i, rows=[self.m.row("r%02d" % i, 1)]) for i in range(30)]
+        specs = [dict(name="s%02d" % i, rows=[self.m.row("r%02d" % i, 1)]) for i in range(80)]
         specs.append(dict(name="bad", rc=1, text="DRIVER_RC=6 " + "x " * 100000, fail="bad"))
         _, out, _ = self.stages_run(specs)
         block = self.block(out)
@@ -184,6 +231,14 @@ class SummaryTests(unittest.TestCase):
         self.assertIn("suite name=preflight pass=0 fail=1 skip=0", block)
         self.assertTrue(block[0].startswith(BEGIN + " verdict=FAIL"))
 
+    def test_summary_is_printed_when_kvm_is_missing(self):
+        with contextlib.redirect_stdout(io.StringIO()) as captured:
+            rc, result, calls = self._main_fixture(kvm=False)
+        self.assertEqual(rc, 1)
+        block = self.block(captured.getvalue())
+        self.assertTrue(block[0].startswith(BEGIN + " verdict=FAIL stages=0"))
+        self.assertIn("suite name=preflight pass=0 fail=1 skip=0", block)
+
     def test_whole_adapter_prints_the_summary_last(self):
         with contextlib.redirect_stdout(io.StringIO()) as captured:
             rc, result, calls = self._main_fixture(failure="merge_bar")
@@ -204,6 +259,42 @@ class SummaryTests(unittest.TestCase):
         self.assertTrue(block[0].startswith(BEGIN + " verdict=PASS"))
         self.assertEqual(len([s for s in block if s.startswith("stage ")]), 4)
         json.dumps(result)
+
+
+class PayloadQuietEnvironment(unittest.TestCase):
+    """The payload quiets cargo's own chatter only; lint level and RUSTFLAGS are not touched."""
+
+    def seen(self):
+        seen = {}
+        helper = v7.V7Tests("test_whole_adapter_uses_existing_flows_in_order")
+        helper.setUp()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RUSTFLAGS", None)
+            os.environ.pop("CARGO_ENCODED_RUSTFLAGS", None)
+            helper._main_fixture(probe=lambda env: seen.update(env))
+        return seen
+
+    def test_payload_exports_quiet_cargo_settings(self):
+        seen = self.seen()
+        self.assertEqual(seen.get("CARGO_TERM_QUIET"), "true")
+        self.assertEqual(seen.get("CARGO_TERM_COLOR"), "never")
+        self.assertEqual(seen.get("CARGO_TERM_PROGRESS_WHEN"), "never")
+        self.assertNotIn("RUSTFLAGS", seen)
+
+    def test_cargo_quiet_is_the_exact_value_cargo_reads(self):
+        self.assertEqual(self.seen().get("CARGO_TERM_QUIET"), "true")
+
+    def test_cargo_output_is_plain(self):
+        seen = self.seen()
+        self.assertEqual(
+            (seen.get("CARGO_TERM_COLOR"), seen.get("CARGO_TERM_PROGRESS_WHEN")), ("never", "never")
+        )
+
+    def test_payload_leaves_rustflags_alone(self):
+        seen = self.seen()
+        self.assertNotIn("RUSTFLAGS", seen)
+        self.assertNotIn("CARGO_ENCODED_RUSTFLAGS", seen)
+        self.assertNotIn("CARGO_BUILD_RUSTFLAGS", seen)
 
 
 if __name__ == "__main__":

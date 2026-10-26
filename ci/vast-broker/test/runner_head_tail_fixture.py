@@ -94,7 +94,7 @@ def run(text, chunk=4000):
 
 
 def shown_rows(output):
-    return [int(x) for x in re.findall(r"^\[untrusted\] row (\d{5}) ", output, re.M)]
+    return [int(x) for x in re.findall(r"^\[untrusted\] row (\d{5})\b", output, re.M)]
 
 
 def split_rows(output, total):
@@ -125,7 +125,11 @@ def case_markers():
     seen = shown_rows(out)
     assert seen[0] == 0 and seen[-1] == n - 1, (seen[:3], seen[-3:])
     marker(out)
-    assert out.index("row 00000") < out.index("dropped from the middle") < out.index("row %05d" % (n - 1))
+    assert (
+        out.index("row 00000")
+        < out.index("dropped from the middle")
+        < out.index("row %05d" % (n - 1))
+    )
 
 
 def case_count():
@@ -169,6 +173,50 @@ def case_wide_budget():
     assert head >= 20 and n - tail_first >= 12, (head, n - tail_first)
 
 
+def case_wide_sizes():
+    # 900-byte lines: both allotments are exact in bytes (the line budget does not bind).
+    n = 3000
+    rowlen = len(row(0, "w ", 470))
+    out, _ = run("".join(row(i, "w ", 470) for i in range(n)), chunk=8000)
+    head, tail_first = split_rows(out, n)
+    cost = rowlen + PREFIX
+    assert head * cost <= m.HEAD_BYTES < (head + 1) * cost, head
+    tail = n - tail_first
+    assert tail * cost <= m.TAIL_BYTES < (tail + 1) * cost, tail
+
+
+def check_ragged(mult, add, mod, chunk, ramp=False):
+    # Lines of very different lengths: head and tail are exactly the whole lines that fit.
+    n = 1200
+    reps = (lambda i: 1 + i * 80 // n) if ramp else (lambda i: 1 + (i * mult + add) % mod)
+    rows = [row(i, "abcdef ", reps(i)) for i in range(n)]
+    cost = [len(x) + PREFIX for x in rows]
+    head, used = [], 0
+    while len(head) < m.HEAD_LINES and used + cost[len(head)] <= m.HEAD_BYTES:
+        used += cost[len(head)]
+        head.append(len(head))
+    tail, used = [], 0
+    while len(tail) < m.TAIL_LINES and used + cost[n - 1 - len(tail)] <= m.TAIL_BYTES:
+        used += cost[n - 1 - len(tail)]
+        tail.insert(0, n - 1 - len(tail))
+    out, _ = run("".join(rows), chunk=chunk)
+    assert shown_rows(out) == head + tail, (len(head), len(tail), shown_rows(out)[:4])
+    gap = sum(len(x) for x in rows[len(head) : tail[0]])
+    assert marker(out) == gap, (marker(out), gap)
+
+
+def case_ragged():
+    check_ragged(7, 0, 90, 5000)
+
+
+def case_ragged_again():
+    check_ragged(13, 5, 60, 7000)
+
+
+def case_ragged_ramp():
+    check_ragged(0, 0, 1, 6000, ramp=True)
+
+
 def case_flood_lines():
     # rustc-warning shaped flood: thousands of short lines; the line budget binds.
     n = 20000
@@ -206,14 +254,14 @@ def case_summary_tail():
 def case_small_log():
     out, _ = run("".join(row(i) for i in range(10)))
     assert "dropped from the middle" not in out
-    assert shown_rows(out)[:10] == list(range(10)) and 9 in shown_rows(out)
+    assert shown_rows(out)[:10] == list(range(10)), "the head shows the whole log"
 
 
 def case_exact_head():
     n = m.HEAD_LINES
     out, _ = run("".join("row %05d\n" % i for i in range(n)))
     assert "dropped from the middle" not in out
-    assert shown_rows(out)[:n] == list(range(n))
+    assert shown_rows(out)[:n] == list(range(n)), "the head shows the whole log"
 
 
 def case_budget_line_kept():
