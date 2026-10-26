@@ -1,0 +1,135 @@
+[
+  {
+    "mutant": "backed_unmap_sparse",
+    "count": 8,
+    "killing_tests": [
+      "a_refused_sparse_retirement_does_not_publish_the_new_dma_map",
+      "a_refused_sparse_retirement_does_not_publish_the_new_vidmem_map",
+      "partial_sparse_retirement_is_counted_when_the_block_cannot_be_freed",
+      "sparse_to_dma_is_one_map_without_backed_unmap",
+      "sparse_to_vidmem_is_one_map_without_backed_unmap",
+      "sparse_unmap_can_return_an_empty_block_to_invalid",
+      "sparse_unmap_preserves_a_backed_neighbour",
+      "unchanged_sparse_neighbours_stay_accessible_during_a_middle_map"
+    ]
+  },
+  {
+    "mutant": "drop_intent_rollback",
+    "count": 2,
+    "killing_tests": [
+      "a_failed_dma_unmap_retires_the_new_sparse_intent",
+      "a_failed_vidmem_unmap_retires_the_new_sparse_intent"
+    ]
+  },
+  {
+    "mutant": "drop_replacement",
+    "count": 2,
+    "killing_tests": [
+      "sparse_to_dma_is_one_map_without_backed_unmap",
+      "sparse_to_vidmem_is_one_map_without_backed_unmap"
+    ]
+  },
+  {
+    "mutant": "drop_reserved_guard",
+    "count": 2,
+    "killing_tests": [
+      "sparse_never_claims_part_of_an_existing_vmm_owned_block",
+      "sparse_never_reserves_a_vmm_owned_address"
+    ]
+  },
+  {
+    "mutant": "drop_retained_count",
+    "count": 2,
+    "killing_tests": [
+      "partial_sparse_retirement_is_counted_when_the_block_cannot_be_freed",
+      "sparse_unmap_preserves_a_backed_neighbour"
+    ]
+  },
+  {
+    "mutant": "drop_sparse_decode",
+    "count": 23,
+    "killing_tests": [
+      "a_failed_dma_unmap_retires_the_new_sparse_intent",
+      "a_failed_vidmem_unmap_retires_the_new_sparse_intent",
+      "a_populated_normal_dma_block_falls_back_to_invalid",
+      "a_refused_sparse_retirement_does_not_publish_the_new_dma_map",
+      "a_refused_sparse_retirement_does_not_publish_the_new_vidmem_map",
+      "disabled_sparse_never_creates_a_backing_or_a_sparse_block",
+      "a_populated_normal_vidmem_block_falls_back_to_invalid",
+      "disabled_sparse_still_unmaps_an_old_backing_to_invalid",
+      "dma_to_sparse_is_one_backed_unmap",
+      "framebuffer_zero_is_not_kept_when_it_becomes_sparse",
+      "held_sparse_retirement_failure_blocks_vidmem",
+      "held_sparse_retirement_failure_blocks_dma",
+      "partial_sparse_retirement_is_counted_when_the_block_cannot_be_freed",
+      "sparse_decoder_canonicalizes_payload_that_has_no_meaning",
+      "sparse_decoder_carries_a_third_kind_without_a_backing",
+      "sparse_resegmentation_keeps_every_page_without_a_host_call",
+      "sparse_to_dma_is_one_map_without_backed_unmap",
+      "sparse_to_vidmem_is_one_map_without_backed_unmap",
+      "sparse_unmap_can_return_an_empty_block_to_invalid",
+      "sparse_unmap_preserves_a_backed_neighbour",
+      "unchanged_backed_neighbours_stay_accessible_during_a_sparse_change",
+      "unchanged_sparse_neighbours_stay_accessible_during_a_middle_map",
+      "vidmem_to_sparse_is_one_backed_unmap"
+    ]
+  },
+  {
+    "mutant": "held_sparse_no_dependencies",
+    "count": 2,
+    "killing_tests": [
+      "held_sparse_retirement_failure_blocks_vidmem",
+      "held_sparse_retirement_failure_blocks_dma"
+    ]
+  },
+  {
+    "mutant": "ignore_feature_gate",
+    "count": 2,
+    "killing_tests": [
+      "disabled_sparse_never_creates_a_backing_or_a_sparse_block",
+      "disabled_sparse_still_unmaps_an_old_backing_to_invalid"
+    ]
+  },
+  {
+    "mutant": "saturating_sparse_end",
+    "count": 2,
+    "killing_tests": [
+      "larger_sparse_ranges_must_not_wrap",
+      "sparse_ranges_must_not_wrap"
+    ]
+  },
+  {
+    "mutant": "sparse_as_plain",
+    "count": 12,
+    "killing_tests": [
+      "a_failed_dma_unmap_retires_the_new_sparse_intent",
+      "a_populated_normal_dma_block_falls_back_to_invalid",
+      "a_failed_vidmem_unmap_retires_the_new_sparse_intent",
+      "a_populated_normal_vidmem_block_falls_back_to_invalid",
+      "disabled_sparse_never_creates_a_backing_or_a_sparse_block",
+      "disabled_sparse_still_unmaps_an_old_backing_to_invalid",
+      "dma_to_sparse_is_one_backed_unmap",
+      "framebuffer_zero_is_not_kept_when_it_becomes_sparse",
+      "sparse_never_claims_part_of_an_existing_vmm_owned_block",
+      "sparse_never_reserves_a_vmm_owned_address",
+      "unchanged_backed_neighbours_stay_accessible_during_a_sparse_change",
+      "vidmem_to_sparse_is_one_backed_unmap"
+    ]
+  },
+  {
+    "mutant": "sparse_backed_ownership",
+    "count": 2,
+    "killing_tests": [
+      "sparse_resegmentation_keeps_every_page_without_a_host_call",
+      "unchanged_sparse_neighbours_stay_accessible_during_a_middle_map"
+    ]
+  },
+  {
+    "mutant": "sparse_linear_key",
+    "count": 2,
+    "killing_tests": [
+      "sparse_resegmentation_keeps_every_page_without_a_host_call",
+      "unchanged_sparse_neighbours_stay_accessible_during_a_middle_map"
+    ]
+  }
+]
