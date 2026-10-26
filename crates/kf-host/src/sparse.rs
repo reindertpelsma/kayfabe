@@ -3,6 +3,8 @@
 use crate::{RmError, channel::GuestVaRange};
 use std::collections::BTreeMap;
 
+pub(crate) mod initial;
+
 /// Normal reservation grain.
 pub const NORMAL_GRAIN: u64 = 2 << 20;
 /// Sparse reservation grain.

@@ -1,0 +1,90 @@
+//! A new selective space must reserve every guest range before host context birth.
+
+use super::{GuestVaRange, Ops, RmError};
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+
+pub(crate) fn reserve_initial(_: &dyn Ops, _: &[(u64, u64)]) -> Result<[GuestVaRange; 3], RmError> {
+    Ok([GuestVaRange::default(); 3])
+}
+
+pub(crate) fn claim(counter: &AtomicUsize, limit: usize) -> bool {
+    counter
+        .try_update(Relaxed, Relaxed, |n| {
+            (n < limit).then_some(n.saturating_add(1))
+        })
+        .is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+    use std::collections::BTreeMap;
+
+    struct Rm {
+        blocks: RefCell<BTreeMap<u32, (u64, u64)>>,
+        next: Cell<u32>,
+        fail: u32,
+    }
+    impl Ops for Rm {
+        fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError> {
+            assert!(!sparse);
+            let h = self.next.get() + 1;
+            self.next.set(h);
+            if h == self.fail {
+                return Err(RmError::NoMemory);
+            }
+            self.blocks.borrow_mut().insert(h, (lo, lo + len));
+            Ok(h)
+        }
+        fn release(&self, h: u32) -> Result<(), RmError> {
+            assert!(self.blocks.borrow_mut().remove(&h).is_some());
+            Ok(())
+        }
+    }
+    fn refusal(fail: u32) {
+        let rm = Rm {
+            blocks: RefCell::new(BTreeMap::new()),
+            next: Cell::new(0),
+            fail,
+        };
+        assert_eq!(
+            reserve_initial(&rm, &[(65536, 1048576), (1 << 40, 1 << 47)]),
+            Err(RmError::NoMemory)
+        );
+        assert!(rm.blocks.borrow().is_empty());
+    }
+    #[test]
+    fn a_refused_first_root_prevents_context_birth() {
+        refusal(1);
+    }
+    #[test]
+    fn a_refused_high_root_releases_the_low_root_before_context_birth() {
+        refusal(2);
+    }
+    #[test]
+    fn an_initially_full_session_budget_cannot_create_another_object() {
+        let n = AtomicUsize::new(3);
+        assert!(!claim(&n, 3));
+        assert_eq!(n.load(Relaxed), 3);
+    }
+    #[test]
+    fn a_session_with_one_object_left_can_claim_exactly_one() {
+        let n = AtomicUsize::new(8);
+        assert!(claim(&n, 9));
+        assert!(!claim(&n, 9));
+        assert_eq!(n.load(Relaxed), 9);
+    }
+    #[test]
+    fn concurrent_spaces_share_one_hard_object_limit() {
+        let n = AtomicUsize::new(0);
+        let accepted = std::thread::scope(|scope| {
+            let jobs: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| (0..64).filter(|_| claim(&n, 7)).count()))
+                .collect();
+            jobs.into_iter().map(|j| j.join().unwrap()).sum::<usize>()
+        });
+        assert_eq!(accepted, 7);
+        assert_eq!(n.load(Relaxed), 7);
+    }
+}
