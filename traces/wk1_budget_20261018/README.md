@@ -2,7 +2,7 @@
 
 STATUS: LIVE, 2026-10-26. Base master b6e308e3e. No deployment, Cloudflare changes or direct provider calls. All runtime tests use fake outbound services.
 
-INFERRED hypothesis, stated before tests: confirmed no-instance failures consume daily rental slots, and interrupted settlement can leave open spend after durable end evidence exists. Falsifiers: those rows already release the count, and injected cost/index failures leave settlement atomic. These are separate from the unknown reason for the live refusal in run 40318395156 attempt 3. Its elapsed response time cannot identify which check refused it.
+INFERRED from source src/ledger.js:136-148 and src/ledger.js:221 at b6e308e3e; hypothesis stated before tests: confirmed no-instance failures consume daily rental slots, and interrupted settlement can leave open spend after durable end evidence exists. Falsifiers: those rows already release the count, and injected cost/index failures leave settlement atomic. These are separate from the unknown reason for the live refusal in run 40318395156 attempt 3. Its elapsed response time cannot identify which check refused it.
 
 MEASURED 2026-10-26, EXPECTED RED 41260f910: 42/47 new Node cases and both new workerd cases fail. EXPECTED RED c01c31440: all four additional interrupted-settlement cases fail. The original budget response hid the deciding check.
 
@@ -26,7 +26,7 @@ CODE READ: runner.py accepts that closed reason vocabulary and a fixed numeric-k
 
 CODE READ: the existing DO-only GET https://internal.invalid/admin/list returns runs plus budget. No public route, new capability or UI feature was added. Budget includes account daily_usd/count_today, profiles.check and profiles.sweep daily/count values, rolling_usd, outstanding_usd, outstanding_rows and the newest 20 spend_rows. Rows contain only key/profile/start/end/hourly price and billed/reserved USD. billed_usd is an accounting estimate: elapsed compute/storage plus the full retained transfer allowance, not a provider invoice. Outstanding rows include overdue open records even when their remaining-TTL estimate is zero. Admin does not prune or repair storage. The existing UI may ignore the additional object.
 
-MEASURED 2026-10-26, /tmp/wk1-budget-node-final.log: final full Node suite passes 2145/2145; /tmp/wk1-budget-focus4.log passes all 77 focused cases. /tmp/wk1-budget-workerd-final.log passes 47/47 real workerd tests, including rollback at both fault sites. /tmp/wk1-budget-admin-ui-final.log passes 77/77 existing admin UI tests after installing its pinned jose dependency locally.
+MEASURED 2026-10-26, /tmp/wk1-budget-node-final.log: final full Node suite passes 2145/2145; /tmp/wk1-budget-retention.log passes all 79 focused cases, including two additional failed-create receipt-retention probes. /tmp/wk1-budget-workerd-final.log passes 47/47 real workerd tests, including rollback at both fault sites. /tmp/wk1-budget-admin-ui-final.log passes 77/77 existing admin UI tests after installing its pinned jose dependency locally.
 
 MEASURED 2026-10-26, /tmp/wk1-budget-bundle-final/index.js: emitted module SHA-256 is 0d1b89536c254ba598249109c1a5d5a379fc36c8572ddf550c8778559647d1e5, replacing 9ac12a86ed2dbc4bc7a63c9a35d739c9dcc9acf7e18eb117187f6e92082ecd09 in deployment.json and wrangler.toml. Combining this branch with IDS requires a fresh combined module hash in both files. The domain PR's public var changes config only.
 

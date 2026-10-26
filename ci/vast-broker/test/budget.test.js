@@ -371,3 +371,30 @@ for (const path of ['/status/123-1', '/rent'])
     assert.equal(JSON.stringify(data).includes('PRIVATE-SENTINEL'), false);
     assert.deepEqual(h.cloud.deletes, ['900']);
   });
+
+for (const hours of [1, 2])
+  test('budget failed-create receipt survives record retention ' + hours, async () => {
+    const storage = new MemoryStorage(),
+      ledger = new Ledger(storage),
+      config = cfg();
+    config.logRetention = hours * 3600000;
+    const r = record(800 + hours, { id: null, closed: 'GONE', price: 0 });
+    await ledger.settle(r, clock);
+    const now = clock + config.logRetention + 1;
+    await ledger.expire(now, config);
+    assert.equal(await storage.get('record:' + r.key), undefined);
+    assert.equal((await storage.get('cost:' + r.key)).created, false);
+    assert.equal((await ledger.budgetSummary(config, now)).profiles.check.count_today, 0);
+    await assert.rejects(
+      ledger.reserve(
+        { ...r, started: now, ended: null },
+        {
+          cfg: config,
+          now,
+          cost: 0.1,
+          credit: 20,
+        },
+      ),
+      (e) => e.reason === 'BUDGET:cost-key',
+    );
+  });
