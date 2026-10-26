@@ -1677,3 +1677,34 @@ fn an_unmap_reports_the_oldest_held_entry_not_the_newest() {
     let rec = chan(r, 0x6b).lock().unwrap().last(1)[0];
     assert_eq!((rec.kind, rec.a, rec.b), (Kind::Unmap, 4, 8_000));
 }
+
+#[test]
+fn the_shutdown_dump_is_printed_once_whichever_exit_path_asks_first() {
+    let r = recorder();
+    born(r, 0x6b, SP);
+    let first = r.dump_shutdown(5_000_000_000);
+    assert!(
+        first[0].starts_with("kf3: GATELOG DUMP #1 why=shutdown t_ms=5000 "),
+        "{first:#?}"
+    );
+    assert!(first.last().unwrap().starts_with("kf3: GATELOG END #1 "));
+    assert!(
+        r.dump_shutdown(6_000_000_000).is_empty(),
+        "the second path prints nothing"
+    );
+}
+
+#[test]
+fn the_shutdown_dump_still_fits_after_xid_dumps() {
+    let r = recorder();
+    for i in 0..(DUMPS_MAX - 1) {
+        let _ = r.dump("xid", u64::from(i), None, None);
+    }
+    let d = r.dump_shutdown(1);
+    assert!(
+        d[0].contains("why=shutdown"),
+        "the last slot is the shutdown dump's: {}",
+        d[0]
+    );
+    assert!(r.dump("xid", 2, None, None)[0].contains("capped"));
+}

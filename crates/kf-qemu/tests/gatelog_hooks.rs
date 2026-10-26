@@ -68,7 +68,7 @@ fn every_gatelog_hook_exists_behind_the_flag() {
     gated(USERRELAY, "rec.chan_birth(", 1);
     gated(CHAN, "rec.chan_free(", 1);
     gated(DEVICE, "rec.dump(\"xid\"", 1);
-    gated(DEVICE, "rec.dump(\"shutdown\"", 1);
+    gated(DEVICE, "rec.dump_shutdown(", 1);
     // vasmgr: the ticket is made only behind the flag, and ended only when there is one
     let s = sites(VASMGR, "global().begin_apply(");
     assert_eq!(s.len(), 1);
@@ -297,6 +297,7 @@ fn every_use_sits_in_the_block_its_flag_check_opens() {
         "rec.chan_birth(",
         "rec.chan_free(",
         "rec.dump(",
+        "rec.dump_shutdown(",
         "global().begin_apply(",
     ];
     let mut checked = 0;
@@ -351,4 +352,42 @@ fn every_use_sits_in_the_block_its_flag_check_opens() {
         }
     }
     assert!(checked >= 12, "only {checked} hook uses found");
+}
+
+const FFI: &str = include_str!("../src/ffi_unsafe.rs");
+
+/// QEMU leaves by `exit`, which never reaches `kf3_unrealize` (run 5301: no `at stop` line, no
+/// shutdown dump), so the shutdown dump is an `atexit` handler registered once at realize.
+#[test]
+fn the_shutdown_dump_is_an_atexit_handler_registered_at_realize_behind_the_flag() {
+    assert!(
+        FFI.contains("fn atexit("),
+        "the libc declaration is in the unsafe file"
+    );
+    let h = body_of_fn(FFI, "extern \"C\" fn gatelog_atexit()");
+    assert!(
+        h.contains("dump_shutdown("),
+        "the handler prints the shutdown dump"
+    );
+    assert!(h.contains("eprintln!"));
+    let reg = FFI.find("atexit(gatelog_atexit)").expect("registration");
+    let before = &FFI[reg.saturating_sub(700)..reg];
+    assert!(
+        before.contains("gatelog::enabled()"),
+        "registered only with the flag"
+    );
+    assert!(before.contains("Once"), "registered once");
+    // inside kf3_realize, on the success path (after the VA thread started)
+    let realize = FFI
+        .find("pub unsafe extern \"C\" fn kf3_realize(")
+        .expect("realize");
+    let va = FFI.find(".spawn(move || d.va_loop())").expect("va thread");
+    assert!(realize < va && va < reg, "after the threads are up");
+    assert!(reg - realize < 9000);
+}
+
+fn body_of_fn<'a>(src: &'a str, sig: &str) -> &'a str {
+    let at = src.find(sig).unwrap_or_else(|| panic!("`{sig}` not found"));
+    let rest = &src[at..];
+    &rest[..rest.find("\n}\n").unwrap_or(rest.len())]
 }

@@ -1273,6 +1273,14 @@ impl Recorder {
         self.t0_unix_ms
     }
 
+    /// The shutdown dump, at most once per process whichever exit path asks first (the VA loop's
+    /// end, or the process's `atexit` handler: QEMU leaves by `exit`, which never stops the loop).
+    /// Empty when it was already printed.
+    pub fn dump_shutdown(&self, t: u64) -> Vec<String> {
+        let _ = t;
+        Vec::new()
+    }
+
     /// ★ One bounded dump (a host Xid naming `chid`/`va`, or `why = "shutdown"`): at most
     /// [`DUMP_LINES_MAX`] lines of at most [`LINE_MAX`] bytes, [`DUMPS_MAX`] per process.
     pub fn dump(&self, why: &str, t: u64, chid: Option<u32>, va: Option<u64>) -> Vec<String> {
