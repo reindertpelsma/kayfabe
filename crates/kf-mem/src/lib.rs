@@ -43,3 +43,6 @@ pub(crate) mod sim;
 pub mod sparse;
 pub mod vahist;
 pub mod vasmgr;
+
+pub mod applydelay;
+pub mod latency_gate;
