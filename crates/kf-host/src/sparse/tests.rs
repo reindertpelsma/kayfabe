@@ -447,3 +447,58 @@ fn a_hardware_sized_64k_leaf_run_is_honoured_exactly() {
     assert!(t.admit(&r, LO + 65536, 65536).unwrap());
     assert_eq!(r.state(LO + 65536), Some(0));
 }
+
+#[test]
+fn recycling_a_sparse_only_space_restores_the_plain_invalid_control() {
+    let (mut t, r) = (tree(100), Rm::new());
+    assert!(t.admit(&r, LO, SPARSE_GRAIN).unwrap());
+    t.clear(&r).unwrap();
+    assert_eq!(r.state(LO), None, "a new guest space owns no old sparse leaves");
+}
+#[test]
+fn recycling_several_sparse_blocks_restores_every_invalid_control() {
+    let (mut t, r) = (tree(100), Rm::new());
+    assert!(t.admit(&r, LO + NORMAL_GRAIN, 2 * SPARSE_GRAIN).unwrap());
+    t.clear(&r).unwrap();
+    assert_eq!(r.state(LO + NORMAL_GRAIN), None);
+    assert_eq!(r.state(LO + NORMAL_GRAIN + SPARSE_GRAIN), None);
+}
+#[test]
+fn recycled_normal_blocks_never_retry_a_previous_guests_held_intent() {
+    let (mut t, r) = (tree(100), Rm::new());
+    populate(&mut t, &r, LO, PAGE);
+    assert!(!t.admit(&r, LO, SPARSE_GRAIN).unwrap());
+    r.unmap(LO, PAGE);
+    t.mark(LO, PAGE, false);
+    t.clear(&r).unwrap();
+    t.retry(&r).unwrap();
+    assert_eq!(r.state(LO), None);
+}
+fn live_recycle(va: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    assert!(t.admit(&r, va, SPARSE_GRAIN).unwrap());
+    populate(&mut t, &r, va, PAGE);
+    r.guard.borrow_mut().insert(va, Some(PAGE));
+    assert!(t.clear(&r).is_err());
+    assert_eq!(t.stats.refused, 1);
+    assert_eq!(r.state(va), Some(PAGE));
+}
+#[test]
+fn an_emptying_space_with_live_vidmem_cannot_be_recycled() { live_recycle(LO); }
+#[test]
+fn an_emptying_space_with_live_dma_cannot_be_recycled() {
+    live_recycle(LO + NORMAL_GRAIN);
+}
+
+#[test]
+fn recycling_discards_a_previous_guests_held_sparse_suffix() {
+    let (mut t, r) = (tree(100), Rm::new());
+    let va = LO + NORMAL_GRAIN;
+    populate(&mut t, &r, va, PAGE);
+    assert!(!t.admit(&r, va, 2 * SPARSE_GRAIN).unwrap());
+    r.unmap(va, PAGE);
+    t.mark(va, PAGE, false);
+    t.clear(&r).unwrap();
+    t.retry(&r).unwrap();
+    assert_eq!(r.state(va + SPARSE_GRAIN), None);
+}

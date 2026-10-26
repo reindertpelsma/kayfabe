@@ -450,6 +450,10 @@ impl Reservations {
         Ok(pieces)
     }
 
+    pub(crate) fn clear(&mut self, _: &dyn Ops) -> Result<(), RmError> {
+        Ok(())
+    }
+
     pub(crate) fn handles(&self) -> Vec<u32> {
         self.blocks
             .values()
