@@ -65,6 +65,8 @@ pub struct VaSpace {
     /// ★ v3-gfx: the guest-allocatable VA ranges, RESERVED in this space (handle 0 = not reserved).
     /// Slots 0-1: [`GUEST_VA_RANGES`]; slot 2: [`MirrorVaStart::low_range`] (2026-10-08, only in a
     /// space started at [`TWIN_VA_FLOOR`]).
+    /// With selective sparse enabled these are the initial coverage boundaries only;
+    /// HostRm routes every map/unmap through its current reservation tree.
     pub guest: [GuestVaRange; 3],
 }
 
@@ -117,13 +119,12 @@ const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
 
 /// `NVOS32_ALLOC_FLAGS_SPARSE` (`nvos.h:1468`): the reservation is sparsified when allocated and an
-/// unmap inside it returns to SPARSE (`gpu_vaspace.c:1399-1426, 2074-2080`). A property of the whole
-/// reservation, so it cannot be applied to only the ranges a guest declares sparse.
+/// unmap inside it returns to SPARSE (`gpu_vaspace.c:1399-1426, 2074-2080`). It applies to the
+/// whole block; selective sparse therefore splits empty normal blocks before using it.
 pub const NVOS32_ALLOC_FLAGS_SPARSE: u32 = 0x0400_0000;
 
-/// The flags of a guest-range reservation. `sparse_diag` is the measurement-only experiment
-/// (`KF3_DIAG_SPARSE_RESV`, `docs/design/V3_SPARSE_PTE.md` section 3); the product passes `false`,
-/// because a sparse reservation absorbs the access to a plain-invalid VA that real hardware faults.
+/// Flags for an authored reservation. Sparse is used only for exact derived sparse blocks,
+/// or by the blanket diagnostic (`KF3_DIAG_SPARSE_RESV`). The default static layout is normal.
 #[must_use]
 pub fn guest_reserve_flags(sparse_diag: bool) -> u32 {
     if sparse_diag {
@@ -869,7 +870,21 @@ impl HostRm {
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
                 // ★ 2026-10-08: plus the low guest range of a floor-started space (slot 2).
-                if reserve_guest {
+                if reserve_guest && self.sparse_enabled {
+                    let ranges: Vec<_> = GUEST_VA_RANGES
+                        .iter()
+                        .copied()
+                        .chain(start.low_range())
+                        .collect();
+                    match self.initial_sparse_roots(space, &ranges) {
+                        Ok(guest) => vas.guest = guest,
+                        Err(e) => {
+                            let _ = self.free(vas.range);
+                            let _ = self.free(vas.space);
+                            return Err(e);
+                        }
+                    }
+                } else if reserve_guest {
                     let ranges = GUEST_VA_RANGES.iter().copied().chain(start.low_range());
                     for (slot, (lo, hi)) in vas.guest.iter_mut().zip(ranges) {
                         match self.reserve_va_flags(
@@ -935,23 +950,21 @@ impl HostRm {
         flags: u32,
         layout: bool,
     ) -> Result<u32, RmError> {
+        // Take the placement guard before claiming budget: blocked allocators must not
+        // consume the capacity needed to restore an empty reservation after a refusal.
+        let _placement = if layout { None } else { self.placement_read()? };
         // The session cap also bounds many hostile spaces and micro reservations.
         const SESSION_BLOCK_LIMIT: usize = 32768;
         use std::sync::atomic::Ordering::Relaxed;
         if self.sparse_enabled
-            && self
-                .sparse_object_count
-                .try_update(Relaxed, Relaxed, |n| {
-                    (n < SESSION_BLOCK_LIMIT).then_some(n.saturating_add(1))
-                })
-                .is_err()
+            && !crate::sparse::initial::claim(&self.sparse_object_count, SESSION_BLOCK_LIMIT)
         {
             let _ = self
                 .sparse_global_overflow
                 .try_update(Relaxed, Relaxed, |n| Some(n.saturating_add(1)));
             return Err(RmError::NoMemory);
         }
-        let result = self.reserve_va_issue(space, at, len, flags, layout);
+        let result = self.reserve_va_issue(space, at, len, flags);
         if self.sparse_enabled {
             match result {
                 Ok(h) => {
@@ -968,14 +981,7 @@ impl HostRm {
         result
     }
 
-    fn reserve_va_issue(
-        &self,
-        space: u32,
-        at: u64,
-        len: u64,
-        flags: u32,
-        layout: bool,
-    ) -> Result<u32, RmError> {
+    fn reserve_va_issue(&self, space: u32, at: u64, len: u64, flags: u32) -> Result<u32, RmError> {
         let mut p = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
             owner: self.client.raw(),
@@ -995,13 +1001,9 @@ impl HostRm {
         let strukt = Some(kf_abi::hostabi::HostParams::Measured(
             &kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS,
         ));
-        let h = if layout {
-            self.carried_alloc(NV50_MEMORY_VIRTUAL, strukt, &mut p, |p| {
-                self.raw_alloc_exact_layout(self.device, want, NV50_MEMORY_VIRTUAL, p, None)
-            })
-        } else {
-            self.raw_alloc(self.device, want, NV50_MEMORY_VIRTUAL, strukt, &mut p)
-        }?;
+        let h = self.carried_alloc(NV50_MEMORY_VIRTUAL, strukt, &mut p, |p| {
+            self.raw_alloc_exact_layout(self.device, want, NV50_MEMORY_VIRTUAL, p, None)
+        })?;
         self.remember(h, self.device);
         Ok(h)
     }

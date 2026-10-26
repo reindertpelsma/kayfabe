@@ -999,7 +999,7 @@ impl HostRm {
         self.raw_alloc_exact_layout(parent, want, class, params, inside)
     }
 
-    // Caller holds the exclusive placement guard while replacing empty reservations.
+    // Caller already holds a placement guard (exclusive for empty-block replacement).
     fn raw_alloc_exact_layout(
         &self,
         parent: u32,

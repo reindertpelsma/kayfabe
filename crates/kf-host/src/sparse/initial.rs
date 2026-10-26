@@ -3,8 +3,26 @@
 use super::{GuestVaRange, Ops, RmError};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
-pub(crate) fn reserve_initial(_: &dyn Ops, _: &[(u64, u64)]) -> Result<[GuestVaRange; 3], RmError> {
-    Ok([GuestVaRange::default(); 3])
+pub(crate) fn reserve_initial(
+    ops: &dyn Ops,
+    ranges: &[(u64, u64)],
+) -> Result<[GuestVaRange; 3], RmError> {
+    if ranges.len() > 3 || ranges.iter().any(|&(lo, hi)| lo >= hi) {
+        return Err(RmError::NoMemory);
+    }
+    let mut guest = [GuestVaRange::default(); 3];
+    for (slot, &(lo, hi)) in guest.iter_mut().zip(ranges) {
+        match ops.reserve(lo, hi - lo, false) {
+            Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
+            Err(e) => {
+                for g in guest.iter().filter(|g| g.handle != 0) {
+                    let _ = ops.release(g.handle);
+                }
+                return Err(e);
+            }
+        }
+    }
+    Ok(guest)
 }
 
 pub(crate) fn claim(counter: &AtomicUsize, limit: usize) -> bool {

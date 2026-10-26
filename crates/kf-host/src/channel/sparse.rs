@@ -14,7 +14,11 @@ impl Ops for SpaceOps<'_> {
             .reserve_va_flags_inner(self.space, lo, len, guest_reserve_flags(sparse), true)
     }
     fn release(&self, handle: u32) -> Result<(), RmError> {
-        self.rm.free(handle)
+        let result = self.rm.free(handle);
+        if result.is_err() && !self.rm.layout_poisoned.swap(true, AcqRel) {
+            eprintln!("kf-host: reservation release refused; further RM placements refused");
+        }
+        result
     }
 }
 
@@ -54,6 +58,18 @@ impl HostRm {
             }
             result
         })())
+    }
+
+    pub(super) fn initial_sparse_roots(
+        &self,
+        space: u32,
+        ranges: &[(u64, u64)],
+    ) -> Result<[GuestVaRange; 3], RmError> {
+        let _placement = self.placement_gate.write().map_err(|_| RmError::NoMemory)?;
+        if self.layout_poisoned.load(Acquire) {
+            return Err(RmError::NoMemory);
+        }
+        crate::sparse::initial::reserve_initial(&SpaceOps { rm: self, space }, ranges)
     }
 
     /// Whether this session opted into selective sparse mappings (default OFF).
