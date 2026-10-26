@@ -132,5 +132,18 @@ class GateTests(unittest.TestCase):
         self.assertFalse(evaluate(rows)['ab_verified'])
 
 
+    def test_prefer_zbc_does_not_certify_task2(self):
+        rows = complete()
+        rows[1]['zbc'] = 2
+        self.assertFalse(evaluate(rows)['task2_eligible'])
+
+    def test_absent_capture_cannot_certify_rop_behavior(self):
+        self.assertFalse(evaluate([])['zbc_suppression_verified'])
+
+    def test_cleanup_rm_failure_is_rejected(self):
+        rows = complete() + [dict(event='free', handle=5, rc=0, status=0x1f)]
+        self.assertFalse(evaluate(rows)['ab_verified'])
+
+
 if __name__ == '__main__':
     unittest.main()
