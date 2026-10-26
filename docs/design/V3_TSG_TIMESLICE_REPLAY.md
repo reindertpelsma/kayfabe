@@ -1,6 +1,6 @@
 # TSG timeslice intent and optional readback facts
 
-STATUS: implementation and GPU-free evidence; hardware validation outstanding.
+**STATUS: LIVE, 2026-10-26; GPU-free validation only.** Hardware validation is outstanding.
 
 ## Contract and evidence limits
 

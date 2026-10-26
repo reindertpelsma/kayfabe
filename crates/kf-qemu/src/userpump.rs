@@ -528,6 +528,12 @@ struct Aux {
     gl: Option<kf_mem::gatelog::Handle>,
     /// Lookups of `gl` made so far (it is registered at birth; a few tries, then none).
     gl_tries: u8,
+    /// Diagnostic only: markers whose native PUT actually succeeded.
+    ens4_actual_marker: u64,
+    /// Ordinary observation USED by Marks::observe, not a fresh diagnostic read.
+    ens4_observed_ns: u64,
+    /// Default-on passive CPU invariants, reset with this channel lifetime.
+    ens4_watch: kf_mem::gatelog::ens4_packet::Watch,
 }
 
 /// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the channel's gate-log hooks, found
@@ -701,6 +707,23 @@ struct PumpIo<'a> {
 }
 
 impl PumpIo<'_> {
+    fn ens3_published(&self, fetch: &Fetch, marker: u64) {
+        if kf_host::diag::enabled()
+            && let Some(chan) = self.r.chan
+        {
+            let rec = kf_mem::gatelog::global();
+            rec.ens3_progress(
+                chan.token,
+                kf_mem::gatelog::ens3::Progress {
+                    publish_ns: rec.now(),
+                    put: fetch.issued(),
+                    marker,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
     /// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the walk gate held this channel before it read
     /// `GP_PUT`. Opens (or extends) the hold, and LOOKS at `GP_PUT` once so the entry the doorbell
     /// announced is seen at the moment it is held (the relay itself reads nothing while held). The
@@ -745,10 +768,12 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             && let Some(chan) = self.r.chan
         {
             let rec = kf_mem::gatelog::global();
+            let observed_ns = rec.now();
+            self.aux.ens4_observed_ns = observed_ns;
             rec.ens3_progress(
                 chan.token,
                 kf_mem::gatelog::ens3::Progress {
-                    observe_ns: rec.now(),
+                    observe_ns: observed_ns,
                     get: words.0,
                     reference: words.1,
                     ..Default::default()
@@ -972,6 +997,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.publish_put(put)
             },
         )?;
+        self.ens3_published(fetch, self.aux.ens4_actual_marker);
         *self.source_admitted = true;
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the entry reached the private host ring.
         if kf_mem::gatelog::enabled()
@@ -1006,6 +1032,8 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.publish_put(put)
             },
         )?;
+        self.aux.ens4_actual_marker = count;
+        self.ens3_published(fetch, count);
         *self.source_admitted = true;
         Ok(count)
     }
@@ -1030,6 +1058,8 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.publish_put(put)
             },
         )?;
+        self.aux.ens4_actual_marker = marks.issued();
+        self.ens3_published(fetch, marks.issued());
         Stats::bump(&self.me.relay_stats.markers);
         Ok(())
     }
@@ -1980,6 +2010,30 @@ impl Pump {
         {
             h.reconcile(self.core.cursor);
         }
+        let receipt_bits = self
+            .aux
+            .ens4_watch
+            .check(self.aux.ens4_actual_marker, self.core.marks.seen());
+        if receipt_bits & 1 != 0 {
+            Stats::bump(&me.relay_stats.ens4_unissued_seen);
+        }
+        if receipt_bits & 6 != 0 {
+            Stats::bump(&me.relay_stats.ens4_sequence_regressed);
+        }
+        // Only validated ordinary Marks::seen closes a published marker association.
+        // Actual marker publication is recorded after every entry hook in this turn.
+        if kf_host::diag::enabled()
+            && let Some(chan) = r.chan
+        {
+            let rec = kf_mem::gatelog::global();
+            rec.ens4_turn(
+                chan.token,
+                self.aux.ens4_actual_marker,
+                self.core.marks.seen(),
+                self.aux.ens4_observed_ns,
+                rec.now(),
+            );
+        }
         self.report_lifecycle_notices();
         self.core.sync_tally();
         {
@@ -2317,9 +2371,13 @@ impl Pump {
         ) -> Result<(), String>,
     ) -> Turn<()> {
         let ram_generation = self.ram_generation;
+        let marker_before = self.core.marks.issued();
         let result = publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {
             write(self, storage)
         });
+        if result.is_ok() && self.core.marks.issued() > marker_before {
+            self.aux.ens4_actual_marker = self.core.marks.issued();
+        }
         if result.is_ok()
             && kf_host::diag::enabled()
             && let Some(chan) = r.chan

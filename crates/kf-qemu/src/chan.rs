@@ -3395,6 +3395,14 @@ impl ChanPlane {
                 + &self.timeslices.summary()
                 + " "
                 + &self.tsg_facts.summary()
+                + " "
+                + &kf_mem::applydelay::summary()
+                + " "
+                + &if kf_host::diag::enabled() {
+                    kf_mem::gatelog::global().ens4_summary()
+                } else {
+                    "ens4_worst_gate_apply_complete_ns=NA ens4_metric=off".into()
+                }
         )
     }
 

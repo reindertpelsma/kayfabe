@@ -60,6 +60,8 @@ pub fn parse(text: &[u8]) -> Option<Selection> {
 pub struct Timing {
     /// Apply wall time only.
     pub wall_ns: u64,
+    /// Actual diagnostic sleep wall time, included in wall_ns, not an extra cost.
+    pub injected_ns: u64,
     /// Actual Linux thread CPU time during this apply; non-additive with RM wall time.
     pub cpu_ns: Option<u64>,
     /// Submit-to-collect wall time, including GPU and scheduling (not additive).
@@ -133,6 +135,7 @@ struct Apply {
     nruns: usize,
     runs: Vec<DiffRun>,
     timing: Timing,
+    injected_ms: u64,
 }
 
 /// Storage stays bounded independently of guest walks or run counts.
@@ -160,7 +163,19 @@ impl Recorder {
             nruns: runs.len(),
             runs: runs.iter().take(RUNS_N).copied().collect(),
             timing: Timing::default(),
+            injected_ms: 0,
         });
+    }
+    /// Record requested injection before sleeping, visible even to an in-flight snapshot.
+    pub fn ens4_delay_requested(&self, space: u64, walk: u64, ms: u64) {
+        if let Some(a) = lock(&self.ens3)
+            .rows
+            .buf
+            .iter_mut()
+            .find(|a| a.space == space && a.walk == walk)
+        {
+            a.injected_ms = ms;
+        }
     }
     /// Complete its timing; preserves the pre-apply timestamp.
     pub fn ens3_end(&self, space: u64, walk: u64, timing: Timing) {
@@ -180,6 +195,17 @@ impl Recorder {
         if let Some(chan) = self.chan_ref(token) {
             let mut chan = lock(&chan);
             if progress.publish_ns != 0 {
+                if progress.marker > chan.progress.marker {
+                    chan.packet.marker(progress.marker);
+                    chan.exposure.marker(progress.marker, progress.publish_ns);
+                    chan.ring.push(super::Rec {
+                        t_ns: progress.publish_ns,
+                        kind: super::Kind::MarkerPublished,
+                        a: 0,
+                        b: progress.marker,
+                        c: progress.put,
+                    });
+                }
                 chan.progress.publish_ns = progress.publish_ns;
                 chan.progress.put = progress.put;
                 chan.progress.marker = progress.marker;
@@ -216,6 +242,8 @@ impl Recorder {
                     c.progress,
                     c.ring.overflow(),
                     c.last(DUMP_LAST),
+                    c.exposure.stats(),
+                    c.packet.class(c.hold.is_some() && c.pend_n > 0),
                 ));
             }
             rows.sort_by_key(|r| r.0);
@@ -242,7 +270,7 @@ impl Recorder {
             chans.len(),
             applies.len()
         )];
-        for (token, space, freed, held, p, lost, records) in chans {
+        for (token, space, freed, held, p, lost, records, exposure, class) in chans {
             out.push(format!(
                 "kf3: ENS3 RING token={token:#x} space={space:#x} \
                 freed_ns={freed:?} hold_age_ns={} held={} records_lost={lost}",
@@ -260,6 +288,11 @@ impl Recorder {
                 p.reference,
                 t.saturating_sub(p.observe_ns)
             ));
+            out.push(format!(
+                "kf3: ENS4 PACKET token={token:#x} class={class} \
+                scope=latest_observed_cohort affected_packet=unknown guest_delivery=unknown {}",
+                exposure.summary()
+            ));
             for r in records {
                 out.push(rec_text(token, &r));
             }
@@ -269,7 +302,8 @@ impl Recorder {
             out.push(format!(
                 "kf3: ENS3 APPLY space={:#x} walk={} start_ns={} end_ns={:?} \
                 finished={} runs={} omitted={} wall_ns={} cpu_residual_wall_ns={} rm_ns={} \
-                invalidate_ns={} walk_ns={} gpu_walk_us={} thread_cpu_ns={:?}",
+                invalidate_ns={} walk_ns={} gpu_walk_us={} thread_cpu_ns={:?} \
+                injected_ms={} injected_wall_ns={}",
                 a.space,
                 a.walk,
                 a.start,
@@ -283,7 +317,9 @@ impl Recorder {
                 inv,
                 a.timing.walk_ns,
                 a.timing.gpu_us,
-                a.timing.cpu_ns
+                a.timing.cpu_ns,
+                a.injected_ms,
+                a.timing.injected_ns
             ));
             for r in &a.runs {
                 out.push(format!(

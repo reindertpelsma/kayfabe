@@ -113,3 +113,121 @@ fn overlapping_gate_and_apply_are_counted_once_not_summed() {
     let t = model(10, 10, 77, 3);
     assert_eq!(t.completed - t.announced, 80);
 }
+
+#[test]
+fn in_flight_dump_has_requested_injection_before_the_sleeper_finishes() {
+    let r = kf_mem::gatelog::Recorder::with_clock(std::time::Instant::now(), 123);
+    r.ens3_begin(1, 1, &[]);
+    r.ens4_delay_requested(1, 1, 3000);
+    let text = r.snapshot_153(Default::default(), 100).join("\n");
+    assert!(text.contains("injected_ms=3000"));
+    assert!(text.contains("finished=false"));
+}
+#[test]
+fn finished_dump_keeps_actual_injection_inside_whole_apply_wall_time() {
+    let r = kf_mem::gatelog::Recorder::with_clock(std::time::Instant::now(), 123);
+    r.ens3_begin(1, 1, &[]);
+    r.ens4_delay_requested(1, 1, 500);
+    r.ens3_end(
+        1,
+        1,
+        kf_mem::gatelog::ens3::Timing {
+            wall_ns: 577_000_000,
+            injected_ns: 500_000_000,
+            ..Default::default()
+        },
+    );
+    let text = r.snapshot_153(Default::default(), 600_000_000).join("\n");
+    assert!(text.contains("injected_ms=500"));
+    assert!(text.contains("injected_wall_ns=500000000"));
+    assert!(text.contains("wall_ns=577000000"));
+}
+#[test]
+fn a_clean_threefold_latency_passes_but_a_fivefold_latency_fails() {
+    let b = baseline();
+    assert!(b.passes(Some(300_000)));
+    assert!(!b.passes(Some(500_000)));
+}
+#[test]
+fn a_missing_fence_cannot_be_calibrated_or_counted_as_a_fast_packet() {
+    assert!(!baseline().passes(None));
+    let mut samples = vec![100_000; 10000];
+    samples[123] = 0;
+    assert!(Bound::calibrate(&samples).is_err());
+}
+#[test]
+fn absent_operator_delay_cannot_inject_even_on_a_huge_apply() {
+    let c = Config::parse(None, None).unwrap();
+    assert_eq!(c.for_runs(usize::MAX), 0);
+    c.run(usize::MAX, |_| panic!("default must remain OFF"));
+}
+#[test]
+fn out_of_policy_doses_are_rejected_rather_than_slept_or_clamped() {
+    for value in ["6000", "10000", "999999"] {
+        assert!(Config::parse(Some(value), Some("4174")).is_err());
+    }
+}
+#[test]
+fn zero_or_extreme_threshold_cannot_turn_all_tiny_applies_into_treatments() {
+    assert!(Config::parse(Some("500"), Some("0")).is_err());
+    assert!(Config::parse(Some("500"), Some("2000000")).is_err());
+}
+#[test]
+fn every_qualifying_apply_sleeps_once_without_doubling_or_background_workers() {
+    let c = Config::parse(Some("500"), None).unwrap();
+    let mut calls = Vec::new();
+    for runs in [4174, 20, 1000, 8000] {
+        c.run(runs, |ms| calls.push(ms));
+    }
+    assert_eq!(calls, vec![500, 500, 500]);
+}
+#[test]
+fn sparse_tail_just_over_point_one_percent_controls_the_quantile() {
+    let mut samples = vec![100; 10000];
+    samples[9989..].fill(200);
+    let b = Bound::calibrate(&samples).unwrap();
+    assert_eq!(b.p999_ns, 200);
+    assert_eq!(b.limit_ns, 800);
+}
+#[test]
+fn a_larger_population_keeps_the_same_nearest_rank_tail_rule() {
+    let mut samples = vec![100; 20000];
+    samples[19979..].fill(500);
+    assert_eq!(Bound::calibrate(&samples).unwrap().p999_ns, 500);
+}
+#[test]
+fn the_frozen_limit_includes_exact_equality() {
+    assert!(baseline().passes(Some(400_000)));
+}
+#[test]
+fn too_few_clean_samples_cannot_produce_a_plausible_bound() {
+    assert!(Bound::calibrate(&vec![100; 9999]).is_err());
+    assert!(Bound::calibrate(&vec![u64::MAX; 10000]).is_err());
+}
+#[test]
+fn dump_records_actual_sleep_wall_time_not_only_the_requested_duration() {
+    let r = kf_mem::gatelog::Recorder::with_clock(std::time::Instant::now(), 123);
+    r.ens3_begin(1, 1, &[]);
+    r.ens4_delay_requested(1, 1, 500);
+    r.ens3_end(
+        1,
+        1,
+        kf_mem::gatelog::ens3::Timing {
+            wall_ns: 600_000_000,
+            injected_ns: 500_123_000,
+            ..Default::default()
+        },
+    );
+    let text = r.snapshot_153(Default::default(), 600_000_000).join("\n");
+    assert!(text.contains("injected_wall_ns=500123000"));
+}
+#[test]
+fn a_later_apply_does_not_pause_an_already_executing_packet() {
+    let t = model(0, 100_000, 77_000_000, 1_000_000);
+    assert_eq!(t.published, 0);
+    assert_eq!(t.completed, 1_000_000);
+}
+#[test]
+fn plus_prefixed_delay_is_not_strict_unsigned_decimal_configuration() {
+    assert!(Config::parse(Some("+500"), None).is_err());
+}

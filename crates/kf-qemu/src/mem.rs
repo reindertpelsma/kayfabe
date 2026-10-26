@@ -5098,3 +5098,7 @@ mod memory_list_tests {
 #[cfg(test)]
 #[path = "mem/walk_gate_tests.rs"]
 mod walk_gate_tests;
+
+#[cfg(test)]
+#[path = "mem/ens4_tests.rs"]
+mod ens4_tests;

@@ -44,6 +44,7 @@ use std::time::Instant;
 
 pub mod ens3;
 pub mod ens4;
+pub mod ens4_packet;
 
 /// Records per channel ring.
 pub const RING_N: usize = 4096;
@@ -345,6 +346,10 @@ pub enum Kind {
     /// A VA-manager unmap found work held: `a` count (bit 31: channel in a hold), `b` oldest age
     /// in ns, `c` diff id.
     Unmap,
+    /// Successful SET_REF: b absolute marker, c private descriptor PUT count.
+    MarkerPublished,
+    /// Validated ordinary observation: b absolute seen marker.
+    MarkerSeen,
 }
 
 impl Kind {
@@ -358,6 +363,8 @@ impl Kind {
             Kind::GateEnd => "gate_end",
             Kind::Published => "published",
             Kind::Unmap => "held_across_unmap",
+            Kind::MarkerPublished => "marker_published",
+            Kind::MarkerSeen => "marker_seen",
         }
     }
 }
@@ -426,10 +433,13 @@ pub struct ChanStats {
     pub published_held: u64,
     /// VA-manager unmaps that found this channel with work waiting.
     pub held_across_unmap: u64,
+    /// ENS4 observed gate-to-engine-idle latency, with missing/upper-bound coverage.
+    pub exposure: ens4::Stats,
 }
 
 impl ChanStats {
     fn fold(&mut self, o: &ChanStats) {
+        self.exposure.fold(o.exposure);
         self.holds = self.holds.saturating_add(o.holds);
         self.regates = self.regates.saturating_add(o.regates);
         self.hold_ns = self.hold_ns.saturating_add(o.hold_ns);
@@ -493,6 +503,8 @@ pub struct ChanLog {
     hold: Option<Hold>,
     stats: ChanStats,
     progress: ens3::Progress,
+    exposure: ens4::Exposure,
+    packet: ens4_packet::Packet,
 }
 
 impl ChanLog {
@@ -514,13 +526,17 @@ impl ChanLog {
             hold: None,
             stats: ChanStats::default(),
             progress: ens3::Progress::default(),
+            exposure: ens4::Exposure::new(512),
+            packet: ens4_packet::Packet::default(),
         }
     }
 
     /// The totals.
     #[must_use]
     pub fn stats(&self) -> ChanStats {
-        self.stats
+        let mut out = self.stats;
+        out.exposure = self.exposure.stats();
+        out
     }
 
     /// The newest `n` records, oldest first.
@@ -604,6 +620,7 @@ impl ChanLog {
             return false;
         }
         self.hold = Some(Hold { t_ns: t, gate: g });
+        self.exposure.gate(t);
         self.stats.holds = self.stats.holds.saturating_add(1);
         for c in &mut self.pend {
             c.held = true;
@@ -633,6 +650,7 @@ impl ChanLog {
         targets: Option<&[(u64, u64)]>,
     ) -> Option<u64> {
         let h = self.hold.take()?;
+        self.exposure.pass();
         let ns = t.saturating_sub(h.t_ns);
         let ov = classify_overlap(ch.walks, ch.space_touched, targets, &ch.extents);
         self.stats.hold_ns = self.stats.hold_ns.saturating_add(ns);
@@ -654,6 +672,7 @@ impl ChanLog {
     /// One entry reached the private host ring at `t`: the oldest announced one. Returns its age
     /// in ns (0 when none was announced: the log never saw its `GP_PUT`).
     pub fn published(&mut self, t: u64) -> u64 {
+        self.packet.published();
         self.stats.published = self.stats.published.saturating_add(1);
         self.pop_one(t, false)
     }
@@ -672,11 +691,17 @@ impl ChanLog {
             self.pop_one(t, true);
             n = n.saturating_add(1);
         }
+        if self.pend_n == 0 {
+            self.exposure.idle();
+        }
         n
     }
 
     fn pop_one(&mut self, t: u64, inferred: bool) -> u64 {
         let Some(front) = self.pend.front_mut() else {
+            if !inferred {
+                self.exposure.published(t, None, false);
+            }
             self.ring.push(Rec {
                 t_ns: t,
                 kind: Kind::Published,
@@ -687,6 +712,11 @@ impl ChanLog {
             return 0;
         };
         let (slot, age, held) = (front.first, t.saturating_sub(front.t_ns), front.held);
+        if inferred {
+            self.exposure.omitted();
+        } else {
+            self.exposure.published(t, Some(front.t_ns), held);
+        }
         front.n = front.n.saturating_sub(1);
         front.first = if self.entries == 0 {
             0
@@ -747,6 +777,7 @@ impl ChanLog {
 
     /// The channel was freed at `t`.
     pub fn freed(&mut self, t: u64) {
+        self.exposure.retire();
         self.freed_ns = Some(t);
     }
 }
@@ -966,7 +997,8 @@ impl Recorder {
             return;
         };
         let (key, vas, stats) = {
-            let l = lock(&c);
+            let mut l = lock(&c);
+            l.exposure.retire();
             ((l.client, l.handle), l.vas, l.stats())
         };
         st.evicted.fold(&stats);
@@ -1263,6 +1295,9 @@ pub fn rec_text(token: u32, r: &Rec) -> String {
             r.b,
             r.c
         ),
+        Kind::MarkerPublished | Kind::MarkerSeen => {
+            format!("marker={} put={}", r.b, r.c)
+        }
         Kind::Unmap => format!(
             "pending={} oldest_age_ns={} in_hold={} walk#={}",
             r.a & !UNMAP_IN_HOLD,
@@ -1378,6 +1413,11 @@ impl Recorder {
                 out.push(unmap_text(f.token, u));
             }
         }
+        // Preserve the per-boot endpoint in ordinary shutdown dumps too.
+        out.push(cap(format!(
+            "kf3: GATELOG ENS4_TOTAL {}",
+            fleet.exposure.summary()
+        )));
         // 3. "held across unmap" per space
         let mut spaces: Vec<(u64, SpaceCnt)> = st.spaces.iter().map(|(&k, &v)| (k, v)).collect();
         spaces.sort_by_key(|&(k, v)| (std::cmp::Reverse(v.with_held), k));

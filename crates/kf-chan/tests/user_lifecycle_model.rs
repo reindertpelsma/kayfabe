@@ -214,6 +214,7 @@ impl Cfg {
 // the world
 
 struct ModelEnv {
+    walk_busy: bool,
     ges: Rc<Vec<Option<Ge>>>,
     rings: [Vec<(u32, u32)>; 2],
     put: [u32; 2],
@@ -255,6 +256,9 @@ impl ModelEnv {
 }
 
 impl Env for ModelEnv {
+    fn walk_busy(&self) -> bool {
+        self.walk_busy
+    }
     fn src_entries(&self) -> u32 {
         self.src_entries
     }
@@ -425,6 +429,7 @@ impl Clone for World {
             log_at_teardown: self.log_at_teardown,
             relay: self.relay.clone(),
             env: ModelEnv {
+                walk_busy: self.env.walk_busy,
                 ges: self.env.ges.clone(),
                 rings: self.env.rings.clone(),
                 put: self.env.put,
@@ -491,6 +496,7 @@ impl World {
             log_at_teardown: 0,
             relay,
             env: ModelEnv {
+                walk_busy: false,
                 ges: Rc::new(ges),
                 rings: [vec![(0, 0); n], vec![(0, 0); n]],
                 put: [0; 2],
@@ -539,6 +545,7 @@ impl World {
         self.torn_down.hash(&mut h);
         self.relay.key().hash(&mut h);
         let e = &self.env;
+        e.walk_busy.hash(&mut h);
         e.rings.hash(&mut h);
         e.put.hash(&mut h);
         e.guest_get.hash(&mut h);
@@ -801,6 +808,7 @@ impl World {
 
 fn empty_env() -> ModelEnv {
     ModelEnv {
+        walk_busy: false,
         ges: Rc::new(Vec::new()),
         rings: [Vec::new(), Vec::new()],
         put: [0; 2],
@@ -2793,5 +2801,5 @@ fn lazy_every_other_scenario_of_this_file_also_holds_with_lazy_observe_on() {
     );
 }
 
-#[path = "ens4_support.rs"]
+#[path = "ens4_support/mod.rs"]
 mod ens4;

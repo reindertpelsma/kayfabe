@@ -1559,6 +1559,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 crate::gatelog::global().ens3_begin(key.0, batch.id, &e.runs);
                 (kf_host::diag::snapshot(), kf_host::diag::thread_cpu_ns())
             });
+            // ENS4 diagnostic sleep is inside the existing apply/gate position,
+            // after begin recording, before ANY native map/unmap. Never on a vCPU.
+            if ens3_before.is_some() {
+                crate::gatelog::global().ens4_delay_requested(
+                    key.0,
+                    batch.id,
+                    crate::applydelay::config().for_runs(e.runs.len()),
+                );
+            }
+            let injected_ns = crate::applydelay::inject(e.runs.len());
             let a = apply_entry(&space.target, &e.runs, &cfg);
             if let Some((before, cpu_before)) = ens3_before {
                 crate::gatelog::global().ens3_end(
@@ -1566,6 +1576,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     batch.id,
                     crate::gatelog::ens3::Timing {
                         wall_ns: ns_since(t_apply),
+                        injected_ns,
                         cpu_ns: cpu_before
                             .and_then(|before| kf_host::diag::thread_cpu_ns()?.checked_sub(before)),
                         walk_ns: walk_elapsed_ns,
@@ -1578,6 +1589,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 crate::gatelog::global().end_apply(tk);
             }
             let apply_ns = ns_since(t_apply);
+            if kf_host::diag::enabled() && e.runs.len() >= 1000 {
+                eprintln!(
+                    "kf3: ENS4 APPLY space={:#x} walk={} runs={} wall_ns={} \
+                    injected_ms={} injected_wall_ns={injected_ns}",
+                    key.0,
+                    batch.id,
+                    e.runs.len(),
+                    apply_ns,
+                    crate::applydelay::config().for_runs(e.runs.len()),
+                );
+            }
+
             if crate::maplog::on() {
                 // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,
                 // so a host fault VA can be matched against what the guest's tables said, when,

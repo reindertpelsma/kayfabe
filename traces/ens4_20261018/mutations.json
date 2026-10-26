@@ -1,0 +1,967 @@
+{
+  "core_completion": [
+    {
+      "mutant": "baseline",
+      "module": "applydelay",
+      "old": "",
+      "new": "",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0
+    },
+    {
+      "mutant": "default-delay-on",
+      "module": "applydelay",
+      "old": "let ms = number(ms, 0)?;",
+      "new": "let ms = number(ms, 1)?;",
+      "killed_by": [
+        "checks::absent_operator_delay_cannot_inject_even_on_a_huge_apply",
+        "checks::default_off_even_when_threshold_is_supplied"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "skip-sleeper",
+      "module": "applydelay",
+      "old": "sleep(ms);",
+      "new": "let _ = ms;",
+      "killed_by": [
+        "checks::every_qualifying_apply_sleeps_once_without_doubling_or_background_workers",
+        "checks::sleeper_runs_on_callers_thread_once_per_large_apply"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "delay-small-applies",
+      "module": "applydelay",
+      "old": "if runs >= self.min_runs {",
+      "new": "if true {",
+      "killed_by": [
+        "checks::custom_threshold_has_no_guest_dependent_duration",
+        "checks::delay_applies_only_to_large_attempted_diffs",
+        "checks::every_qualifying_apply_sleeps_once_without_doubling_or_background_workers",
+        "checks::sleeper_runs_on_callers_thread_once_per_large_apply"
+      ],
+      "count": 4,
+      "exit": 101
+    },
+    {
+      "mutant": "threshold-off-by-one",
+      "module": "applydelay",
+      "old": "if runs >= self.min_runs {",
+      "new": "if runs > self.min_runs {",
+      "killed_by": [
+        "checks::custom_threshold_has_no_guest_dependent_duration",
+        "checks::delay_applies_only_to_large_attempted_diffs",
+        "checks::every_qualifying_apply_sleeps_once_without_doubling_or_background_workers"
+      ],
+      "count": 3,
+      "exit": 101
+    },
+    {
+      "mutant": "unbounded-dose",
+      "module": "applydelay",
+      "old": "if ms > 5000 {",
+      "new": "if false {",
+      "killed_by": [
+        "checks::out_of_policy_doses_are_rejected_rather_than_slept_or_clamped",
+        "checks::upper_delay_boundary_is_inclusive_and_cannot_wrap"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "unbounded-threshold",
+      "module": "applydelay",
+      "old": "if !(1..=1_000_000).contains(&runs) {",
+      "new": "if false {",
+      "killed_by": [
+        "checks::threshold_is_bounded_and_never_zero",
+        "checks::zero_or_extreme_threshold_cannot_turn_all_tiny_applies_into_treatments"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "accept-plus-prefix",
+      "module": "applydelay",
+      "old": "|| !v.bytes().all(|b| b.is_ascii_digit())",
+      "new": "|| false",
+      "killed_by": [
+        "checks::plus_prefixed_delay_is_not_strict_unsigned_decimal_configuration",
+        "checks::upper_delay_boundary_is_inclusive_and_cannot_wrap"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "insufficient-calibration",
+      "module": "latency_gate",
+      "old": "!(10_000..=1_000_000).contains(&samples.len())",
+      "new": "false",
+      "killed_by": [
+        "checks::calibration_rejects_invalid_or_insufficient_samples",
+        "checks::too_few_clean_samples_cannot_produce_a_plausible_bound"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "zero-calibration-is-valid",
+      "module": "latency_gate",
+      "old": "samples.contains(&0)",
+      "new": "false",
+      "killed_by": [
+        "checks::a_missing_fence_cannot_be_calibrated_or_counted_as_a_fast_packet",
+        "checks::calibration_rejects_invalid_or_insufficient_samples"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "use-median-not-p999",
+      "module": "latency_gate",
+      "old": ".checked_mul(999)",
+      "new": ".checked_mul(500)",
+      "killed_by": [
+        "checks::a_larger_population_keeps_the_same_nearest_rank_tail_rule",
+        "checks::sparse_tail_just_over_point_one_percent_controls_the_quantile"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "wrong-margin",
+      "module": "latency_gate",
+      "old": "p999_ns.checked_mul(4)",
+      "new": "p999_ns.checked_mul(2)",
+      "killed_by": [
+        "checks::a_clean_threefold_latency_passes_but_a_fivefold_latency_fails",
+        "checks::clean_calibration_freezes_four_times_nearest_rank_p999",
+        "checks::sparse_tail_just_over_point_one_percent_controls_the_quantile",
+        "checks::the_frozen_limit_includes_exact_equality"
+      ],
+      "count": 4,
+      "exit": 101
+    },
+    {
+      "mutant": "reject-exact-bound",
+      "module": "latency_gate",
+      "old": "ns <= self.limit_ns",
+      "new": "ns < self.limit_ns",
+      "killed_by": [
+        "checks::clean_calibration_freezes_four_times_nearest_rank_p999",
+        "checks::the_frozen_limit_includes_exact_equality"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "missing-fence-is-pass",
+      "module": "latency_gate",
+      "old": "sample.is_some_and",
+      "new": "sample.is_none_or",
+      "killed_by": [
+        "checks::a_missing_fence_cannot_be_calibrated_or_counted_as_a_fast_packet",
+        "checks::no_completion_is_a_failure_even_if_get_or_irq_progresses"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "ignore-global-hold",
+      "module": "latency_gate",
+      "old": "{\n        apply_end\n    } else {",
+      "new": "{\n        announced\n    } else {",
+      "killed_by": [
+        "checks::overlapping_gate_and_apply_are_counted_once_not_summed",
+        "checks::retained_77ms_apply_causes_a_deliberate_conditional_latency_failure",
+        "checks::injection_can_fail_a_previously_clean_virtual_time_control"
+      ],
+      "count": 3,
+      "exit": 101
+    },
+    {
+      "mutant": "retroactively-pause-published-work",
+      "module": "latency_gate",
+      "old": "announced >= apply_start && announced < apply_end",
+      "new": "announced < apply_end",
+      "killed_by": [
+        "checks::a_later_apply_does_not_pause_an_already_executing_packet",
+        "checks::a_packet_published_before_the_apply_is_not_delayed_retroactively"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "double-count-apply-inside-gate",
+      "module": "latency_gate",
+      "old": "completed: published.saturating_add(execute_ns)",
+      "new": "completed: published.saturating_add(execute_ns).saturating_add(apply_ns)",
+      "killed_by": [
+        "checks::a_packet_published_before_the_apply_is_not_delayed_retroactively",
+        "checks::a_later_apply_does_not_pause_an_already_executing_packet",
+        "checks::injection_can_fail_a_previously_clean_virtual_time_control",
+        "checks::overlapping_gate_and_apply_are_counted_once_not_summed"
+      ],
+      "count": 4,
+      "exit": 101
+    },
+    {
+      "mutant": "omit-requested-inflight-dose",
+      "module": "ens3",
+      "old": "a.injected_ms = ms;",
+      "new": "a.injected_ms = 0;",
+      "killed_by": [
+        "checks::finished_dump_keeps_actual_injection_inside_whole_apply_wall_time",
+        "checks::in_flight_dump_has_requested_injection_before_the_sleeper_finishes"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "omit-actual-injected-wall",
+      "module": "ens3",
+      "old": "a.timing.injected_ns\n",
+      "new": "0\n",
+      "killed_by": [
+        "checks::dump_records_actual_sleep_wall_time_not_only_the_requested_duration",
+        "checks::finished_dump_keeps_actual_injection_inside_whole_apply_wall_time"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "no-completion-observation",
+      "module": "completion",
+      "old": "if self.retired || seen <= self.seen {",
+      "new": "if true {",
+      "killed_by": [
+        "completion_checks::a_completed_marker_does_not_cover_a_second_gated_batch",
+        "completion_checks::a_hold_before_put_observation_is_labelled_as_a_gate_start_proxy",
+        "completion_checks::a_known_hold_does_not_credit_future_ungated_work",
+        "completion_checks::an_old_marker_cannot_complete_a_new_post_hold_publication",
+        "completion_checks::an_unknown_arrival_hold_does_not_credit_future_ungated_work",
+        "completion_checks::an_unpublished_future_marker_is_never_a_completion_receipt",
+        "completion_checks::bounded_pending_receipts_record_loss_instead_of_growing",
+        "completion_checks::first153_dump_names_the_proxy_source_of_a_pregpput_hold",
+        "completion_checks::free_and_native_token_reuse_preserve_the_per_boot_completed_maximum",
+        "completion_checks::future_counts_cannot_hide_a_later_valid_observation",
+        "completion_checks::gate_marker_cannot_cover_a_gated_entry_published_after_that_marker",
+        "completion_checks::idle_does_not_discard_a_real_publication_waiting_for_its_marker",
+        "completion_checks::known_gated_entry_matches_the_later_engine_idle_marker",
+        "completion_checks::marker_publication_before_entry_cannot_cover_that_entry",
+        "completion_checks::multiple_held_entries_use_the_oldest_announcement_in_one_batch",
+        "completion_checks::overlapping_apply_inside_hold_is_not_added_a_second_time",
+        "completion_checks::production_chanlog_and_recorder_feed_the_existing_status_endpoint",
+        "completion_checks::normal_shutdown_prints_the_completed_boot_endpoint",
+        "completion_checks::production_hold_before_put_is_exposed_as_a_proxy_not_a_known_arrival",
+        "completion_checks::recorder_turn_repeats_do_not_attach_new_work_to_an_old_marker",
+        "completion_checks::repeated_churn_cannot_exceed_even_a_single_pending_slot",
+        "completion_checks::shutdown_keeps_the_peak_of_a_freed_and_reused_native_token",
+        "completion_checks::stale_and_duplicate_observations_do_not_inflate_the_maximum"
+      ],
+      "count": 23,
+      "exit": 101
+    },
+    {
+      "mutant": "completion-before-covering-marker",
+      "module": "completion",
+      "old": "f.marker <= seen",
+      "new": "true",
+      "killed_by": [
+        "completion_checks::a_completed_marker_does_not_cover_a_second_gated_batch",
+        "completion_checks::an_old_marker_cannot_complete_a_new_post_hold_publication"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "forget-retirement",
+      "module": "completion",
+      "old": "pub fn retire(&mut self) {",
+      "new": "pub fn retire(&mut self) { return;",
+      "killed_by": [
+        "completion_checks::retirement_also_drops_the_unmarked_builder",
+        "completion_checks::retiring_a_channel_cannot_complete_its_pending_future_work"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "unbounded-pending-receipts",
+      "module": "completion",
+      "old": "if self.pending.len() == self.cap {",
+      "new": "if false {",
+      "killed_by": [
+        "completion_checks::bounded_pending_receipts_record_loss_instead_of_growing",
+        "completion_checks::repeated_churn_cannot_exceed_even_a_single_pending_slot"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-per-boot-max",
+      "module": "completion",
+      "old": "pub fn fold(&mut self, other: Self) {",
+      "new": "pub fn fold(&mut self, other: Self) { return;",
+      "killed_by": [
+        "completion_checks::folding_completed_channels_preserves_the_boot_maximum",
+        "completion_checks::free_and_native_token_reuse_preserve_the_per_boot_completed_maximum",
+        "completion_checks::gate_marker_cannot_cover_a_gated_entry_published_after_that_marker",
+        "completion_checks::normal_shutdown_prints_the_completed_boot_endpoint",
+        "completion_checks::production_chanlog_and_recorder_feed_the_existing_status_endpoint",
+        "completion_checks::production_hold_before_put_is_exposed_as_a_proxy_not_a_known_arrival",
+        "completion_checks::recorder_turn_repeats_do_not_attach_new_work_to_an_old_marker",
+        "completion_checks::shutdown_keeps_the_peak_of_a_freed_and_reused_native_token"
+      ],
+      "count": 8,
+      "exit": 101
+    },
+    {
+      "mutant": "known-arrival-becomes-proxy",
+      "module": "completion",
+      "old": "proxy: false",
+      "new": "proxy: true",
+      "killed_by": [
+        "completion_checks::bounded_pending_receipts_record_loss_instead_of_growing",
+        "completion_checks::future_counts_cannot_hide_a_later_valid_observation",
+        "completion_checks::idle_does_not_discard_a_real_publication_waiting_for_its_marker",
+        "completion_checks::known_gated_entry_matches_the_later_engine_idle_marker",
+        "completion_checks::multiple_held_entries_use_the_oldest_announcement_in_one_batch",
+        "completion_checks::overlapping_apply_inside_hold_is_not_added_a_second_time",
+        "completion_checks::marker_publication_before_entry_cannot_cover_that_entry",
+        "completion_checks::stale_and_duplicate_observations_do_not_inflate_the_maximum"
+      ],
+      "count": 8,
+      "exit": 101
+    },
+    {
+      "mutant": "unknown-arrival-looks-exact",
+      "module": "completion",
+      "old": "proxy: true",
+      "new": "proxy: false",
+      "killed_by": [
+        "completion_checks::a_hold_before_put_observation_is_labelled_as_a_gate_start_proxy",
+        "completion_checks::an_old_marker_cannot_complete_a_new_post_hold_publication",
+        "completion_checks::first153_dump_names_the_proxy_source_of_a_pregpput_hold",
+        "completion_checks::production_hold_before_put_is_exposed_as_a_proxy_not_a_known_arrival"
+      ],
+      "count": 4,
+      "exit": 101
+    },
+    {
+      "mutant": "idle-hold-never-expires",
+      "module": "completion",
+      "old": "pub fn idle(&mut self) {",
+      "new": "pub fn idle(&mut self) { return;",
+      "killed_by": [
+        "completion_checks::actual_chanlog_reconcile_drops_a_gate_that_had_no_work",
+        "completion_checks::an_idle_hold_is_not_assigned_to_work_arriving_much_later"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "accept-unpublished-future-count",
+      "module": "completion",
+      "old": "if seen > self.issued {",
+      "new": "if false {",
+      "killed_by": [
+        "completion_checks::an_unpublished_future_marker_is_never_a_completion_receipt",
+        "completion_checks::future_counts_cannot_hide_a_later_valid_observation"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "old-marker-covers-new-work",
+      "module": "completion",
+      "old": "seq <= self.issued",
+      "new": "seq < self.issued",
+      "killed_by": [
+        "completion_checks::gate_marker_cannot_cover_a_gated_entry_published_after_that_marker",
+        "completion_checks::recorder_turn_repeats_do_not_attach_new_work_to_an_old_marker",
+        "completion_checks::repeating_an_old_actual_marker_does_not_cover_a_new_entry"
+      ],
+      "count": 3,
+      "exit": 101
+    },
+    {
+      "mutant": "drop-completed-counter",
+      "module": "completion",
+      "old": "self.totals.completed = self.totals.completed.saturating_add(1);",
+      "new": "self.totals.completed = 0;",
+      "killed_by": [
+        "completion_checks::a_completed_marker_does_not_cover_a_second_gated_batch",
+        "completion_checks::a_known_hold_does_not_credit_future_ungated_work",
+        "completion_checks::bounded_pending_receipts_record_loss_instead_of_growing",
+        "completion_checks::known_gated_entry_matches_the_later_engine_idle_marker",
+        "completion_checks::multiple_held_entries_use_the_oldest_announcement_in_one_batch",
+        "completion_checks::an_unknown_arrival_hold_does_not_credit_future_ungated_work",
+        "completion_checks::repeated_churn_cannot_exceed_even_a_single_pending_slot",
+        "completion_checks::stale_and_duplicate_observations_do_not_inflate_the_maximum"
+      ],
+      "count": 8,
+      "exit": 101
+    },
+    {
+      "mutant": "miss-production-gate-hook",
+      "module": "gatelog",
+      "old": "self.exposure.gate(t);",
+      "new": "",
+      "killed_by": [
+        "completion_checks::first153_dump_names_the_proxy_source_of_a_pregpput_hold",
+        "completion_checks::production_hold_before_put_is_exposed_as_a_proxy_not_a_known_arrival"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "miss-production-publish-hook",
+      "module": "gatelog",
+      "old": "self.exposure.published(t, Some(front.t_ns), held);",
+      "new": "",
+      "killed_by": [
+        "completion_checks::first153_dump_names_the_proxy_source_of_a_pregpput_hold",
+        "completion_checks::free_and_native_token_reuse_preserve_the_per_boot_completed_maximum",
+        "completion_checks::gate_marker_cannot_cover_a_gated_entry_published_after_that_marker",
+        "completion_checks::normal_shutdown_prints_the_completed_boot_endpoint",
+        "completion_checks::production_chanlog_and_recorder_feed_the_existing_status_endpoint",
+        "completion_checks::production_hold_before_put_is_exposed_as_a_proxy_not_a_known_arrival",
+        "completion_checks::recorder_turn_repeats_do_not_attach_new_work_to_an_old_marker",
+        "completion_checks::shutdown_keeps_the_peak_of_a_freed_and_reused_native_token"
+      ],
+      "count": 8,
+      "exit": 101
+    }
+  ],
+  "linux_scorer": [
+    {
+      "mutant": "baseline",
+      "old": "",
+      "new": "",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0
+    },
+    {
+      "mutant": "skip-owned-USER-route",
+      "old": "token = one(route, qemu)",
+      "new": "token = \"0x10067\"",
+      "killed_by": [
+        "test_a_passthrough_target_cannot_borrow_another_user_rings_birth",
+        "test_another_clients_identical_channel_cannot_supply_route_proof",
+        "test_missing_route_is_invalid_even_if_client_passed"
+      ],
+      "count": 3,
+      "exit": 1
+    },
+    {
+      "mutant": "skip-large-apply-proof",
+      "old": "if not any(int(key, 16) == space and int(runs) >= 1000 for key, runs in applies):",
+      "new": "if False:",
+      "killed_by": [
+        "test_no_apply_record_is_not_equivalent_to_a_zero_cost_apply",
+        "test_small_or_unrelated_applies_cannot_supply_exposure"
+      ],
+      "count": 2,
+      "exit": 1
+    },
+    {
+      "mutant": "skip-hold-and-termination-proof",
+      "old": "if not hold or \"GATELOG END #\" not in qemu:",
+      "new": "if False:",
+      "killed_by": [
+        "test_a_fleet_of_other_holds_cannot_prove_the_targets_exposure",
+        "test_another_channel_hold_is_not_the_failed_channels_hold",
+        "test_truncated_dump_or_client_never_becomes_pass",
+        "test_unterminated_gate_dump_cannot_certify_a_clean_arm"
+      ],
+      "count": 4,
+      "exit": 1
+    },
+    {
+      "mutant": "borrow-another-channel-hold",
+      "old": "rf\"GATELOG HOLDTOP token={token} .*?holds=([1-9]\\d*) \"",
+      "new": "r\"GATELOG HOLDTOP token=0x[0-9a-f]+ .*?holds=([1-9]\\d*) \"",
+      "killed_by": [
+        "test_a_fleet_of_other_holds_cannot_prove_the_targets_exposure",
+        "test_another_channel_hold_is_not_the_failed_channels_hold"
+      ],
+      "count": 2,
+      "exit": 1
+    },
+    {
+      "mutant": "skip-frozen-calibration-check",
+      "old": "if tuple(map(int, frozen)) != (len(clean), p999, bound):",
+      "new": "if False:",
+      "killed_by": [
+        "test_baseline_or_bound_disagreement_is_invalid",
+        "test_calibration_p999_must_match_the_saved_samples"
+      ],
+      "count": 2,
+      "exit": 1
+    },
+    {
+      "mutant": "erase-failing-packets",
+      "old": "failed = [i for i, ns in enumerate(tested) if ns is None or ns > bound]",
+      "new": "failed = []",
+      "killed_by": [
+        "test_a_missing_first_fence_is_not_erased_by_the_last_fast_completion",
+        "test_false_client_pass_does_not_mask_an_over_bound_csv_sample",
+        "test_irq_or_get_progress_does_not_substitute_for_engine_receipt",
+        "test_one_over_bound_packet_fails_even_when_the_next_completes"
+      ],
+      "count": 4,
+      "exit": 1
+    },
+    {
+      "mutant": "only-last-packet-matters",
+      "old": "failed = [i for i, ns in enumerate(tested) if ns is None or ns > bound]",
+      "new": "failed = [len(tested)-1] if tested[-1] is None or tested[-1] > bound else []",
+      "killed_by": [
+        "test_a_missing_first_fence_is_not_erased_by_the_last_fast_completion",
+        "test_one_over_bound_packet_fails_even_when_the_next_completes"
+      ],
+      "count": 2,
+      "exit": 1
+    },
+    {
+      "mutant": "ignore-missing-sample-indexes",
+      "old": "if integer(row[\"index\"], 1_000_000) != index:",
+      "new": "if False:",
+      "killed_by": [
+        "test_duplicate_sample_indexes_cannot_hide_a_failing_packet",
+        "test_nonmonotone_calibration_indexes_are_not_a_complete_population"
+      ],
+      "count": 2,
+      "exit": 1
+    },
+    {
+      "mutant": "wrong-calibration-margin",
+      "old": "bound = p999 * 4",
+      "new": "bound = p999 * 8",
+      "killed_by": [
+        "test_a_missing_first_fence_is_not_erased_by_the_last_fast_completion",
+        "test_baseline_or_bound_disagreement_is_invalid",
+        "test_exact_bound_is_still_pass",
+        "test_irq_or_get_progress_does_not_substitute_for_engine_receipt",
+        "test_one_over_bound_packet_fails_even_when_the_next_completes",
+        "test_proven_same_route_large_apply_and_clean_latencies_pass"
+      ],
+      "count": 6,
+      "exit": 1
+    },
+    {
+      "mutant": "lose-client-namespace",
+      "old": "space = (int(owner, 16) << 32) | int(vas, 16)",
+      "new": "space = int(vas, 16)",
+      "killed_by": [
+        "test_a_missing_first_fence_is_not_erased_by_the_last_fast_completion",
+        "test_exact_bound_is_still_pass",
+        "test_irq_or_get_progress_does_not_substitute_for_engine_receipt",
+        "test_one_over_bound_packet_fails_even_when_the_next_completes",
+        "test_proven_same_route_large_apply_and_clean_latencies_pass"
+      ],
+      "count": 5,
+      "exit": 1
+    }
+  ],
+  "packet_watch": [
+    {
+      "mutant": "baseline",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "forget-publication",
+      "count": 10,
+      "killed_by": [
+        "another_completed_cohort_still_cannot_prove_guest_delivery",
+        "completed_marker_without_guest_evidence_is_only_ii_candidate",
+        "covered_pending_host_completion_is_class_iii_observation",
+        "future_reference_cannot_establish_completion",
+        "newer_covering_marker_needs_its_own_observation",
+        "old_marker_does_not_cover_later_publication",
+        "published_without_marker_coverage_stays_unknown",
+        "repeated_marker_does_not_gain_coverage_of_new_work",
+        "stale_marker_does_not_gain_coverage_of_new_work",
+        "unissued_reference_after_valid_progress_does_not_complete_new_marker"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "forget-marker",
+      "count": 6,
+      "killed_by": [
+        "another_completed_cohort_still_cannot_prove_guest_delivery",
+        "future_reference_cannot_establish_completion",
+        "completed_marker_without_guest_evidence_is_only_ii_candidate",
+        "newer_covering_marker_needs_its_own_observation",
+        "unissued_reference_after_valid_progress_does_not_complete_new_marker",
+        "covered_pending_host_completion_is_class_iii_observation"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "forget-host-observation",
+      "count": 2,
+      "killed_by": [
+        "completed_marker_without_guest_evidence_is_only_ii_candidate",
+        "another_completed_cohort_still_cannot_prove_guest_delivery"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "old-marker-covers-new-work",
+      "count": 2,
+      "killed_by": [
+        "repeated_marker_does_not_gain_coverage_of_new_work",
+        "stale_marker_does_not_gain_coverage_of_new_work"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "future-reference-is-complete",
+      "count": 2,
+      "killed_by": [
+        "future_reference_cannot_establish_completion",
+        "unissued_reference_after_valid_progress_does_not_complete_new_marker"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "ignore-held-announcement",
+      "count": 2,
+      "killed_by": [
+        "held_announcement_is_class_i",
+        "newer_held_packet_is_not_the_prior_completed_packet"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "missing-marker-is-complete",
+      "count": 4,
+      "killed_by": [
+        "old_marker_does_not_cover_later_publication",
+        "published_without_marker_coverage_stays_unknown",
+        "repeated_marker_does_not_gain_coverage_of_new_work",
+        "stale_marker_does_not_gain_coverage_of_new_work"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "pending-host-is-complete",
+      "count": 4,
+      "killed_by": [
+        "covered_pending_host_completion_is_class_iii_observation",
+        "future_reference_cannot_establish_completion",
+        "newer_covering_marker_needs_its_own_observation",
+        "unissued_reference_after_valid_progress_does_not_complete_new_marker"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "invent-guest-delivery",
+      "count": 2,
+      "killed_by": [
+        "another_completed_cohort_still_cannot_prove_guest_delivery",
+        "completed_marker_without_guest_evidence_is_only_ii_candidate"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-unissued-counter",
+      "count": 2,
+      "killed_by": [
+        "unissued_seen_after_normal_turn_is_detected",
+        "unissued_seen_has_named_bit"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-seen-regression-counter",
+      "count": 2,
+      "killed_by": [
+        "reset_means_new_monitor_not_forgiven_regression",
+        "seen_regression_has_named_bit"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-publication-regression-counter",
+      "count": 2,
+      "killed_by": [
+        "reset_means_new_monitor_not_forgiven_regression",
+        "publication_regression_has_named_bit"
+      ],
+      "exit": 101
+    }
+  ],
+  "external_replay": [
+    {
+      "mutant": "baseline",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "invent-guest-observation",
+      "count": 2,
+      "killed_by": [
+        "test_class_ii_needs_guest_negative_evidence",
+        "test_second_completed_packet_is_only_candidate_without_guest_evidence"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "uncensored-without-evidence",
+      "count": 2,
+      "killed_by": [
+        "test_another_censored_packet_is_unknown",
+        "test_censored_negative_evidence_is_unknown"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "unpublished-is-complete",
+      "count": 2,
+      "killed_by": [
+        "test_class_i",
+        "test_class_i_other_packet"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "ignore-delivery-deadline",
+      "count": 8,
+      "killed_by": [
+        "test_apply_does_not_mask_lost_completion",
+        "test_delivery_deadline",
+        "test_delivery_lost_at_complete_horizon",
+        "test_guest_receipt_for_other_packet_never_clears_second_packet",
+        "test_late_second_packet",
+        "test_minimization_keeps_failure",
+        "test_seed_replays_identically",
+        "test_wrong_packet_does_not_discharge"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "cross-packet-completion",
+      "count": 2,
+      "killed_by": [
+        "test_guest_receipt_for_other_packet_never_clears_second_packet",
+        "test_wrong_packet_does_not_discharge"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "shrink-discards-witness",
+      "count": 2,
+      "killed_by": [
+        "test_minimization_idempotent",
+        "test_minimization_keeps_failure"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "ignore-marker-records",
+      "count": 2,
+      "killed_by": [
+        "test_exact_marker_and_put_records",
+        "test_production_marker_record_syntax"
+      ],
+      "exit": 1
+    },
+    {
+      "mutant": "synthetic-edge-never-dropped",
+      "count": 2,
+      "killed_by": [
+        "test_minimization_keeps_failure",
+        "test_seed_replays_identically"
+      ],
+      "exit": 1
+    }
+  ],
+  "production_relay": [
+    {
+      "mutant": "baseline",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "bypass-walk-gate",
+      "count": 2,
+      "killed_by": [
+        "lifecycle::ens4::apply_hold_before_put_does_not_read_or_publish_a_new_entry",
+        "lifecycle::ens4::delayed_apply_during_pointer_credit_wait_does_not_read_new_put"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "keep-cache-across-migration",
+      "count": 2,
+      "killed_by": [
+        "lifecycle::ens4::migration_invalidates_cached_put_even_with_exhausted_private_credit",
+        "lifecycle::ens4::migration_to_lower_put_drops_old_cached_value_during_apply"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "credit-floor-does-not-force-observation",
+      "count": 2,
+      "killed_by": [
+        "user_lazy::tests::low_credit_is_its_own_reason_and_looks_on_every_turn",
+        "user_lazy::tests::observe_reason_agrees_with_must_observe_when_the_ring_guard_is_off"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "forget-wait-forced-observation",
+      "count": 2,
+      "killed_by": [
+        "user_lazy::tests::a_look_clears_the_wait_latch_and_the_relay_goes_back_to_skipping",
+        "user_lazy::tests::observe_reason_agrees_with_must_observe_when_the_ring_guard_is_off"
+      ],
+      "exit": 101
+    }
+  ],
+  "source_guards": [
+    {
+      "mutant": "baseline",
+      "module": "vasmgr",
+      "old": "",
+      "new": "",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0
+    },
+    {
+      "mutant": "remove-production-delay",
+      "module": "vasmgr",
+      "old": "crate::applydelay::inject(e.runs.len())",
+      "new": "crate::applydelay::skip(e.runs.len())",
+      "killed_by": [
+        "delay_is_between_begin_and_apply_with_end_recording_afterwards",
+        "injection_is_local_to_va_apply_and_shown_in_status"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-actual-gate-marker",
+      "module": "userpump",
+      "old": "self.aux.ens4_actual_marker = count;",
+      "new": "let _ = count;",
+      "killed_by": [
+        "all_actual_marker_publish_paths_record_successful_counts",
+        "gate_and_batch_markers_record_counts_only_after_publication_returns_success"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-actual-batch-marker",
+      "module": "userpump",
+      "old": "self.aux.ens4_actual_marker = marks.issued();",
+      "new": "let _ = marks.issued();",
+      "killed_by": [
+        "all_actual_marker_publish_paths_record_successful_counts",
+        "gate_and_batch_markers_record_counts_only_after_publication_returns_success"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-actual-staged-marker",
+      "module": "userpump",
+      "old": "self.aux.ens4_actual_marker = self.core.marks.issued();",
+      "new": "let _ = self.core.marks.issued();",
+      "killed_by": [
+        "all_actual_marker_publish_paths_record_successful_counts",
+        "staged_witnesses_register_actual_marker_success_too"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "get-count-as-completion",
+      "module": "userpump",
+      "old": "self.core.marks.seen(),",
+      "new": "self.core.fetch.fetched(),",
+      "killed_by": [
+        "marker_seen_and_the_used_observation_timestamp_feed_the_endpoint",
+        "turn_endpoint_has_exact_actual_marker_and_validated_seen_arguments"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-turn-association",
+      "module": "userpump",
+      "old": "rec.ens4_turn(",
+      "new": "rec.skip_ens4_turn(",
+      "killed_by": [
+        "completion_comes_from_validated_marker_progress_not_raw_get_or_irq",
+        "marker_seen_and_the_used_observation_timestamp_feed_the_endpoint",
+        "turn_endpoint_has_exact_actual_marker_and_validated_seen_arguments"
+      ],
+      "count": 3,
+      "exit": 101
+    },
+    {
+      "mutant": "wrong-completion-observation-time",
+      "module": "userpump",
+      "old": "self.core.marks.seen(),\n                self.aux.ens4_observed_ns,",
+      "new": "self.core.marks.seen(),\n                rec.now(),",
+      "killed_by": [
+        "marker_seen_and_the_used_observation_timestamp_feed_the_endpoint",
+        "turn_endpoint_has_exact_actual_marker_and_validated_seen_arguments"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-pointer-progress",
+      "module": "userpump",
+      "old": "self.ens3_published(fetch, self.aux.ens4_actual_marker);",
+      "new": "",
+      "killed_by": [
+        "every_direct_private_put_updates_the_existing_ens3_progress_too",
+        "pointer_gate_and_batch_publications_have_progress_hooks_after_success"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-gate-progress",
+      "module": "userpump",
+      "old": "self.ens3_published(fetch, count);",
+      "new": "",
+      "killed_by": [
+        "every_direct_private_put_updates_the_existing_ens3_progress_too",
+        "pointer_gate_and_batch_publications_have_progress_hooks_after_success"
+      ],
+      "count": 2,
+      "exit": 101
+    },
+    {
+      "mutant": "lose-batch-progress",
+      "module": "userpump",
+      "old": "self.ens3_published(fetch, marks.issued());",
+      "new": "",
+      "killed_by": [
+        "every_direct_private_put_updates_the_existing_ens3_progress_too",
+        "pointer_gate_and_batch_publications_have_progress_hooks_after_success"
+      ],
+      "count": 2,
+      "exit": 101
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "apply_us": 0,
+    "exit": 0,
+    "stdout": "ENS4_SIM synthetic=true runs=4174 apply_us=0 trace=Trace { announced: 1000000, gate_start: 0, apply_start: 0, apply_end: 0, published: 1000000, completed: 1100000 } p999_ns=100000 k=4 bound_ns=400000 worst_ns=100000\nENS4_GATE_VERDICT=PASS\nENS4_GATE_DONE rc=0\n",
+    "stderr": ""
+  },
+  {
+    "apply_us": 77000,
+    "exit": 1,
+    "stdout": "ENS4_SIM synthetic=true runs=4174 apply_us=77000 trace=Trace { announced: 1000000, gate_start: 0, apply_start: 0, apply_end: 77000000, published: 77000000, completed: 77100000 } p999_ns=100000 k=4 bound_ns=400000 worst_ns=76100000\nENS4_GATE_VERDICT=FAIL\nENS4_GATE_DONE rc=1\n",
+    "stderr": ""
+  },
+  {
+    "apply_us": 577000,
+    "exit": 1,
+    "stdout": "ENS4_SIM synthetic=true runs=4174 apply_us=577000 trace=Trace { announced: 1000000, gate_start: 0, apply_start: 0, apply_end: 577000000, published: 577000000, completed: 577100000 } p999_ns=100000 k=4 bound_ns=400000 worst_ns=576100000\nENS4_GATE_VERDICT=FAIL\nENS4_GATE_DONE rc=1\n",
+    "stderr": ""
+  },
+  {
+    "apply_us": 1077000,
+    "exit": 1,
+    "stdout": "ENS4_SIM synthetic=true runs=4174 apply_us=1077000 trace=Trace { announced: 1000000, gate_start: 0, apply_start: 0, apply_end: 1077000000, published: 1077000000, completed: 1077100000 } p999_ns=100000 k=4 bound_ns=400000 worst_ns=1076100000\nENS4_GATE_VERDICT=FAIL\nENS4_GATE_DONE rc=1\n",
+    "stderr": ""
+  },
+  {
+    "apply_us": 2077000,
+    "exit": 1,
+    "stdout": "ENS4_SIM synthetic=true runs=4174 apply_us=2077000 trace=Trace { announced: 1000000, gate_start: 0, apply_start: 0, apply_end: 2077000000, published: 2077000000, completed: 2077100000 } p999_ns=100000 k=4 bound_ns=400000 worst_ns=2076100000\nENS4_GATE_VERDICT=FAIL\nENS4_GATE_DONE rc=1\n",
+    "stderr": ""
+  },
+  {
+    "apply_us": 3077000,
+    "exit": 1,
+    "stdout": "ENS4_SIM synthetic=true runs=4174 apply_us=3077000 trace=Trace { announced: 1000000, gate_start: 0, apply_start: 0, apply_end: 3077000000, published: 3077000000, completed: 3077100000 } p999_ns=100000 k=4 bound_ns=400000 worst_ns=3076100000\nENS4_GATE_VERDICT=FAIL\nENS4_GATE_DONE rc=1\n",
+    "stderr": ""
+  }
+]

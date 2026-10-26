@@ -242,6 +242,12 @@ impl HostRm {
         Ok(())
     }
 
+    /// This connection's owned RM client handle, for matching guest diagnostic identities.
+    #[must_use]
+    pub fn client_handle(&self) -> u32 {
+        self.client.raw()
+    }
+
     /// The session's device handle (`NV01_DEVICE_0` — the object `NV0080` controls address).
     #[must_use]
     pub fn device(&self) -> u32 {

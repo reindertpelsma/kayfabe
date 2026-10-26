@@ -1,0 +1,71 @@
+{
+  "events": [
+    {
+      "ns": 1,
+      "op": "announce",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 2,
+      "op": "apply_begin",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 3,
+      "op": "publish",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 4,
+      "op": "host_complete",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 5,
+      "op": "credit_wait",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 6,
+      "op": "credit_return",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 7,
+      "op": "apply_end",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 10,
+      "op": "migration",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 100,
+      "op": "horizon",
+      "packet": "synthetic:1"
+    }
+  ],
+  "failures": [
+    "COMPLETION_DELIVERY_LATE"
+  ],
+  "minimized": [
+    {
+      "ns": 3,
+      "op": "publish",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 4,
+      "op": "host_complete",
+      "packet": "synthetic:1"
+    },
+    {
+      "ns": 100,
+      "op": "horizon",
+      "packet": "synthetic:1"
+    }
+  ],
+  "result": "synthetic detector failure",
+  "seed": 42
+}

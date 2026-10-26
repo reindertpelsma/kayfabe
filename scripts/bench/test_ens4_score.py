@@ -13,8 +13,9 @@ ENS4_LINUX packets=2 rounds=1 maps_per_round=4174
 ENS4_CLIENT_VERDICT=PASS
 ENS4_CLIENT_DONE rc=0
 """
-    qemu = """Windows USER ring chan 0x1:0xa BORN USER private-read-only-ring token 0x7 host 0x10067;
-kf3: ENS4 APPLY space=0x100000003 walk=1 runs=4174 wall_ns=77000000 injected_ms=0
+    qemu = ("Windows USER ring chan 0x1:0xa BORN USER private-read-only-ring token 0x7 "
+            "host 0x10067;\n")
+    qemu += """kf3: ENS4 APPLY space=0x100000003 walk=1 runs=4174 wall_ns=77000000 injected_ms=0
 kf3: GATELOG HOLDTOP token=0x10067 vas=(0x1,0x2) holds=1 hold_ms=77
 kf3: GATELOG END #1 lines=6
 """
@@ -93,6 +94,51 @@ class Score(unittest.TestCase):
     def test_false_client_pass_does_not_mask_an_over_bound_csv_sample(self):
         c, q, rows = fixture()
         rows[-1]["latency_ns"] = "401"
+        self.assertEqual(ens4_score.score(c, q, rows)["verdict"], "INVALID")
+
+    def test_no_apply_record_is_not_equivalent_to_a_zero_cost_apply(self):
+        c, q, rows = fixture()
+        self.assertEqual(ens4_score.score(c, q.replace("ENS4 APPLY", "other"), rows)
+                         ["verdict"], "INVALID")
+
+    def test_unterminated_gate_dump_cannot_certify_a_clean_arm(self):
+        c, q, rows = fixture()
+        self.assertEqual(ens4_score.score(c, q.replace("GATELOG END #", "unfinished"), rows)
+                         ["verdict"], "INVALID")
+
+    def test_a_passthrough_target_cannot_borrow_another_user_rings_birth(self):
+        c, q, rows = fixture()
+        q = q.replace("BORN USER", "BORN Passthrough")
+        q += ("Windows USER ring chan 0x2:0xa BORN USER private-read-only-ring "
+              "token 0x7 host 0x10067;\n")
+        self.assertEqual(ens4_score.score(c, q, rows)["verdict"], "INVALID")
+
+    def test_calibration_p999_must_match_the_saved_samples(self):
+        c, q, rows = fixture()
+        self.assertEqual(ens4_score.score(c.replace("p999_ns=100", "p999_ns=200"), q, rows)
+                         ["verdict"], "INVALID")
+
+    def test_duplicate_sample_indexes_cannot_hide_a_failing_packet(self):
+        c, q, rows = fixture()
+        rows[-1]["index"] = rows[-2]["index"]
+        self.assertEqual(ens4_score.score(c, q, rows)["verdict"], "INVALID")
+
+    def test_nonmonotone_calibration_indexes_are_not_a_complete_population(self):
+        c, q, rows = fixture()
+        rows[10]["index"], rows[11]["index"] = rows[11]["index"], rows[10]["index"]
+        self.assertEqual(ens4_score.score(c, q, rows)["verdict"], "INVALID")
+
+    def test_a_missing_first_fence_is_not_erased_by_the_last_fast_completion(self):
+        c, q, rows = fixture()
+        rows[-2]["latency_ns"] = ""
+        rows[-2]["engine_receipt"] = "false"
+        c = c.replace("VERDICT=PASS", "VERDICT=FAIL").replace("rc=0", "rc=1")
+        self.assertEqual(ens4_score.score(c, q, rows)["verdict"], "FAIL")
+
+    def test_a_fleet_of_other_holds_cannot_prove_the_targets_exposure(self):
+        c, q, rows = fixture()
+        q = q.replace("HOLDTOP token=0x10067", "HOLDTOP token=0x10068")
+        q += "kf3: GATELOG HOLDTOP token=0x10069 vas=(0x1,0x2) holds=12 hold_ms=90\n"
         self.assertEqual(ens4_score.score(c, q, rows)["verdict"], "INVALID")
 
 

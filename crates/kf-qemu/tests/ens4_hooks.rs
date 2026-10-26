@@ -98,3 +98,24 @@ fn pointer_gate_and_batch_publications_have_progress_hooks_after_success() {
         assert!(body.contains("self.ens3_published("));
     }
 }
+#[test]
+fn receipt_invariants_are_checked_unconditionally_before_optional_diagnostics() {
+    let turn = PUMP
+        .split("fn turn(&mut self, me: &ChanPlane")
+        .nth(1)
+        .unwrap();
+    let check = turn.find(".ens4_watch").unwrap();
+    let optional = turn[check..].find("if kf_host::diag::enabled()").unwrap() + check;
+    assert!(check < optional);
+    assert!(turn[check..optional].contains("ens4_unissued_seen"));
+    assert!(turn[check..optional].contains("ens4_sequence_regressed"));
+}
+#[test]
+fn invariant_bits_have_status_counters_and_never_change_the_turn_result() {
+    let turn = PUMP.split("let receipt_bits =").nth(1).unwrap();
+    let check = turn.split("// Only validated").next().unwrap();
+    assert!(check.contains("ens4_unissued_seen"));
+    assert!(check.contains("ens4_sequence_regressed"));
+    assert!(!check.contains("return"));
+    assert!(!check.contains("panic!"));
+}

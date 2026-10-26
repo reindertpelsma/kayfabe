@@ -1,0 +1,46 @@
+{
+  "run": "ENS4 GPU-free 2026-10-26",
+  "base": "0dbdefd99113c075b1d66c081d82490aa69922d7",
+  "status": "remaining ENS4 scope replaced by ENS5; software published, no hardware",
+  "targeted_mem": {
+    "passed": 169,
+    "failed": 0,
+    "ignored": 0
+  },
+  "source_hooks": {
+    "passed": 13,
+    "failed": 0,
+    "ignored": 0
+  },
+  "relay_extension": {
+    "passed": 10,
+    "exhaustive_states": [
+      1455,
+      252393,
+      569663
+    ],
+    "seeds": "1..256 migration and CreditWait, repeated exact replay"
+  },
+  "python": {
+    "passed": 46
+  },
+  "external_scheduler": {
+    "seeds": "1..10000",
+    "result": "no reproduction",
+    "synthetic_dropped_edge": "seed42, one-minimal 3-event witness; not a current-code race"
+  },
+  "mutants": {
+    "core_completion": 31,
+    "linux_scorer": 10,
+    "packet_watch": 12,
+    "external_replay": 8,
+    "production_relay": 4,
+    "source_guards": 10
+  },
+  "minimum_killers": 2,
+  "clippy": "clippy: existing-debt=264 new=0 resolved=268",
+  "harness_clippy": "clippy: existing-debt=196 new=0 resolved=336",
+  "claims": "claims: existing-debt=3755 new=0 resolved=3",
+  "full_regression": "in progress at publish; result recorded in lane report after completion",
+  "hardware": "none; Linux native arm compiled only; no real first153 regression captured"
+}

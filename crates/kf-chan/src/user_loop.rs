@@ -255,6 +255,10 @@ pub const DRAIN_BUCKETS: usize = 16;
 /// Production counters, all bounded (fixed atomics, no per-event allocation).
 #[derive(Debug, Default)]
 pub struct Stats {
+    /// Passive receipt invariant: validated seen count beyond successful native publication.
+    pub ens4_unissued_seen: AtomicU64,
+    /// Passive receipt invariant: a count regressed during one channel lifetime.
+    pub ens4_sequence_regressed: AtomicU64,
     /// Parks that ended on the doorbell eventfd.
     pub wake_doorbell: AtomicU64,
     /// Parks that ended on an engine / completion event.
@@ -319,7 +323,11 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={} busy_looks={} unannounced_spins={}) backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={} busy_looks={} unannounced_spins={}) \
+            backstop_found(work={} carried={} contended={}) event_without_progress={} gates={} \
+            carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} \
+            drain_us_log2={drain:?} \
+            ENS4_UNISSUED_SEEN={} ENS4_SEQUENCE_REGRESSED={}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -336,6 +344,8 @@ impl Stats {
             g(&self.contended),
             g(&self.pop_writebacks),
             g(&self.markers),
+            g(&self.ens4_unissued_seen),
+            g(&self.ens4_sequence_regressed),
         )
     }
 }
