@@ -438,6 +438,66 @@ CASES += [
         scoped("execute_stages", 'result="TIMEOUT" if rc == 124 else "FAIL"', 'result="FAIL"'),
     ),
     (
+        "kvm-totals-not-checked",
+        replace(
+            "        if passed < 1 or failed or ran < 1 or skipped:",
+            "        if False:",
+        ),
+    ),
+    (
+        "kvm-rc-ignored",
+        replace(
+            '    if re.search(r"^KVM_TESTS_RC=[1-9]", text, re.M):',
+            "    if False:",
+        ),
+    ),
+    (
+        "kvm-red-lines-not-red",
+        replace("|CARGO|KVM_TESTS)_RC=", "|CARGO)_RC="),
+    ),
+    (
+        "crate-tests-row-required-again",
+        replace(
+            '    requested = len(re.findall(r"^KVM_TESTS_REQUESTED=1$", text, re.M))',
+            '    only(r"^TESTS passed ([1-9][0-9]*) failed 0$", text, "kf_tests", rows)\n'
+            '    requested = len(re.findall(r"^KVM_TESTS_REQUESTED=1$", text, re.M))',
+        ),
+    ),
+    (
+        "failed-tests-not-listed",
+        replace("            found = FAILED_TEST.match(line) or item", "            found = None"),
+    ),
+    (
+        "failed-test-cap-removed",
+        replace("    return seen[:limit], len(seen)", "    return seen, len(seen)"),
+    ),
+    (
+        "panic-dropped",
+        replace(
+            '            record["panic"] = first_panic(files)', '            record["panic"] = ""'
+        ),
+    ),
+    (
+        "fold-launders-tokens",
+        replace("            if is_test_identifier(m[0])", "            if True"),
+    ),
+    (
+        "fold-pieces-too-long",
+        replace("FOLD = 30", "FOLD = 40"),
+    ),
+    (
+        "fold-digit-rule-dropped",
+        replace("        and sum(c.isdigit() for c in run) * 5 <= len(run)\n", ""),
+    ),
+    (
+        "summary-names-not-folded",
+        replace('" name=" + fold_identifiers(printable(name))', '" name=" + printable(name)'),
+    ),
+    (
+        "summary-panic-not-folded",
+        replace('" line=" + fold_identifiers(record["panic"])', '" line=" + record["panic"]'),
+    ),
+    (
         "cargo-quiet-not-exported",
         replace('            CARGO_TERM_QUIET="true",\n', ""),
     ),
@@ -499,6 +559,7 @@ def main():
             "test_vast_payload_v7.py",
             "test_vast_payload_admission.py",
             "test_vast_payload_diagnostics.py",
+            "test_vast_payload_failures.py",
             "test_vast_payload_guest_guard.py",
             "test_vast_payload_result_logs.py",
             "test_vast_payload_summary.py",
@@ -518,6 +579,12 @@ def main():
             "test_owner_copy_family_rule.py",
         ):
             shutil.copyfile(HERE.parent / "bench/tests" / name, bench / "tests" / name)
+        fixtures = root / "ci/vast-broker/test/fixtures"
+        fixtures.mkdir(parents=True)
+        shutil.copyfile(
+            HERE.parents[1] / "ci/vast-broker/test/fixtures/scrub-vectors.json",
+            fixtures / "scrub-vectors.json",
+        )
         for name in ("sweep_ada_20261018", "sweep_dies_20261018", "sweep_windows_20261021"):
             shutil.copytree(HERE.parents[1] / "traces" / name, root / "traces" / name)
         baseline = run(root)

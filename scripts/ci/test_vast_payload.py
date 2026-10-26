@@ -89,9 +89,7 @@ class PayloadTests(unittest.TestCase):
             self.m.provision_rows(PROVISION.replace("KF3_RC=0\n", ""), 0)
 
     def test_merge_exact_revision_and_counts(self):
-        self.assertEqual(
-            [r["pass"] for r in self.m.merge_rows(MERGE, 0, SHA)], [9, 1, 30, 30, 1]
-        )
+        self.assertEqual([r["pass"] for r in self.m.merge_rows(MERGE, 0, SHA)], [9, 1, 30, 30, 1])
 
     def test_merge_wrong_revision_refuses(self):
         with self.assertRaises(self.m.EvidenceError):
@@ -111,7 +109,7 @@ class PayloadTests(unittest.TestCase):
 
     def test_gate10_fallback_is_existing_allowed_bar(self):
         self.assertEqual(
-            self.m.merge_rows(MERGE.replace("gate10=PASS", "gate10=FALLBACK"), 0, SHA)[1]["pass"], 9
+            self.m.merge_rows(MERGE.replace("gate10=PASS", "gate10=FALLBACK"), 0, SHA)[0]["pass"], 9
         )
 
     def test_ladder_host_four_unique_correct_rungs(self):

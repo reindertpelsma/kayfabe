@@ -56,6 +56,40 @@ class MergeCheckComposition(unittest.TestCase):
             text, r'if \[ "\$\{KF_MERGE_KVM_TESTS:-0\}" = 1 \]; then\n[^\n]*kvm_tests\.sh'
         )
 
+    def test_the_census_precedes_every_stage_and_exits_2(self):
+        text = code(MERGE_CHECK)
+        census = text.index("v3 crate census truncated")
+        self.assertLess(census, text.index("v3_gates.sh"))
+        self.assertLess(census, text.index("kvm_tests.sh"))
+        self.assertRegex(text[census : census + 80], r"exit 2")
+
+    def test_the_kvm_stage_runs_only_for_the_flag_value_1(self):
+        text = code(MERGE_CHECK)
+        block = re.search(
+            r'if \[ "\$\{KF_MERGE_KVM_TESTS:-0\}" = 1 \]; then\n(.*?)\nfi\n', text, re.S
+        )
+        self.assertIsNotNone(block)
+        script = (
+            'PROV=p; T=t\nif [ "${KF_MERGE_KVM_TESTS:-0}" = 1 ]; then\n'
+            + block[1].replace("bash scripts/bench/box/kvm_tests.sh", "echo CALLED")
+            + "\nfi\n"
+        )
+        for value, called in (
+            ("1", True),
+            ("0", False),
+            ("yes", False),
+            ("", False),
+            (None, False),
+        ):
+            with self.subTest(repr(value)):
+                env = {k: v for k, v in os.environ.items() if k != "KF_MERGE_KVM_TESTS"}
+                if value is not None:
+                    env["KF_MERGE_KVM_TESTS"] = value
+                out = subprocess.run(
+                    ["bash", "-c", script], env=env, capture_output=True, text=True, timeout=30
+                ).stdout
+                self.assertEqual("CALLED" in out, called, out)
+
     def test_stages_after_the_census_are_unchanged(self):
         text = code(MERGE_CHECK)
         order = [
@@ -72,6 +106,63 @@ class MergeCheckComposition(unittest.TestCase):
         head = "\n".join(MERGE_CHECK.read_text().splitlines()[:12])
         self.assertNotIn("every kf-* crate test", head)
         self.assertIn("CI", head)
+
+
+class MergeCheckRun(unittest.TestCase):
+    """Run the real merge_check.sh in a one-crate git fixture: it must stop at the census."""
+
+    def run_bar(self, **extra):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d) / "repo"
+            (root / "scripts/bench/box").mkdir(parents=True)
+            (root / "crates/kf-only").mkdir(parents=True)
+            (root / "crates/kf-only/Cargo.toml").write_text("[package]\nname='kf-only'\n")
+            for name in ("merge_check.sh", "kvm_tests.sh"):
+                source = MERGE_CHECK if name == "merge_check.sh" else KVM_TESTS
+                (root / "scripts/bench/box" / name).write_text(source.read_text())
+            git = ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t"]
+            subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+            subprocess.run([*git, "add", "-A"], check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "x"], check=True)
+            subprocess.run([*git, "remote", "add", "origin", str(root)], check=True)
+            env = dict(
+                os.environ,
+                BENCH_DIR=str(Path(d) / "bench"),
+                KF_PROV_DIR=str(Path(d) / "prov"),
+                CARGO_TARGET_DIR=str(Path(d) / "target"),
+                **extra,
+            )
+            p = subprocess.run(
+                ["bash", str(root / "scripts/bench/box/merge_check.sh"), "main", "tag1"],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            return p.returncode, (Path(d) / "prov/tag1.log").read_text()
+
+    def run_or_skip(self, **extra):
+        rc, log = self.run_bar(**extra)
+        if "another merge check is running" in log:
+            self.skipTest("a real merge check holds /tmp/kayfabe-merge-check.lock")
+        return rc, log
+
+    def test_a_truncated_checkout_stops_at_the_census_with_rc_2(self):
+        rc, log = self.run_or_skip()
+        self.assertEqual(rc, 2, log)
+        self.assertIn("v3 crate census truncated", log)
+        self.assertRegex(log, r"EXIT rc=2 ")
+        self.assertNotIn("GATES_RC", log)
+
+    def test_the_kvm_flag_does_not_run_tests_on_a_truncated_checkout(self):
+        rc, log = self.run_or_skip(KF_MERGE_KVM_TESTS="1")
+        self.assertEqual(rc, 2, log)
+        self.assertNotIn("KVM_TESTS_REQUESTED", log)
+
+    def test_no_box_script_prints_the_legacy_totals_line(self):
+        for script in (MERGE_CHECK.parent).glob("*.sh"):
+            with self.subTest(script.name):
+                self.assertNotIn("TESTS passed", code(script).replace("KVM_TESTS passed", ""))
 
 
 class KvmTestsBehaviour(unittest.TestCase):
@@ -124,6 +215,10 @@ class KvmTestsBehaviour(unittest.TestCase):
         self.assertNotIn("kf-rm", args)
         self.assertIn("--no-fail-fast", args)
 
+    def test_the_cargo_command_line_is_exactly_the_two_kvm_crates(self):
+        _, _, args, _ = self.run_script(self.GOOD, 0)
+        self.assertEqual(args.split(), "test -q --no-fail-fast -p kf-linux-raw -p kf-chan".split())
+
     def test_a_clean_run_prints_the_request_and_the_totals(self):
         rc, out, _, _ = self.run_script(self.GOOD, 0)
         self.assertEqual(rc, 0, out)
@@ -150,11 +245,56 @@ class KvmTestsBehaviour(unittest.TestCase):
         self.assertNotEqual(rc, 0)
         self.assertIn("kvm_skipped=1", out)
 
+    def test_several_skipped_gates_are_red(self):
+        log = self.GOOD + "".join("KVM-GATE: SKIPPED t%d \u2014 x\n" % i for i in range(3))
+        rc, out, _, _ = self.run_script(log, 0)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("kvm_skipped=3", out)
+
+    def test_cargo_ok_with_no_gate_markers_at_all_is_red(self):
+        log = "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n"
+        rc, out, _, _ = self.run_script(log, 0)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("kvm_ran=0 kvm_skipped=0", out)
+
+    def test_a_build_error_reports_its_rc_and_is_red(self):
+        rc, out, _, _ = self.run_script("error[E0432]: unresolved import `x`\n", 2)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("KVM_TESTS_RC=2", out.splitlines())
+
+    def test_the_log_of_a_failing_run_is_kept(self):
+        _, _, _, kept = self.run_script("t::a --- FAILED\n", 101)
+        self.assertEqual(kept, "t::a --- FAILED\n")
+
     def test_a_run_that_reached_no_kvm_test_is_red(self):
         log = "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n"
         rc, out, _, _ = self.run_script(log, 0)
         self.assertNotEqual(rc, 0)
         self.assertIn("kvm_ran=0", out)
+
+    def test_a_filtered_out_run_with_zero_tests_is_red(self):
+        log = "KVM-GATE: RAN a_test\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured\n"
+        rc, out, _, _ = self.run_script(log, 0)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("KVM_TESTS passed 0 failed 0", out)
+
+    def test_a_non_zero_cargo_rc_is_red_even_when_the_totals_look_green(self):
+        for code_ in (101, 2):
+            with self.subTest(code_):
+                rc, out, _, _ = self.run_script(self.GOOD, code_)
+                self.assertNotEqual(rc, 0)
+                self.assertIn("KVM_TESTS_RC=%d" % code_, out.splitlines())
+
+    def test_a_crashed_test_binary_is_red_not_a_pass(self):
+        rc, out, _, _ = self.run_script(
+            self.GOOD + "error: test failed, to rerun pass `-p kf-chan`\n", 101
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn("KVM_TESTS passed 12 failed 0 kvm_ran=2 kvm_skipped=0", out.splitlines())
+
+    def test_the_request_line_is_printed_even_when_cargo_fails(self):
+        _, out, _, _ = self.run_script("boom\n", 101)
+        self.assertEqual(out.splitlines()[0], "KVM_TESTS_REQUESTED=1")
 
     def test_zero_tests_is_red(self):
         rc, out, _, _ = self.run_script("KVM-GATE: RAN a_test\n", 0)

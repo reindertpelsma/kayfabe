@@ -230,6 +230,36 @@ class SummaryCarriesTheFailures(Base):
         self.assertNotIn(secret, scrubbed)
         self.assertNotIn(VECTORS["redact"]["base64url-mixed"], scrubbed)
 
+    def test_failed_test_rows_survive_the_old_scrubber(self):
+        block = self.failing("t::" + LONG + " --- FAILED\n")
+        row = [s for s in block if s.startswith("failed_test ")][0]
+        self.assertNotIn("[redacted]", old_scrubber(row))
+        self.assertEqual(
+            old_scrubber(row).replace("~", ""), "failed_test stage=merge_bar name=t::" + LONG
+        )
+
+    def test_the_panic_row_survives_the_old_scrubber(self):
+        block = self.failing(TERSE)
+        row = [s for s in block if s.startswith("panic ")][0]
+        self.assertNotIn("[redacted]", old_scrubber(row))
+        self.assertIn(LONG, old_scrubber(row).replace("~", ""))
+
+    def test_a_long_thread_name_in_the_panic_line_is_readable_after_scrubbing(self):
+        text = "thread '" + LONG + "' (7) panicked at a.rs:1:1:\nboom\n"
+        row = [s for s in self.failing(text) if s.startswith("panic ")][0]
+        self.assertNotIn("[redacted]", old_scrubber(row))
+        self.assertIn(
+            "thread '" + LONG + "' (7) panicked at a.rs:1:1: | boom",
+            old_scrubber(row).replace("~", ""),
+        )
+
+    def test_every_token_vector_in_a_panic_message_is_left_whole(self):
+        for name, token in VECTORS["redact"].items():
+            with self.subTest(name):
+                text = "thread 'x' panicked at a.rs:1:1:\nsaw " + token + "\n"
+                row = [s for s in self.failing(text) if s.startswith("panic ")][0]
+                self.assertIn(token, row)
+
     def test_a_passing_stage_prints_no_failure_rows(self):
         _, out, _ = self.stages_run([dict(name="a", text=TERSE)])
         block = self.block(out)
@@ -346,6 +376,21 @@ class MergeRows(Base):
             self.m.merge_rows(
                 self.with_kvm(self.KVM_OK + self.KVM_OK.splitlines()[1] + "\n"), 0, SHA
             )
+
+    def test_a_kvm_rc_line_next_to_green_totals_refuses(self):
+        for rc in ("101", "2"):
+            with self.subTest(rc):
+                text = self.with_kvm(self.KVM_OK + "KVM_TESTS_RC=" + rc + "\n")
+                with self.assertRaises(self.m.EvidenceError) as caught:
+                    self.m.merge_rows(text, 0, SHA)
+                self.assertEqual(caught.exception.name, "kvm_tests")
+
+    def test_the_first_failing_line_finds_a_kvm_rc_line(self):
+        path = self.logs("START\nKVM_TESTS_REQUESTED=1\nKVM_TESTS_RC=101\nlater\n")[0]
+        self.assertEqual(self.m.first_failing_line([path]), "KVM_TESTS_RC=101")
+
+    def test_kvm_skips_are_red_lines(self):
+        self.assertTrue(self.m.red_line("KVM_TESTS passed 12 failed 0 kvm_ran=4 kvm_skipped=2"))
 
     def test_kvm_red_lines_stop_the_stage_early(self):
         self.assertTrue(self.m.red_line("KVM_TESTS_RC=101"))

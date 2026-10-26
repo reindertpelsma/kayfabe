@@ -54,10 +54,26 @@ def merge_rows(text, rc, sha):
     rows = []
     if only(r"^HEAD=([0-9a-f]{40}) CHECKOUT=[^\n]+$", text, "infrastructure") != sha:
         raise EvidenceError("infrastructure")
+    # [2026-10-26] The bar no longer runs the GPU-free crate tests (CI's `stable` job does, on every
+    # commit). The legacy totals line stays red; the opt-in with-KVM stage (kvm_tests.sh) is graded
+    # here, and a request without exactly one passing result is a failure, never a silent skip.
     if re.search(r"^TESTS passed [0-9]+ failed [1-9]", text, re.M):
         raise EvidenceError("kf_tests")
-    count = only(r"^TESTS passed ([1-9][0-9]*) failed 0$", text, "kf_tests", rows)
-    rows.append(row("kf_tests", int(count)))
+    requested = len(re.findall(r"^KVM_TESTS_REQUESTED=1$", text, re.M))
+    results = re.findall(
+        r"^KVM_TESTS passed ([0-9]+) failed ([0-9]+) kvm_ran=([0-9]+) kvm_skipped=([0-9]+)$",
+        text,
+        re.M,
+    )
+    if re.search(r"^KVM_TESTS_RC=[1-9]", text, re.M):
+        raise EvidenceError("kvm_tests", rows)
+    if requested or results:
+        if requested != 1 or len(results) != 1:
+            raise EvidenceError("kvm_tests", rows)
+        passed, failed, ran, skipped = map(int, results[0])
+        if passed < 1 or failed or ran < 1 or skipped:
+            raise EvidenceError("kvm_tests", rows)
+        rows.append(row("kvm_tests", passed))
     only(r"^GATES_RC=0$", text, "gates", rows)
     only(r"^V3_GATES_SUMMARY ([^\n]+)$", text, "gates", rows)
     only(r"^V3_GATES_SUMMARY pass=9 fail=0 gate10=(PASS|FALLBACK)$", text, "gates", rows)
@@ -123,11 +139,15 @@ def ladder_rows(text, rc, mode, sha):
 def red_line(line):
     return bool(
         re.search(
-            r"^(?:BOX|DRIVER|TREE|LADDER|FG|KF3|GATES|SUITE|CARGO)_RC=[1-9][0-9]*\b", line, re.M
+            r"^(?:BOX|DRIVER|TREE|LADDER|FG|KF3|GATES|SUITE|CARGO|KVM_TESTS)_RC=[1-9][0-9]*\b",
+            line,
+            re.M,
         )
         or re.search(r"^(?:BARE|FAST)_CELL_ARM\b.* verdict=(?!PASS\b)[A-Z_]+\b", line, re.M)
         or re.search(r"^V3_GATES_SUMMARY\b.* fail=[1-9]", line, re.M)
         or re.search(r"^TESTS passed [0-9]+ failed [1-9]", line, re.M)
+        or re.search(r"^KVM_TESTS passed [0-9]+ failed [1-9]", line, re.M)
+        or re.search(r"^KVM_TESTS passed .* kvm_skipped=[1-9]", line, re.M)
         or re.search(r"^CL_ROW .* verdict=(?!PASS\b)[A-Z_]+\b", line, re.M)
     )
 
@@ -188,6 +208,76 @@ def first_failing_line(paths):
     return "no red line found; last line: " + printable(last) if last else "no output found"
 
 
+# Test names. libtest's terse mode prints `<name> --- FAILED`, its verbose mode `test <name> ... FAILED`,
+# and both end with a `failures:` list of indented names. Measured 2026-10-26 (gate run 40263112941):
+# the Worker/runner scrubber blanks any run of 32+ [A-Za-z0-9_-] characters, so a 60-character test
+# name reached the log as `[redacted] --- FAILED`.
+TEST_NAME = r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*"
+FAILED_TEST = re.compile(r"^(?:test )?(" + TEST_NAME + r")(?: \.\.\.| ---) FAILED$")
+FAILURE_ITEM = re.compile(r"^    (" + TEST_NAME + r")$")
+PANIC = re.compile(r"\bpanicked at\b")
+FAILED_TEST_LIMIT = 20
+# A snake_case test name: lowercase words, at least three, each at most 20 characters, at most 128
+# characters in all and at most one digit in five. Hex, base64url, mixed-case, hyphenated and
+# digit-heavy strings are not. ci/vast-broker (sanitize.js, runner.py scrub) uses the same grammar to
+# decide which 32+ character runs a scrubber may keep; scrub-vectors.json pins both sides.
+SNAKE_NAME = re.compile(r"[a-z][a-z0-9]{0,19}(?:_[a-z0-9]{1,20}){2,}")
+LONG_RUN = re.compile(r"[A-Za-z0-9_-]{32,}")
+FOLD = 30
+
+
+def is_test_identifier(run):
+    return (
+        len(run) <= 128
+        and SNAKE_NAME.fullmatch(run) is not None
+        and sum(c.isdigit() for c in run) * 5 <= len(run)
+    )
+
+
+def fold_identifiers(text):
+    """Split test-name-shaped 32+ character runs into pieces of at most 30 joined by "~".
+
+    A scrubber that has not been redeployed still blanks the long form; the pieces stay readable.
+    Anything that is not test-name shaped is left whole, so it still reaches the scrubber whole.
+    """
+    return LONG_RUN.sub(
+        lambda m: (
+            "~".join(m[0][i : i + FOLD] for i in range(0, len(m[0]), FOLD))
+            if is_test_identifier(m[0])
+            else m[0]
+        ),
+        text,
+    )
+
+
+def failed_tests(paths, limit=FAILED_TEST_LIMIT):
+    """(names, total): the failed test names in the logs, in order, de-duplicated, at most `limit`."""
+    seen = []
+    for path in paths:
+        state = None  # "head" after `failures:`, "list" while its indented names continue
+        for line in read_lines(path):
+            if line == "failures:":
+                state = "head"
+                continue
+            item = FAILURE_ITEM.match(line) if state else None
+            state = "list" if item else None
+            found = FAILED_TEST.match(line) or item
+            if found and found[1] not in seen:
+                seen.append(found[1])
+    return seen[:limit], len(seen)
+
+
+def first_panic(paths):
+    """The first panic line of the logs and the message line after it, bounded; "" if none."""
+    for path in paths:
+        lines = read_lines(path)
+        for i, line in enumerate(lines):
+            if PANIC.search(line):
+                following = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                return printable(line.strip() + (" | " + following if following else ""))
+    return ""
+
+
 def step_cause(root, first):
     """The last lines of the provisioning step log named by a failing RC line."""
     match = re.match(r"(BOX|DRIVER|TREE|FG|KF3)_RC=", first)
@@ -217,7 +307,23 @@ def summary_lines(result, records):
             text += " reason=" + record["reason"]
         stage_rows.append(text)
         if record.get("first_fail"):
-            fail_rows.append("first_fail stage=" + record["name"] + " line=" + record["first_fail"])
+            fail_rows.append(
+                "first_fail stage="
+                + record["name"]
+                + " line="
+                + fold_identifiers(record["first_fail"])
+            )
+        if record.get("panic"):
+            fail_rows.append(
+                "panic stage=" + record["name"] + " line=" + fold_identifiers(record["panic"])
+            )
+        for name in record.get("failed_tests", []):
+            fail_rows.append(
+                "failed_test stage=" + record["name"] + " name=" + fold_identifiers(printable(name))
+            )
+        more = record.get("failed_total", 0) - len(record.get("failed_tests", []))
+        if more > 0:
+            fail_rows.append("failed_tests_more stage=%s count=%d" % (record["name"], more))
         if record.get("cause"):
             fail_rows.append("cause stage=" + record["name"] + " log_tail=" + record["cause"])
     for suite in result["suites"]:
@@ -483,6 +589,8 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             record.update(result="TIMEOUT" if rc == 124 else "FAIL", reason=failure)
             files = [*stage["progress"], stage["output"], *stage.get("detail", [])]
             record["first_fail"] = first_failing_line(files)
+            record["failed_tests"], record["failed_total"] = failed_tests(files)
+            record["panic"] = first_panic(files)
             if name == "provision":
                 record["cause"] = step_cause(PROV_DIR, record["first_fail"])
             print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)

@@ -20,6 +20,13 @@
     "word-over-20": "aaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbb_cccccccccc",
     "over-128": "word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word",
     "ghs-family": "ghs_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-    "fine-grained-family": "github_pat_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    "fine-grained-family": "github_pat_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "digit-heavy-words": "a1b2c3d4e5f6_a1b2c3d4e5f6_a1b2c3d4e5f6",
+    "two-long-words": "abcdefghijklmnopqrst_uvwxyzabcdefghijkl",
+    "over-128-b": "token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token",
+    "later-word-over-20": "abcdefgh_ccccccccccccccccccccccccc_de",
+    "leading-capital": "Test_case_name_with_leading_capital_letter",
+    "first-word-over-20-b": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_ab_cd",
+    "later-word-over-20-b": "ab_cd_eeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
   }
 }

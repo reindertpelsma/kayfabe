@@ -71,9 +71,7 @@ class V7Tests(unittest.TestCase):
     def test_merge_prefix_survives_partial_evidence(self):
         with self.assertRaises(self.m.EvidenceError) as caught:
             self.m.merge_rows(MERGE.split("BARE_SUITE_PASS=")[0], 124, SHA)
-        self.assertEqual(
-            [r["name"] for r in caught.exception.rows], ["gates", "kf3_build"]
-        )
+        self.assertEqual([r["name"] for r in caught.exception.rows], ["gates", "kf3_build"])
 
     def test_provision_head_is_bound_to_sha(self):
         source = Path(self.m.__file__).read_text()
@@ -95,7 +93,7 @@ class V7Tests(unittest.TestCase):
             result = {"verdict": "FAIL", "suites": [self.m.row("provision", 1)]}
 
             def grade(rc):
-                raise self.m.EvidenceError("raw_suite", [self.m.row("kf_tests", 20)])
+                raise self.m.EvidenceError("raw_suite", [self.m.row("gates", 20)])
 
             stages = [
                 {
@@ -109,7 +107,7 @@ class V7Tests(unittest.TestCase):
             rc = self.m.execute_stages(stages, 1, result, path, runner=lambda *args: 124)
             self.assertEqual(rc, 1)
             rows = json.loads(path.read_text())["suites"]
-            self.assertEqual([r["name"] for r in rows], ["provision", "kf_tests", "timeout"])
+            self.assertEqual([r["name"] for r in rows], ["provision", "gates", "timeout"])
             self.assertEqual(rows[-1]["fail"], 1)
 
     def test_first_bad_stage_cancels_later_stages(self):
@@ -193,7 +191,7 @@ class V7Tests(unittest.TestCase):
 
             def grade(rc):
                 self.assertEqual(rc, 1)
-                raise self.m.EvidenceError("raw_suite", [self.m.row("kf_tests", 20)])
+                raise self.m.EvidenceError("raw_suite", [self.m.row("gates", 20)])
 
             with self.assertRaises(self.m.EvidenceError) as caught:
                 self.m.stage_grade(None, None, log, grade, 1)
@@ -387,7 +385,7 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest"])
         self.assertEqual(result["verdict"], "PASS")
-        self.assertEqual(len(result["suites"]), 9)
+        self.assertEqual(len(result["suites"]), 8)
         self.assertEqual(set(result), {"verdict", "suites", "hardware"})
 
     def test_provisioned_musl_binary_is_found_by_existing_guest_helper(self):
@@ -573,9 +571,7 @@ class V7Tests(unittest.TestCase):
         text += "BARE_CELL_ARM arm=timer verdict=FAIL rc=1\n"
         with self.assertRaises(self.m.EvidenceError) as caught:
             self.m.merge_rows(text, 1, SHA)
-        self.assertEqual(
-            [r["name"] for r in caught.exception.rows], ["gates", "kf3_build"]
-        )
+        self.assertEqual([r["name"] for r in caught.exception.rows], ["gates", "kf3_build"])
 
     def test_thin_red_keeps_raw_and_build_rows(self):
         text = MERGE.split("FAST_SUITE_PASS=")[0]
