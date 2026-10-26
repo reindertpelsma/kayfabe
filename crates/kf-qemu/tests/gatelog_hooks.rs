@@ -369,7 +369,10 @@ fn the_shutdown_dump_is_an_atexit_handler_registered_at_realize_behind_the_flag(
         h.contains("dump_shutdown("),
         "the handler prints the shutdown dump"
     );
-    assert!(h.contains("eprintln!"));
+    assert!(
+        h.contains("writeln!") && !h.contains("eprintln!"),
+        "no panic out of exit"
+    );
     let reg = FFI.find("atexit(gatelog_atexit)").expect("registration");
     let before = &FFI[reg.saturating_sub(700)..reg];
     assert!(

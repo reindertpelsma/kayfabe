@@ -38,7 +38,7 @@
 
 use crate::apply::DiffRun;
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -865,6 +865,7 @@ pub struct Recorder {
     applying_space: AtomicU64,
     applying_walk: AtomicU64,
     last_walk: AtomicU64,
+    shutdown_done: AtomicBool,
 }
 
 /// A channel's hooks: the log plus the recorder's clock and state. Cheap to clone.
@@ -897,6 +898,7 @@ impl Recorder {
             applying_space: AtomicU64::new(0),
             applying_walk: AtomicU64::new(0),
             last_walk: AtomicU64::new(0),
+            shutdown_done: AtomicBool::new(false),
         }
     }
 
@@ -1277,8 +1279,10 @@ impl Recorder {
     /// end, or the process's `atexit` handler: QEMU leaves by `exit`, which never stops the loop).
     /// Empty when it was already printed.
     pub fn dump_shutdown(&self, t: u64) -> Vec<String> {
-        let _ = t;
-        Vec::new()
+        if self.shutdown_done.swap(true, Ordering::AcqRel) {
+            return Vec::new();
+        }
+        self.dump("shutdown", t, None, None)
     }
 
     /// ★ One bounded dump (a host Xid naming `chid`/`va`, or `why = "shutdown"`): at most

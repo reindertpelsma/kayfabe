@@ -2479,7 +2479,7 @@ impl Device {
         // shutdown, bounded (`gatelog::Recorder::dump`), once the loop has stopped.
         if kf_mem::gatelog::enabled() {
             let rec = kf_mem::gatelog::global();
-            for line in rec.dump("shutdown", rec.now(), None, None) {
+            for line in rec.dump_shutdown(rec.now()) {
                 eprintln!("{line}");
             }
         }
