@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import { checkWorkflows } from '../workflow-guard.js';
 
 const gpu = await readFile(
@@ -76,3 +77,41 @@ test('site actions must be SHA pinned', () => {
     ).length,
   );
 });
+
+for (const exists of [true, false])
+  test('site version switch preserves a page or falls back, exists=' + exists, async () => {
+    const script = await readFile(
+      new URL('../../../site/book-theme/versions.js', import.meta.url),
+      'utf8',
+    );
+    const select = { dataset: { current: 'master' }, replaceChildren: () => {}, value: '' };
+    const location = { pathname: '/docs/master/design/overview.html', href: '' };
+    const requests = [];
+    runInNewContext(script, {
+      document: { getElementById: () => select },
+      location,
+      Option: class {
+        constructor(label, value) {
+          this.label = label;
+          this.value = value;
+        }
+      },
+      fetch: async (url, init = {}) => {
+        requests.push({ url, ...init });
+        return url.endsWith('versions.json')
+          ? {
+              json: async () => [
+                { version: 'master', label: 'master (unreleased)' },
+                { version: 'v1.0', label: 'v1.0 (latest)' },
+              ],
+            }
+          : { ok: exists };
+      },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(select.value, 'master');
+    select.value = 'v1.0';
+    await select.onchange();
+    assert.equal(requests.at(-1).method, 'HEAD');
+    assert.equal(location.href, exists ? '/docs/v1.0/design/overview.html' : '/docs/v1.0/');
+  });

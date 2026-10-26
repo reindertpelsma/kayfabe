@@ -27,7 +27,16 @@ class Versions(unittest.TestCase):
         self.git("config", "user.name", "Site fixture")
         self.git("config", "user.email", "fixture@example.com")
         (self.repo / "docs").mkdir()
-        (self.repo / "docs/live.md").write_text("# Live\n\n**STATUS: LIVE**, fixture\n")
+        (self.repo / "docs/live.md").write_text("# Internal\nSTATUS: LIVE\n")
+        self.commit("no manual")
+        self.git("tag", "v0.8.0")
+        (self.repo / "docs/howto").mkdir()
+        (self.repo / "docs/howto/SUMMARY.md").write_text(
+            "# Summary\n\n- [Start](index.md)\n- [Windows](windows.md)\n"
+        )
+        (self.repo / "docs/howto/index.md").write_text("# Start\n")
+        (self.repo / "docs/howto/windows.md").write_text("# Windows\n")
+        (self.repo / "docs/FAQ.md").write_text("# FAQ\n")
         self.commit("base")
         self.git("tag", "v0.9.0")
         (self.repo / "site/content").mkdir(parents=True)
@@ -56,7 +65,7 @@ class Versions(unittest.TestCase):
         self.assertEqual((plan["root"], plan["latest"]), ("master", "master"))
 
     def test_zero_tags_has_only_master(self):
-        self.git("tag", "-d", "v0.9.0", "v0.10.0", "v1.0.0")
+        self.git("tag", "-d", "v0.8.0", "v0.9.0", "v0.10.0", "v1.0.0")
         self.assertEqual(builder().version_plan(self.repo, [])["versions"], ["master"])
 
     def test_published_artifacts_select_newest_publication(self):
@@ -93,12 +102,52 @@ class Versions(unittest.TestCase):
         self.assertFalse((dest / "site/config.toml").exists())
         self.assertFalse((dest / "site/build.sh").exists())
 
-    def test_live_filter_uses_first_status_near_top(self):
-        docs = self.repo / "docs"
-        (docs / "old.md").write_text("STATUS: SUPERSEDED\nSTATUS: LIVE\n")
-        (docs / "research.md").write_text("**STATUS: RESEARCH**\n")
-        (docs / "late.md").write_text("\n" * 50 + "STATUS: LIVE\n")
-        self.assertEqual([p.name for p in builder().live_documents(docs)], ["live.md"])
+    def test_tags_without_manual_are_absent_even_if_published(self):
+        plan = builder().version_plan(self.repo, [self.release("v0.8.0")])
+        self.assertNotIn("v0.8.0", plan["versions"])
+        self.assertEqual(plan["latest"], "master")
+
+    def test_manual_order_and_faq_only(self):
+        book = self.repo / "book"
+        selected = builder().manual_source(self.repo, book)
+        self.assertEqual(selected, ["index.md", "windows.md", "FAQ.md"])
+        self.assertFalse((book / "live.md").exists())
+        self.assertTrue((book / "SUMMARY.md").read_text().endswith("- [FAQ](FAQ.md)\n"))
+
+    def test_manual_does_not_copy_internal_docs(self):
+        book = self.repo / "book"
+        builder().manual_source(self.repo, book)
+        self.assertEqual(
+            {p.name for p in book.iterdir()}, {"SUMMARY.md", "index.md", "windows.md", "FAQ.md"}
+        )
+
+    def test_internal_links_fail_publication(self):
+        for link in [
+            "../design/secret.html",
+            "/docs/OWNER_RULINGS.md",
+            "https://github.com/reindertpelsma/kayfabe/blob/master/docs/STATUS_DETAIL.md",
+        ]:
+            with self.subTest(link=link), self.assertRaises(ValueError):
+                builder().check_page(
+                    '<title>Manual</title><a href="' + link + '">internal</a>',
+                    "docs/master/index.html",
+                )
+
+    def test_more_internal_links_fail_publication(self):
+        for link in ["../../archive/old.md", "../handoff-notes.md", "/docs/STATUS_AND_HANDOFF.md"]:
+            with self.subTest(link=link), self.assertRaises(ValueError):
+                builder().check_page(
+                    '<title>Manual</title><a href="' + link + '">internal</a>',
+                    "docs/master/index.html",
+                )
+
+    def test_missing_title_fails_publication(self):
+        with self.assertRaises(ValueError):
+            builder().check_page("<p>Missing title</p>", "docs/master/index.html")
+
+    def test_empty_title_fails_publication(self):
+        with self.assertRaises(ValueError):
+            builder().check_page("<title> </title>", "docs/master/index.html")
 
     def test_broken_links_are_reported_without_failing(self):
         dest = self.repo / "public"
