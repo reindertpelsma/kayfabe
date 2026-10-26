@@ -241,7 +241,7 @@ test('admin UI page is plain table with timed refresh and stop controls', async 
   assert.equal(h.calls.length, 0);
 });
 
-test('admin UI binding references the existing broker DO without migrations or secrets', async () => {
+test('admin UI binding targets existing broker DO without migrations or secrets', async () => {
   const config = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
   assert.match(config, /name = "LEDGER"/);
   assert.match(config, /class_name = "BrokerLedger"/);

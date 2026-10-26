@@ -2,6 +2,18 @@
 
 STATUS: LIVE local test evidence, 2026-10-26; no deployment or live Vast acceptance.
 
+## Integration update: master 737402577 (PR #141)
+
+MEASURED (2026-10-26 merge validation, [merge-checks.txt](merge-checks.txt)): merging master into UI1 preserves the admin class byte-for-byte and keeps the ledger/bootstrap exactly as master. Only the two bundle-hash fields conflicted; both now name the combined dry-run bundle. No history is rewritten and no deployment is performed.
+
+MEASURED (2026-10-26, `merge-checks.txt`): all 1,968 broker Node tests, 37 workerd tests (with `MINIFLARE_ASSERT_BODIES_CONSUMED=true`) and 50 admin Worker tests pass, with zero failures/skips. The 24 admin mutants still fail at least two tests each; the restored source then passes all 83 focused tests. Formatting also passes. A full PR line audit corrected one original 102-column test declaration missed at the initial checkpoint; assertions are unchanged. The reviewed combined bundle hash supersedes the initial UI1 hash below:
+
+```text
+edc934d70573d676ccb5123c13ac0fc4c0b0fe3f9c37d158ea717c8a6476642d
+```
+
+## Initial UI1 checkpoint (be85b084b)
+
 CODE READ (`ci/vast-admin/worker.js`, broker `BrokerLedger.fetch`): UI1 adds the owner-only Access-authenticated Worker, its external DO binding and plain table, internal list/stop routes, and coordinator-only Access/deployment instructions. The broker source diff stays in `BrokerLedger.fetch` plus two constructor assignments retaining its context/environment. The existing service, owner stop handlers and provider cleanup implementation are reused without changes.
 
 FALSIFIER, stated before implementation in the tests: a public admin request reaches the ledger; a summary leaks non-whitelisted fields; an internal stop bypasses owner cleanup or settles before API absence; a missing/invalid Access identity reads or stops; a wrong email enters; or a proxy issues more than one DO call. Mutation falsifier: any deliberately broken boundary fails fewer than two independent tests.
@@ -16,7 +28,7 @@ MEASURED (UI1 final full broker run, 2026-10-26, `checks.txt`): all 1,943 tests 
 
 MEASURED (UI1 mutation run, 2026-10-26, [mutations.md](mutations.md), [mutation-output.txt](mutation-output.txt)): all 24 mutants fail between two and 13 independent tests each. Each source file is restored before the next probe and in an outer `finally`; the final green focused suite runs after restoration. The table records two named witnesses per mutant. Reproduce locally with `python3 traces/vast_admin_20261018/mutate.py` after installing the two Workers' test dependencies; it uses only fixture providers.
 
-MEASURED (UI1 Wrangler dry runs, 2026-10-26, `checks.txt`): both Worker configurations bundle locally. The main bundle hash is pinned in `ci/vast-broker/deployment.json` and `wrangler.toml`:
+MEASURED (UI1 Wrangler dry runs, 2026-10-26, `checks.txt`): both Worker configurations bundle locally. The initial main bundle hash was pinned at `be85b084b` and is superseded by the integration update above:
 
 ```text
 8a0c7358318434f48a9a60255c1ecd47bac2af29f5725c8586cf841d3883f51b
@@ -24,4 +36,4 @@ MEASURED (UI1 Wrangler dry runs, 2026-10-26, `checks.txt`): both Worker configur
 
 CODE READ (`ci/vast-broker/test/bundle.test.js`): the full broker suite emits two independent bundles, checks deterministic bytes against the manifest, rejects Node imports, and exercises the source/bundled entrypoints. The admin dry-run bundle hash is recorded for evidence only; the admin has no deployment-manifest protocol.
 
-NOT VERIFIED: Cloudflare deployment, the external namespace binding in a hosted account, the Access application/login flow, actual provider stop, or GPU hardware. No direct Vast or Claude calls were made. The coordinator must configure the dedicated Access application and deploy both Workers in the documented order; rebase/recompute the broker hash after integrating WK1's source changes.
+NOT VERIFIED: Cloudflare deployment, the external namespace binding in a hosted account, the Access application/login flow, actual provider stop, or GPU hardware. No direct Vast or Claude calls were made. The coordinator must configure the dedicated Access application and deploy both Workers in the documented order; WK1 integration is recorded above; recompute the broker hash after any further source change.

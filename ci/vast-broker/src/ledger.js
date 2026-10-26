@@ -1,5 +1,5 @@
 // prettier-ignore
-import {refuse} from './policy.js';
+import {refuse,numericId} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
 export class Ledger {
@@ -81,7 +81,44 @@ export class Ledger {
     }
     return records;
   }
-  async reserve(record) {
+  // All ledger admission checks and the intent writes share ONE transaction. The
+  // service's preflight reads/queue are only early refusals, never this lock.
+  // No provider operation belongs here: storage may retry the callback.
+  async reserve(record, { cfg, now, cost, credit }) {
+    await this.storage.transaction(async (storage) => {
+      const ledger = new Ledger(storage);
+      if (await ledger.get('cost:' + record.key)) refuse('UNAVAILABLE_BUDGET', 409);
+      const cached = await ledger.get('sha:' + record.sha),
+        force = Number(record.attempt ?? record.key.split('-').at(-1)) > 1;
+      if (cached && (!force || now - cached.started < cfg.gap)) refuse('UNAVAILABLE_BUDGET', 409);
+      const open = await ledger.openRecords(),
+        branch = open.filter((o) => o.branch === record.branch && o.sha !== record.sha);
+      if (branch.some((o) => numericId(o.run) && BigInt(o.run) > BigInt(record.run)))
+        refuse('NOT_ELIGIBLE', 409);
+      // Let the next preflight supersede an older branch run, outside the txn.
+      if (branch.length) refuse('BUSY', 409);
+      if (
+        open.length >= cfg.maxConcurrent ||
+        open.filter((o) => (o.profile ?? 'check') === (record.profile ?? 'check')).length >=
+          cfg.maxConcurrentProfile[record.profile ?? 'check']
+      )
+        refuse('BUSY', 409);
+      const bad = await storage.list({ prefix: 'bad-machine:', limit: 257 });
+      if (
+        bad.size > 256 ||
+        bad.has('bad-machine:' + record.machineId) ||
+        cfg.badMachines.includes(record.machineId) ||
+        open.some((o) => Number.isSafeInteger(o.machineId) && o.machineId === record.machineId)
+      )
+        refuse();
+      if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(credit))
+        refuse('UNAVAILABLE_BUDGET', 409);
+      const outstanding = await ledger.budgets(cfg, now, cost);
+      if (credit < cfg.reserve + cost + outstanding) refuse('UNAVAILABLE_BUDGET', 409);
+      await ledger.#writeReservation(record);
+    });
+  }
+  async #writeReservation(record) {
     await this.save(record);
     // Owner ruling 2026-10-24 item 8: the open: index is the set of active runs.
     await this.put('open:' + record.key, true);

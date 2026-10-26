@@ -29,6 +29,8 @@ CODE READ (`package.json`, broker lockfile): run from the repository root with N
 npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
 npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
 node --test ci/vast-broker/test
+MINIFLARE_ASSERT_BODIES_CONSUMED=true \
+  node --test ci/vast-broker/workerd/admission.test.js
 node --test ci/vast-admin/test/*.test.mjs
 ci/vast-broker/node_modules/.bin/wrangler deploy \
   --config ci/vast-admin/wrangler.toml --dry-run
