@@ -27,6 +27,7 @@ struct Target {
     guard: RefCell<BTreeMap<u64, State>>,
     violations: RefCell<Vec<String>>,
     refuse_sparse_retire: bool,
+    refuse_backed_unmap: bool,
     reserved: bool,
 }
 
@@ -53,6 +54,7 @@ impl Target {
             guard: RefCell::new(BTreeMap::new()),
             violations: RefCell::new(vec![]),
             refuse_sparse_retire: false,
+            refuse_backed_unmap: false,
             reserved: false,
         }
     }
@@ -156,6 +158,9 @@ impl MapTarget for Target {
 
     fn unmap_range(&self, va: u64, len: u64, _: bool) -> Result<(), String> {
         self.calls.borrow_mut().push("backed-unmap");
+        if self.refuse_backed_unmap {
+            return Err("backed unmap refused".into());
+        }
         for i in 0..len / P {
             let at = va + i * P;
             if !matches!(self.pages.borrow().get(&at), Some(State::Backed(..))) {
@@ -337,8 +342,44 @@ fn sparse_unmap_preserves_a_backed_neighbour() {
         .insert(VA + P, State::Backed(false, 0x80_0000));
     let out = apply(&t, &[run(true, true, VA, P, 0, false)]);
     assert_eq!(out.codes, [KFWR_ACK_APPLIED]);
+    assert_eq!(out.sparse_retained_bytes, P);
     assert_eq!(t.pages.borrow()[&VA], State::Sparse);
     assert_eq!(&*t.calls.borrow(), &["sparse-retire", "invalidate"]);
+}
+
+#[test]
+fn partial_sparse_retirement_is_counted_when_the_block_cannot_be_freed() {
+    let t = Target::new(true);
+    let out = apply(&t, &[run(true, true, VA + P, 2 * P, 0, false)]);
+    assert_eq!(out.sparse_retained_bytes, 2 * P);
+    assert!(t.all(State::Sparse));
+}
+
+fn failed_backed_unmap_retires_new_sparse_intent(ram: bool) {
+    let mut t = Target::new(true);
+    t.seed(ram, 0x10_0000);
+    t.refuse_backed_unmap = true;
+    let out = apply(
+        &t,
+        &[
+            run(false, true, VA, L, 0x10_0000, ram),
+            run(true, false, VA, L, 0, false),
+        ],
+    );
+    assert_eq!(out.codes, [KFWR_ACK_FAILED, KFWR_ACK_FAILED]);
+    assert!(t.calls.borrow().contains(&"sparse-intent"));
+    assert!(t.calls.borrow().contains(&"sparse-retire"));
+    assert!(!t.calls.borrow().contains(&"backed-map"));
+}
+
+#[test]
+fn a_failed_vidmem_unmap_retires_the_new_sparse_intent() {
+    failed_backed_unmap_retires_new_sparse_intent(false);
+}
+
+#[test]
+fn a_failed_dma_unmap_retires_the_new_sparse_intent() {
+    failed_backed_unmap_retires_new_sparse_intent(true);
 }
 
 #[test]
