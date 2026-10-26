@@ -560,10 +560,14 @@ def persist_result(destination, result):
 def execute_stages(stages, soft, result, destination, runner=run_bounded):
     """Persist the finished prefix even when a later suite times out or fails."""
     records = STAGE_RECORDS
+    result["host_reference"] = "MISSING"
     records[:] = [dict(name=stage["name"]) for stage in stages]
     persist_result(destination, result)
     for stage, record in zip(stages, records):
         name = stage["name"]
+        if name == "cuda_host":
+            result["host_reference"] = "NOT_GREEN"
+            persist_result(destination, result)
         print("KF_PAYLOAD_STAGE_START name=" + name, flush=True)
         start = time.monotonic()
         rc = runner(stage["command"], soft, stage["output"], stage["progress"])
@@ -577,6 +581,8 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             rows = stage["grade"](rc)
             if rc == 124:
                 raise EvidenceError("timeout", rows)
+            if name == "cuda_host":
+                result["host_reference"] = "GREEN"
             result["suites"].extend(rows)
             persist_result(destination, result)
         except EvidenceError as error:
@@ -818,7 +824,7 @@ def main():
     evidence = Path("/workspace/kf-ci-evidence")
     evidence.mkdir(parents=True, exist_ok=True)
     destination = Path("/workspace/kf-result.json")
-    result = {"verdict": "FAIL", "suites": [], "hardware": hardware()}
+    result = {"verdict": "FAIL", "suites": [], "hardware": hardware(), "host_reference": "MISSING"}
     STAGE_RECORDS.clear()
 
     def terminate(*_):

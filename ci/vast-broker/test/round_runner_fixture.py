@@ -38,6 +38,16 @@ base = {
     **manifest,
     **scope["extra_status"](pending=True),
 }
+ids_gpu = sys.argv[2] if len(sys.argv) > 2 else None
+if ids_gpu:
+    base.update(
+        instance_id="900",
+        geolocation="Texas, <US>",
+        dph_total=0.2,
+        gpu_model=ids_gpu,
+        host_driver_version="570.124.06",
+        host_reference="GREEN",
+    )
 calls = []
 reads = 0
 
@@ -84,9 +94,12 @@ def client(route, method="GET", body=None):
     return m.Reply(code, {"content-type": "application/json"}, json.dumps(data).encode())
 
 
-result = m.Runner(ctx, manifest, client, emit=lambda _: None, summary=io.StringIO()).execute()
+messages, summary = [], io.StringIO()
+result = m.Runner(ctx, manifest, client, emit=messages.append, summary=summary).execute()
 stops = [x for x in calls if x.startswith("/stop/")]
 # Owner ruling 2026-10-24 item 4: a verified final result is followed by one stop.
 assert stops == ([] if case.startswith("exhausted") else ["/stop/123-1"]), calls
 assert reads >= 3, reads
 assert result["verdict"] == ("UNAVAILABLE" if case.startswith("exhausted") else "PASS"), result
+if ids_gpu:
+    print(json.dumps({"stdout": "".join(messages), "summary": summary.getvalue()}))

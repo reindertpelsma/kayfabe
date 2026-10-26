@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { sha, nonce, env } from './helpers.js';
 const sanitize = async () => import('../src/sanitize.js');
 for (const v of ['$(id)', '`id`', "'", '\n', 'a'.repeat(39), 'A'.repeat(40)])
@@ -104,4 +105,22 @@ for (const payload of [
   test('no workflow command delimiter survives anywhere ' + payload.slice(0, 20), async () => {
     const { sanitizeLog } = await sanitize();
     assert.doesNotMatch(sanitizeLog(new TextEncoder().encode(payload)), /::|##\[/);
+  });
+
+for (const gpu of ['RTX 3090', 'NVIDIA Quadro RTX 6000'])
+  test('trusted BASE runner publishes rental identity once ' + gpu, () => {
+    const run = spawnSync(
+      'python3',
+      ['-I', new URL('./round_runner_fixture.py', import.meta.url).pathname, 'BUSY', gpu],
+      { encoding: 'utf8' },
+    );
+    assert.equal(run.status, 0, run.stderr);
+    const { stdout, summary } = JSON.parse(run.stdout);
+    assert.equal((stdout.match(/RENTAL machine=/g) ?? []).length, 1);
+    assert.match(stdout, /RENTAL machine=100001 host=3001 instance=900 gpu=/);
+    assert.ok(stdout.includes('price=0.200000'));
+    for (const value of ['900', '100001', '3001', gpu, '570.124.06', 'GREEN', '0.200000'])
+      assert.ok(summary.includes(value), value);
+    assert.ok(summary.includes('Texas, &lt;US&gt;'));
+    assert.doesNotMatch(summary, /<US>/);
   });
