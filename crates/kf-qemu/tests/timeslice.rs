@@ -123,6 +123,36 @@ fn never_born_intents_are_bounded_vm_wide() {
     assert_eq!(r.prepare((3, 10), 2, 400).err(), Some(NO_MEMORY));
     assert_eq!(r.len(), 8);
 }
+
+#[test]
+fn free_cannot_hide_unbounded_queued_tickets_from_the_global_cap() {
+    let r = replay();
+    let mut held = Vec::new();
+    for tsg in 10..18 {
+        held.push(r.prepare((1, tsg), 2, 400).unwrap());
+        r.forget(1, tsg);
+    }
+    assert_eq!(r.len(), 0);
+    assert_eq!(r.prepare((1, 99), 2, 400).err(), Some(NO_MEMORY));
+    for ticket in held {
+        r.cancel(&ticket);
+    }
+}
+
+#[test]
+fn canceling_a_freed_ticket_releases_exactly_one_queue_slot() {
+    let r = replay();
+    let held: Vec<_> = (10..18)
+        .map(|tsg| {
+            let t = r.prepare((1, tsg), 2, 400).unwrap();
+            r.forget(1, tsg);
+            t
+        })
+        .collect();
+    r.cancel(&held[0]);
+    assert!(r.prepare((1, 90), 2, 400).is_ok());
+    assert_eq!(r.prepare((1, 91), 2, 400).err(), Some(NO_MEMORY));
+}
 #[test]
 fn free_before_birth_erases_the_saved_value() {
     let r = replay();
