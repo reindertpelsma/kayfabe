@@ -1127,7 +1127,9 @@ impl HostRm {
                 // Occupancy is recorded before the host call and conservatively retained
                 // after a refused map or rollback. A later successful exact unmap clears
                 // it; it can never free live PTEs.
-                let refine = !self.layout_poisoned.load(std::sync::atomic::Ordering::Acquire);
+                let refine = !self
+                    .layout_poisoned
+                    .load(std::sync::atomic::Ordering::Acquire);
                 let pieces = tree.route_map(ops, space.range, a, len, refine)?;
                 map_piece_list(
                     self,
