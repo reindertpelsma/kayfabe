@@ -130,6 +130,11 @@ export function createService({
     id: r.id,
     machine_id: providerId(r.machineId),
     host_id: providerId(r.hostId),
+    instance_id: r.id,
+    geolocation: r.geolocation ?? 'unknown',
+    dph_total: r.dphTotal ?? null,
+    host_driver_version: r.hostDriverVersion ?? 'unknown',
+    host_reference: r.result?.host_reference ?? 'MISSING',
     sha: r.sha,
     state: phase(r),
     verdict:
@@ -153,7 +158,7 @@ export function createService({
     die: r.die ?? 'unknown',
     country: r.country ?? 'UNKNOWN',
     compute_cap: r.hardware?.compute_cap ?? r.computeCap ?? 0,
-    // Items 10/10b: only the box-reported guest driver; the offer's host driver is never kept.
+    // Guest driver and the public offer-side host label are separate diagnostics.
     driver_version: r.hardware?.driver_version ?? 'unknown',
     selection_reason: r.selectionReason ?? 'NONE',
     preferences_ignored: r.preferencesIgnored ?? 0,
@@ -804,6 +809,16 @@ export function createService({
         profile,
         die: offer.die,
         country: offer.country,
+        geolocation:
+          typeof offer.geolocation === 'string'
+            ? offer.geolocation.replace(/[\p{Cc}\p{Cf}]/gu, ' ').slice(0, 128)
+            : 'unknown',
+        dphTotal: offer.dph_total,
+        hostDriverVersion:
+          typeof offer.driver_version === 'string' &&
+          /^(?:unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?)$/.test(offer.driver_version)
+            ? offer.driver_version
+            : 'unknown',
         computeCap: offer.compute_cap,
         machineId: offer.machine_id,
         hostId: providerId(offer.host_id),

@@ -306,3 +306,42 @@ for (const host_reference of ['GREEN', 'NOT_GREEN'])
     );
     assert.equal((await (await h.call('/status/123-1')).json()).host_reference, host_reference);
   });
+
+for (const gpu of ['RTX 4070<script>', 'RTX_3090::error::'])
+  test('literal GPU pattern rejects hostile suffix ' + gpu, async () => {
+    const result = await render('summary', {
+      gpu_model: gpu,
+      geolocation: '<US>|' + 'x'.repeat(200),
+    });
+    assert.match(result.summary, /\| GPU model \| unknown \|/);
+    assert.doesNotMatch(result.summary, /<script>|<US>|::error::/);
+    assert.ok(result.summary.includes('&lt;US&gt;&#124;'));
+    assert.ok(!result.summary.includes('x'.repeat(129)));
+  });
+
+for (const host_reference of ['green', 'GREEN\n::error::'])
+  test('host reference is a bounded enum ' + JSON.stringify(host_reference), async () => {
+    const h = await rent();
+    assert.equal(
+      (
+        await h.report({
+          seq: 1,
+          kind: 'result',
+          result: { nonce, verdict: 'FAIL', host_reference },
+        })
+      ).status,
+      400,
+    );
+  });
+
+for (const control of ['\n', '\t'])
+  test('offer attribution remains bounded and display-only ' + control.codePointAt(0), async () => {
+    const h = await setup();
+    h.cloud.offer.geolocation = 'A' + control + 'A'.repeat(150) + ', US';
+    h.cloud.offer.driver_version = '<script>';
+    const data = await (await h.call()).json();
+    assert.equal(data.geolocation.length, 128);
+    assert.doesNotMatch(data.geolocation, /[\p{Cc}\p{Cf}]/u);
+    assert.equal(data.host_driver_version, 'unknown');
+    assert.equal(data.driver_version, 'unknown');
+  });

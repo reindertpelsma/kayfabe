@@ -10,13 +10,14 @@ import { setup, env, nonce, sampleResult } from './helpers.js';
 // driver_version is irrelevant (same KVM image everywhere; the guest loads its own driver) and
 // misleading when shown as the guest's. OFFER_DRIVER_TAGS and the DRIVER rejection go; the
 // status driver_version is only the box-reported guest driver (`unknown` before a result); the
-// offer's host driver is not stored or exposed anywhere and selection does not use it.
+// selection does not use the offer's host driver. Owner 2026-10-26 now asks for its separate
+// public diagnostic label, which must never be confused with the box-reported driver.
 // FALSIFIER: an offer with an unlisted or missing host driver_version is rejected; a DRIVER
 // code or OFFER_DRIVER_TAGS remains in the Worker, the runner or the deploy helper; the status,
-// an availability row, the ledger or a log line carries the offer's host driver.
+// guest-driver status or selection semantics change when the public host label is added.
 const broker = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, broker), 'utf8');
-const hostDriver = '570.124.06'; // The offer's host driver: never shown, never stored.
+const hostDriver = '570.124.06'; // Public offer-side label, separate from the guest field.
 const availability = (h) => h.call('/availability?profile=check', { method: 'GET' });
 
 for (const value of ['999.1.1', '1.0', undefined, null, 570, 'garbage'])
@@ -88,23 +89,19 @@ test('item 10b: status says unknown until the box result, then the guest driver'
   const after = await (await h.call('/status/123-1')).json();
   assert.equal(after.driver_version, sampleResult().hardware.driver_version);
 });
-test('item 10b: the host driver is stored and exposed nowhere', async () => {
+test('public host label is separate from the guest driver and selection', async () => {
   const h = await setup();
   h.cloud.offer.driver_version = hostDriver;
-  const seen = [];
-  seen.push(await (await availability(h)).text());
-  seen.push(await (await h.call()).text());
-  seen.push(await (await h.call('/status/123-1')).text());
-  seen.push(await (await h.call('/logs/123-1?cursor=0', { method: 'GET' })).text());
-  seen.push(await (await h.call('/stop/123-1')).text());
-  for (const text of seen) {
-    assert.ok(!text.includes(hostDriver), text);
-    assert.doesNotMatch(text, /"driver"\s*:/);
+  assert.ok(!(await (await availability(h)).text()).includes(hostDriver));
+  for (const path of ['/rent', '/status/123-1', '/stop/123-1']) {
+    const data = await (await h.call(path)).json();
+    assert.equal(data.host_driver_version, hostDriver);
+    assert.equal(data.driver_version, 'unknown');
+    assert.equal('driver' in data, false);
   }
   const record = await h.storage.get('record:123-1');
+  assert.equal(record.hostDriverVersion, hostDriver);
   assert.equal('driver' in record, false);
-  for (const [key, value] of h.storage.data)
-    assert.ok(!JSON.stringify(value ?? null).includes(hostDriver), key);
 });
 test('item 10b: availability rows carry no driver field', async () => {
   const h = await setup();

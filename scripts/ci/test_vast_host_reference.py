@@ -16,21 +16,25 @@ def load(name):
 
 
 class HostReferenceTests(unittest.TestCase):
-    def execute(self, failed=None):
+    def execute(self, failed=None, timeout=False, host=True):
         payload = load("vast_payload")
         stages = []
-        for name in ["provision", "cuda_host", "guest"]:
+        for name in ["provision", "cuda_host", "guest"] if host else ["provision", "guest"]:
 
             def grade(rc, name=name):
                 if name == failed:
                     raise payload.EvidenceError(name)
                 return [payload.row(name, 1)]
 
-            stages.append(dict(name=name, grade=grade, command=[], output="", progress=[]))
+            stages.append(dict(name=name, grade=grade, command=[name], output="", progress=[]))
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "result.json"
             result = {"verdict": "FAIL", "suites": [], "hardware": {}}
-            payload.execute_stages(stages, 0, result, path, runner=lambda *args: 0)
+
+            def runner(command, *_args):
+                return 124 if timeout and command == ["cuda_host"] else 0
+
+            payload.execute_stages(stages, 0, result, path, runner=runner)
             return json.loads(path.read_text())
 
     def test_native_host_pass_is_green(self):
@@ -41,6 +45,12 @@ class HostReferenceTests(unittest.TestCase):
 
     def test_native_host_failure_is_not_green(self):
         self.assertEqual(self.execute("cuda_host")["host_reference"], "NOT_GREEN")
+
+    def test_interrupted_native_host_is_not_green(self):
+        self.assertEqual(self.execute(timeout=True)["host_reference"], "NOT_GREEN")
+
+    def test_absent_native_host_stage_is_missing(self):
+        self.assertEqual(self.execute(host=False)["host_reference"], "MISSING")
 
     def test_provision_failure_has_no_native_reference(self):
         self.assertEqual(self.execute("provision")["host_reference"], "MISSING")

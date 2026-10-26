@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { env, jwt, MockCloud } from '../test/helpers.js';
+import { env, jwt, MockCloud, callbackToken } from '../test/helpers.js';
 
 // FALSIFIER: caps, run-attempt/SHA identity or machine exclusion depend on a
 // service closure's queue rather than a single DO storage transaction.
@@ -360,6 +360,13 @@ test('workerd admission is transactional without shared service state', async (t
           ),
         );
         const data = responses.map((r) => r.data);
+        for (const row of data.filter((r) => r.state === 'BOOTING')) {
+          assert.equal(row.instance_id, row.id);
+          assert.equal(row.geolocation, 'Texas, US');
+          assert.equal(row.dph_total, 0.2);
+          assert.equal(row.host_driver_version, '580.95.05');
+          assert.equal(row.host_reference, 'MISSING');
+        }
         const admitted = data.filter((r) => r.state === 'BOOTING').length;
         if (independent) assert.equal(admitted, cap, JSON.stringify(data.map((r) => r.state)));
         else assert.ok(admitted > 0 && admitted <= cap, JSON.stringify(data.map((r) => r.state)));
@@ -367,6 +374,34 @@ test('workerd admission is transactional without shared service state', async (t
         if (independent) {
           const rows = (await call('/snapshot')).data;
           assert.equal(rows.filter(([k]) => k.startsWith('cost:')).length, cap);
+          const record = rows.find(([k]) => k.startsWith('record:'))[1];
+          const reference = cap === 1 ? 'GREEN' : 'NOT_GREEN';
+          const report = await fetchRequest(
+            env.WORKER_URL + '/' + bindings.BROKER_PATH_PREFIX + '/report/' + record.key,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + callbackToken(record),
+                'X-Test-Run': record.run,
+              },
+              body: JSON.stringify({
+                seq: 1,
+                kind: 'result',
+                result: {
+                  nonce: record.nonce,
+                  sha: record.sha,
+                  runner_nonce: record.runnerNonce,
+                  verdict: 'FAIL',
+                  host_reference: reference,
+                  suites: [{ name: 'guest', pass: 0, fail: 1, skip: 0 }],
+                  hardware: { gpu_name: 'RTX 4070', compute_cap: 890, driver_version: '580.95.05' },
+                },
+              }),
+            },
+          );
+          assert.equal(report.status, 200);
+          const after = (await call('/snapshot')).data.find(([k]) => k === 'record:' + record.key);
+          assert.equal(after[1].result.host_reference, reference);
         }
         assert.equal(cloud.created.length, admitted);
       });

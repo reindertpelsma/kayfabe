@@ -498,7 +498,14 @@ STATUS_KEYS = {
     "last_post_at",
     "result_deadline_at",
 }
-OPTIONAL_STATUS_KEYS = {"country"}
+OPTIONAL_STATUS_KEYS = {
+    "country",
+    "instance_id",
+    "geolocation",
+    "dph_total",
+    "host_driver_version",
+    "host_reference",
+}
 ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
 
@@ -550,6 +557,25 @@ def validate_status(data, ctx, manifest, http_status):
     ):
         raise Invalid()
     if not provider_id(data["machine_id"]) or not provider_id(data["host_id"]):
+        raise Invalid()
+    if "instance_id" in data and data["instance_id"] != data["id"]:
+        raise Invalid()
+    location = data.get("geolocation", "unknown")
+    if not isinstance(location, str) or len(location) > 128:
+        raise Invalid()
+    if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in location):
+        raise Invalid()
+    price = data.get("dph_total")
+    if price is not None and (
+        type(price) not in {int, float} or not math.isfinite(price) or not 0 <= price <= 1000
+    ):
+        raise Invalid()
+    host_driver = data.get("host_driver_version", "unknown")
+    if not isinstance(host_driver, str) or not re.fullmatch(
+        r"unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?", host_driver
+    ):
+        raise Invalid()
+    if data.get("host_reference", "MISSING") not in {"GREEN", "NOT_GREEN", "MISSING"}:
         raise Invalid()
     if type(data["cleanup_pending"]) is not bool or not integer(data["log_cursor"], 0, 10000):
         raise Invalid()
@@ -628,6 +654,46 @@ def shown_id(value):
     return "-" if value is None else str(value)
 
 
+def public_gpu(value):
+    prefix = r"(?:NVIDIA[ _])?(?:(?:GeForce|Quadro)[ _])?"
+    model = r"(?:RTX|GTX)[ _](?:PRO[ _])?[A-Z]{0,2}\d{3,4}[A-Z]{0,2}"
+    suffix = r"(?:[ _-][A-Z0-9]{1,16}){0,4}"
+    quadro = r"(?:NVIDIA[ _])?Quadro[ _][A-Z]?\d{3,4}"
+    die = r"(?:TU|GA|AD|GB)\d{3}|CC_\d{2,3}"
+    pattern = r"(?:" + prefix + model + suffix + "|" + quadro + suffix + "|" + die + ")"
+    if isinstance(value, str) and len(value) <= 100 and re.fullmatch(pattern, value, re.I | re.A):
+        return value
+    return "unknown"
+
+
+def rental_line(data):
+    price = data.get("dph_total")
+    return (
+        "RENTAL machine="
+        + shown_id(data["machine_id"])
+        + " host="
+        + shown_id(data["host_id"])
+        + " instance="
+        + shown_id(data.get("instance_id", data["id"]))
+        + " gpu="
+        + public_gpu(data["gpu_model"]).replace(" ", "_")
+        + " price="
+        + (format(price, ".6f") if price is not None else "unknown")
+    )
+
+
+def summary_cell(value):
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("|", "&#124;")
+        .replace("`", "&#96;")
+        .replace("\n", " ")
+    )
+
+
 class Runner:
     def __init__(self, ctx, manifest, client, emit=print, summary=None):
         self.ctx = ctx
@@ -636,6 +702,7 @@ class Runner:
         self.emit = emit
         self.summary = summary
         self.metadata = None
+        self.rental_shown = False
         self.cursor = 0
         self.hash = ZERO
         self.raw = []
@@ -941,6 +1008,10 @@ class Runner:
                     result["state"] = data["state"]
                     break
                 admitted = True
+                self.metadata = data
+                if not self.rental_shown and data["id"] is not None:
+                    self.emit(rental_line(data) + "\n")
+                    self.rental_shown = True
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
                 if final:
@@ -1008,24 +1079,10 @@ class Runner:
                 ("Displayed log SHA256", hashlib.sha256(safe.encode()).hexdigest()),
                 ("Runner dropped bytes", str(dropped)),
             ]:
-                self.summary.write("| " + key + " | " + value + " |\n")
+                self.summary.write("| " + key + " | " + summary_cell(value) + " |\n")
             if self.metadata is not None:
                 d = self.metadata
-                gpu, _ = scrub(
-                    d["gpu_model"],
-                    max_bytes=512,
-                    max_lines=1,
-                    redactions=self.ctx.get("redactions", ()),
-                )
-                gpu = (
-                    gpu.strip()
-                    .replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                    .replace("|", "&#124;")
-                    .replace("`", "&#96;")
-                    .replace("\n", " ")
-                )
+                gpu = public_gpu(d["gpu_model"])
                 elapsed = (
                     (d["result_at"] or d["ended_at"] or d["started_at"]) - d["started_at"]
                 ) / 1000
@@ -1033,8 +1090,20 @@ class Runner:
                     ("Profile", d["profile"]),
                     ("Die class", d["die"]),
                     ("Provider country (untrusted)", d.get("country", "UNKNOWN")),
+                    ("Vast instance id", shown_id(d.get("instance_id", d["id"]))),
                     ("Vast machine id", shown_id(d["machine_id"])),
                     ("Vast host id", shown_id(d["host_id"])),
+                    ("Offer geolocation (untrusted)", d.get("geolocation", "unknown")),
+                    (
+                        "Offer USD/hour",
+                        (
+                            format(d["dph_total"], ".6f")
+                            if d.get("dph_total") is not None
+                            else "unknown"
+                        ),
+                    ),
+                    ("Host driver label (untrusted)", d.get("host_driver_version", "unknown")),
+                    ("Host reference (untrusted)", d.get("host_reference", "MISSING")),
                     ("Driver (untrusted)", d["driver_version"]),
                     ("Selection reason", d["selection_reason"]),
                     ("Preferences ignored", str(d["preferences_ignored"])),
@@ -1042,7 +1111,7 @@ class Runner:
                     ("Elapsed seconds", format(elapsed, ".3f")),
                     ("Estimated USD", format(d["cost_estimate_usd"], ".6f")),
                 ]:
-                    self.summary.write("| " + key + " | " + value + " |\n")
+                    self.summary.write("| " + key + " | " + summary_cell(value) + " |\n")
                 for row in d["suites"]:
                     self.summary.write(
                         "| Suite "

@@ -215,11 +215,26 @@ def read_result_file(path):
         if len(raw) > 65536:
             raise ValueError("size")
         doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique)
-        allowed = {"verdict", "suites", "hardware", "nonce", "sha", "runner_nonce", "diagnostics"}
+        allowed = {
+            "verdict",
+            "suites",
+            "hardware",
+            "nonce",
+            "sha",
+            "runner_nonce",
+            "diagnostics",
+            "host_reference",
+        }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
         if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE"):
             raise ValueError("verdict")
+        if "host_reference" in doc and doc["host_reference"] not in (
+            "GREEN",
+            "NOT_GREEN",
+            "MISSING",
+        ):
+            raise ValueError("host reference")
         rows = doc["suites"]
         if type(rows) is not list or not 1 <= len(rows) <= 19:
             raise ValueError("suites")
@@ -261,6 +276,7 @@ def _ensure_fail(rows, name):
 def final_result(env, rc, timed_out, reason, path):
     """Build the structured result. Exit status and log text never supply a PASS."""
     rows, hardware, verdict = [], dict(UNKNOWN_HW), "FAIL"
+    reference = {}
     if reason in REASONS:
         _ensure_fail(rows, reason)
     else:
@@ -272,6 +288,8 @@ def final_result(env, rc, timed_out, reason, path):
                 raise ResultError("binding")
             verdict, rows = doc["verdict"], [dict(row) for row in doc["suites"]]
             hardware = dict(doc.get("hardware") or UNKNOWN_HW)
+            if "host_reference" in doc:
+                reference["host_reference"] = doc["host_reference"]
         except FileNotFoundError:
             if not timed_out:
                 _ensure_fail(rows, "result_missing")
@@ -297,6 +315,7 @@ def final_result(env, rc, timed_out, reason, path):
         "verdict": verdict,
         "suites": rows,
         "hardware": hardware,
+        **reference,
     }
 
 
