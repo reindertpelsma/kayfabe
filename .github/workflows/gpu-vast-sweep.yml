@@ -32,7 +32,7 @@ jobs:
         shell: bash --noprofile --norc -eo pipefail {0}
         timeout-minutes: 205
         env:
-          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}
+          WORKER_URL: ${{ vars.VAST_BROKER_URL }}
           WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.VAST_BROKER_ACCESS_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.VAST_BROKER_ACCESS_SECRET }}

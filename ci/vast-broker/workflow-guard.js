@@ -84,11 +84,11 @@ function jobsIn(text) {
 }
 function endpointBoundary(filename, text, jobs) {
   const accessAlias = /\bCF_ACCESS_CLIENT_(?:ID|SECRET)\b/;
-  const secretBindings = {
-    WORKER_URL: 'VAST_BROKER_URL',
-    WORKER_PATH: 'VAST_BROKER_PATH',
-    CF_ACCESS_CLIENT_ID: 'VAST_BROKER_ACCESS_ID',
-    CF_ACCESS_CLIENT_SECRET: 'VAST_BROKER_ACCESS_SECRET',
+  const endpointBindings = {
+    WORKER_URL: 'vars.VAST_BROKER_URL',
+    WORKER_PATH: 'secrets.VAST_BROKER_PATH',
+    CF_ACCESS_CLIENT_ID: 'secrets.VAST_BROKER_ACCESS_ID',
+    CF_ACCESS_CLIENT_SECRET: 'secrets.VAST_BROKER_ACCESS_SECRET',
   };
   const errors = [],
     fail = (reason) => errors.push('Broker endpoint ' + reason);
@@ -123,13 +123,13 @@ function endpointBoundary(filename, text, jobs) {
       for (const line of step.split('\n')) {
         if (/^        env:\s*$/.test(line)) environment = true;
         else if (/^        \S/.test(line)) environment = false;
-        const match = /^          ([A-Z_]+): \$\{\{ secrets\.([A-Z_]+) \}\}$/.exec(line);
+        const match = /^          ([A-Z_]+): \$\{\{ ((?:vars|secrets)\.[A-Z_]+) \}\}$/.exec(line);
         if (
           environment &&
           steps.length === 1 &&
           /^        id: broker\s*$/m.test(step) &&
           match &&
-          secretBindings[match[1]] === match[2]
+          endpointBindings[match[1]] === match[2]
         ) {
           found.add(match[1]);
           continue;
@@ -137,7 +137,7 @@ function endpointBoundary(filename, text, jobs) {
         kept.push(line);
       }
       if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))
-        fail('requires two step-env secret bindings');
+        fail('requires public URL and secret path step-env bindings');
       if (
         /\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(
           kept.join('\n').split(/^        run:/m)[0],
