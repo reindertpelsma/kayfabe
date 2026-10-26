@@ -72,6 +72,17 @@ class BuiltOutput(unittest.TestCase):
         self.assertNotIn("Disallow", text)
         self.assertTrue((OUTPUT / "404.html").is_file())
 
+    def test_only_user_manual_is_published_with_builtin_search(self):
+        for version in self.report["versions"]:
+            book = OUTPUT / "docs" / version
+            self.assertFalse((book / "design").exists())
+            self.assertFalse((book / "OWNER_RULINGS.html").exists())
+            self.assertTrue((book / "searchindex.js").is_file())
+            self.assertIn("URL_SEARCH_PARAM = 'search'", (book / "searcher.js").read_text())
+        self.assertEqual(
+            (OUTPUT / "docs/index.html").read_text().count("Design and internals (GitHub)"), 1
+        )
+
     def test_versions_json_search_default_and_plain_links(self):
         versions = json.loads((OUTPUT / "docs/versions.json").read_text())
         self.assertEqual([v["version"] for v in versions], self.report["versions"])

@@ -1,6 +1,8 @@
 """Small local tests; temporary git tags stand in for published releases."""
 
 import importlib.util
+import io
+import tarfile
 import json
 from pathlib import Path
 import subprocess
@@ -83,6 +85,24 @@ class Versions(unittest.TestCase):
         draft = self.release("v0.10.0")
         draft["draft"] = True
         self.assertEqual(builder().version_plan(self.repo, releases + [draft])["root"], "master")
+
+    def test_assetless_newer_release_does_not_displace_published_manual(self):
+        releases = [self.release("v0.10.0", "2026-10-25T00:00:00Z"), self.release("v1.0.0")]
+        releases[1]["assets"] = []
+        self.assertEqual(builder().version_plan(self.repo, releases)["latest"], "v0.10.0")
+
+    def test_draft_newer_release_does_not_displace_published_landing(self):
+        releases = [self.release("v0.10.0", "2026-10-25T00:00:00Z"), self.release("v1.0.0")]
+        releases[1]["draft"] = True
+        self.assertEqual(builder().version_plan(self.repo, releases)["root"], "v0.10.0")
+
+    def test_publication_sort_works_with_api_order_reversed(self):
+        releases = [self.release("v1.0.0", "2026-10-25T00:00:00Z"), self.release("v0.10.0")]
+        self.assertEqual(builder().version_plan(self.repo, releases)["latest"], "v0.10.0")
+
+    def test_master_override_keeps_published_manual_selected(self):
+        plan = builder().version_plan(self.repo, [self.release("v0.10.0")], "master")
+        self.assertEqual((plan["root"], plan["latest"]), ("master", "v0.10.0"))
 
     def test_old_tag_without_site_still_gets_docs(self):
         plan = builder().version_plan(self.repo, [self.release("v0.9.0")])
@@ -180,6 +200,41 @@ class Versions(unittest.TestCase):
         text = (folder / "windows.html").read_text()
         self.assertIn('rel="canonical" href="https://kayfabe.dev/docs/v1.0.0/windows.html"', text)
 
+    def fake_landing(self, source, destination, *args):
+        destination.mkdir(parents=True, exist_ok=True)
+        (destination / "index.html").write_text("<head><title>Landing</title></head><main></main>")
+
+    def assert_master_book_config(self, source):
+        module = builder()
+        work = self.repo / "work"
+        work.mkdir()
+        output = self.repo / "out"
+
+        def rendered(command, **kwargs):
+            destination = Path(command[-1])
+            destination.mkdir(parents=True)
+            (destination / "toc.html").write_text("<head></head>")
+
+        with patch.object(module.subprocess, "run", side_effect=rendered):
+            module.docs_build(
+                source,
+                "v0.10.0",
+                {"versions": ["v0.10.0"], "latest": "v0.10.0"},
+                work,
+                output,
+                {"mdbook": "mdbook"},
+            )
+        self.assertEqual(
+            (work / "book/book.toml").read_text(), (module.SITE / "book.toml").read_text()
+        )
+
+    def test_tag_missing_book_config_uses_master(self):
+        self.assert_master_book_config(self.repo)
+
+    def test_tag_broken_book_config_uses_master(self):
+        (self.repo / "site/book.toml").write_text("this is not TOML")
+        self.assert_master_book_config(self.repo)
+
     def test_oldest_manual_render_failure_fails_build(self):
         module = builder()
 
@@ -188,7 +243,7 @@ class Versions(unittest.TestCase):
                 raise subprocess.CalledProcessError(1, "mdbook")
 
         with patch.object(module, "docs_build", side_effect=render), patch.object(
-            module, "landing_build"
+            module, "landing_build", side_effect=self.fake_landing
         ), self.assertRaises(subprocess.CalledProcessError):
             module.build(self.repo, {}, [])
 
@@ -198,11 +253,42 @@ class Versions(unittest.TestCase):
         def render(source, *args):
             if source != self.repo:
                 raise subprocess.CalledProcessError(1, "zola")
+            self.fake_landing(source, *args)
 
         with patch.object(module, "docs_build"), patch.object(
             module, "landing_build", side_effect=render
         ), self.assertRaises(subprocess.CalledProcessError):
             module.build(self.repo, {}, [])
+
+    def assert_bad_tool_hash(self, name):
+        module = builder()
+        config = self.repo / "config"
+        config.mkdir()
+        cache = self.repo / "cache"
+        cache.mkdir()
+        (config / "tools.json").write_text(
+            json.dumps(
+                {
+                    name: {
+                        "version": "1",
+                        "url": "https://example.invalid/tool.tar.gz",
+                        "sha256": "0" * 64,
+                    }
+                }
+            )
+        )
+        with tarfile.open(cache / (name + "-1.tar.gz"), "w:gz") as archive:
+            entry = tarfile.TarInfo(name)
+            entry.size = 4
+            archive.addfile(entry, io.BytesIO(b"tool"))
+        with patch.object(module, "SITE", config), self.assertRaisesRegex(ValueError, "SHA-256"):
+            module.tools(cache)
+
+    def test_zola_download_hash_is_required(self):
+        self.assert_bad_tool_hash("zola")
+
+    def test_mdbook_download_hash_is_required(self):
+        self.assert_bad_tool_hash("mdbook")
 
     def test_broken_links_are_reported_without_failing(self):
         dest = self.repo / "public"
@@ -215,6 +301,12 @@ class Versions(unittest.TestCase):
         result = builder().broken_links(dest)
         self.assertEqual(len(result), 2)
         self.assertEqual({item["reason"] for item in result}, {"file missing", "anchor missing"})
+
+    def test_missing_file_link_is_reported(self):
+        output = self.repo / "public"
+        output.mkdir()
+        (output / "index.html").write_text('<a href="missing.html">Broken</a>')
+        self.assertEqual(builder().broken_links(output)[0]["target"], "missing.html")
 
 
 if __name__ == "__main__":

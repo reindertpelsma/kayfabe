@@ -1,0 +1,134 @@
+[
+  {
+    "mutant": "all-tag-docs",
+    "killing_tests": 2,
+    "tests": [
+      "test_no_published_release_keeps_master_but_tag_docs_exist",
+      "test_tags_without_manual_are_absent_even_if_published"
+    ]
+  },
+  {
+    "mutant": "ignore-assets",
+    "killing_tests": 2,
+    "tests": [
+      "test_assetless_newer_release_does_not_displace_published_manual",
+      "test_no_assets_and_drafts_do_not_move_landing"
+    ]
+  },
+  {
+    "mutant": "allow-drafts",
+    "killing_tests": 2,
+    "tests": [
+      "test_draft_newer_release_does_not_displace_published_landing",
+      "test_no_assets_and_drafts_do_not_move_landing"
+    ]
+  },
+  {
+    "mutant": "oldest-publication",
+    "killing_tests": 2,
+    "tests": [
+      "test_publication_sort_works_with_api_order_reversed",
+      "test_published_artifacts_select_newest_publication"
+    ]
+  },
+  {
+    "mutant": "ignore-root-override",
+    "killing_tests": 2,
+    "tests": [
+      "test_master_override_affects_only_landing",
+      "test_master_override_keeps_published_manual_selected"
+    ]
+  },
+  {
+    "mutant": "copy-internal-docs",
+    "killing_tests": 2,
+    "tests": [
+      "test_manual_does_not_copy_internal_docs",
+      "test_manual_order_and_faq_only"
+    ]
+  },
+  {
+    "mutant": "allow-internal-links",
+    "killing_tests": 2,
+    "tests": [
+      "html')",
+      "md')"
+    ]
+  },
+  {
+    "mutant": "allow-missing-title",
+    "killing_tests": 2,
+    "tests": [
+      "test_empty_title_fails_publication",
+      "test_missing_title_fails_publication"
+    ]
+  },
+  {
+    "mutant": "skip-old-renders",
+    "killing_tests": 2,
+    "tests": [
+      "test_old_landing_render_failure_fails_build",
+      "test_oldest_manual_render_failure_fails_build"
+    ]
+  },
+  {
+    "mutant": "skip-download-hash",
+    "killing_tests": 2,
+    "tests": [
+      "test_mdbook_download_hash_is_required",
+      "test_zola_download_hash_is_required"
+    ]
+  },
+  {
+    "mutant": "tag-book-config",
+    "killing_tests": 2,
+    "tests": [
+      "test_tag_broken_book_config_uses_master",
+      "test_tag_missing_book_config_uses_master"
+    ]
+  },
+  {
+    "mutant": "self-canonical-old-docs",
+    "killing_tests": 2,
+    "tests": [
+      "test_release_canonicals_keep_chapter_path",
+      "test_release_canonicals_use_real_latest_page"
+    ]
+  },
+  {
+    "mutant": "hide-broken-links",
+    "killing_tests": 2,
+    "tests": [
+      "test_broken_links_are_reported_without_failing",
+      "test_missing_file_link_is_reported"
+    ]
+  },
+  {
+    "mutant": "pages-boundary-removed",
+    "killing_tests": 6,
+    "tests": [
+      "not ok 2 - site deploy rejects extra permission contents: write",
+      "not ok 3 - site deploy rejects extra permission actions: write",
+      "not ok 4 - site deploy fails closed without condition",
+      "not ok 5 - site deploy fails closed without environment",
+      "not ok 6 - site deploy fails closed without dependency",
+      "not ok 13 - site actions must be SHA pinned"
+    ]
+  },
+  {
+    "mutant": "unrelated-oidc-allowed",
+    "killing_tests": 2,
+    "tests": [
+      "not ok 11 - unrelated job cannot acquire OIDC ordinary.yml",
+      "not ok 12 - unrelated job cannot acquire OIDC publish.yml"
+    ]
+  },
+  {
+    "mutant": "selector-removed",
+    "killing_tests": 2,
+    "tests": [
+      "not ok 14 - site version switch preserves a page or falls back, exists=true",
+      "not ok 15 - site version switch preserves a page or falls back, exists=false"
+    ]
+  }
+]
