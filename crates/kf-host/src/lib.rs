@@ -21,6 +21,7 @@ pub use channel::{
 };
 pub use event::EventFd;
 
+use channel::NV2080_CTRL_CMD_DMA_INVALIDATE_TLB;
 use kf_abi::bringup::{
     CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD,
     NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
@@ -1031,8 +1032,7 @@ impl HostRm {
         if !params.is_empty() {
             patches.push(Indirect::new(16, params));
         }
-        self.ctl
-            .ioctl(req, &mut arg, &mut patches)
+        diag::rm(false, || self.ctl.ioctl(req, &mut arg, &mut patches))
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
@@ -1089,8 +1089,7 @@ impl HostRm {
         if !params.is_empty() {
             patches.push(Indirect::new(16, params));
         }
-        node.ioctl(req, &mut arg, &mut patches)
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(false, || node.ioctl(req, &mut arg, &mut patches)).map_err(|e| ioctl_error(&e))?;
         let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         Ok(out.h_object_new)
@@ -1150,8 +1149,7 @@ impl HostRm {
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         let mut patches = [Indirect::nested(16, params, inner_at, inner)
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?];
-        self.ctl
-            .ioctl(req, &mut arg, &mut patches)
+        diag::rm(false, || self.ctl.ioctl(req, &mut arg, &mut patches))
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
@@ -1277,9 +1275,10 @@ impl HostRm {
         if !payload.is_empty() {
             patches.push(Indirect::new(16, payload));
         }
-        self.ctl
-            .ioctl(req, &mut arg, &mut patches)
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(cmd == NV2080_CTRL_CMD_DMA_INVALIDATE_TLB, || {
+            self.ctl.ioctl(req, &mut arg, &mut patches)
+        })
+        .map_err(|e| ioctl_error(&e))?;
         let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         Ok(out.status)
     }
@@ -1359,9 +1358,7 @@ impl HostRm {
             .map_err(|e| abi_refused("NVOS46 map", &e))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, host.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut host, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(false, || self.ctl.ioctl(req, &mut host, &mut [])).map_err(|e| ioctl_error(&e))?;
         let arg = self
             .abi
             .from_host(runs, &host)
@@ -1449,9 +1446,7 @@ impl HostRm {
             .map_err(|e| abi_refused("NVOS47 unmap", &e))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, host.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut host, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(false, || self.ctl.ioctl(req, &mut host, &mut [])).map_err(|e| ioctl_error(&e))?;
         let arg = self
             .abi
             .from_host(runs, &host)
@@ -1672,9 +1667,7 @@ impl HostRm {
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(false, || self.ctl.ioctl(req, &mut arg, &mut [])).map_err(|e| ioctl_error(&e))?;
         let out =
             Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
@@ -1712,9 +1705,7 @@ impl HostRm {
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY, arg.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(false, || self.ctl.ioctl(req, &mut arg, &mut [])).map_err(|e| ioctl_error(&e))?;
         let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         let r = status_check(out.status);
         let n = self.views[if r.is_ok() { 1 } else { 2 }]
@@ -2275,9 +2266,7 @@ impl HostRm {
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_FREE as u8, arg.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
+        diag::rm(false, || self.ctl.ioctl(req, &mut arg, &mut [])).map_err(|e| ioctl_error(&e))?;
         let out = Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.forget(object);

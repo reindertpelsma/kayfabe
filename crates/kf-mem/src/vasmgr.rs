@@ -1486,7 +1486,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
         let tm = &mut self.stats.timing;
         tm.walks = tm.walks.saturating_add(1);
-        tm.walk_ns = tm.walk_ns.saturating_add(ns_since(batch.submitted));
+        let walk_elapsed_ns = ns_since(batch.submitted);
+        tm.walk_ns = tm.walk_ns.saturating_add(walk_elapsed_ns);
         tm.gpu_us = tm.gpu_us.saturating_add(done.gpu_us);
         tm.leaves_last = done.nrun as u64;
         let by_slot: BTreeMap<u32, &EntryDiff> = done.entries.iter().map(|e| (e.slot, e)).collect();
@@ -1554,7 +1555,25 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             // when its apply ends. Changes no decision.
             let gl_ticket = crate::gatelog::enabled()
                 .then(|| crate::gatelog::global().begin_apply(key.0, batch.id, &e.runs));
+            let ens3_before = kf_host::diag::enabled().then(|| {
+                crate::gatelog::global().ens3_begin(key.0, batch.id, &e.runs);
+                (kf_host::diag::snapshot(), kf_host::diag::thread_cpu_ns())
+            });
             let a = apply_entry(&space.target, &e.runs, &cfg);
+            if let Some((before, cpu_before)) = ens3_before {
+                crate::gatelog::global().ens3_end(
+                    key.0,
+                    batch.id,
+                    crate::gatelog::ens3::Timing {
+                        wall_ns: ns_since(t_apply),
+                        cpu_ns: cpu_before
+                            .and_then(|before| kf_host::diag::thread_cpu_ns()?.checked_sub(before)),
+                        walk_ns: walk_elapsed_ns,
+                        gpu_us: done.gpu_us,
+                        costs: kf_host::diag::snapshot().since(before),
+                    },
+                );
+            }
             if let Some(tk) = gl_ticket {
                 crate::gatelog::global().end_apply(tk);
             }

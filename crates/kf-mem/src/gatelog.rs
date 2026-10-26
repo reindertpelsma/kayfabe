@@ -96,7 +96,9 @@ pub fn flag_on(v: Option<&str>) -> bool {
 #[must_use]
 pub fn enabled() -> bool {
     static E: OnceLock<bool> = OnceLock::new();
-    *E.get_or_init(|| flag_on(std::env::var("KF3_DIAG_GATELOG").ok().as_deref()))
+    *E.get_or_init(|| {
+        flag_on(std::env::var("KF3_DIAG_GATELOG").ok().as_deref()) || kf_host::diag::enabled()
+    })
 }
 
 /// The process's recorder, on the VAHIST clock ([`crate::vahist::Recorder::clock`]).
@@ -489,6 +491,7 @@ pub struct ChanLog {
     pend_n: u64,
     hold: Option<Hold>,
     stats: ChanStats,
+    progress: ens3::Progress,
 }
 
 impl ChanLog {
@@ -509,6 +512,7 @@ impl ChanLog {
             pend_n: 0,
             hold: None,
             stats: ChanStats::default(),
+            progress: ens3::Progress::default(),
         }
     }
 
@@ -861,6 +865,8 @@ struct State {
 /// ★ The recorder (one per process: [`global`]; tests make their own).
 #[derive(Debug)]
 pub struct Recorder {
+    ens3: Mutex<ens3::History>,
+    first_153_done: AtomicBool,
     t0: Instant,
     t0_unix_ms: u128,
     st: Mutex<State>,
@@ -882,6 +888,8 @@ impl Recorder {
     #[must_use]
     pub fn with_clock(t0: Instant, t0_unix_ms: u128) -> Recorder {
         Recorder {
+            ens3: Mutex::new(ens3::History::default()),
+            first_153_done: AtomicBool::new(false),
             t0,
             t0_unix_ms,
             st: Mutex::new(State {

@@ -179,6 +179,78 @@ fn latest_publication_is_distinct_from_last_hardware_observation() {
     assert!(s.contains("publish_ns=20 put=44 marker=31"));
     assert!(s.contains("observe_ns=10 get=2 reference=0xabcd0001"));
 }
+
+#[test]
+fn observing_private_words_does_not_erase_last_successful_publication() {
+    let r = fixture();
+    r.ens3_progress(
+        0x10067,
+        Progress {
+            publish_ns: 20,
+            put: 44,
+            marker: 31,
+            ..Progress::default()
+        },
+    );
+    r.ens3_progress(
+        0x10067,
+        Progress {
+            observe_ns: 30,
+            get: 8,
+            reference: 0xabcd0003,
+            ..Progress::default()
+        },
+    );
+    let s = text(&r, Selection::default());
+    assert!(s.contains("publish_ns=20 put=44 marker=31"));
+    assert!(s.contains("observe_ns=30 get=8 reference=0xabcd0003"));
+}
+
+#[test]
+fn newest_put_does_not_erase_last_hardware_reference() {
+    let r = fixture();
+    r.ens3_progress(
+        0x10067,
+        Progress {
+            observe_ns: 10,
+            get: 2,
+            reference: 0xabcd0001,
+            ..Progress::default()
+        },
+    );
+    r.ens3_progress(
+        0x10067,
+        Progress {
+            publish_ns: 20,
+            put: 44,
+            marker: 31,
+            ..Progress::default()
+        },
+    );
+    let s = text(&r, Selection::default());
+    assert!(s.contains("publish_ns=20 put=44 marker=31"));
+    assert!(s.contains("observe_ns=10 get=2 reference=0xabcd0001"));
+}
+
+#[test]
+fn large_diff_keeps_only_bounded_run_samples_and_counts_omissions() {
+    let r = fixture();
+    r.ens3_begin(0x100000003, 7, &vec![runs()[0]; 1000]);
+    let s = text(&r, Selection::default());
+    assert!(s.contains("runs=1000 omitted=992"));
+    assert_eq!(s.lines().filter(|s| s.contains("ENS3 RUN ")).count(), 8);
+}
+
+#[test]
+fn every_diff_has_its_own_fixed_run_budget() {
+    let r = fixture();
+    for i in 1..=2 {
+        r.ens3_begin(0x100000003, i, &vec![runs()[1]; 64]);
+    }
+    let s = text(&r, Selection::default());
+    assert_eq!(s.lines().filter(|s| s.contains("ENS3 RUN ")).count(), 16);
+    assert_eq!(s.matches("runs=64 omitted=56").count(), 2);
+}
 #[test]
 fn open_gate_and_recent_gate_interval_are_visible() {
     let r = fixture();

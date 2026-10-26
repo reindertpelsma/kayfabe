@@ -67,6 +67,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
+#[path = "ens3.rs"]
+mod ens3;
 #[path = "userpump.rs"]
 mod userpump;
 #[path = "userquota.rs"]
@@ -3192,6 +3194,7 @@ impl ChanPlane {
         }
         // MEASUREMENT ONLY, default off (`KF3_DIAG_PROGRESS=<ms>`): the PROGRESS_STRAND watcher.
         self.start_strand_diag();
+        self.start_ens3_diag();
         Ok(())
     }
 

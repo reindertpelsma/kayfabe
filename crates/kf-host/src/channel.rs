@@ -45,7 +45,7 @@ const CHANNEL_ALLOC_FLAGS_OFF: usize = 20;
 
 const NV01_CONTEXT_DMA: u32 = 0x0000_0002;
 /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`ogkm-580: ctrl2080dma.h`).
-const NV2080_CTRL_CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502;
+pub(crate) const NV2080_CTRL_CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502;
 /// `hVASpace` offset inside `NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS`.
 const INVALIDATE_H_VASPACE_OFF: usize = 12;
 /// RM requires a USERD offset aligned to 512 bytes (`[measured]`, the old tree's rm.rs:1346).

@@ -1,0 +1,167 @@
+[
+  {
+    "mutant": "M01_no_valid_trigger",
+    "killed": 6,
+    "tests": [
+      "changing_the_file_does_not_rearm_first_153",
+      "first_valid_trigger_is_consumed_once",
+      "invalid_trigger_can_be_corrected_without_losing_first_snapshot",
+      "no_va_trigger_accepts_unidentified_first_153",
+      "selected_trigger_preserves_exact_space_and_channel",
+      "oversized_file_cannot_hide_a_valid_trigger_prefix"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M02_wrong_event_accepted",
+    "killed": 3,
+    "tests": [
+      "invalid_trigger_can_be_corrected_without_losing_first_snapshot",
+      "malformed_and_oversized_triggers_are_rejected",
+      "non_153_text_never_becomes_a_snapshot"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M03_ignore_selectors",
+    "killed": 2,
+    "tests": [
+      "selector_does_not_leak_unrelated_channel_or_space",
+      "space_only_selects_its_rings_and_applies"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M04_no_apply_history",
+    "killed": 5,
+    "tests": [
+      "apply_history_and_dump_are_bounded_and_report_loss",
+      "every_diff_has_its_own_fixed_run_budget",
+      "in_flight_apply_is_visible_before_it_finishes",
+      "large_diff_keeps_only_bounded_run_samples_and_counts_omissions",
+      "snapshot_includes_map_unmap_and_apply_phase_costs"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M05_no_ring_progress",
+    "killed": 4,
+    "tests": [
+      "latest_publication_is_distinct_from_last_hardware_observation",
+      "newest_put_does_not_erase_last_hardware_reference",
+      "observing_private_words_does_not_erase_last_successful_publication",
+      "newest_publication_and_observed_marker_survive_ring_wrap"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M06_rearm_first_trigger",
+    "killed": 2,
+    "tests": [
+      "changing_the_file_does_not_rearm_first_153",
+      "first_valid_trigger_is_consumed_once"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M07_run_budget_plus_one",
+    "killed": 2,
+    "tests": [
+      "every_diff_has_its_own_fixed_run_budget",
+      "large_diff_keeps_only_bounded_run_samples_and_counts_omissions"
+    ],
+    "suite": "mem"
+  },
+  {
+    "mutant": "M08_no_timing_accumulation",
+    "killed": 4,
+    "tests": [
+      "diag::tests::invalidate_is_not_counted_as_an_ordinary_rm_call",
+      "diag::tests::ioctl_success_and_error_each_contribute_one_real_call",
+      "diag::tests::sparse_scope_counts_every_call_and_blocks",
+      "diag::tests::restore_scope_counts_work_and_keeps_thread_isolation"
+    ],
+    "suite": "host"
+  },
+  {
+    "mutant": "M09_conflate_invalidate",
+    "killed": 2,
+    "tests": [
+      "diag::tests::nested_admission_is_not_subtracted_twice",
+      "diag::tests::rm_and_invalidate_are_disjoint_in_an_apply"
+    ],
+    "suite": "host"
+  },
+  {
+    "mutant": "M10_ioctls_not_timed",
+    "killed": 2,
+    "tests": [
+      "diag::tests::ioctl_success_and_error_each_contribute_one_real_call",
+      "diag::tests::invalidate_is_not_counted_as_an_ordinary_rm_call"
+    ],
+    "suite": "host"
+  },
+  {
+    "mutant": "M11_cpu_clock_unavailable",
+    "killed": 2,
+    "tests": [
+      "thread_time_unsafe::tests::thread_cpu_clock_is_available_and_monotonic",
+      "thread_time_unsafe::tests::independent_worker_has_its_own_available_cpu_clock"
+    ],
+    "suite": "cpu"
+  },
+  {
+    "mutant": "W01_rm_hooks_omitted",
+    "killed": 2,
+    "tests": [
+      "rm_ioctl_and_invalidate_category_are_both_measured",
+      "sparse_reservation_alloc_free_map_and_unmap_reach_timed_ioctls"
+    ],
+    "suite": "hooks"
+  },
+  {
+    "mutant": "W02_apply_begin_omitted",
+    "killed": 2,
+    "tests": [
+      "apply_cost_is_finished_after_apply_and_before_vahist_printing",
+      "every_real_apply_is_bracketed_for_ens3"
+    ],
+    "suite": "hooks"
+  },
+  {
+    "mutant": "W03_sparse_phases_misclassified",
+    "killed": 2,
+    "tests": [
+      "cost_work_counts_actual_clone_blocks_and_restore_page_visits",
+      "sparse_admission_clone_and_restore_scan_have_separate_costs"
+    ],
+    "suite": "hooks"
+  },
+  {
+    "mutant": "W04_real_progress_hooks_omitted",
+    "killed": 2,
+    "tests": [
+      "real_private_put_and_existing_hw_words_feed_snapshot",
+      "published_sequence_and_marker_come_from_real_fetch_and_marks"
+    ],
+    "suite": "hooks"
+  },
+  {
+    "mutant": "W05_first153_dump_omitted",
+    "killed": 2,
+    "tests": [
+      "first153_observer_is_started_separately_from_va_apply",
+      "snapshot_thread_is_off_by_default_and_collects_nsi_counters"
+    ],
+    "suite": "hooks"
+  },
+  {
+    "mutant": "M12_wall_clock_substituted",
+    "killed": 2,
+    "tests": [
+      "thread_time_unsafe::tests::thread_cpu_clock_is_available_and_monotonic",
+      "thread_time_unsafe::tests::independent_worker_has_its_own_available_cpu_clock"
+    ],
+    "suite": "cpu"
+  }
+]

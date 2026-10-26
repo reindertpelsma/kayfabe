@@ -291,7 +291,12 @@ impl Reservations {
     }
 
     pub(crate) fn admit(&mut self, ops: &dyn Ops, va: u64, len: u64) -> Result<bool, RmError> {
-        let snapshot = self.blocks.clone();
+        let _admission = crate::diag::Scope::start(crate::diag::Phase::Admission, 0);
+        let snapshot = {
+            let _clone =
+                crate::diag::Scope::start(crate::diag::Phase::Clone, self.blocks.len() as u64);
+            self.blocks.clone()
+        };
         self.declined = false;
         let result = self.admit_inner(ops, va, len);
         let declined = result.is_err() && self.declined;
@@ -313,8 +318,15 @@ impl Reservations {
                     self.stats.retained_bytes = self.stats.retained_bytes.saturating_add(hi - lo);
                 }
             }
+            let mut diag_scan = crate::diag::Scope::start(crate::diag::Phase::Restore, 0);
+            let mut diag_scan_pages = 0u64;
             for b in self.blocks.values_mut() {
                 b.wanted = [0; 8];
+                if crate::diag::enabled() {
+                    let end = b.hi.min(b.lo.saturating_add(NORMAL_GRAIN));
+                    diag_scan_pages =
+                        diag_scan_pages.saturating_add(end.saturating_sub(b.lo).div_ceil(PAGE));
+                }
                 // An intent-bearing block is at most NORMAL_GRAIN; coarse siblings
                 // have no intent. This loop is bounded independently of guest VA.
                 for p in (b.lo..b.hi.min(b.lo.saturating_add(NORMAL_GRAIN))).step_by(PAGE as usize)
@@ -327,6 +339,7 @@ impl Reservations {
                     }
                 }
             }
+            diag_scan.add_work(diag_scan_pages);
         }
         if declined {
             // Sparse is best-effort: the run stays invalid (counted), never a refusal that the

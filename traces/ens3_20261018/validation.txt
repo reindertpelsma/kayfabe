@@ -1,0 +1,32 @@
+ENS3 GPU-free validation, 2026-10-26
+
+Final serialized test command (nice19, shared cargo target):
+  cargo test --release -j2 -p kf-mem -p kf-host -p kf-qemu -p kf-chan -p kf-linux-raw
+Result: 1845 passed, 0 failed, 11 pre-existing ignored; 64 harnesses including clean doctests.
+New tests: 42 (21 snapshot, 10 composition, 8 timing, 2 CPU clock, 1 admission probe).
+
+After strengthening the CPU-clock origin assertions: targeted CPU tests 2/2 PASS.
+After Clippy's semantics-preserving parser/counter formatting corrections:
+  targeted snapshot contracts 21/21 PASS.
+Explicit KF3_DIAG_ENS3=1 fresh-process checks:
+  snapshot 21/21 PASS; composition 10/10 PASS; admission probe 1/1 PASS.
+
+Clippy, all targets of the same five crates, release/locked/-j2: PASS.
+New Clippy debt: 0. No debt allowlist edited.
+Claims gate: new=0. No claims allowlist edited.
+Full workspace cargo fmt --all --check: PASS.
+Changed/new source lines <=100 columns; git diff --check: PASS.
+Unsafe count: kf-linux-raw98, kf-qemu87, other reviewed counts unchanged.
+The new raw CPU-clock block and merged GATELOG atexit registration are itemized in CI.
+
+Mutants: 17/17 killed, each by >=2 tests; no compiler error counted as a kill.
+See mutants.json for names, failing tests, and functional-vs-composition suite.
+The additional wall-clock-substitution mutant is killed by both CPU-origin tests.
+
+Initial combined-base four-crate unit/integration results: 1635 passed, 0 failed, 11 ignored.
+Its doctest archive was invalidated by an overlapping dev rebuild, so that invocation
+is NOT reported as a complete green baseline. The final serial invocation above
+completed without that artifact race. The initial baseline excludes kf-linux-raw.
+
+Hardware runs: 0. Standard QEMU build/install deferred by ENS3 controller instruction.
+No sparse behavior, gate, timeout, completion or GPU scheduling change.

@@ -71,6 +71,10 @@ fn published_sequence_and_marker_come_from_real_fetch_and_marks() {
 fn first153_observer_is_started_separately_from_va_apply() {
     assert!(CHAN.contains("self.start_ens3_diag()"));
     assert!(CHAN.contains("mod ens3;"));
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ens3.rs");
+    let s = std::fs::read_to_string(p).unwrap_or_default();
+    assert!(s.contains("poller.poll("));
+    assert!(s.contains("snapshot_153("));
 }
 #[test]
 fn snapshot_thread_is_off_by_default_and_collects_nsi_counters() {

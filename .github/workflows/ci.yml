@@ -1751,7 +1751,10 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          # ENS3 combines GATELOG21497: ffi_unsafe.rs adds one atexit registration.
+          # The callback has C fn() ABI and static process lifetime; libc retains it.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:98 \
+            kf-cuda:78 kf-qemu:87 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
@@ -1871,6 +1874,10 @@ jobs:
           #     never named. The bounded mapping primitive: the mmap, the munmap in Drop,
           #     the two MAP_FIXED arms (place / restore), the bounds-checked view
           #     projection, and the mprotect.
+          #   thread_time_unsafe.rs (1, ENS3) — clock_gettime(CLOCK_THREAD_CPUTIME_ID).
+          #     An initialized, aligned timespec lives exclusively across the libc call;
+          #     no guest input, retained pointer or GPU access. Negative/overflowing time
+          #     is unavailable. Called only by the explicit diagnostic apply timer.
           #   sysconf_unsafe.rs (1) — the page-size query, the one syscall the geometry
           #     newtype is derived from.
           #   epoll_unsafe.rs   (3) — M2-d, the readiness set: create, ctl (shared by

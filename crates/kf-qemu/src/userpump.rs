@@ -739,7 +739,23 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             .storage
             .lock()
             .map_err(|_| "USER_RING_STORAGE_POISONED")?;
-        Ok((storage.gpu_get()?, storage.gpu_reference()?))
+        let words = (storage.gpu_get()?, storage.gpu_reference()?);
+        drop(storage);
+        if kf_host::diag::enabled()
+            && let Some(chan) = self.r.chan
+        {
+            let rec = kf_mem::gatelog::global();
+            rec.ens3_progress(
+                chan.token,
+                kf_mem::gatelog::ens3::Progress {
+                    observe_ns: rec.now(),
+                    get: words.0,
+                    reference: words.1,
+                    ..Default::default()
+                },
+            );
+        }
+        Ok(words)
     }
     fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
         let r = self.r;
@@ -2301,9 +2317,25 @@ impl Pump {
         ) -> Result<(), String>,
     ) -> Turn<()> {
         let ram_generation = self.ram_generation;
-        publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {
+        let result = publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {
             write(self, storage)
-        })
+        });
+        if result.is_ok()
+            && kf_host::diag::enabled()
+            && let Some(chan) = r.chan
+        {
+            let rec = kf_mem::gatelog::global();
+            rec.ens3_progress(
+                chan.token,
+                kf_mem::gatelog::ens3::Progress {
+                    publish_ns: rec.now(),
+                    put: self.core.fetch.issued(),
+                    marker: self.core.marks.issued(),
+                    ..Default::default()
+                },
+            );
+        }
+        result
     }
 
     fn segment_turn(
