@@ -2347,11 +2347,7 @@ pub struct ChanPlane {
     guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
-    rung: Box<[AtomicU64]>,
-    rang: Box<[AtomicU64]>,
-    /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
-    /// `kf_mem::maplog` clock; 0 = never, or maplog off).
-    rung_at_us: Box<[AtomicU64]>,
+    inline: crate::inline_ledger::InlineLedger,
     /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: per guest token, doorbells on a WORKER-served
     /// (Translated) token, for the USER ring trace (`userpump`). Monotonic; nothing decides on it.
     queued: Box<[AtomicU64]>,
@@ -2995,9 +2991,19 @@ impl ChanPlane {
             groups: Mutex::new(HashMap::new()),
             guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
             enc_sessions: Mutex::new(HashMap::new()),
-            rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
-            rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
-            rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            inline: crate::inline_ledger::InlineLedger::new(
+                tokens,
+                crate::inline_ledger::Trace {
+                    enabled: Box::new(kf_mem::maplog::on),
+                    clock: Box::new(kf_mem::maplog::t),
+                    emit: Box::new(|w| {
+                        let crate::inline_ledger::Witness { idx, n, reached, t } = w;
+                        eprintln!(
+                            "kf3: maplog t={t:.6} DOORBELL-SUMMARY chid {idx:#x} rings={n} any_reached={reached}"
+                        );
+                    }),
+                },
+            ),
             queued: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             db_census: std::array::from_fn(|_| AtomicU64::new(0)),
             nsi,
@@ -3374,39 +3380,15 @@ impl ChanPlane {
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store
-    /// succeeded. Two relaxed atomics — the only thing this plane does on a vCPU.
+    /// succeeded. Fixed counter steps and an optional preinitialized timestamp;
+    /// the act owner's ledger take emits diagnostics outside the trap.
     pub fn note_inline(&self, idx: u32, reached: bool) {
-        if let Some(c) = self.rung.get(idx as usize) {
-            c.fetch_add(1, Ordering::Relaxed);
-        }
-        if kf_mem::maplog::on()
-            && let Some(c) = self.rung_at_us.get(idx as usize)
-        {
-            // ⊘ Diagnostic only (and it writes a line from the vCPU — never on in production).
-            let t = kf_mem::maplog::t();
-            c.store((t * 1e6) as u64, Ordering::Relaxed);
-            let n = self
-                .rung
-                .get(idx as usize)
-                .map_or(0, |r| r.load(Ordering::Relaxed));
-            eprintln!("kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}");
-        }
-        if reached && let Some(c) = self.rang.get(idx as usize) {
-            c.fetch_add(1, Ordering::Relaxed);
-        }
+        self.inline.note(idx, reached);
     }
 
     /// `(rung, reached)` for token `idx`, reset (a freed token's successor starts at zero).
     fn take_ledger(&self, idx: u32) -> (u64, u64) {
-        let r = self
-            .rung
-            .get(idx as usize)
-            .map_or(0, |c| c.swap(0, Ordering::Relaxed));
-        let f = self
-            .rang
-            .get(idx as usize)
-            .map_or(0, |c| c.swap(0, Ordering::Relaxed));
-        (r, f)
+        self.inline.take(idx)
     }
 
     /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the completed async preempts not yet posted (drained) —
@@ -6372,7 +6354,7 @@ impl ChanPlane {
         };
         let total: u64 = tokens
             .iter()
-            .filter_map(|&i| self.rung.get(i as usize))
+            .filter_map(|&i| self.inline.rung.get(i as usize))
             .map(|c| c.load(Ordering::Relaxed))
             .sum();
         let Ok(mut st) = STATE.lock() else { return };
@@ -6424,10 +6406,12 @@ impl ChanPlane {
         let tok = t.idx;
         let (gpfifo_va, entries, userd_gpa) = t.ring_at;
         let db = self
+            .inline
             .rung
             .get(tok as usize)
             .map_or(0, |x| x.load(Ordering::Relaxed));
         let db_at = self
+            .inline
             .rung_at_us
             .get(tok as usize)
             .map_or(0, |x| x.load(Ordering::Relaxed));
@@ -7407,7 +7391,8 @@ impl ChanPlane {
                         e.chid,
                         e.engine,
                         e.except_type,
-                        self.rung
+                        self.inline
+                            .rung
                             .get(e.chid as usize)
                             .map_or(0, |c| c.load(Ordering::Relaxed)),
                         self.last_rung(e.chid)
@@ -7982,7 +7967,8 @@ impl ChanPlane {
                 (
                     t.idx,
                     t.engine,
-                    self.rung
+                    self.inline
+                        .rung
                         .get(t.idx as usize)
                         .map_or(0, |c| c.load(Ordering::Relaxed)),
                 )
@@ -8001,6 +7987,7 @@ impl ChanPlane {
     /// `KF3_MAPLOG`: when guest token `idx` last rang (seconds on the maplog clock), or `-`.
     fn last_rung(&self, idx: u32) -> String {
         match self
+            .inline
             .rung_at_us
             .get(idx as usize)
             .map_or(0, |c| c.load(Ordering::Relaxed))
@@ -8381,10 +8368,11 @@ impl ChanPlane {
             w.store(0, Ordering::Release);
         }
         for w in self
+            .inline
             .rung
             .iter()
-            .chain(self.rang.iter())
-            .chain(self.rung_at_us.iter())
+            .chain(self.inline.rang.iter())
+            .chain(self.inline.rung_at_us.iter())
         {
             w.store(0, Ordering::Relaxed);
         }

@@ -45,7 +45,7 @@
 //! drainer has delivered the registration's last count — so the caller frees the twin (and a later
 //! act re-births the token) only after the old eventfd can deliver nothing more.
 
-use kf_linux_raw::{MAX_READY_BATCH, Notifier, PollTimeout, Poller, ReadyTokens};
+use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::os::fd::BorrowedFd;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -831,24 +831,19 @@ impl DbFast {
             }
             Err(_) => return 0,
         }
-        let mut total = 0;
-        loop {
-            let mut ready = ReadyTokens::new();
-            self.counters.polls.fetch_add(1, Ordering::Relaxed);
-            let t = Instant::now();
-            let got = self
-                .poller
-                .wait(&mut ready, PollTimeout::Immediate)
-                .unwrap_or(0);
-            let n = self.on_ready(&ready, t, sink);
-            if n > 0 {
-                self.counters.poll_hits.fetch_add(1, Ordering::Relaxed);
-            }
-            total += n;
-            if got < MAX_READY_BATCH {
-                return total;
-            }
+        // One batch per turn, including when the guest keeps every fd ready.
+        // epoll is level-triggered: the suffix and stores after a counter drain
+        // remain ready for the next turn. Draining to empty would let userspace
+        // keep us here forever, starving register writes and reset progress.
+        let mut ready = ReadyTokens::new();
+        self.counters.polls.fetch_add(1, Ordering::Relaxed);
+        let t = Instant::now();
+        let _ = self.poller.wait(&mut ready, PollTimeout::Immediate);
+        let n = self.on_ready(&ready, t, sink);
+        if n > 0 {
+            self.counters.poll_hits.fetch_add(1, Ordering::Relaxed);
         }
+        n
     }
 
     /// One line for the device's status/boot log.
@@ -890,6 +885,7 @@ impl DbFast {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kf_linux_raw::MAX_READY_BATCH;
     use std::sync::atomic::AtomicBool;
 
     /// A KVM stand-in: records placements, refuses on demand (so the refusal arms are reachable
@@ -948,6 +944,83 @@ mod tests {
 
     fn pump(f: &DbFast, s: &dyn Sink) -> usize {
         f.service_ready(s)
+    }
+
+    // W1 EXPECTED RED: a legal backlog and immediate new guest stores must not
+    // extend a drainer turn beyond one readiness batch. No scheduling or clock
+    // assumption: signals happen at explicit delivery steps.
+    fn ready_backlog(count: usize) -> (DbFast, Vec<Arc<Notifier>>) {
+        let f = DbFast::new(count, kick()).unwrap();
+        assert!(f.enable(Box::new(Arc::new(FakeKvm::default()))));
+        f.site_add(0x90);
+        let mut fds = Vec::new();
+        for idx in 0..u32::try_from(count).unwrap() {
+            assert!(matches!(
+                f.register(idx, idx),
+                RegOutcome::Registered { .. }
+            ));
+            let fd = efd_of(&f, idx);
+            fd.signal().unwrap();
+            fds.push(fd);
+        }
+        (f, fds)
+    }
+
+    #[test]
+    fn worst_trap_backlog_yields_after_one_batch_without_losing_the_suffix() {
+        let (f, _fds) = ready_backlog(MAX_READY_BATCH * 2);
+        let sink = Rec::default();
+        assert_eq!(f.service_ready(&sink), MAX_READY_BATCH, "one turn only");
+        assert_eq!(
+            f.service_ready(&sink),
+            MAX_READY_BATCH,
+            "suffix stays ready"
+        );
+        assert_eq!(f.service_ready(&sink), 0);
+        let got = sink.got.lock().unwrap();
+        assert_eq!(got.len(), MAX_READY_BATCH * 2);
+        assert_eq!(
+            got.iter().copied().collect::<BTreeSet<_>>().len(),
+            got.len()
+        );
+    }
+
+    #[test]
+    fn worst_trap_continuous_guest_rings_yield_and_remain_level_ready() {
+        struct GuestDuringDelivery {
+            fds: Vec<Arc<Notifier>>,
+            steps: std::sync::atomic::AtomicUsize,
+        }
+        impl Sink for GuestDuringDelivery {
+            fn deliver(&self, idx: u32, _value: u32, _tag: u64) -> Delivered {
+                let step = self.steps.fetch_add(1, Ordering::Relaxed);
+                // Another guest store after this token's counter was drained.
+                // Stop after a batch so the old unbounded implementation also
+                // terminates, with an excessive structural step count.
+                if step < MAX_READY_BATCH {
+                    self.fds[idx as usize].signal().unwrap();
+                }
+                Delivered::Handed
+            }
+        }
+        let (f, fds) = ready_backlog(MAX_READY_BATCH);
+        let sink = GuestDuringDelivery {
+            fds,
+            steps: std::sync::atomic::AtomicUsize::new(0),
+        };
+        assert_eq!(
+            f.service_ready(&sink),
+            MAX_READY_BATCH,
+            "guest cannot extend a turn"
+        );
+        assert_eq!(sink.steps.load(Ordering::Relaxed), MAX_READY_BATCH);
+        assert_eq!(
+            f.service_ready(&sink),
+            MAX_READY_BATCH,
+            "new stores stay ready"
+        );
+        assert_eq!(f.service_ready(&sink), 0);
+        assert_eq!(sink.steps.load(Ordering::Relaxed), MAX_READY_BATCH * 2);
     }
 
     /// ★ `v3-mc22`: the status line never waits on the registry lock. The drainer prints it every
