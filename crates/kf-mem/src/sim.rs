@@ -746,6 +746,9 @@ impl SimRm {
 }
 
 impl SpaceVerbs for &Sim {
+    fn invalidate(&self) -> Result<(), String> {
+        self.0.borrow_mut().invalidate()
+    }
     fn map_row(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
         if self.0.borrow_mut().ext_hit(2) {
             return Err(format!("map {:#x}+{:#x}: refused (injected)", d.va, d.len));
@@ -1043,7 +1046,10 @@ impl MapTarget for SimMirror<'_> {
         res
     }
     fn invalidate(&self) -> Result<(), String> {
-        self.sim().0.borrow_mut().invalidate()
+        self.bv.invalidate()
+    }
+    fn pending_invalidate(&self) -> bool {
+        self.bv.pending_invalidate()
     }
     fn own_view(&self, va: u64, end: u64) -> Option<crate::ledger::OwnView> {
         Some(self.bv.own_view(va, end))

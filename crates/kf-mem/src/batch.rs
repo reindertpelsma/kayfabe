@@ -3,7 +3,8 @@
 //! A batched map (`kf_host::HostRm::map_scattered`) places N VA-contiguous guest-RAM runs through
 //! ONE host object of our own. The walker still commits — and later unmaps — those runs one by one
 //! (or in ranges), so the object must outlive every piece of it and be freed exactly when its last
-//! piece is gone: freeing it earlier would make RM unmap every piece still in use
+//! piece is gone AND its deferred TLB invalidate has completed: freeing it earlier can unpin
+//! backing still reachable through stale translations, or make RM unmap pieces still in use
 //! (`ogkm-580 rs_client.c:1342-1395`), never freeing it pins guest pages for the VM's life.
 //!
 //! This is a ledger of OUR OWN host handles (the kind `V3_BUILD.md`'s 2026-09-25 amendment
@@ -23,6 +24,11 @@ use std::collections::BTreeMap;
 /// against a simulated host RM (`crate::sim`) that implements `ogkm-595.84 rs_server.c:2419-2520`
 /// and `virt_mem_allocator_gm107.c:1531-1638` exactly, foreign mappings included.
 pub trait SpaceVerbs {
+    /// Complete this space's deferred TLB invalidation before releasing retired resources.
+    ///
+    /// # Errors
+    /// The host's refusal; all retired resources must remain pinned for a later retry.
+    fn invalidate(&self) -> Result<(), String>;
     /// One FIXED map of a row ([`MapTarget::map`] semantics: `HeldByHost` for an occupied VA).
     ///
     /// # Errors
@@ -102,6 +108,9 @@ pub trait SpaceVerbs {
 }
 
 impl SpaceVerbs for HostVas<'_> {
+    fn invalidate(&self) -> Result<(), String> {
+        MapTarget::invalidate(self)
+    }
     fn map_row(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         MapTarget::map(self, d, defer)
     }
@@ -1110,6 +1119,8 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     /// ★ Review fix 2026-10-10 (finding 5): batch objects whose free host RM refused — still OURS,
     /// still mapped somewhere: [`BatchedVas::leftovers`] reports them so the space is never recycled.
     pub stuck_objects: std::sync::Mutex<Vec<u32>>,
+    /// Resources awaiting a successful explicit TLB invalidate (never a vCPU operation).
+    pending_retire: std::sync::Mutex<Retirements>,
     /// ★ D1: big-leaf segments placed THROUGH a micro reservation sized to them (one reservation
     /// per segment, or per leaf when the whole segment was refused and was too big for 4 KiB grain).
     pub leaf_reserved: std::sync::atomic::AtomicU64,
@@ -1148,20 +1159,29 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     _rm: std::marker::PhantomData<&'rm ()>,
 }
 
+/// A snapshot can be taken before invalidation without holding a lock across the host call.
+/// Unmaps that finish later enqueue into the next snapshot and keep their pins meanwhile.
+#[derive(Debug, Default)]
+struct Retirements {
+    objects: Vec<u32>,
+    micro_pins: BTreeMap<(u64, u32), Seg>,
+}
+
 /// ★ One micro reservation of ours: `[lo, hi)` (its key is `lo`), its handle, and the maps in
 /// flight THROUGH it.
 ///
 /// ★ Review fix 2026-10-10 (finding 6): `pins` > 0 while a map through it is between its host call
 /// and its record in the ledger — a reservation is released only when nothing of ours is in it
-/// AND nothing is being mapped through it, so a caller on another thread (the falcon-context
-/// steer, [`BatchedVas::hand_to_host`]) can release it without racing the VA thread.
+/// AND nothing is being mapped through it. Deferred unmaps retain a pin until their explicit
+/// invalidate completes, including while its host call is in flight. Thus another thread (the
+/// falcon-context steer, [`BatchedVas::hand_to_host`]) cannot release it ahead of the VA thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MicroResv {
     /// Its end.
     pub hi: u64,
     /// Its handle (an `hDma`).
     pub handle: u32,
-    /// Maps in flight through it.
+    /// Maps in flight through it, plus pending or in-flight invalidate pins.
     pub pins: u32,
 }
 
@@ -1268,6 +1288,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             strays_removed: std::sync::atomic::AtomicU64::new(0),
             held_ours: std::sync::atomic::AtomicU64::new(0),
             stuck_objects: std::sync::Mutex::new(Vec::new()),
+            pending_retire: std::sync::Mutex::new(Retirements::default()),
             leaf_reserved: std::sync::atomic::AtomicU64::new(0),
             leaf_grained: std::sync::atomic::AtomicU64::new(0),
             rigid_seen: std::sync::atomic::AtomicU64::new(0),
@@ -2103,6 +2124,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             .saturating_add(self.hold(&self.micro, |m| (m.len(), 1)))
             .saturating_add(self.hold(&self.book, |b| (b.len(), 1)))
             .saturating_add(self.hold(&self.stuck_objects, |s| (s.len(), 1)))
+            .saturating_add(self.hold(&self.pending_retire, |p| {
+                (p.objects.len().saturating_add(p.micro_pins.len()), 1)
+            }))
     }
 
     /// Record the pieces just placed, [`LEDGER_CHUNK`] per lock hold.
@@ -2152,10 +2176,84 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         }
     }
 
+    /// Keep a reservation pinned from before a deferred host unmap until invalidation succeeds.
+    /// Enqueue AFTER the call: an invalidate racing the unmap cannot release this pin early.
+    fn unmap_in(&self, h: u32, va: u64, size: u64, defer: bool) -> Result<(), String> {
+        let pin = if defer {
+            self.hold(&self.micro, |m| {
+                let pin = m.range_mut(..=va).next_back().and_then(|(&lo, r)| {
+                    if r.handle != h || va >= r.hi {
+                        return None;
+                    }
+                    r.pins = r.pins.saturating_add(1);
+                    Some((Some(h), lo, r.hi))
+                });
+                (pin, 1)
+            })
+        } else {
+            None
+        };
+        let result = self.vas.unmap_in(h, va, size, defer);
+        if let Some(pin) = pin {
+            self.retain_micro_pin(pin);
+        }
+        result
+    }
+
+    /// One pending pin per reservation, even if a guest causes repeated unmaps or retries.
+    /// A concurrent invalidate may own an earlier pin in its snapshot; this one then belongs
+    /// to the next invalidate. Replacing a queued pin needs no second pin on the reservation.
+    fn retain_micro_pin(&self, pin: Seg) {
+        if let Some(h) = pin.0 {
+            let duplicate = self.hold(&self.pending_retire, |p| {
+                (p.micro_pins.insert((pin.1, h), pin).is_some(), 1)
+            });
+            if duplicate {
+                self.unpin(core::slice::from_ref(&pin));
+            }
+        }
+    }
+
+    /// Whether deferred unmaps still hold batch objects or reservation pins for invalidation.
+    #[must_use]
+    pub fn pending_invalidate(&self) -> bool {
+        self.hold(&self.pending_retire, |p| {
+            (!p.objects.is_empty() || !p.micro_pins.is_empty(), 1)
+        })
+    }
+
+    /// Complete one deferred batch and then release only resources retired before its submission.
+    /// No ledger lock is held during the invalidate or any free. A refusal retains every pin.
+    ///
+    /// # Errors
+    /// The host invalidate's refusal; the next invalidate retries the same retirements.
+    pub fn invalidate(&self) -> Result<(), String> {
+        let pending = self.hold(&self.pending_retire, |p| (core::mem::take(p), 1));
+        let micro: Vec<Seg> = pending.micro_pins.into_values().collect();
+        if let Err(e) = self.vas.invalidate() {
+            for chunk in pending.objects.chunks(LEDGER_CHUNK) {
+                self.hold(&self.pending_retire, |p| {
+                    p.objects.extend_from_slice(chunk);
+                    ((), chunk.len())
+                });
+            }
+            for pin in micro {
+                self.retain_micro_pin(pin);
+            }
+            return Err(e);
+        }
+        self.free(pending.objects);
+        self.unpin(&micro);
+        for (_, lo, hi) in micro {
+            self.release_micro(lo, hi);
+        }
+        Ok(())
+    }
+
     /// Whole-mapping unmap of one OWN entry, by its routing.
     fn unmap_entry(&self, s: u64, m: OwnMap, defer: bool) -> Result<(), String> {
         match m.via {
-            Some(h) => self.vas.unmap_in(h, s, 0, defer),
+            Some(h) => self.unmap_in(h, s, 0, defer),
             // By ROW: a row straddling a guest-reservation edge is one host mapping per `hDma`.
             None => self.vas.unmap_row(s, m.len, defer),
         }
@@ -2212,7 +2310,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             }
             for &(via, s, e) in runs.iter().rev() {
                 let r = match via {
-                    Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer),
+                    Some(h) => self.unmap_in(h, s, e.saturating_sub(s), defer),
                     None => self.vas.unmap_range(s, e.saturating_sub(s), defer),
                 };
                 if let Err(r) = r {
@@ -2559,11 +2657,11 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// One maximal owned span: the host call (no lock held), then the ledger and the book.
     fn unmap_span(&self, (s, e, via): (u64, u64, Option<u32>), defer: bool) -> Result<(), String> {
         match via {
-            Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer)?,
+            Some(h) => self.unmap_in(h, s, e.saturating_sub(s), defer)?,
             None => self.vas.unmap_range(s, e.saturating_sub(s), defer)?,
         }
         self.cut_own(s, e);
-        self.retired(s, e.saturating_sub(s));
+        self.retired(s, e.saturating_sub(s), defer);
         Ok(())
     }
 
@@ -2641,7 +2739,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         }
         if done_end > va {
             // The entries that landed tile [va, done_end): one pass over the book for all of them.
-            self.retired(va, done_end.saturating_sub(va));
+            self.retired(va, done_end.saturating_sub(va), defer);
         }
         self.release_micro(va, end);
         r
@@ -2650,6 +2748,11 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// Free every batch object and micro reservation left (the space is being retired). Returns
     /// how many batch objects.
     pub fn drain(&self) -> usize {
+        // A failed invalidate must never turn a retire into an early unpin. Leftovers keep the
+        // caller from recycling this space; its owning host resources stay tracked.
+        if self.invalidate().is_err() {
+            return 0;
+        }
         let taken = self.hold(&self.book, |b| (b.take_all(), 1));
         let rest = taken.extents();
         drop(taken); // the bitmaps go OUTSIDE the lock
@@ -2764,9 +2867,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     }
 
     /// `[va, va+len)` is no longer mapped by us: clear it in the book ([`LEDGER_CHUNK`] units per
-    /// hold), forget the ledger entries of the batch objects that emptied, and free those objects
-    /// (host calls, no lock held).
-    fn retired(&self, va: u64, len: u64) {
+    /// hold), forget the ledger entries of emptied objects, and queue their frees until invalidate
+    /// succeeds. A non-deferred unmap has already invalidated (host calls hold no ledger lock).
+    fn retired(&self, va: u64, len: u64, defer: bool) {
         let end = va.saturating_add(len);
         let mut cur = BookCursor::default();
         let mut emptied: Vec<(u32, u64, u64)> = Vec::new();
@@ -2784,7 +2887,17 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         for &(h, s, l) in &emptied {
             self.forget_batch_range(h, s, s.saturating_add(l));
         }
-        self.free(emptied.into_iter().map(|(h, _, _)| h).collect());
+        let handles: Vec<u32> = emptied.into_iter().map(|(h, _, _)| h).collect();
+        if defer {
+            for chunk in handles.chunks(LEDGER_CHUNK) {
+                self.hold(&self.pending_retire, |p| {
+                    p.objects.extend_from_slice(chunk);
+                    ((), chunk.len())
+                });
+            }
+        } else {
+            self.free(handles);
+        }
     }
 
     fn free(&self, handles: Vec<u32>) {
@@ -2982,6 +3095,8 @@ mod tests {
 
     use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
 
+    type InvalidateGate = (std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>);
+
     /// A host that accepts every verb and remembers nothing — the ledger code alone is under test,
     /// at sizes the host model (`crate::sim`, linear scans) could not carry.
     struct NullHost {
@@ -2989,6 +3104,8 @@ mod tests {
         /// Reservations longer than this are refused (0 = all refused).
         reserve_max: AtomicU64,
         host_calls: AtomicU64,
+        freed: std::sync::Mutex<Vec<u32>>,
+        invalidate_gate: std::sync::Mutex<Option<InvalidateGate>>,
     }
 
     impl NullHost {
@@ -2997,6 +3114,8 @@ mod tests {
                 next: AtomicU32::new(0x100),
                 reserve_max: AtomicU64::new(reserve_max),
                 host_calls: AtomicU64::new(0),
+                freed: std::sync::Mutex::new(Vec::new()),
+                invalidate_gate: std::sync::Mutex::new(None),
             }
         }
         fn call(&self) {
@@ -3005,6 +3124,14 @@ mod tests {
     }
 
     impl SpaceVerbs for &NullHost {
+        fn invalidate(&self) -> Result<(), String> {
+            let gate = self.invalidate_gate.lock().unwrap().take();
+            if let Some((entered, go)) = gate {
+                entered.send(()).unwrap();
+                go.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+            }
+            Ok(())
+        }
         fn map_row(&self, _: &Desired, _: bool) -> Result<Mapped, String> {
             self.call();
             Ok(Mapped::Placed)
@@ -3034,7 +3161,8 @@ mod tests {
             self.call();
             Ok(())
         }
-        fn free(&self, _: u32) -> Result<(), String> {
+        fn free(&self, h: u32) -> Result<(), String> {
+            self.freed.lock().unwrap().push(h);
             self.call();
             Ok(())
         }
@@ -3082,6 +3210,61 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
             leaf,
         }
+    }
+
+    /// An invalidate may finish only the resources retired before it began. Host calls in this
+    /// test are blocked by channels, never sleeps; the other worker remains free to retire.
+    fn retire_during_invalidate(batch: bool) {
+        let host = NullHost::new(u64::MAX);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let (a, b, len) = (0x2_0000_0000u64, 0x2_0002_0000u64, 0x1_0000u64);
+        for va in [a, b] {
+            if batch {
+                let rows: Vec<_> = (0..8).map(|i| row(va + i * P, P, P)).collect();
+                bv.place(std::os::fd::AsFd::as_fd(&std::io::stdin()), &rows, true)
+                    .unwrap();
+            } else {
+                bv.map(&row(va, len, len), true).unwrap();
+            }
+        }
+        bv.unmap_range(a, len, true).unwrap();
+        let (entered, wait_entered) = std::sync::mpsc::channel();
+        let (go, wait_go) = std::sync::mpsc::channel();
+        *host.invalidate_gate.lock().unwrap() = Some((entered, wait_go));
+        std::thread::scope(|scope| {
+            let invalidating = scope.spawn(|| bv.invalidate());
+            wait_entered
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            bv.unmap_range(b, len, true).unwrap();
+            bv.unmap_range(a, len, true).unwrap();
+            assert!(
+                host.freed.lock().unwrap().is_empty(),
+                "completion still pending"
+            );
+            go.send(()).unwrap();
+            invalidating.join().unwrap().unwrap();
+        });
+        assert!(!bv.micro_covers(a, a + len));
+        assert!(
+            bv.micro_covers(b, b + len),
+            "later retirement needs another invalidate"
+        );
+        assert!(bv.pending_invalidate());
+        assert_eq!(host.freed.lock().unwrap().len(), if batch { 2 } else { 1 });
+        bv.invalidate().unwrap();
+        assert_eq!(bv.leftovers(), 0);
+        assert_eq!(host.freed.lock().unwrap().len(), if batch { 4 } else { 2 });
+    }
+
+    #[test]
+    fn a_batch_retired_during_invalidate_keeps_its_pin_until_the_next_completion() {
+        retire_during_invalidate(true);
+    }
+
+    #[test]
+    fn a_micro_retired_during_invalidate_waits_for_the_next_completion() {
+        retire_during_invalidate(false);
     }
 
     /// The timing tests below measure latencies of threads running concurrently: they take this lock
@@ -3164,6 +3347,8 @@ mod tests {
             Ok(()),
             "exact, inside"
         );
+        assert!(bv.pending_invalidate());
+        bv.invalidate().unwrap();
         assert_eq!(bv.hand_to_host(va, len), HandOver::Free);
         assert_eq!((bv.leftovers(), bv.leaf_reserved.load(Relaxed)), (0, 1));
         // (a2) the whole row refused, one leaf accepted.
@@ -3191,6 +3376,9 @@ mod tests {
     fn per_leaf_reservations_that_are_refused_spend_the_grain_budget() {
         struct Flaky(NullHost, AtomicU32);
         impl SpaceVerbs for &Flaky {
+            fn invalidate(&self) -> Result<(), String> {
+                Ok(())
+            }
             fn map_row(&self, d: &Desired, f: bool) -> Result<Mapped, String> {
                 (&self.0).map_row(d, f)
             }
@@ -3315,6 +3503,11 @@ mod tests {
         assert!(bv.micro.lock().unwrap().values().all(|r| r.pins == 0));
         assert!(bv.micro_covers(base, base + span));
         assert_eq!(bv.unmap_range(base, span, true), Ok(()));
+        assert!(
+            bv.micro_covers(base, base + span),
+            "kept until invalidate completes"
+        );
+        bv.invalidate().unwrap();
         assert!(!bv.micro_covers(base, base + span));
         assert_eq!(bv.leftovers(), 0);
         assert!(bv.hold_stats().0 <= BOUND, "{:?}", bv.hold_stats());
@@ -3414,6 +3607,9 @@ mod tests {
     }
 
     impl SpaceVerbs for &CountHost {
+        fn invalidate(&self) -> Result<(), String> {
+            Ok(())
+        }
         fn map_row(&self, d: &Desired, f: bool) -> Result<Mapped, String> {
             let n = self.maps.fetch_add(1, Relaxed) + 1;
             if n == self.fail_map_at.load(Relaxed) {
@@ -3610,6 +3806,9 @@ mod tests {
     }
 
     impl SpaceVerbs for &GateHost {
+        fn invalidate(&self) -> Result<(), String> {
+            Ok(())
+        }
         fn map_row(&self, d: &Desired, _: bool) -> Result<Mapped, String> {
             {
                 let mut p = self.pages.lock().unwrap();
@@ -4102,6 +4301,9 @@ mod tests {
     }
 
     impl SpaceVerbs for &SlowHost {
+        fn invalidate(&self) -> Result<(), String> {
+            Ok(())
+        }
         delegate_to_null!();
         fn unmap_range(&self, v: u64, l: u64, f: bool) -> Result<(), String> {
             std::thread::sleep(std::time::Duration::from_millis(self.1));

@@ -209,6 +209,11 @@ pub trait MapTarget {
     /// The host's refusal, by name.
     fn invalidate(&self) -> Result<(), String>;
 
+    /// Deferred retirements still need an invalidate even if this refresh places no new row.
+    fn pending_invalidate(&self) -> bool {
+        false
+    }
+
     /// ★★★ Satisfy a [`UsermodeRow`] (Hopper+; `V3_BAR1_DOORBELL.md` §4).
     ///
     /// [`Mapped::Placed`]: the target installed something of its OWN for the view (the BAR1

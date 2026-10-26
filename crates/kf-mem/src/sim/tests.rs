@@ -775,6 +775,11 @@ fn a_range_across_an_empty_gap_is_one_call_per_owned_span() {
     map_ram(&m, &mut c, &[(40, 1, 10), (41, 1, 11)]);
     map_ram(&m, &mut c, &[(44, 1, 12), (45, 1, 13)]);
     m.bv.unmap_range(pg(40), 6 * P, true).unwrap();
+    assert!(
+        !sim.0.borrow().objs.is_empty(),
+        "retired objects still pin stale translations"
+    );
+    m.invalidate().unwrap();
     let rm = sim.0.borrow();
     assert_eq!(rm.ranges, vec![(pg(40), 2 * P), (pg(44), 2 * P)]);
     assert_eq!(rm.gap_bytes, 0);
