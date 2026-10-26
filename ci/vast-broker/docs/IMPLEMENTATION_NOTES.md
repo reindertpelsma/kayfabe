@@ -128,7 +128,10 @@ the runner independently validates and labels it untrusted. See
 [region evidence](../../../traces/vast_broker_summary/README.md).
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js] `check` is the PR profile:
-configured measured classes GA106 first, then AD104, GA102 and AD102, capped at
+configured classes GA106, AD104, GA102 and AD102. Default checks choose the cheapest
+eligible class representative after applying country preference within each class; equal
+prices retain configured class order. Explicit die preferences remain ordered. See
+[selection](../../../docs/howto/vast-check-selection.md). The profile is capped at
 $1 effective/hour and the shared $6 daily/$30 rolling/$8 reserve limits. No
 qualifying class returns UNAVAILABLE; the Worker never substitutes another die.
 AD107 is excluded until the owner adds it after three qualifying sweep passes.

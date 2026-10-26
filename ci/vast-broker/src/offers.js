@@ -272,8 +272,18 @@ export class OfferBook {
           a.id - b.id,
       );
     if (!candidates.length) refuse('UNAVAILABLE', 503, 'NO_ALLOWED_OFFERS');
+    let selected = candidates[0];
+    if (profile === 'check' && preferences === undefined) {
+      // Keep the existing country/price choice within each die. Default checks then pick
+      // the cheapest of those eligible representatives; explicit preferences/rotation stay ordered.
+      const representatives = new Map();
+      for (const offer of candidates)
+        if (!representatives.has(offer.die)) representatives.set(offer.die, offer);
+      for (const offer of representatives.values())
+        if (offer.pricing.effective < selected.pricing.effective) selected = offer;
+    }
     return {
-      offer: candidates[0],
+      offer: selected,
       ignored,
       reason: rotate ? 'ROTATE' : preferences === undefined ? 'DEFAULT_ORDER' : 'PREFERENCE',
     };
