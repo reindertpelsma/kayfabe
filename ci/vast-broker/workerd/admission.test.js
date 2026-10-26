@@ -257,7 +257,11 @@ test('workerd admission is transactional without shared service state', async (t
       await call('/seed', [['cost:' + candidate.key, costRow]]);
       const response = await call('/reserve', { record: candidate });
       assert.equal(response.status, 409);
-      assert.deepEqual(response.data, { state: 'UNAVAILABLE_BUDGET' });
+      assert.deepEqual(response.data, {
+        state: 'UNAVAILABLE_BUDGET',
+        reason: 'BUDGET:cost-key',
+        budget: { started_at: costRow.started, ended_at: costRow.ended },
+      });
       assert.deepEqual((await call('/snapshot')).data, [['cost:' + candidate.key, costRow]]);
     });
     await t.test('newer branch discovered ' + i, async (t) => {
