@@ -2342,6 +2342,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Vast Worker admission in workerd (Wrangler dependencies)
+        env:
+          MINIFLARE_ASSERT_BODIES_CONSUMED: "true"
         run: |
           npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
           node --test ci/vast-broker/workerd/admission.test.js
