@@ -56,6 +56,8 @@ pub struct Stats {
     pub unhonoured_bytes: u64,
     /// Sparse-to-invalid bytes retained in occupied sparse blocks.
     pub retained_bytes: u64,
+    /// Plain maps placed in an unrefined (coarse) block because refinement was declined.
+    pub coarse_maps: u64,
 }
 
 #[derive(Debug)]

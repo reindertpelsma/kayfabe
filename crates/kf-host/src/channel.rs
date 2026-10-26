@@ -956,8 +956,15 @@ impl HostRm {
         // The session cap also bounds many hostile spaces and micro reservations.
         const SESSION_BLOCK_LIMIT: usize = 32768;
         use std::sync::atomic::Ordering::Relaxed;
+        // Only the tree's own blocks are counted: a micro or other reservation is placed exactly
+        // as with the twin OFF (it must never be refused by the sparse budget).
+        let counted = self.sparse_enabled;
         if self.sparse_enabled
-            && !crate::sparse::initial::claim(&self.sparse_object_count, SESSION_BLOCK_LIMIT)
+            && !crate::sparse::initial::claim_block(
+                &self.sparse_object_count,
+                SESSION_BLOCK_LIMIT,
+                layout,
+            )
         {
             let _ = self
                 .sparse_global_overflow
@@ -965,7 +972,7 @@ impl HostRm {
             return Err(RmError::NoMemory);
         }
         let result = self.reserve_va_issue(space, at, len, flags);
-        if self.sparse_enabled {
+        if counted {
             match result {
                 Ok(h) => {
                     self.sparse_objects

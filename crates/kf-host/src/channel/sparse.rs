@@ -130,6 +130,7 @@ impl HostRm {
                 .saturating_add(self.sparse_global_overflow.load(Relaxed)),
             unhonoured_bytes: self.sparse_totals[4].load(Relaxed),
             retained_bytes: self.sparse_totals[5].load(Relaxed),
+            coarse_maps: 0,
         }
     }
 

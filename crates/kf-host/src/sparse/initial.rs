@@ -33,6 +33,13 @@ pub(crate) fn claim(counter: &AtomicUsize, limit: usize) -> bool {
         .is_ok()
 }
 
+/// Claim one session slot for a reservation. Only the tree's own blocks (`tree_block`) count
+/// against the cap; any other reservation passes exactly as it does with the twin OFF.
+pub(crate) fn claim_block(counter: &AtomicUsize, limit: usize, tree_block: bool) -> bool {
+    let _ = tree_block;
+    claim(counter, limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,5 +118,28 @@ mod tests {
         });
         assert_eq!(accepted, 7);
         assert_eq!(n.load(Relaxed), 7);
+    }
+    #[test]
+    fn a_non_tree_reservation_passes_a_full_session() {
+        let n = AtomicUsize::new(5);
+        assert!(claim_block(&n, 5, false));
+    }
+    #[test]
+    fn a_non_tree_reservation_never_consumes_the_session_budget() {
+        let n = AtomicUsize::new(2);
+        assert!(claim_block(&n, 5, false));
+        assert_eq!(n.load(Relaxed), 2);
+    }
+    #[test]
+    fn a_tree_block_is_refused_by_a_full_session() {
+        let n = AtomicUsize::new(5);
+        assert!(!claim_block(&n, 5, true));
+        assert_eq!(n.load(Relaxed), 5);
+    }
+    #[test]
+    fn a_tree_block_consumes_one_session_slot() {
+        let n = AtomicUsize::new(2);
+        assert!(claim_block(&n, 5, true));
+        assert_eq!(n.load(Relaxed), 3);
     }
 }

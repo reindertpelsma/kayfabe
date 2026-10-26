@@ -11,6 +11,7 @@ struct Rm {
     next: Cell<u32>,
     calls: Cell<usize>,
     fail: Cell<usize>,
+    fail_from: Cell<usize>,
     guard: RefCell<BTreeMap<u64, Option<u64>>>,
 }
 
@@ -53,7 +54,8 @@ impl Ops for Rm {
     fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError> {
         let n = self.calls.get() + 1;
         self.calls.set(n);
-        if n == self.fail.get() {
+        let from = self.fail_from.get();
+        if n == self.fail.get() || (from != 0 && n >= from) {
             return Err(RmError::NoMemory);
         }
         assert!(len > 0 && lo.checked_add(len).is_some());
@@ -501,4 +503,194 @@ fn recycling_discards_a_previous_guests_held_sparse_suffix() {
     t.clear(&r).unwrap();
     t.retry(&r).unwrap();
     assert_eq!(r.state(va + SPARSE_GRAIN), None);
+}
+
+// ── Plain maps are never refused or changed by the sparse twin (owner ruling 2026-10-26) ──
+
+const RANGE: u32 = 0x9000;
+const WIDE: u64 = 64;
+
+fn wide(limit: usize) -> (Reservations, Rm) {
+    let r = Rm::new();
+    r.blocks
+        .borrow_mut()
+        .insert(1, (LO, LO + WIDE * NORMAL_GRAIN, false));
+    let t = Reservations::new(
+        &[GuestVaRange {
+            handle: 1,
+            lo: LO,
+            hi: LO + WIDE * NORMAL_GRAIN,
+        }],
+        limit,
+    );
+    (t, r)
+}
+
+/// What the host would hold after mapping `off` at `va`: page -> backing offset. Every piece must
+/// name a live reservation that contains it (or the range object for an unreserved hole).
+fn host_pages(r: &Rm, pieces: &[(u32, u64, u64)], va: u64, len: u64, off: u64) -> BTreeMap<u64, u64> {
+    let mut out = BTreeMap::new();
+    let mut next = va;
+    for &(h, pva, plen) in pieces {
+        assert_eq!(pva, next, "pieces tile the row without a gap");
+        if h != RANGE {
+            let (lo, hi, sparse) = r.blocks.borrow()[&h];
+            assert!(!sparse && lo <= pva && pva + plen <= hi, "piece inside its own block");
+        }
+        for p in (pva..pva + plen).step_by(PAGE as usize) {
+            out.insert(p, off + (p - va));
+        }
+        next = pva + plen;
+    }
+    assert_eq!(next, va + len);
+    out
+}
+
+/// The product with the twin OFF: ONE piece through the static coarse reservation.
+fn off_pages(va: u64, len: u64, off: u64) -> BTreeMap<u64, u64> {
+    (va..va + len)
+        .step_by(PAGE as usize)
+        .map(|p| (p, off + (p - va)))
+        .collect()
+}
+
+/// A catia-like churn: more distinct 2 MiB regions than the budget can hold, with row shapes of a
+/// few pages, a whole tile, and several tiles.
+fn churn() -> Vec<(u64, u64, u64)> {
+    let mut rows = Vec::new();
+    for i in 0..WIDE {
+        let base = LO + i * NORMAL_GRAIN;
+        let (a, n) = match i % 3 {
+            0 => (base + 5 * PAGE, 3 * PAGE),
+            1 => (base, NORMAL_GRAIN),
+            _ => (base + PAGE, 7 * PAGE),
+        };
+        rows.push((a, n, 0x1000_0000 + i * 0x20_0000));
+    }
+    rows
+}
+
+#[test]
+fn plain_maps_across_an_exhausted_budget_are_never_refused() {
+    let (mut t, r) = wide(10);
+    for (va, len, off) in churn() {
+        let pieces = t.route_map(&r, RANGE, va, len).expect("a plain map is never refused");
+        r.backed(va, len);
+        assert_eq!(host_pages(&r, &pieces, va, len, off), off_pages(va, len, off));
+    }
+    assert!(t.blocks.len() <= 10, "the block bound still holds");
+}
+#[test]
+fn plain_maps_are_byte_identical_to_the_twin_off_through_map_and_unmap() {
+    let (mut t, r) = wide(10);
+    let (mut on, mut off) = (BTreeMap::new(), BTreeMap::new());
+    let rows = churn();
+    for &(va, len, o) in &rows {
+        let pieces = t.route_map(&r, RANGE, va, len).expect("plain map");
+        r.backed(va, len);
+        on.extend(host_pages(&r, &pieces, va, len, o));
+        off.extend(off_pages(va, len, o));
+        assert_eq!(on, off);
+    }
+    for &(va, len, _) in rows.iter().rev() {
+        let pieces = t.pieces(RANGE, va, len).expect("an unmap routes through a handle");
+        for &(_, pva, plen) in &pieces {
+            t.mark(pva, plen, false);
+            for p in (pva..pva + plen).step_by(PAGE as usize) {
+                on.remove(&p);
+            }
+        }
+        r.unmap(va, len);
+        for p in (va..va + len).step_by(PAGE as usize) {
+            off.remove(&p);
+        }
+        assert_eq!(on, off);
+    }
+}
+#[test]
+fn a_plain_map_into_a_populated_coarse_block_is_accepted() {
+    let (mut t, r) = wide(3);
+    let a = LO + 4 * NORMAL_GRAIN;
+    for va in [a, a + 8 * NORMAL_GRAIN, a + 9 * NORMAL_GRAIN, a + 9 * NORMAL_GRAIN + PAGE] {
+        let pieces = t.route_map(&r, RANGE, va, PAGE).expect("plain map");
+        r.backed(va, PAGE);
+        assert_eq!(host_pages(&r, &pieces, va, PAGE, 7 * PAGE), off_pages(va, PAGE, 7 * PAGE));
+    }
+}
+#[test]
+fn a_refused_split_leaves_the_plain_map_in_its_original_block() {
+    let (mut t, r) = wide(100);
+    r.fail.set(2);
+    let va = LO + 3 * NORMAL_GRAIN;
+    let pieces = t.route_map(&r, RANGE, va, PAGE).expect("plain map");
+    r.backed(va, PAGE);
+    assert_eq!(host_pages(&r, &pieces, va, PAGE, 0), off_pages(va, PAGE, 0));
+    assert_eq!(t.stats.refused, 1, "the RM refusal is counted");
+}
+#[test]
+fn a_block_lost_to_a_failed_repair_is_mapped_through_the_range_object() {
+    let (mut t, r) = wide(100);
+    r.fail_from.set(1);
+    let va = LO + 3 * NORMAL_GRAIN;
+    let pieces = t.route_map(&r, RANGE, va, PAGE).expect("plain map");
+    assert!(pieces.iter().all(|&(h, _, _)| h == RANGE || h != 0));
+    assert!(t.poisoned);
+    assert_eq!(pieces.iter().map(|p| p.2).sum::<u64>(), PAGE);
+    r.fail_from.set(0);
+}
+#[test]
+fn an_unmap_of_a_block_lost_to_a_failed_repair_routes_through_the_range_object() {
+    let (mut t, r) = wide(100);
+    r.fail_from.set(1);
+    let va = LO + 3 * NORMAL_GRAIN;
+    let _ = t.route_map(&r, RANGE, va, PAGE);
+    let pieces = t.pieces(RANGE, va, PAGE).expect("an unmap routes through a handle");
+    assert!(pieces.iter().all(|&(h, _, _)| h != 0));
+}
+#[test]
+fn declined_plain_maps_are_counted_as_coarse_maps_not_as_overflow() {
+    let (mut t, r) = wide(4);
+    let mut declined = 0;
+    for (va, len, _) in churn() {
+        let before = t.blocks.len();
+        t.route_map(&r, RANGE, va, len).expect("plain map");
+        r.backed(va, len);
+        declined += u64::from(t.blocks.len() == before);
+    }
+    assert!(declined > 0);
+    assert_eq!(t.stats.overflow, 0, "overflow is for sparse admissions only");
+    assert!(t.stats.coarse_maps > 0 && t.stats.coarse_maps <= WIDE);
+}
+#[test]
+fn a_map_that_refines_normally_is_not_a_coarse_map() {
+    let (mut t, r) = wide(100);
+    t.route_map(&r, RANGE, LO + NORMAL_GRAIN, PAGE).expect("plain map");
+    assert_eq!(t.stats.coarse_maps, 0);
+    assert_eq!(t.stats.overflow, 0);
+}
+#[test]
+fn a_sparse_run_over_the_block_budget_is_unhonoured_not_refused() {
+    let (mut t, r) = (tree(1), Rm::new());
+    assert_eq!(t.admit(&r, LO, SPARSE_GRAIN), Ok(false));
+    assert_eq!(r.calls.get(), 0);
+    assert_eq!(r.state(LO), None);
+}
+#[test]
+fn each_declined_sparse_admission_is_one_overflow_and_its_bytes_are_unhonoured() {
+    let (mut t, r) = (tree(1), Rm::new());
+    for n in 1..=3u64 {
+        assert_eq!(t.admit(&r, LO, SPARSE_GRAIN), Ok(false));
+        assert_eq!(t.stats.overflow, n);
+        assert_eq!(t.stats.unhonoured_bytes, n * SPARSE_GRAIN);
+    }
+    assert_eq!(t.stats.refused, 0);
+}
+#[test]
+fn a_sparse_run_declined_midway_withdraws_every_new_tile() {
+    let (mut t, r) = (tree(3), Rm::new());
+    assert_eq!(t.admit(&r, LO, 2 * SPARSE_GRAIN), Ok(false));
+    assert!(!r.blocks.borrow().values().any(|b| b.2), "no sparse block remains");
+    assert_eq!(r.state(LO), None);
+    assert_eq!(r.state(LO + SPARSE_GRAIN), None);
+    assert_eq!(t.stats.overflow, 1);
 }
