@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 def builder():
@@ -97,7 +98,8 @@ class Versions(unittest.TestCase):
     def test_snapshot_contains_tag_data_not_configs_or_scripts(self):
         dest = self.repo / "snapshot"
         builder().snapshot(self.repo, "v0.10.0", dest)
-        self.assertTrue((dest / "docs/live.md").is_file())
+        self.assertFalse((dest / "docs/live.md").exists())
+        self.assertTrue((dest / "docs/howto/SUMMARY.md").is_file())
         self.assertTrue((dest / "site/content/_index.md").is_file())
         self.assertFalse((dest / "site/config.toml").exists())
         self.assertFalse((dest / "site/build.sh").exists())
@@ -124,6 +126,7 @@ class Versions(unittest.TestCase):
     def test_internal_links_fail_publication(self):
         for link in [
             "../design/secret.html",
+            "https://github.com/reindertpelsma/kayfabe/blob/master/docs/reference/other.md",
             "/docs/OWNER_RULINGS.md",
             "https://github.com/reindertpelsma/kayfabe/blob/master/docs/STATUS_DETAIL.md",
         ]:
@@ -134,7 +137,12 @@ class Versions(unittest.TestCase):
                 )
 
     def test_more_internal_links_fail_publication(self):
-        for link in ["../../archive/old.md", "../handoff-notes.md", "/docs/STATUS_AND_HANDOFF.md"]:
+        for link in [
+            "../../archive/old.md",
+            "/docs/WINDOWS_GUEST_SETUP.md",
+            "../handoff-notes.md",
+            "/docs/STATUS_AND_HANDOFF.md",
+        ]:
             with self.subTest(link=link), self.assertRaises(ValueError):
                 builder().check_page(
                     '<title>Manual</title><a href="' + link + '">internal</a>',
@@ -148,6 +156,53 @@ class Versions(unittest.TestCase):
     def test_empty_title_fails_publication(self):
         with self.assertRaises(ValueError):
             builder().check_page("<title> </title>", "docs/master/index.html")
+
+    def test_release_canonicals_use_real_latest_page(self):
+        module = builder()
+        output = self.repo / "output"
+        for version in ["master", "v0.9.0", "v1.0.0"]:
+            folder = output / "docs" / version
+            folder.mkdir(parents=True)
+            (folder / "index.html").write_text("<head><title>Manual</title></head>")
+        module.metadata(output, {"versions": ["master", "v0.9.0", "v1.0.0"], "latest": "v1.0.0"})
+        text = (output / "docs/v0.9.0/index.html").read_text()
+        self.assertIn('rel="canonical" href="https://kayfabe.dev/docs/v1.0.0/"', text)
+        self.assertNotIn("/docs/v0.9.0/", (output / "sitemap.xml").read_text())
+        self.assertIn("/docs/v1.0.0/", (output / "sitemap.xml").read_text())
+
+    def test_release_canonicals_keep_chapter_path(self):
+        module = builder()
+        output = self.repo / "output"
+        folder = output / "docs/v0.9.0"
+        folder.mkdir(parents=True)
+        (folder / "windows.html").write_text("<head><title>Windows</title></head>")
+        module.metadata(output, {"versions": ["v0.9.0", "v1.0.0"], "latest": "v1.0.0"})
+        text = (folder / "windows.html").read_text()
+        self.assertIn('rel="canonical" href="https://kayfabe.dev/docs/v1.0.0/windows.html"', text)
+
+    def test_oldest_manual_render_failure_fails_build(self):
+        module = builder()
+
+        def render(source, version, *args):
+            if version == "v0.9.0":
+                raise subprocess.CalledProcessError(1, "mdbook")
+
+        with patch.object(module, "docs_build", side_effect=render), patch.object(
+            module, "landing_build"
+        ), self.assertRaises(subprocess.CalledProcessError):
+            module.build(self.repo, {}, [])
+
+    def test_old_landing_render_failure_fails_build(self):
+        module = builder()
+
+        def render(source, *args):
+            if source != self.repo:
+                raise subprocess.CalledProcessError(1, "zola")
+
+        with patch.object(module, "docs_build"), patch.object(
+            module, "landing_build", side_effect=render
+        ), self.assertRaises(subprocess.CalledProcessError):
+            module.build(self.repo, {}, [])
 
     def test_broken_links_are_reported_without_failing(self):
         dest = self.repo / "public"
