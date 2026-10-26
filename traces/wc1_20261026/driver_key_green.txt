@@ -1,0 +1,4 @@
+ok active_driver_0000
+ok active_driver_0012
+ok rejects_wrong_class_before_read
+ok rejects_wrong_provider

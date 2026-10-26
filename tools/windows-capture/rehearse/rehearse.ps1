@@ -7,6 +7,7 @@ param(
     [string]$DecodeTag = '580.82.07'
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'driver_key.ps1')
 $root = 'C:\kfwc_wc1'
 $build = Join-Path $root 'build'
 $out = Join-Path $root 'out'
@@ -54,19 +55,12 @@ if ($Action -eq 'Setup') {
         # LTSC evaluation OVMF may have no SecureBoot variable. Other errors are not admission.
         if ($_.Exception.Message -notmatch '0xC0000100|not supported on this platform') { throw }
     }
-    # GSP is mandatory on GB20x, optional on older supported GeForce families.
+    # Enable the documented measurement setting; native Windows defaults vary.
     # These are driver settings, not writes through the capture module.
-    $base = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\' +
-        '{4d36e968-e325-11ce-bfc1-08002be10318}'
-    $gspChanged = $false
-    foreach ($key in Get-ChildItem $base) {
-        $v = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue
-        if ($v.ProviderName -eq 'NVIDIA') {
-            if ($v.EnableGpuFirmware -ne 1) { $gspChanged = $true }
-            New-ItemProperty -LiteralPath $key.PSPath -Name EnableGpuFirmware `
-                -Value 1 -PropertyType DWord -Force | Out-Null
-        }
-    }
+    $key = Get-KfwcNvidiaDriverKey $gpu[0].InstanceId
+    $gspChanged = $key.EnableGpuFirmware -ne 1
+    New-ItemProperty -LiteralPath $key.Path -Name EnableGpuFirmware `
+        -Value 1 -PropertyType DWord -Force | Out-Null
     $svc = 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm'
     New-ItemProperty -LiteralPath $svc -Name EnableGpuFirmware `
         -Value 1 -PropertyType DWord -Force | Out-Null
