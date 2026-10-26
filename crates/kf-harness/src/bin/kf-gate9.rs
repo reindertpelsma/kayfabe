@@ -39,8 +39,14 @@ const PT_BYTES: usize = 4 << 20;
 const DATA: u64 = 16 << 20;
 const PAGE: u64 = 0x1000;
 
+#[path = "kf-gate9/sparse.rs"]
+mod sparse;
+
 fn main() {
     let mut l = Checks::default();
+    if let Err(e) = sparse::check(&mut l) {
+        l.check("sparse_run", false, e);
+    }
     for (tag, v3) in [("ver2", false), ("ver3", true)] {
         if let Err(e) = differential(&mut l, tag, v3, None, KFWR_RF_KEY_PERM_DEFAULT) {
             l.check(if v3 { "ver3_run" } else { "ver2_run" }, false, e);
