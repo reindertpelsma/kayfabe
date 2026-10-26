@@ -17,7 +17,7 @@ export class AdmissionFixture {
     const path = new URL(request.url).pathname;
     if (path === '/seed') {
       for (const [key, value] of await request.json()) await this.ctx.storage.put(key, value);
-      return new Response('ok');
+      return Response.json({ state: 'SEEDED' });
     }
     if (path === '/snapshot') {
       return Response.json([...(await this.ctx.storage.list())]);

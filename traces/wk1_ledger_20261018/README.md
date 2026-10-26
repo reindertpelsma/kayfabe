@@ -1,6 +1,6 @@
 # WK1 transactional admission evidence
 
-STATUS: LIVE, 2026-10-26. Scope follows the owner's final cut: audit plus transactional admission; four CI lines reuse Wrangler's existing workerd dependencies. No global-state refactor, lint or admin Worker.
+STATUS: LIVE, 2026-10-26. Scope follows the owner's final cut: audit plus transactional admission; a small CI step reuses Wrangler's existing workerd dependencies. No global-state refactor, lint or admin Worker.
 
 CODE READ at base 48c3b7d36: the production gateway sends requests to one named BrokerLedger; createService and its queue live inside that DO. The defect established here is missing storage-level admission checks. Independent service closures are a deliberate test of admission without the queue, not evidence of a live production two-isolate incident. The audit is in [globals.md](globals.md).
 
@@ -50,3 +50,5 @@ Limits: no live provider/Cloudflare behavior is claimed. Broader scheduled-handl
 Final ledger source SHA256 for reproduction: `2abef20b9566ae47999e23512f4a0600c5e6c9e4ffba61d49aebe0ded5ea368f`.
 
 MEASURED 2026-10-26 after integrating master a424e1d39 into WK1: 1935/1935 Node tests and 37/37 workerd TAP tests pass, with zero failures/skips. The extra 25 Node cases came from master's bootstrap/boot-limit changes. The deterministic bundle test passes with reviewed SHA256 `958d414e6a0e3e9523955dbdef3098bb454441d6ae23a4b1c6f6fa3dfaa83bf3`. No deployment was performed.
+
+MEASURED 2026-10-26, hosted CI runs 40248489982 and 40248598241 at 9b69fad39: the production cap-2 case failed while decoding a Miniflare HTTP Response whose body was already consumed. Local enforcement of MINIFLARE_ASSERT_BODIES_CONSUMED reproduced 33 body-contract failures before the harness fix. The adapter now decodes every response inside its concurrent task and consumes seed responses as JSON; the same 36 subcases plus parent pass with the contract assertion enabled. CI enforces that assertion. The ledger code and all cap/refusal/rollback assertions are unchanged.

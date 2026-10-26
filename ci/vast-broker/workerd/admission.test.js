@@ -32,6 +32,13 @@ const record = (i, patch = {}) => ({
   ...patch,
 });
 
+// Miniflare responses must be consumed as soon as each fetch resolves, including
+// proxy responses. Decode each body inside its concurrent task.
+async function readJson(responsePromise) {
+  const response = await responsePromise;
+  return { status: response.status, data: await response.json() };
+}
+
 async function runtime(t, extra = {}) {
   const cloud = new MockCloud();
   cloud.contracts = Array.from({ length: 20 }, (_, i) => 900 + i);
@@ -68,10 +75,12 @@ async function runtime(t, extra = {}) {
   const ns = await mf.getDurableObjectNamespace('TEST_LEDGER');
   const stub = ns.get(ns.idFromName(t.name));
   const call = (path, body) =>
-    stub.fetch('https://test.invalid' + path, {
-      method: body === undefined ? 'GET' : 'POST',
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    readJson(
+      stub.fetch('https://test.invalid' + path, {
+        method: body === undefined ? 'GET' : 'POST',
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    );
   return { mf, stub, cloud, call };
 }
 
@@ -218,12 +227,12 @@ test('workerd admission is transactional without shared service state', async (t
           }),
         ),
       );
-      const states = await Promise.all(responses.map((r) => r.json()));
+      const states = responses.map((r) => r.data);
       assert.ok(
         states.some((s) => s.state === expected),
         JSON.stringify(states),
       );
-      const rows = await (await call('/snapshot')).json();
+      const rows = (await call('/snapshot')).data;
       const cap =
         name === 'account slots four' ||
         name === 'profile slots three' ||
@@ -248,10 +257,8 @@ test('workerd admission is transactional without shared service state', async (t
       await call('/seed', [['cost:' + candidate.key, costRow]]);
       const response = await call('/reserve', { record: candidate });
       assert.equal(response.status, 409);
-      assert.deepEqual(await response.json(), { state: 'UNAVAILABLE_BUDGET' });
-      assert.deepEqual(await (await call('/snapshot')).json(), [
-        ['cost:' + candidate.key, costRow],
-      ]);
+      assert.deepEqual(response.data, { state: 'UNAVAILABLE_BUDGET' });
+      assert.deepEqual((await call('/snapshot')).data, [['cost:' + candidate.key, costRow]]);
     });
     await t.test('newer branch discovered ' + i, async (t) => {
       const { call } = await runtime(t, { MAX_CONCURRENT_RENTALS: '4' });
@@ -262,7 +269,7 @@ test('workerd admission is transactional without shared service state', async (t
       ]);
       const response = await call('/reserve', { record: record(i) });
       assert.equal(response.status, 409);
-      assert.deepEqual(await response.json(), { state: 'NOT_ELIGIBLE' });
+      assert.deepEqual(response.data, { state: 'NOT_ELIGIBLE' });
     });
     await t.test('configured bad machine ' + i, async (t) => {
       const { call } = await runtime(t);
@@ -271,7 +278,7 @@ test('workerd admission is transactional without shared service state', async (t
         config: { badMachines: [record(i).machineId] },
       });
       assert.equal(response.status, 503);
-      assert.deepEqual(await response.json(), { state: 'UNAVAILABLE' });
+      assert.deepEqual(response.data, { state: 'UNAVAILABLE' });
     });
   }
   for (const count of [1, 2, 257, 258]) {
@@ -286,11 +293,8 @@ test('workerd admission is transactional without shared service state', async (t
       );
       const response = await call('/reserve', { record: record(1) });
       assert.equal(response.status, 503);
-      assert.deepEqual(await response.json(), { state: 'UNAVAILABLE' });
-      assert.equal(
-        (await (await call('/snapshot')).json()).filter(([k]) => k.startsWith('cost:')).length,
-        0,
-      );
+      assert.deepEqual(response.data, { state: 'UNAVAILABLE' });
+      assert.equal((await call('/snapshot')).data.filter(([k]) => k.startsWith('cost:')).length, 0);
     });
   }
   for (const failAt of ['sha:', 'cost:']) {
@@ -298,7 +302,7 @@ test('workerd admission is transactional without shared service state', async (t
       const { call } = await runtime(t);
       const response = await call('/reserve', { record: record(1), failAt });
       assert.equal(response.status, 500);
-      assert.deepEqual(await (await call('/snapshot')).json(), []);
+      assert.deepEqual((await call('/snapshot')).data, []);
     });
   }
   for (const independent of [true, false]) {
@@ -328,14 +332,14 @@ test('workerd admission is transactional without shared service state', async (t
           }),
         );
         const fetchRequest = (url, init) =>
-          independent ? stub.fetch(url, init) : mf.dispatchFetch(url, init);
+          readJson(independent ? stub.fetch(url, init) : mf.dispatchFetch(url, init));
         if (!independent) {
           const available = await fetchRequest(
             env.WORKER_URL + '/' + bindings.BROKER_PATH_PREFIX + '/availability?profile=check',
             { headers: { Authorization: 'Bearer ' + tokens[0], 'X-KF-Protocol': '6' } },
           );
           assert.equal(available.status, 200);
-          assert.ok(Array.isArray((await available.json()).offers));
+          assert.ok(Array.isArray(available.data.offers));
         }
         const responses = await Promise.all(
           tokens.map((token, i) =>
@@ -355,13 +359,13 @@ test('workerd admission is transactional without shared service state', async (t
             }),
           ),
         );
-        const data = await Promise.all(responses.map((r) => r.json()));
+        const data = responses.map((r) => r.data);
         const admitted = data.filter((r) => r.state === 'BOOTING').length;
         if (independent) assert.equal(admitted, cap, JSON.stringify(data.map((r) => r.state)));
         else assert.ok(admitted > 0 && admitted <= cap, JSON.stringify(data.map((r) => r.state)));
         assert.equal(data.filter((r) => r.state === 'BUSY').length, 4 - admitted);
         if (independent) {
-          const rows = await (await call('/snapshot')).json();
+          const rows = (await call('/snapshot')).data;
           assert.equal(rows.filter(([k]) => k.startsWith('cost:')).length, cap);
         }
         assert.equal(cloud.created.length, admitted);

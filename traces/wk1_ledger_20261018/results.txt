@@ -37,3 +37,23 @@ integrated workerd (master a424e1d39 + WK1 fix)
 # skipped 0
 # todo 0
 # duration_ms 16728.906364
+
+response contract EXPECTED RED (85cdd48ba)
+# tests 37
+# suites 0
+# pass 3
+# fail 34
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17175.449932
+
+response contract GREEN (same ledger source)
+# tests 37
+# suites 0
+# pass 37
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15259.277384
