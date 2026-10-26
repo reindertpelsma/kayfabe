@@ -29,7 +29,7 @@ The device checks its configuration when QEMU starts and refuses by name rather 
 
 | Message or symptom | Meaning and action |
 |---|---|
-| `store of N MiB refused: NoMemory` | `fb-mb` is larger than the card can give. Lower it. On the 8 GiB RTX 3060 Ti, 6144 MiB was measured to boot; the bench's rule for cards under 10 GiB is (VRAM - 2048 MiB), rounded down to whole GiB. <!-- src: scripts/fastguest/run_fast_guest.sh --> |
+| `store of N MiB refused: NoMemory` | `fb-mb` is larger than the card can give. Lower it. On the 8 GiB RTX 3060 Ti the harness script records that 6144 MiB boots; the bench's rule for cards under 10 GiB is (VRAM - 2048 MiB), rounded down to whole GiB. <!-- src: scripts/fastguest/run_fast_guest.sh --> |
 | `a guest BAR1 of 256 MiB does not fit: 256 MiB + 16 MiB headroom > 256 MiB host aperture. The largest that fits here is 128 MiB` | Lower `bar1-size` (the harnesses use 128 MiB). The sum of guest BAR1, BAR2, the 1 MiB PRAMIN window and 16 MiB headroom, over all kayfabe devices on the card, must fit the host BAR1. <!-- src: scripts/fastguest/run_fast_guest.sh, crates/kf-qemu/src/cardbudget.rs --> |
 | `the GPU still holds N MiB after 30 s - a previous VM did not release it` | The previous VM's GPU memory outlives its QEMU for a moment. Wait until `nvidia-smi` shows the GPU idle (`KF_GPU_IDLE_MIB`, default 512), or the store reservation will likely fail. <!-- src: scripts/fastguest/run_fast_guest.sh --> |
 | `host driver X is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts` | The host driver version is not one the repository measured. Use a version in [Requirements](requirements.md). <!-- src: crates/kf-abi/src/hostabi.rs --> |
@@ -63,7 +63,7 @@ The device checks its configuration when QEMU starts and refuses by name rather 
 |---|---|
 | The NVIDIA display adapter shows **Code 43** | The driver ran its resource manager on the CPU instead of the GSP path kayfabe serves. Set `EnableGpuFirmware=1` in both the class key and the `nvlddmkm` service key, before the driver's first start, and restart. [measured on Windows 11 Pro and LTSC] <!-- src: docs/WINDOWS_GUEST_SETUP.md --> |
 | Code 43 on GB206 even with the settings | Open; GB206 under Windows is not solved. <!-- src: README.md --> |
-| The display driver resets when the Start menu opens | Set `HKLM\SOFTWARE\Microsoft\Windows\Dwm\OverlayTestMode = 5` (DWORD). The cause is not proven. <!-- src: docs/WINDOWS_GUEST_SETUP.md --> |
+| The display driver resets when the Start menu opens | Set `HKLM\SOFTWARE\Microsoft\Windows\Dwm\OverlayTestMode = 5` (DWORD). The cause is not known. <!-- src: docs/WINDOWS_GUEST_SETUP.md --> |
 | `dwm.exe` crash-loops after cloning an image | An image with a Windows update staged was snapshotted. Do not; block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md --> |
 | Boot to ssh takes about 20 minutes; the guest ignores `shutdown /s` for 5 minutes | The driver is in Code 43, which slows everything. Fix the cause (settings above). `win_vm.sh stop` falls back to QMP `quit`. <!-- src: scripts/bench/windows/README.md --> |
 | The guest was enrolled in an unrelated company's Autopilot tenant | A default-identity VM matched it once. Give every VM a unique SMBIOS UUID, serial and MAC, and keep setup offline until after OOBE. <!-- src: docs/WINDOWS_GUEST_SETUP.md --> |

@@ -17,7 +17,7 @@ The stock GeForce driver on Windows runs its resource manager on the CPU by defa
 |---|---|---|---|
 | 1 | `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\<index>` `EnableGpuFirmware` | `1` | forces GSP; `<index>` is the display adapter's own key (`0000` on Windows 11 Pro, `0001` on the LTSC image: read it, never assume) |
 | 2 | `HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm` `EnableGpuFirmware` | `1` | the same flag; the service key alone is not enough, set both |
-| 3 | `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | `5` | without it, opening the Start menu reset the display driver on Windows 11 Pro (cause not proven) |
+| 3 | `HKLM\SOFTWARE\Microsoft\Windows\Dwm` `OverlayTestMode` | `5` | without it, opening the Start menu reset the display driver on Windows 11 Pro (the cause is not known) |
 
 <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 

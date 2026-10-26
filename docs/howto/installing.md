@@ -96,7 +96,7 @@ Every property below is declared in `qemu/hw/misc/kf3/kf3.c`. Defaults are as de
 
 Properties are given as `-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0`, or for one property on an existing device `-global kf3-gpu.<property>=<value>`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/windows/win_vm.sh -->
 
-Environment variables beginning with `KF3_` also exist (for example `KF3_RPC_TRACE=1` logs every command the emulated GPU answers). They are for development and measurement. A complete, supported list is **not documented yet**; the harness sets what it needs. <!-- src: scripts/bench/windows/win_vm.sh -->
+Environment variables beginning with `KF3_` also exist (for example `KF3_RPC_TRACE=1` logs every command the emulated GPU answers). They are for development and benchmarking. A complete, supported list is **not documented yet**; the harness sets what it needs. <!-- src: scripts/bench/windows/win_vm.sh -->
 
 ### Example: the Linux desktop guest's device line
 
