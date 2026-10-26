@@ -230,6 +230,59 @@ fn boundaries(l: &mut Checks, v3: bool, big: bool) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     }
+    // Keep the middle sparse placement while the statement grows on both sides.
+    // The right-hand diff piece must still carry zero, rather than a linear offset.
+    let leaf = t.alloc(if big { 256 } else { 4096 }, 4096);
+    let entry = if v3 {
+        ver3::pde(leaf)
+    } else if big {
+        big_pde(leaf)
+    } else {
+        pde(leaf)
+    };
+    t.put64(dual, if big { entry } else { 0 });
+    t.put64(dual + 8, if big { 0 } else { entry });
+    t.put64(dual + 16, 0);
+    t.put64(dual + 24, 0);
+    t.put64(leaf + 8, 8);
+    let ps = if big { 0x10000 } else { PAGE };
+    k.write_image(&img, t.origin, &t.mem[..t.used()])
+        .map_err(|e| e.to_string())?;
+    let got = k
+        .refresh_image(&img, &[WalkEntry { pdb: root, slot: 0 }])
+        .map_err(|e| e.to_string())?;
+    l.check(
+        "sparse_clipped_seed",
+        got.runs.len() == 1 && got.runs[0].va == ps,
+        format!("v3={v3} big={big} runs={:?}", got.runs),
+    );
+    k.ack(
+        got.header.generation,
+        vec![KFWR_ACK_APPLIED; got.runs.len()],
+    )
+    .map_err(|e| e.to_string())?;
+    t.put64(leaf, 8);
+    t.put64(leaf + 16, 8);
+    k.write_image(&img, t.origin, &t.mem[..t.used()])
+        .map_err(|e| e.to_string())?;
+    let got = k
+        .refresh_image(&img, &[WalkEntry { pdb: root, slot: 0 }])
+        .map_err(|e| e.to_string())?;
+    l.check(
+        if big {
+            "big_sparse_clipped_offset"
+        } else {
+            "small_sparse_clipped_offset"
+        },
+        got.runs.len() == 2
+            && got.runs[0].va == 0
+            && got.runs[1].va == 2 * ps
+            && got
+                .runs
+                .iter()
+                .all(|r| r.gpga == 0 && r.len == ps && r.op == KFWR_OP_MAP),
+        format!("v3={v3} big={big} runs={:?}", got.runs),
+    );
     k.release(img);
     Ok(())
 }
