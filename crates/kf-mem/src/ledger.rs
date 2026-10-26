@@ -379,6 +379,15 @@ pub trait MapTarget {
     /// the per-refresh host-call budget it keeps for placing rows ([`crate::batch::BatchedVas::
     /// begin_refresh`]). Default: nothing to renew. A wrapping target must FORWARD this.
     fn begin_refresh(&self) {}
+
+    /// Reconsider accepted sparse intent after backed unmaps, before the final invalidate.
+    /// Default: no target work. Wrappers must forward this hook.
+    ///
+    /// # Errors
+    /// A native retry/repair failure; never fabricates a settled invalidate.
+    fn end_refresh(&self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// ★ Review fix 2026-10-10 — [`MapTarget::own_view`]'s answer.
