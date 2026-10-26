@@ -1,0 +1,96 @@
+source_line	key	source_die	source_branch	source_bytes	source_request	TU102	TU104	TU106	TU116	TU117
+30	cudart.0x20809009	GA106	580	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+31	cudart.0x20809009	AD103	575	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+32	cudart.0x20809009	AD104	595	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+33	cudart.0x20809001	GA106	580	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+34	cudart.0x20809001	AD103	575	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+35	cudart.0x20809064	GA106	580	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+36	cudart.0x20809064	AD104	595	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+37	cudart.0x2080a001	GA106	580	16	0x0=0x0,0x4=0x0,0x8=0x0,0xc=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+38	gss.0x20808162	GA106	580	1	0x0=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+39	gss.0x20808162	AD104	595	1	0x0=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+46	rm.0x20800a59	GA106	570	16	-	C	C	C	C	C
+47	rm.0x20802a08	GA106	570	4	-	C	C	C	C	C
+48	rm.0x20800a59	GA106	575	16	-	C	C	C	C	C
+49	rm.0x20802a08	GA106	575	4	-	C	C	C	C	C
+50	rm.0x20800a59	GA106	580	16	-	C	C	C	C	C
+51	rm.0x20802a08	GA106	580	4	-	C	C	C	C	C
+52	rm.0x20800a59	GA106	590	16	-	C	C	C	C	C
+53	rm.0x20802a08	GA106	590	4	-	C	C	C	C	C
+54	rm.0x20800a59	GA106	595	16	-	C	C	C	C	C
+55	rm.0x20802a08	GA106	595	4	-	C	C	C	C	C
+56	rm.0x20800a59	GA106	610	16	-	C	C	C	C	C
+57	rm.0x20802a08	GA106	610	4	-	C	C	C	C	C
+58	rm.0x20800a59	GA104	595	16	-	C	C	C	C	C
+59	rm.0x20802a08	GA104	595	4	-	C	C	C	C	C
+60	rm.0x20802806	GA106	570	4	0x0=0x3	C	C	C	C	C
+61	rm.0x20802801	GA106	570	4	0x0=0x3	C	C	C	C	C
+62	rm.0x2080121f	GA106	570	40	0x0=0x4	C	C	C	C	C
+63	rm.0x50700709	GA106	570	8	-	C	C	C	C	C
+64	rm.0x20802806	GA106	575	4	0x0=0x3	C	C	C	C	C
+65	rm.0x20802801	GA106	575	4	0x0=0x3	C	C	C	C	C
+66	rm.0x2080121f	GA106	575	40	0x0=0x4	C	C	C	C	C
+67	rm.0x50700709	GA106	575	8	-	C	C	C	C	C
+68	rm.0x20802806	GA106	580	4	0x0=0x3	C	C	C	C	C
+69	rm.0x20802801	GA106	580	4	0x0=0x3	C	C	C	C	C
+70	rm.0x2080121f	GA106	580	40	0x0=0x4	C	C	C	C	C
+71	rm.0x50700709	GA106	580	8	-	C	C	C	C	C
+72	rm.0x20802806	GA106	590	4	0x0=0x3	C	C	C	C	C
+73	rm.0x20802801	GA106	590	4	0x0=0x3	C	C	C	C	C
+74	rm.0x2080121f	GA106	590	40	0x0=0x4	C	C	C	C	C
+75	rm.0x50700709	GA106	590	8	-	C	C	C	C	C
+76	rm.0x20802806	GA106	595	4	0x0=0x3	C	C	C	C	C
+77	rm.0x20802801	GA106	595	4	0x0=0x3	C	C	C	C	C
+78	rm.0x2080121f	GA106	595	40	0x0=0x4	C	C	C	C	C
+79	rm.0x50700709	GA106	595	8	-	C	C	C	C	C
+80	rm.0x20802806	GA106	610	4	0x0=0x3	C	C	C	C	C
+81	rm.0x20802801	GA106	610	4	0x0=0x3	C	C	C	C	C
+82	rm.0x2080121f	GA106	610	40	0x0=0x4	C	C	C	C	C
+83	rm.0x50700709	GA106	610	8	-	C	C	C	C	C
+84	rm.0x20802801	GA104	595	4	0x0=0x3	C	C	C	C	C
+85	rm.0x2080121f	GA104	595	40	0x0=0x4	C	C	C	C	C
+86	rm.0x50700709	GA104	595	8	-	C	C	C	C	C
+87	rm.0x20802806	GA104	595	4	0x0=0x6	C	C	C	C	C
+88	zbc.color	AD102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+89	zbc.depth	AD102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+90	zbc.stencil	AD102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+91	zbc.color	AD103	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+92	zbc.depth	AD103	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+93	zbc.stencil	AD103	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+94	zbc.color	AD104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+95	zbc.depth	AD104	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+96	zbc.stencil	AD104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+97	zbc.color	AD106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+98	zbc.depth	AD106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+99	zbc.stencil	AD106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+100	zbc.color	GA102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+101	zbc.depth	GA102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+102	zbc.stencil	GA102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+103	zbc.color	GA104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+104	zbc.depth	GA104	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+105	zbc.stencil	GA104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+106	zbc.color	GA106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+107	zbc.depth	GA106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+108	zbc.stencil	GA106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+109	zbc.color	GB202	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+110	zbc.depth	GB202	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+111	zbc.stencil	GB202	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+112	zbc.color	GB203	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+113	zbc.depth	GB203	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+114	zbc.stencil	GB203	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+115	zbc.color	GB206	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+116	zbc.depth	GB206	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+117	zbc.stencil	GB206	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+118	zbc.color	TU102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+119	zbc.depth	TU102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+120	zbc.stencil	TU102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+121	zbc.color	TU106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+122	zbc.depth	TU106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+123	zbc.stencil	TU106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+124	zbc.color	TU116	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+125	zbc.depth	TU116	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+126	zbc.stencil	TU116	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing
+127	rm.0x20802801	AD102	580	4	0x0=0x3	C	C	C	C	C
+128	rm.0x20802806	AD102	580	4	0x0=0xb	C	C	C	C	C
+129	rm.0x20802801	TU106	580	4	0x0=0x3	C	C	C	C	C
+130	rm.0x20802806	TU106	580	4	0x0=0x3	C	C	C	C	C
