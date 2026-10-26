@@ -4,6 +4,14 @@ use super::*;
 use crate::sparse::{Ops, Reservations, Stats};
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Relaxed};
 
+pub(super) fn with_placement<T>(
+    gate: &std::sync::RwLock<()>,
+    f: impl FnOnce() -> Result<T, RmError>,
+) -> Result<T, RmError> {
+    let _placement = gate.write().map_err(|_| RmError::NoMemory)?;
+    f()
+}
+
 struct SpaceOps<'a> {
     rm: &'a HostRm,
     space: u32,
