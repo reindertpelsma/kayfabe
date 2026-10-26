@@ -1,0 +1,52 @@
+[
+  {
+    "cell": "AD103-575.51.03",
+    "pci_device": "0x2705",
+    "driver": "575.51.03",
+    "source_sha256": "9374a5391e3747dc9204f0ec9cffdcf227e67d9e27c0da1f92f1841d012fd7c1",
+    "base_exit": 0,
+    "green_exit": 0,
+    "same_bytes": true,
+    "pass": true
+  },
+  {
+    "cell": "AD103-C",
+    "pci_device": "0x2705",
+    "driver": "32.0.15.8088",
+    "source_sha256": "aa3691e9cee5285d766673617d96b075031f1f4c1066b65d8af18aa4869ea109",
+    "base_exit": 0,
+    "green_exit": 0,
+    "same_bytes": true,
+    "pass": true
+  },
+  {
+    "cell": "AD103-D",
+    "pci_device": "0x2705",
+    "driver": "32.0.15.8088",
+    "source_sha256": "a04bb5077fd598c75ca53b2e14d67f6688aa699d3c5039885878cbc6de5dc7fc",
+    "base_exit": 0,
+    "green_exit": 0,
+    "same_bytes": true,
+    "pass": true
+  },
+  {
+    "cell": "AD103-E",
+    "pci_device": "0x2705",
+    "driver": "32.0.15.8088",
+    "source_sha256": "7d220ce15da4e3445a42afc1b27cac3d33bfb2d1955b66e173366aaf4e3d1f6d",
+    "base_exit": 0,
+    "green_exit": 0,
+    "same_bytes": true,
+    "pass": true
+  },
+  {
+    "cell": "AD103-F",
+    "pci_device": "0x2705",
+    "driver": "32.0.15.8088",
+    "source_sha256": "041cc7ed3a69e0d5efa9d64ee825d4e041b4882cfd47f02640847899d82aff42",
+    "base_exit": 0,
+    "green_exit": 0,
+    "same_bytes": true,
+    "pass": true
+  }
+]

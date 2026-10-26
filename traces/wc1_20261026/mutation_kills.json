@@ -1,0 +1,118 @@
+{
+  "mutants": [
+    {
+      "mutant": "pending_scan_uses_sibling_size",
+      "exit": 1,
+      "killing_tests": [
+        "pending_status_larger",
+        "pending_status_smaller"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "pending_region_uses_sibling_size",
+      "exit": 1,
+      "killing_tests": [
+        "pending_mailbox_status_smaller",
+        "pending_status_smaller"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "architecture_high_bit",
+      "exit": 1,
+      "killing_tests": [
+        "family_boot_capabilities",
+        "unknown_family_no_mailbox"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "fsp_as_direct_mailbox",
+      "exit": 1,
+      "killing_tests": [
+        "family_report_without_attach",
+        "fsp_mailbox_is_not_libos"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "no_family_report",
+      "exit": 1,
+      "killing_tests": [
+        "family_report_without_attach",
+        "family_scan_without_mailbox",
+        "gb20x_geometry_loss"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "no_geometry_report",
+      "exit": 1,
+      "killing_tests": [
+        "gb20x_geometry_loss",
+        "recent_moved_pending_status"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "no_early_moved_table",
+      "exit": 1,
+      "killing_tests": [
+        "recent_moved_pending_status",
+        "recent_moved_table_early",
+        "recent_window_expires",
+        "recent_window_ram_edges"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "no_same_table_revisit",
+      "exit": 1,
+      "killing_tests": [
+        "recent_corrupt_prefix_is_refused",
+        "recent_empty_epoch",
+        "recent_sequence_zero_prefix"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "stale_epoch_accepted",
+      "exit": 1,
+      "killing_tests": [
+        "recent_moved_table_early",
+        "recent_stale_and_partial_epochs",
+        "recent_window_expires"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "either_old_queue_may_seed",
+      "exit": 1,
+      "killing_tests": [
+        "recent_seed_requires_wrapped_queues",
+        "recent_seed_status_first"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "buffered_header_not_published",
+      "exit": 1,
+      "killing_tests": [
+        "header_visible_reader",
+        "header_visible_size"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "unlisted_private_output_allowed",
+      "exit": 1,
+      "killing_tests": [
+        "test_executable_name_refused_before_pull",
+        "test_unlisted_text_refused_before_pull"
+      ],
+      "pass": true
+    }
+  ],
+  "pass": true
+}

@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../lib/kfwc_meta.h"
+#include "kfwc_file.h"
 
 static volatile LONG g_interrupted;
 static BOOL WINAPI on_ctrl(DWORD ev)
@@ -153,7 +154,6 @@ int main(int argc, char **argv)
     FILE *out = NULL;
     unsigned char *buf;
     kfwc_cap_file fh;
-    unsigned char hb[KFWC_CAP_FILE_HEADER_BYTES];
     int i, rc = 1, status_only = 0;
     ULONGLONG deadline;
     char build[64] = "", ubr[32] = "", dispver[32] = "", drvver[64] = "";
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
     if (kfwc_cap_set_string(fh.driver_version, drvver))
         fprintf(stderr, "warning: driver version string had unprintable characters (dropped)\n");
     kfwc_cap_set_string(fh.decode_tag, tag);
-    if (kfwc_cap_file_encode(&fh, hb) != KFWC_CAP_FILE_HEADER_BYTES || fwrite(hb, 1, sizeof(hb), out) != sizeof(hb)) {
+    if (kfwc_file_begin(out, &fh)) {
         fprintf(stderr, "cannot write the file header\n");
         goto done;
     }

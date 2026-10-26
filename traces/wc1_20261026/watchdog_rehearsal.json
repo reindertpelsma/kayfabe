@@ -1,0 +1,23 @@
+[
+  {
+    "case": "cancel",
+    "pass": true,
+    "exit": 0,
+    "calls": []
+  },
+  {
+    "case": "destroy_exact",
+    "pass": true,
+    "exit": 0,
+    "calls": [
+      "destroy instance 424242 -y",
+      "show instances-v1 --raw"
+    ]
+  },
+  {
+    "case": "no_id",
+    "pass": true,
+    "exit": 0,
+    "calls": []
+  }
+]

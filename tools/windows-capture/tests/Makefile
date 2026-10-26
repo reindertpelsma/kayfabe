@@ -33,3 +33,7 @@ $(OUT)/test_ring_tsan: test_ring.c $(LIB)/kfwc_ring.c $(LIB)/kfwc_record.c $(wil
 $(OUT)/test_meta: test_meta.c $(LIB)/kfwc_meta.c $(wildcard $(LIB)/*.h) ../driver/kfwc_ioctl.h
 	mkdir -p $(OUT)
 	$(CC) $(CFLAGS) $(SAN) test_meta.c $(LIB)/kfwc_meta.c $(LIB)/kfwc_record.c -o $@
+
+$(OUT)/test_file: test_file.c ../user/kfwc_file.h $(LIB)/kfwc_record.c
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(SAN) test_file.c $(LIB)/kfwc_record.c -o $@

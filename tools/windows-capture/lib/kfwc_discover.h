@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  *
- * Queue discovery. Two independent routes to the same object (a "binding": the shared
+ * Queue discovery. Independent routes to the same object (a "binding": the shared
  * region's page list and the two queue geometries). Read-only.
  *
  *  (a) kfwc_discover_mailbox: BAR0 NV_PGSP_FALCON_MAILBOX0/1 -> LibOS init-args array ->
@@ -16,6 +16,13 @@
  *      the route that produced 4,535 valid records on an RTX 4070 under driver 580.88 with
  *      the earlier tracer (origin/codex/windows-gsp-tracer-2026-10-04); it cannot recover
  *      messages that left the ring before it attached.
+ *
+ *  (c) engine revisit: a previously validated table retained internally by the
+ *      module on the same PCI device, only after both old queues advanced past
+ *      ring capacity. The full region validator is reused, and both published
+ *      prefixes must be zero-filled/empty or checksum-valid sequence zero.
+ *      No ioctl accepts a table address. Method 3 is reported separately; native
+ *      Blackwell prefix coverage remains unverified until a loss-free run.
  */
 #ifndef KFWC_DISCOVER_H
 #define KFWC_DISCOVER_H
@@ -27,6 +34,28 @@
 /* discovery methods */
 #define KFWC_METHOD_MAILBOX 1u      /* option (a): BAR0 boot-args mailbox */
 #define KFWC_METHOD_SCAN 2u         /* option (b): physical RAM scan */
+#define KFWC_METHOD_REVISIT 3u      /* internally retained table, fresh sequence-zero epoch */
+#define KFWC_METHOD_NEARBY 4u       /* bounded early scan near an internally validated old table */
+
+/* Source: ogkm 595.91.07, nv_ref.h:111,129-136; no PCI SKU table. */
+#define KFWC_FAMILY_UNKNOWN 0u
+#define KFWC_FAMILY_TURING 1u
+#define KFWC_FAMILY_AMPERE 2u
+#define KFWC_FAMILY_ADA 3u
+#define KFWC_FAMILY_HOPPER 4u
+#define KFWC_FAMILY_BLACKWELL_DATA 5u
+#define KFWC_FAMILY_BLACKWELL_CONSUMER 6u
+#define KFWC_BOOT_UNKNOWN 0u
+#define KFWC_BOOT_LIBOS 1u
+#define KFWC_BOOT_FSP 2u
+
+typedef struct kfwc_capabilities {
+    kfwc_u32 family, architecture, implementation, boot_path;
+} kfwc_capabilities;
+
+/* Decode only the existing read-only BOOT_0 surface. Unknown architectures stay unknown. */
+void kfwc_family_decode(kfwc_u32 boot0, kfwc_capabilities *c);
+int kfwc_read_capabilities(const kfwc_platform *p, kfwc_capabilities *c);
 
 typedef struct kfwc_qgeom {
     kfwc_u32 valid;        /* tx header validated (the status header may still be zero) */
@@ -61,7 +90,11 @@ typedef struct kfwc_binding {
 #define KFWC_MB_REGION_BAD 7u      /* page table failed validation */
 #define KFWC_MB_QUEUE_BAD 8u       /* queue header failed validation */
 
+#define KFWC_MB_FSP 9u           /* FSP args are not a direct LibOS mailbox pointer */
+#define KFWC_MB_UNKNOWN 10u      /* unknown architecture: scan validated geometry only */
+
 typedef struct kfwc_mb_diag {
+    kfwc_capabilities caps;
     kfwc_u32 status;           /* KFWC_MB_* */
     kfwc_u64 mailbox_pa;       /* value of MAILBOX1:MAILBOX0 when readable */
     kfwc_u64 shared_pa;        /* from the init args when reached */

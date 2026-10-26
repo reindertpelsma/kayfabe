@@ -2,6 +2,38 @@
 #include "kfwc_discover.h"
 #include <string.h>
 
+/* Public-source family capability selection, independent of die and PCI product id.
+ * FSP path: kernel_gsp_gh100.c:418-468, gspRmParams.bootArgsOffset.
+ * Legacy path: kernel_gsp_tu102.c:347-359, direct LibOS mailbox address. */
+void kfwc_family_decode(kfwc_u32 boot0, kfwc_capabilities *c)
+{
+    memset(c, 0, sizeof(*c));
+    if (boot0 == 0xffffffffu)
+        return;
+    c->architecture = ((boot0 >> 24) & 0x1fu) | (((boot0 >> 8) & 1u) << 5);
+    c->implementation = (boot0 >> 20) & 0xfu;
+    switch (c->architecture) {
+    case 0x16: c->family = KFWC_FAMILY_TURING; break;
+    case 0x17: c->family = KFWC_FAMILY_AMPERE; break;
+    case 0x19: c->family = KFWC_FAMILY_ADA; break;
+    case 0x18: c->family = KFWC_FAMILY_HOPPER; break;
+    case 0x1a: c->family = KFWC_FAMILY_BLACKWELL_DATA; break;
+    case 0x1b: c->family = KFWC_FAMILY_BLACKWELL_CONSUMER; break;
+    default: return;
+    }
+    c->boot_path = c->family <= KFWC_FAMILY_ADA ? KFWC_BOOT_LIBOS : KFWC_BOOT_FSP;
+}
+
+int kfwc_read_capabilities(const kfwc_platform *p, kfwc_capabilities *c)
+{
+    kfwc_u32 boot0;
+    memset(c, 0, sizeof(*c));
+    if (kfwc_reg_read(p, KFWC_REG_PMC_BOOT_0, &boot0))
+        return 1;
+    kfwc_family_decode(boot0, c);
+    return 0;
+}
+
 #define BIND_REGION_BAD 1
 #define BIND_QUEUE_BAD 2
 
@@ -125,15 +157,14 @@ int kfwc_bind_region(const kfwc_platform *p, kfwc_binding *b, kfwc_u64 table_pa,
     if (queue_header_at(p, b, 0, cmd_off, pte_count, 0) ||
         queue_header_at(p, b, 1, stat_off, pte_count, 1))
         return BIND_QUEUE_BAD;
-    if (!b->q[1].valid) {
-        /* Status header not published yet: assume the sibling's geometry, re-checked on the
-         * first poll that finds a header. The assumption is bounded by the page list. */
-        if ((kfwc_u64)stat_off + b->q[0].size > (kfwc_u64)pte_count * KFWC_PAGE)
-            return BIND_QUEUE_BAD;
-    }
     {
         kfwc_u32 c0 = b->q[0].off, c1 = b->q[0].off + b->q[0].size;
-        kfwc_u32 s0 = b->q[1].off, s1 = b->q[1].off + (b->q[1].valid ? b->q[1].size : b->q[0].size);
+        kfwc_u32 s0 = b->q[1].off;
+        kfwc_u32 s1 = b->q[1].valid ? s0 + b->q[1].size : pte_count * KFWC_PAGE;
+        /* An unpublished queue has no measured size yet. The validated region bounds
+         * its possible extent; never copy the sibling's geometry. Recheck on publication. */
+        if (!b->q[1].valid && s1 - s0 < KFWC_QUEUE_MIN_BYTES)
+            return BIND_QUEUE_BAD;
         if (c0 < s1 && s0 < c1)
             return BIND_QUEUE_BAD;
     }
@@ -178,7 +209,21 @@ int kfwc_bind_candidate(const kfwc_platform *p, kfwc_binding *b, kfwc_u64 pa)
         r = kfwc_tx_header_check(h, &stat, 1);
         if (r == 0)
             return 1;
-        stat_pages = (r == 1) ? stat.size / KFWC_PAGE : cmd_pages;
+        if (r == 1) {
+            stat_pages = stat.size / KFWC_PAGE;
+        } else {
+            /* GspMsgQueuesInit zeroes the region, fills the entire self-table, then
+             * creates the command header (ogkm 595.91.07 message_queue_cpu.c:277-309).
+             * Its nonzero PTE prefix therefore bounds the still-unpublished status
+             * queue. Keep the full validator; do not infer its size from the command. */
+            for (i = 1u + cmd_pages; i < KFWC_MAX_REGION_PAGES; i++)
+                if (kfwc_get64(b->scratch + 8u * i) == 0)
+                    break;
+            stat_pages = i - 1u - cmd_pages;
+            if (stat_pages < KFWC_QUEUE_MIN_BYTES / KFWC_PAGE ||
+                stat_pages > KFWC_QUEUE_MAX_BYTES / KFWC_PAGE)
+                return 1;
+        }
     }
     i = 1u + cmd_pages + stat_pages;
     if (i > KFWC_MAX_REGION_PAGES)
@@ -202,8 +247,16 @@ int kfwc_discover_mailbox(const kfwc_platform *p, kfwc_binding *b, kfwc_mb_diag 
     d->status = KFWC_MB_UNREADABLE;
     if (kfwc_reg_read(p, KFWC_REG_PMC_BOOT_0, &id))
         return 1;
+    kfwc_family_decode(id, &d->caps);
     if (kfwc_reg_read(p, KFWC_REG_GSP_MAILBOX0, &lo) || kfwc_reg_read(p, KFWC_REG_GSP_MAILBOX1, &hi))
         return 1;
+    /* Still sample the same mailbox registers for restart/back-off signatures.
+     * FSP error/status words must never be dereferenced as a LibOS array. */
+    if (d->caps.boot_path != KFWC_BOOT_LIBOS) {
+        d->mailbox_pa = ((kfwc_u64)hi << 32) | lo;
+        d->status = d->caps.boot_path == KFWC_BOOT_FSP ? KFWC_MB_FSP : KFWC_MB_UNKNOWN;
+        return 1;
+    }
     if (lo == 0 && hi == 0) {
         d->status = KFWC_MB_ZERO;
         return 1;

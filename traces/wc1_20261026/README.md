@@ -1,0 +1,11 @@
+STATUS: RESEARCH, 2026-10-26 — WC1 Part A verification receipts; no native Blackwell result yet.
+
+CODE READ (`docs/design/V3_BLACKWELL_CAPTURE_OPERATOR.md`): this directory contains bounded derived facts only. Raw captures remain private. `ga104_inventory.tsv` is the subset of the supplied GA104/596.51 census needed by the die table; it is not a complete startup stream. `ga104_inventory_receipt.json` records its source census hash, driver identity and missing-prefix/loss counts. No raw GA104 file was available for replay.
+
+MEASURED (WC1 Part A, 2026-10-26; `baseline.txt`, `expected_red_revisit.txt`, `expected_red_file.txt`, `check_summary.txt`): the baseline library passes 27 tests; revisit/family tests were committed EXPECTED RED before implementation. Two file-visibility tests fail against the buffered header and pass with explicit publication. The final library passes 48 tests / 513 checks; metadata 35 checks; the ring has 51 checks under ASan/UBSan and 51 under ThreadSanitizer; transport round-trip has 221 checks; private-pull integrity has 9 tests and the fake CLI/SSH/scp rehearsal has 5. Both wire formats decode; deliberate loss accounts for exactly 87 missing messages. The negative compile rejects a BAR0 store.
+
+MEASURED (WC1 Part A, 2026-10-26; `mutation_kills.json`): all twelve new mutants have at least two distinct killing tests. The 23 inherited mutants are all caught (`check_summary.txt`). Tests mutate scratch copies and leave the actual sources intact. The source guard catches all injected violations and accepts the tree.
+
+MEASURED (WC1 Part A, 2026-10-26; `saved_replay.json`): five saved AD103 streams (575.51.03 and 580.88) produce byte-identical baseline/candidate replay output. These are private-corpus replay tests, not new Windows load/boot measurements. The synthetic golden generator reproduces all 24 committed records byte for byte (WC1 host `golden-check.txt`; bounded verification receipt in `part_a_verification.json`).
+
+MEASURED (WC1 Part A, 2026-10-26; `watchdog_rehearsal.json`): fake-CLI timer checks cover cancellation, exact-id destroy followed by API absence, and no-id expiry; no real lease was created by the rehearsal. The public native operator plan precedes rental. Host guest rehearsal was skipped because the shared GPU lock stayed held; it was never acquired.

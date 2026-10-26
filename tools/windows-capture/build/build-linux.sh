@@ -91,8 +91,11 @@ python3 -I "$root/tests/guard_readonly.py" --root "$root" --sys "$out/kfwc.sys"
 x86_64-w64-mingw32-gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Wshadow -Wl,--no-insert-timestamp \
     "$root/user/kfwc_collect.c" "$root/lib/kfwc_record.c" "$root/lib/kfwc_meta.c" -ladvapi32 \
     -o "$out/kfwc_collect.exe"
+x86_64-w64-mingw32-gcc -std=c99 -O2 -Wall -Wextra -Werror -Wshadow \
+    -Wl,--no-insert-timestamp "$root/rehearse/d3d_minimal.c" -ld3d11 -ldxgi -ldxguid \
+    -o "$out/d3d_minimal.exe"
 
-(cd "$out" && sha256sum kfwc.sys kfwc_collect.exe > SHA256SUMS)
+(cd "$out" && sha256sum kfwc.sys kfwc_collect.exe d3d_minimal.exe > SHA256SUMS)
 {
     echo "source revision: $(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)"
     echo "kit: Microsoft.Windows.WDK.x64 + SDK.CPP $version"

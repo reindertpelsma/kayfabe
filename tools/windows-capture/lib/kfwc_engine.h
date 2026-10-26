@@ -35,7 +35,7 @@
 #include "kfwc_discover.h"
 #include "kfwc_record.h"
 
-#define KFWC_ENGINE_ABI 3u
+#define KFWC_ENGINE_ABI 4u
 #define KFWC_SCAN_CHUNK (1024u * 1024u)
 #define KFWC_MAX_CHAIN 256u
 #define KFWC_EVENT_SLOTS 64u
@@ -63,9 +63,15 @@ typedef struct kfwc_config {
      * scan_backoff_initial_ticks == 0 disables the back-off (passes repeat back to back). */
     kfwc_u64 scan_backoff_initial_ticks;
     kfwc_u64 scan_backoff_max_ticks;
+    /* Internal only: a page table from this module's previously validated, wrapped
+     * queues on the same PCI device. Never accepted through the device ioctl. A
+     * revisit must prove a fresh sequence-zero prefix before it can attach. */
+    kfwc_u64 recent_table_pa;
+    kfwc_u64 recent_window_bytes, recent_window_ticks; /* internal, bounded early search */
 } kfwc_config;
 
-typedef struct kfwc_stats {          /* counters monotonic (scan_backoff_ticks is a level); 33 x u64 */
+/* 41 x u64; counters monotonic, scan_backoff_ticks is a level. */
+typedef struct kfwc_stats {
     kfwc_u64 abi, steps, state, generation;
     kfwc_u64 scan_bytes, scan_passes, scan_candidates, attaches, detaches;
     kfwc_u64 messages[2], payload_bytes;
@@ -75,6 +81,9 @@ typedef struct kfwc_stats {          /* counters monotonic (scan_backoff_ticks i
     kfwc_u64 mailbox_reads, mailbox_status, method, layout, records_refused;
     kfwc_u64 seq_gap_messages, lapped_messages, next_counter, events_lost;
     kfwc_u64 scan_backoff_resets;   /* mailbox pair changed while searching: back-off restarted */
+    /* Capability report persists after detach and does not depend on events fitting. */
+    kfwc_u64 family, architecture, implementation, boot_path;
+    kfwc_u64 cmd_bytes, stat_bytes, element_bytes, region_pages;
     kfwc_u64 scan_backoff_ticks;    /* the pause that follows the NEXT completed pass (level, not a counter) */
 } kfwc_stats;
 
@@ -109,6 +118,7 @@ typedef struct kfwc_dir {
 } kfwc_dir;
 
 typedef struct kfwc_engine {
+    kfwc_u64 recent_cursor;
     kfwc_platform plat;
     kfwc_sink sink;
     kfwc_config cfg;
@@ -147,6 +157,11 @@ void kfwc_engine_init(kfwc_engine *e, const kfwc_platform *p, const kfwc_sink *s
 kfwc_u32 kfwc_engine_step(kfwc_engine *e);
 /* Clean stop: announces nothing for a clean detach, then writes the END record. */
 void kfwc_engine_stop(kfwc_engine *e);
+/* Internal rediscovery seed, or zero. Only a validated live pair whose two
+ * transport sequences have advanced beyond ring capacity is eligible. */
+kfwc_u64 kfwc_engine_recent_table(const kfwc_engine *e);
+/* Internal early search is bounded separately from the ordinary scan/backoff. */
+int kfwc_engine_recent_scan_due(kfwc_engine *e);
 /* 1 when the next step would spend its time scanning RAM (searching, scan enabled, past the
  * mailbox-zero delay and not in a back-off pause); the driver uses it to pick its sleep. */
 int kfwc_engine_scan_due(kfwc_engine *e);

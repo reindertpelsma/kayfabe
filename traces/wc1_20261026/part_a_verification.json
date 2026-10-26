@@ -1,0 +1,16 @@
+{
+  "run": "WC1-PartA-20261026",
+  "library_tests": 48,
+  "library_checks": 513,
+  "new_mutants": 12,
+  "new_mutants_min_distinct_killers": 2,
+  "inherited_mutants": 23,
+  "golden_records_byte_identical": 24,
+  "powershell_parser_errors": 0,
+  "powershell_parser_version": "7.4.6",
+  "powershell_archive_sha256": "6f6015203c47806c5cc444c19d8ed019695e610fbd948154264bf9ca8e157561",
+  "windows_load": "not yet run",
+  "raw_ga104_replay": "unavailable",
+  "gpu_lock": "held; guest rehearsal not started",
+  "claims_new": 0
+}

@@ -68,6 +68,10 @@ typedef struct STATE {
     ULONG range_count;
     GPU gpus[MAX_GPUS];
     ULONG gpu_count, gpu_sel;
+    /* Only this module can seed rediscovery; no ioctl accepts a physical address. */
+    kfwc_u64 recent_table_pa;
+    GPU recent_gpu;
+    BOOLEAN recent_valid;
     ULONG bar_state;
     KFWC_MMIO bar0;             /* the only way registers are touched */
     PVOID bar0_map;             /* the same mapping, kept untyped ONLY to hand back to MmUnmapIoSpace */
@@ -319,7 +323,9 @@ static VOID Worker(PVOID context)
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
     while (!stopping(s)) {
         kfwc_u32 n;
+        kfwc_u64 recent;
         ULONG wait_us;
+        BOOLEAN early_scan;
         LARGE_INTEGER delay;
         ExAcquireFastMutex(&s->lock);
         if (!s->gpu_count && (ULONGLONG)KeQueryPerformanceCounter(NULL).QuadPart - last_pci > (ULONGLONG)s->qpc_freq.QuadPart) {
@@ -327,6 +333,16 @@ static VOID Worker(PVOID context)
             pci_find_gpus(s);
         }
         n = kfwc_engine_step(s->engine);
+        early_scan = (BOOLEAN)kfwc_engine_recent_scan_due(s->engine);
+        recent = kfwc_engine_recent_table(s->engine);
+        if (recent && s->gpu_sel < s->gpu_count) {
+            /* Both old rings have advanced beyond retaining sequence zero. A
+             * later revisit can therefore distinguish that old epoch from a
+             * newly zeroed/published queue at the same validated RAM location. */
+            s->recent_table_pa = recent;
+            s->recent_gpu = s->gpus[s->gpu_sel];
+            s->recent_valid = TRUE;
+        }
         if (s->engine->state == KFWC_ST_SEARCHING && s->req.use_scan)
             /* scan steps at the scan cadence; in a back-off pause (or before the scan delay
              * ends) only the mailbox is read, and the engine reads it every 10 ms at most */
@@ -336,7 +352,7 @@ static VOID Worker(PVOID context)
             wait_us = s->req.poll_us;
         s->loops++;
         ExReleaseFastMutex(&s->lock);
-        if (n && ++burst < 16) /* more may be waiting: a bounded burst, then yield */
+        if ((n || early_scan) && ++burst < 16) /* bounded early scan/message burst, then yield */
             continue;
         burst = 0;
         delay.QuadPart = -(LONGLONG)wait_us * 10;
@@ -395,6 +411,16 @@ static NTSTATUS capture_start(STATE *s, const kfwc_start_req *req)
     cfg.layout = r.layout;
     cfg.use_mailbox = r.use_mailbox ? 1 : 0;
     cfg.use_scan = r.use_scan ? 1 : 0;
+    if (s->recent_valid && s->gpu_sel < s->gpu_count) {
+        const GPU *g = &s->gpus[s->gpu_sel];
+        const GPU *old = &s->recent_gpu;
+        if (g->bus == old->bus && g->dev == old->dev && g->fn == old->fn &&
+            g->vendor == old->vendor && g->device == old->device && g->revision == old->revision) {
+            cfg.recent_table_pa = s->recent_table_pa;
+            cfg.recent_window_bytes = 1ull << 30;
+            cfg.recent_window_ticks = 15u * (kfwc_u64)s->qpc_freq.QuadPart;
+        }
+    }
     cfg.scan_bytes_per_step = r.scan_bytes_per_step;
     cfg.max_msgs_per_step = r.max_msgs_per_step;
     cfg.scan_delay_ticks = (kfwc_u64)r.scan_delay_ms * (kfwc_u64)s->qpc_freq.QuadPart / 1000u;

@@ -1,0 +1,23 @@
+{
+  "source_census_sha256": "ec1cea7ae829543d1dee57574b04d0e130b1e9336d0ca377583d2d74adc0bcb6",
+  "source_facts": {
+    "os": "Windows",
+    "module_version": "1",
+    "pci_vendor_id": "0x10de",
+    "pci_device_id": "0x24b0",
+    "pci_revision_id": "0xa1",
+    "driver_version": "32.0.15.9651",
+    "decode_tag": "595.84",
+    "ts_hz": "3579545"
+  },
+  "messages": {
+    "cmd": 5722,
+    "status": 5763
+  },
+  "missing_messages": 10277,
+  "anomalies": {
+    "prefix_missing": 2,
+    "capture_loss": 4
+  },
+  "note": "Census only is available locally; raw GA104 capture not yet located on host."
+}

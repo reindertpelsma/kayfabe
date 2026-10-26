@@ -11,6 +11,6 @@ static __inline int kfwc_file_begin(FILE *out, const kfwc_cap_file *header)
     kfwc_u8 bytes[KFWC_CAP_FILE_HEADER_BYTES];
     if (kfwc_cap_file_encode(header, bytes) != KFWC_CAP_FILE_HEADER_BYTES)
         return 1;
-    return fwrite(bytes, 1, sizeof(bytes), out) != sizeof(bytes);
+    return fwrite(bytes, 1, sizeof(bytes), out) != sizeof(bytes) || fflush(out) != 0;
 }
 #endif

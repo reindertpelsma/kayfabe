@@ -1,0 +1,15 @@
+test_main: 48/48 tests passed, 513 checks, 0 failed
+test_ring: 51 checks, 0 failed
+test_ring: 51 checks, 0 failed
+test_meta: 35 checks, 0 failed
+ok header_visible_size
+ok header_visible_reader
+Ran 7 tests in 0.002s
+Ran 5 tests in 0.832s
+guard self-test: all injected violations caught, real tree clean
+mutation check: 23 mutations, 0 not caught
+test_kayfabe_roundtrip: 221 checks, 0 failed
+lossy capture: announced loss and 87 missing messages, as counted by the engine
+compiler said: HOST_TEST_SOURCE(298,18): error: read-only variable is not assignable
+ALL STEPS PASSED
+private_pull_current: 9 tests passed after fixed-name guard

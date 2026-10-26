@@ -13,7 +13,7 @@
 
 #include "../lib/kfwc_engine.h"
 
-#define KFWC_DRIVER_ABI 3u
+#define KFWC_DRIVER_ABI 4u
 #define KFWC_MODULE_VERSION 1u
 
 /* CTL_CODE(FILE_DEVICE_UNKNOWN, fn, METHOD_BUFFERED, FILE_READ_ACCESS), spelled out so that no
@@ -63,7 +63,7 @@ typedef struct kfwc_start_req {     /* 48 bytes */
 } kfwc_start_req;
 KFWC_STATIC_ASSERT(kfwc_start_req_is_48, sizeof(kfwc_start_req) == 48);
 
-typedef struct kfwc_stats_out {     /* 33 engine words + 8 ring/driver words */
+typedef struct kfwc_stats_out {     /* 41 engine words + 8 ring/driver words */
     kfwc_stats engine;
     kfwc_u64 ring_puts, ring_refused, ring_bytes_in, ring_bytes_out, ring_high_water;
     kfwc_u64 loop_iterations, bar_remaps, pci_scans;

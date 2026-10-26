@@ -29,6 +29,14 @@ run "$OUT/test_ring_tsan"
 step "sidecar / metadata"
 run make -C "$here" OUT="$OUT" "$OUT/test_meta"
 run "$OUT/test_meta"
+step "collector header visible before records arrive"
+run make -C "$here" OUT="$OUT" "$OUT/test_file"
+run "$OUT/test_file"
+step "family/revisit mutation check (two distinct killers per mutant)"
+run python3 -I "$here/mutate_family.py" "$OUT/family-mutants"
+step "native rehearsal integrity and transport"
+run python3 -I "$here/test_verify_pull.py"
+run python3 -I "$here/test_rehearse_transport.py"
 step "read-only guard + its self-test"
 run python3 -I "$here/guard_readonly.py"
 run python3 -I "$here/guard_readonly.py" --self-test
@@ -36,10 +44,15 @@ step "mutation check (the tests must fail when the library is broken)"
 run python3 -I "$here/mutate.py" --out "$OUT/mut"
 
 step "round trip: kayfabe's own encoder -> rings -> engine -> KFGSPCAP"
-fx=/tmp/kfwc-fixture.bin
-(cd "$here/kf-fixture" && CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_TARGET_DIR=/tmp/kfwc-target-fx \
-    cargo run --offline -q -- "$fx" 2>&1 | grep -E "^wrote|^error" ) || { echo "fixture build failed"; fail=$((fail + 1)); }
-rm -rf /tmp/kfwc-target-fx
+fx=${KFWC_FIXTURE:-/tmp/kfwc-fixture.bin}
+fx_target=${KFWC_FIXTURE_TARGET:-/tmp/kfwc-target-fx}
+(
+    cd "$here/kf-fixture"
+    CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_TARGET_DIR="$fx_target" \
+        nice -n 19 cargo run --offline --release -j2 -q -- "$fx" 2>&1 \
+        | grep -E "^wrote|^error"
+) || { echo "fixture build failed"; fail=$((fail + 1)); }
+rm -rf "$fx_target"
 run make -C "$here" OUT="$OUT" "$OUT/test_kayfabe_roundtrip"
 run "$OUT/test_kayfabe_roundtrip" "$fx" "$OUT/rt"
 step "observer comparison script (validation step 2) against synthetic observer exports"

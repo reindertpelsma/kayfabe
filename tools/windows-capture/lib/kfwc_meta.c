@@ -11,9 +11,12 @@ const char *const kfwc_meta_allowed_keys[] = {
     "loss_unknown", "end", "stats", "steps", "attaches", "detaches", "messages_cmd", "messages_status",
     "lost_messages_exact", "loss_records", "torn_reads", "invalid_elements", "unsupported",
     "read_failures", "resyncs", "sink_dropped", "records_refused", "scan_bytes", "scan_passes",
-    "scan_candidates", "scan_backoff_resets", "scan_backoff_ticks", "mailbox_reads", "mailbox_status", "method", "layout", "seq_gap_messages",
+    "scan_candidates", "scan_backoff_resets", "scan_backoff_ticks", "mailbox_reads",
+    "mailbox_status", "method", "layout", "seq_gap_messages",
     "lapped_messages", "ring_refused", "ring_high_water", "events", "code", "generation", "data_hex",
-    "ticks_per_second", "started_qpc", 0};
+    "ticks_per_second", "started_qpc", "capabilities", "family", "architecture",
+    "implementation", "boot_path", "method_name", "cmd_bytes", "stat_bytes", "element_bytes",
+    "region_pages", "table_max_pages", "queue_max_bytes", "events_lost", "sink_loss_pending", 0};
 
 int kfwc_json_escape(char *dst, size_t cap, const char *src)
 {
@@ -41,6 +44,27 @@ int kfwc_json_escape(char *dst, size_t cap, const char *src)
     }
     dst[n] = 0;
     return dirty;
+}
+
+static const char *family_name(kfwc_u64 family)
+{
+    static const char *const names[] = {
+        "unknown", "turing", "ampere", "ada", "hopper", "blackwell-datacenter",
+        "blackwell-consumer"
+    };
+    return family < sizeof(names) / sizeof(names[0]) ? names[family] : "unknown";
+}
+
+static const char *boot_name(kfwc_u64 path)
+{
+    return path == KFWC_BOOT_LIBOS ? "libos-mailbox" :
+           path == KFWC_BOOT_FSP ? "fsp" : "unknown";
+}
+
+static const char *method_name(kfwc_u64 method)
+{
+    static const char *const names[] = {"none", "mailbox", "scan", "revisit", "nearby"};
+    return method < sizeof(names) / sizeof(names[0]) ? names[method] : "unknown";
 }
 
 size_t kfwc_meta_format(char *out, size_t cap, const kfwc_meta *m)
@@ -77,6 +101,15 @@ size_t kfwc_meta_format(char *out, size_t cap, const kfwc_meta *m)
          (unsigned long long)s->scan_bytes, (unsigned long long)s->scan_passes,
          (unsigned long long)s->scan_candidates, (unsigned long long)s->scan_backoff_resets,
          (unsigned long long)s->scan_backoff_ticks);
+    EMIT(" \"capabilities\": {\"family\": \"%s\", \"architecture\": %llu, "
+         "\"implementation\": %llu, \"boot_path\": \"%s\", \"method_name\": \"%s\", "
+         "\"cmd_bytes\": %llu, \"stat_bytes\": %llu, \"element_bytes\": %llu, "
+         "\"region_pages\": %llu, \"table_max_pages\": %u, \"queue_max_bytes\": %u},\n",
+         family_name(s->family), (unsigned long long)s->architecture,
+         (unsigned long long)s->implementation, boot_name(s->boot_path), method_name(s->method),
+         (unsigned long long)s->cmd_bytes, (unsigned long long)s->stat_bytes,
+         (unsigned long long)s->element_bytes, (unsigned long long)s->region_pages,
+         (unsigned)KFWC_MAX_REGION_PAGES, (unsigned)KFWC_QUEUE_MAX_BYTES);
     EMIT(" \"ring\": {\"bytes\": %u, \"ring_refused\": %llu, \"ring_high_water\": %llu},\n",
          (unsigned)m->info.ring_bytes, (unsigned long long)m->stats.ring_refused,
          (unsigned long long)m->stats.ring_high_water);
@@ -89,14 +122,15 @@ size_t kfwc_meta_format(char *out, size_t cap, const kfwc_meta *m)
          "\"messages_status\": %llu, \"lost_messages_exact\": %llu, \"seq_gap_messages\": %llu, "
          "\"lapped_messages\": %llu, \"loss_records\": %llu, \"torn_reads\": %llu, \"invalid_elements\": %llu, "
          "\"unsupported\": %llu, \"read_failures\": %llu, \"resyncs\": %llu, \"sink_dropped\": %llu, "
-         "\"records_refused\": %llu},\n",
+         "\"records_refused\": %llu, \"events_lost\": %llu, \"sink_loss_pending\": %llu},\n",
          (unsigned long long)s->steps, (unsigned long long)s->attaches, (unsigned long long)s->detaches,
          (unsigned long long)s->messages[0], (unsigned long long)s->messages[1],
          (unsigned long long)s->lost_messages_exact, (unsigned long long)s->seq_gap_messages,
          (unsigned long long)s->lapped_messages, (unsigned long long)s->loss_records,
          (unsigned long long)s->torn_reads, (unsigned long long)s->invalid_elements,
          (unsigned long long)s->unsupported, (unsigned long long)s->read_failures, (unsigned long long)s->resyncs,
-         (unsigned long long)s->sink_dropped, (unsigned long long)s->records_refused);
+         (unsigned long long)s->sink_dropped, (unsigned long long)s->records_refused,
+         (unsigned long long)s->events_lost, (unsigned long long)s->sink_loss_pending);
     EMIT(" \"events\": [");
     for (i = 0; i < m->n_events; i++) {
         char hex[2 * 48 + 1];
