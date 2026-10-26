@@ -93,6 +93,24 @@ export async function jwt(patch = {}, header = {}, key = pair.privateKey) {
 }
 export class MemoryStorage {
   data = new Map();
+  // Node-only storage model. Admission race evidence comes from real workerd,
+  // not from this small rollback/serialization implementation.
+  tail = Promise.resolve();
+  async transaction(action) {
+    const previous = this.tail;
+    let release;
+    this.tail = new Promise((resolve) => (release = resolve));
+    await previous;
+    const before = structuredClone(this.data);
+    try {
+      return await action(this);
+    } catch (error) {
+      this.data = before;
+      throw error;
+    } finally {
+      release();
+    }
+  }
   async get(key) {
     return structuredClone(this.data.get(key));
   }
