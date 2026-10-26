@@ -37,6 +37,7 @@ NVIDIA's open-gpu-kernel-modules source is the reference the generated tables ar
 Other projects attempt something close to kayfabe: a GPU for a virtual machine that runs the stock NVIDIA driver while the host keeps using the card. They are credited here for readers who want to compare approaches. Kayfabe does not copy code from them.
 
 - **Caraxes** ([silasmue/Caraxes](https://github.com/silasmue/Caraxes), MIT; a fork of [UniStuttgart-IKR/Leandro](https://github.com/UniStuttgart-IKR/Leandro)). A synthetic NVIDIA GPU served over vfio-user that plays the GSP firmware, shadows the guest's page tables and runs the guest's channels on host channels. It is the closest in shape to kayfabe, and it makes different design choices. Its README describes the project and its current limits. <!-- src: https://github.com/silasmue/Caraxes README -->
+- **Open-IOV** ([open-iov.org](https://open-iov.org/index.php/Main_Page)). A community project with the same goal: unmodified NVIDIA drivers inside virtual machines without a vendor vGPU licence. Its site describes a host kernel module that emulates the GPU System Processor interface, with documentation under CC-BY-4.0 and code under BSD-3-Clause (GPL-2.0 for the kernel modules). Kayfabe makes different design choices; read both to compare. <!-- src: https://open-iov.org/index.php/Main_Page -->
 
 ## Trademarks
 
