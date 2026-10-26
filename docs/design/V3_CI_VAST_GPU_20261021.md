@@ -74,7 +74,22 @@ below is deleted. Current state: ci/vast-broker/README.md (top section) and DEPL
 
 [INFERRED from source: actual worst case] One nominal allowance is 1.25 USD. At max compute price, an undestroyed instance can add 12 USD/day or 360 USD/30 days, plus storage/network fees; there is NO finite proven dollar maximum while automatic funding remains enabled. Shared account credit is a last-resort account-wide ceiling only if the owner disables automatic top-up/invoiced credit, confirms Vast overdraft/debt rules and keeps modest prepaid funds; 8 USD reserve is admission headroom, not isolation of dev leases. Revoke the dedicated Vast key if compromised; revocation also disables automated delete, so reconcile broker IDs manually. RENTING_ENABLED=false stops new admission without deleting the ledger. Ask Vast whether dedicated keys support resource/endpoint restrictions. Never add Vast or Cloudflare credentials to GitHub.
 
-## Owner URL secrecy and optional route prefix (2026-10-22)
+## Public domain correction (2026-10-26; supersedes URL secrecy below)
+
+[CODE READ: owner domain addendum, wrangler.toml, workflow-guard.js, deploy.mjs] The public broker
+origin is `https://ci.kayfabe.dev`. GitHub environment `gpu-vast` stores `VAST_BROKER_URL` as a
+variable; both workflows bind only `WORKER_URL: ${{ vars.VAST_BROKER_URL }}` in the trusted broker
+step. `VAST_BROKER_PATH`, `VAST_BROKER_ACCESS_ID` and `VAST_BROKER_ACCESS_SECRET` remain secrets.
+The Worker `WORKER_URL` is also a public toml var; a vars-file entry must equal it. The runner
+and Worker origin must change together because it is their exact OIDC audience. Before the
+first var deploy the coordinator deletes the old Worker secret (`wrangler secret delete WORKER_URL`);
+the coding lane does not deploy or change Cloudflare. Protect all of `ci.kayfabe.dev` with the
+same two Access service tokens; a workers.dev fallback needs equivalent hostname-wide Access.
+The admin origin is `https://admin.kayfabe.dev`, with its own owner-identity Access app.
+The guard retains all other step, secret, output and bootstrap boundaries; origin masking stays
+in place. URL secrecy claims below are historical and superseded; the path remains secret.
+
+## Owner URL secrecy and optional route prefix (2026-10-22) — historical, superseded for URLs
 
 [CODE READ: owner request] GitHub VAST_BROKER_URL is an Actions secret, replacing the repository variable. Optional GitHub VAST_BROKER_PATH matches the Worker secret BROKER_PATH_PREFIX. Bind these only in the broker execution step; no box/run or status-writer job receives them. The Worker origin WORKER_URL is also supplied as a secret binding rather than a committed deploy variable. Do not publish real origins or prefixes in config, names, job outputs, status descriptions, summaries, artifacts or errors. URL secrecy reduces scanning/DoS noise; OIDC, approval and per-run HMAC remain the actual controls. The Vast operator can read onstart including the full callback URL/prefix and can disclose it. A compromised proposed workflow can also disclose granted secrets; protection/review of broker workflow changes remains required.
 
