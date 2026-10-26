@@ -47,4 +47,6 @@ CODE READ: mutate.mjs temporarily edits only src/ledger.js and restores it in fi
 
 Limits: no live provider/Cloudflare behavior is claimed. Broader scheduled-handler and redirect-specific workerd coverage from original task 3 is outside the final cut. The service scheduler remains the existing lifecycle serializer; removing it safely across every report/stop/blob path is not part of this patch.
 
-Ledger source SHA256 for the mutation campaign: `2abef20b9566ae47999e23512f4a0600c5e6c9e4ffba61d49aebe0ded5ea368f`.
+Final ledger source SHA256 for reproduction: `2abef20b9566ae47999e23512f4a0600c5e6c9e4ffba61d49aebe0ded5ea368f`.
+
+MEASURED 2026-10-26 after integrating master a424e1d39 into WK1: 1935/1935 Node tests and 37/37 workerd TAP tests pass, with zero failures/skips. The extra 25 Node cases came from master's bootstrap/boot-limit changes. The deterministic bundle test passes with reviewed SHA256 `958d414e6a0e3e9523955dbdef3098bb454441d6ae23a4b1c6f6fa3dfaa83bf3`. No deployment was performed.

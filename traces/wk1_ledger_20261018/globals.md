@@ -65,3 +65,5 @@ CODE READ at 48c3b7d36: `export default createGateway()` constructs a behavior c
 Owner scope cut, 2026-10-26: audit only, plus the reservation transaction and one workerd concurrency test. No broad request reconstruction, lint, admin UI or counter/cache refactor. The earlier gateway and service interleaving observations remain audit findings, not claims that they were fixed here.
 
 Owner guideline: reconstruct request handlers from env and durable state inside fetch/scheduled; module state is only constants or synchronously computed constant caches. Static utility methods may not write globals; static fields are constants. Every await may expose changed shared state; the Durable Object is the only lock.
+
+Integration addendum — CODE READ at a424e1d39: upstream added `onstart.js:11` `SPARSE`, a module-level array populated once and only read with synchronous `join()` to build the bootstrap script (`onstart.js:44`). Classification: read-only precomputation; no runtime mutation or async read/modify/write. Other inventory references remain pinned to initial base 48c3b7d36.

@@ -1,0 +1,39 @@
+baseline Node (48c3b7d36)
+# tests 1910
+# suites 0
+# pass 1910
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 183331.448573
+
+EXPECTED RED (test commit 692a0ce0a)
+# tests 35
+# suites 0
+# pass 0
+# fail 35
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 29870.312903
+
+integrated Node (master a424e1d39 + WK1 fix)
+# tests 1935
+# suites 0
+# pass 1935
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 89642.777944
+
+integrated workerd (master a424e1d39 + WK1 fix)
+# tests 37
+# suites 0
+# pass 37
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16728.906364
