@@ -125,7 +125,7 @@ struct KfFormat {
     uint8_t  first_dir;         /* the first active slot: where the root table sits */
     uint8_t  sparse_twin;       /* default OFF: emit sparse leaf placements */
     uint8_t  pde_pcf_bits;      /* VER3 PDE PCF width, from dev_mmu.h */
-    uint8_t  pde_sparse_ats;    /* VER3 PDE SPARSE_ATS_ALLOWED enumerant */
+    uint8_t  pde_sparse_no_ats;    /* VER3 PDE SPARSE_ATS_NOT_ALLOWED enumerant */
 
     /* ── entry fields ── */
     uint8_t  valid_bit;
@@ -337,14 +337,14 @@ __device__ __forceinline__ uint64_t kf_ps_bytes_of(const KfFormat &F, uint32_t f
  * found nothing under it and unmapped all 22 rows, and the kernel copy channel died at its
  * next GP fetch. Now a present, in-window, aligned sub-table at 0 is walked like any other.
  * Format-generic: VER2 and VER3 use the same paths (every family first-class). */
-/* PDE-level sparse is census-only in v1, including VER3 SPARSE_ATS_ALLOWED. */
+/* PDE-level sparse is census-only in v1, including both VER3 ATS variants. */
 __device__ __forceinline__ bool kf_pde_sparse(const KfFormat &F, uint64_t raw)
 {
     if (F.table_version == KF_TBL_VER2)
         return kf_ap_raw(F, raw) == F.pde_ap_invalid &&
                ((raw >> F.bit_volatile) & 1ull) != 0ull;
     const uint64_t pcf = kf_field(raw, F.pcf.lo, F.pde_pcf_bits, 0);
-    return pcf == F.pcf_sparse || pcf == F.pde_sparse_ats;
+    return pcf == F.pcf_sparse || pcf == F.pde_sparse_no_ats;
 }
 
 __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
@@ -1538,7 +1538,7 @@ static KfFormat kf_format_ver3_untested(void)
     F.pcf = kf_f(3, 5, 0);
     F.pcf_sparse = 1;          /* NV_MMU_VER3_PTE_PCF_SPARSE */
     F.pde_pcf_bits = 3;        /* NV_MMU_VER3_PDE_PCF 5:3 */
-    F.pde_sparse_ats = 3;      /* NV_MMU_VER3_PDE_PCF_SPARSE_ATS_ALLOWED */
+    F.pde_sparse_no_ats = 3;      /* NV_MMU_VER3_PDE_PCF_SPARSE_ATS_NOT_ALLOWED */
     F.kind = kf_f(8, 4, 0);              /* NV_MMU_VER3_PTE_KIND 11:8 */
     F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
     F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;

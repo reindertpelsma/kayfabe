@@ -218,8 +218,8 @@ pub struct KfFormat {
     pub sparse_twin: u8,
     /// VER3 directory PCF width (distinct from the leaf PCF width).
     pub pde_pcf_bits: u8,
-    /// VER3 directory sparse-with-ATS PCF enumerant.
-    pub pde_sparse_ats: u8,
+    /// VER3 directory sparse-without-ATS PCF enumerant.
+    pub pde_sparse_no_ats: u8,
     /// The "entry is valid" bit.
     pub valid_bit: u8,
     /// First bit of the aperture nibble.
@@ -969,7 +969,7 @@ pub fn kf_format_ver2() -> KfFormat {
     f.first_dir = 1;
     f.sparse_twin = 0;
     f.pde_pcf_bits = 0;
-    f.pde_sparse_ats = 0;
+    f.pde_sparse_no_ats = 0;
     f.valid_bit = 0;
     f.ap_lo = 1;
     f.ap_bits = 2;
@@ -1128,7 +1128,7 @@ pub fn kf_format_ver3() -> KfFormat {
     };
     f.pcf_sparse = 1;
     f.pde_pcf_bits = 3;
-    f.pde_sparse_ats = 3;
+    f.pde_sparse_no_ats = 3;
     f.kind = KfField {
         lo: 8,
         bits: 4,

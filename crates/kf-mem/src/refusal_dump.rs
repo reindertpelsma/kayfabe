@@ -498,7 +498,7 @@ mod tests {
             first_dir: 1,
             sparse_twin: 0,
             pde_pcf_bits: 0,
-            pde_sparse_ats: 0,
+            pde_sparse_no_ats: 0,
             valid_bit: 0,
             ap_lo: 1,
             ap_bits: 2,
