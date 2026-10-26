@@ -91,6 +91,15 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
   *before* another checkout's build therefore gets that checkout's code: here kf-cuda failed to compile
   against a `kf-linux-raw` from another revision. `merge_check.sh` is safe because it creates its
   worktree right before it builds. For any other build, give the checkout its own target directory.
+- ⊘ *[2026-10-26, gate run 40255723206 and probe box 57755545, RTX 3090]* `DRIVER_RC=0` followed by
+  `NOT_READY driver=No devices were found`: purging the 575 packages removes the only nouveau
+  blacklist, a udev "add" event while no nvidia module is loaded lets nouveau claim the GPU, and
+  after `rmmod nouveau; modprobe nvidia` the module loads (every old check passed) but
+  RmInitAdapter fails ("GPU is likely in a bad state"). `provision_host_driver.sh` now blacklists
+  nouveau (and reloads udev), and `gpu_settle` repairs a wedged GPU (unload, PCI reset of the
+  NVIDIA display function, reload; 3 tries) or ends with `DRIVER_SWAP_DONE rc=8`, on which
+  `provision_full.sh` stops before the builds. `NOT_READY` now also prints `NVIDIA_SMI_RC` and the
+  last 20 NVRM lines. Tests: `scripts/ci/test_vast_gpu_swap.py`, mutants `gpu_swap_mutants.py`.
 - *[2026-09-27]* A `REBOOT_NEEDED` line in `prov.log` means an unattended upgrade installed a kernel
   newer than the running one: the host driver this run built will not survive a reboot. Either do not
   reboot that box, or reboot it and provision again.
