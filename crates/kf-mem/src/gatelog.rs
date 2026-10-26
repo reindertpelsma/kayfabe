@@ -42,6 +42,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
+pub mod ens3;
+
 /// Records per channel ring.
 pub const RING_N: usize = 4096;
 /// Channels tracked at once (a channel beyond it is counted, not tracked).
