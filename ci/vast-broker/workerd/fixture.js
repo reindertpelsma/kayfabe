@@ -19,6 +19,12 @@ export class AdmissionFixture {
       for (const [key, value] of await request.json()) await this.ctx.storage.put(key, value);
       return Response.json({ state: 'SEEDED' });
     }
+    if (path === '/admin/list') return new BrokerLedger(this.ctx, this.env).fetch(request);
+    if (path === '/settle') {
+      const { record, now } = await request.json();
+      await new Ledger(this.ctx.storage).settle(record, now);
+      return Response.json({ state: 'SETTLED' });
+    }
     if (path === '/snapshot') {
       return Response.json([...(await this.ctx.storage.list())]);
     }
@@ -43,7 +49,10 @@ export class AdmissionFixture {
         });
         return Response.json({ state: 'RESERVED' });
       } catch (error) {
-        return Response.json({ state: error.state ?? 'ERROR' }, { status: error.status ?? 500 });
+        return Response.json(
+          { state: error.state ?? 'ERROR', reason: error.reason, budget: error.budget },
+          { status: error.status ?? 500 },
+        );
       }
     }
     const run = request.headers.get('X-Test-Run');
