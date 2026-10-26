@@ -1262,6 +1262,58 @@ static void t_end_record(void)
 
 /* Source: ogkm 595.91.07 nv_ref.h architecture bits and GH100 FSP boot args.
  * The queue bytes are produced independently by synth.h from msgq/message_queue_priv.h. */
+static void t_recent_moved_pending_status(void)
+{
+    harness h;
+    synth next;
+    recent_setup(&h, 1, 1);
+    /* The old allocation has gone; the next epoch appears at another RAM page. */
+    memset(fk_ptr(&h.m, h.s.table_pa), 0, KFWC_PAGE);
+    sy_init(&next, &h.m, 1, 0x400000, 0x40000, 0x40000, 0);
+    sy_post(&next, 0, 72, 32);
+    h.cfg.recent_window_bytes = 4u << 20;
+    h.cfg.recent_window_ticks = 1000;
+    kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+    hn_steps(&h, 6);
+    CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4);
+    CHECK(h.e->bind.table_pa == next.table_pa && h.e->stats.messages[0] == 1);
+    CHECK(h.e->stats.stat_bytes == 0); /* unpublished is not a measured size */
+    sy_publish_stat_header(&next);
+    sy_post(&next, 1, 65, 32);
+    hn_steps(&h, 3);
+    CHECK(h.e->stats.stat_bytes == 0x40000 && h.e->stats.messages[1] == 1);
+    CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_legacy_families_keep_exact_records(void)
+{
+    harness a, b;
+    kfwc_u32 i, j;
+    for (i = 0x16; i <= 0x19; i++) {
+        if (i == 0x18) continue;
+        hn_init(&a, 1, 1, 0);
+        hn_init(&b, 1, 1, 0);
+        b.m.boot0 = (i << 24) | 0x2000a1u;
+        sy_post(&a.s, 0, 76, 16);
+        sy_post(&a.s, 1, 76, 16);
+        sy_post(&b.s, 0, 76, 16);
+        sy_post(&b.s, 1, 76, 16);
+        hn_steps(&a, 3);
+        hn_steps(&b, 3);
+        CHECK(a.e->stats.method == 1 && b.e->stats.method == 1);
+        CHECK(a.sb.n == b.sb.n && sb_losses(&b.sb) == 0);
+        for (j = 0; j < a.sb.n && j < b.sb.n; j++) {
+            CHECK(a.sb.r[j].h.kind == b.sb.r[j].h.kind);
+            CHECK(a.sb.r[j].h.payload_bytes == b.sb.r[j].h.payload_bytes);
+            CHECK(memcmp(a.sb.r[j].payload, b.sb.r[j].payload,
+                         a.sb.r[j].h.payload_bytes) == 0);
+        }
+        hn_free(&a);
+        hn_free(&b);
+    }
+}
+
 static void t_family_boot_capabilities(void)
 {
     static const kfwc_u32 arch[] = {0x16, 0x17, 0x19, 0x18, 0x1a, 0x1b};
@@ -1377,6 +1429,8 @@ typedef void (*test_fn)(void);
 int main(int argc, char **argv)
 {
     static const struct { const char *name; test_fn fn; } tests[] = {
+        {"recent_moved_pending_status", t_recent_moved_pending_status},
+        {"legacy_family_exact_records", t_legacy_families_keep_exact_records},
         {"family_boot_capabilities", t_family_boot_capabilities},
         {"fsp_mailbox_is_not_libos", t_fsp_mailbox_is_not_a_libos_pointer},
         {"gb20x_geometry_loss", t_gb20x_live_geometry_and_loss},
@@ -1406,7 +1460,8 @@ int main(int argc, char **argv)
         {"recent_sequence_zero_prefix", t_recent_sequence_zero_prefix},
         {"recent_stale_and_partial_epochs", t_recent_stale_and_partial_epochs},
         {"recent_requires_scan_and_ram_validation", t_recent_requires_scan_and_ram_validation},
-        {"recent_seed_requires_wrapped_queues", t_recent_seed_requires_both_old_queues_to_have_wrapped},
+        {"recent_seed_requires_wrapped_queues",
+         t_recent_seed_requires_both_old_queues_to_have_wrapped},
         {"recent_corrupt_prefix_is_refused", t_recent_corrupt_prefix_is_not_accepted},
         {"scan_gated_by_mailbox", t_scan_gated_by_mailbox_zero},
         {"events_and_mailbox_cross_check", t_events_and_xcheck},
