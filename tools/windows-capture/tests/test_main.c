@@ -739,6 +739,8 @@ static void t_recent_seed_requires_both_old_queues_to_have_wrapped(void)
     hn_init(&h, 1, 1, 0);
     hn_steps(&h, 2);
     CHECK(kfwc_engine_recent_table(h.e) == 0);
+    sy_post(&h.s, 1, 76, 16);
+    hn_steps(&h, 2);
     for (i = 0; i < 100; i++) sy_post(&h.s, 0, 76, 16);
     hn_steps(&h, 2);
     CHECK(kfwc_engine_recent_table(h.e) == 0);
@@ -1262,15 +1264,49 @@ static void t_end_record(void)
 
 /* Source: ogkm 595.91.07 nv_ref.h architecture bits and GH100 FSP boot args.
  * The queue bytes are produced independently by synth.h from msgq/message_queue_priv.h. */
+static void pending_independent_sizes(kfwc_u32 cmd_bytes, kfwc_u32 stat_bytes)
+{
+    harness h;
+    hn_init(&h, 1, 0, 1);
+    h.m.boot0 = 0x1b2000a1u;
+    sy_init(&h.s, &h.m, 1, 0x100000, cmd_bytes, stat_bytes, 0);
+    sy_post(&h.s, 0, 72, 32);
+    hn_steps(&h, 8);
+    CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.attaches == 1);
+    CHECK(h.e->bind.pages == h.s.pages);
+    CHECK(h.e->stats.messages[0] == 1 && h.e->stats.stat_bytes == 0);
+    sy_publish_stat_header(&h.s);
+    sy_post(&h.s, 1, 65, 32);
+    hn_steps(&h, 4);
+    CHECK(h.e->stats.attaches == 1 && h.e->stats.detaches == 0);
+    CHECK(h.e->stats.messages[1] == 1 && h.e->stats.stat_bytes == stat_bytes);
+    CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_pending_status_larger(void)
+{
+    pending_independent_sizes(0x20000, 0x40000);
+}
+
+static void t_pending_status_smaller(void)
+{
+    pending_independent_sizes(0x40000, 0x20000);
+}
+
 static void t_recent_seed_status_first(void)
 {
     harness h;
     kfwc_u32 i;
     hn_init(&h, 1, 1, 0);
     hn_steps(&h, 2);
+    sy_post(&h.s, 0, 76, 16);
+    hn_steps(&h, 2);
     for (i = 0; i < 100; i++) sy_post(&h.s, 1, 76, 16);
     hn_steps(&h, 2);
     CHECK(kfwc_engine_recent_table(h.e) == 0);
+    sy_post(&h.s, 1, 76, 16);
+    hn_steps(&h, 2);
     for (i = 0; i < 100; i++) sy_post(&h.s, 0, 76, 16);
     hn_steps(&h, 2);
     CHECK(kfwc_engine_recent_table(h.e) == h.s.table_pa);
@@ -1293,6 +1329,7 @@ static void t_recent_moved_pending_status(void)
     CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4);
     CHECK(h.e->bind.table_pa == next.table_pa && h.e->stats.messages[0] == 1);
     CHECK(h.e->stats.stat_bytes == 0); /* unpublished is not a measured size */
+    CHECK(h.e->stats.cmd_bytes == 0x40000);
     sy_publish_stat_header(&next);
     sy_post(&next, 1, 65, 32);
     hn_steps(&h, 3);
@@ -1444,6 +1481,8 @@ typedef void (*test_fn)(void);
 int main(int argc, char **argv)
 {
     static const struct { const char *name; test_fn fn; } tests[] = {
+        {"pending_status_larger", t_pending_status_larger},
+        {"pending_status_smaller", t_pending_status_smaller},
         {"recent_seed_status_first", t_recent_seed_status_first},
         {"recent_moved_pending_status", t_recent_moved_pending_status},
         {"legacy_family_exact_records", t_legacy_families_keep_exact_records},

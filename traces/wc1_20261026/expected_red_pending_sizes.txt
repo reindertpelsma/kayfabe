@@ -1,0 +1,9 @@
+  FAIL test_main.c:1276 [pending_status_larger] h.e->bind.pages == h.s.pages
+  FAIL test_main.c:1281 [pending_status_larger] h.e->stats.attaches == 1 && h.e->stats.detaches == 0
+  FAIL test_main.c:1283 [pending_status_larger] sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0
+  FAIL test_main.c:1276 [pending_status_smaller] h.e->bind.pages == h.s.pages
+  FAIL test_main.c:1277 [pending_status_smaller] h.e->stats.messages[0] == 1 && h.e->stats.stat_bytes == 0
+  FAIL test_main.c:1282 [pending_status_smaller] h.e->stats.messages[1] == 1 && h.e->stats.stat_bytes == stat_bytes
+FAIL pending_status_larger
+FAIL pending_status_smaller
+test_main: 45/47 tests passed, 509 checks, 6 failed
