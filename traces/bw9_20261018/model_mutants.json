@@ -1,0 +1,60 @@
+{
+  "restored_sha256": "ffb7dbcabb1557b24beae52ad970527d0ce8cf62f07d7e44a8093328a75de122",
+  "mutants": {
+    "success_without_registration": {
+      "rc": 1,
+      "killing_tests": [
+        "test_a_host_wide_sample_never_reaches_guest_A",
+        "test_destroy_retires_region_before_success",
+        "test_guest_B_cannot_supply_guest_A_statistics",
+        "test_incoherent_completion_samples_are_not_published",
+        "test_init_registers_complete_guest_ram_span",
+        "test_publication_stays_inside_validated_region",
+        "test_real_vm_sample_publishes_with_a_valid_timestamp",
+        "test_real_vm_sample_with_other_load_is_not_a_constant",
+        "test_reinitialize_revokes_old_writer_generation",
+        "test_reset_revokes_old_writer_generation",
+        "test_second_vm_owns_its_registration",
+        "test_torn_snapshot_with_newer_timestamp_is_rejected",
+        "test_unimplemented_memory_and_video_metrics_stay_invalid",
+        "test_unsupported_poll_bits_are_atomic_refusals",
+        "test_zero_poll_mask_stops_refresh"
+      ]
+    },
+    "publication_success_without_bytes": {
+      "rc": 1,
+      "killing_tests": [
+        "test_real_vm_sample_publishes_with_a_valid_timestamp",
+        "test_real_vm_sample_with_other_load_is_not_a_constant"
+      ]
+    },
+    "host_or_other_vm_metrics": {
+      "rc": 1,
+      "killing_tests": [
+        "test_a_host_wide_sample_never_reaches_guest_A",
+        "test_guest_B_cannot_supply_guest_A_statistics"
+      ]
+    },
+    "old_writer_generation": {
+      "rc": 1,
+      "killing_tests": [
+        "test_reinitialize_revokes_old_writer_generation",
+        "test_reset_revokes_old_writer_generation"
+      ]
+    },
+    "destroy_without_revocation": {
+      "rc": 1,
+      "killing_tests": [
+        "test_destroy_retires_region_before_success",
+        "test_wire_destroy_does_not_register_zero"
+      ]
+    },
+    "unchecked_guest_span": {
+      "rc": 1,
+      "killing_tests": [
+        "test_bad_address_never_creates_registration",
+        "test_bad_reinit_keeps_existing_registration_and_data"
+      ]
+    }
+  }
+}

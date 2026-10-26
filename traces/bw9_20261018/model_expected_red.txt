@@ -1,0 +1,203 @@
+F.FFFFF.FFFFFFFFFFFF
+======================================================================
+FAIL: test_a_host_wide_sample_never_reaches_guest_A (test_rusd_model.Contract.test_a_host_wide_sample_never_reaches_guest_A)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 65, in test_a_host_wide_sample_never_reaches_guest_A
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_bad_reinit_keeps_existing_registration_and_data (test_rusd_model.Contract.test_bad_reinit_keeps_existing_registration_and_data)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 122, in test_bad_reinit_keeps_existing_registration_and_data
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_destroy_retires_region_before_success (test_rusd_model.Contract.test_destroy_retires_region_before_success)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 77, in test_destroy_retires_region_before_success
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_guest_B_cannot_supply_guest_A_statistics (test_rusd_model.Contract.test_guest_B_cannot_supply_guest_A_statistics)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 71, in test_guest_B_cannot_supply_guest_A_statistics
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_incoherent_completion_samples_are_not_published (test_rusd_model.Contract.test_incoherent_completion_samples_are_not_published)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 129, in test_incoherent_completion_samples_are_not_published
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_init_registers_complete_guest_ram_span (test_rusd_model.Contract.test_init_registers_complete_guest_ram_span)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 23, in test_init_registers_complete_guest_ram_span
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_no_poll_subscription_means_no_publication (test_rusd_model.Contract.test_no_poll_subscription_means_no_publication)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 45, in test_no_poll_subscription_means_no_publication
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_publication_stays_inside_validated_region (test_rusd_model.Contract.test_publication_stays_inside_validated_region)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 142, in test_publication_stays_inside_validated_region
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_real_vm_sample_publishes_with_a_valid_timestamp (test_rusd_model.Contract.test_real_vm_sample_publishes_with_a_valid_timestamp)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 33, in test_real_vm_sample_publishes_with_a_valid_timestamp
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_real_vm_sample_with_other_load_is_not_a_constant (test_rusd_model.Contract.test_real_vm_sample_with_other_load_is_not_a_constant)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 39, in test_real_vm_sample_with_other_load_is_not_a_constant
+    model = self.ready("B")
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_reinitialize_revokes_old_writer_generation (test_rusd_model.Contract.test_reinitialize_revokes_old_writer_generation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 100, in test_reinitialize_revokes_old_writer_generation
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_reset_revokes_old_writer_generation (test_rusd_model.Contract.test_reset_revokes_old_writer_generation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 91, in test_reset_revokes_old_writer_generation
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_second_vm_owns_its_registration (test_rusd_model.Contract.test_second_vm_owns_its_registration)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 28, in test_second_vm_owns_its_registration
+    model = self.ready("B", 8192)
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_torn_snapshot_with_newer_timestamp_is_rejected (test_rusd_model.Contract.test_torn_snapshot_with_newer_timestamp_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 136, in test_torn_snapshot_with_newer_timestamp_is_rejected
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_unimplemented_memory_and_video_metrics_stay_invalid (test_rusd_model.Contract.test_unimplemented_memory_and_video_metrics_stay_invalid)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 152, in test_unimplemented_memory_and_video_metrics_stay_invalid
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_unsupported_poll_bits_are_atomic_refusals (test_rusd_model.Contract.test_unsupported_poll_bits_are_atomic_refusals)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 51, in test_unsupported_poll_bits_are_atomic_refusals
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_wire_destroy_does_not_register_zero (test_rusd_model.Contract.test_wire_destroy_does_not_register_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 85, in test_wire_destroy_does_not_register_zero
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_zero_poll_mask_stops_refresh (test_rusd_model.Contract.test_zero_poll_mask_stops_refresh)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 58, in test_zero_poll_mask_stops_refresh
+    model = self.ready()
+  File "<repo>/traces/bw9_20261018/test_rusd_model.py", line 19, in ready
+    self.assertTrue(model.initialize(init_request(address)))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.004s
+
+FAILED (failures=18)

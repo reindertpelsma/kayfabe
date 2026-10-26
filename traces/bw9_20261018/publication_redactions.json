@@ -1,0 +1,131 @@
+{
+  "meaning": "Only board identifiers/local paths removed; original bytes retained privately. Outcome text and timestamps unchanged.",
+  "files": [
+    {
+      "path": "traces/sweep_continue_20261020/lease_56949833/native/sweep_bare595.log",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "7c022536fee97252439b6251fbbfcd6825511a0555413c77e44031bc5e8cc8bd",
+      "publication_sha256": "3d669532e12d260a6d54b2bb5939c47eddc0f8a86138e6f5f77562e2c674f01d"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/native_raw595.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "bc4b04f9688f9a692190b610b2190e20e373d197d109360130c594e242f4bbd8",
+      "publication_sha256": "978d84fe4af62cb23dd50dbabdc4bb23a65580eab6fbcc763bba487552e7ba50"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/b2_codec_candidate/qemu_linux.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "5407bed32804e9e1f5bdebe06b42ab79aad7a840f2471b3956d3e7ba5bf5c921",
+      "publication_sha256": "31f32f5dfe49b7907dc3ebf027b92c844d2188eeb6532712dcca8587d1932489"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux580_cuda/rungs/cup2/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "995340af3a602bda5e5506bf66bbe54f9885aaa995338628db3b0e7a25cd1826",
+      "publication_sha256": "b2676a4d01f8c3e88faa418a4df81ba4d3724e407ee1df1e4f001a3916ac2be5"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux580_cuda/rungs/cup3/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "254d1645e0c47ed18f422e7c32b7860ada6d98a015c213ff444b7322fe01e546",
+      "publication_sha256": "6a36db75faad5ab738e9797e1dc1ef337937d17c5c11e39522aabce346c942f9"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux580_cuda/rungs/cup8/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "49bc65286594818047a471e3825eb2685d864e80835355972f10e0ec71407307",
+      "publication_sha256": "cb5ad5fad6aed865a2b2e154486e0a0f1bb74e79a832ad904d0c28167d600f29"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux580_cuda/rungs/cup8bench/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "e15cb795d4ecaddd64e3a76939cd29612e83932dcef1a7b37e116f1169e7ca3d",
+      "publication_sha256": "907df1bd72d5e7d7d6611df7c3c08ba3647f4c2e5e39c8065a659f1152a2820c"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux580_gfx/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "d40384965effabd32a7205b99768a20c5400ab1b85e13c359a83c7750665c202",
+      "publication_sha256": "dfd0cefebf7ecc4dd41a4dc4066e8e56fc476c62ae3bdcfde042eb070ca274d9"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux595_cuda/rungs/cup2/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "88983a1512bc073dc6eb0d2c470b3388dd547b88a24831256fae1cac56f7b025",
+      "publication_sha256": "54b328684a8ebba71496151cef65ed8aaf5ec0fa373907c588e59a309b7a1c5d"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux595_cuda/rungs/cup3/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "587ea752caa6ec21c2574eb2396f205c4cb6ac9530a68d230900dc87ecaa16c5",
+      "publication_sha256": "eb11c11cfd93ae2523d82fc664c64ba6386ff828866ca6db8f8b74575da4d4f5"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux595_cuda/rungs/cup8/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "e6fb60ef5994ff38ed5c03a46feca7fa2d8458fa9e9a549a39ceb1e08937b059",
+      "publication_sha256": "7ac44ce54d46189819eea8049b550b9715670c444992110d3a0db9f868c4bf14"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux595_cuda/rungs/cup8bench/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "1d5a9bb1a82b99b419842cf310bb15e630797f0031cf726338bb78d594116471",
+      "publication_sha256": "2a29778f124b898b922a218e1649dce48a237c11397ae318d592a5831aa817d3"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/linux595_gfx/qemu.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "6dc6ea923ea2c6da069b0f49c2a40db4f1f52c6399912b43b97362dd49d18ff7",
+      "publication_sha256": "4443192fa91f6dce39de55cc8cd380107e33af2da6d7330f64719fe691e5a56d"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/native_raw595.txt",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "6872432ceb1b88d43341fb07e49c33e0ed63bd19cb94b0e78c91be788053a894",
+      "publication_sha256": "c3b17224eaf40f991289c85c5f3d1fbeced424ab556ddbbf6c991091dde1573e"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57046541/native/sweep_bare595.log",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "b85501685f85548ff75d1fe1f149f384f64eab18d79d71c63470c6f988f7fb7b",
+      "publication_sha256": "ab2ccdff8ed0f013e742e1903043845aa62f12762a1ef33161eaf6aa3c3fdb5a"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/native/sweep_bare595.log",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "5f8d4cd49cd3173e673335e06aceda5b759a33f0b94ca801c0207afcf5b0fc73",
+      "publication_sha256": "cc1333e40a6353c14c1ce41935cde8e4037a47dce1c3adaa5d6167cf9e9b5dd4"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/native/sweep_bare595.log",
+      "kind": "board UUID omitted",
+      "replacements": 1,
+      "original_sha256": "1e7f3807a9b96eaef9382ae3e09de125724416651c7c7f0bf731bbeca455ef53",
+      "publication_sha256": "12c29fb4582b5804ea28deab1e3932ee87cdcf82e1d0e327bd14e81e46b3c9af"
+    },
+    {
+      "path": "traces/bw9_20261018/model_expected_red.txt",
+      "kind": "local repository prefix replaced by <repo>",
+      "replacements": 36,
+      "original_sha256": "75b71be4af44c9a95cced361cd222fedcd2e2a2a36a98a08b16f3df66a582e9d",
+      "publication_sha256": "e38d1231e139bd0bb81845d7b7911323eeeee924753c2638aac822205eacb87e"
+    }
+  ]
+}

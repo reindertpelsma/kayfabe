@@ -1,0 +1,140 @@
+{
+  "provenance": "MEASURED BW5/BW6 retained control metadata; source hashes in status_comparison.json.",
+  "clock_limit": "Observer UTC and guest dump UTC have no newly established subsecond skew bound; before-timeout placement is nominal UTC alignment, not proof of causal order.",
+  "fifo_occurrences": {
+    "57556167": [
+      {
+        "ordinal": 23,
+        "observed_utc": "2026-10-24T20:11:05.462338+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 24,
+        "observed_utc": "2026-10-24T20:11:05.462346+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 25,
+        "observed_utc": "2026-10-24T20:11:05.462357+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 26,
+        "observed_utc": "2026-10-24T20:11:05.462369+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 47,
+        "observed_utc": "2026-10-24T20:11:05.462634+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 4480,
+        "observed_utc": "2026-10-24T20:11:21.045461+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 4481,
+        "observed_utc": "2026-10-24T20:11:21.045467+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 4482,
+        "observed_utc": "2026-10-24T20:11:21.045473+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 4483,
+        "observed_utc": "2026-10-24T20:11:21.045480+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 4504,
+        "observed_utc": "2026-10-24T20:11:21.045620+00:00",
+        "trace_result": "0x0"
+      }
+    ],
+    "57503040": [
+      {
+        "ordinal": 23,
+        "observed_utc": "2026-10-24T11:41:30.746153+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 24,
+        "observed_utc": "2026-10-24T11:41:30.746213+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 25,
+        "observed_utc": "2026-10-24T11:41:30.746242+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 26,
+        "observed_utc": "2026-10-24T11:41:30.746266+00:00",
+        "trace_result": "0x0"
+      },
+      {
+        "ordinal": 47,
+        "observed_utc": "2026-10-24T11:41:30.746914+00:00",
+        "trace_result": "0x0"
+      }
+    ]
+  },
+  "GB202_CE4_token_0x80f": {
+    "birth_line": 3198,
+    "engine": 13,
+    "gpfifo_entries": 16384,
+    "stats": [
+      {
+        "qemu_line": 5568,
+        "observer_utc_upper_bound": "2026-10-24T20:11:07.584091+00:00",
+        "forwarded": 2,
+        "submissions": 2,
+        "serves": 5,
+        "gp_put": 2,
+        "software_gp_get": 2
+      },
+      {
+        "qemu_line": 9400,
+        "observer_utc_upper_bound": "2026-10-24T20:11:09.501134+00:00",
+        "forwarded": 2,
+        "submissions": 2,
+        "serves": 5,
+        "gp_put": 2,
+        "software_gp_get": 2
+      },
+      {
+        "qemu_line": 11036,
+        "observer_utc_upper_bound": "2026-10-24T20:11:11.614486+00:00",
+        "forwarded": 31720,
+        "submissions": 1892,
+        "serves": 1294,
+        "gp_put": 15338,
+        "software_gp_get": 15335
+      },
+      {
+        "qemu_line": 11251,
+        "observer_utc_upper_bound": "2026-10-24T20:11:14.426234+00:00",
+        "forwarded": 36129,
+        "submissions": 2315,
+        "serves": 1595,
+        "gp_put": 4676,
+        "software_gp_get": 3360
+      }
+    ],
+    "retire_line": 11697,
+    "retire_put": 4676,
+    "retire_software_get": 3360,
+    "retire_next_observer_utc": "2026-10-24T20:11:19.339142+00:00"
+  },
+  "GB205_CE4_counterpart": {
+    "token": "0x80b",
+    "retire_line": 12702,
+    "retire_put": 380,
+    "retire_software_get": 380
+  },
+  "GB202_dump_141_guest_utc": "2026-10-24T20:11:15.673239",
+  "relay_limit": "Power-of-two log sampling; missing relay #512 is not proof that count stopped at #256. Pre-timeout nominal counter is432."
+}

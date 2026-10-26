@@ -1,0 +1,21 @@
+{
+  "restored_sha256": "97070c383710ec85092834283ef8fd09ba5b22439a6ecb7d483b82ff65ef19d4",
+  "mutants": {
+    "init_success_stub": {
+      "rc": 101,
+      "killing_tests": [
+        "ga104_init_has_no_success_without_publisher",
+        "gb202_init_has_no_success_without_publisher",
+        "gb205_init_has_no_success_without_publisher"
+      ]
+    },
+    "poll_success_stub": {
+      "rc": 101,
+      "killing_tests": [
+        "gb202_poll_has_no_success_without_publisher",
+        "ga104_poll_has_no_success_without_publisher",
+        "gb205_poll_has_no_success_without_publisher"
+      ]
+    }
+  }
+}

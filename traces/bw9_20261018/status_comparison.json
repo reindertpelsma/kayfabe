@@ -1,0 +1,143 @@
+{
+  "provenance": "MEASURED retained evidence, sources in each row; null means unknown.",
+  "rows": [
+    {
+      "die": "GB202",
+      "driver": "Windows 580.88",
+      "mode": "kayfabe",
+      "product_rev": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+      "lease": "57556167",
+      "selector": "0x20800afe",
+      "envelope_status": 86,
+      "first_ordinal": 28,
+      "first_observed_utc": "2026-10-24T20:11:05.462402+00:00",
+      "explicit_refusal_line": 275,
+      "retained_request_count": 3,
+      "count_scope": "whole retained run, includes recovery",
+      "input_hashes": {
+        "vm_logs/on_fix_b1_qemu.log": "e8e26ddd4f07e6904fbf83fc2e949b0971530e976b6332158b9d0acd172c1bf2",
+        "prov/arms/on_fix/api.tsv": "b5842cc852f8767bb17dcf70a810d66f0b32107b88ea84d35c74de82e7f98f7d",
+        "prov/arms/on_fix/rpc_timing.jsonl": "f73436c81ed26d0090df91ea28c6833fb8f638aa117fb677bc4260ac98eda8f4"
+      }
+    },
+    {
+      "die": "GB202",
+      "driver": "Windows 580.88",
+      "mode": "kayfabe",
+      "product_rev": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+      "lease": "57556167",
+      "selector": "0x20800aff",
+      "envelope_status": 86,
+      "first_ordinal": 29,
+      "first_observed_utc": "2026-10-24T20:11:05.462415+00:00",
+      "explicit_refusal_line": 280,
+      "retained_request_count": 259,
+      "count_scope": "whole retained run, includes recovery",
+      "input_hashes": {
+        "vm_logs/on_fix_b1_qemu.log": "e8e26ddd4f07e6904fbf83fc2e949b0971530e976b6332158b9d0acd172c1bf2",
+        "prov/arms/on_fix/api.tsv": "b5842cc852f8767bb17dcf70a810d66f0b32107b88ea84d35c74de82e7f98f7d",
+        "prov/arms/on_fix/rpc_timing.jsonl": "f73436c81ed26d0090df91ea28c6833fb8f638aa117fb677bc4260ac98eda8f4"
+      }
+    },
+    {
+      "die": "GB205",
+      "driver": "Windows 580.88",
+      "mode": "kayfabe",
+      "product_rev": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+      "lease": "57503040",
+      "selector": "0x20800afe",
+      "envelope_status": 86,
+      "first_ordinal": 28,
+      "first_observed_utc": "2026-10-24T11:41:30.746321+00:00",
+      "explicit_refusal_line": 370,
+      "retained_request_count": 1,
+      "count_scope": "whole retained run, includes recovery",
+      "input_hashes": {
+        "vm_logs/on_fix_b1_qemu.log": "adfc0db32fe637cba1a8f97a3b352167b5287b36a294606839885b938f3eadd2",
+        "prov/arms/on_fix/api.tsv": "1520c9ff75bfeb6cc8a538c792c3020acc9db7590c446ba70059c32f0e898f9b",
+        "prov/arms/on_fix/rpc_timing.jsonl": "9e31cd2553d03f92d380962daac1df56b363ab5180bdf031618fa79ba5ad9488"
+      }
+    },
+    {
+      "die": "GB205",
+      "driver": "Windows 580.88",
+      "mode": "kayfabe",
+      "product_rev": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+      "lease": "57503040",
+      "selector": "0x20800aff",
+      "envelope_status": 86,
+      "first_ordinal": 29,
+      "first_observed_utc": "2026-10-24T11:41:30.746359+00:00",
+      "explicit_refusal_line": 375,
+      "retained_request_count": 272,
+      "count_scope": "whole retained run, includes recovery",
+      "input_hashes": {
+        "vm_logs/on_fix_b1_qemu.log": "adfc0db32fe637cba1a8f97a3b352167b5287b36a294606839885b938f3eadd2",
+        "prov/arms/on_fix/api.tsv": "1520c9ff75bfeb6cc8a538c792c3020acc9db7590c446ba70059c32f0e898f9b",
+        "prov/arms/on_fix/rpc_timing.jsonl": "9e31cd2553d03f92d380962daac1df56b363ab5180bdf031618fa79ba5ad9488"
+      }
+    },
+    {
+      "die": "GA104",
+      "driver": "Windows 596.51",
+      "mode": "native",
+      "source": "traces/constants_measure_20261014b/ga104_596.51/C/ga104_C.controls.tsv",
+      "source_sha256": "ec1cea7ae829543d1dee57574b04d0e130b1e9336d0ca377583d2d74adc0bcb6",
+      "AFE": {
+        "requests": 2,
+        "replies": 2,
+        "control_status": 0,
+        "envelope_status": 0
+      },
+      "AFF": {
+        "requests": 3,
+        "replies": 3,
+        "control_status": 0,
+        "envelope_status": 0
+      },
+      "limits": "Retained census with 10277 missing prefix messages and four losses; raw unavailable locally."
+    },
+    {
+      "die": "GB202",
+      "driver": "Windows 580.88",
+      "mode": "native",
+      "source_rev": "1953e4cb32f6e70595cc97a46523a0f79275cbe4",
+      "source": "traces/wc1_20261026/bw6_comparison.json",
+      "AFE_first_reply": {
+        "control_status": 0,
+        "sequence": 49,
+        "params_size": 16
+      },
+      "confirmations": [
+        "57745025/startup2",
+        "57752437/startup1",
+        "57752437/startup2"
+      ]
+    },
+    {
+      "die": "GB205",
+      "driver": "Windows 580.88",
+      "mode": "native",
+      "AFE": null,
+      "AFF": null,
+      "limits": "No local native RUSD response census."
+    },
+    {
+      "die": "GB203",
+      "driver": "Linux 580.159.04",
+      "mode": "native and kayfabe",
+      "AFE": null,
+      "AFF": null,
+      "limits": "Local suite summaries lack RUSD statuses; 587-record native CE user ioctl stream is not a GSP census."
+    },
+    {
+      "die": "GA104",
+      "driver": "Linux 580.159.04",
+      "mode": "kayfabe",
+      "source_rev": "738c90e5",
+      "source": "traces/v3_app_matrix/vast53563077_rtx3070_738c90e5/r4off/qemu_digest.txt:4",
+      "AFE_envelope_status": 86,
+      "AFF_envelope_status": 86
+    }
+  ]
+}
