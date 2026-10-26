@@ -1,0 +1,7 @@
+test nv4k_is_not_a_sparse_leaf ... FAILED
+test valid_volatile_is_not_a_sparse_leaf_on_either_format ... FAILED
+test nv4k_with_stale_payload_is_not_a_sparse_leaf ... FAILED
+test sparse_and_plain_invalid_match_on_both_formats ... ok
+failures:
+failures:
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s

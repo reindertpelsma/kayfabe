@@ -494,10 +494,14 @@ impl Device {
         // ★ P4 realize order (`V3_P4_PORT_MAP.md` §2.0): the GPU walker's CUDA context comes up
         // BEFORE the reservation, then the store is exported into it. ⊘ No walker, no device:
         // BAR2 and every invalidate are walked by it, and there is no CPU fallback to fall to.
-        let fmt = match family.mmu_format() {
+        let mut fmt = match family.mmu_format() {
             kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
             kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
         };
+        fmt.sparse_twin = u8::from(rm.sparse_twin());
+        if rm.sparse_twin() {
+            eprintln!("kf3: selective sparse twin=true");
+        }
         // ★★★ v3-roperm: the permission policy — ONE value for the walker's diff key and the host
         // map. ATOMIC_DISABLE is carried only under `KF3_CARRY_ATOMIC_DISABLE=1`: enable it once
         // replayable-fault delivery exists (`kf_mem::apply::PermPolicy`).
@@ -2057,6 +2061,24 @@ impl Device {
                     .waited(va_busy_from.saturating_sub(tw), matches!(got, Ok(0)));
             }
             let _ = self.mem.inbox.wake.drain();
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1` + `KF3_DIAG_VAHIST_TRIGGER=<path>`, default
+            // off): the host lane writes the host's Xid text there; the VA thread looks at most
+            // every 500 ms (one `open`), and answers each new trigger ONCE with a bounded dump
+            // (`kf_mem::vahist::Recorder::lookup`, at most 4 per process). Changes no decision.
+            if kf_mem::vahist::enabled()
+                && let Some(path) = kf_mem::vahist::trigger_path()
+            {
+                match kf_mem::vahist::global().poll_trigger(path, std::time::Instant::now()) {
+                    Some(Ok(t)) => {
+                        let view = crate::mem::VahistView { m: &m };
+                        for line in kf_mem::vahist::global().lookup(&t, &view) {
+                            eprintln!("{line}");
+                        }
+                    }
+                    Some(Err(e)) => eprintln!("kf3: VAHIST trigger not looked up: {e}"),
+                    None => {}
+                }
+            }
             self.serve_cache_ops(&mut cache_done);
             // ★★ Device reset, stage Memory (`docs/design/V3_DEVICE_RESET.md` §3): the channel plane
             // freed every guest client already. The old life's queued walks are dropped at once; a
@@ -2807,6 +2829,24 @@ impl Device {
             tm.leaves_last,
             tm.host_calls,
         );
+        let sparse = if self.rm.sparse_twin() {
+            let s = self.rm.sparse_totals();
+            format!(
+                " sparse[placed={} retired={} unhonoured={} retained={} made={} freed={} \
+                 refused={} overflow={} coarse_maps={}]",
+                va.sparse_placed,
+                va.sparse_retired,
+                va.sparse_unhonoured_bytes,
+                va.sparse_retained_bytes,
+                s.made,
+                s.freed,
+                s.refused,
+                s.overflow,
+                s.coarse_maps,
+            )
+        } else {
+            String::new()
+        };
         let mem = format!(
             " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
@@ -2851,7 +2891,7 @@ impl Device {
             mc.cache_ops.load(o),
             mc.sysmembars.load(o),
             mc.root_unsets.load(o),
-        ) + &timing
+        ) + &timing + &sparse
             // ★ Hopper+ only (Turing … Ada's line is unchanged): the BAR1 doorbell views.
             + &if self.plane.doorbell.follows_guest_bar1() {
                 let b = &self.bar1_overlay;

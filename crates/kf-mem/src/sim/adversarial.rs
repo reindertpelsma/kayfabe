@@ -81,6 +81,12 @@ impl<'a> Faulty<'a> {
 }
 
 impl SpaceVerbs for &Faulty<'_> {
+    fn invalidate(&self) -> Result<(), String> {
+        if self.tick() {
+            return Err("injected invalidate".into());
+        }
+        SpaceVerbs::invalidate(&self.sim)
+    }
     fn map_row(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         if self.tick() {
             return Err("injected map_row".into());
@@ -244,7 +250,10 @@ impl MapTarget for FMirror<'_> {
         res
     }
     fn invalidate(&self) -> Result<(), String> {
-        Ok(())
+        self.bv.invalidate()
+    }
+    fn pending_invalidate(&self) -> bool {
+        self.bv.pending_invalidate()
     }
     fn own_view(&self, va: u64, end: u64) -> Option<crate::ledger::OwnView> {
         Some(self.bv.own_view(va, end))
@@ -1080,12 +1089,15 @@ fn a_range_failing_on_its_second_span_leaves_rows_equal_to_the_ledger_and_releas
         1,
         "the batch went through a micro reservation"
     );
-    // Calls: 0 unmap_in (the batch's span), 1 free (its emptied object), 2 unmap_range (vidmem).
-    f.fail_at.set(Some(f.calls.get() + 2));
+    // Calls before invalidate: 0 unmap_in (batch), 1 unmap_range (vidmem).
+    // The retired object and reservation are not freed in between.
+    f.fail_at.set(Some(f.calls.get() + 1));
     let r = m.unmap_range(pg(4), 13 * P, true);
     assert!(r.is_err() && f.fired.get());
     let rows: Vec<u64> = m.rows.borrow().keys().map(|&v| (v - BASE) / P).collect();
     assert_eq!(rows, vec![16], "rows == what the ledger still holds");
+    assert_eq!(sim.0.borrow().resv.len(), 1, "kept pending invalidate");
+    m.invalidate().unwrap();
     let rm = sim.0.borrow();
     assert!((4..12).all(|p| rm.translate(pg(p), Owner::Mirror).is_none()));
     assert_eq!(rm.translate(pg(16), Owner::Mirror), Some((false, 40 * P)));
@@ -1104,9 +1116,10 @@ fn a_refused_micro_free_stays_tracked_and_is_retried() {
     let f = Faulty::new(&sim);
     let m = FMirror::new(&f, true, true);
     let _ = eight_scattered(&m, false);
-    // Calls: 0 unmap_in, 1 free (batch object), 2 free (micro reservation) — refused.
-    f.fail_at.set(Some(f.calls.get() + 2));
+    // Calls: 0 unmap_in, 1 invalidate, 2 free (batch), 3 free (micro) — refused.
+    f.fail_at.set(Some(f.calls.get() + 3));
     m.unmap_range(pg(4), 8 * P, true).unwrap();
+    m.invalidate().unwrap();
     assert!(f.fired.get());
     assert_eq!(sim.0.borrow().resv.len(), 1, "host RM still holds it");
     assert_eq!(m.bv.micro.lock().unwrap().len(), 1, "and so do we");
@@ -1133,6 +1146,7 @@ fn a_refused_micro_free_stays_tracked_and_is_retried() {
         Some((true, 900 * P))
     );
     m.unmap_range(pg(6), P, true).unwrap();
+    m.invalidate().unwrap();
     assert!(
         sim.0.borrow().resv.is_empty(),
         "the free retried and landed"

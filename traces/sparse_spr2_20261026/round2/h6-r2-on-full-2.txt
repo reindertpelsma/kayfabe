@@ -1,0 +1,7 @@
+RUN tag=r2-on-full-2 bin=<lane>/kf3-bins/59f09133/qemu-system-x86_64 sha=... run=seq,chain env='KF3_SPARSE_TWIN=1 KF3_DIAG_SPARSE_RESV=0 KF3_DIAG_VAHIST=1' start=2026-10-26T12:06:58Z xid_before=6
+END tag=r2-on-full-2 xid_after=6 delta=0 end=2026-10-26T12:07:16Z
+H6_SUMMARY mode=seq iters=300 ok=300 control_bad=0 unbound_read_not_zero=0 writes_landed_in_memory=0
+H6_VERDICT ABSORBED_ZERO_NO_FAULT
+H6_SUMMARY mode=chain iters=300 ok=300 control_bad=0 unbound_read_not_zero=0 writes_landed_in_memory=0
+H6_VERDICT ABSORBED_ZERO_NO_FAULT
+kf-host: SPARSE made=8410 freed=4330 refused=0 overflow=0 unhonoured_bytes=131072 retained_bytes=0 coarse_maps=0

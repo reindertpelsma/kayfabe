@@ -420,6 +420,7 @@ impl Report {
             );
             if r.op != KFWR_OP_UNMAP
                 && !sysmem
+                && r.flags & crate::abi::KFWR_RF_SPARSE == 0
                 && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
             {
                 return Err(ReportError::RunOutsideGpga {

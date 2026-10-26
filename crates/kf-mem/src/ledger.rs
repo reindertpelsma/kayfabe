@@ -38,6 +38,8 @@ pub const AP_PEER: u8 = 1;
 pub const AP_SYS_COHERENT: u8 = 2;
 /// System memory, non-coherent.
 pub const AP_SYS_NONCOHERENT: u8 = 3;
+/// Internal leaf kind for a sparse run. This is not a hardware aperture code.
+pub const AP_SPARSE: u8 = 0x80;
 
 /// Why a walked leaf could not become a [`Desired`] row. Refused by name, never clamped.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -189,6 +191,39 @@ pub enum Settle {
 /// ⊘ Every verb is one WE author (§9): a guest value never reaches a host flag word here —
 /// `defer` is ours, the backing is decided by `Desired::ram`.
 pub trait MapTarget {
+    /// Selective sparse reservations are enabled for this target. Default OFF.
+    fn sparse_twin(&self) -> bool {
+        false
+    }
+
+    /// Admit sparse coverage before backed unmaps. Existing sparse blocks retain their
+    /// mappings until those unmaps return directly to sparse; populated normal blocks
+    /// must answer HeldByHost (unhonoured), never be freed or sparsified here.
+    ///
+    /// # Errors
+    /// A bounded reservation failure, by name. No backing memory may be mapped.
+    fn map_sparse(&self, va: u64, len: u64, defer: bool) -> Result<Mapped, String> {
+        let _ = (va, len, defer);
+        Ok(Mapped::HeldByHost)
+    }
+
+    /// Retire sparse coverage. With an incoming replacement, keep the sparse block so
+    /// sparse→backed is one host map. Otherwise an empty block may be freed; a block
+    /// holding other coverage stays sparse. Return the bytes that stayed sparse.
+    ///
+    /// # Errors
+    /// The host's refusal, by name. Never unmap a backed neighbour.
+    fn unmap_sparse(
+        &self,
+        va: u64,
+        len: u64,
+        replacement: bool,
+        defer: bool,
+    ) -> Result<u64, String> {
+        let _ = (va, len, replacement, defer);
+        Ok(0)
+    }
+
     /// Map `d` at `d.va`, deferring the TLB invalidate when `defer`.
     ///
     /// [`Mapped::Placed`] is a mapping WE made (acknowledged APPLIED); [`Mapped::HeldByHost`]
@@ -208,6 +243,11 @@ pub trait MapTarget {
     /// # Errors
     /// The host's refusal, by name.
     fn invalidate(&self) -> Result<(), String>;
+
+    /// Deferred retirements still need an invalidate even if this refresh places no new row.
+    fn pending_invalidate(&self) -> bool {
+        false
+    }
 
     /// ★★★ Satisfy a [`UsermodeRow`] (Hopper+; `V3_BAR1_DOORBELL.md` §4).
     ///
@@ -474,6 +514,26 @@ impl HostVas<'_> {
 }
 
 impl MapTarget for HostVas<'_> {
+    fn sparse_twin(&self) -> bool {
+        self.rm.sparse_twin()
+    }
+    fn map_sparse(&self, va: u64, len: u64, _: bool) -> Result<Mapped, String> {
+        self.rm
+            .admit_sparse(self.space, va, len)
+            .map(|placed| {
+                if placed {
+                    Mapped::Placed
+                } else {
+                    Mapped::HeldByHost
+                }
+            })
+            .map_err(|e| format!("sparse admit {va:#x}+{len:#x}: {e:?}"))
+    }
+    fn unmap_sparse(&self, va: u64, len: u64, replacement: bool, _: bool) -> Result<u64, String> {
+        self.rm
+            .retire_sparse(self.space, va, len, replacement)
+            .map_err(|e| format!("sparse retire {va:#x}+{len:#x}: {e:?}"))
+    }
     // ★ P1+P2 inc A: a host GPU VA space — its vidmem leaves are bounded by the carve-out.
     fn gpu_space(&self) -> bool {
         true

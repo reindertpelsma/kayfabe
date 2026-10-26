@@ -1,0 +1,37 @@
+[
+  {
+    "mutant": "ignore_sparse_key",
+    "exit": 101,
+    "kills": [
+      "old_vidmem_becoming_sparse_is_a_change",
+      "sparse_becoming_vidmem_is_a_change",
+      "sparse_has_no_backing_or_permission_key"
+    ]
+  },
+  {
+    "mutant": "linear_sparse_coverage",
+    "exit": 101,
+    "kills": [
+      "adjacent_sparse_statements_cover_one_placement",
+      "extending_sparse_after_a_kept_middle_has_no_backing_offset",
+      "sparse_subrange_keeps_no_linear_offset",
+      "three_sparse_segments_cover_one_placement"
+    ]
+  },
+  {
+    "mutant": "offset_sparse_clip",
+    "exit": 101,
+    "kills": [
+      "sparse_subrange_keeps_no_linear_offset",
+      "extending_sparse_after_a_kept_middle_has_no_backing_offset"
+    ]
+  },
+  {
+    "mutant": "linear_sparse_join",
+    "exit": 101,
+    "kills": [
+      "adjacent_sparse_coverage_coalesces_without_backing",
+      "three_sparse_segments_have_one_coverage_interval"
+    ]
+  }
+]

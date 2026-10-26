@@ -123,7 +123,9 @@ struct KfFormat {
     uint8_t  big_ps, small_ps;
     uint32_t root_align;        /* a page-directory base is a PAGE address */
     uint8_t  first_dir;         /* the first active slot: where the root table sits */
-    uint8_t  pad0[3];
+    uint8_t  sparse_twin;       /* default OFF: emit sparse leaf placements */
+    uint8_t  pde_pcf_bits;      /* VER3 PDE PCF width, from dev_mmu.h */
+    uint8_t  pde_sparse_no_ats;    /* VER3 PDE SPARSE_ATS_NOT_ALLOWED enumerant */
 
     /* ── entry fields ── */
     uint8_t  valid_bit;
@@ -335,9 +337,20 @@ __device__ __forceinline__ uint64_t kf_ps_bytes_of(const KfFormat &F, uint32_t f
  * found nothing under it and unmapped all 22 rows, and the kernel copy channel died at its
  * next GP fetch. Now a present, in-window, aligned sub-table at 0 is walked like any other.
  * Format-generic: VER2 and VER3 use the same paths (every family first-class). */
+/* PDE-level sparse is census-only in v1, including both VER3 ATS variants. */
+__device__ __forceinline__ bool kf_pde_sparse(const KfFormat &F, uint64_t raw)
+{
+    if (F.table_version == KF_TBL_VER2)
+        return kf_ap_raw(F, raw) == F.pde_ap_invalid &&
+               ((raw >> F.bit_volatile) & 1ull) != 0ull;
+    const uint64_t pcf = kf_field(raw, F.pcf.lo, F.pde_pcf_bits, 0);
+    return pcf == F.pcf_sparse || pcf == F.pde_sparse_no_ats;
+}
+
 __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
                                                uint32_t apc, bool leaf_capable)
 {
+    if (F.sparse_twin && kf_pde_sparse(F, raw)) return false;
     switch (F.table_version) {
     case KF_TBL_VER2:
         /* The aperture IS the validity. `kern_gmmu_fmt_gm10x.c:165-182`. */
@@ -358,11 +371,13 @@ __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
 /* Did the guest DECLARE this slot empty, as opposed to never having written it? */
 __device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
 {
+    if (kf_valid(F, raw)) return false;
     switch (F.table_version) {
     case KF_TBL_VER2:
         /* "GM20X supports sparse directly in HW by setting the volatile bit when
          * the valid bit is clear" — `kern_gmmu_gm200.c:46-70`. A BIT TEST. */
-        return ((raw >> F.bit_volatile) & 1ull) != 0ull;
+        return ((raw >> F.bit_volatile) & 1ull) != 0ull &&
+               ((raw >> F.bit_privilege) & 1ull) == 0ull;
     default:
         /* ⚠ UNTESTED. `NV_MMU_VER3_PTE_PCF_SPARSE = 1` (`gh100/dev_mmu.h:499`).
          * An EQUALITY against a multi-bit value — which is exactly why a field
@@ -409,7 +424,7 @@ __device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
 __device__ __forceinline__ bool kf_big_pte_unmapped(const KfFormat &F, uint64_t e)
 {
     if (F.table_version != KF_TBL_VER2) return false;
-    if (kf_valid(F, e) || kf_slot_sparse(F, e)) return false;
+    if (kf_valid(F, e) || ((e >> F.bit_volatile) & 1ull)) return false;
     return ((e >> F.bit_privilege) & 1ull) != 0ull;
 }
 
@@ -431,7 +446,8 @@ __device__ __forceinline__ bool kf_big_pte_unmapped(const KfFormat &F, uint64_t 
  * Format-generic (kf_valid is descriptor-driven): VER2 and VER3 alike. */
 __device__ __forceinline__ bool kf_big_pte_owns_slot(const KfFormat &F, uint64_t e)
 {
-    return kf_valid(F, e) || kf_big_pte_unmapped(F, e);
+    return kf_valid(F, e) || kf_big_pte_unmapped(F, e) ||
+           (F.sparse_twin && kf_slot_sparse(F, e));
 }
 
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
@@ -558,7 +574,8 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
 #endif
 #ifndef KF_BREAK_COALESCE
     if (c.have && c.run.flags == flags &&
-        c.run.va + c.run.len == va && c.run.gpga + c.run.len == gpga) {
+        c.run.va + c.run.len == va &&
+        ((flags & KFWR_RF_SPARSE) || c.run.gpga + c.run.len == gpga)) {
         c.run.len += len;
         return;
     }
@@ -599,7 +616,7 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
     }
     uint32_t apc = kf_ap_raw(F, raw);
     if (!kf_dir_present(F, raw, apc, L.leaf_ps != KF_PS_NONE)) {
-        if (kf_slot_sparse(F, raw)) c.sparse++;
+        if (kf_pde_sparse(F, raw)) c.sparse++;
         return KF_STEP_SKIP;
     }
     if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; return KF_STEP_SKIP; }
@@ -686,14 +703,14 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                 pts = kf_addr(F, hi16, aps);
                                 has_s = kf_table_ok(c, pts, sb, sb);   /* 0 is a table: see below */
                             }
-                        } else if (kf_slot_sparse(F, hi16)) c.sparse++;
+                        } else if (kf_pde_sparse(F, hi16)) c.sparse++;
                         if (kf_dir_present(F, lo16, apb, D.leaf_ps != KF_PS_NONE)) {
                             if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
                             else {
                                 ptb = kf_big_addr(F, lo16, apb);
                                 has_b = kf_table_ok(c, ptb, bb, bb);   /* 0 is a table: see below */
                             }
-                        } else if (kf_slot_sparse(F, lo16)) {
+                        } else if (kf_pde_sparse(F, lo16)) {
                             /* ogkm `_gmmuIsInvalidPdeOk`: an INVALID big half with VOL set
                              * is sparse and aborts the whole 2 MiB — sublevel 1 is never
                              * read. ⊘ Only when the big half is NOT present: VOL on a
@@ -737,7 +754,14 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.big_ps],
                                                 kf_leaf_flags(F, e, F.big_ps), e, KF_SAMPLE_LVL_BIG);
-                                    else if (kf_slot_sparse(F, e)) c.sparse++;
+                                    else if (kf_slot_sparse(F, e)) {
+                                        c.sparse++;
+                                        if (F.sparse_twin)
+                                            kf_emit(c, va4 | ((uint64_t)bb << F.big_va_lo), 0,
+                                                    1ull << F.ps_log2[F.big_ps],
+                                                    KFWR_RF_SPARSE | (F.big_ps << KFWR_RF_PS_SHIFT),
+                                                    e, KF_SAMPLE_LVL_BIG);
+                                    }
                                 }
                             }
                             if (has_s && !slot_owned) {
@@ -752,7 +776,15 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.small_ps],
                                                 kf_leaf_flags(F, e, F.small_ps), e, KF_SAMPLE_LVL_SMALL);
-                                    else if (kf_slot_sparse(F, e)) c.sparse++;
+                                    else if (kf_slot_sparse(F, e)) {
+                                        c.sparse++;
+                                        if (F.sparse_twin)
+                                            kf_emit(c, va4 | ((uint64_t)s << F.small_va_lo), 0,
+                                                    1ull << F.ps_log2[F.small_ps],
+                                                    KFWR_RF_SPARSE |
+                                                    (F.small_ps << KFWR_RF_PS_SHIFT),
+                                                    e, KF_SAMPLE_LVL_SMALL);
+                                    }
                                 }
                             }
                         }
@@ -877,6 +909,7 @@ __device__ __forceinline__ uint32_t kf_pcls(uint32_t flags) { return (flags >> K
  * again. Mirrored by kf_cuda::diffmodel::host_key_with. */
 __device__ __forceinline__ uint32_t kf_hkey(uint32_t flags, uint32_t kp)
 {
+    if (flags & KFWR_RF_SPARSE) return 1u << 14;
     const uint32_t ap = flags & KFWR_RF_AP_MASK;
     const uint32_t k = ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
     return k | (((flags >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2)
@@ -963,7 +996,8 @@ __device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n, uin
         const KfMapRun r = w[i];
         const uint64_t rend = kf_end(r);
         if (!(r.va <= at && at < rend) || kf_hkey(r.flags, kp) != key) return false;
-        if (r.gpga + (at - r.va) != p.gpga + (at - p.va)) return false;
+        if (!(p.flags & KFWR_RF_SPARSE) &&
+            r.gpga + (at - r.va) != p.gpga + (at - p.va)) return false;
         at = rend;
         if (at >= end) { *last = i; return true; }
     }
@@ -1184,7 +1218,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
                 const uint64_t e0 = kf_end(r) < hi ? kf_end(r) : hi;
                 KfMapRun m;
                 m.va = s0;
-                m.gpga = r.gpga + (s0 - r.va);
+                m.gpga = (r.flags & KFWR_RF_SPARSE) ? 0ull : r.gpga + (s0 - r.va);
                 m.len = e0 - s0;
                 m.flags = r.flags & ~KFWR_RF_HELD;
                 m.op = KFWR_OP_MAP;
@@ -1502,7 +1536,9 @@ static KfFormat kf_format_ver3_untested(void)
      * REGULAR_RW_ATOMIC_CACHED=0, _UNCACHED=1, PRIVILEGE_=2, _RO_=4, _NO_ATOMIC_=8. */
     F.bit_volatile = 3; F.bit_privilege = 4; F.bit_read_only = 5; F.bit_atomic_disable = 6;
     F.pcf = kf_f(3, 5, 0);
-    F.pcf_sparse = 1;                    /* NV_MMU_VER3_PTE_PCF_SPARSE */
+    F.pcf_sparse = 1;          /* NV_MMU_VER3_PTE_PCF_SPARSE */
+    F.pde_pcf_bits = 3;        /* NV_MMU_VER3_PDE_PCF 5:3 */
+    F.pde_sparse_no_ats = 3;      /* NV_MMU_VER3_PDE_PCF_SPARSE_ATS_NOT_ALLOWED */
     F.kind = kf_f(8, 4, 0);              /* NV_MMU_VER3_PTE_KIND 11:8 */
     F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
     F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;
@@ -1739,7 +1775,8 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
 #endif
 #ifndef KF_BREAK_COALESCE
     if (c.have && c.run.flags == flags &&
-        c.run.va + c.run.len == va && c.run.gpga + c.run.len == gpga) {
+        c.run.va + c.run.len == va &&
+        ((flags & KFWR_RF_SPARSE) || c.run.gpga + c.run.len == gpga)) {
         c.run.len += len;
         return;
     }
@@ -1848,7 +1885,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     if (!dual) {
         const uint32_t apc = kf_ap_raw(F, lo16);
         if (!kf_dir_present(F, lo16, apc, L.leaf_ps != KF_PS_NONE)) {
-            if (census && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
+            if (census && kf_pde_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
             return false;
         }
         const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
@@ -1887,7 +1924,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             else if (census) kf_par_refuse_samp(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
                                                 level, dva, hi16, pts, sb);
         }
-    } else if (census && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
+    } else if (census && kf_pde_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
     if (kf_dir_present(F, lo16, apb, L.leaf_ps != KF_PS_NONE)) {
         if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) {
             if (census) kf_par_refuse_samp(d, KFWR_R_FOREIGN_AP, e.pdb, level, dva, lo16,
@@ -1899,7 +1936,7 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             else if (census) kf_par_refuse_samp(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
                                                 level, dva, lo16, ptb, bb);
         }
-    } else if (kf_slot_sparse(F, lo16)) {
+    } else if (kf_pde_sparse(F, lo16)) {
         /* An INVALID, sparse big half vetoes the small table (see the serial walk). */
         if (census) atomicAdd(&d->sparse_slots, 1u);
         has &= ~1u;
@@ -2076,7 +2113,14 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                             1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps),
                             e, KF_SAMPLE_LVL_BIG);
-            else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+            else if (kf_slot_sparse(F, e)) {
+                if (census) atomicAdd(&a.dev->sparse_slots, 1u);
+                if (F.sparse_twin)
+                    kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), 0,
+                                1ull << F.ps_log2[F.big_ps],
+                                KFWR_RF_SPARSE | (F.big_ps << KFWR_RF_PS_SHIFT),
+                                e, KF_SAMPLE_LVL_BIG);
+            }
         }
         if ((t.has & 1u) && !slot_owned) {
             for (uint32_t j = 0u; j < 16u && j < ratio; j++) {
@@ -2087,7 +2131,14 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                     kf_acc_emit(c, t.va | ((uint64_t)si << F.small_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                                 1ull << F.ps_log2[F.small_ps], kf_leaf_flags(F, e, F.small_ps),
                                 e, KF_SAMPLE_LVL_SMALL);
-                else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+                else if (kf_slot_sparse(F, e)) {
+                    if (census) atomicAdd(&a.dev->sparse_slots, 1u);
+                    if (F.sparse_twin)
+                        kf_acc_emit(c, t.va | ((uint64_t)si << F.small_va_lo), 0,
+                                    1ull << F.ps_log2[F.small_ps],
+                                    KFWR_RF_SPARSE | (F.small_ps << KFWR_RF_PS_SHIFT),
+                                    e, KF_SAMPLE_LVL_SMALL);
+                }
             }
         }
     }
@@ -2187,7 +2238,8 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
     const uint32_t plfl  = __shfl_up_sync(full, c.last.flags, 1);
     uint32_t head = 1u;
     if (lane && c.n && pk && plfl == c.first.flags &&
-        plva + pllen == c.first.va && plgp + pllen == c.first.gpga) head = 0u;
+        plva + pllen == c.first.va &&
+        ((c.first.flags & KFWR_RF_SPARSE) || plgp + pllen == c.first.gpga)) head = 0u;
     const uint32_t contrib = (c.n && !head) ? (c.n - 1u) : c.n;
 
     uint32_t x = contrib;
@@ -2269,7 +2321,7 @@ __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, cons
         if (p.n && task[i - 1u].pdb == task[i].pdb &&
             p.lflags == sum[i].fflags &&
             p.lva + p.llen == sum[i].fva &&
-            p.lgpga + p.llen == sum[i].fgpga) h = 0u;
+            ((p.lflags & KFWR_RF_SPARSE) || p.lgpga + p.llen == sum[i].fgpga)) h = 0u;
     }
 #endif
     head[i] = h;
@@ -2703,7 +2755,7 @@ extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
          * outside the store hands the guest memory that is not its own. ⊘ This is
          * a SECOND implementation of the kernel's own emit-time check on purpose:
          * if the two ever disagree, the report is the thing that was wrong. */
-        if (r[i].op != KFWR_OP_UNMAP &&
+        if (r[i].op != KFWR_OP_UNMAP && !(r[i].flags & KFWR_RF_SPARSE) &&
             ((r[i].flags & KFWR_RF_AP_MASK) == KFWR_AP_VIDMEM) &&
             (r[i].gpga > gpga_span || r[i].len > gpga_span - r[i].gpga))
                                                   { msg = "run leaves the GPGA window"; rc = -16; goto out; }

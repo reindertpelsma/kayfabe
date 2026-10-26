@@ -1,0 +1,26 @@
+[
+  {
+    "mutant": "nv4k_as_sparse",
+    "kills": [
+      "nv4k_is_not_a_sparse_leaf",
+      "nv4k_with_stale_payload_is_not_a_sparse_leaf"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "valid_as_sparse",
+    "kills": [
+      "valid_volatile_is_not_a_sparse_leaf_on_ver2",
+      "valid_volatile_is_not_a_sparse_leaf_on_ver3"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "bound_sparse_to_store",
+    "kills": [
+      "sparse_coverage_may_be_larger_than_the_framebuffer",
+      "sparse_coverage_needs_no_framebuffer"
+    ],
+    "exit": 101
+  }
+]

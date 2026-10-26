@@ -160,6 +160,8 @@ extern "C" {
  * ours, so its UNMAP carries this bit and the host retires it without asking the
  * host RM to take down what it never placed for us (P6b ruling (a)). */
 #define KFWR_RF_HELD (1u << 31)
+/* Address-free sparse placement, emitted only with KfFormat::sparse_twin. */
+#define KFWR_RF_SPARSE (1u << 7)
 #define KFWR_RF_KIND_SHIFT 16u
 #define KFWR_RF_KIND_MASK  0xFFu
 #define KFWR_PS_4K    0u
@@ -310,11 +312,10 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes (or the report/device ABI does). A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 6u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
-                              * 5: permission bits join the diff key (kf_hkey), selected per launch by
-                              *    KfArgs::key_perm (a subset of KFWR_RF_KEY_PERM_ALL)
-                              * 6: refusal samples (KfRefusalSample): KfReportHeader grows 64 -> 392 bytes and
-                              *    KfDev gains the sample accumulator; KfFormat and KfArgs are unchanged */
+/* 3: diff/ack; 4: capacity layout; 5: keyed permissions; 6: refusal samples.
+ * 7: SPARSE placement flag and explicit sparse policy/PDE PCF setup bytes.
+ * The ABI 7 struct sizes are unchanged; the spare format bytes gained meaning. */
+#define KF_ABI_VERSION 7u
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused

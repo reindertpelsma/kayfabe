@@ -777,6 +777,14 @@ pub struct VaStats {
     pub held: u64,
     /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
     pub vmm_overlaps: u64,
+    /// Sparse runs admitted and retired without backed-memory map rows.
+    pub sparse_placed: u64,
+    /// Sparse intent retirements.
+    pub sparse_retired: u64,
+    /// Closed fallback in normal blocks or at unsupported sparse granules.
+    pub sparse_unhonoured_bytes: u64,
+    /// Sparse-to-invalid bytes retained in occupied sparse blocks.
+    pub sparse_retained_bytes: u64,
     /// ★ Invalidate clears deferred because a target's accepted work was not live yet.
     pub deferred_clears: u64,
     /// ★ Hopper+ usermode-page views a target placed a trap for (BAR1, `V3_BAR1_DOORBELL.md`).
@@ -1562,6 +1570,29 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     );
                 }
             }
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1` only, default off; `crate::vahist`): this
+            // space's runs and verdicts into its bounded history; ONE bounded dump the first time
+            // a MAP of the space is refused or its walk refuses leaves. Changes no decision.
+            if crate::vahist::recording() {
+                let rec = crate::vahist::global();
+                if rec.record_apply(
+                    key.0,
+                    batch.id,
+                    &e.runs,
+                    &a.codes,
+                    space.target.withholds_privileged(),
+                    e.refused,
+                ) {
+                    let why = if e.refused != 0 {
+                        "the walk refused leaves"
+                    } else {
+                        "a MAP was refused (absent on the host)"
+                    };
+                    for line in rec.auto_dump(key.0, why) {
+                        eprintln!("{line}");
+                    }
+                }
+            }
             self.stats.timing.apply_ns = self.stats.timing.apply_ns.saturating_add(apply_ns);
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
@@ -1624,6 +1655,22 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 .host_invalidates
                 .saturating_add(u64::from(a.invalidated));
             self.stats.held = self.stats.held.saturating_add(a.held as u64);
+            self.stats.sparse_placed = self
+                .stats
+                .sparse_placed
+                .saturating_add(a.sparse_placed as u64);
+            self.stats.sparse_retired = self
+                .stats
+                .sparse_retired
+                .saturating_add(a.sparse_retired as u64);
+            self.stats.sparse_unhonoured_bytes = self
+                .stats
+                .sparse_unhonoured_bytes
+                .saturating_add(a.sparse_unhonoured_bytes);
+            self.stats.sparse_retained_bytes = self
+                .stats
+                .sparse_retained_bytes
+                .saturating_add(a.sparse_retained_bytes);
             self.stats.vmm_overlaps = self
                 .stats
                 .vmm_overlaps

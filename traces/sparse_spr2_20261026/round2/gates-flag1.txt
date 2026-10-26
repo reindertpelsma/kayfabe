@@ -1,0 +1,129 @@
+V3_GATES_START 2026-10-26T13:05:49+01:00
+HEAD=59f09133 dirty=0
+GPU=NVIDIA GeForce RTX 4070, 595.91.07
+GATE1_VERDICT=PASS
+GATE2_VERDICT=PASS
+GATE3_VERDICT=PASS
+GATE4_VERDICT=PASS
+GATE5_VERDICT=PASS
+GATE6_VERDICT=PASS
+GATE7_VERDICT=PASS
+GATE8_VERDICT=PASS
+GATE9_VERDICT=PASS
+MICRO_RESERVE_VERDICT arm=reserve PASS
+GATE10_VERDICT=PASS
+V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1
+V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-10-26T13:05:59+01:00
+CHECK teardown_is_ranges_and_frees_the_batch PASS unmapped=191 ranges=2 unmap_verbs=2 booked=0 frees=1 rows_le
+CHECK ver2_first_invalidate_maps_the_guest_ranges PASS mapped=2 (want 2 coalesced) cleared=1 stats=VaStats { w
+CHECK ver2_every_host_op_ran_while_the_guest_saw_busy PASS stats=VaStats { walks_submitted: 5, walks_reconcile
+CHECK ver3_first_invalidate_maps_the_guest_ranges PASS mapped=2 (want 2 coalesced) cleared=1 stats=VaStats { w
+CHECK ver3_every_host_op_ran_while_the_guest_saw_busy PASS stats=VaStats { walks_submitted: 5, walks_reconcile
+CHECK small_sparse_across_tables PASS v3=false big=false runs=[KfMapRun { va: 0, gpga: 0, len: 4194304, flags:
+CHECK sparse_pde_count_only PASS v3=false big=false raw=0x8 sparse=2 runs=[KfMapRun { va: 0, gpga: 0, len: 419
+CHECK sparse_clipped_seed PASS v3=false big=false runs=[KfMapRun { va: 4096, gpga: 0, len: 4096, flags: 128, o
+CHECK small_sparse_clipped_offset PASS v3=false big=false runs=[KfMapRun { va: 0, gpga: 0, len: 4096, flags: 1
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=0 raw=0x100001 got=[KfMapRun { va: 0, gpga:
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 1677
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=2 raw=0x8 got=[] want=[]
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=3 raw=0x0 got=[] want=[]
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=4 raw=0x8 got=[] want=[]
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=5 raw=0x100001 got=[KfMapRun { va: 0, gpga:
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 1677
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, l
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, l
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, 
+CHECK small_sparse_diff PASS v3=false big=false enabled=false step=10 raw=0x0 got=[] want=[]
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=0 raw=0x100001 got=[KfMapRun { va: 0, gpga: 
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 16777
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=2 raw=0x8 got=[] want=[]
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=3 raw=0x0 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=4 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=5 raw=0x100001 got=[KfMapRun { va: 0, gpga: 
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 16777
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, l
+CHECK small_sparse_diff PASS v3=false big=false enabled=true step=10 raw=0x0 got=[] want=[]
+CHECK big_sparse_across_tables PASS v3=false big=true runs=[KfMapRun { va: 0, gpga: 0, len: 4194304, flags: 38
+CHECK sparse_pde_count_only PASS v3=false big=true raw=0x8 sparse=2 runs=[KfMapRun { va: 0, gpga: 0, len: 4194
+CHECK sparse_clipped_seed PASS v3=false big=true runs=[KfMapRun { va: 65536, gpga: 0, len: 65536, flags: 384, 
+CHECK big_sparse_clipped_offset PASS v3=false big=true runs=[KfMapRun { va: 0, gpga: 0, len: 65536, flags: 384
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=0 raw=0x100001 got=[KfMapRun { va: 0, gpga: 16
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 1677721
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=2 raw=0x8 got=[] want=[]
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=3 raw=0x0 got=[] want=[]
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=4 raw=0x8 got=[] want=[]
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=5 raw=0x100001 got=[KfMapRun { va: 0, gpga: 16
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 1677721
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len:
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, len:
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, len
+CHECK big_sparse_diff PASS v3=false big=true enabled=false step=10 raw=0x0 got=[] want=[]
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=0 raw=0x100001 got=[KfMapRun { va: 0, gpga: 167
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 16777216
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=2 raw=0x8 got=[] want=[]
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=3 raw=0x0 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=4 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=5 raw=0x100001 got=[KfMapRun { va: 0, gpga: 0, 
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 16777216
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, len:
+CHECK big_sparse_diff PASS v3=false big=true enabled=true step=10 raw=0x0 got=[] want=[]
+CHECK small_sparse_across_tables PASS v3=true big=false runs=[KfMapRun { va: 0, gpga: 0, len: 4194304, flags: 
+CHECK sparse_pde_count_only PASS v3=true big=false raw=0x8 sparse=2 runs=[KfMapRun { va: 0, gpga: 0, len: 4194
+CHECK sparse_pde_count_only PASS v3=true big=false raw=0x18 sparse=2 runs=[]
+CHECK sparse_clipped_seed PASS v3=true big=false runs=[KfMapRun { va: 4096, gpga: 0, len: 4096, flags: 128, op
+CHECK small_sparse_clipped_offset PASS v3=true big=false runs=[KfMapRun { va: 0, gpga: 0, len: 4096, flags: 12
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=0 raw=0x1000001 got=[KfMapRun { va: 0, gpga:
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 16777
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=2 raw=0x8 got=[] want=[]
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=3 raw=0x0 got=[] want=[]
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=4 raw=0x8 got=[] want=[]
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=5 raw=0x1000001 got=[KfMapRun { va: 0, gpga:
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 16777
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, l
+CHECK small_sparse_diff PASS v3=true big=false enabled=false step=10 raw=0x0 got=[] want=[]
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=0 raw=0x1000001 got=[KfMapRun { va: 0, gpga: 
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 167772
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=2 raw=0x8 got=[] want=[]
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=3 raw=0x0 got=[KfMapRun { va: 0, gpga: 0, len
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=4 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=5 raw=0x1000001 got=[KfMapRun { va: 0, gpga: 
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 167772
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, len
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, le
+CHECK small_sparse_diff PASS v3=true big=false enabled=true step=10 raw=0x0 got=[] want=[]
+CHECK big_sparse_across_tables PASS v3=true big=true runs=[KfMapRun { va: 0, gpga: 0, len: 4194304, flags: 384
+CHECK sparse_pde_count_only PASS v3=true big=true raw=0x8 sparse=2 runs=[KfMapRun { va: 0, gpga: 0, len: 41943
+CHECK sparse_pde_count_only PASS v3=true big=true raw=0x18 sparse=2 runs=[]
+CHECK sparse_clipped_seed PASS v3=true big=true runs=[KfMapRun { va: 65536, gpga: 0, len: 65536, flags: 384, o
+CHECK big_sparse_clipped_offset PASS v3=true big=true runs=[KfMapRun { va: 0, gpga: 0, len: 65536, flags: 384,
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=0 raw=0x1000001 got=[KfMapRun { va: 0, gpga: 16
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 16777216
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=2 raw=0x8 got=[] want=[]
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=3 raw=0x0 got=[] want=[]
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=4 raw=0x8 got=[] want=[]
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=5 raw=0x1000001 got=[KfMapRun { va: 0, gpga: 16
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 16777216
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, len:
+CHECK big_sparse_diff PASS v3=true big=true enabled=false step=10 raw=0x0 got=[] want=[]
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=0 raw=0x1000001 got=[KfMapRun { va: 0, gpga: 167
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=1 raw=0x8 got=[KfMapRun { va: 0, gpga: 16777216,
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=2 raw=0x8 got=[] want=[]
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=3 raw=0x0 got=[KfMapRun { va: 0, gpga: 0, len: 1
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=4 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len: 1
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=5 raw=0x1000001 got=[KfMapRun { va: 0, gpga: 0, 
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=6 raw=0x1 got=[KfMapRun { va: 0, gpga: 16777216,
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=7 raw=0x8 got=[KfMapRun { va: 0, gpga: 0, len: 1
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=8 raw=0x1 got=[KfMapRun { va: 0, gpga: 0, len: 1
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=9 raw=0x28 got=[KfMapRun { va: 0, gpga: 0, len: 
+CHECK big_sparse_diff PASS v3=true big=true enabled=true step=10 raw=0x0 got=[] want=[]
+xids_in_journal_interval=0

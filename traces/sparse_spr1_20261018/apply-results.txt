@@ -1,0 +1,7 @@
+SPR1 task 2, implementation 81590c99e
+Initial suite: 20 failed, 2 passed (EXPECTED RED a20e210b8).
+Expanded focused suite: 27 passed.
+Full serial kf-mem suite: {'passed': 272, 'failed': 0, 'ignored': 3}
+Clippy kf-mem library: exit 0, existing documentation/dead-code warnings.
+12 apply mutants, each killed by >=2 tests; see apply-mutations.json.
+Initial regression had one flag-bit expectation needing the SPARSE ABI update.

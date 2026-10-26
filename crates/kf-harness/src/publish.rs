@@ -88,6 +88,11 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn invalidate(&self) -> Result<(), String> {
         self.inner.invalidate()
     }
+    // Forwarded EXPLICITLY: the trait default (`false`) would skip the invalidate that
+    // releases deferred retirements when a refresh places nothing new.
+    fn pending_invalidate(&self) -> bool {
+        self.inner.pending_invalidate()
+    }
     fn va_extent(&self) -> Option<u64> {
         self.inner.va_extent()
     }
@@ -169,8 +174,13 @@ impl MapTarget for Batching<'_> {
         }
         Ok(())
     }
+    // Through the batch ledger: it releases the objects retired by deferred unmaps only
+    // AFTER the host invalidate succeeded (`BatchedVas::invalidate`).
     fn invalidate(&self) -> Result<(), String> {
-        self.bv.vas.invalidate()
+        self.bv.invalidate()
+    }
+    fn pending_invalidate(&self) -> bool {
+        self.bv.pending_invalidate()
     }
     // ★ v3-cdp: the production verb; its unmap is the whole-mapping one (`unmap_run` with no length).
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
@@ -243,4 +253,53 @@ pub fn publish(
         applied,
         gpu_us: c.gpu_us,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    /// A target whose deferred retirements are still waiting for an invalidate.
+    struct Pending(Cell<bool>);
+
+    impl MapTarget for Pending {
+        fn map(&self, _: &Desired, _: bool) -> Result<Mapped, String> {
+            Ok(Mapped::Placed)
+        }
+        fn unmap(&self, _: u64, _: bool) -> Result<(), String> {
+            Ok(())
+        }
+        fn invalidate(&self) -> Result<(), String> {
+            self.0.set(false);
+            Ok(())
+        }
+        fn pending_invalidate(&self) -> bool {
+            self.0.get()
+        }
+    }
+
+    #[test]
+    fn the_recording_wrapper_reports_the_inner_pending_invalidate() {
+        let r = Recorded::new(Pending(Cell::new(true)));
+        assert!(r.pending_invalidate());
+        r.invalidate().unwrap();
+        assert!(!r.pending_invalidate());
+    }
+
+    #[test]
+    fn the_recording_wrapper_hides_nothing_when_nothing_is_pending() {
+        let r = Recorded::new(Pending(Cell::new(false)));
+        assert!(!r.pending_invalidate());
+    }
+
+    #[test]
+    fn the_recording_wrapper_follows_the_inner_state_both_ways() {
+        let inner = Pending(Cell::new(false));
+        let r = Recorded::new(inner);
+        for want in [true, false, true] {
+            r.inner.0.set(want);
+            assert_eq!(r.pending_invalidate(), want);
+        }
+    }
 }

@@ -1451,6 +1451,23 @@ impl GpuMirror {
 }
 
 impl MapTarget for GpuMirror {
+    fn sparse_twin(&self) -> bool {
+        self.bv.vas.sparse_twin()
+    }
+    fn map_sparse(&self, va: u64, len: u64, defer: bool) -> Result<Mapped, String> {
+        self.user_regions.check(va, len)?;
+        self.bv.vas.map_sparse(va, len, defer)
+    }
+    fn unmap_sparse(
+        &self,
+        va: u64,
+        len: u64,
+        replacement: bool,
+        defer: bool,
+    ) -> Result<u64, String> {
+        self.user_regions.check(va, len)?;
+        self.bv.vas.unmap_sparse(va, len, replacement, defer)
+    }
     fn withholds_privileged(&self) -> bool {
         // ★ P1+P2 inc D: ONE atomic load of the per-twin state word (`crate::twin`).
         !self.kernel_vas.is_kernel()
@@ -1658,7 +1675,10 @@ impl MapTarget for GpuMirror {
         r
     }
     fn invalidate(&self) -> Result<(), String> {
-        self.vas.invalidate()
+        self.bv.invalidate()
+    }
+    fn pending_invalidate(&self) -> bool {
+        self.bv.pending_invalidate()
     }
     fn va_extent(&self) -> Option<u64> {
         self.vas.va_extent()
@@ -1668,6 +1688,17 @@ impl MapTarget for GpuMirror {
     }
     fn begin_refresh(&self) {
         self.bv.begin_refresh();
+        if let Err(e) = self.bv.vas.rm.retry_sparse(self.bv.vas.space) {
+            static LOGGED: AtomicU64 = AtomicU64::new(0);
+            if LOGGED
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    (n < 16).then_some(n.saturating_add(1))
+                })
+                .is_ok()
+            {
+                eprintln!("kf3: sparse retry refused: {e:?}");
+            }
+        }
     }
 }
 
@@ -1771,6 +1802,27 @@ pub const PREWARM_SPARES: u64 = 3;
 pub type Mirrors = std::sync::Arc<Mutex<std::collections::HashMap<VasKey, Mirror>>>;
 
 impl MapTarget for Target {
+    fn sparse_twin(&self) -> bool {
+        matches!(self, Target::Gpu(g) if g.sparse_twin())
+    }
+    fn map_sparse(&self, va: u64, len: u64, defer: bool) -> Result<Mapped, String> {
+        match self {
+            Target::Gpu(g) => g.map_sparse(va, len, defer),
+            _ => Ok(Mapped::HeldByHost),
+        }
+    }
+    fn unmap_sparse(
+        &self,
+        va: u64,
+        len: u64,
+        replacement: bool,
+        defer: bool,
+    ) -> Result<u64, String> {
+        match self {
+            Target::Gpu(g) => g.unmap_sparse(va, len, replacement, defer),
+            _ => Ok(0),
+        }
+    }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         match self {
             Target::Window(w) => w.map(d, defer),
@@ -1813,6 +1865,12 @@ impl MapTarget for Target {
             Target::Window(w) => w.invalidate(),
             Target::Bar1(b) => b.win.invalidate(),
             Target::Gpu(g) => g.invalidate(),
+        }
+    }
+    fn pending_invalidate(&self) -> bool {
+        match self {
+            Target::Gpu(g) => g.pending_invalidate(),
+            Target::Window(_) | Target::Bar1(_) => false,
         }
     }
     fn va_extent(&self) -> Option<u64> {
@@ -3459,10 +3517,29 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
     // ★ V3_BATCHED_MAP: VA-contiguous rows go as one range each; every batch object is freed.
+    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's row extents at retire
+    // (coalesced, bounded in `kf_mem::vahist::retire`) — "was X the previous owner's VA?".
+    if kf_mem::vahist::enabled() {
+        let extents: Vec<(u64, u64)> = g.rows.read().map_or_else(
+            |_| Vec::new(),
+            |r| {
+                r.iter()
+                    .take(kf_mem::vahist::RETIRE_EXTENTS.saturating_mul(64))
+                    .map(|(&va, &(len, _, _, _))| (va, len))
+                    .collect()
+            },
+        );
+        kf_mem::vahist::global().retire(key.0, extents, live);
+    }
     let t_unmap = std::time::Instant::now();
     let (nrows, mut refused, calls) = g.unmap_all_rows();
     let host_calls = calls.saturating_add(u64::from(nrows > 0));
     if nrows > 0 && g.invalidate().is_err() {
+        refused = refused.saturating_add(1);
+    }
+    // Sparse reservations and held intents are not backed rows. They must also
+    // be cleared before a different guest space can inherit this host VA space.
+    if refused == 0 && rm.reset_sparse(g.vas.space).is_err() {
         refused = refused.saturating_add(1);
     }
     let unmap_us = t_unmap.elapsed().as_micros();
@@ -3486,6 +3563,50 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         if recycled { "kept as a spare" } else { "freed" },
         g.calls_line()
     )
+}
+
+/// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the VA thread's live view for a
+/// `kf_mem::vahist` lookup — our rows (read under their own lock, never the recorder's) and the
+/// guest's PTE for the VA (at most nine 8-byte store reads, through the walker's bounds check).
+/// Built and used ONLY on the VA thread, which owns the manager and the walker's context.
+pub struct VahistView<'a> {
+    /// The VA manager.
+    pub m: &'a Manager,
+}
+
+impl kf_mem::vahist::SpaceView for VahistView<'_> {
+    fn live_keys(&self) -> Vec<u64> {
+        self.m
+            .table
+            .objects()
+            .into_iter()
+            .take(kf_mem::vahist::MAX_SPACES)
+            .map(|(k, _, _)| k.0)
+            .collect()
+    }
+
+    fn row_at(&self, key: u64, va: u64) -> Option<(u64, u64, bool, u64)> {
+        let Some(Target::Gpu(g)) = self.m.table.target(VasKey(key)) else {
+            return None;
+        };
+        let r = g.rows.read().ok()?;
+        let (&start, &(len, off, ram, _)) = r.range(..=va).next_back()?;
+        (va < start.checked_add(len)?).then_some((start, len, ram, off))
+    }
+
+    fn guest_pte(&self, key: u64, va: u64) -> Option<String> {
+        let root = self.m.table.root(VasKey(key))?;
+        let kernel = &self.m.walker().kernel;
+        let fmt = *kernel.format();
+        let mut read8 = |off: u64| {
+            let mut b = [0u8; 8];
+            kernel
+                .read_store(off, &mut b)
+                .ok()
+                .map(|()| u64::from_le_bytes(b))
+        };
+        Some(kf_mem::vahist::probe_pte(&fmt, root, va, &mut read8))
+    }
 }
 
 /// Diagnostics: every VA-space object the plane holds, `key=slot@root:rows`.
@@ -3635,6 +3756,17 @@ pub fn apply_statement(
                     );
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
+                }
+                // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the space's history
+                // starts here, with its host space and whether it is a recycled spare.
+                if kf_mem::vahist::enabled()
+                    && let Some(Target::Gpu(g)) = m.table.target(key)
+                {
+                    kf_mem::vahist::global().note_space(
+                        key.0,
+                        g.vas.space.space.into(),
+                        reused.is_some(),
+                    );
                 }
             }
             match m.table.set_root(key, s.pdb.0, ap) {
@@ -4917,3 +5049,7 @@ mod memory_list_tests {
         assert_eq!(ram.validate(span), None);
     }
 }
+
+#[cfg(test)]
+#[path = "mem/walk_gate_tests.rs"]
+mod walk_gate_tests;

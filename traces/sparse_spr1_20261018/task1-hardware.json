@@ -1,0 +1,78 @@
+{
+  "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026",
+  "models": [
+    "Model: \t\t NVIDIA GeForce RTX 4070"
+  ],
+  "runs": [
+    {
+      "arm": "expanded-green",
+      "start": "SPR1_GATE9_START arm=expanded-green utc=2026-10-26T06:15:25.806143070Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "green",
+      "start": "SPR1_GATE9_START arm=green utc=2026-10-26T06:10:09.291891095Z rev=d23ebe9c043f481c0adbfe93b4493a0051ee5c24",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-drop_pde_sparse_no_ats",
+      "start": "SPR1_GATE9_START arm=mutant-drop_pde_sparse_no_ats utc=2026-10-26T06:17:05.230134764Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-linear_clip_offset",
+      "start": "SPR1_GATE9_START arm=mutant-linear_clip_offset utc=2026-10-26T06:16:43.108807384Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-linear_leaf_join",
+      "start": "SPR1_GATE9_START arm=mutant-linear_leaf_join utc=2026-10-26T06:15:58.673010800Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-linear_sparse_coverage",
+      "start": "SPR1_GATE9_START arm=mutant-linear_sparse_coverage utc=2026-10-26T06:16:54.195498510Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-linear_task_join",
+      "start": "SPR1_GATE9_START arm=mutant-linear_task_join utc=2026-10-26T06:16:20.902526508Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-linear_warp_join",
+      "start": "SPR1_GATE9_START arm=mutant-linear_warp_join utc=2026-10-26T06:16:09.716932977Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-no_sparse_emit",
+      "start": "SPR1_GATE9_START arm=mutant-no_sparse_emit utc=2026-10-26T06:15:36.518931805Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-no_sparse_key",
+      "start": "SPR1_GATE9_START arm=mutant-no_sparse_key utc=2026-10-26T06:15:47.552125390Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "mutant-sparse_big_not_owner",
+      "start": "SPR1_GATE9_START arm=mutant-sparse_big_not_owner utc=2026-10-26T06:16:32.041868916Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    },
+    {
+      "arm": "oldptx-boundaries",
+      "start": "SPR1_GATE9_START arm=oldptx-boundaries utc=2026-10-26T06:07:34.166699699Z rev=40bc2ad2c3722c8f640793c8d779730c717cf200",
+      "xid_count": 0
+    },
+    {
+      "arm": "oldptx",
+      "start": "SPR1_GATE9_START arm=oldptx utc=2026-10-26T05:59:16.346231316Z rev=e43e886520c96185a2783f40b5f2511aae67cec9",
+      "xid_count": 0
+    },
+    {
+      "arm": "restored-green",
+      "start": "SPR1_GATE9_START arm=restored-green utc=2026-10-26T06:17:11.666781055Z rev=006c07ea89961600744f2e27985630cb4645ddc9",
+      "xid_count": 0
+    }
+  ]
+}

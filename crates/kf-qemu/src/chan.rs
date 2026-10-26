@@ -2608,9 +2608,18 @@ fn keep_engine_object(
     {
         return false;
     }
+    let class = object.class;
     v.objects.insert(handle, object);
     v.pending_objects.remove(&handle);
     index.insert((key.0, handle), key);
+    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the class joins the channel's
+    // lifetime record — AFTER both locks are released, so the recorder's mutex is never taken
+    // under the `pt` lock.
+    drop(index);
+    drop(pt);
+    if kf_mem::vahist::enabled() {
+        kf_mem::vahist::global().chan_class(key.0, key.1, class);
+    }
     true
 }
 
@@ -5781,6 +5790,14 @@ impl ChanPlane {
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     if !t.user_ring || r.is_ok() {
                         t.live.fetch_sub(1, Ordering::AcqRel);
+                    }
+                    // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_VAHIST=1`, default off): the ONE lifetime line
+                    // of a recorded USER-ring birth (capped); nothing for any other twin.
+                    if t.user_ring
+                        && kf_mem::vahist::enabled()
+                        && let Some(l) = kf_mem::vahist::global().chan_free(c, h, r.is_ok())
+                    {
+                        eprintln!("{l}");
                     }
                     // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
                     // host RM really freed the channel. A refused free leaves it counted — the

@@ -1,0 +1,120 @@
+[
+  {
+    "mutant": "no_sparse_emit",
+    "cases": [
+      "big_sparse_across_tables v3=false big=true",
+      "big_sparse_across_tables v3=true big=true",
+      "big_sparse_clipped_offset v3=false big=true",
+      "big_sparse_clipped_offset v3=true big=true",
+      "big_sparse_diff v3=false big=true",
+      "big_sparse_diff v3=true big=true",
+      "small_sparse_across_tables v3=false big=false",
+      "small_sparse_across_tables v3=true big=false",
+      "small_sparse_clipped_offset v3=false big=false",
+      "small_sparse_clipped_offset v3=true big=false",
+      "small_sparse_diff v3=false big=false",
+      "small_sparse_diff v3=true big=false",
+      "sparse_clipped_seed v3=false big=false",
+      "sparse_clipped_seed v3=false big=true",
+      "sparse_clipped_seed v3=true big=false",
+      "sparse_clipped_seed v3=true big=true"
+    ],
+    "failures": 36,
+    "returncode": 1,
+    "ptx_sha256": "d2775a6f26ffff73c615774cb040dd730b64f3caddb3ad6b9a552eb6a6f2cf92"
+  },
+  {
+    "mutant": "no_sparse_key",
+    "cases": [
+      "big_sparse_diff v3=false big=true",
+      "big_sparse_diff v3=true big=true",
+      "small_sparse_diff v3=false big=false",
+      "small_sparse_diff v3=true big=false"
+    ],
+    "failures": 20,
+    "returncode": 1,
+    "ptx_sha256": "006e206cc83491fca7e09211e68f33fdd08783384921a9ac686aee87123b95e6"
+  },
+  {
+    "mutant": "linear_leaf_join",
+    "cases": [
+      "small_sparse_across_tables v3=false big=false",
+      "small_sparse_across_tables v3=true big=false",
+      "small_sparse_diff v3=false big=false",
+      "small_sparse_diff v3=true big=false"
+    ],
+    "failures": 14,
+    "returncode": 1,
+    "ptx_sha256": "c3ddb971bd3e9494d6bcb74e5fc49659b417a723c78be3a6eef9cecfbf2c9549"
+  },
+  {
+    "mutant": "linear_warp_join",
+    "cases": [
+      "big_sparse_across_tables v3=false big=true",
+      "big_sparse_across_tables v3=true big=true",
+      "big_sparse_diff v3=false big=true",
+      "big_sparse_diff v3=true big=true",
+      "small_sparse_across_tables v3=false big=false",
+      "small_sparse_across_tables v3=true big=false"
+    ],
+    "failures": 16,
+    "returncode": 1,
+    "ptx_sha256": "ca65368b9fc89602a0679e330bd33cdd6fd467bfa5775714adacd03b2ad43837"
+  },
+  {
+    "mutant": "linear_task_join",
+    "cases": [
+      "big_sparse_across_tables v3=false big=true",
+      "big_sparse_across_tables v3=true big=true",
+      "small_sparse_across_tables v3=false big=false",
+      "small_sparse_across_tables v3=true big=false"
+    ],
+    "failures": 4,
+    "returncode": 1,
+    "ptx_sha256": "5a598fc87c2c54d2af9a4ceabda518ac2a9c47a001ec1eb8c2bc39d79c82953f"
+  },
+  {
+    "mutant": "sparse_big_not_owner",
+    "cases": [
+      "big_sparse_diff v3=false big=true",
+      "big_sparse_diff v3=true big=true"
+    ],
+    "failures": 12,
+    "returncode": 1,
+    "ptx_sha256": "cef607322919ff1565ea6ae5676206faa39a39fed4b666aae637fa29e58827c5"
+  },
+  {
+    "mutant": "linear_clip_offset",
+    "cases": [
+      "big_sparse_clipped_offset v3=false big=true",
+      "big_sparse_clipped_offset v3=true big=true",
+      "small_sparse_clipped_offset v3=false big=false",
+      "small_sparse_clipped_offset v3=true big=false"
+    ],
+    "failures": 4,
+    "returncode": 1,
+    "ptx_sha256": "05db3c052904031d60862646484ca882043c22531908df6c4ce4fc724d575ab0"
+  },
+  {
+    "mutant": "linear_sparse_coverage",
+    "cases": [
+      "big_sparse_clipped_offset v3=false big=true",
+      "big_sparse_clipped_offset v3=true big=true",
+      "small_sparse_clipped_offset v3=false big=false",
+      "small_sparse_clipped_offset v3=true big=false"
+    ],
+    "failures": 4,
+    "returncode": 1,
+    "ptx_sha256": "23bd1827cbea0c187039ca460784fdd984093086a2ff2a4678704c501e41f804"
+  },
+  {
+    "mutant": "drop_pde_sparse_no_ats",
+    "cases": [
+      "sparse_pde_count_only v3=true big=false",
+      "sparse_pde_count_only v3=true big=true"
+    ],
+    "failures": 2,
+    "returncode": 1,
+    "ptx_sha256": "2eb8f90ef1ea5e3695d3739860aaf8fc8211ee61bc58f0931dcb953fd3327338"
+  }
+]
