@@ -28,13 +28,31 @@ impl HostRm {
         space: u32,
         f: impl FnOnce(&mut Reservations, &dyn Ops) -> Result<T, RmError>,
     ) -> Option<Result<T, RmError>> {
+        self.with_sparse_gate(space, false, f)
+    }
+
+    /// Plain map and unmap routing: a failed layout repair never refuses these.
+    pub(super) fn with_sparse_route<T>(
+        &self,
+        space: u32,
+        f: impl FnOnce(&mut Reservations, &dyn Ops) -> Result<T, RmError>,
+    ) -> Option<Result<T, RmError>> {
+        self.with_sparse_gate(space, true, f)
+    }
+
+    fn with_sparse_gate<T>(
+        &self,
+        space: u32,
+        routing: bool,
+        f: impl FnOnce(&mut Reservations, &dyn Ops) -> Result<T, RmError>,
+    ) -> Option<Result<T, RmError>> {
         if !self.sparse_enabled {
             return None;
         }
         let layout = self.sparse_spaces.lock().ok()?.get(&space)?.clone();
         Some((|| {
             let _placement = self.placement_gate.write().map_err(|_| RmError::NoMemory)?;
-            if self.layout_poisoned.load(Acquire) {
+            if crate::sparse::poison_refuses(self.layout_poisoned.load(Acquire), routing) {
                 return Err(RmError::NoMemory);
             }
             let mut tree = layout.lock().map_err(|_| RmError::NoMemory)?;
@@ -50,6 +68,7 @@ impl HostRm {
                     .unhonoured_bytes
                     .saturating_sub(before.unhonoured_bytes),
                 after.retained_bytes.saturating_sub(before.retained_bytes),
+                after.coarse_maps.saturating_sub(before.coarse_maps),
             ]) {
                 let _ = counter.try_update(Relaxed, Relaxed, |n| Some(n.saturating_add(delta)));
             }
@@ -130,7 +149,7 @@ impl HostRm {
                 .saturating_add(self.sparse_global_overflow.load(Relaxed)),
             unhonoured_bytes: self.sparse_totals[4].load(Relaxed),
             retained_bytes: self.sparse_totals[5].load(Relaxed),
-            coarse_maps: 0,
+            coarse_maps: self.sparse_totals[6].load(Relaxed),
         }
     }
 
@@ -156,7 +175,7 @@ impl HostRm {
         {
             eprintln!(
                 "kf-host: SPARSE space={space:#x} made={} freed={} refused={} overflow={} \
-                 unhonoured_bytes={} retained_bytes={}",
+                 unhonoured_bytes={} retained_bytes={} coarse_maps={}",
                 stats.made,
                 stats.freed,
                 stats.refused,
@@ -165,6 +184,7 @@ impl HostRm {
                     .saturating_add(self.sparse_global_overflow.load(Relaxed)),
                 stats.unhonoured_bytes,
                 stats.retained_bytes,
+                stats.coarse_maps,
             );
         }
     }
@@ -177,7 +197,7 @@ impl HostRm {
         by_range: bool,
         defer: bool,
     ) -> Option<Result<(), RmError>> {
-        self.with_sparse(space.space, |tree, _| {
+        self.with_sparse_route(space.space, |tree, _| {
             let pieces = tree.pieces(space.range, va, len)?;
             let mut first = Ok(());
             for (h, pva, plen) in pieces {

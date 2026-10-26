@@ -36,8 +36,7 @@ pub(crate) fn claim(counter: &AtomicUsize, limit: usize) -> bool {
 /// Claim one session slot for a reservation. Only the tree's own blocks (`tree_block`) count
 /// against the cap; any other reservation passes exactly as it does with the twin OFF.
 pub(crate) fn claim_block(counter: &AtomicUsize, limit: usize, tree_block: bool) -> bool {
-    let _ = tree_block;
-    claim(counter, limit)
+    !tree_block || claim(counter, limit)
 }
 
 #[cfg(test)]

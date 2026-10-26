@@ -476,7 +476,7 @@ pub struct HostRm {
     sparse_objects: Mutex<std::collections::BTreeSet<u32>>,
     sparse_object_count: std::sync::atomic::AtomicUsize,
     sparse_global_overflow: std::sync::atomic::AtomicU64,
-    sparse_totals: [std::sync::atomic::AtomicU64; 6],
+    sparse_totals: [std::sync::atomic::AtomicU64; 7],
     /// Subdevice notifiers this session has armed REPEAT — arming is per SUBDEVICE and legal only
     /// from `DISABLE` (`subdevice_ctrl_event_kernel.c:123-130`), so it is done once, here.
     armed: Mutex<std::collections::BTreeSet<u32>>,

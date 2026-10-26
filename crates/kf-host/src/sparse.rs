@@ -25,6 +25,13 @@ pub fn enabled() -> bool {
     enabled_from(std::env::var("KF3_SPARSE_TWIN").ok().as_deref())
 }
 
+/// Whether a tree whose layout repair failed refuses this call. Sparse bookkeeping stops;
+/// routing a plain map or unmap never does (it only names handles that still exist).
+#[must_use]
+pub(crate) fn poison_refuses(poisoned: bool, routing: bool) -> bool {
+    poisoned && !routing
+}
+
 /// Reservation verbs, with a host implementation and an adversarial model.
 pub(crate) trait Ops {
     fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError>;
@@ -41,22 +48,26 @@ struct Block {
     wanted: [u64; 8],
 }
 
-/// Bounded, saturating counters; no guest-controlled log stream.
+/// Bounded, saturating counters; no guest-controlled log stream. Each says what it counts:
+/// all are EVENTS or BYTES summed over the session, never "distinct" objects.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Stats {
-    /// Reservations created after initial space creation.
+    /// Reservation objects created after initial space creation (cumulative).
     pub made: u64,
-    /// Empty reservations released.
+    /// Reservation objects released (cumulative); `made - freed` is the live count.
     pub freed: u64,
-    /// RM verb refusals.
+    /// Host RM verb refusals (a reserve or release that RM, or the session cap, refused).
     pub refused: u64,
-    /// Object-budget refusals.
+    /// SPARSE admissions declined by the object budget (the run stays invalid): one per
+    /// declined admission. Plain maps never count here.
     pub overflow: u64,
-    /// Sparse bytes that could not be honoured in this call.
+    /// Sparse bytes left invalid at admission, summed per admission (a run retried later is
+    /// counted again).
     pub unhonoured_bytes: u64,
     /// Sparse-to-invalid bytes retained in occupied sparse blocks.
     pub retained_bytes: u64,
-    /// Plain maps placed in an unrefined (coarse) block because refinement was declined.
+    /// Plain maps placed in a coarse block because refinement was declined (object budget,
+    /// a populated coarse block, or an RM refusal): one per map call. They are NOT refused.
     pub coarse_maps: u64,
 }
 
@@ -66,6 +77,8 @@ pub(crate) struct Reservations {
     limit: usize,
     pub(crate) stats: Stats,
     pub(crate) poisoned: bool,
+    /// Set by the object budget; read by the caller that decides what a decline means.
+    declined: bool,
 }
 
 impl Reservations {
@@ -91,6 +104,7 @@ impl Reservations {
             limit,
             stats: Stats::default(),
             poisoned: false,
+            declined: false,
         }
     }
 
@@ -108,9 +122,12 @@ impl Reservations {
         Ok(end)
     }
 
+    /// The block budget. A decline is only recorded here; the caller decides what it means:
+    /// a plain map goes on in its coarse block (`coarse_maps`), a sparse admission is left
+    /// invalid (`overflow`).
     fn budget(&mut self, count: usize) -> Result<(), RmError> {
         if count > self.limit {
-            self.stats.overflow = self.stats.overflow.saturating_add(1);
+            self.declined = true;
             return Err(RmError::NoMemory);
         }
         Ok(())
@@ -162,7 +179,8 @@ impl Reservations {
         sparse: bool,
     ) -> Result<(), RmError> {
         let old = self.blocks.get(&key).cloned().ok_or(RmError::NoMemory)?;
-        if Self::occupied(&old) {
+        // A block lost to a failed repair has no reservation to free or to split.
+        if old.handle == 0 || Self::occupied(&old) {
             return Err(RmError::NoMemory);
         }
         let parts: Vec<_> = [(old.lo, lo, false), (lo, hi, sparse), (hi, old.hi, false)]
@@ -274,7 +292,9 @@ impl Reservations {
 
     pub(crate) fn admit(&mut self, ops: &dyn Ops, va: u64, len: u64) -> Result<bool, RmError> {
         let snapshot = self.blocks.clone();
+        self.declined = false;
         let result = self.admit_inner(ops, va, len);
+        let declined = result.is_err() && self.declined;
         if result.is_err() {
             let fresh: Vec<_> = self
                 .blocks
@@ -307,6 +327,13 @@ impl Reservations {
                     }
                 }
             }
+        }
+        if declined {
+            // Sparse is best-effort: the run stays invalid (counted), never a refusal that the
+            // walker would retry on every refresh. Every tile made for it was withdrawn above.
+            self.stats.overflow = self.stats.overflow.saturating_add(1);
+            self.stats.unhonoured_bytes = self.stats.unhonoured_bytes.saturating_add(len);
+            return Ok(false);
         }
         result
     }
@@ -429,8 +456,16 @@ impl Reservations {
         range: u32,
         va: u64,
         len: u64,
+        refine: bool,
     ) -> Result<Vec<(u32, u64, u64)>, RmError> {
-        self.normal(ops, va, len)?;
+        // Arguments the twin-OFF path also refuses (below the floor, wrapping, unaligned).
+        Self::end(va, len)?;
+        // Refinement only prepares a later sparse carve. A decline (budget, a populated coarse
+        // block, an RM refusal) never refuses the map: it goes in the coarse block exactly as
+        // with the twin OFF, and is counted.
+        if !refine || self.poisoned || self.normal(ops, va, len).is_err() {
+            self.stats.coarse_maps = self.stats.coarse_maps.saturating_add(1);
+        }
         let pieces = self.pieces(range, va, len)?;
         self.mark(va, len, true);
         Ok(pieces)
@@ -448,7 +483,9 @@ impl Reservations {
         while cur < end {
             let (handle, stop) = if let Some(key) = self.key(cur) {
                 let b = self.blocks.get(&key).ok_or(RmError::NoMemory)?;
-                (b.handle, b.hi.min(end))
+                // A block lost to a failed repair is placed through the range object, as an
+                // unreserved range is with the twin OFF.
+                (if b.handle == 0 { range } else { b.handle }, b.hi.min(end))
             } else {
                 (
                     range,
@@ -458,7 +495,10 @@ impl Reservations {
                         .map_or(end, |(&lo, _)| lo.min(end)),
                 )
             };
-            if handle == 0 || stop <= cur || pieces.len() > self.limit.saturating_mul(2) {
+            if handle == 0
+                || stop <= cur
+                || pieces.len() > self.limit.saturating_mul(2).saturating_add(1)
+            {
                 return Err(RmError::NoMemory);
             }
             pieces.push((handle, cur, stop - cur));

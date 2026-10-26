@@ -2833,7 +2833,7 @@ impl Device {
             let s = self.rm.sparse_totals();
             format!(
                 " sparse[placed={} retired={} unhonoured={} retained={} made={} freed={} \
-                 refused={} overflow={}]",
+                 refused={} overflow={} coarse_maps={}]",
                 va.sparse_placed,
                 va.sparse_retired,
                 va.sparse_unhonoured_bytes,
@@ -2842,6 +2842,7 @@ impl Device {
                 s.freed,
                 s.refused,
                 s.overflow,
+                s.coarse_maps,
             )
         } else {
             String::new()

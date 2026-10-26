@@ -1,0 +1,121 @@
+[
+ {
+  "mutant": "propagate_normal_error",
+  "killing_tests": [
+   "sparse::tests::a_block_lost_to_a_failed_repair_is_mapped_through_the_range_object",
+   "sparse::tests::a_plain_map_into_a_populated_coarse_block_is_accepted",
+   "sparse::tests::a_refused_split_leaves_the_plain_map_in_its_original_block",
+   "sparse::tests::declined_plain_maps_are_counted_as_coarse_maps_not_as_overflow",
+   "sparse::tests::plain_maps_across_an_exhausted_budget_are_never_refused",
+   "sparse::tests::plain_maps_are_byte_identical_to_the_twin_off_through_map_and_unmap"
+  ],
+  "count": 6
+ },
+ {
+  "mutant": "no_coarse_count",
+  "killing_tests": [
+   "sparse::tests::a_map_with_refinement_off_makes_no_reservation_call_and_is_placed_coarse",
+   "sparse::tests::declined_plain_maps_are_counted_as_coarse_maps_not_as_overflow"
+  ],
+  "count": 2
+ },
+ {
+  "mutant": "handle0_unrouted",
+  "killing_tests": [
+   "sparse::tests::a_block_lost_to_a_failed_repair_is_mapped_through_the_range_object",
+   "sparse::tests::an_unmap_of_a_block_lost_to_a_failed_repair_routes_through_the_range_object"
+  ],
+  "count": 2
+ },
+ {
+  "mutant": "replace_frees_handle0",
+  "killing_tests": [
+   "sparse::tests::a_block_lost_to_a_failed_repair_is_never_freed_or_split_again",
+   "sparse::tests::a_sparse_run_over_a_block_lost_to_a_failed_repair_makes_no_host_call"
+  ],
+  "count": 2
+ },
+ {
+  "mutant": "admit_decline_is_error",
+  "killing_tests": [
+   "sparse::tests::a_sparse_run_declined_midway_withdraws_every_new_tile",
+   "sparse::tests::a_sparse_run_over_the_block_budget_is_unhonoured_not_refused",
+   "sparse::tests::each_declined_sparse_admission_is_one_overflow_and_its_bytes_are_unhonoured",
+   "sparse::tests::sparse_object_exhaustion_in_the_middle_preserves_the_original_reservation",
+   "sparse::tests::sparse_object_exhaustion_is_refused_before_free"
+  ],
+  "count": 5
+ },
+ {
+  "mutant": "admit_decline_uncounted",
+  "killing_tests": [
+   "sparse::tests::a_sparse_run_declined_midway_withdraws_every_new_tile",
+   "sparse::tests::each_declined_sparse_admission_is_one_overflow_and_its_bytes_are_unhonoured",
+   "sparse::tests::sparse_object_exhaustion_in_the_middle_preserves_the_original_reservation",
+   "sparse::tests::sparse_object_exhaustion_is_refused_before_free"
+  ],
+  "count": 4
+ },
+ {
+  "mutant": "budget_counts_overflow",
+  "killing_tests": [
+   "sparse::tests::a_sparse_run_declined_midway_withdraws_every_new_tile",
+   "sparse::tests::declined_plain_maps_are_counted_as_coarse_maps_not_as_overflow",
+   "sparse::tests::each_declined_sparse_admission_is_one_overflow_and_its_bytes_are_unhonoured",
+   "sparse::tests::normal_object_exhaustion_never_places_a_backing_in_a_coarse_block",
+   "sparse::tests::sparse_object_exhaustion_in_the_middle_preserves_the_original_reservation",
+   "sparse::tests::sparse_object_exhaustion_is_refused_before_free"
+  ],
+  "count": 6
+ },
+ {
+  "mutant": "claim_ignores_kind",
+  "killing_tests": [
+   "sparse::initial::tests::a_non_tree_reservation_never_consumes_the_session_budget",
+   "sparse::initial::tests::a_non_tree_reservation_passes_a_full_session"
+  ],
+  "count": 2
+ },
+ {
+  "mutant": "claim_never",
+  "killing_tests": [
+   "sparse::initial::tests::a_tree_block_consumes_one_session_slot",
+   "sparse::initial::tests::a_tree_block_is_refused_by_a_full_session"
+  ],
+  "count": 2
+ },
+ {
+  "mutant": "poison_always",
+  "killing_tests": [
+   "sparse::tests::a_failed_repair_stops_sparse_bookkeeping_but_never_plain_routing",
+   "sparse::tests::only_sparse_bookkeeping_stops_on_a_poisoned_layout",
+   "sparse::tests::routing_survives_a_poisoned_layout_for_every_plain_call"
+  ],
+  "count": 3
+ },
+ {
+  "mutant": "refine_ignored",
+  "killing_tests": [
+   "sparse::tests::a_map_with_refinement_off_leaves_the_geometry_untouched",
+   "sparse::tests::a_map_with_refinement_off_makes_no_reservation_call_and_is_placed_coarse"
+  ],
+  "count": 2
+ },
+ {
+  "mutant": "skip_arg_validation",
+  "killing_tests": [
+   "sparse::tests::a_plain_map_below_the_twin_floor_is_refused_as_with_the_twin_off",
+   "sparse::tests::a_refused_plain_map_does_not_count_as_a_coarse_map",
+   "sparse::tests::a_wrapping_plain_map_is_refused_as_with_the_twin_off"
+  ],
+  "count": 3
+ },
+ {
+  "mutant": "no_occupancy",
+  "killing_tests": [
+   "sparse::tests::a_routed_map_is_live_so_a_sparse_run_cannot_free_its_tile",
+   "sparse::tests::a_routed_map_is_live_so_the_space_cannot_be_recycled"
+  ],
+  "count": 2
+ }
+]

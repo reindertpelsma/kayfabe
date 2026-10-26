@@ -958,7 +958,7 @@ impl HostRm {
         use std::sync::atomic::Ordering::Relaxed;
         // Only the tree's own blocks are counted: a micro or other reservation is placed exactly
         // as with the twin OFF (it must never be refused by the sparse budget).
-        let counted = self.sparse_enabled;
+        let counted = self.sparse_enabled && layout;
         if self.sparse_enabled
             && !crate::sparse::initial::claim_block(
                 &self.sparse_object_count,
@@ -1123,11 +1123,12 @@ impl HostRm {
         let extra = extra | perm.nvos46_flags();
         let shared = backing == MapBacking::SharedSlice;
         if let Some(a) = at
-            && let Some(result) = self.with_sparse(space.space, |tree, ops| {
+            && let Some(result) = self.with_sparse_route(space.space, |tree, ops| {
                 // Occupancy is recorded before the host call and conservatively retained
                 // after a refused map or rollback. A later successful exact unmap clears
                 // it; it can never free live PTEs.
-                let pieces = tree.route_map(ops, space.range, a, len)?;
+                let refine = !self.layout_poisoned.load(std::sync::atomic::Ordering::Acquire);
+                let pieces = tree.route_map(ops, space.range, a, len, refine)?;
                 map_piece_list(
                     self,
                     &pieces,
