@@ -32,6 +32,12 @@ Crates used only by tests and developer tools are listed in `Cargo.lock` and are
 
 NVIDIA's open-gpu-kernel-modules source is the reference the generated tables are checked against, and the version a given table comes from is recorded with it. <!-- src: third_party/README.md, THIRD_PARTY_NOTICES.md section 1.1 -->
 
+## Related projects
+
+Other projects attempt something close to kayfabe: a GPU for a virtual machine that runs the stock NVIDIA driver while the host keeps using the card. They are credited here for readers who want to compare approaches. Kayfabe does not copy code from them.
+
+- **Caraxes** ([silasmue/Caraxes](https://github.com/silasmue/Caraxes), MIT; a fork of [UniStuttgart-IKR/Leandro](https://github.com/UniStuttgart-IKR/Leandro)). A synthetic NVIDIA GPU served over vfio-user that plays the GSP firmware, shadows the guest's page tables and runs the guest's channels on host channels. It is the closest in shape to kayfabe, and it makes different design choices. Its README describes the project and its current limits. <!-- src: https://github.com/silasmue/Caraxes README -->
+
 ## Trademarks
 
 NVIDIA, GeForce, CUDA and the like are trademarks of their owners. Windows is a trademark of Microsoft Corporation. All other names are the property of their owners. They are used here only to say what kayfabe works with. **Kayfabe is not affiliated with or endorsed by NVIDIA or Microsoft.** <!-- src: docs/NOTICES.md -->
