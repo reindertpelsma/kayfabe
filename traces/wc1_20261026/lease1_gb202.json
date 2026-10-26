@@ -1,0 +1,241 @@
+{
+  "hashes_ok": true,
+  "files": 18,
+  "bytes": 62958453,
+  "cells": [
+    {
+      "cell": "startup1",
+      "capabilities": {
+        "family": "blackwell-consumer",
+        "architecture": 27,
+        "implementation": 2,
+        "boot_path": "fsp",
+        "method_name": "scan",
+        "cmd_bytes": 262144,
+        "stat_bytes": 262144,
+        "element_bytes": 4096,
+        "region_pages": 129,
+        "table_max_pages": 512,
+        "queue_max_bytes": 1048576
+      },
+      "discovery": {
+        "method": 2,
+        "layout": 1,
+        "bar0": 3,
+        "gpu_count": 1,
+        "mailbox_reads": 2079,
+        "mailbox_status": 9,
+        "scan_bytes": 66755719168,
+        "scan_passes": 0,
+        "scan_candidates": 8,
+        "scan_backoff_resets": 6,
+        "scan_backoff_ticks": 17897725
+      },
+      "stats": {
+        "steps": 104843,
+        "attaches": 1,
+        "detaches": 1,
+        "messages_cmd": 289,
+        "messages_status": 289,
+        "lost_messages_exact": 0,
+        "seq_gap_messages": 0,
+        "lapped_messages": 0,
+        "loss_records": 2,
+        "torn_reads": 0,
+        "invalid_elements": 0,
+        "unsupported": 0,
+        "read_failures": 0,
+        "resyncs": 2,
+        "sink_dropped": 0,
+        "records_refused": 0,
+        "events_lost": 0,
+        "sink_loss_pending": 0
+      },
+      "capture": {
+        "records": 597,
+        "end_seen": 1,
+        "file_ok": 1,
+        "by_kind": {
+          "bind": 2,
+          "elements": 592,
+          "loss_overflow": 0,
+          "loss_unreadable": 0,
+          "loss_unknown": 2,
+          "end": 1
+        }
+      },
+      "oracle": {
+        "oracle_ok": false,
+        "anomaly_total": 4,
+        "messages": {
+          "cmd": 289,
+          "status": 289
+        },
+        "missing_messages": 9746
+      }
+    },
+    {
+      "cell": "startup2",
+      "capabilities": {
+        "family": "blackwell-consumer",
+        "architecture": 27,
+        "implementation": 2,
+        "boot_path": "fsp",
+        "method_name": "nearby",
+        "cmd_bytes": 262144,
+        "stat_bytes": 262144,
+        "element_bytes": 4096,
+        "region_pages": 129,
+        "table_max_pages": 512,
+        "queue_max_bytes": 1048576
+      },
+      "discovery": {
+        "method": 4,
+        "layout": 1,
+        "bar0": 3,
+        "gpu_count": 1,
+        "mailbox_reads": 122,
+        "mailbox_status": 9,
+        "scan_bytes": 5369757696,
+        "scan_passes": 0,
+        "scan_candidates": 5,
+        "scan_backoff_resets": 6,
+        "scan_backoff_ticks": 17897725
+      },
+      "stats": {
+        "steps": 60378,
+        "attaches": 1,
+        "detaches": 1,
+        "messages_cmd": 5107,
+        "messages_status": 5172,
+        "lost_messages_exact": 0,
+        "seq_gap_messages": 0,
+        "lapped_messages": 0,
+        "loss_records": 0,
+        "torn_reads": 0,
+        "invalid_elements": 0,
+        "unsupported": 0,
+        "read_failures": 0,
+        "resyncs": 2,
+        "sink_dropped": 0,
+        "records_refused": 0,
+        "events_lost": 0,
+        "sink_loss_pending": 0
+      },
+      "capture": {
+        "records": 10301,
+        "end_seen": 1,
+        "file_ok": 1,
+        "by_kind": {
+          "bind": 2,
+          "elements": 10298,
+          "loss_overflow": 0,
+          "loss_unreadable": 0,
+          "loss_unknown": 0,
+          "end": 1
+        }
+      },
+      "oracle": {
+        "oracle_ok": true,
+        "anomaly_total": 0,
+        "messages": {
+          "cmd": 5107,
+          "status": 5172
+        },
+        "missing_messages": 0
+      }
+    },
+    {
+      "cell": "warm",
+      "capabilities": {
+        "family": "blackwell-consumer",
+        "architecture": 27,
+        "implementation": 2,
+        "boot_path": "fsp",
+        "method_name": "scan",
+        "cmd_bytes": 262144,
+        "stat_bytes": 262144,
+        "element_bytes": 4096,
+        "region_pages": 129,
+        "table_max_pages": 512,
+        "queue_max_bytes": 1048576
+      },
+      "discovery": {
+        "method": 2,
+        "layout": 1,
+        "bar0": 3,
+        "gpu_count": 1,
+        "mailbox_reads": 889,
+        "mailbox_status": 9,
+        "scan_bytes": 3776954368,
+        "scan_passes": 0,
+        "scan_candidates": 3,
+        "scan_backoff_resets": 1,
+        "scan_backoff_ticks": 17897725
+      },
+      "stats": {
+        "steps": 72344,
+        "attaches": 1,
+        "detaches": 1,
+        "messages_cmd": 473,
+        "messages_status": 481,
+        "lost_messages_exact": 0,
+        "seq_gap_messages": 0,
+        "lapped_messages": 0,
+        "loss_records": 2,
+        "torn_reads": 0,
+        "invalid_elements": 0,
+        "unsupported": 0,
+        "read_failures": 0,
+        "resyncs": 2,
+        "sink_dropped": 0,
+        "records_refused": 0,
+        "events_lost": 0,
+        "sink_loss_pending": 0
+      },
+      "capture": {
+        "records": 981,
+        "end_seen": 1,
+        "file_ok": 1,
+        "by_kind": {
+          "bind": 2,
+          "elements": 976,
+          "loss_overflow": 0,
+          "loss_unreadable": 0,
+          "loss_unknown": 2,
+          "end": 1
+        }
+      },
+      "oracle": {
+        "oracle_ok": false,
+        "anomaly_total": 4,
+        "messages": {
+          "cmd": 473,
+          "status": 481
+        },
+        "missing_messages": 16560
+      }
+    }
+  ],
+  "run": "WC1-lease1-57745025",
+  "die": "GB202",
+  "windows_driver": "580.88",
+  "gsp": "580.65.05",
+  "driver_source": "4bc5fd186",
+  "bar1_mib": 32768,
+  "bar1_exception": true,
+  "d3d": {
+    "repeats": 2,
+    "frames_each": 60,
+    "pass": true,
+    "code_each": [
+      0,
+      0
+    ]
+  },
+  "teardown": {
+    "id": 57745025,
+    "absent": true,
+    "utc": "2026-10-26T02:01:29.909619Z"
+  }
+}

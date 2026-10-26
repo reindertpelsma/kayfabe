@@ -1,7 +1,7 @@
-make: Entering directory '/data/wc1/green/tools/windows-capture/tests'
-mkdir -p /data/wc1/lower-red
-cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_main.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o /data/wc1/lower-red/test_main
-/data/wc1/lower-red/test_main
+make: Entering directory '<host-source>/tools/windows-capture/tests'
+mkdir -p <host-output>
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_main.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o <host-output>/test_main
+<host-output>/test_main
   FAIL test_main.c:1377 [recent_lower_published] h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == KFWC_METHOD_NEARBY
   FAIL test_main.c:1378 [recent_lower_published] h.e->bind.table_pa == next.table_pa && h.e->stats.messages[0] == 1
   FAIL test_main.c:1379 [recent_lower_published] h.e->stats.messages[1] == (kfwc_u64)publish_status
@@ -58,5 +58,5 @@ ok   layout_autodetect_and_pin
 ok   scan_backoff
 ok   end_record
 test_main: 48/50 tests passed, 521 checks, 5 failed
-make: Leaving directory '/data/wc1/green/tools/windows-capture/tests'
+make: Leaving directory '<host-source>/tools/windows-capture/tests'
 make: *** [Makefile:12: test] Error 1

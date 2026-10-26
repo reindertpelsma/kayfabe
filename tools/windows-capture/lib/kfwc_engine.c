@@ -631,8 +631,9 @@ static int bind_fresh(kfwc_engine *e, kfwc_u64 pa, kfwc_u32 method)
 }
 
 /* A retained location is an ordering hint, never a fact about the next epoch.
- * For a short startup window, scan at most 1 GiB forward, repeatedly, keeping
- * the same per-step byte bound. Only fresh validated candidates may attach. */
+ * For a short startup window, scan up to 1 GiB on either side, repeatedly,
+ * alternating bounded outward bands. The per-step byte bound is unchanged.
+ * Only fresh validated candidates may attach. */
 int kfwc_engine_recent_scan_due(kfwc_engine *e)
 {
     return e->state == KFWC_ST_SEARCHING && e->cfg.use_scan &&
@@ -652,16 +653,34 @@ static int recent_scan_step(kfwc_engine *e)
     if (budget > limit) budget = (kfwc_u32)limit;
     budget &= ~(KFWC_PAGE - 1u);
     while (budget) {
-        kfwc_u64 pa, left;
+        kfwc_u64 pa = 0, band, span, pos, off, distance;
         kfwc_u32 n, i;
-        if (e->recent_cursor >= limit) e->recent_cursor = 0;
-        if (e->cfg.recent_table_pa > ~(kfwc_u64)0 - e->recent_cursor) return 0;
-        pa = e->cfg.recent_table_pa + e->recent_cursor;
-        left = limit - e->recent_cursor;
-        n = left < budget ? (kfwc_u32)left : budget;
+        int address_valid = 1;
+        if (e->recent_cursor >= 2u * limit) e->recent_cursor = 0;
+        band = e->recent_cursor / (2u * KFWC_SCAN_CHUNK);
+        distance = band * KFWC_SCAN_CHUNK;
+        span = limit - distance;
+        if (span > KFWC_SCAN_CHUNK) span = KFWC_SCAN_CHUNK;
+        pos = e->recent_cursor - 2u * distance;
+        off = pos % span;
+        n = span - off < budget ? (kfwc_u32)(span - off) : budget;
+        if (pos < span) {
+            distance += off;
+            if (e->cfg.recent_table_pa > ~(kfwc_u64)0 - distance) address_valid = 0;
+            else pa = e->cfg.recent_table_pa + distance;
+        } else {
+            distance += span;
+            if (distance > e->cfg.recent_table_pa) {
+                kfwc_u64 missing = distance - e->cfg.recent_table_pa;
+                if (off < missing) {
+                    if (missing - off < n) n = (kfwc_u32)(missing - off);
+                    address_valid = 0;
+                } else pa = off - missing;
+            } else pa = e->cfg.recent_table_pa - distance + off;
+        }
         /* Split at RAM holes; never ask the platform to read an invalid page. */
-        if (!e->plat.ram_contains(e->plat.ctx, pa, n)) n = KFWC_PAGE;
-        if (e->plat.ram_contains(e->plat.ctx, pa, n)) {
+        if (address_valid && !e->plat.ram_contains(e->plat.ctx, pa, n)) n = KFWC_PAGE;
+        if (address_valid && e->plat.ram_contains(e->plat.ctx, pa, n)) {
             e->stats.scan_bytes += n;
             if (e->plat.read_ram(e->plat.ctx, pa, e->scan_buf, n)) {
                 e->stats.read_failures++;

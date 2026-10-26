@@ -1,4 +1,4 @@
-STATUS: RESEARCH, 2026-10-26 — WC1 Part A verification receipts; no native Blackwell result yet.
+STATUS: RESEARCH, 2026-10-26 — WC1 verification receipts; one complete native GB202 restart capture, lower-move fix awaits second lease.
 
 CODE READ (`docs/design/V3_BLACKWELL_CAPTURE_OPERATOR.md`): this directory contains bounded derived facts only. Raw captures remain private. `ga104_inventory.tsv` is the subset of the supplied GA104/596.51 census needed by the die table; it is not a complete startup stream. `ga104_inventory_receipt.json` records its source census hash, driver identity and missing-prefix/loss counts. No raw GA104 file was available for replay.
 
@@ -9,3 +9,7 @@ MEASURED (WC1 Part A, 2026-10-26; `mutation_kills.json`): all twelve new mutants
 MEASURED (WC1 Part A, 2026-10-26; `saved_replay.json`): five saved AD103 streams (575.51.03 and 580.88) produce byte-identical baseline/candidate replay output. These are private-corpus replay tests, not new Windows load/boot measurements. The synthetic golden generator reproduces all 24 committed records byte for byte (WC1 host `golden-check.txt`; bounded verification receipt in `part_a_verification.json`).
 
 MEASURED (WC1 Part A, 2026-10-26; `watchdog_rehearsal.json`): fake-CLI timer checks cover cancellation, exact-id destroy followed by API absence, and no-id expiry; no real lease was created by the rehearsal. The public native operator plan precedes rental. Host guest rehearsal was skipped because the shared GPU lock stayed held; it was never acquired.
+
+MEASURED (WC1 lease1 `57745025`, 2026-10-26; `lease1_gb202.json`): all 18 private files were hash-verified before exact-id destroy and API absence. Restart 1 announces its missing prefix; restart 2 passes the census oracle with sequence zero and no anomalies. Both D3D runs pass 60 frames and remain Code 0. No public raw stream or sidecar event address is included.
+
+MEASURED (WC1 lower-move tests, 2026-10-26; `expected_red_lower_move.txt`, `second_check_summary.txt`, `mutation_kills.json`): the two lower-move tests failed before the bidirectional fix and now pass; reverting that change kills both. Current library 50/50, 521 checks; 15 new mutants each have at least two distinct killers. All 23 inherited mutants are caught; all five saved AD103 replay outputs remain identical. The two operator fixes each have four PowerShell cases and two independent mutation killers.

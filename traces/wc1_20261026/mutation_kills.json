@@ -1,6 +1,15 @@
 {
   "mutants": [
     {
+      "mutant": "nearby_forward_only",
+      "exit": 1,
+      "killing_tests": [
+        "recent_lower_pending",
+        "recent_lower_published"
+      ],
+      "pass": true
+    },
+    {
       "mutant": "pending_scan_uses_sibling_size",
       "exit": 1,
       "killing_tests": [
@@ -59,6 +68,8 @@
       "mutant": "no_early_moved_table",
       "exit": 1,
       "killing_tests": [
+        "recent_lower_pending",
+        "recent_lower_published",
         "recent_moved_pending_status",
         "recent_moved_table_early",
         "recent_window_expires",
@@ -80,6 +91,8 @@
       "mutant": "stale_epoch_accepted",
       "exit": 1,
       "killing_tests": [
+        "recent_lower_pending",
+        "recent_lower_published",
         "recent_moved_table_early",
         "recent_stale_and_partial_epochs",
         "recent_window_expires"

@@ -1,6 +1,8 @@
 # V3: the Windows GSP capture module (`tools/windows-capture/`, "kfwc")
 
-**STATUS UPDATE: LIVE, 2026-10-26 — WC1 family-driven discovery and native rehearsal; Blackwell hardware validation pending.**
+MEASURED (WC1 lease1 `57745025`, 2026-10-26; `traces/wc1_20261026/lease1_gb202.json`): native GB202/580.88 loaded the family-driven module. One of two 90-second restart captures is complete (5,107 command/5,172 status messages; census oracle true, no missing message/anomaly); the other declares a missing prefix. Both hardware D3D readbacks pass. CODE READ (`lib/kfwc_engine.c`): the retained-location scan now alternates outward bands above and below its hint, correcting the lower-address discovery gap without changing polling or freshness checks. MEASURED (`second_check_summary.txt`, `mutation_kills.json`): 50 library tests/521 checks, 15 new mutants with at least two killers each, and five unchanged saved Ada replays; second native validation pending.
+
+**STATUS UPDATE: LIVE, 2026-10-26 — WC1 family-driven discovery and native rehearsal; GB202 1/2 restart captures complete; bidirectional repair awaits lease2.**
 
 CODE READ (`tools/windows-capture/lib/kfwc_discover.c`, `lib/kfwc_engine.c`): discovery now reports a public-ogkm family capability instead of treating FSP mailboxes as direct LibOS pointers. The internally validated revisit/nearby-table path from `codex/windows-capture-revisit` remains independent of die/PCI product ids. The sidecar adds readable family, boot path, method, actual queue geometry and event-loss counters, including when discovery fails. Driver/engine ABI is 4; rebuild collector and module together. KFGSPCAP remains v1. The collector publishes its file header before waiting for any new queue, so the native rehearsal can start capture before restarting NVIDIA. Operator plan: `V3_BLACKWELL_CAPTURE_OPERATOR.md`; per-die gaps: `V3_BLACKWELL_DIE_TABLE.md`.
 

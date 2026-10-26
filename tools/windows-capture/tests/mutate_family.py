@@ -11,6 +11,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MUTANTS = [
+    ("nearby_forward_only", "lib/kfwc_engine.c",
+     "if (pos < span) {", "if (1) {"),
     ("pending_scan_uses_sibling_size", "lib/kfwc_discover.c",
      "stat_pages = i - 1u - cmd_pages;", "stat_pages = cmd_pages;"),
     ("pending_region_uses_sibling_size", "lib/kfwc_discover.c",
