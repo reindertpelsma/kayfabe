@@ -1,0 +1,14 @@
+{
+  "run": "WC1-round2-GB205-57802404",
+  "date": "2026-10-26",
+  "native_controls": 182,
+  "reference_controls": 183,
+  "coverage": {
+    "both": 182,
+    "reference_retained_only": 1
+  },
+  "native_driver": "580.88",
+  "reference_driver": "580.88",
+  "reference_missing_prefix": 0,
+  "limit": "Observed inventory; workload/coverage differences are not die invariants."
+}
