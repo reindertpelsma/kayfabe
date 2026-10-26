@@ -1,5 +1,9 @@
 /* Observe documented RM ioctl payloads; forward every actual ioctl unchanged. */
 #define _GNU_SOURCE
+#define GL_GLEXT_PROTOTYPES 1
+#include <dlfcn.h>
+#include <GL/gl.h>
+#include <GL/glext.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -144,4 +148,36 @@ int ioctl(int fd, unsigned long request, ...) {
     }
     errno = saved;
     return result;
+}
+
+/* Public API boundaries only; no driver code or call stacks are inspected. */
+void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width,
+                  GLsizei height, GLint border, GLenum format, GLenum type,
+                  const void *pixels) {
+    typedef void (*Fn)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum,
+                       GLenum, const void *);
+    Fn next = (Fn)dlsym(RTLD_NEXT, "glTexImage2D");
+    if (!next) {
+        emit("RM_GL_RESOLVE_FAIL glTexImage2D\n");
+        _exit(127);
+    }
+    emit("RM_GL_BEGIN glTexImage2D tid=%ld target=%x internalformat=%x "
+         "width=%d height=%d\n", syscall(SYS_gettid), target, internalformat,
+         width, height);
+    next(target, level, internalformat, width, height, border, format, type, pixels);
+    emit("RM_GL_END glTexImage2D tid=%ld\n", syscall(SYS_gettid));
+}
+void glRenderbufferStorage(GLenum target, GLenum internalformat, GLsizei width,
+                           GLsizei height) {
+    typedef void (*Fn)(GLenum, GLenum, GLsizei, GLsizei);
+    Fn next = (Fn)dlsym(RTLD_NEXT, "glRenderbufferStorage");
+    if (!next) {
+        emit("RM_GL_RESOLVE_FAIL glRenderbufferStorage\n");
+        _exit(127);
+    }
+    emit("RM_GL_BEGIN glRenderbufferStorage tid=%ld target=%x internalformat=%x "
+         "width=%d height=%d\n", syscall(SYS_gettid), target, internalformat,
+         width, height);
+    next(target, internalformat, width, height);
+    emit("RM_GL_END glRenderbufferStorage tid=%ld\n", syscall(SYS_gettid));
 }
