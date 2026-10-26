@@ -351,3 +351,28 @@ fn switch_is_default_off_and_requires_exact_one() {
     }
     assert!(enabled_from(Some("1")));
 }
+
+fn late_admission_refusal(failure: usize) {
+    let (mut t, r) = (tree(100), Rm::new());
+    r.fail.set(failure);
+    assert!(t.admit(&r, LO, 2 * SPARSE_GRAIN).is_err());
+    assert!(!t.poisoned);
+    for p in (LO..LO + 2 * SPARSE_GRAIN).step_by(PAGE as usize) {
+        assert_eq!(
+            r.state(p),
+            None,
+            "failed admission leaves no new sparse coverage"
+        );
+    }
+    for b in t.blocks.values() {
+        assert!(b.wanted.iter().all(|&v| v == 0));
+    }
+}
+#[test]
+fn a_late_sparse_admission_refusal_withdraws_the_first_new_tile() {
+    late_admission_refusal(5);
+}
+#[test]
+fn a_refused_sparse_suffix_withdraws_all_new_intent() {
+    late_admission_refusal(6);
+}
