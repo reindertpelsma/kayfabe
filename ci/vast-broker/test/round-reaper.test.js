@@ -20,7 +20,7 @@ async function harness(rows, mutate) {
       const url = new URL(input);
       assert.equal(url.origin, 'https://console.vast.ai');
       assert.equal(new Headers(init.headers).get('Authorization'), 'Bearer reaper-mock-key');
-      assert.equal(init.redirect, 'error');
+      assert.equal(init.redirect, 'manual');
       calls.push({ path: url.pathname, method: init.method ?? 'GET' });
       if (url.pathname === '/api/v1/instances/') {
         lists++;

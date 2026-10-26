@@ -1375,3 +1375,17 @@ tests: `crates/kf-qemu/src/scrub.rs` (the event table), `memreset.rs` (the memor
    clean; a guest RM life (fn 72) taints it, only a completed scrub of the range cleans it. See §4.11.13.
 7. **Not yet measured:** the scrub's wall time (the log line carries it); hardware verification is the checklist
    in the branch report.
+
+## §AN. The Vast CI Worker is test infrastructure, not a product; right-sized, not hardened further, 2026-10-25
+
+Owner, 2026-10-25 ("we dont make SaaS"):
+
+1. The Vast CI Worker is **TEST infrastructure** for GPU validations on every commit and release. It is not a
+   product. It stays, is right-sized, and is not hardened beyond that.
+2. The **Cloudflare Access pair is kept** (a free anti-bot gate, not the security boundary). The **reaper stays on
+   Cloudflare**.
+3. **Private manual GPU sweeps** use `scripts/ci/vast_simple` (draft PR #137: SSH pull, no Worker).
+4. **Passing tests are not security.** The gate is the owner's approval of the SHA. The real risks are Vast key
+   custody and spend/abuse. See `ci/vast-broker/docs/THREAT_MODEL.md` ("Why a Worker (and when not)").
+5. **Budget:** the daily Vast budget is raised to **12 USD for 2026-10-25**; the **8 USD credit reserve is kept**.
+   Per-lane stops live in the lane files.

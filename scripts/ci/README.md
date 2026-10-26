@@ -1,7 +1,8 @@
 # Vast box scripts (repo side of the CI broker)
 STATUS: LIVE, 2026-10-24: box protocol 7 (ported from protocol 4/5 on branch
-claude/vast-payload-p7-20261024; no real box has run protocol 7 yet). The evidence below is for
-the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
+claude/vast-payload-p7-20261024). MEASURED 2026-10-25: a real Vast box booted with the
+protocol-7 setup but had not yet reported to the Worker, so protocol 7 has no end-to-end run on a
+real box yet. The evidence below is for the pre-port payload. MEASURED: run `v9-xid-kvm-20261023`, source
 `2c908a0e8`: bound PASS, host/fat CUDA4/4 each, tests3749/0, gates9/9+10,
 raw30/30, thin30/30 and census. [Latest evidence and gaps](../../traces/vast_xid_v9_20261018/LIVE_RUN.md).
 The earlier V8 run stopped at raw defer-liveness wrapper rc6; that finding is superseded by
@@ -13,7 +14,8 @@ env file `/run/kf-ci/env`, helpers, reporter, payload under `timeout`); `vast_re
 `test_vast_box.py`, `vast_box_mutants.py`. There is no hold helper or login hook (owner ruling
 2026-10-23 19:10; the Worker has no hold route). The box sends the Worker-injected Cloudflare
 Access pair (`KF_ACCESS_ID`, `KF_ACCESS_SECRET`) as `CF-Access-Client-Id`/`-Secret` on every
-broker call when both are set (owner ruling 2026-10-23 21:45); the payload never sees it.
+broker call when both are set (owner ruling 2026-10-23 21:45); the payload process does not get
+it, but the box code can read the root-only env file ([threat model](../../ci/vast-broker/docs/THREAT_MODEL.md)).
 
 Env (protocol 7, declared by `BOX_PROTOCOL` in `vast_report.py`; the Worker reads that line at
 the tested SHA before renting). Required: `KF_PROTOCOL`, `KF_BROKER_URL` (https origin + secret
