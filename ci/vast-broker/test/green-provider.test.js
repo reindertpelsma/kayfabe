@@ -1,0 +1,128 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { setup, callbackToken, env } from './helpers.js';
+import { Ledger } from '../src/ledger.js';
+import { configuration } from '../src/policy.js';
+
+// FALSIFIER: a provider fault already gets one fresh-machine retry, preserving total time/money.
+const row = (h) => h.storage.get('record:123-1');
+async function fixture() {
+  const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '40' });
+  h.cloud.contracts = [900, 901, 902];
+  assert.equal((await h.call()).status, 200);
+  const original = await row(h);
+  h.cloud.extraOffers = [{ ...h.cloud.offer, id: 6, machine_id: 100002, price: 0.1 }];
+  return { h, original };
+}
+async function fault(h, kind = 'report') {
+  const r = await row(h);
+  if (kind === 'boot') {
+    h.time.value = r.bootDeadline;
+    return h.call('/status/123-1');
+  }
+  return h.report({
+    seq: 1,
+    kind: 'result',
+    result: {
+      nonce: r.nonce,
+      verdict: 'PROVIDER_FAULT',
+      suites: [{ name: 'provider_kvm_missing', pass: 0, fail: 1, skip: 0 }],
+      hardware: { gpu_name: 'unknown', compute_cap: 0, driver_version: 'unknown' },
+    },
+  });
+}
+for (const kind of ['boot', 'report'])
+  for (const restart of [false, true])
+    test('green one provider replacement ' + kind + ' restart=' + restart, async () => {
+      const { h, original } = await fixture();
+      const stale = callbackToken(original, env.RUN_TOKEN_SECRET);
+      assert.equal((await fault(h, kind)).status, 200);
+      const failed = await row(h);
+      assert.equal(failed.verdict, 'PROVIDER_FAULT');
+      assert.notEqual(failed.ended, null);
+      assert.equal(h.cloud.instances.has('900'), false);
+      assert.ok(await h.storage.get('bad-machine:100001'));
+      if (restart) h.restart();
+      const response = await h.call();
+      assert.equal(response.status, 200);
+      const data = await response.json();
+      assert.equal(data.id, '901');
+      assert.equal(data.provider_retries, 1);
+      assert.equal(data.machine_id, 100002);
+      const replacement = await row(h);
+      assert.equal(replacement.hardDeadline, original.hardDeadline);
+      assert.equal(replacement.softDeadline, original.softDeadline);
+      assert.equal(replacement.runBudgetUsd, original.runBudgetUsd);
+      assert.notEqual(replacement.nonce, original.nonce);
+      assert.equal(h.cloud.created.length, 2);
+      assert.equal(
+        (await h.report({ seq: 2, kind: 'log', text: 'stale' }, { token: stale })).status,
+        401,
+      );
+      assert.equal((await fault(h)).status, 200);
+      const again = await h.call();
+      assert.equal(again.status, 200);
+      assert.equal((await again.json()).verdict, 'PROVIDER_FAULT');
+      assert.equal(h.cloud.created.length, 2);
+      assert.deepEqual(h.cloud.deletes.sort(), ['900', '901']);
+      assert.ok(h.cloud.instances.has('777') && h.cloud.instances.has('888'));
+      const costs = [...(await h.storage.list({ prefix: 'cost:' }))];
+      assert.equal(costs.length, 2);
+      const budget = await new Ledger(h.storage).budgetSummary(
+        { ...configuration(env), profile: 'check' },
+        h.time.value,
+      );
+      assert.equal(budget.profiles.check.count_today, 2);
+      assert.ok(budget.rolling_usd <= original.runBudgetUsd);
+    });
+for (const verdict of ['FAIL', 'UNAVAILABLE'])
+  test('green ordinary result does not retry ' + verdict, async () => {
+    const { h, original } = await fixture();
+    assert.equal(
+      (await h.report({ seq: 1, kind: 'result', result: { nonce: original.nonce, verdict } }))
+        .status,
+      200,
+    );
+    assert.equal((await h.call()).status, 200);
+    assert.equal(h.cloud.created.length, 1);
+    assert.equal(await h.storage.get('bad-machine:100001'), undefined);
+  });
+for (const kind of ['boot', 'report'])
+  test('green replacement needs confirmed cleanup ' + kind, async () => {
+    const { h } = await fixture();
+    const fetcher = h.cloud.fetch;
+    h.cloud.fetch = async (url, init = {}) =>
+      init.method === 'DELETE' ? Response.json({ success: true }) : fetcher(url, init);
+    h.restart();
+    await fault(h, kind);
+    await h.call();
+    assert.equal(h.cloud.created.length, 1);
+    assert.equal((await row(h)).ended, null);
+    assert.ok(h.cloud.instances.has('900'));
+  });
+for (const price of [0.4, 0.45])
+  test('green replacement cannot enlarge run allowance ' + price, async () => {
+    const { h } = await fixture();
+    await fault(h, 'boot');
+    h.cloud.extraOffers[0].price = price;
+    h.time.value += 60001;
+    await h.call();
+    assert.equal(h.cloud.created.length, 1);
+    assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
+  });
+
+for (const kind of ['pass', 'fault', 'budget'])
+  for (const variant of [1, 2])
+    test('green BASE runner provider replacement ' + kind + variant, async () => {
+      const { spawnSync } = await import('node:child_process');
+      const r = spawnSync(
+        'python3',
+        [
+          '-I',
+          new URL('./green_provider_runner_fixture.py', import.meta.url).pathname,
+          kind + variant,
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(r.status, 0, r.stderr || r.stdout);
+    });
