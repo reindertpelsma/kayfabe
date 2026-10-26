@@ -1,0 +1,218 @@
+{
+  "stats": {
+    "cpu": {
+      "n": 1000,
+      "mean_ms": 1.499102337,
+      "median_ms": 1.4233850000000001,
+      "p90_ms": 1.629573,
+      "p99_ms": 3.4899570999999985,
+      "p999_ms": 4.424299139999926,
+      "one_percent_low_per_s": 286.5364734712643,
+      "point_one_percent_low_per_s": 226.02449978100188,
+      "min_ms": 1.4201,
+      "max_ms": 7.58028,
+      "over_33_ms_fraction": 0.0,
+      "over_50_ms_fraction": 0.0,
+      "over_100_ms_fraction": 0.0,
+      "over_2x_median_fraction": 0.019
+    },
+    "completion_gaps": {
+      "n": 1000,
+      "mean_ms": 1.499545699000001,
+      "median_ms": 1.423834999997986,
+      "p90_ms": 1.630009999999693,
+      "p99_ms": 3.4903772999996523,
+      "p999_ms": 4.424729159998913,
+      "one_percent_low_per_s": 286.5019778807579,
+      "point_one_percent_low_per_s": 226.00253345229513,
+      "min_ms": 1.4205300000007526,
+      "max_ms": 7.5807299999999245,
+      "over_33_ms_fraction": 0.0,
+      "over_50_ms_fraction": 0.0,
+      "over_100_ms_fraction": 0.0,
+      "over_2x_median_fraction": 0.019
+    },
+    "render_gpu": {
+      "n": 1000,
+      "mean_ms": 1.3936199360000001,
+      "median_ms": 1.369088,
+      "p90_ms": 1.57184,
+      "p99_ms": 1.573888,
+      "p999_ms": 1.5804323839999663,
+      "one_percent_low_per_s": 635.3692257644763,
+      "point_one_percent_low_per_s": 632.7382367786392,
+      "min_ms": 1.36704,
+      "max_ms": 3.003392,
+      "over_33_ms_fraction": 0.0,
+      "over_50_ms_fraction": 0.0,
+      "over_100_ms_fraction": 0.0,
+      "over_2x_median_fraction": 0.001
+    },
+    "sample_gpu": {
+      "n": 1000,
+      "mean_ms": 0.017143808,
+      "median_ms": 0.016384,
+      "p90_ms": 0.018432,
+      "p99_ms": 0.019456,
+      "p999_ms": 0.020722687999994265,
+      "one_percent_low_per_s": 51398.02631578947,
+      "point_one_percent_low_per_s": 48256.28798736326,
+      "min_ms": 0.01536,
+      "max_ms": 0.263168,
+      "over_33_ms_fraction": 0.0,
+      "over_50_ms_fraction": 0.0,
+      "over_100_ms_fraction": 0.0,
+      "over_2x_median_fraction": 0.001
+    },
+    "iterations_per_s": 666.8686393931629
+  },
+  "aperture_subsets": {
+    "vidmem": {
+      "mapped_bytes": 8405102592,
+      "compressible_bytes": 8359116800,
+      "stripped_bytes": 8359116800,
+      "strip_fraction_all": 0.9945288244257995,
+      "strip_fraction_compressible": 1.0
+    },
+    "sysmem": {
+      "mapped_bytes": 13828096,
+      "compressible_bytes": 0,
+      "stripped_bytes": 0,
+      "strip_fraction_all": 0.0,
+      "strip_fraction_compressible": null
+    }
+  },
+  "n": 1,
+  "primary_K_render_median_range_ms": [
+    1.364992,
+    1.369088
+  ],
+  "diag_render_within_primary_range": true,
+  "strip_fraction_all_mapping_bytes": 0.9928953105546698,
+  "strip_fraction_compressible_mapping_bytes": 1.0,
+  "stdout_sha256": "3b8e69d9857faea288c1310d7f7cac039aa142c0cd3c3d82e3561002266709e2",
+  "stderr_sha256": "2c026407c1af63655d359752076ed56258649d583de498208d5a427e9b32c52a",
+  "census": {
+    "mapped_bytes": 8418930688,
+    "compressible_bytes": 8359116800,
+    "stripped_bytes": 8359116800,
+    "rows": [
+      {
+        "raw": 0,
+        "host": 0,
+        "ram": false,
+        "page": "4K",
+        "bytes": 20480,
+        "pages4k": 5
+      },
+      {
+        "raw": 0,
+        "host": 0,
+        "ram": true,
+        "page": "64K",
+        "bytes": 65536,
+        "pages4k": 16
+      },
+      {
+        "raw": 6,
+        "host": 6,
+        "ram": false,
+        "page": "4K",
+        "bytes": 1400832,
+        "pages4k": 342
+      },
+      {
+        "raw": 6,
+        "host": 6,
+        "ram": false,
+        "page": "64K",
+        "bytes": 4718592,
+        "pages4k": 1152
+      },
+      {
+        "raw": 6,
+        "host": 6,
+        "ram": false,
+        "page": "2M",
+        "bytes": 39845888,
+        "pages4k": 9728
+      },
+      {
+        "raw": 6,
+        "host": 6,
+        "ram": true,
+        "page": "4K",
+        "bytes": 13762560,
+        "pages4k": 3360
+      },
+      {
+        "raw": 8,
+        "host": 6,
+        "ram": false,
+        "page": "2M",
+        "bytes": 31457280,
+        "pages4k": 7680
+      },
+      {
+        "raw": 9,
+        "host": 6,
+        "ram": false,
+        "page": "2M",
+        "bytes": 8317173760,
+        "pages4k": 2030560
+      },
+      {
+        "raw": 12,
+        "host": 3,
+        "ram": false,
+        "page": "2M",
+        "bytes": 10485760,
+        "pages4k": 2560
+      }
+    ]
+  },
+  "periodic_snapshot_totals": [
+    {
+      "unix_ns": 1792986011192776789,
+      "mapped_bytes": 0,
+      "compressible_bytes": 0,
+      "stripped_bytes": 0
+    },
+    {
+      "unix_ns": 1792986013202812383,
+      "mapped_bytes": 0,
+      "compressible_bytes": 0,
+      "stripped_bytes": 0
+    },
+    {
+      "unix_ns": 1792986015207281583,
+      "mapped_bytes": 0,
+      "compressible_bytes": 0,
+      "stripped_bytes": 0
+    },
+    {
+      "unix_ns": 1792986017211603841,
+      "mapped_bytes": 0,
+      "compressible_bytes": 0,
+      "stripped_bytes": 0
+    },
+    {
+      "unix_ns": 1792986019215930226,
+      "mapped_bytes": 0,
+      "compressible_bytes": 0,
+      "stripped_bytes": 0
+    },
+    {
+      "unix_ns": 1792986021263626277,
+      "mapped_bytes": 8410542080,
+      "compressible_bytes": 8359116800,
+      "stripped_bytes": 8359116800
+    },
+    {
+      "unix_ns": 1792986023265392510,
+      "mapped_bytes": 8418930688,
+      "compressible_bytes": 8359116800,
+      "stripped_bytes": 8359116800
+    }
+  ]
+}

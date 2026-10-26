@@ -1,5 +1,10 @@
 # LX2 — the tested Linux graphics probe does not reach parity
 
+UPDATE 2026-10-26: the owner explicitly resumed surface-only attribution in
+[phase 3](PHASE3_REPORT.md), run `lx2-phase3-20261026`. The primary table below is
+unchanged; the earlier combined CUDA tracing crash remains unresolved and CUPTI
+was not retried. The historical stop below describes phase 2.
+
 STATUS: RESEARCH / PARTIAL, 2026-10-26. Primary matched measurement is complete; attribution stopped on native diagnostic instability. These are owner-authored probes, not application benchmark certification or a general Linux performance verdict.
 
 CODE READ: the owner replaced VFIO with host bare metal as native reference. Workloads were built once on the host and copied unchanged into a matching host-mode guest. Both arms used NVIDIA driver/userspace 595.91.07 and kernel 7.0.0-34-generic. The kayfabe source/binary revision is 6564dd597; the lane branch contains harness/evidence only. The preregistration precedes all data: [PREREG.md](PREREG.md).

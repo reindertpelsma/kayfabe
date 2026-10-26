@@ -1,5 +1,23 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-26 — LX2 phase 3: depth-sensitive interval and compression intent
+
+MEASURED 2026-10-26, run `lx2-phase3-20261026`, six native/K pairs: colour-only render K/N
+0.999 [0.996,1.000], depth-only 3.035 [3.026,3.048], combined 1.756 [1.750,1.759].
+Colour completion throughput remains 0.937 K/N. KINDSTAT's unchanged probe matches
+primary K median spread and strips 100% of compressible accepted mapping bytes;
+whole-boot totals include a dominant framebuffer-scale mapping and are not traffic.
+Matched Linux RM records return compressed colour/depth formats in both arms;
+the owned host store returns COMPR_NONE / format06. CODE READ `apply.rs:290` strips
+those leaf kinds; leaf intent does not recover the entire allocation/ZBC request.
+INFERRED: compression/layout is a coherent lead, not causal timing proof.
+MEASURED 2026-10-26, `lx2-phase3-20261026` cleanup: 16 valid runs / 64 groups, no new host
+fault/instability match, owned jobs exited, desktop restored and lease released.
+CUPTI stays disabled; the earlier combined CUDA tracing crash is unresolved.
+No product change. Method, distributions, source caveats and setup incidents:
+[phase 3 evidence](../traces/linux_parity_20261025/PHASE3_REPORT.md).
+
+
 ## UPDATE 2026-10-26 — LX2 Linux graphics parity measured; attribution stopped
 
 MEASURED 2026-10-26, LX2 source 6564dd597, six matched native/guest pairs:
