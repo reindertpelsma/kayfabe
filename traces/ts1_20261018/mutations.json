@@ -1,0 +1,786 @@
+{
+  "run": "TS1 GPU-free 2026-10-26",
+  "rows": [
+    {
+      "mutant": "baseline",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0,
+      "kind": "behavior"
+    },
+    {
+      "mutant": "early-not-remembered",
+      "killed_by": [
+        "test_timeslice::a_live_set_and_a_shared_member_do_not_inflate_early_or_replayed_counts",
+        "test_timeslice::accepted_intents_still_fill_the_global_cap_after_queue_slots_are_released",
+        "test_timeslice::an_existing_tsg_can_change_value_at_the_per_client_limit",
+        "test_timeslice::client_namespaces_cannot_steal_each_others_value",
+        "test_timeslice::early_set_reaches_the_first_born_group_exactly_once",
+        "test_timeslice::early_then_live_set_wins_and_is_replayed_to_later_shards",
+        "test_timeslice::explicit_members_and_ctxshares_never_duplicate_a_group_replay",
+        "test_timeslice::failed_host_replay_retains_the_value_for_a_retry_birth",
+        "test_timeslice::host_rounding_refusal_is_a_birth_failure_not_a_consumed_intent",
+        "test_timeslice::legacy_kill_switch_shards_each_get_the_requested_value",
+        "test_timeslice::measurement_off_shards_are_each_counted_and_do_not_consume_desired_value",
+        "test_timeslice::measurement_zero_suppresses_only_replay_and_counts_it",
+        "test_timeslice::native_group_free_drops_only_telemetry_not_guest_intent",
+        "test_timeslice::native_live_refusals_preserve_non_argument_status_and_previous_desire",
+        "test_timeslice::never_born_intents_are_bounded_per_client",
+        "test_timeslice::never_born_intents_are_bounded_vm_wide",
+        "test_timeslice::no_environment_setting_enables_real_first_birth_replay",
+        "test_timeslice::queued_set_from_freed_lifetime_cannot_mutate_reused_tsg",
+        "test_timeslice::requested_value_is_not_rounded_on_the_cpu",
+        "test_timeslice::reset_of_an_idle_saved_tsg_cannot_replay_on_the_next_device",
+        "test_timeslice::same_numeric_tsg_after_free_cannot_inherit_old_timeslice",
+        "test_timeslice::status_reports_early_replayed_and_last_us_without_host_locking",
+        "test_timeslice::two_early_sets_replay_only_the_newest_request",
+        "test_timeslice_mirror::actual_explicit_mirror_plan_replays_once_across_several_ctxshares",
+        "test_timeslice_mirror::actual_legacy_mirror_plan_replays_once_across_members",
+        "test_timeslice_mirror::actual_mirror_off_plan_replays_each_new_ctxshare_shard",
+        "test_timeslice_mirror::contradictory_mirror_mode_refusal_does_not_change_timeslice_intent",
+        "test_timeslice_mirror::ctxshare_cap_refusal_never_consumes_or_replays_the_saved_value",
+        "test_timeslice_mirror::explicit_set_refusal_unwinds_channel_ctxshare_group_and_retry_keeps_intent",
+        "test_timeslice_mirror::last_explicit_member_free_keeps_channel_ctxshare_tsg_order",
+        "test_timeslice_mirror::member_refusal_unwinds_ctx_then_group_and_preserves_early_request",
+        "test_timeslice_mirror::mirror_off_set_refusal_releases_only_its_new_shard_and_retains_intent",
+        "test_timeslice_mirror::non_last_ctxshare_free_does_not_release_group_or_consume_intent"
+      ],
+      "count": 33,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if success {\n            e.us = Some(ticket.us);",
+        "new": "if success && !early {\n            e.us = Some(ticket.us);"
+      }
+    },
+    {
+      "mutant": "first-set-wins",
+      "killed_by": [
+        "test_timeslice::an_existing_tsg_can_change_value_at_the_per_client_limit",
+        "test_timeslice::early_then_live_set_wins_and_is_replayed_to_later_shards",
+        "test_timeslice::two_early_sets_replay_only_the_newest_request"
+      ],
+      "count": 3,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if success {\n            e.us = Some(ticket.us);",
+        "new": "if success && e.us.is_none() {\n            e.us = Some(ticket.us);"
+      }
+    },
+    {
+      "mutant": "replay-every-member",
+      "killed_by": [
+        "test_timeslice::a_live_set_and_a_shared_member_do_not_inflate_early_or_replayed_counts",
+        "test_timeslice::early_set_reaches_the_first_born_group_exactly_once",
+        "test_timeslice::explicit_members_and_ctxshares_never_duplicate_a_group_replay",
+        "test_timeslice_mirror::actual_explicit_mirror_plan_replays_once_across_several_ctxshares",
+        "test_timeslice_mirror::actual_legacy_mirror_plan_replays_once_across_members"
+      ],
+      "count": 5,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if !new_group {",
+        "new": "if false && !new_group {"
+      }
+    },
+    {
+      "mutant": "only-one-shard",
+      "killed_by": [
+        "test_timeslice::client_namespaces_cannot_steal_each_others_value",
+        "test_timeslice::early_then_live_set_wins_and_is_replayed_to_later_shards",
+        "test_timeslice::legacy_kill_switch_shards_each_get_the_requested_value",
+        "test_timeslice_mirror::actual_mirror_off_plan_replays_each_new_ctxshare_shard"
+      ],
+      "count": 4,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if !new_group {",
+        "new": "if !new_group || self.stats().replayed > 0 {"
+      }
+    },
+    {
+      "mutant": "remove-per-client-cap",
+      "killed_by": [
+        "test_timeslice::an_existing_tsg_can_change_value_at_the_per_client_limit",
+        "test_timeslice::never_born_intents_are_bounded_per_client"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "s.entries.keys().filter(|k| k.0 == key.0).count() >= self.per_client",
+        "new": "false"
+      }
+    },
+    {
+      "mutant": "remove-total-intent-cap",
+      "killed_by": [
+        "test_timeslice::accepted_intents_still_fill_the_global_cap_after_queue_slots_are_released",
+        "test_timeslice::never_born_intents_are_bounded_vm_wide"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "s.entries.len() >= self.total",
+        "new": "false"
+      }
+    },
+    {
+      "mutant": "remove-queued-act-cap",
+      "killed_by": [
+        "test_timeslice::canceling_a_freed_ticket_releases_exactly_one_queue_slot",
+        "test_timeslice::free_cannot_hide_unbounded_queued_tickets_from_the_global_cap"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if s.queued >= self.total {",
+        "new": "if false {"
+      }
+    },
+    {
+      "mutant": "ignore-guest-free",
+      "killed_by": [
+        "test_timeslice::accepted_intents_still_fill_the_global_cap_after_queue_slots_are_released",
+        "test_timeslice::canceling_a_freed_ticket_releases_exactly_one_queue_slot",
+        "test_timeslice::device_free_purges_intents_even_when_no_host_member_was_born",
+        "test_timeslice::device_free_stops_a_queued_set_from_touching_a_live_native_group",
+        "test_timeslice::free_before_birth_erases_the_saved_value",
+        "test_timeslice::free_cannot_hide_unbounded_queued_tickets_from_the_global_cap",
+        "test_timeslice::free_client_cancels_every_reserved_ticket_in_that_namespace",
+        "test_timeslice::queued_set_from_freed_lifetime_cannot_mutate_reused_tsg"
+      ],
+      "count": 8,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "pub fn forget(&self, client: u32, object: u32) {",
+        "new": "pub fn forget(&self, client: u32, object: u32) { return;"
+      }
+    },
+    {
+      "mutant": "ignore-device-reset",
+      "killed_by": [
+        "test_timeslice::reset_cancels_old_tickets_and_forgets_all_requested_values",
+        "test_timeslice::reset_of_an_idle_saved_tsg_cannot_replay_on_the_next_device"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "pub fn clear(&self) {",
+        "new": "pub fn clear(&self) { return;"
+      }
+    },
+    {
+      "mutant": "drop-group-intent-on-native-free",
+      "killed_by": [
+        "test_timeslice::native_group_free_drops_only_telemetry_not_guest_intent",
+        "test_timeslice_mirror::last_explicit_member_free_keeps_channel_ctxshare_tsg_order"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "s.groups.remove(&group);",
+        "new": "if let Some(g) = s.groups.remove(&group) { s.entries.remove(&g.key); }"
+      }
+    },
+    {
+      "mutant": "retain-freed-group-telemetry",
+      "killed_by": [
+        "test_timeslice::a_released_native_handle_does_not_display_the_previous_owners_request",
+        "test_timeslice::native_group_free_drops_only_telemetry_not_guest_intent",
+        "test_timeslice_mirror::last_explicit_member_free_keeps_channel_ctxshare_tsg_order"
+      ],
+      "count": 3,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "s.groups.remove(&group);",
+        "new": "let _ = group;"
+      }
+    },
+    {
+      "mutant": "skip-queue-cancel",
+      "killed_by": [
+        "test_timeslice::cancel_is_idempotent_and_cannot_release_another_queued_acts_slot",
+        "test_timeslice::canceled_queue_reservations_do_not_spend_the_table_forever",
+        "test_timeslice::canceling_a_freed_ticket_releases_exactly_one_queue_slot"
+      ],
+      "count": 3,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "pub fn cancel(&self, ticket: &Ticket) {",
+        "new": "pub fn cancel(&self, ticket: &Ticket) { return;"
+      }
+    },
+    {
+      "mutant": "ignore-kill-switch",
+      "killed_by": [
+        "test_timeslice::measurement_off_shards_are_each_counted_and_do_not_consume_desired_value",
+        "test_timeslice::measurement_zero_suppresses_only_replay_and_counts_it"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if !self.enabled {",
+        "new": "if false {"
+      }
+    },
+    {
+      "mutant": "default-off",
+      "killed_by": [
+        "test_timeslice::default_on_kill_switch_is_exact_zero_only",
+        "test_timeslice::no_environment_setting_enables_real_first_birth_replay"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "value != Some(\"0\")",
+        "new": "value == Some(\"1\")"
+      }
+    },
+    {
+      "mutant": "cpu-round-value",
+      "killed_by": [
+        "test_timeslice::client_namespaces_cannot_steal_each_others_value",
+        "test_timeslice::host_rounding_refusal_is_a_birth_failure_not_a_consumed_intent",
+        "test_timeslice::legacy_kill_switch_shards_each_get_the_requested_value",
+        "test_timeslice::live_first_set_is_retained_for_a_later_new_group",
+        "test_timeslice::measurement_zero_suppresses_only_replay_and_counts_it",
+        "test_timeslice::no_environment_setting_enables_real_first_birth_replay",
+        "test_timeslice::requested_value_is_not_rounded_on_the_cpu"
+      ],
+      "count": 7,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "us,\n            life,",
+        "new": "us: us / 16 * 16,\n            life,"
+      }
+    },
+    {
+      "mutant": "swallow-birth-refusal",
+      "killed_by": [
+        "test_timeslice::failed_host_replay_retains_the_value_for_a_retry_birth",
+        "test_timeslice::host_rounding_refusal_is_a_birth_failure_not_a_consumed_intent",
+        "test_timeslice_mirror::explicit_set_refusal_unwinds_channel_ctxshare_group_and_retry_keeps_intent",
+        "test_timeslice_mirror::mirror_off_set_refusal_releases_only_its_new_shard_and_retains_intent"
+      ],
+      "count": 4,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "host.set(channel, us)?;",
+        "new": "let _ = host.set(channel, us);"
+      }
+    },
+    {
+      "mutant": "collapse-live-status",
+      "killed_by": [
+        "test_timeslice::host_invalid_state_is_not_misreported_as_invalid_argument",
+        "test_timeslice::native_live_refusals_preserve_non_argument_status_and_previous_desire"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "result = Err(status);",
+        "new": "result = Err(0x1f);"
+      }
+    },
+    {
+      "mutant": "inflate-early-count",
+      "killed_by": [
+        "test_timeslice::a_live_set_and_a_shared_member_do_not_inflate_early_or_replayed_counts",
+        "test_timeslice::initially_live_group_sets_are_not_early_sets_or_birth_replays"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if success && early {",
+        "new": "if success {"
+      }
+    },
+    {
+      "mutant": "inflate-replay-count",
+      "killed_by": [
+        "test_timeslice::a_live_set_and_a_shared_member_do_not_inflate_early_or_replayed_counts",
+        "test_timeslice::initially_live_group_sets_are_not_early_sets_or_birth_replays"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/timeslice.rs",
+        "old": "if replayed {",
+        "new": "if true {"
+      }
+    },
+    {
+      "mutant": "facts-ignore-off",
+      "killed_by": [
+        "test_tsgfacts::disabled_book_ignores_joiners_setters_and_native_failures",
+        "test_tsgfacts::disabled_has_no_native_reads_or_metadata"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "if !self.enabled {",
+        "new": "if false {"
+      }
+    },
+    {
+      "mutant": "facts-missing-readbacks",
+      "killed_by": [
+        "test_tsgfacts::birth_has_desired_generation_birth_and_both_getters",
+        "test_tsgfacts::full_group_book_does_not_read_back_or_log_a_third_shard",
+        "test_tsgfacts::hostile_repeated_setters_stop_readbacks_at_the_event_bound",
+        "test_tsgfacts::metadata_and_event_caps_suppress_native_reads",
+        "test_tsgfacts::mode_setter_logs_requested_modes_and_native_result",
+        "test_tsgfacts::most_recent_failed_set_is_still_the_logged_guest_desire",
+        "test_tsgfacts::native_free_and_reset_remove_records_without_host_calls",
+        "test_tsgfacts::one_tsg_cannot_bypass_group_metadata_cap_by_creating_shards",
+        "test_tsgfacts::readback_refusals_are_facts_with_both_statuses",
+        "test_tsgfacts::timeslice_setter_logs_failed_desire_and_readback_separately"
+      ],
+      "count": 10,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "let timeslice = host.timeslice(c);\n        let modes = host.modes(c);",
+        "new": "let timeslice: Result<u64,u32> = Err(0x40);\n        let modes: Result<[u32;5],u32> = Err(0x40);"
+      }
+    },
+    {
+      "mutant": "facts-ignore-lifetime-free",
+      "killed_by": [
+        "test_tsgfacts::device_and_client_free_remove_never_reused_group_facts",
+        "test_tsgfacts::free_reuse_has_a_new_logical_generation"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "pub fn forget(&self, client: u32, object: u32) {",
+        "new": "pub fn forget(&self, client: u32, object: u32) { return;"
+      }
+    },
+    {
+      "mutant": "facts-destroy-join-identity",
+      "killed_by": [
+        "test_tsgfacts::all_explicit_members_keep_one_birth_identity",
+        "test_tsgfacts::same_group_join_retains_generation_and_birth_identity"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "if new {",
+        "new": "if true {"
+      }
+    },
+    {
+      "mutant": "facts-omit-desired-us",
+      "killed_by": [
+        "test_tsgfacts::most_recent_failed_set_is_still_the_logged_guest_desire",
+        "test_tsgfacts::timeslice_setter_logs_failed_desire_and_readback_separately"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "Request::Timeslice(us) => g.desired = Some(us),",
+        "new": "Request::Timeslice(us) => g.desired = None,"
+      }
+    },
+    {
+      "mutant": "facts-cap-disabled",
+      "killed_by": [
+        "test_tsgfacts::full_group_book_does_not_read_back_or_log_a_third_shard",
+        "test_tsgfacts::one_tsg_cannot_bypass_group_metadata_cap_by_creating_shards"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "b.groups.len() >= self.cap",
+        "new": "false"
+      }
+    },
+    {
+      "mutant": "facts-event-cap-disabled",
+      "killed_by": [
+        "test_tsgfacts::hostile_repeated_setters_stop_readbacks_at_the_event_bound",
+        "test_tsgfacts::metadata_and_event_caps_suppress_native_reads"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "if b.events >= self.max_events {",
+        "new": "if false {"
+      }
+    },
+    {
+      "mutant": "facts-setter-status-zero",
+      "killed_by": [
+        "test_tsgfacts::mode_setter_logs_requested_modes_and_native_result",
+        "test_tsgfacts::timeslice_setter_logs_failed_desire_and_readback_separately"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-qemu/src/tsgfacts.rs",
+        "old": "setter_status={status:#x}",
+        "new": "setter_status=0x0"
+      }
+    },
+    {
+      "mutant": "getters-baseline",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0,
+      "kind": "behavior"
+    },
+    {
+      "mutant": "timeslice-getter-wrong-owned-object",
+      "killed_by": [
+        "tsgread::tests::timeslice_uses_only_owned_group_and_zeroed_eight_byte_output",
+        "tsgread::tests::timeslice_native_refusal_never_uses_the_reply_bytes"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "call(chan.tsg,",
+        "new": "call(chan.chan,"
+      }
+    },
+    {
+      "mutant": "modes-getter-wrong-owned-channel",
+      "killed_by": [
+        "tsgread::tests::modes_refusal_and_transport_failures_keep_their_status",
+        "tsgread::tests::modes_uses_our_subdevice_and_channel_not_tsg_or_submit_token"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "&chan.chan.to_le_bytes()",
+        "new": "&chan.tsg.to_le_bytes()"
+      }
+    },
+    {
+      "mutant": "timeslice-getter-wrong-verb",
+      "killed_by": [
+        "tsgread::tests::timeslice_native_refusal_never_uses_the_reply_bytes",
+        "tsgread::tests::timeslice_uses_only_owned_group_and_zeroed_eight_byte_output"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "0xa06c_0104",
+        "new": "0xa06c_0105"
+      }
+    },
+    {
+      "mutant": "modes-getter-wrong-verb",
+      "killed_by": [
+        "tsgread::tests::modes_refusal_and_transport_failures_keep_their_status",
+        "tsgread::tests::modes_uses_our_subdevice_and_channel_not_tsg_or_submit_token"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "0x2080_1235",
+        "new": "0x2080_1236"
+      }
+    },
+    {
+      "mutant": "timeslice-getter-wrong-endian",
+      "killed_by": [
+        "tsgread::tests::getters_decode_all_high_bits_and_keep_mode_field_order",
+        "tsgread::tests::timeslice_uses_only_owned_group_and_zeroed_eight_byte_output"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "u64::from_le_bytes(p)",
+        "new": "u64::from_be_bytes(p)"
+      }
+    },
+    {
+      "mutant": "modes-getter-wrong-field-order",
+      "killed_by": [
+        "tsgread::tests::getters_decode_all_high_bits_and_keep_mode_field_order",
+        "tsgread::tests::modes_uses_our_subdevice_and_channel_not_tsg_or_submit_token"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "let at = 4 + i * 4;",
+        "new": "let at = i * 4;"
+      }
+    },
+    {
+      "mutant": "getters-collapse-native-status",
+      "killed_by": [
+        "tsgread::tests::both_getters_preserve_busy_and_memory_statuses_even_with_valid_bytes",
+        "tsgread::tests::modes_refusal_and_transport_failures_keep_their_status",
+        "tsgread::tests::timeslice_native_refusal_never_uses_the_reply_bytes"
+      ],
+      "count": 3,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-host/src/tsgread.rs",
+        "old": "status => Err(status)",
+        "new": "_ => Err(0x40)"
+      }
+    },
+    {
+      "mutant": "source-hooks-baseline",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0,
+      "kind": "source-composition guard"
+    },
+    {
+      "mutant": "source-SET-bypass-cache",
+      "killed_by": [
+        "hooks::early_set_is_reserved_and_deferred_instead_of_returned_not_ours",
+        "hooks::production_sets_use_the_bounded_timeslice_orchestrator"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "timeslices.prepare(",
+        "new": "timeslices.prepare_bypassed("
+      }
+    },
+    {
+      "mutant": "source-no-translated-replay",
+      "killed_by": [
+        "hooks::passthrough_and_translated_births_both_replay",
+        "hooks::translated_birth_replays_and_cleans_up_before_publishing_a_slot"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "me.replay_timeslice(&a, chan.host().channel(), true)",
+        "new": "me.no_replay(&a, chan.host().channel(), true)"
+      }
+    },
+    {
+      "mutant": "source-no-legacy-replay",
+      "killed_by": [
+        "hooks::each_passthrough_birth_kind_replays_after_mirror_acceptance",
+        "hooks::passthrough_and_translated_births_both_replay"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "self.replay_timeslice(a, c, join.is_none())",
+        "new": "self.no_replay(a, c, join.is_none())"
+      }
+    },
+    {
+      "mutant": "source-no-explicit-replay",
+      "killed_by": [
+        "hooks::each_passthrough_birth_kind_replays_after_mirror_acceptance",
+        "hooks::passthrough_and_translated_births_both_replay"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "self.replay_timeslice(a, born.chan, born.group_new)",
+        "new": "self.no_replay(a, born.chan, born.group_new)"
+      }
+    },
+    {
+      "mutant": "source-no-USER-replay",
+      "killed_by": [
+        "hooks::passthrough_and_translated_births_both_replay",
+        "hooks::private_user_ring_birth_replays_before_becoming_ready"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/userrelay.rs",
+        "old": "me.replay_timeslice(a, chan, group_new)",
+        "new": "me.no_replay(a, chan, group_new)"
+      }
+    },
+    {
+      "mutant": "source-no-free-eviction",
+      "killed_by": [
+        "hooks::native_group_telemetry_is_removed_on_free",
+        "hooks::statement_free_and_reset_cancel_timeslice_lifetimes"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "self.timeslices.forget(client, object)",
+        "new": "self.no_forget(client, object)"
+      }
+    },
+    {
+      "mutant": "source-no-reset-eviction",
+      "killed_by": [
+        "hooks::native_cleanup_is_separate_from_guest_lifetime_invalidation",
+        "hooks::statement_free_and_reset_cancel_timeslice_lifetimes"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "self.timeslices.clear()",
+        "new": "self.no_clear()"
+      }
+    },
+    {
+      "mutant": "source-no-native-free-telemetry",
+      "killed_by": [
+        "hooks::native_cleanup_is_separate_from_guest_lifetime_invalidation",
+        "hooks::native_group_telemetry_is_removed_on_free"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "self.timeslices.group_freed(chan.tsg)",
+        "new": "self.no_group_freed(chan.tsg)"
+      }
+    },
+    {
+      "mutant": "source-no-queue-cancel",
+      "killed_by": [
+        "hooks::rejected_queue_admission_cancels_the_exact_reserved_ticket",
+        "hooks::reservation_has_a_cancel_path_as_well_as_an_act_consumer"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "source-composition guard",
+      "patch": {
+        "file": "crates/kf-qemu/src/chan.rs",
+        "old": "self.timeslices.cancel(&ticket)",
+        "new": "self.no_cancel(&ticket)"
+      }
+    },
+    {
+      "mutant": "rm-baseline",
+      "killed_by": [],
+      "count": 0,
+      "exit": 0,
+      "kind": "behavior"
+    },
+    {
+      "mutant": "rm-unknown-classes-become-ours",
+      "killed_by": [
+        "chanlink::tests::timeslice_ctxshare_is_not_misclassified_as_a_group",
+        "chanlink::tests::timeslice_unknown_object_is_not_carried_to_the_plane"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-rm/src/chanlink.rs",
+        "old": "self.tsgs.get(&(h.client, h.object))?.0",
+        "new": "self.tsgs.get(&(h.client, h.object)).map_or(0, |f| f.0)"
+      }
+    },
+    {
+      "mutant": "rm-device-parent-not-forwarded",
+      "killed_by": [
+        "chanlink::tests::timeslice_ctxshare_is_not_misclassified_as_a_group",
+        "chanlink::tests::timeslice_clients_keep_distinct_owning_devices_for_the_same_tsg_number",
+        "chanlink::tests::timeslice_known_group_carries_owning_device_before_any_channel",
+        "chanlink::tests::timeslice_unknown_object_is_not_carried_to_the_plane"
+      ],
+      "count": 4,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-rm/src/chanlink.rs",
+        "old": "let device = self.tsgs.get(&(h.client, h.object))?.0;",
+        "new": "let device = 0;"
+      }
+    },
+    {
+      "mutant": "rm-device-free-leaves-dependent-tsgs",
+      "killed_by": [
+        "chanlink::tests::timeslice_device_free_purges_dependent_ctxshare_but_preserves_other_device",
+        "chanlink::tests::timeslice_group_under_a_freed_device_is_not_live"
+      ],
+      "count": 2,
+      "exit": 101,
+      "kind": "behavior",
+      "patch": {
+        "file": "crates/kf-rm/src/chanlink.rs",
+        "old": "k.1 == object || facts.0 == object",
+        "new": "k.1 == object"
+      }
+    }
+  ]
+}

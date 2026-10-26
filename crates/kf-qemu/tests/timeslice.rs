@@ -318,3 +318,121 @@ fn default_on_kill_switch_is_exact_zero_only() {
     }
     assert!(!timeslice::flag_on(Some("0")));
 }
+
+#[test]
+fn an_existing_tsg_can_change_value_at_the_per_client_limit() {
+    let r = Replay::new(true, 1, 8);
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[]).unwrap();
+    set(&r, &h, KEY, 2048, &[]).unwrap();
+    assert_eq!(r.prepare((1, 11), 2, 400).err(), Some(NO_MEMORY));
+    r.birth(KEY, channel(100, 1), true, &h).unwrap();
+    assert_eq!(r.last_applied(100), Some(2048));
+}
+#[test]
+fn accepted_intents_still_fill_the_global_cap_after_queue_slots_are_released() {
+    let r = Replay::new(true, 8, 2);
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[]).unwrap();
+    set(&r, &h, (2, 10), 400, &[]).unwrap();
+    assert_eq!(r.prepare((3, 10), 2, 400).err(), Some(NO_MEMORY));
+    r.forget(1, 10);
+    assert!(r.prepare((3, 10), 2, 400).is_ok());
+}
+#[test]
+fn device_free_stops_a_queued_set_from_touching_a_live_native_group() {
+    let r = replay();
+    let h = Host::default();
+    let t = r.prepare(KEY, 2, 400).unwrap();
+    r.forget(1, 2);
+    assert_eq!(r.apply(&t, &[channel(100, 1)], &h), Err(INVALID_STATE));
+    assert!(h.calls.borrow().is_empty());
+}
+#[test]
+fn reset_of_an_idle_saved_tsg_cannot_replay_on_the_next_device() {
+    let r = replay();
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[]).unwrap();
+    r.birth(KEY, channel(100, 1), true, &h).unwrap();
+    r.clear();
+    r.birth(KEY, channel(100, 2), true, &h).unwrap();
+    assert_eq!(h.calls.borrow().len(), 1);
+    assert_eq!(r.last_applied(100), None);
+}
+#[test]
+fn a_released_native_handle_does_not_display_the_previous_owners_request() {
+    let r = replay();
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[channel(100, 1)]).unwrap();
+    r.group_freed(100);
+    r.birth((2, 10), channel(100, 2), true, &h).unwrap();
+    assert_eq!(r.last_applied(100), None);
+}
+#[test]
+fn cancel_is_idempotent_and_cannot_release_another_queued_acts_slot() {
+    let r = Replay::new(true, 4, 2);
+    let a = r.prepare(KEY, 2, 400).unwrap();
+    let _b = r.prepare((1, 11), 2, 400).unwrap();
+    r.cancel(&a);
+    r.cancel(&a);
+    let _c = r.prepare((1, 12), 2, 400).unwrap();
+    assert_eq!(r.prepare((1, 13), 2, 400).err(), Some(NO_MEMORY));
+}
+#[test]
+fn no_environment_setting_enables_real_first_birth_replay() {
+    let r = Replay::new(timeslice::flag_on(None), 4, 8);
+    let h = Host::default();
+    set(&r, &h, KEY, 1000, &[]).unwrap();
+    r.birth(KEY, channel(100, 1), true, &h).unwrap();
+    assert_eq!(*h.calls.borrow(), vec![(100, 1000)]);
+}
+#[test]
+fn measurement_off_shards_are_each_counted_and_do_not_consume_desired_value() {
+    let r = Replay::new(false, 4, 8);
+    let h = Host::default();
+    set(&r, &h, KEY, 2048, &[]).unwrap();
+    for group in 100..104 {
+        r.birth(KEY, channel(group, group + 1), true, &h).unwrap();
+    }
+    assert_eq!(r.stats().dropped, 4);
+    assert_eq!(r.desired(KEY), Some(2048));
+    assert_eq!(h.calls.borrow().len(), 0);
+}
+#[test]
+fn a_live_set_and_a_shared_member_do_not_inflate_early_or_replayed_counts() {
+    let r = replay();
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[]).unwrap();
+    set(&r, &h, (1, 11), 1000, &[]).unwrap();
+    r.birth(KEY, channel(100, 1), true, &h).unwrap();
+    r.birth(KEY, channel(100, 2), false, &h).unwrap();
+    set(&r, &h, KEY, 4000, &[channel(100, 1), channel(100, 2)]).unwrap();
+    assert_eq!(
+        r.stats(),
+        timeslice::Stats {
+            early_sets: 2,
+            replayed: 1,
+            dropped: 0
+        }
+    );
+}
+#[test]
+fn native_live_refusals_preserve_non_argument_status_and_previous_desire() {
+    let r = replay();
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[]).unwrap();
+    h.fail.set(Some(0x1a));
+    assert_eq!(set(&r, &h, KEY, 4000, &[channel(100, 1)]), Err(0x1a));
+    assert_eq!(r.desired(KEY), Some(400));
+}
+#[test]
+fn initially_live_group_sets_are_not_early_sets_or_birth_replays() {
+    let r = replay();
+    let h = Host::default();
+    set(&r, &h, KEY, 400, &[channel(100, 1)]).unwrap();
+    assert_eq!(r.stats().early_sets, 0);
+    assert_eq!(r.stats().replayed, 0);
+    r.birth(KEY, channel(200, 2), true, &h).unwrap();
+    assert_eq!(r.stats().early_sets, 0);
+    assert_eq!(r.stats().replayed, 1);
+}

@@ -179,3 +179,74 @@ fn native_free_and_reset_remove_records_without_host_calls() {
     assert!(b.after(chan(200), "set", Request::None, 0, &h).is_none());
     assert_eq!(h.calls.get(), 4);
 }
+#[test]
+fn disabled_book_ignores_joiners_setters_and_native_failures() {
+    let b = Facts::new(false, 3, 8);
+    let h = Host {
+        fail: true,
+        ..host(&b)
+    };
+    assert!(b.birth((1, 10), 2, chan(100), true, None, &h).is_none());
+    assert!(
+        b.after(chan(100), "ctxsw-set", Request::Ctxsw(1, 0, 2), 0x1f, &h)
+            .is_none()
+    );
+    assert_eq!(h.calls.get(), 0);
+}
+#[test]
+fn all_explicit_members_keep_one_birth_identity() {
+    let b = Facts::new(true, 3, 16);
+    let h = host(&b);
+    b.birth((1, 10), 2, chan(100), true, None, &h).unwrap();
+    for _ in 0..4 {
+        let s = b.birth((1, 10), 2, chan(100), false, None, &h).unwrap();
+        assert!(s.contains("generation=1 host_birth=1"));
+    }
+}
+#[test]
+fn most_recent_failed_set_is_still_the_logged_guest_desire() {
+    let b = Facts::new(true, 3, 8);
+    let h = host(&b);
+    b.birth((1, 10), 2, chan(100), true, None, &h).unwrap();
+    b.after(chan(100), "set", Request::Timeslice(400), 0, &h)
+        .unwrap();
+    let s = b
+        .after(chan(100), "set", Request::Timeslice(2048), 0x40, &h)
+        .unwrap();
+    assert!(s.contains("desired_us=Some(2048)"));
+    assert!(s.contains("timeslice_get=Ok(1001)"));
+}
+#[test]
+fn one_tsg_cannot_bypass_group_metadata_cap_by_creating_shards() {
+    let b = Facts::new(true, 1, 16);
+    let h = host(&b);
+    b.birth((1, 10), 2, chan(100), true, None, &h).unwrap();
+    assert!(b.birth((1, 10), 2, chan(200), true, None, &h).is_none());
+    assert_eq!(h.calls.get(), 2);
+}
+#[test]
+fn full_group_book_does_not_read_back_or_log_a_third_shard() {
+    let b = Facts::new(true, 2, 16);
+    let h = host(&b);
+    for group in [100, 200] {
+        b.birth((1, 10), 2, chan(group), true, None, &h).unwrap();
+    }
+    assert!(b.birth((1, 10), 2, chan(300), true, None, &h).is_none());
+    assert_eq!(h.calls.get(), 4);
+    assert!(b.summary().contains("tsg_fact_groups=2"));
+}
+#[test]
+fn hostile_repeated_setters_stop_readbacks_at_the_event_bound() {
+    let b = Facts::new(true, 2, 3);
+    let h = host(&b);
+    b.birth((1, 10), 2, chan(100), true, None, &h).unwrap();
+    for _ in 0..2 {
+        b.after(chan(100), "set", Request::Timeslice(400), 0, &h)
+            .unwrap();
+    }
+    for _ in 0..32 {
+        assert!(b.after(chan(100), "set", Request::None, 0, &h).is_none());
+    }
+    assert_eq!(h.calls.get(), 6);
+    assert!(b.summary().contains("tsg_fact_dropped=32"));
+}

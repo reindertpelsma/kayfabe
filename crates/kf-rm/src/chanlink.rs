@@ -1749,6 +1749,8 @@ impl ChannelPolicy {
                 {
                     return None;
                 }
+                // Only an allocated TSG is ours, never another class or an unknown name.
+                let device = self.tsgs.get(&(h.client, h.object))?.0;
                 let Some(us) = params
                     .get(..8)
                     .filter(|_| params.len() == 8)
@@ -1763,7 +1765,7 @@ impl ChannelPolicy {
                 ChanStatement::Timeslice {
                     client: h.client,
                     object: h.object,
-                    device: 0,
+                    device,
                     us,
                 }
             }
@@ -2367,8 +2369,17 @@ impl ChannelPolicy {
             self.tsgs.retain(|k, _| k.0 != client);
             self.ctxshares.retain(|k, _| k.0 != client);
         } else {
-            self.tsgs.remove(&(client, object));
-            self.ctxshares.remove(&(client, object));
+            let gone_tsgs: std::collections::BTreeSet<_> = self
+                .tsgs
+                .iter()
+                .filter(|(k, facts)| k.0 == client && (k.1 == object || facts.0 == object))
+                .map(|(k, _)| k.1)
+                .collect();
+            self.tsgs
+                .retain(|k, _| k.0 != client || !gone_tsgs.contains(&k.1));
+            self.ctxshares.retain(|k, facts| {
+                !(k.0 == client && (k.1 == object || gone_tsgs.contains(&facts.parent)))
+            });
             // RM frees the dependants of a TSG: its ctxshares go with it, so a TSG handle reused
             // later cannot inherit a ctxshare that names the old TSG as its parent.
             self.ctxshares
@@ -4721,6 +4732,44 @@ mod tests {
         p.respond(&tsg_alloc(1, 2, 10, 0, 1));
         p.respond(&free_cmd(1, 1, 2));
         assert!(!p.tsgs.contains_key(&(1, 10)));
+    }
+    #[test]
+    fn timeslice_device_free_purges_dependent_ctxshare_but_preserves_other_device() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::Done);
+        let mut p = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        p.respond(&tsg_alloc(1, 2, 10, 0, 1));
+        p.respond(&ctxshare_alloc(1, 10, 11, 0, 1, 0));
+        p.respond(&tsg_alloc(1, 3, 20, 0, 1));
+        p.respond(&ctxshare_alloc(1, 20, 21, 0, 1, 0));
+        p.respond(&free_cmd(1, 1, 2));
+        assert!(!p.ctxshares.contains_key(&(1, 11)));
+        assert!(p.ctxshares.contains_key(&(1, 21)));
+        assert!(p.tsgs.contains_key(&(1, 20)));
+    }
+    #[test]
+    fn timeslice_clients_keep_distinct_owning_devices_for_the_same_tsg_number() {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<Vec<(u32, u32)>>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Timeslice { client, device, .. } = st {
+                out.lock().unwrap().push((client, device));
+            }
+            ChanAnswer::Done
+        });
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut p = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        for (c, d) in [(1, 2), (2, 3)] {
+            p.respond(&tsg_alloc(c, d, 10, 0, 1));
+            p.respond(&control_on(
+                c,
+                10,
+                TSG_SET_TIMESLICE,
+                &1000u64.to_le_bytes(),
+            ));
+        }
+        assert_eq!(*seen.lock().unwrap(), vec![(1, 2), (2, 3)]);
     }
 }
 

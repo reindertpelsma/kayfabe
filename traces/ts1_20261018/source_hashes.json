@@ -1,0 +1,14 @@
+{
+  "crates/kf-host/src/channel.rs": "737a27118eb7f8806a0f18fdeaff9545fb43465720f534cd8930928f52b8dd77",
+  "crates/kf-host/src/tsgread.rs": "c19b6da7b2a4459acd58149ac9f333601935fd51455130e4b4eb71dcaa078514",
+  "crates/kf-qemu/src/chan.rs": "f0374c419c1508b872f83147ebfe3339c502a7d5db8b09669c43373c19ee0649",
+  "crates/kf-qemu/src/timeslice.rs": "248218bfa6390476bad50671ac852e0bc4dd29e509a896018e0085a8d2b9bf5f",
+  "crates/kf-qemu/src/tsgfacts.rs": "68d66db3402e14cd0a634a7283ab91383cc9d03ff80b8c4a6fb78a1799568d5b",
+  "crates/kf-qemu/src/tsgmirror.rs": "754f520412dc7da00675001c17b9b63b6123ffb7cb6432f56a16d7336ce4256e",
+  "crates/kf-qemu/src/userrelay.rs": "376cf56eec43481a0d5aa2b443e152174db9341d3fbcbe7ab97253a302b7754e",
+  "crates/kf-rm/src/chanlink.rs": "78cf568621cae32d41857001bc2ecb4518e1c4d91c3fd5416e594f7b9840ba2c",
+  "crates/kf-qemu/tests/timeslice.rs": "1376c5cdcd603be0ee5312a0bfc0939d5f53f67dc9dac430b803f0f76ab634b5",
+  "crates/kf-qemu/tests/timeslice_mirror.rs": "5e5569a613d122b82925a10db1e35b69ea76fbf29cbde5406b4013142fe441d2",
+  "crates/kf-qemu/tests/timeslice_hooks.rs": "8cae69cf7d6cb534e550ccd412eb2506b0848a8cca6ce74cfbce24d395516d0b",
+  "crates/kf-qemu/tests/tsgfacts.rs": "f1adc64a00f1b1d5816f325ad2fa390f4512c6f51d8d91a68e0a28f65d6b398f"
+}

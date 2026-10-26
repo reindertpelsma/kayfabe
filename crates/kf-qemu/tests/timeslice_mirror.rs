@@ -13,6 +13,7 @@ struct Host {
     ops: RefCell<Vec<(&'static str, u32)>>,
     sets: RefCell<Vec<(u32, u64)>>,
     fail_member: Cell<bool>,
+    fail_set: Cell<bool>,
 }
 impl Host {
     fn id(&self) -> u32 {
@@ -24,7 +25,11 @@ impl Host {
 impl Setter for Host {
     fn set(&self, c: Channel, us: u64) -> Result<(), u32> {
         self.sets.borrow_mut().push((c.tsg, us));
-        Ok(())
+        if self.fail_set.get() {
+            Err(0x1f)
+        } else {
+            Ok(())
+        }
     }
 }
 impl ExplicitHost for Host {
@@ -120,7 +125,15 @@ fn birth(m: &mut GroupMap, r: &Replay, h: &Host, q: &Req) -> Result<Channel, u32
             (c, join.is_none())
         }
     };
-    r.birth((q.client, q.tsg), c, new, h)?;
+    if let Err(status) = r.birth((q.client, q.tsg), c, new, h) {
+        let release = m.release(q.client, q.tsg, q.ctx_share, c.tsg, true);
+        let group_freed = release.free_group;
+        free_member(h, c, release).unwrap();
+        if group_freed {
+            r.group_freed(c.tsg);
+        }
+        return Err(status);
+    }
     Ok(c)
 }
 fn intent(r: &Replay, h: &Host) {
@@ -257,4 +270,45 @@ fn contradictory_mirror_mode_refusal_does_not_change_timeslice_intent() {
     assert!(m.plan(&req(0)).is_err());
     assert_eq!(r.desired((1, 10)), Some(400));
     assert_eq!(h.sets.borrow().len(), 1);
+}
+
+#[test]
+fn explicit_set_refusal_unwinds_channel_ctxshare_group_and_retry_keeps_intent() {
+    let (mut m, r, h) = (
+        GroupMap::new(true),
+        Replay::new(true, 8, 16),
+        Host::default(),
+    );
+    intent(&r, &h);
+    h.fail_set.set(true);
+    assert_eq!(birth(&mut m, &r, &h, &req(1)), Err(0x1f));
+    assert!(m.is_empty());
+    assert_eq!(
+        h.ops.borrow().iter().map(|o| o.0).collect::<Vec<_>>(),
+        vec!["channel", "ctx", "tsg"]
+    );
+    assert_eq!(r.desired((1, 10)), Some(400));
+    h.fail_set.set(false);
+    let c = birth(&mut m, &r, &h, &req(1)).unwrap();
+    assert_eq!(r.last_applied(c.tsg), Some(400));
+}
+#[test]
+fn mirror_off_set_refusal_releases_only_its_new_shard_and_retains_intent() {
+    let (mut m, r, h) = (
+        GroupMap::new(false),
+        Replay::new(true, 8, 16),
+        Host::default(),
+    );
+    intent(&r, &h);
+    h.fail_set.set(true);
+    assert_eq!(birth(&mut m, &r, &h, &req(1)), Err(0x1f));
+    assert!(m.is_empty());
+    assert_eq!(
+        h.ops.borrow().iter().map(|o| o.0).collect::<Vec<_>>(),
+        vec!["channel", "tsg"]
+    );
+    assert_eq!(r.desired((1, 10)), Some(400));
+    h.fail_set.set(false);
+    birth(&mut m, &r, &h, &req(2)).unwrap();
+    assert_eq!(m.len(), 1);
 }

@@ -1,0 +1,156 @@
+{
+  "run": "TS1 GPU-free 2026-10-26",
+  "base": "3bfb0965640f12c3971293b2b1b2d989d6e0cfef",
+  "cargo_target": "one shared target; nice -n 19, --release -j2",
+  "expected_red": {
+    "expected-red.log": {
+      "passed": 5,
+      "failed": 19,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "fad89c34f56e3c84c5c51a1dd046d36eb88228c4061f95a6e156a3378c7af596"
+    },
+    "expected-red-queue.log": {
+      "passed": 1,
+      "failed": 3,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "b2a3bb1dcde9c59e84f3f4547461213c767c520d940c44490bfcbb1dc18902ac"
+    },
+    "expected-red-mirror.log": {
+      "passed": 0,
+      "failed": 6,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "4e576c526ac9a184600a4968d7519959c13727c49a6a27722bf9c7297c9389b1"
+    },
+    "expected-red-mirror-only.log": {
+      "passed": 0,
+      "failed": 8,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "ed9951105b6834870c3d26c9504e6430daefb2cef2ef07dff016be780060de83"
+    },
+    "expected-red-link.log": {
+      "passed": 0,
+      "failed": 4,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "ffb8ba9ffb902cf78edc8a617cffc92e8d3613cb7fd83b8869c7a954b8db571c"
+    },
+    "facts-red.log": {
+      "passed": 1,
+      "failed": 11,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "db8e7c43a6041347bc09305481b5756d77a79f9ad3b18e1d8fb511761b118c4f"
+    },
+    "readback-red.log": {
+      "passed": 0,
+      "failed": 4,
+      "ignored": 0,
+      "groups": 1,
+      "log_sha256": "159e08682ea3000ed21a1a46615cca170fdc2b01b7490c4c76a2b120e5c85ae8"
+    }
+  },
+  "five_crate_regression": {
+    "crates": [
+      "kf-qemu",
+      "kf-rm",
+      "kf-chan",
+      "kf-mem",
+      "kf-host"
+    ],
+    "passed": 2496,
+    "failed": 0,
+    "ignored": 11,
+    "groups": 121,
+    "log_sha256": "12588a8d2467eebb07e9229ccec10dc59f99e1072f22c077153c2c6118409082"
+  },
+  "final_three_crate_regression": {
+    "crates": [
+      "kf-qemu",
+      "kf-rm",
+      "kf-host"
+    ],
+    "passed": 1476,
+    "failed": 0,
+    "ignored": 4,
+    "groups": 82,
+    "log_sha256": "d4125652c8fe287780318742c7f3af82c90e62cce9cdad1319d878d65fe2b45c"
+  },
+  "selected_models": {
+    "tests/user_lifecycle_model.rs": [
+      63,
+      0,
+      3
+    ],
+    "tests/user_loop_model.rs": [
+      38,
+      0,
+      0
+    ],
+    "tests/user_loop_model_v2.rs": [
+      53,
+      0,
+      1
+    ],
+    "tests/user_loop_model_v3_pointer.rs": [
+      19,
+      0,
+      0
+    ],
+    "tests/timeslice.rs": [
+      36,
+      0,
+      0
+    ],
+    "tests/timeslice_hooks.rs": [
+      8,
+      0,
+      0
+    ],
+    "tests/timeslice_mirror.rs": [
+      8,
+      0,
+      0
+    ],
+    "tests/tsgfacts.rs": [
+      12,
+      0,
+      0
+    ]
+  },
+  "final_new_qemu_tests": {
+    "tests/timeslice.rs": [
+      37,
+      0,
+      0
+    ],
+    "tests/timeslice_hooks.rs": [
+      13,
+      0,
+      0
+    ],
+    "tests/timeslice_mirror.rs": [
+      10,
+      0,
+      0
+    ],
+    "tests/tsgfacts.rs": [
+      18,
+      0,
+      0
+    ]
+  },
+  "mutants": {
+    "behavior": 37,
+    "source_composition": 9,
+    "minimum_killing_tests": 2
+  },
+  "clippy_gate": "clippy: existing-debt=256 new=0 resolved=276",
+  "claims_gate": "claims: existing-debt=3755 new=0 resolved=3",
+  "unchanged_original_mirror_tests_passed": 32,
+  "hardware": "not run; no host/VM/GPU/lock use",
+  "performance": "early trigger not demonstrated by PF1; no benefit claimed"
+}

@@ -2388,6 +2388,9 @@ pub struct ChanPlane {
     /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
     groups: Mutex<crate::tsgmirror::GroupMap>,
+    /// Bounded guest TSG intent; native calls are made only by acts.
+    timeslices: crate::timeslice::Replay,
+    tsg_facts: crate::tsgfacts::Facts,
     /// ★ tsg-mirror counters (`mirror=[...]` in the status line).
     pub mirror_stats: crate::tsgmirror::Stats,
     /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
@@ -3050,6 +3053,12 @@ impl ChanPlane {
             pt_fifo_raised: AtomicU64::new(0),
             pt_fifo_owed: std::array::from_fn(|_| AtomicU64::new(0)),
             groups: Mutex::new(crate::tsgmirror::GroupMap::new(crate::tsgmirror::enabled())),
+            timeslices: crate::timeslice::Replay::new(
+                crate::timeslice::enabled(),
+                crate::timeslice::PER_CLIENT,
+                crate::timeslice::TOTAL,
+            ),
+            tsg_facts: crate::tsgfacts::Facts::new(crate::tsgfacts::enabled(), 65536, 100000),
             mirror_stats: crate::tsgmirror::Stats::default(),
             guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
             enc_sessions: Mutex::new(HashMap::new()),
@@ -3380,7 +3389,12 @@ impl ChanPlane {
                 .get()
                 .map_or(0, kf_rm::osevent::OsEventLog::kernel_overflowed),
             self.nsi.summary(),
-            per.join(" ") + &fifo_refusal_summary
+            per.join(" ")
+                + &fifo_refusal_summary
+                + " "
+                + &self.timeslices.summary()
+                + " "
+                + &self.tsg_facts.summary()
         )
     }
 
@@ -3937,9 +3951,17 @@ impl ChanPlane {
                     "ctxsw preemption",
                     Box::new(move |me: &ChanPlane| {
                         for c in &twins {
-                            me.rm
-                                .set_ctxsw_preemption_mode(*c, flags, gfxp, cilp)
-                                .map_err(|e| (NV_ERR_NOT_SUPPORTED, format!("twin host {:#x} SET_CTXSW_PREEMPTION_MODE: {e:?}", c.token)))?;
+                            let result = me.rm
+                                .set_ctxsw_preemption_mode_status(*c, flags, gfxp, cilp);
+                            if let Some(line) = me.tsg_facts.after(
+                                *c, "ctxsw-set", crate::tsgfacts::Request::Ctxsw(flags, gfxp, cilp),
+                                result.as_ref().err().copied().unwrap_or(0), me.rm,
+                            ) {
+                                eprintln!("kf3: {line}");
+                            }
+                            result.map_err(|e| (NV_ERR_NOT_SUPPORTED, format!(
+                                "twin host {:#x} SET_CTXSW_PREEMPTION_MODE: {e:?}", c.token
+                            )))?;
                         }
                         Ok(format!("{client:#x}:{channel:#x} SET_CTXSW_PREEMPTION_MODE flags={flags:#x} gfxp={gfxp} cilp={cilp} on {} host group(s)", twins.len()))
                     }),
@@ -3973,46 +3995,65 @@ impl ChanPlane {
                     "zcull bind",
                     Box::new(move |me: &ChanPlane| {
                         for c in &twins {
-                            me.rm
-                                .zcull_bind(*c, va, mode)
-                                .map_err(|e| (NV_ERR_NOT_SUPPORTED, format!("twin host {:#x} ZCULL_BIND va={va:#x} mode={mode}: {e:?}", c.token)))?;
+                            let result = me.rm.zcull_bind_status(*c, va, mode);
+                            if let Some(line) = me.tsg_facts.after(
+                                *c, "zcull-bind", crate::tsgfacts::Request::Zcull(mode),
+                                result.as_ref().err().copied().unwrap_or(0), me.rm,
+                            ) {
+                                eprintln!("kf3: {line}");
+                            }
+                            result.map_err(|e| (NV_ERR_NOT_SUPPORTED, format!(
+                                "twin host {:#x} ZCULL_BIND va={va:#x} mode={mode}: {e:?}", c.token
+                            )))?;
                         }
                         Ok(format!("{client:#x}:{channel:#x} ZCULL_BIND va={va:#x} mode={mode} on {} GR twin(s)", twins.len()))
                     }),
                 )
             }
-            ChanStatement::Timeslice { client, object, us, .. } => {
-                let mut twins: Vec<kf_host::Channel> = self
-                    .pt
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, v)| k.0 == client && v.tsg == Some(object))
-                            .map(|(_, v)| v.chan)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                // A guest TSG can contain Translated channels as well as passthrough
-                // twins. Resolve its members in this client's namespace, then use
-                // only our owned host channels. No host call or wait holds these locks.
-                let translated: Vec<u32> = self
-                    .by_obj
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, _)| k.0 == client)
-                            .map(|(_, ht)| *ht)
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if twins.is_empty() && translated.is_empty() {
-                    return ChanAnswer::NotOurs;
-                }
-                self.defer(
+            ChanStatement::Timeslice {
+                client,
+                object,
+                device,
+                us,
+            } => {
+                // Only known guest TSGs reach this arm. Reserve the allocation lifetime
+                // before queueing so Free cannot revive an old SET on a reused handle.
+                let ticket = match self.timeslices.prepare((client, object), device, us) {
+                    Ok(t) => t,
+                    Err(status) => {
+                        return ChanAnswer::Refused {
+                            status,
+                            why: "SET_TIMESLICE bounded intent reservation refused".into(),
+                        };
+                    }
+                };
+                self.tsg_facts.scope((client, object), device);
+                let queued = ticket.clone();
+                let answer = self.defer(
                     "timeslice",
                     Box::new(move |me: &ChanPlane| {
-                        // Slot resolution runs on the act thread as well: it must
-                        // not contend with a pump while the GSP drainer is locked.
+                        // Resolve AFTER preceding births, in act order. Native calls
+                        // run outside every member/slot/intent bookkeeping guard.
+                        let mut twins: Vec<kf_host::Channel> = me
+                            .pt
+                            .lock()
+                            .map(|m| {
+                                m.iter()
+                                    .filter(|(k, v)| k.0 == client && v.tsg == Some(object))
+                                    .map(|(_, v)| v.chan)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let translated: Vec<u32> = me
+                            .by_obj
+                            .lock()
+                            .map(|m| {
+                                m.iter()
+                                    .filter(|(k, _)| k.0 == client)
+                                    .map(|(_, ht)| *ht)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
                         for ht in translated {
                             if let Some(slot) = me.slot(ht)
                                 && let Ok(g) = slot.lock()
@@ -4022,29 +4063,25 @@ impl ChanPlane {
                                 twins.push(g.chan.host().channel());
                             }
                         }
-                        if twins.is_empty() {
-                            return Err((NV_ERR_INVALID_STATE, format!(
-                                "{client:#x}:{object:#x} SET_TIMESLICE: no live owned group member"
-                            )));
-                        }
-                        let mut groups_done = std::collections::HashSet::new();
-                        for c in &twins {
-                            if !groups_done.insert(c.tsg) {
-                                continue;
-                            }
-                            me.rm.set_timeslice(*c, us).map_err(|e| {
+                        me.timeslices
+                            .apply(&queued, &twins, &me.timeslice_host())
+                            .map_err(|status| {
                                 (
-                                    NV_ERR_INVALID_ARGUMENT,
-                                    format!("twin host {:#x} SET_TIMESLICE {us}: {e:?}", c.token),
+                                    status,
+                                    format!(
+                                        "{client:#x}:{object:#x} SET_TIMESLICE {us} us refused"
+                                    ),
                                 )
                             })?;
-                        }
                         Ok(format!(
-                            "{client:#x}:{object:#x} SET_TIMESLICE {us} us on {} twin group(s)",
-                            groups_done.len()
+                            "{client:#x}:{object:#x} SET_TIMESLICE {us} us remembered"
                         ))
                     }),
-                )
+                );
+                if matches!(answer, ChanAnswer::Refused { .. }) {
+                    self.timeslices.cancel(&ticket);
+                }
+                answer
             }
             // ★ 2026-10-07 (Windows run34): `SET_CHANNEL_PROPERTIES` engine timeslice on ONE guest
             // channel — the host's `SET_TIMESLICE` on that channel's own host group (passthrough
@@ -4085,7 +4122,7 @@ impl ChanPlane {
                                     ),
                                 )
                             })?;
-                        me.rm.set_timeslice(c, us).map_err(|e| {
+                        crate::timeslice::Setter::set(&me.timeslice_host(), c, us).map_err(|e| {
                             (
                                 NV_ERR_INVALID_ARGUMENT,
                                 format!(
@@ -5521,6 +5558,8 @@ impl ChanPlane {
     }
 
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        self.timeslices.forget(client, object);
+        self.tsg_facts.forget(client, object);
         match self.user_births.cancel(client, object) {
             Ok(_) => {}
             Err(why) => {
@@ -5943,6 +5982,55 @@ impl ChanPlane {
             .collect()
     }
 
+    fn timeslice_host(&self) -> crate::tsgfacts::Authored<'_> {
+        crate::tsgfacts::Authored {
+            rm: self.rm,
+            facts: &self.tsg_facts,
+        }
+    }
+
+    /// An owned private group is released with its channel, as before.
+    fn free_timesliced_channel(&self, chan: kf_host::Channel) -> Result<(), kf_host::RmError> {
+        let result = self.rm.free_channel(chan);
+        if result.is_ok() {
+            self.timeslices.group_freed(chan.tsg);
+            self.tsg_facts.group_freed(chan.tsg);
+        }
+        result
+    }
+
+    /// Replay after the unchanged mirror plan/commit, before a channel is published.
+    pub(super) fn replay_timeslice(
+        &self,
+        a: &ChannelAlloc,
+        chan: kf_host::Channel,
+        group_new: bool,
+    ) -> Result<(), (u32, String)> {
+        let logical_group = a.tsg.unwrap_or(a.handle);
+        if let Some(line) = self.tsg_facts.birth(
+            (a.client, logical_group),
+            a.device,
+            chan,
+            group_new,
+            self.timeslices.desired((a.client, logical_group)),
+            self.rm,
+        ) {
+            eprintln!("kf3: {line}");
+        }
+        let Some(tsg) = a.tsg else { return Ok(()) };
+        self.timeslices
+            .birth((a.client, tsg), chan, group_new, &self.timeslice_host())
+            .map_err(|status| {
+                (
+                    status,
+                    format!(
+                        "{:#x}:{tsg:#x} timeslice replay refused on host group {:#x}",
+                        a.client, chan.tsg
+                    ),
+                )
+            })
+    }
+
     /// ★ v3-video: free a Passthrough twin — a member of a shared host group frees its channel,
     /// and the group goes with its LAST member; an ungrouped twin frees channel and group.
     fn release_twin(
@@ -5981,7 +6069,7 @@ impl ChanPlane {
             }
         }
         let Some(guest_tsg) = guest_tsg else {
-            let r = self.rm.free_channel(chan);
+            let r = self.free_timesliced_channel(chan);
             self.drop_relay(chan.token);
             self.finish_user_ring_free(chan.token, user_record.as_ref(), r.is_ok());
             return r;
@@ -6012,7 +6100,12 @@ impl ChanPlane {
         if rel.free_ctx.is_some() {
             self.mirror_stats.ctx_freed.fetch_add(1, Ordering::Relaxed);
         }
+        let group_freed = rel.free_group;
         let outcome = crate::tsgmirror::free_rest(self.rm, chan.tsg, rel, r);
+        if group_freed && outcome.is_ok() {
+            self.timeslices.group_freed(chan.tsg);
+            self.tsg_facts.group_freed(chan.tsg);
+        }
         self.finish_user_ring_free(chan.token, user_record.as_ref(), outcome.is_ok());
         outcome
     }
@@ -6183,13 +6276,20 @@ impl ChanPlane {
             .map_err(|r| (r.status, r.why))?;
         let host_err = |e: String| (NV_ERR_INSUFFICIENT_RESOURCES, e);
         match plan {
-            None => kf_chan::passthrough::birth_twin_in(self.rm, space, g, None)
-                .map(|c| (c, None))
-                .map_err(host_err),
+            None => {
+                let c = kf_chan::passthrough::birth_twin_in(self.rm, space, g, None)
+                    .map_err(host_err)?;
+                self.replay_timeslice(a, c, true)?;
+                Ok((c, None))
+            }
             Some(crate::tsgmirror::Plan::Legacy { key, join }) => {
                 let c = kf_chan::passthrough::birth_twin_in(self.rm, space, g, join)
                     .map_err(host_err)?;
                 self.mirror_commit_legacy(a, key, c, engine, join.is_none());
+                if let Err((status, why)) = self.replay_timeslice(a, c, join.is_none()) {
+                    let cleanup = self.release_twin(a.client, a.tsg, a.ctx_share, c);
+                    return Err((status, format!("{why}; native cleanup {cleanup:?}")));
+                }
                 Ok((c, None))
             }
             Some(crate::tsgmirror::Plan::Explicit(p)) => {
@@ -6206,6 +6306,10 @@ impl ChanPlane {
                         ))
                     })?;
                 self.mirror_commit_explicit(a, &p, &born);
+                if let Err((status, why)) = self.replay_timeslice(a, born.chan, born.group_new) {
+                    let cleanup = self.release_twin(a.client, a.tsg, a.ctx_share, born.chan);
+                    return Err((status, format!("{why}; native cleanup {cleanup:?}")));
+                }
                 Ok((born.chan, Some(born)))
             }
         }
@@ -7472,7 +7576,7 @@ impl ChanPlane {
                     match admitted {
                         Ok((_, at)) => Some(at),
                         Err(e) => {
-                            let _ = me.rm.free_channel(host.channel());
+                            let _ = me.free_timesliced_channel(host.channel());
                             let released = host.release(me.rm).is_some_and(|l| !l.contains("REFUSED"));
                             t.give_ring(ring_va, released);
                             return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, e)));
@@ -7496,7 +7600,7 @@ impl ChanPlane {
                 if let Some(at) = gr_gp_get
                     && let Err(e) = chan.set_gpu_gp_get(at)
                 {
-                    let _ = me.rm.free_channel(chan.host().channel());
+                    let _ = me.free_timesliced_channel(chan.host().channel());
                     let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
                     t.give_ring(ring_va, released);
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("GR tier REFUSED: {e}"))));
@@ -7512,6 +7616,13 @@ impl ChanPlane {
                     crate::tspace::INCA_STRICT,
                     matches!(me.family, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
                 );
+                // Every Translated ring owns its own new host group.
+                if let Err(e) = me.replay_timeslice(&a, chan.host().channel(), true) {
+                    let _ = me.free_timesliced_channel(chan.host().channel());
+                    let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
+                    t.give_ring(ring_va, released);
+                    return Err(fail(e));
+                }
                 let alloc = me
                     .caps
                     .lock()
@@ -7519,7 +7630,7 @@ impl ChanPlane {
                     .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Translated, ht, Owner::Kernel).map_err(|e| format!("{e:?}")));
                 if let Err(e) = alloc {
                     let mut chan = chan;
-                    let _ = me.rm.free_channel(chan.host().channel());
+                    let _ = me.free_timesliced_channel(chan.host().channel());
                     // ★ v3-appfix J: and the ring's own object, mapping and CPU view.
                     let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
                     t.give_ring(ring_va, released);
@@ -7895,7 +8006,9 @@ impl ChanPlane {
                 g.guest_idx
             );
         }
-        let freed_chan = self.rm.free_channel(g.chan.host().channel()).is_ok();
+        let freed_chan = self
+            .free_timesliced_channel(g.chan.host().channel())
+            .is_ok();
         // ★ v3-appfix J: the ring's 1 MiB object, its GPU mapping and its host BAR1 CPU view went
         // with NOTHING before — ~4.5 MiB of host BAR1 per guest CUDA process with persistence
         // mode, the 256 MiB aperture gone at ~55 processes. Only after the channel is freed (its
@@ -8643,6 +8756,7 @@ impl ChanPlane {
             out.extend(m.values().map(|o| o.owner.0));
         }
         out.extend(self.user_births.clients());
+        out.extend(self.timeslices.clients());
         out.into_iter().collect()
     }
 
@@ -8669,6 +8783,8 @@ impl ChanPlane {
 
     /// The per-life state that holds no host resource (act thread, at the reset's barrier).
     fn reset_nonhost_state(&self) {
+        self.timeslices.clear();
+        self.tsg_facts.clear();
         if let Ok(mut m) = self.rc_queue.lock() {
             m.clear();
         }

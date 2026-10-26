@@ -11,12 +11,12 @@
 
 pub mod birth;
 pub mod channel;
-mod tsgread;
 pub mod diag;
 pub mod event;
 pub mod sparse;
 pub mod tier;
 pub mod timer;
+mod tsgread;
 pub use channel::{
     Channel, CtxShare, MapBacking, MapPerm, Placement, RingSpec, ScatterError, SubctxKind, VaSpace,
 };

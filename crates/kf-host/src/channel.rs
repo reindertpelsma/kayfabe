@@ -2175,6 +2175,72 @@ impl HostRm {
         self.raw_control(self.subdevice, 0x2080_1208, &mut p)
     }
 
+    /// Existing context-switch setter, with uncollapsed RM status for fact logging.
+    ///
+    /// # Errors
+    /// Native RM status, or INVALID_STATE on transport failure.
+    pub fn set_ctxsw_preemption_mode_status(
+        &self,
+        chan: Channel,
+        flags: u32,
+        gfxp: u32,
+        cilp: u32,
+    ) -> Result<(), u32> {
+        let mut p = [0u8; 32];
+        p[0..4].copy_from_slice(&flags.to_le_bytes());
+        p[4..8].copy_from_slice(&chan.tsg.to_le_bytes());
+        p[8..12].copy_from_slice(&gfxp.to_le_bytes());
+        p[12..16].copy_from_slice(&cilp.to_le_bytes());
+        match self.raw_control_opaque(self.subdevice, 0x2080_1210, &mut p) {
+            Ok(0) => Ok(()),
+            Ok(status) => Err(status),
+            Err(_) => Err(0x40),
+        }
+    }
+
+    /// Existing owned-channel zcull bind, preserving RM status for fact logging.
+    ///
+    /// # Errors
+    /// Native RM status, or INVALID_STATE on transport failure.
+    pub fn zcull_bind_status(&self, chan: Channel, va: u64, mode: u32) -> Result<(), u32> {
+        let mut p = [0u8; 24];
+        p[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
+        p[4..8].copy_from_slice(&chan.chan.to_le_bytes());
+        p[8..16].copy_from_slice(&va.to_le_bytes());
+        p[16..20].copy_from_slice(&mode.to_le_bytes());
+        match self.raw_control_opaque(self.subdevice, 0x2080_1208, &mut p) {
+            Ok(0) => Ok(()),
+            Ok(status) => Err(status),
+            Err(_) => Err(0x40),
+        }
+    }
+
+    /// Read owned TSG timeslice bookkeeping with the native RM status preserved.
+    /// GET returns the requested value, not necessarily the rounded hardware quantum.
+    /// NON_PRIVILEGED, access mask zero: OGKM `g_kernel_channel_group_api_nvoc.c`.
+    ///
+    /// # Errors
+    /// Native RM status, or INVALID_STATE if the transport failed.
+    pub fn get_timeslice_status(&self, chan: Channel) -> Result<u64, u32> {
+        crate::tsgread::timeslice(chan, |object, cmd, payload| {
+            self.raw_control_opaque(object, cmd, payload)
+                .map_err(|_| 0x40)
+        })
+    }
+
+    /// Read this owned channel's context-switch modes without changing them.
+    /// Output order: zcull, PM, SMPC, compute preemption, graphics preemption.
+    /// NON_PRIVILEGED, access mask zero: OGKM `g_subdevice_nvoc.c`.
+    ///
+    /// # Errors
+    /// Native RM status, or INVALID_STATE if the transport failed.
+    pub fn get_ctxsw_modes_status(&self, chan: Channel) -> Result<[u32; 5], u32> {
+        crate::tsgread::modes(self.subdevice, chan, |object, cmd, payload| {
+            self.raw_control_opaque(object, cmd, payload)
+                .map_err(|_| 0x40)
+        })
+    }
+
     /// ★ w827: `NVA06C_CTRL_CMD_SET_TIMESLICE` on `chan`'s group (`ctrla06c.h:146-152`) — host RM
     /// rounds to what the hardware supports and refuses what it does not.
     ///

@@ -693,8 +693,18 @@ impl Birth {
             }
             None => {}
         }
-        let ready = if self.orphaned.load(Ordering::Acquire) {
-            Err("USER_RING_BIRTH_ORPHANED".into())
+        let group_new = match &plan {
+            Some(crate::tsgmirror::Plan::Legacy { join, .. }) => join.is_none(),
+            Some(crate::tsgmirror::Plan::Explicit(_)) => {
+                explicit_born.as_ref().is_some_and(|b| b.group_new)
+            }
+            None => true,
+        };
+        let replay = me.replay_timeslice(a, chan, group_new);
+        let ready = if let Err(e) = replay {
+            Err(e)
+        } else if self.orphaned.load(Ordering::Acquire) {
+            Err(fail("USER_RING_BIRTH_ORPHANED".into()))
         } else if crate::tsgmirror::skip_late_schedule(explicit_born.as_ref()) {
             // a joiner of a standing explicit host TSG: a member of a scheduled TSG runs unscheduled (probes 60-66, 90)
             me.mirror_stats
@@ -704,13 +714,14 @@ impl Birth {
         } else {
             crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan)
                 .map(|_| ())
+                .map_err(fail)
         };
-        if let Err(why) = ready {
+        if let Err((status, why)) = ready {
             let cleanup = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
             if cleanup.is_ok() {
                 self.count.native_attempted = false;
             }
-            return Err(fail(format!("{why}; native cleanup {cleanup:?}")));
+            return Err((status, format!("{why}; native cleanup {cleanup:?}")));
         }
         let attached = me.user_births.commit(&self.pending, |identity| {
             // Exact pending birth excludes cancellation/reuse while zeroing the
