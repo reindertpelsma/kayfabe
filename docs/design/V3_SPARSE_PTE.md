@@ -16,8 +16,7 @@ invalid PTE, so the same write faults there.
 **Falsified by any one of:**
 1. The twin's unmap of a sparse-declared page is already sparse (the reservation carries SPARSE, or a
    sparse state is carried through the diff). CODE READ below says it is not.
-2. The guest PTE at fault time was not the sparse encoding, for example plain `0`. MEASURED only at
-   +0.6 s (see section 4), so this stays open.
+2. The guest PTE at fault time was not the sparse encoding, for example plain `0`. MEASURED in run 5227 on 2026-10-25 only at +0.6 s (see section 4), so this stays open.
 3. Public documentation says a write to a sparse PTE faults on real hardware. PUBLIC below says it
    does not.
 4. After a twin that keeps sparse state, the same write still faults (hardware validation).
@@ -91,7 +90,7 @@ These are owner decisions (reservation layout; walker ABI), so this branch does 
   single definition any later diff or probe uses.
 - The VAHIST PTE probe names `sparse` explicitly, so the next captured lookup decides H6's second
   falsifier directly instead of by reading `vol=1`.
-- A diagnostic, default OFF, measurement-only: `KF3_DIAG_SPARSE_RESV=1` adds `NVOS32_ALLOC_FLAGS_SPARSE`
+- CODE READ: a diagnostic, default OFF, observation-only: `KF3_DIAG_SPARSE_RESV=1` adds `NVOS32_ALLOC_FLAGS_SPARSE`
   to the guest reservations (the "quick experiment"). It is never required to boot, and its use makes
   the negative controls invalid (section 3).
 - A test that pins the default: guest reservations must not carry SPARSE unless the diagnostic is set.
