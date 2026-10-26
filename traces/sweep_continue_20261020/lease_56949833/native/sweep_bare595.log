@@ -63,4 +63,4 @@ BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=0 ms=40 rc=0 pci_dev=0x2B8
 --rpc-mixed-allocs           PASS         1s  1s
 BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=1 ms=837 rc=0 pci_dev=0x2B8510DE drv=595.91.07 kmod=open cc=12.0 rev=90e7f2a54
 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
-BARE_CELL pci_dev=0x2B8510DE gpu="NVIDIA GeForce RTX 5090" drv=595.91.07 kmod=open cc=12.0 rev=90e7f2a54 pass=30 fail=0 crash=0 arms=30 uuid=GPU-c9545e40-4ecd-6017-0d5e-0fc8f9fd53b7
+BARE_CELL pci_dev=0x2B8510DE gpu="NVIDIA GeForce RTX 5090" drv=595.91.07 kmod=open cc=12.0 rev=90e7f2a54 pass=30 fail=0 crash=0 arms=30 uuid=[GPU UUID omitted]

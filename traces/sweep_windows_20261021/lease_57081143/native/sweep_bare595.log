@@ -63,4 +63,4 @@ BARE_CELL_ARM arm=cross-client-leak verdict=PASS secs=0 ms=26 rc=0 pci_dev=0x280
 --rpc-mixed-allocs           PASS         1s  1s
 BARE_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=1 ms=826 rc=0 pci_dev=0x280310DE drv=595.91.07 kmod=open cc=8.9 rev=74aa78abe
 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
-BARE_CELL pci_dev=0x280310DE gpu="NVIDIA GeForce RTX 4060 Ti" drv=595.91.07 kmod=open cc=8.9 rev=74aa78abe pass=30 fail=0 crash=0 arms=30 uuid=GPU-870664c7-72d4-efc4-48af-30d18191083e
+BARE_CELL pci_dev=0x280310DE gpu="NVIDIA GeForce RTX 4060 Ti" drv=595.91.07 kmod=open cc=8.9 rev=74aa78abe pass=30 fail=0 crash=0 arms=30 uuid=[GPU UUID omitted]
