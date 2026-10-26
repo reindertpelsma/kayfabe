@@ -1,0 +1,96 @@
+{
+  "run": "WC1-native-GB202-20261026",
+  "control": "0x20809064",
+  "params_bytes": 520,
+  "old_request_second_word": 2,
+  "promotion": "partial only; exact old request does not match, tail is not all zero",
+  "observations": [
+    {
+      "capture": "57745025/startup2",
+      "request_prefix_u32": [
+        0,
+        3,
+        1,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0
+      ],
+      "request_tail_nonzero_bytes": 1,
+      "reply_prefix_u32": [
+        0,
+        3,
+        1,
+        1,
+        1,
+        100,
+        4,
+        16,
+        1,
+        100
+      ],
+      "reply_tail_nonzero_bytes": 4
+    },
+    {
+      "capture": "57752437/startup1",
+      "request_prefix_u32": [
+        0,
+        3,
+        1,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0
+      ],
+      "request_tail_nonzero_bytes": 1,
+      "reply_prefix_u32": [
+        0,
+        3,
+        1,
+        1,
+        1,
+        100,
+        4,
+        16,
+        1,
+        100
+      ],
+      "reply_tail_nonzero_bytes": 4
+    },
+    {
+      "capture": "57752437/startup2",
+      "request_prefix_u32": [
+        0,
+        3,
+        1,
+        0,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0
+      ],
+      "request_tail_nonzero_bytes": 1,
+      "reply_prefix_u32": [
+        0,
+        3,
+        1,
+        1,
+        1,
+        100,
+        4,
+        16,
+        1,
+        100
+      ],
+      "reply_tail_nonzero_bytes": 4
+    }
+  ]
+}

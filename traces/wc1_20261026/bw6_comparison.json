@@ -1,0 +1,95 @@
+{
+  "run": "WC1-lease1-57745025-startup2_vs_BW6-on_fix",
+  "date": "2026-10-26",
+  "sources_sha256": {
+    "BW6-api.tsv": "b5842cc852f8767bb17dcf70a810d66f0b32107b88ea84d35c74de82e7f98f7d",
+    "BW6-rpc_timing.jsonl": "f73436c81ed26d0090df91ea28c6833fb8f638aa117fb677bc4260ac98eda8f4",
+    "BW6-qemu.log": "e8e26ddd4f07e6904fbf83fc2e949b0971530e976b6332158b9d0acd172c1bf2"
+  },
+  "first_comparable_request_mismatch": {
+    "matched_prefix_tokens": 27,
+    "native_transport_sequence": 29,
+    "native_control": "0x20800a61",
+    "native_occurrence_in_block": 5,
+    "bw6_ordinal": 27,
+    "bw6_control": "0x20802a08",
+    "meaning": "request-count/order difference; not five distinct runlists and not byte equality"
+  },
+  "first_explicit_control_status_mismatch": {
+    "control": "0x20800afe",
+    "name": "INTERNAL_INIT_USER_SHARED_DATA",
+    "native_request_sequence": 31,
+    "native_reply_sequence": 49,
+    "native_rm_status": 0,
+    "bw6_ordinal": 28,
+    "bw6_rm_status": 86,
+    "bw6_utc": "2026-10-24T20:11:05.462402+00:00"
+  },
+  "matching_first_refusal": {
+    "control": "0x20800a87",
+    "native_rm_status": 86,
+    "bw6_rm_status": 86
+  },
+  "supported_constant_difference": {
+    "control": "0x20802a08",
+    "native_bytes": 16384,
+    "bw6_authored_bytes": 20480,
+    "bw6_ordinal": 27
+  },
+  "excerpts": [
+    {
+      "line": 213,
+      "text": "kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status"
+    },
+    {
+      "line": 275,
+      "text": "kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 \u2014 the guest read a non-OK status"
+    }
+  ],
+  "limits": [
+    "BW6 omits many response bodies and early asynchronous events. Absolute FIRST byte difference is inconclusive.",
+    "A differing status or value is not evidence that it caused the 0x141 timeout.",
+    "Refusing RUSD is deliberate without a publisher; do not turn it into a success stub."
+  ],
+  "native_confirmations": [
+    {
+      "capture": "57745025/startup2",
+      "first_afe_reply": {
+        "sequence": 49,
+        "status": 0,
+        "params_size": 16
+      },
+      "first_a87_reply": {
+        "sequence": 30,
+        "status": 86,
+        "params_size": 1056
+      }
+    },
+    {
+      "capture": "57752437/startup1",
+      "first_afe_reply": {
+        "sequence": 49,
+        "status": 0,
+        "params_size": 16
+      },
+      "first_a87_reply": {
+        "sequence": 30,
+        "status": 86,
+        "params_size": 1056
+      }
+    },
+    {
+      "capture": "57752437/startup2",
+      "first_afe_reply": {
+        "sequence": 49,
+        "status": 0,
+        "params_size": 16
+      },
+      "first_a87_reply": {
+        "sequence": 30,
+        "status": 86,
+        "params_size": 1056
+      }
+    }
+  ]
+}

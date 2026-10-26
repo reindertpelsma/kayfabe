@@ -1,4 +1,4 @@
-STATUS: RESEARCH, 2026-10-26 — WC1 native Windows capture operator plan, before any WC1 lease.
+STATUS: RESEARCH, 2026-10-26 — WC1 native operator plan and execution receipts; repaired-build GB202 passes 2/2 startup oracles.
 
 # Native Blackwell capture validation
 
@@ -41,3 +41,11 @@ CODE READ (`tools/windows-capture/rehearse/verify_pull.py`): on collection failu
 2. INFERRED (`V3_BLACKWELL_DIE_TABLE.md`): compare the native startup order and same-question replies against the read-only BW6 observer/QEMU evidence; report the first supported divergence, or state why FIRST is not established. The raw BW5/BW6 files are never edited. Two agreeing same-die/same-driver observations may fill non-board table values. Dynamic state and board-specific fields never become constants.
 3. CODE READ (`V3_PROVENANCE.md`): raw streams stay private on the trusted host. Public artifacts contain counts, ids, hashes and reviewed non-board constants only. No UUID, serial, VBIOS/PROM, MAC, PCI BDF or user name is exported. Do not copy arbitrary bodies, full logs or dumps into git.
 4. CODE READ (`scripts/bench/box/README.md`): **before normal destroy**, verify the private pull and rehash every file again. Record the command and UTC, run `vastai destroy instance "$OWN_ID" -y`, then `vastai show instances-v1 --raw` and prove that exact id absent. Only after API absence cancel the owned watchdog. Record final charge estimate/credit, update WC1 report after each lease, and leave no owned process, lock, target or live lease. Budget/deadline and any cyber-safety notice stop the run; preserve the notice verbatim and do not rephrase or retry around it.
+
+## Execution update (original hypotheses above unchanged)
+
+MEASURED (2026-10-26, WC1 lease1 `57745025`; `traces/wc1_20261026/lease1_gb202.json`): one restart passed the complete startup oracle and one announced a missing prefix. The table moved below its prior allocation on the missed restart. The retained-location walker was forward-only; the generic correction alternates bounded outward bands on both sides, retaining the original per-step byte budget and startup window. Two lower-move tests were committed EXPECTED RED, then passed; the forward-only mutant is killed by both (`mutation_kills.json`). The second authorized lease revalidates GB202 instead of expanding to another die.
+
+CODE READ (`tools/windows-capture/rehearse/driver_key.ps1`, `capture_dir.ps1`): preparation now selects only the active NVIDIA software key through [DEVPKEY_Device_Driver](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/devpkey-device-driver), avoiding enumeration of protected sibling keys. It creates fresh capture directories before invoking the collector and rejects pre-existing directories. No ACL was weakened. Both operator defects have expected-red, green and two-killer mutation receipts. The GSP setting is checked after reboot; native Windows defaults vary. A watchdog ARMED file is insufficient: verify the timer process is still alive immediately before and after create, and keep its supervising execution session open through API absence.
+
+MEASURED (2026-10-26, WC1 lease2 `57752437`, `traces/wc1_20261026/lease2_gb202.json`): the corrected single command completed install, same-pin reboot, warm discovery, both startup/D3D repeats, service removal, private pull and hash verification without manual repair. Independent rehash preceded exact-id destruction and API absence. Both restart captures are complete; there was no third lease.

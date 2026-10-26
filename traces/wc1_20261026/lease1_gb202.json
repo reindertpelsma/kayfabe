@@ -231,7 +231,8 @@
     "code_each": [
       0,
       0
-    ]
+    ],
+    "code_sample": "after restart, before D3D; no final PnP resample"
   },
   "teardown": {
     "id": 57745025,

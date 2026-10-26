@@ -1,0 +1,15 @@
+{
+  "run": "WC1-lease1-57745025-startup2",
+  "native_driver": "580.88",
+  "ga104_driver": "596.51",
+  "native_oracle": true,
+  "ga104_missing_prefix": 10277,
+  "native_controls": 183,
+  "ga104_controls": 179,
+  "scopes": {
+    "both": 164,
+    "ga104_retained_only": 15,
+    "native_retained_only": 19
+  },
+  "note": "Observed inventories differ in die, driver and captured workload. Retained-only does not establish family absence."
+}
