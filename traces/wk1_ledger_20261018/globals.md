@@ -13,7 +13,7 @@ STATUS: LIVE, 2026-10-26. CODE READ at base 48c3b7d36; paths below are under `ci
 | `MODELS` | `policy.js:22` | Empty legacy compatibility array, never mutated or consulted by production admission. |
 | `DEFAULTS` and nested arrays/objects | `defaults.js:3` | Top level frozen, children mutable by type; read-only policy precomputation in production. Configuration builds fresh per-request data. |
 
-CODE READ: `github.js` and `oidc.js` have no mutable module-level binding. The default export in `index.js:1260` calls `createGateway()` once, retaining the following closure state for an isolate. Literal module scope alone therefore misses relevant shared state.
+CODE READ: `github.js` and `oidc.js` have no mutable module-level binding. The default export in `index.js:1249` calls `createGateway()` once, retaining the following closure state for an isolate. Literal module scope alone therefore misses relevant shared state.
 
 ## Gateway closure retained by the module default export
 
