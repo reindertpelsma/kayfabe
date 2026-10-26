@@ -73,6 +73,64 @@ class ProviderFaults(unittest.TestCase):
                 result = reporter.final_result(env, 1, False, None, target)
                 self.assertEqual(result["verdict"], "PROVIDER_FAULT")
 
+    def test_gpu_fault_flows_through_stage_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "result.json"
+            log = "DRIVER_RC=8\nNOT_READY driver_rc=8 (GPU unusable)\nNVIDIA_SMI_RC=1\n"
+
+            def grade(rc):
+                name = payload.provider_fault(log)
+                if name:
+                    raise payload.ProviderFault(name)
+                raise payload.EvidenceError("provision")
+
+            result = {"verdict": "FAIL", "suites": [], "hardware": dict(reporter.UNKNOWN_HW)}
+            stage = {
+                "name": "provision",
+                "command": [],
+                "output": target,
+                "progress": [],
+                "grade": grade,
+            }
+            with redirect_stdout(io.StringIO()):
+                payload.execute_stages([stage], 10, result, target, runner=lambda *args: 1)
+            self.assertEqual(result["verdict"], "PROVIDER_FAULT")
+
+    def test_missing_xid_proof_blocks_provider_fault(self):
+        self.check_xid_guard("missing watcher evidence")
+
+    def test_unmatched_xid_blocks_provider_fault(self):
+        from test_vast_payload import watch, XID
+
+        self.check_xid_guard(watch(XID, 0, 1, rc=1))
+
+    def check_xid_guard(self, text):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "watch.log"
+            log.write_text(text)
+
+            def grade(rc):
+                raise payload.ProviderFault("provider_gpu_unavailable")
+
+            with self.assertRaises(payload.EvidenceError) as caught:
+                payload.stage_grade(Path(directory), "test", log, grade, 1)
+            self.assertNotIsInstance(caught.exception, payload.ProviderFault)
+
+    def test_local_result_parser_accepts_explicit_provider_fault(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "result.json"
+            target.write_text(
+                json.dumps(
+                    {
+                        "verdict": "PROVIDER_FAULT",
+                        "suites": [
+                            {"name": "provider_kvm_missing", "pass": 0, "fail": 1, "skip": 0}
+                        ],
+                    }
+                )
+            )
+            self.assertEqual(reporter.read_result_file(target)["verdict"], "PROVIDER_FAULT")
+
 
 if __name__ == "__main__":
     unittest.main()

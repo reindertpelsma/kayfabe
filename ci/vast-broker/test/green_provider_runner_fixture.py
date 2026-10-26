@@ -63,8 +63,8 @@ def client(route, method="GET", body=None):
                 "verdict": "UNAVAILABLE",
                 "log_tail_sanitised": "",
                 "bytes_dropped": 0,
-                "reason": "BUDGET:daily-usd",
-                "budget": {"daily_cap_usd": 10},
+                "reason": "BUDGET:run-usd",
+                "budget": {"run_cap_usd": 1, "prior_usd": 0.2, "cost_usd": 0.9},
             }
         else:
             data = status()

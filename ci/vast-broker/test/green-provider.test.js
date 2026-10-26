@@ -16,7 +16,16 @@ async function fixture() {
 }
 async function fault(h, kind = 'report') {
   const r = await row(h);
-  if (kind === 'boot') {
+  if (kind !== 'report') {
+    h.cloud.instances.get(r.id).actual_status = kind === 'running-boot' ? 'running' : 'created';
+    h.cloud.logText =
+      "libvirt: QEMU Driver error : Domain not found: no domain with matching name 'C." +
+      r.id +
+      "'\n";
+    for (const at of [r.started + 60000, r.started + 240000, r.bootDeadline - 60000]) {
+      h.time.value = at;
+      await h.service.sweep();
+    }
     h.time.value = r.bootDeadline;
     return h.call('/status/123-1');
   }
@@ -31,7 +40,7 @@ async function fault(h, kind = 'report') {
     },
   });
 }
-for (const kind of ['boot', 'report'])
+for (const kind of ['boot', 'running-boot', 'report'])
   for (const restart of [false, true])
     test('green one provider replacement ' + kind + ' restart=' + restart, async () => {
       const { h, original } = await fixture();
@@ -54,6 +63,9 @@ for (const kind of ['boot', 'report'])
       assert.equal(replacement.softDeadline, original.softDeadline);
       assert.equal(replacement.runBudgetUsd, original.runBudgetUsd);
       assert.notEqual(replacement.nonce, original.nonce);
+      const environment = h.cloud.calls.filter((call) => call.url.includes('/api/v0/asks/')).at(-1)
+        .body.env;
+      assert.equal(environment.KF_NONCE, replacement.nonce);
       assert.equal(h.cloud.created.length, 2);
       assert.equal(
         (await h.report({ seq: 2, kind: 'log', text: 'stale' }, { token: stale })).status,
@@ -106,7 +118,9 @@ for (const price of [0.4, 0.45])
     await fault(h, 'boot');
     h.cloud.extraOffers[0].price = price;
     h.time.value += 60001;
-    await h.call();
+    const response = await h.call();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).verdict, 'PROVIDER_FAULT');
     assert.equal(h.cloud.created.length, 1);
     assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
   });
