@@ -844,3 +844,6 @@ fn only_sparse_bookkeeping_stops_on_a_poisoned_layout() {
         .collect();
     assert_eq!(refused, [(true, false)]);
 }
+include!("breaker_tests.rs");
+include!("breaker_model.rs");
+include!("breaker_model_tests.rs");
