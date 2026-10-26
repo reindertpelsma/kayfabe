@@ -1,5 +1,8 @@
 STATUS: RESEARCH, 2026-10-26 — WC1 native operator plan and execution receipts; repaired-build GB202 passes 2/2 startup oracles.
 
+CODE READ (WC1 round2 owner direction, 2026-10-26): the original two-lease cap below applied to round1. A new seven-hour round beginning10:52Z authorizes one native lease each for GB205, GB203, GB206 and GB207 if a verified VM-capable offer exists, cheapest first; one retry per die only for a pre-SSH provider fault, on a different machine and host. New round stopUSD6, cap8, rate<=1.40/h, <=2.5h/box; daily12 and reserve8 unchanged. The same580.88 capture protocol and hypotheses below apply, with live die identification and no neighboring-die substitutions. The passing BW5/GB205 comparison is the control for the failing BW6/GB202 lead. No raw data or board identifiers are published. Per-box operational watchdog is predeclared at5400s, independently checked alive before create; budget guards may admit less than the round stop when shared liabilities require it.
+
+
 # Native Blackwell capture validation
 
 CODE READ (`docs/OWNER_RULINGS.md` §AF–AH, T.12; WC1 owner addition): validate the family driven capture module on native GB202 first, preferably the BW7 machine class. If the first lease exposes a discovery defect, retain its diagnostics, add expected-red tests, correct the module and validate on the second lease. If it succeeds, the second may cover GB205 or GB203. At most two leases; no third retry. No reverse engineering is part of this plan.
