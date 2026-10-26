@@ -6,6 +6,7 @@ import { env, jwt, MockCloud } from '../test/helpers.js';
 
 // FALSIFIER: default /rent already selects the cheapest eligible die in real workerd.
 // Every outbound call is intercepted: these tests cannot rent or reach the provider.
+const prefix = 'workerd-green-' + 'p'.repeat(32);
 const bundle = await build({
   entryPoints: [new URL('./fixture.js', import.meta.url).pathname],
   bundle: true,
@@ -27,7 +28,7 @@ for (const gpu of ['RTX_4090', 'RTX_4070']) {
         modules: true,
         script: bundle.outputFiles[0].text,
         compatibilityDate: '2026-10-21',
-        bindings: env,
+        bindings: { ...env, BROKER_PATH_PREFIX: prefix },
         durableObjects: { TEST_LEDGER: { className: 'AdmissionFixture', useSQLite: true } },
         outboundService: async (request) =>
           cloud.fetch(request.url, {
@@ -42,7 +43,7 @@ for (const gpu of ['RTX_4090', 'RTX_4070']) {
     const stub = ns.get(ns.idFromName(t.name));
     const now = Math.floor(Date.now() / 1000);
     const token = await jwt({ iat: now, nbf: now - 1, exp: now + 300 });
-    const response = await stub.fetch(env.WORKER_URL + '/rent', {
+    const response = await stub.fetch(env.WORKER_URL + '/' + prefix + '/rent', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'X-KF-Protocol': '6' },
       body: JSON.stringify({
