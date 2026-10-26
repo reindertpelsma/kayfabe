@@ -1084,13 +1084,14 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.codes[i] = KFWR_ACK_HELD;
         }
     }
-    if out
-        .mapped
-        .saturating_add(out.unmapped)
-        .saturating_add(out.taken_down)
-        .saturating_add(out.usermode_trapped)
-        .saturating_add(out.sked_placed)
-        > 0
+    if target.pending_invalidate()
+        || out
+            .mapped
+            .saturating_add(out.unmapped)
+            .saturating_add(out.taken_down)
+            .saturating_add(out.usermode_trapped)
+            .saturating_add(out.sked_placed)
+            > 0
     {
         match target.invalidate() {
             Ok(()) => out.invalidated = true,
