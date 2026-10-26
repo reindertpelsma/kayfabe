@@ -1,0 +1,10 @@
+{
+  "source": "NVIDIA open GPU kernel modules 595.91.07",
+  "files": {
+    "src/nvidia/src/kernel/gpu/mem_mgr/arch/turing/mem_mgr_tu102.c": "b84959c8a9e6d7da823738abcee08c1bbfa2d04328abada81fc49b8738525b82",
+    "src/nvidia/src/kernel/gpu/mem_mgr/arch/turing/mem_mgr_tu102_base.c": "bf06741bac1bffaafc16b9be6560b8b2fdcacfd1a7de2300bd24711da415d3a0",
+    "src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_mgr_gm107.c": "6feb77e1646d354b7ea0ca769e7bde59c7cb1b8ac034eec20f2f8a54cf6aa4e0",
+    "src/nvidia/src/kernel/mem_mgr/virtual_mem.c": "7b9949bc423a29ba8cc16ee50590bb5e3eaaef394d6bdd8f531cbfc2fff0fb9a",
+    "src/nvidia/generated/g_mem_mgr_nvoc.c": "aa8d552eb7a9b68fea0dd819d88ef580eaad86337563c552308e211a6f25d524"
+  }
+}

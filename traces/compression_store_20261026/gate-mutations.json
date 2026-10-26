@@ -1,0 +1,90 @@
+{
+  "never_accept_ab": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_complete_ab_is_verified",
+      "test_e5_gate.GateTests.test_zero_comptag_field_is_not_failure_in_raw_mode"
+    ]
+  },
+  "ignore_allocation_readback": {
+    "kill_count": 3,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_missing_returned_attrs_is_rejected",
+      "test_e5_gate.GateTests.test_returned_compr_none_is_rejected",
+      "test_e5_gate.GateTests.test_returned_uncompressed_format_is_rejected"
+    ]
+  },
+  "ignore_coverage": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_inverted_coverage_is_rejected",
+      "test_e5_gate.GateTests.test_no_coverage_is_rejected"
+    ]
+  },
+  "ignore_matrix_completeness": {
+    "kill_count": 5,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_downgraded_kind_is_rejected",
+      "test_e5_gate.GateTests.test_invalid_64k_pte_is_rejected",
+      "test_e5_gate.GateTests.test_missing_4k_pitch_pte_is_rejected",
+      "test_e5_gate.GateTests.test_pitch_alias_with_inherited_compressed_kind_is_rejected",
+      "test_e5_gate.GateTests.test_wrong_4k_page_size_is_rejected"
+    ]
+  },
+  "ignore_pte_kind": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_downgraded_kind_is_rejected",
+      "test_e5_gate.GateTests.test_pitch_alias_with_inherited_compressed_kind_is_rejected"
+    ]
+  },
+  "ignore_pte_valid_and_page_size": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_invalid_64k_pte_is_rejected",
+      "test_e5_gate.GateTests.test_wrong_4k_page_size_is_rejected"
+    ]
+  },
+  "ignore_rm_failures": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_cleanup_rm_failure_is_rejected",
+      "test_e5_gate.GateTests.test_control_rm_failure_is_rejected"
+    ]
+  },
+  "ignore_clean_finish": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_probe_failure_is_rejected",
+      "test_e5_gate.GateTests.test_truncated_capture_is_rejected"
+    ]
+  },
+  "ignore_zbc_policy": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_default_zbc_is_policy_mismatch",
+      "test_e5_gate.GateTests.test_prefer_zbc_is_policy_mismatch"
+    ]
+  },
+  "allow_root_or_missing_uid": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_missing_uid_is_rejected",
+      "test_e5_gate.GateTests.test_root_capture_is_rejected"
+    ]
+  },
+  "certify_task2_without_c_d": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_ab_never_certifies_task2_without_c_and_d",
+      "test_e5_gate.GateTests.test_prefer_zbc_does_not_certify_task2"
+    ]
+  },
+  "certify_zbc_without_producer": {
+    "kill_count": 2,
+    "killing_tests": [
+      "test_e5_gate.GateTests.test_absent_capture_cannot_certify_rop_behavior",
+      "test_e5_gate.GateTests.test_no_zbc_readback_never_certifies_rop_behavior"
+    ]
+  }
+}

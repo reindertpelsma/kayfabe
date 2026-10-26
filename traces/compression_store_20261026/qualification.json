@@ -1,0 +1,43 @@
+{
+  "probe_revision": "fc337998e80c12afbce158b5e9e55c7b07fba639",
+  "source_sha256": "a9182e1e2e388b39e9ece1f52e9cb0333d5abbc9de5ae4cb84799d9b0c3d0923",
+  "host_binary_sha256": "014830f6ea9117b93fb08d484af9f68a73493eb84b42950f4006bf91f36a30f6",
+  "host_build": {
+    "compiler": "cc",
+    "flags": "-std=gnu11 -O2 -Wall -Wextra -Werror",
+    "nice": 19,
+    "rc": 0
+  },
+  "expected_red": {
+    "revision": "c96e3f7a3",
+    "loader_errors": 1,
+    "executed_test_bodies": 0,
+    "reason": "ModuleNotFoundError: e5_gate (new instrument API absent)"
+  },
+  "green": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0
+  },
+  "mutation_count": 12,
+  "minimum_killing_tests": 2,
+  "gpu_runs": 0,
+  "owned_lease_acquisitions": 0,
+  "lock_attempts": [
+    {
+      "utc": "2026-10-26T04:55:06Z",
+      "rc": 1
+    },
+    {
+      "utc": "2026-10-26T04:59:52Z",
+      "rc": 75,
+      "interval_s": 286
+    },
+    {
+      "utc": "2026-10-26T05:04:52Z",
+      "rc": 75,
+      "interval_s": 300
+    }
+  ],
+  "stop_reason": "Source prerequisite contradiction; owner ruling required; hardware lock busy"
+}
