@@ -34,6 +34,7 @@ pub use store::{Store, StoreRefusal};
 pub mod apply;
 pub mod batch;
 pub mod cpuwin;
+pub mod gatelog;
 pub mod ledger;
 pub mod maplog;
 pub mod refusal_dump;

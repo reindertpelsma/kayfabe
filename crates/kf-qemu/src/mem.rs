@@ -2379,6 +2379,27 @@ impl Inbox {
             || self.split_tokens.lock().is_ok_and(|m| !m.is_empty())
     }
 
+    /// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): WHICH of [`Self::walk_busy`]'s conditions hold,
+    /// as `kf_mem::gatelog::WHY_*` bits (0 = the gate is open). Decides nothing.
+    #[must_use]
+    pub fn walk_busy_why(&self) -> u8 {
+        use kf_mem::gatelog::{WHY_SPLIT_QUEUED, WHY_SPLIT_RUNNING, WHY_UNSETTLED, WHY_VA_BUSY};
+        let mut why = 0;
+        if self.walk_busy.load(Ordering::Acquire) {
+            why |= WHY_VA_BUSY;
+        }
+        if !self.all_settled() {
+            why |= WHY_UNSETTLED;
+        }
+        if self.splits.lock().is_ok_and(|q| !q.is_empty()) {
+            why |= WHY_SPLIT_QUEUED;
+        }
+        if self.split_tokens.lock().is_ok_and(|m| !m.is_empty()) {
+            why |= WHY_SPLIT_RUNNING;
+        }
+        why
+    }
+
     /// The VA thread, at the end of every loop: whether it has a walk in flight or pending.
     pub fn set_walk_busy(&self, busy: bool) {
         self.walk_busy.store(busy, Ordering::Release);
@@ -4140,6 +4161,30 @@ mod tests {
         inbox.wait_walk(9);
         assert_eq!(inbox.take_walk_waiters(), vec![5, 9]);
         assert!(inbox.take_walk_waiters().is_empty());
+    }
+
+    /// ⊘ `KF3_DIAG_GATELOG`: `walk_busy_why` names each condition of `walk_busy` and is empty
+    /// exactly when `walk_busy` is false.
+    #[test]
+    fn walk_busy_why_names_every_condition_of_the_gate() {
+        use kf_mem::gatelog::{WHY_SPLIT_QUEUED, WHY_SPLIT_RUNNING, WHY_VA_BUSY};
+        let inbox = Inbox::new().expect("inbox");
+        assert_eq!(inbox.walk_busy_why(), 0);
+        assert!(!inbox.walk_busy());
+        inbox.set_walk_busy(true);
+        assert_eq!(inbox.walk_busy_why(), WHY_VA_BUSY);
+        inbox.set_walk_busy(false);
+        let t = inbox.request_split(7, None);
+        assert_eq!(inbox.walk_busy_why(), WHY_SPLIT_QUEUED);
+        let _ = inbox.take_split_requests();
+        assert_eq!(inbox.walk_busy_why(), WHY_SPLIT_RUNNING);
+        inbox.set_walk_busy(true);
+        assert_eq!(inbox.walk_busy_why(), WHY_VA_BUSY | WHY_SPLIT_RUNNING);
+        assert!(inbox.walk_busy());
+        inbox.set_walk_busy(false);
+        let _ = inbox.finish_split(t, Ok(()));
+        assert_eq!(inbox.walk_busy_why(), 0);
+        assert!(!inbox.walk_busy());
     }
 
     /// ★★ OWNER_RULINGS §U.2: a gated split opens its gate only on success, only at its finish (on

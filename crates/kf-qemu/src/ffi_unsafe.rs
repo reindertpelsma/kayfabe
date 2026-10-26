@@ -5,6 +5,7 @@ use crate::device::{Config, Device};
 use crate::raw_unsafe::RawRegion;
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
+use std::io::Write as _;
 use std::os::unix::ffi::OsStrExt as _;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
@@ -267,6 +268,17 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the VA-manager thread");
                 return -1;
             }
+            // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): QEMU leaves through `exit`,
+            // which never reaches `kf3_unrealize`, so the walk-gate log's shutdown dump is an
+            // `atexit` handler, registered once, after the threads are up.
+            if kf_mem::gatelog::enabled() {
+                static REGISTERED: std::sync::Once = std::sync::Once::new();
+                REGISTERED.call_once(|| {
+                    // SAFETY: `gatelog_atexit` is a plain `extern "C" fn()` that lives for the
+                    // process; libc `atexit` only stores it.
+                    let _ = unsafe { atexit(gatelog_atexit) };
+                });
+            }
             if !out.is_null() {
                 // SAFETY: `out` is writable (caller contract).
                 unsafe { *out = (d as *const Device).cast_mut().cast::<c_void>() };
@@ -277,6 +289,22 @@ pub unsafe extern "C" fn kf3_realize(
             write_err(err, err_len, &e);
             -1
         }
+    }
+}
+
+unsafe extern "C" {
+    /// libc: run `cb` at normal process exit.
+    fn atexit(cb: extern "C" fn()) -> i32;
+}
+
+/// ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the walk-gate log's shutdown dump, at process exit
+/// (bounded: [`kf_mem::gatelog::Recorder::dump_shutdown`] prints at most once).
+extern "C" fn gatelog_atexit() {
+    let rec = kf_mem::gatelog::global();
+    // never a panic out of an `extern "C"` fn at exit: a closed stderr is ignored
+    let mut err = std::io::stderr().lock();
+    for line in rec.dump_shutdown(rec.now()) {
+        let _ = writeln!(err, "{line}");
     }
 }
 

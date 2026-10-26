@@ -512,6 +512,15 @@ impl Recorder {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// The recorder's clock origin: its monotonic start and the wall clock at that instant (ms
+    /// since the Unix epoch, the `t0_unix_ms` its dumps print). `KF3_DIAG_GATELOG` stamps its
+    /// records on this same clock so the two logs can be joined.
+    #[must_use]
+    pub fn clock(&self) -> (Instant, u128) {
+        let st = self.st();
+        (st.t0, st.t0_unix_ms)
+    }
+
     fn ms(st: &State) -> u64 {
         u64::try_from(st.t0.elapsed().as_millis()).unwrap_or(u64::MAX)
     }

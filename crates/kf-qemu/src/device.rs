@@ -2065,14 +2065,24 @@ impl Device {
             // off): the host lane writes the host's Xid text there; the VA thread looks at most
             // every 500 ms (one `open`), and answers each new trigger ONCE with a bounded dump
             // (`kf_mem::vahist::Recorder::lookup`, at most 4 per process). Changes no decision.
-            if kf_mem::vahist::enabled()
+            if (kf_mem::vahist::enabled() || kf_mem::gatelog::enabled())
                 && let Some(path) = kf_mem::vahist::trigger_path()
             {
                 match kf_mem::vahist::global().poll_trigger(path, std::time::Instant::now()) {
                     Some(Ok(t)) => {
-                        let view = crate::mem::VahistView { m: &m };
-                        for line in kf_mem::vahist::global().lookup(&t, &view) {
-                            eprintln!("{line}");
+                        if kf_mem::vahist::enabled() {
+                            let view = crate::mem::VahistView { m: &m };
+                            for line in kf_mem::vahist::global().lookup(&t, &view) {
+                                eprintln!("{line}");
+                            }
+                        }
+                        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the same trigger (the host's
+                        // Xid text) dumps the walk-gate log, bounded (`gatelog::Recorder::dump`).
+                        if kf_mem::gatelog::enabled() {
+                            let rec = kf_mem::gatelog::global();
+                            for line in rec.dump("xid", rec.now(), t.chid, Some(t.va)) {
+                                eprintln!("{line}");
+                            }
                         }
                     }
                     Some(Err(e)) => eprintln!("kf3: VAHIST trigger not looked up: {e}"),
@@ -2467,6 +2477,14 @@ impl Device {
                 if self.mem.inbox.user_va.has_work() {
                     let _ = self.mem.inbox.wake.signal();
                 }
+            }
+        }
+        // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the walk-gate log's summary at
+        // shutdown, bounded (`gatelog::Recorder::dump`), once the loop has stopped.
+        if kf_mem::gatelog::enabled() {
+            let rec = kf_mem::gatelog::global();
+            for line in rec.dump_shutdown(rec.now()) {
+                eprintln!("{line}");
             }
         }
         // ★ The boot display: a seed the guest never retired (it never loaded its driver) goes with
