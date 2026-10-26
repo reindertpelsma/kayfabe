@@ -1,5 +1,18 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-26 — LX2 Linux graphics parity measured; attribution stopped
+
+MEASURED 2026-10-26, LX2 source 6564dd597, six matched native/guest pairs:
+offscreen render-target/depth throughput K/native 0.555 (paired range 0.549–0.564),
+large naive GEMM about 1.00, 256 MiB streaming 0.923. No primary Xid/OOM.
+The longer render GPU interval does not prove active execution or compression cost.
+A separate native RM/strace/CUPTI step ended with SIGSEGV after content PASS;
+no guest diagnostic followed. Owned resources were cleaned and GDM restored.
+Evidence, distributions, scope and resume prerequisite:
+[Linux parity](../traces/linux_parity_20261025/REPORT.md).
+No product change or performance fix; resolve native tracing before resuming attribution.
+
+
 ## UPDATE 2026-10-22 — G1 Phase 1 descriptor admission GPU-free green
 
 CODE READ: the authoritative descriptor decision resolves the earlier stop.

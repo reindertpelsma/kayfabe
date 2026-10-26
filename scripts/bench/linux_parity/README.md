@@ -1,6 +1,6 @@
 # Linux parity probes
 
-STATUS: RESEARCH, 2026-10-25/26, LX2. Hardware results remain unmeasured until the private host campaign completes. The preregistration is [PREREG.md](../../../traces/linux_parity_20261025/PREREG.md).
+STATUS: RESEARCH, 2026-10-25/26, LX2. Primary results and the native diagnostic safety stop are recorded in [REPORT.md](../../../traces/linux_parity_20261025/REPORT.md). The preregistration is [PREREG.md](../../../traces/linux_parity_20261025/PREREG.md).
 
 `surface.c` is an offscreen NVIDIA EGL/OpenGL workload: RGBA8 + depth, 64 ordered layers, then a sampled render-target pass. It records CPU completion and per-pass GPU timestamps, checks final color/depth, and emits 1000 frame records after timing. Build once on the test host with `gcc -O2 surface.c -lEGL -lOpenGL -lm -o surface`. This probe does not claim to reproduce an application's full rendering workload or guarantee compression use.
 
@@ -17,4 +17,6 @@ The missing analyzer import in the tests-only EXPECTED RED commit establishes th
 
 `power_button.c` is a diskless-guest shutdown helper: it checks for QEMU DMI, waits for the guest ACPI power-button event, and invokes guest poweroff. It is never run by the native benchmark suite. This supports QMP `system_powerdown`; failure retains the lease and is reported. Kernel and driver source are unchanged.
 
-`cupti_trace.c` is optional CUDA activity collection for separate diagnostic passes. Build against matching CUPTI/runtime/compiler SDK headers and libcupti, then use the documented `CUDA_INJECTION64_PATH` mechanism with a new `LX2_CUPTI_OUT` file. It records driver and concurrent-kernel activity, callback drop counts and collector failures. This collector is compile-checked only: hardware operation remains unverified. CUPTI tracing can perturb short kernels and does not belong in primary parity data; see [NVIDIA's CUPTI usage documentation](https://docs.nvidia.com/cupti/main/main.html).
+`cupti_trace.c` is optional CUDA activity collection for separate diagnostic passes. Build against matching CUPTI/runtime/compiler SDK headers and libcupti, then use the documented `CUDA_INJECTION64_PATH` mechanism with a new `LX2_CUPTI_OUT` file. It records driver and concurrent-kernel activity, callback drop counts and collector failures. The combined native RM/strace/CUPTI run ended with SIGSEGV and no kernel records; the failing component is unisolated and this collector is not hardware-qualified. CUPTI tracing can perturb short kernels and does not belong in primary parity data; see [NVIDIA's CUPTI usage documentation](https://docs.nvidia.com/cupti/main/main.html).
+
+`rm_trace.c` observes documented 595.91.07 RM ioctl fields using the matching open headers, then forwards the actual ioctl. `rm_fixture.c` is a CPU-only `/dev/null` fixture. One fixture preserved the underlying ENOTTY result; this is not complete transparency or GPU-tracer qualification. Serialized and unsupported parameter layouts remain undecoded. Native traces were preserved privately after the combined tracing crash; no guest ioctl comparison or profiler workaround was attempted.
