@@ -1,0 +1,22 @@
+{
+  "run": "WC1-round3c-TU106-market-20261026",
+  "target_machine": 13058,
+  "target_host": 79466,
+  "target_die": "TU106",
+  "started_utc": "2026-10-26T20:54:06+00:00",
+  "deadline_utc": "2026-10-27T00:54:06+00:00",
+  "interval_seconds": 1200,
+  "query": "verified=true vms_enabled=true rentable=true rented=false machine_id=13058 dph_total<=0.4",
+  "storage_quote_gib": 150,
+  "paid_automation": false,
+  "polls": [
+    {
+      "utc": "2026-10-26T20:54:08.806449+00:00",
+      "status": "ok",
+      "offers": 0,
+      "review_candidates": 0
+    }
+  ],
+  "status": "watching",
+  "next_poll_utc": "2026-10-26T21:14:08.806449+00:00"
+}
