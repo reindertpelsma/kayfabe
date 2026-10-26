@@ -35,8 +35,8 @@ export class Ledger {
     }
     await flush();
   }
-  async logPage(record, cursor) {
-    const end = Math.min(record.logChunks ?? 0, cursor + 4);
+  async logPage(record, cursor, count = 4) {
+    const end = Math.min(record.logChunks ?? 0, cursor + count);
     let text = '';
     const chunks = [];
     for (let i = cursor; i < end; i++) {

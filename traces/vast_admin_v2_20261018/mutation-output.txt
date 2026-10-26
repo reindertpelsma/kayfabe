@@ -1,0 +1,20 @@
+L01 internal origin bypass: 2 killing tests
+L02 public log route exposed: 2 killing tests
+L03 record capability disclosure: 3 killing tests
+L04 four chunks per page: 4 killing tests
+L05 byte limit removed: 2 killing tests
+L06 traversal truncated: 2 killing tests
+L07 phantom final page: 3 killing tests
+L08 final summary hidden: 2 killing tests
+L09 whole tail used as summary: 3 killing tests
+L10 missing log reported available: 2 killing tests
+L11 cursor range bypass: 2 killing tests
+L12 HTML escape bypass: 2 killing tests
+L13 Next loses run binding: 2 killing tests
+L14 Next on exhausted page: 2 killing tests
+L15 log links omitted: 4 killing tests
+L16 Stop requires provider ID: 5 killing tests
+L17 terminal rows get Stop: 2 killing tests
+L18 log owner check bypass: 2 killing tests
+L19 log error body disclosed: 2 killing tests
+L20 missing log loses expiry message: 2 killing tests

@@ -1070,6 +1070,56 @@ export class BrokerLedger {
   }
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/admin/log') {
+      if (url.origin !== 'https://internal.invalid' || request.method !== 'GET') return notFound();
+      const json = (data, status = 200) =>
+        Response.json(data, {
+          status,
+          headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+        });
+      const params = url.searchParams,
+        run = params.get('run'),
+        raw = params.get('cursor') ?? '0';
+      if (
+        params.getAll('run').length !== 1 ||
+        params.getAll('cursor').length > 1 ||
+        [...params.keys()].some((key) => !['run', 'cursor'].includes(key)) ||
+        !/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(run ?? '') ||
+        !/^(0|[1-9][0-9]{0,6})$/.test(raw)
+      )
+        return json({ error: 'Invalid log selection' }, 400);
+      const cursor = Number(raw);
+      try {
+        const ledger = new Ledger(this.ctx.storage),
+          record = await ledger.get('record:' + run);
+        if (!record)
+          return json({ text: 'log expired', summary: '', cursor, next_cursor: null }, 404);
+        const count = record.logChunks ?? 0;
+        if (!Number.isSafeInteger(count) || count < 0) throw Error();
+        if (cursor > count) return json({ error: 'Invalid log selection' }, 400);
+        // Reuse the relay reader, one chunk instead of the runner's default four.
+        const page = await ledger.logPage(record, cursor, 1),
+          tail = typeof record.log === 'string' ? record.log : '',
+          encoder = new TextEncoder();
+        if (
+          encoder.encode(page.log_increment_sanitised).length > 16384 ||
+          encoder.encode(tail).length > 8192
+        )
+          throw Error();
+        const marker =
+          String.raw`(?:^|\n)(?:\[box\] )?KF_FINAL_SUMMARY_BEGIN\b` +
+          String.raw`[\s\S]*?KF_FINAL_SUMMARY_END[^\n]*(?:\n|$)`;
+        const blocks = [...tail.matchAll(new RegExp(marker, 'g'))];
+        return json({
+          text: page.log_increment_sanitised,
+          summary: blocks.at(-1)?.[0].replace(/^\n/, '') ?? '',
+          cursor,
+          next_cursor: page.next_cursor < count ? page.next_cursor : null,
+        });
+      } catch {
+        return json({ error: 'Log unavailable' }, 503);
+      }
+    }
     if (url.pathname.startsWith('/admin/')) {
       if (url.origin !== 'https://internal.invalid' || url.search) return notFound();
       const json = (data, status = 200) =>
