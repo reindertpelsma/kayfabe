@@ -52,6 +52,7 @@ for t in $RUN; do
         chain) timeout 150 /opt/lx2/sparse_h6 300 chain ;;
         one)   timeout 100 /opt/lx2/sparse_h6 1 seq ;;
         neg)   timeout 90 /opt/lx2/gpu_wedge_probe fault ;;
+        negl)  timeout 90 /opt/lx2/gpu_wedge_probe_lo fault ;;
         victim) timeout 60 /opt/lx2/gpu_wedge_probe victim ;;
     esac
     echo "H6G_EXIT $t rc=$?"
