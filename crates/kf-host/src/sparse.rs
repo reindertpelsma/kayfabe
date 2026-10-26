@@ -3,6 +3,7 @@
 use crate::{RmError, channel::GuestVaRange};
 use std::collections::BTreeMap;
 
+#[path = "sparse/initial.rs"]
 pub(crate) mod initial;
 
 /// Normal reservation grain.
