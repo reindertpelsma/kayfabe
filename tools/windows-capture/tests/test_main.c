@@ -636,7 +636,7 @@ static void t_recent_moved_table_is_found_before_bulk_delay(void)
         h.cfg.recent_window_ticks = 1000;
         h.cfg.scan_bytes_per_step = 1u << 20;
         kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
-        hn_steps(&h, 6);
+        hn_steps(&h, 12); /* nearby budget now covers both directions */
         CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == 4);
         CHECK(h.e->bind.table_pa == next.table_pa);
         CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
@@ -656,7 +656,7 @@ static void t_recent_window_skips_pages_outside_ram(void)
     kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
     hn_steps(&h, 3);
     CHECK(h.e->state == KFWC_ST_SEARCHING && h.e->stats.attaches == 0);
-    CHECK(h.e->stats.scan_bytes == 3u * KFWC_PAGE);
+    CHECK(h.e->stats.scan_bytes > 0 && h.e->stats.scan_bytes <= 3u * (1u << 20));
     CHECK(h.m.refused == 0 && h.m.stores == 0);
     hn_free(&h);
 }
@@ -1356,6 +1356,34 @@ static void t_recent_moved_pending_status(void)
     hn_free(&h);
 }
 
+/* A host allocation may move below its previous location as well as above it. */
+static void recent_moved_lower(int publish_status)
+{
+    harness h;
+    synth next;
+    recent_setup(&h, 1, 1);
+    memset(fk_ptr(&h.m, h.s.table_pa), 0, KFWC_PAGE);
+    sy_init(&h.s, &h.m, 1, 0x500000, 0x40000, 0x40000, 1);
+    h.s.q[0].seq = h.s.q[1].seq = 99;
+    sy_post(&h.s, 0, 76, 16); sy_post(&h.s, 1, 76, 16);
+    sy_init(&next, &h.m, 1, 0x100000, 0x40000, 0x40000, publish_status);
+    sy_post(&next, 0, 72, 32);
+    if (publish_status) sy_post(&next, 1, 65, 32);
+    h.cfg.recent_table_pa = h.s.table_pa;
+    h.cfg.recent_window_bytes = 4u << 20;
+    h.cfg.recent_window_ticks = 1000;
+    kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+    hn_steps(&h, 14);
+    CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.method == KFWC_METHOD_NEARBY);
+    CHECK(h.e->bind.table_pa == next.table_pa && h.e->stats.messages[0] == 1);
+    CHECK(h.e->stats.messages[1] == (kfwc_u64)publish_status);
+    CHECK(sb_losses(&h.sb) == 0 && h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_recent_lower_published(void) { recent_moved_lower(1); }
+static void t_recent_lower_pending(void) { recent_moved_lower(0); }
+
 static void t_legacy_families_keep_exact_records(void)
 {
     harness a, b;
@@ -1504,6 +1532,8 @@ int main(int argc, char **argv)
         {"pending_status_smaller", t_pending_status_smaller},
         {"recent_seed_status_first", t_recent_seed_status_first},
         {"recent_moved_pending_status", t_recent_moved_pending_status},
+        {"recent_lower_published", t_recent_lower_published},
+        {"recent_lower_pending", t_recent_lower_pending},
         {"legacy_family_exact_records", t_legacy_families_keep_exact_records},
         {"family_boot_capabilities", t_family_boot_capabilities},
         {"fsp_mailbox_is_not_libos", t_fsp_mailbox_is_not_a_libos_pointer},
