@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}kayfabe{% endblock %}</title>
+    <meta name="description" content="{{ config.description }}" />
+    <link rel="stylesheet" href="{{ get_url(path='style.css') }}" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">kayfabe</a>
+      <nav>
+        <a href="/docs/">Docs</a> <a href="https://github.com/reindertpelsma/kayfabe">GitHub</a>
+      </nav>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+    <footer>
+      kayfabe is open source. This site is static documentation; it is not a download source.
+    </footer>
+  </body>
+</html>
