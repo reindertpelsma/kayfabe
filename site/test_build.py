@@ -169,6 +169,20 @@ class Versions(unittest.TestCase):
                     "docs/master/index.html",
                 )
 
+    def test_vendor_documentation_links_remain_allowed(self):
+        builder().check_page(
+            '<title>Manual</title><a href="https://vendor.example/docs/reference/setup">'
+            "Vendor instructions</a>",
+            "docs/master/index.html",
+        )
+
+    def test_other_repository_documentation_links_remain_allowed(self):
+        builder().check_page(
+            '<title>Manual</title><a href="https://github.com/other/project/docs/design/">'
+            "Upstream docs</a>",
+            "docs/master/index.html",
+        )
+
     def test_missing_title_fails_publication(self):
         with self.assertRaises(ValueError):
             builder().check_page("<p>Missing title</p>", "docs/master/index.html")
