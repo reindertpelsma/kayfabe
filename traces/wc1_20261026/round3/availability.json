@@ -176,10 +176,17 @@
         "total_offers": 4,
         "turing_offers": 0,
         "single_gpu_review_candidates": 0
+      },
+      {
+        "utc": "2026-10-26T19:57:32.174231+00:00",
+        "status": "ok",
+        "total_offers": 8,
+        "turing_offers": 0,
+        "single_gpu_review_candidates": 0
       }
     ],
     "status": "watching",
-    "next_poll_utc": "2026-10-26T19:57:32.174121+00:00",
+    "next_poll_utc": "2026-10-26T20:22:32.174231+00:00",
     "capture_authority": "Native conversion after archived Linux pre-reference; Windows startup oracle+D3D are the post-reference; no kayfabe verdict.",
     "scope_renewal": "Round3a post-SSH VFIO limit remains historical; round3b authorizes native-conversion capture on an eligible Turing offer.",
     "completed_capture": {
