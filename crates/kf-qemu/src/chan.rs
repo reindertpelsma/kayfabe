@@ -3981,7 +3981,7 @@ impl ChanPlane {
                     }),
                 )
             }
-            ChanStatement::Timeslice { client, object, us } => {
+            ChanStatement::Timeslice { client, object, us, .. } => {
                 let mut twins: Vec<kf_host::Channel> = self
                     .pt
                     .lock()

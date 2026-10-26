@@ -657,6 +657,8 @@ pub enum ChanStatement {
         client: u32,
         /// The TSG.
         object: u32,
+        /// Owning guest device, for cascading free of a never-born group.
+        device: u32,
         /// `timesliceUs`.
         us: u64,
     },
@@ -1761,6 +1763,7 @@ impl ChannelPolicy {
                 ChanStatement::Timeslice {
                     client: h.client,
                     object: h.object,
+                    device: 0,
                     us,
                 }
             }
@@ -4655,6 +4658,69 @@ mod tests {
         assert!(is_rm_internal_client(0xc1e0_0006));
         assert!(!is_rm_internal_client(0xc1d0_0006), "the user base");
         assert!(!is_rm_internal_client(0xe000_0001), "a VF client");
+    }
+    #[test]
+    fn timeslice_unknown_object_is_not_carried_to_the_plane() {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<usize>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if matches!(st, ChanStatement::Timeslice { .. }) {
+                *out.lock().unwrap() += 1;
+            }
+            ChanAnswer::Done
+        });
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut p = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        p.respond(&control_on(1, 10, TSG_SET_TIMESLICE, &400u64.to_le_bytes()));
+        assert_eq!(*seen.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn timeslice_ctxshare_is_not_misclassified_as_a_group() {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<usize>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if matches!(st, ChanStatement::Timeslice { .. }) {
+                *out.lock().unwrap() += 1;
+            }
+            ChanAnswer::Done
+        });
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut p = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        p.respond(&tsg_alloc(1, 2, 10, 0, 1));
+        p.respond(&ctxshare_alloc(1, 10, 11, 0, 1, 0));
+        p.respond(&control_on(1, 11, TSG_SET_TIMESLICE, &400u64.to_le_bytes()));
+        assert_eq!(*seen.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn timeslice_known_group_carries_owning_device_before_any_channel() {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<Vec<u32>>> = Arc::default();
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Timeslice { device, .. } = st {
+                out.lock().unwrap().push(device);
+            }
+            ChanAnswer::Done
+        });
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let mut p = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        p.respond(&tsg_alloc(1, 2, 10, 0, 1));
+        p.respond(&control_on(1, 10, TSG_SET_TIMESLICE, &400u64.to_le_bytes()));
+        assert_eq!(*seen.lock().unwrap(), vec![2]);
+    }
+
+    #[test]
+    fn timeslice_group_under_a_freed_device_is_not_live() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::Done);
+        let mut p = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        p.respond(&tsg_alloc(1, 2, 10, 0, 1));
+        p.respond(&free_cmd(1, 1, 2));
+        assert!(!p.tsgs.contains_key(&(1, 10)));
     }
 }
 

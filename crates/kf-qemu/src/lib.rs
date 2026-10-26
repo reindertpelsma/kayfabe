@@ -36,6 +36,7 @@ pub mod reset;
 pub mod rmfacts;
 pub mod scrub;
 pub mod tsgmirror;
+pub mod timeslice;
 pub mod tspace;
 pub mod twin;
 pub(crate) mod userbirth;
