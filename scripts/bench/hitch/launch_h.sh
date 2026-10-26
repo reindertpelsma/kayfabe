@@ -24,7 +24,7 @@ while IFS= read -r name; do unset "$name"; done < <(compgen -e | sed -n '/^KF3_/
 export WIN_CPU="host,-vmx,migratable=off,+invtsc,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_time,hv_synic,hv_stimer,hv_tlbflush,hv_ipi,hv_frequencies"
 # no guest internet during install (OOBE then offers offline setup; no Windows Update before the driver is pinned)
 export WIN_NET_RESTRICT=off WIN_MAC=$VM_MAC WIN_GPU_UUID=$GPU_UUID
-export KF3_REV=$REV WIN_TRACE=0 WIN_GSP_OBSERVER=0 WIN_FLAGS="${WIN_FLAGS:-KF3_LIFECYCLE_COUNT=1 KF3_LIFECYCLE_PERIOD_S=5}" PROD_EXTRA_FLAGS= WIN_DROP="KF3_TIMER_MAP ${EXTRA_DROP:-}" WIN_FB_MB=8192 WIN_RAM_MB=12288 WIN_BAR1=8589934592 WIN_REUSE=1
+export KF3_REV=$REV WIN_TRACE=0 WIN_GSP_OBSERVER=0 WIN_FLAGS="${WIN_FLAGS:-}" PROD_EXTRA_FLAGS= WIN_DROP="KF3_TIMER_MAP ${EXTRA_DROP:-}" WIN_FB_MB=8192 WIN_RAM_MB=12288 WIN_BAR1=8589934592 WIN_REUSE=1
 export WIN_QEMU_EXTRA="-uuid $VM_UUID -smbios type=1,manufacturer=KayfabeLab,product=KF-Guest,serial=$VM_SERIAL -drive file=$TOOLS,if=none,id=cd1,media=cdrom,readonly=on -device ide-cd,drive=cd1,bus=ide.0,unit=0 -drive file=/var/lib/vast-windows-test-media/virtio.iso,if=none,id=cd2,media=cdrom,readonly=on -device ide-cd,drive=cd2,bus=ide.0,unit=1 -drive file=$W/appmatrix/image/kfapps.iso,if=none,id=cd3,media=cdrom,readonly=on -device ide-cd,drive=cd3,bus=ide.1,unit=0"
 export WIN_TITLE="kayfabe Windows 11 (run $N, $REV)" WIN_MAX_SECONDS=0
 bash "$B" run "$N"

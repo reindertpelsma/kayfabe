@@ -44,7 +44,7 @@
 #   - no GPU lock: the Linux guest of interactive.sh holds /tmp/kayfabe-fastguest.lock, and two kf3
 #     VMs on one GPU is the point of this launcher (watch `dmesg` for Xid).
 # The audited runner (`pc_boundary_experiment.py`) is not used because it takes that lock and
-# refuses to add devices; its env (KF3_RPC_TRACE=1 and the flag list) is reproduced here.
+# refuses to add devices; its behavior flags are retained below. Diagnostics are opt-in via WIN_FLAGS.
 #
 # env: KF3_REV (kf3 binary under $W/kf3-bins; required), WIN_FLAGS (space-separated extra KF3_*
 #   flags set to 1, e.g. "KF3_PREEMPT_BIND_PROBE"), WIN_STDVGA (0), WIN_MAX_SECONDS (0 = no bound),
@@ -278,11 +278,12 @@ if [ "${WIN_TRACE:-0}" = 1 ]; then
     [ "${WIN_GSP_OBSERVER:-0}" = 1 ] && ARGS+=(-global "kf3-gpu.x-gsp-observer=$RUN/gsp.jsonl"
         -global "kf3-gpu.x-gsp-observer-seconds=${WIN_GSP_OBSERVER_SECONDS:-3600}")
 fi
-# the harness's flag list (pc_boundary_experiment.py FLAGS + pc_sdr_experiment.py) and KF3_DEFERRED_API
+# CODE READ: keep the research behavior profile; production leaves measurement flags unset.
+# Opt in explicitly with WIN_FLAGS="KF3_RPC_TRACE=1" (or the individual trace names).
 # 2026-10-10 (OWNER_RULINGS §AB): KF3_TSPACE, KF3_INCA_REFUSE and KF3_KERNEL_{NVDEC,NVENC,OFA}_CTX are
 # deleted (their behaviour is hardwired ON); they are no longer listed.
-FLAGS="KF3_GFX_POOL_PROBE KF3_TIMER_MAP KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_METHOD_TRACE KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_SW_SUBCH_INERT KF3_TRANSLATED_CE_RELAY KF3_BAR0_TRACE KF3_MAPLOG KF3_DEFERRED_API ${WIN_FLAGS:-}"
-ENV=(KF3_RPC_TRACE=1); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
+FLAGS="KF3_GFX_POOL_PROBE KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_SW_SUBCH_INERT KF3_TRANSLATED_CE_RELAY KF3_DEFERRED_API ${WIN_FLAGS:-}"
+ENV=(); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
 python3 - "$RUN/command.json" "$KF3_REV" "$QBIN" "${ENV[@]}" -- "$QBIN" "${ARGS[@]}" <<'PY'
 import json, sys, datetime
 out, rev, qbin = sys.argv[1:4]

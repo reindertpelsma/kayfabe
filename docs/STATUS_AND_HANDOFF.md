@@ -1484,7 +1484,9 @@ Windows desktop staying up; it is not a merge-bar item yet.
 `OWNER_RULINGS.md` (§X is the non-stall ruling); KF3 ABI 25 = the trace verbs + the input-sink verbs. `[measured, runs 98-103,
 2026-10-09]` (1) Runs 98/99's "reset ~19.6 s after driver start" is TDR + bugcheck **0x116**: kf3 refused Windows' mirrored
 DIRECT10 colour program (`ILUT/OLUT_CONTROL 0x4050a`, MIRROR=1; ILUT offset in 256-byte units) and halted its display engine;
-fixed behind `KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_ILUT_OFFSET_256=1` (default off; GPU-free test with the measured program):
+fixed behind `KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_ILUT_OFFSET_256=1` (historically default off;
+CODE READ update 2026-10-22: both default on in D1, each exact `=0` keeps the prior decoder arm,
+while SDR_COLOR remains opt-in; [current inventory](design/V3_FLAG_INVENTORY_20261022.md)):
 flips then run at 60 Hz and Windows draws its lock screen through kf3 (frame in the record). (2) The guest still TDRs (0x116,
 runs 100-103): in runs 101/103 the D3D process's Passthrough GR/CE twins take **host Xid 31 (FAULT_PTE at `0x4034000`/`0x4036000`)**
 after kf3 applies page-table walks that UNMAP other rows of the same 2 MiB region (H-pde, stated, not run); in runs 100/102
@@ -1887,7 +1889,8 @@ The earlier SDR product `2aa8b92d` and missing-capability test follow:
 
 **Latest owner-directed implementation:** branch `codex/sdr-lut-20261006`,
 product `2aa8b92de6c6ab158f9bc8e788be792408a074a3`, real bounded GPU SDR
-ILUT/OLUT processing under `KF3_DISPLAY_SDR_COLOR=1` (default off).
+ILUT/OLUT processing under `KF3_DISPLAY_SDR_COLOR=1` (still default off after review B2,
+2026-10-22; only MIRROR and ILUT_OFFSET_256 default on within that path).
 Linux open580.159.04 on borrowed RTX 4070 runs Weston and Sway. A 2501K
 KMS curve changes output with **zero error in all 6,220,800 RGB components**;
 restoration is byte-identical, with no compositor gamma failure. Six GPU colour
