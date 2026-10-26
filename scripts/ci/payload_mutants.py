@@ -295,7 +295,7 @@ CASES += [
     ("structured-arm-logs-omitted", replace('snapshot["diagnostics"] = events', "pass")),
     (
         "local-reader-rejects-arm-logs",
-        report_replace(', "runner_nonce", "diagnostics"}', ', "runner_nonce"}'),
+        report_replace('            "diagnostics",\n', ''),
         "vast_report.py",
     ),
     (
@@ -340,8 +340,8 @@ CASES += [
     (
         "local-logs-leak-into-worker-wire-schema",
         report_replace(
-            '        "hardware": hardware,\n    }',
-            '        "hardware": hardware,\n        "diagnostics": [],\n    }',
+            '        **reference,\n    }',
+            '        **reference,\n        "diagnostics": [],\n    }',
         ),
         "vast_report.py",
     ),

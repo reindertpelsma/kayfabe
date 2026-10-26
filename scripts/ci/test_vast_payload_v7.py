@@ -386,7 +386,8 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar", "cuda_guest"])
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(len(result["suites"]), 8)
-        self.assertEqual(set(result), {"verdict", "suites", "hardware"})
+        self.assertEqual(set(result), {"verdict", "suites", "hardware", "host_reference"})
+        self.assertEqual(result["host_reference"], "GREEN")
 
     def test_provisioned_musl_binary_is_found_by_existing_guest_helper(self):
         rc, result, calls = self._main_fixture(legacy_client="musl")
