@@ -11,7 +11,7 @@ PROVISION = (
 )
 MERGE = (
     "HEAD=" + SHA + " CHECKOUT=/workspace/bench/verify-worktrees/fixture\n"
-    "TESTS passed 2000 failed 0\nGATES_RC=0\n"
+    "GATES_RC=0\n"
     "V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS\nKF3_RC=0\n"
     "BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30\nFG_RC=0\n"
     "SUITE_RC=0\nFAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30\n"
@@ -90,7 +90,7 @@ class PayloadTests(unittest.TestCase):
 
     def test_merge_exact_revision_and_counts(self):
         self.assertEqual(
-            [r["pass"] for r in self.m.merge_rows(MERGE, 0, SHA)], [2000, 9, 1, 30, 30, 1]
+            [r["pass"] for r in self.m.merge_rows(MERGE, 0, SHA)], [9, 1, 30, 30, 1]
         )
 
     def test_merge_wrong_revision_refuses(self):

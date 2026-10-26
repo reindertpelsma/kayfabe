@@ -72,7 +72,7 @@ class V7Tests(unittest.TestCase):
         with self.assertRaises(self.m.EvidenceError) as caught:
             self.m.merge_rows(MERGE.split("BARE_SUITE_PASS=")[0], 124, SHA)
         self.assertEqual(
-            [r["name"] for r in caught.exception.rows], ["kf_tests", "gates", "kf3_build"]
+            [r["name"] for r in caught.exception.rows], ["gates", "kf3_build"]
         )
 
     def test_provision_head_is_bound_to_sha(self):
@@ -213,10 +213,10 @@ class V7Tests(unittest.TestCase):
                 self.m.stage_grade(None, None, log, grade, 2)
             self.assertEqual(caught.exception.name, "provision")
 
-    def test_timeout_does_not_erase_completed_tests(self):
+    def test_timeout_before_the_gates_has_no_phantom_rows(self):
         with self.assertRaises(self.m.EvidenceError) as caught:
             self.m.merge_rows(MERGE.split("GATES_RC=")[0], 124, SHA)
-        self.assertEqual(caught.exception.rows, [self.m.row("kf_tests", 2000)])
+        self.assertEqual(caught.exception.rows, [])
 
     def test_timeout_really_stops_grandchild_work(self):
         import sys
@@ -430,7 +430,7 @@ class V7Tests(unittest.TestCase):
         self.assertEqual(calls, ["provision", "cuda_host", "merge_bar"])
         self.assertEqual(
             [r["name"] for r in result["suites"]],
-            ["provision", "cuda_host", "kf_tests", "gates", "kf3_build", "timeout"],
+            ["provision", "cuda_host", "gates", "kf3_build", "timeout"],
         )
         self.assertEqual(result["verdict"], "FAIL")
 
@@ -574,7 +574,7 @@ class V7Tests(unittest.TestCase):
         with self.assertRaises(self.m.EvidenceError) as caught:
             self.m.merge_rows(text, 1, SHA)
         self.assertEqual(
-            [r["name"] for r in caught.exception.rows], ["kf_tests", "gates", "kf3_build"]
+            [r["name"] for r in caught.exception.rows], ["gates", "kf3_build"]
         )
 
     def test_thin_red_keeps_raw_and_build_rows(self):
@@ -584,7 +584,7 @@ class V7Tests(unittest.TestCase):
             self.m.merge_rows(text, 1, SHA)
         self.assertEqual(
             [r["name"] for r in caught.exception.rows],
-            ["kf_tests", "gates", "kf3_build", "raw_suite"],
+            ["gates", "kf3_build", "raw_suite"],
         )
 
 
