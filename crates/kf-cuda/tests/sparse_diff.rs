@@ -56,6 +56,28 @@ fn sparse_subrange_keeps_no_linear_offset() {
 }
 
 #[test]
+fn extending_sparse_after_a_kept_middle_has_no_backing_offset() {
+    let old = placed(&[run(2 * PAGE, PAGE, true)]);
+    let d = diffmodel::diff(&old, &[run(PAGE, 3 * PAGE, true)], 8);
+    assert_eq!(d.runs.len(), 2);
+    assert_eq!(d.runs[1].va, 3 * PAGE);
+    assert_eq!(d.runs[1].gpga, 0);
+}
+
+#[test]
+fn three_sparse_segments_cover_one_placement() {
+    let old = placed(&[run(PAGE, 3 * PAGE, true)]);
+    let walk = [run(PAGE, PAGE, true), run(2 * PAGE, PAGE, true), run(3 * PAGE, PAGE, true)];
+    assert!(diffmodel::diff(&old, &walk, 8).runs.is_empty());
+}
+
+#[test]
+fn three_sparse_segments_have_one_coverage_interval() {
+    let walk = [run(PAGE, PAGE, true), run(2 * PAGE, PAGE, true), run(3 * PAGE, PAGE, true)];
+    assert_eq!(diffmodel::coverage(&walk)[0].len(), 1);
+}
+
+#[test]
 fn adjacent_sparse_statements_cover_one_placement() {
     let old = placed(&[run(0, 2 * PAGE, true)]);
     let walk = [run(0, PAGE, true), run(PAGE, PAGE, true)];
