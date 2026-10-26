@@ -1658,7 +1658,10 @@ impl MapTarget for GpuMirror {
         r
     }
     fn invalidate(&self) -> Result<(), String> {
-        self.vas.invalidate()
+        self.bv.invalidate()
+    }
+    fn pending_invalidate(&self) -> bool {
+        self.bv.pending_invalidate()
     }
     fn va_extent(&self) -> Option<u64> {
         self.vas.va_extent()
@@ -1813,6 +1816,12 @@ impl MapTarget for Target {
             Target::Window(w) => w.invalidate(),
             Target::Bar1(b) => b.win.invalidate(),
             Target::Gpu(g) => g.invalidate(),
+        }
+    }
+    fn pending_invalidate(&self) -> bool {
+        match self {
+            Target::Gpu(g) => g.pending_invalidate(),
+            Target::Window(_) | Target::Bar1(_) => false,
         }
     }
     fn va_extent(&self) -> Option<u64> {
@@ -4917,3 +4926,7 @@ mod memory_list_tests {
         assert_eq!(ram.validate(span), None);
     }
 }
+
+#[cfg(test)]
+#[path = "mem/walk_gate_tests.rs"]
+mod walk_gate_tests;

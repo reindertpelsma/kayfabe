@@ -1,0 +1,93 @@
+CODE READ base 6564dd597: crates/kf-mem/src/batch.rs:2559-2567
+2559:     /// One maximal owned span: the host call (no lock held), then the ledger and the book.
+2560:     fn unmap_span(&self, (s, e, via): (u64, u64, Option<u32>), defer: bool) -> Result<(), String> {
+2561:         match via {
+2562:             Some(h) => self.vas.unmap_in(h, s, e.saturating_sub(s), defer)?,
+2563:             None => self.vas.unmap_range(s, e.saturating_sub(s), defer)?,
+2564:         }
+2565:         self.cut_own(s, e);
+2566:         self.retired(s, e.saturating_sub(s));
+2567:         Ok(())
+
+CODE READ base 6564dd597: crates/kf-mem/src/batch.rs:2766-2788
+2766:     /// `[va, va+len)` is no longer mapped by us: clear it in the book ([`LEDGER_CHUNK`] units per
+2767:     /// hold), forget the ledger entries of the batch objects that emptied, and free those objects
+2768:     /// (host calls, no lock held).
+2769:     fn retired(&self, va: u64, len: u64) {
+2770:         let end = va.saturating_add(len);
+2771:         let mut cur = BookCursor::default();
+2772:         let mut emptied: Vec<(u32, u64, u64)> = Vec::new();
+2773:         loop {
+2774:             let (step, finished) = self.hold(&self.book, |b| {
+2775:                 let mut step = Vec::new();
+2776:                 let (t, f) = b.unmapped_step(va, end, &mut cur, LEDGER_CHUNK, &mut step);
+2777:                 ((step, f), t)
+2778:             });
+2779:             emptied.extend(step);
+2780:             if finished {
+2781:                 break;
+2782:             }
+2783:         }
+2784:         for &(h, s, l) in &emptied {
+2785:             self.forget_batch_range(h, s, s.saturating_add(l));
+2786:         }
+2787:         self.free(emptied.into_iter().map(|(h, _, _)| h).collect());
+2788:     }
+
+CODE READ base 6564dd597: crates/kf-mem/src/apply.rs:1083-1107
+1083:         } else if held_any[i] && placed[i].is_empty() && kept[i].is_empty() {
+1084:             out.codes[i] = KFWR_ACK_HELD;
+1085:         }
+1086:     }
+1087:     if out
+1088:         .mapped
+1089:         .saturating_add(out.unmapped)
+1090:         .saturating_add(out.taken_down)
+1091:         .saturating_add(out.usermode_trapped)
+1092:         .saturating_add(out.sked_placed)
+1093:         > 0
+1094:     {
+1095:         match target.invalidate() {
+1096:             Ok(()) => out.invalidated = true,
+1097:             Err(e) => {
+1098:                 // ⊘ The rows landed (their verdicts stand — the host holds them); the space is
+1099:                 // not settled until an invalidate succeeds, so the caller must not clear.
+1100:                 out.refused = out.refused.saturating_add(1);
+1101:                 out.invalidate_refused = true;
+1102:                 out.first_refusal.get_or_insert(e);
+1103:             }
+1104:         }
+1105:     }
+1106:     out
+1107: }
+
+CODE READ base 6564dd597: crates/kf-qemu/src/mem.rs:1481-1500
+1481:     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+1482:         for row in rows {
+1483:             self.user_regions.check(row.va, row.len)?;
+1484:         }
+1485:         let (Some(ram), true) = (self.ram, batching_enabled()) else {
+1486:             return Err(kf_mem::ledger::NOT_BATCHED.into());
+1487:         };
+1488:         let fd = ram
+1489:             .backing_fd()
+1490:             .ok_or("no fd-backed guest RAM to stitch a batch from")?;
+1491:         let t = std::time::Instant::now();
+1492:         let placed = self.bv.place(fd.borrow(), rows, defer);
+1493:         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+1494:         if let (Some(a), Some(b)) = (rows.first(), rows.last()) {
+1495:             self.rows_follow_ledger(a.va, b.va.saturating_add(b.len));
+1496:         }
+1497:         if let Err(e) = placed {
+1498:             // ★ 2026-10-09: `NOT_BATCHED` = rows outside a guest reservation, placed per run by
+1499:             // design (`BatchedVas` rule 2) — not a refused batch.
+1500:             if e != kf_mem::ledger::NOT_BATCHED {
+
+CODE READ base 6564dd597: crates/kf-qemu/src/mem.rs:1658-1664
+1658:         r
+1659:     }
+1660:     fn invalidate(&self) -> Result<(), String> {
+1661:         self.vas.invalidate()
+1662:     }
+1663:     fn va_extent(&self) -> Option<u64> {
+1664:         self.vas.va_extent()
