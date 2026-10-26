@@ -1,0 +1,69 @@
+112,157c112
+< # Native public kernel-GR report release: real GPU payload/GET and host event, before Windows.
+< # Corrected benchmark fixture only; product/QEMU remains the pinned 6e3 revision.
+< fixture_source=618f0431815d037d4226b642ae37e76967353e90
+< git fetch --depth 1 origin "$fixture_source"
+< git worktree add --detach /workspace/bw-native-fixture "$fixture_source"
+< [ "$(git -C /workspace/bw-native-fixture rev-parse HEAD)" = "$fixture_source" ]
+< [ -z "$(git -C /workspace/bw-native-fixture status --porcelain --untracked-files=no)" ]
+< (
+<  cd /workspace/bw-native-fixture
+<  df -h /
+<  CARGO_TARGET_DIR=/workspace/native-fixture-target cargo build --release -p kf-harness --bin kf-gr-tier
+< ) >/root/prov/sweep_grtier_build.log 2>&1
+< python3 - <<'FIXTURE_RECEIPT'
+< import json,hashlib,subprocess
+< from pathlib import Path
+< p=Path('/workspace/native-fixture-target/release/kf-gr-tier')
+< j={'source':subprocess.check_output(['git','-C','/workspace/bw-native-fixture','rev-parse','HEAD'],text=True).strip(),'binary':str(p),'binary_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'product_unchanged':'6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b','separate_target':True}
+< Path('/root/prov/native_fixture_receipt.json').write_text(json.dumps(j,indent=2)+'\n')
+< FIXTURE_RECEIPT
+< native_gr_rc=0
+< env KF3_TRANSLATED_CE_RELAY=1 timeout 180 /workspace/native-fixture-target/release/kf-gr-tier >/root/prov/sweep_native_grtier.log 2>&1 || native_gr_rc=$?
+< echo "NATIVE_GR_FINDING rc=$native_gr_rc verdict_is_not_a_gate"
+< grep '^GR_TIER_VERDICT=' /root/prov/sweep_native_grtier.log || true
+< # The page is already measured for GB202 and GB206. This lease tests serving it.
+< # Tier 2 returned 0x1f previously; neither existing measurement is repeated.
+< echo PRECOMP_EXISTING_MEASUREMENTS_SUBTRACTED | tee /root/prov/precomp_tier3_exit.txt
+< python3 - <<'POST_PRECOMP'
+< import sys
+< sys.path.insert(0,'/root/sweep2/guard/blackwell');import phase_xid_guard as G
+< import json
+< from pathlib import Path
+< allowed=json.loads(Path('/root/prov/native_receipt.json').read_text())['approved_native_xid_lines']
+< assert tuple(G.N.xid_lines(G.N.kernel_snapshot()))==tuple(allowed),'new Xid during PRECOMP read is fatal'
+< POST_PRECOMP
+< # B1b: exact 3 pinned repeats + one same-width unpinned control; verdicts are findings.
+< if bash /root/sweep2/build_fuzz_fixture.sh; then
+<  flock -o /tmp/kayfabe-fastguest.lock python3 /root/sweep2/fuzz_findings.py \
+<   /workspace/bw3-fuzz-target/release/kayfabe-rm-ladder /root/prov/native_fuzz_findings.json
+< else
+<  echo NATIVE_FUZZ_FIXTURE_UNRUN_BUILD_FAILURE
+<  python3 - <<'FUZZ_UNRUN'
+< from pathlib import Path
+< import json
+< Path('/root/prov/native_fuzz_findings.json').write_text(json.dumps({'records':[], 'pinned_samples':0,'native_finding':None,'continue_windows':True,'reason':'fixture build failed','experiment_mode':'OBSERVATION','attestation':False})+'\n')
+< FUZZ_UNRUN
+< fi
+---
+> # BW11: gr-tier fixture, PRECOMP read and native fuzz omitted (not part of the one variable).
+174c129
+< bash /root/sweep2/build_candidates.sh &
+---
+> bash /root/sweep2/build_fix.sh &
+183a139
+> touch /root/prov/N0_EXPORT_ACK
+211,221d166
+< mapfile -t measured < <(python3 - <<'MEASURED_META'
+< import json,hashlib
+< from pathlib import Path
+< j=json.loads(Path('/root/prov/measured_binary.json').read_text())
+< assert j['source']=='48b027267a0e05c9ffdb4a049d34f4d719fd1837'
+< assert j['binary']=='/workspace/bench/kf3-bins/48b02726/qemu-system-x86_64'
+< assert j['tests_verified_before_arms'] is True
+< assert hashlib.sha256(Path(j['binary']).read_bytes()).hexdigest()==j['binary_sha256']
+< print(j['binary']);print(j['source'])
+< MEASURED_META
+< )
+240d184
+< [ "${#measured[@]}" = 2 ]

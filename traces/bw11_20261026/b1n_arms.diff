@@ -1,0 +1,14 @@
+33c33,41
+< 
+---
+>     {
+>         "run": "on_fix_probe",
+>         "kind": "windows",
+>         "label": "DIAGNOSTIC",
+>         "env": {"KF3_COMPLETION_PROBE": "1000"},
+>         "prep": None,
+>         "enable": "enable580_once.ps1",
+>         "enable_count": 1,
+>     },
+37a46
+>     "KF3_COMPLETION_PROBE": lambda run, value: value == "1000",
