@@ -100,6 +100,22 @@ fn an_unmap_is_exempt_because_it_names_no_memory() {
     );
 }
 
+#[test]
+fn sparse_coverage_may_be_larger_than_the_framebuffer() {
+    let mut sparse = run(0, 2 * SPAN, 1);
+    sparse.flags = 1 << 7;
+    assert_eq!(report(vec![sparse]).validate(), Ok(()));
+}
+
+#[test]
+fn sparse_coverage_needs_no_framebuffer() {
+    let mut sparse = run(0, 4096, 1);
+    sparse.flags = 1 << 7;
+    let mut r = report(vec![sparse]);
+    r.gpga_span = 0;
+    assert_eq!(r.validate(), Ok(()));
+}
+
 /// ★★★★★ **Every report the VA manager applies must be a DIFF against the committed
 /// placements** (`KFWR_HF_DIFF`, the commit-on-ack protocol, `kf_cuda::diffmodel`).
 #[test]
