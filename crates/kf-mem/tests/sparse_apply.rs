@@ -432,6 +432,7 @@ fn unchanged_sparse_neighbours_stay_accessible_during_a_middle_map() {
         1
     );
     assert!(!t.calls.borrow().contains(&"backed-unmap"));
+    assert!(!t.calls.borrow().contains(&"sparse-intent"));
 }
 
 #[test]

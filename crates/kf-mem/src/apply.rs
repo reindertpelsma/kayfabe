@@ -24,6 +24,8 @@ use kf_chip::sked::MessageLeaf;
 use kf_chip::usermode::{UsermodeLeaf, UsermodeMmio};
 use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD};
 
+mod sparse;
+
 /// One run of a diff, decoded from the report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DiffRun {
@@ -358,16 +360,25 @@ impl PermPolicy {
     /// One walk-report run → one [`DiffRun`].
     #[must_use]
     pub fn diff_run(self, m: &kf_cuda::abi::KfMapRun) -> DiffRun {
+        let sparse = m.flags & kf_cuda::abi::KFWR_RF_SPARSE != 0;
         DiffRun {
             unmap: m.op == kf_cuda::abi::KFWR_OP_UNMAP,
             va: m.va,
             len: m.len,
-            at: m.gpga,
-            ap: m.aperture(),
+            at: if sparse { 0 } else { m.gpga },
+            ap: if sparse {
+                crate::ledger::AP_SPARSE
+            } else {
+                m.aperture()
+            },
             held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
-            kind: m.kind(),
-            perm: self.host_perm(m.flags),
-            privileged: m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
+            kind: if sparse { 0 } else { m.kind() },
+            perm: if sparse {
+                kf_host::MapPerm::READ_WRITE
+            } else {
+                self.host_perm(m.flags)
+            },
+            privileged: !sparse && m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
             leaf: leaf_bytes(m.page_size()),
         }
     }
@@ -460,6 +471,9 @@ fn carve_reached(
 /// (`kf_cuda::diffmodel::commit`) moves the placement between classes. Where keeping would leave a
 /// mapping host RM cannot split under a later change, [`keep_only_what_stays_exact`] decides.
 fn same_mapping(u: &DiffRun, m: &DiffRun) -> bool {
+    if u.ap == crate::ledger::AP_SPARSE || m.ap == crate::ledger::AP_SPARSE {
+        return u.ap == m.ap;
+    }
     u.ap == m.ap
         && u.kind == m.kind
         && u.perm == m.perm
@@ -479,9 +493,11 @@ struct Kept {
 
 /// Whether `r` is a plain memory run (a usermode view or a SKED page keeps its own verbs).
 fn plain_run(r: &DiffRun, cfg: &ApplyCfg<'_>) -> bool {
-    cfg.usermode
-        .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
-        .is_none()
+    r.ap != crate::ledger::AP_SPARSE
+        && cfg
+            .usermode
+            .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+            .is_none()
         && kf_chip::sked::message_leaf(r.ap, r.kind) != Some(MessageLeaf::SkedReflected)
 }
 
@@ -514,11 +530,12 @@ fn maps_over<'m>(
 /// Only plain memory runs take part. O((U + M) log M).
 fn unchanged_pairs(runs: &[DiffRun], cfg: &ApplyCfg<'_>, withhold_privileged: bool) -> Vec<Kept> {
     let maps = maps_by_va(runs, |i| {
-        plain_run(&runs[i], cfg) && !(runs[i].privileged && withhold_privileged)
+        (plain_run(&runs[i], cfg) || runs[i].ap == crate::ledger::AP_SPARSE)
+            && !(runs[i].privileged && withhold_privileged)
     });
     let mut out = Vec::new();
     for (u, ur) in runs.iter().enumerate() {
-        if !ur.unmap || ur.held || !plain_run(ur, cfg) {
+        if !ur.unmap || ur.held || !(plain_run(ur, cfg) || ur.ap == crate::ledger::AP_SPARSE) {
             continue;
         }
         let u_end = ur.va.saturating_add(ur.len);
@@ -594,7 +611,10 @@ fn keep_only_what_stays_exact(
     for (u, mut ps) in by_u {
         let r = &runs[u];
         let end = r.va.saturating_add(r.len);
-        if let Some(view) = target.own_view(r.va, end) {
+        if let Some(view) = (r.ap != crate::ledger::AP_SPARSE)
+            .then(|| target.own_view(r.va, end))
+            .flatten()
+        {
             ps = ps
                 .iter()
                 .flat_map(|p| {
@@ -782,7 +802,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     let over: Vec<Vec<usize>> = runs
         .iter()
         .map(|r| {
-            if r.unmap && !r.held {
+            if r.unmap && (!r.held || r.ap == crate::ledger::AP_SPARSE) {
                 maps_over(runs, &all_maps, r.va, r.va.saturating_add(r.len)).collect()
             } else {
                 Vec::new()
@@ -844,12 +864,24 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     }
     link_fail(&mut out, &mut failed);
 
+    // Retire old sparse intent before admitting replacements; preserve blocks for every
+    // incoming mapping. Admit new sparse intent before backed unmaps, so an occupied
+    // NORMAL block takes the closed fallback rather than an invalid→sparse gap.
+    let sparse = sparse::Work::prepare(runs, cfg, extent, &reserved, &kept, &mut out, &mut failed);
+    sparse::retire(target, runs, &kept, &all_maps, &mut out, &mut failed);
+    link_fail(&mut out, &mut failed);
+    let sparse_admitted = sparse.admit(target, runs, &kept, &mut out, &mut failed);
+    link_fail(&mut out, &mut failed);
+
     // ── 2. Unmaps: the CHANGED pieces of every UNMAP run. An UNMAP already failed by a link keeps
     // its rigid mappings whole (its placement stays committed), but its changed pieces still go.
     // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent pieces go as ONE range (the union of exactly the
     // placements being removed); a refused range falls back piece by piece (GPU) or run by run.
     let mut pieces: Vec<(usize, u64, u64)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
+        if r.ap == crate::ledger::AP_SPARSE {
+            continue;
+        }
         if r.held {
             out.held_retired = out.held_retired.saturating_add(1);
             continue;
@@ -963,7 +995,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     let mut placed: Vec<Vec<(u64, u64)>> = vec![Vec::new(); n];
     let mut held_any = vec![false; n];
     for (i, r0) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
-        if failed[i] || plain_run(r0, cfg) {
+        if failed[i] || plain_run(r0, cfg) || r0.ap == crate::ledger::AP_SPARSE {
             continue;
         }
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
@@ -1072,6 +1104,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     link_fail(&mut out, &mut failed);
+    sparse.rollback(target, &sparse_admitted, &failed, &mut out);
 
     // ── 4. Verdicts of the MAP runs. A FAILED run's NEW pieces that were placed go again (the
     // walker re-emits the run; the ledger must hold nothing it does not commit) — never a kept
@@ -1099,6 +1132,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             .saturating_add(out.taken_down)
             .saturating_add(out.usermode_trapped)
             .saturating_add(out.sked_placed)
+            .saturating_add(out.sparse_placed)
+            .saturating_add(out.sparse_retired)
             > 0
     {
         match target.invalidate() {
@@ -2052,6 +2087,11 @@ mod tests {
                 },
                 6 => DiffRun {
                     privileged: true,
+                    ..plain
+                },
+                7 => DiffRun {
+                    ap: crate::ledger::AP_SPARSE,
+                    at: 0,
                     ..plain
                 },
                 16..=23 => DiffRun {
