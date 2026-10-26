@@ -1,0 +1,12 @@
+SPR1 task 3, code revision 5adef2a89
+Initial model: 26 failed, 2 passed (EXPECTED RED 31a1e62b2).
+Late admission rollback: 2 failed, 28 passed before fix (fc036b5f8).
+Initial roots: 2 failed, 3 passed before implementation (a34702e35).
+Final focused reservation suite: 43 passed.
+Final serial kf-host/kf-mem/kf-qemu: 836 passed, 0 failed, 7 ignored.
+Clippy all targets for the three changed crates: new=0 against existing debt.
+17 reservation/initial-space/session-budget mutants, minimum two killing tests.
+An initial regression found four assertions sharing an inline-test-module scanner assumption;
+an inline wrapper restored all six channel-boundary checks without changing assertions.
+The sparse internal kind was also moved outside encoded apertures: two new negative
+controls failed before that correction and all 29 apply tests pass afterward.

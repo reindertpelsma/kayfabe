@@ -1,0 +1,169 @@
+[
+  {
+    "mutant": "drop_admission_rollback",
+    "count": 2,
+    "killing_tests": [
+      "sparse::tests::a_late_sparse_admission_refusal_withdraws_the_first_new_tile",
+      "sparse::tests::a_refused_sparse_suffix_withdraws_all_new_intent"
+    ]
+  },
+  {
+    "mutant": "drop_empty_block_retry",
+    "count": 2,
+    "killing_tests": [
+      "sparse::tests::held_intent_in_a_different_tile_retries_after_dma_is_removed",
+      "sparse::tests::held_intent_is_retried_only_after_the_normal_block_empties"
+    ]
+  },
+  {
+    "mutant": "drop_empty_restore",
+    "count": 4,
+    "killing_tests": [
+      "sparse::tests::a_later_rm_refusal_restores_all_coarse_siblings",
+      "sparse::tests::a_refused_sparse_suffix_withdraws_all_new_intent",
+      "sparse::tests::a_late_sparse_admission_refusal_withdraws_the_first_new_tile",
+      "sparse::tests::first_rm_reservation_refusal_restores_empty_normal_coverage"
+    ]
+  },
+  {
+    "mutant": "drop_live_tracking",
+    "count": 8,
+    "killing_tests": [
+      "sparse::tests::a_cancelled_held_suffix_is_not_sparsified_on_retry",
+      "sparse::tests::cancelled_held_intent_never_appears_on_a_later_refresh",
+      "sparse::tests::full_sparse_retirement_preserves_a_backed_neighbour",
+      "sparse::tests::held_intent_in_a_different_tile_retries_after_dma_is_removed",
+      "sparse::tests::held_intent_is_retried_only_after_the_normal_block_empties",
+      "sparse::tests::populated_normal_dma_stays_invalid_at_another_tile",
+      "sparse::tests::populated_normal_vidmem_stays_invalid_around_the_backing",
+      "sparse::tests::sparse_retirement_preserves_a_backing_at_the_far_edge"
+    ]
+  },
+  {
+    "mutant": "drop_object_limit",
+    "count": 3,
+    "killing_tests": [
+      "sparse::tests::normal_object_exhaustion_never_places_a_backing_in_a_coarse_block",
+      "sparse::tests::sparse_object_exhaustion_is_refused_before_free",
+      "sparse::tests::sparse_object_exhaustion_in_the_middle_preserves_the_original_reservation"
+    ]
+  },
+  {
+    "mutant": "drop_replacement_preserve",
+    "count": 2,
+    "killing_tests": [
+      "sparse::tests::a_full_sparse_to_vidmem_replacement_has_no_invalid_gap",
+      "sparse::tests::a_full_sparse_to_dma_replacement_has_no_invalid_gap"
+    ]
+  },
+  {
+    "mutant": "drop_retained_count",
+    "count": 2,
+    "killing_tests": [
+      "sparse::tests::partial_retirement_preserves_unchanged_sparse_intent",
+      "sparse::tests::retirement_of_two_pages_preserves_the_other_sparse_intents"
+    ]
+  },
+  {
+    "mutant": "drop_sparse_intent_retirement",
+    "count": 3,
+    "killing_tests": [
+      "sparse::tests::a_cancelled_held_suffix_is_not_sparsified_on_retry",
+      "sparse::tests::all_sparse_intent_removed_frees_only_the_empty_block",
+      "sparse::tests::cancelled_held_intent_never_appears_on_a_later_refresh"
+    ]
+  },
+  {
+    "mutant": "ignore_populated_normal",
+    "count": 6,
+    "killing_tests": [
+      "sparse::tests::a_cancelled_held_suffix_is_not_sparsified_on_retry",
+      "sparse::tests::cancelled_held_intent_never_appears_on_a_later_refresh",
+      "sparse::tests::held_intent_is_retried_only_after_the_normal_block_empties",
+      "sparse::tests::held_intent_in_a_different_tile_retries_after_dma_is_removed",
+      "sparse::tests::populated_normal_vidmem_stays_invalid_around_the_backing",
+      "sparse::tests::populated_normal_dma_stays_invalid_at_another_tile"
+    ]
+  },
+  {
+    "mutant": "initial_blanket_sparse",
+    "count": 3,
+    "killing_tests": [
+      "sparse::initial::tests::a_refused_first_root_prevents_context_birth",
+      "sparse::initial::tests::a_refused_high_root_releases_the_low_root_before_context_birth",
+      "sparse::initial::tests::a_refused_third_root_releases_both_preceding_roots"
+    ]
+  },
+  {
+    "mutant": "leak_initial_roots",
+    "count": 2,
+    "killing_tests": [
+      "sparse::initial::tests::a_refused_third_root_releases_both_preceding_roots",
+      "sparse::initial::tests::a_refused_high_root_releases_the_low_root_before_context_birth"
+    ]
+  },
+  {
+    "mutant": "no_normal_presplit",
+    "count": 15,
+    "killing_tests": [
+      "sparse::tests::a_full_sparse_to_dma_replacement_has_no_invalid_gap",
+      "sparse::tests::a_later_rm_refusal_restores_all_coarse_siblings",
+      "sparse::tests::a_late_sparse_admission_refusal_withdraws_the_first_new_tile",
+      "sparse::tests::a_refused_sparse_suffix_withdraws_all_new_intent",
+      "sparse::tests::a_sparse_tile_at_a_normal_boundary_is_exact",
+      "sparse::tests::first_dma_population_at_the_far_edge_is_a_two_mib_tile",
+      "sparse::tests::first_vidmem_population_is_a_two_mib_tile",
+      "sparse::tests::first_rm_reservation_refusal_restores_empty_normal_coverage",
+      "sparse::tests::held_intent_in_a_different_tile_retries_after_dma_is_removed",
+      "sparse::tests::held_intent_is_retried_only_after_the_normal_block_empties",
+      "sparse::tests::normal_object_exhaustion_never_places_a_backing_in_a_coarse_block",
+      "sparse::tests::pieces_route_a_backed_row_across_two_normal_tiles",
+      "sparse::tests::sparse_dma_sparse_keeps_other_sparse_pages_accessible",
+      "sparse::tests::sparse_object_exhaustion_in_the_middle_preserves_the_original_reservation",
+      "sparse::tests::sparse_retirement_preserves_a_backing_at_the_far_edge"
+    ]
+  },
+  {
+    "mutant": "round_partial_sparse",
+    "count": 3,
+    "killing_tests": [
+      "sparse::tests::an_isolated_small_sparse_leaf_stays_invalid",
+      "sparse::tests::sixteen_derived_small_leaves_can_fill_one_exact_sparse_tile",
+      "sparse::tests::rounding_an_edge_sparse_leaf_would_absorb_a_negative_control"
+    ]
+  },
+  {
+    "mutant": "sparse_grain_two_mib",
+    "count": 2,
+    "killing_tests": [
+      "sparse::tests::a_hardware_sized_64k_leaf_run_is_honoured_exactly",
+      "sparse::tests::sixteen_derived_small_leaves_can_fill_one_exact_sparse_tile"
+    ]
+  },
+  {
+    "mutant": "stale_piece_routing",
+    "count": 2,
+    "killing_tests": [
+      "sparse::tests::pieces_route_through_the_new_sparse_handle",
+      "sparse::tests::pieces_route_a_backed_row_across_two_normal_tiles"
+    ]
+  },
+  {
+    "mutant": "swallow_initial_refusal",
+    "count": 3,
+    "killing_tests": [
+      "sparse::initial::tests::a_refused_first_root_prevents_context_birth",
+      "sparse::initial::tests::a_refused_high_root_releases_the_low_root_before_context_birth",
+      "sparse::initial::tests::a_refused_third_root_releases_both_preceding_roots"
+    ]
+  },
+  {
+    "mutant": "unbounded_session_claim",
+    "count": 3,
+    "killing_tests": [
+      "sparse::initial::tests::a_session_with_one_object_left_can_claim_exactly_one",
+      "sparse::initial::tests::an_initially_full_session_budget_cannot_create_another_object",
+      "sparse::initial::tests::concurrent_spaces_share_one_hard_object_limit"
+    ]
+  }
+]
