@@ -12,6 +12,7 @@
 pub mod birth;
 pub mod channel;
 pub mod event;
+pub mod sparse;
 pub mod tier;
 pub mod timer;
 pub use channel::{
