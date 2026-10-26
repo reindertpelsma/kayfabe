@@ -15,9 +15,11 @@ for (const path of ['/rent', '/availability?profile=check'])
 for (const repo of ['reindertpelsma/kayfabe', 'example/project'])
   test('tiny onstart golden template ' + repo, () => {
     const s = onstart(sha, repo);
+    // The sparse list itself is pinned by onstart-sparse.test.js; here the fixed frame around it.
+    const list = /<<'KF_SPARSE'\n([\s\S]+)\nKF_SPARSE\n/.exec(s)[1];
     assert.equal(
       s,
-      `#!/bin/bash\nset -eu\ngit clone --filter=blob:none --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit fetch --depth=1 origin ${sha}\ngit checkout --detach ${sha}\n[ "$(git rev-parse HEAD)" = '${sha}' ]\nexec bash scripts/ci/vast_onstart.sh\n`,
+      `#!/bin/bash\nset -eu\ngit clone --filter=blob:none --no-checkout https://github.com/${repo}.git /workspace/kf-ci-src\ncd /workspace/kf-ci-src\ngit config core.sparseCheckout true\ngit config core.sparseCheckoutCone false\nmkdir -p .git/info\ncat >.git/info/sparse-checkout <<'KF_SPARSE'\n${list}\nKF_SPARSE\ngit fetch --depth=1 origin ${sha}\ngit checkout --detach ${sha}\n[ "$(git rev-parse HEAD)" = '${sha}' ]\nexec bash scripts/ci/vast_onstart.sh\n`,
     );
     assert.ok(!s.includes('v1.'));
     assert.ok(!s.includes('KF_REPORT'));

@@ -1,0 +1,15 @@
+{"mutant": "account slots", "status": 1, "kills": ["account slots", "account slots four"], "ok": true}
+{"mutant": "profile slots", "status": 1, "kills": ["profile slots", "profile slots three"], "ok": true}
+{"mutant": "daily count", "status": 1, "kills": ["daily rentals", "daily rentals three"], "ok": true}
+{"mutant": "daily spend", "status": 1, "kills": ["daily spend", "daily spend tight"], "ok": true}
+{"mutant": "rolling spend", "status": 1, "kills": ["rolling spend", "rolling spend tight"], "ok": true}
+{"mutant": "credit reserve", "status": 1, "kills": ["credit reserve", "credit reserve tight"], "ok": true}
+{"mutant": "run attempt", "status": 1, "kills": ["same attempt", "same attempt nonce", "attempt row survives record retention 1", "attempt row survives record retention 2"], "ok": true}
+{"mutant": "SHA gap", "status": 1, "kills": ["same SHA", "same SHA rerun"], "ok": true}
+{"mutant": "older branch", "status": 1, "kills": ["older branch discovered", "older branch cross profile"], "ok": true}
+{"mutant": "newer branch", "status": 1, "kills": ["newer branch discovered 1", "newer branch discovered 2"], "ok": true}
+{"mutant": "bad-machine cap", "status": 1, "kills": ["bad-machine entries 257", "bad-machine entries 258"], "ok": true}
+{"mutant": "bad-machine entry", "status": 1, "kills": ["bad-machine entries 1", "bad-machine entries 2"], "ok": true}
+{"mutant": "configured bad machine", "status": 1, "kills": ["configured bad machine 1", "configured bad machine 2"], "ok": true}
+{"mutant": "reserved machine", "status": 1, "kills": ["same machine", "same machine different profiles"], "ok": true}
+{"mutant": "transaction removed", "status": 1, "kills": ["intent rollback at sha:", "intent rollback at cost:"], "ok": true}

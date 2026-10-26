@@ -308,6 +308,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+USER_AGENT = "kayfabe-vast-box/7"
+
+
 class HttpsTransport:
     """HTTPS POST to one fixed URL; no proxies, no redirects; token only in that header."""
 
@@ -329,7 +332,13 @@ class HttpsTransport:
 
     def post(self, url, body):
         """Return (status, parsed JSON or None); status None means no HTTP answer."""
-        headers = {"Content-Type": "application/json", "Authorization": "Bearer " + self.token}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + self.token,
+            # Cloudflare answers Python's default urllib User-Agent with 403 error 1010 before
+            # Access sees the request (measured on a real box, 2026-10-25).
+            "User-Agent": USER_AGENT,
+        }
         headers.update(self.access)
         request = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
@@ -360,7 +369,14 @@ class Limits:
         self.max_requests, self.hard_requests = 1500, 1950
         self.line_cap = 4000
         self.buffer_cap = 1 << 20
+        # When a cap binds, the END of the log is what survives (gate visibility, 2026-10-26): the
+        # last tail_posts chunks are reserved for it, and so are tail_requests requests.
+        self.tail_posts = 2
+        self.tail_requests = 8
         self.__dict__.update(kw)
+
+
+GAP_MARK = "[kf-report] %d bytes omitted\n"
 
 
 class LineCapper:
@@ -405,17 +421,58 @@ class Reporter:
         self.next_try, self.dead, self.fallback_used = 0.0, False, False
         self.progress_acked = False
         self.progress_refused = False
+        self.gap = 0  # bytes dropped since the last post; announced at the head of the next one
+        self.tail_mode = False  # a cap binds: only the newest tail_keep bytes are kept
+        self.finishing = False
         self.last_ok = self.last_post = self.clock()
 
     def say(self, message):
         print("[kf-report] " + message, flush=True)
 
     def feed(self, data):
-        text = self.decoder.decode(self.capper.feed(data))
-        if len(self.text) + len(text) > self.limits.buffer_cap:
-            self.omitted += len(text.encode())
-        else:
-            self.text += text
+        self.text += self.decoder.decode(self.capper.feed(data))
+        self._drop_oldest(self._tail_keep() if self.tail_mode else self.limits.buffer_cap)
+
+    def _tail_keep(self):
+        return self.limits.chunk * self.limits.tail_posts
+
+    def _drop_oldest(self, keep):
+        """Keep at most `keep` bytes of unsent text, the NEWEST ones; the gap is announced later."""
+        if len(self.text) * 4 <= keep:
+            return
+        raw = self.text.encode()
+        if len(raw) <= keep:
+            return
+        kept = raw[len(raw) - keep :].decode("utf-8", "ignore")
+        dropped = len(raw) - len(kept.encode())
+        self.text = kept
+        self.omitted += dropped
+        self.gap += dropped
+
+    def _over(self, body_size, reserve):
+        """Would this post break a cap? `reserve` keeps room for the end of the log."""
+        limits = self.limits
+        posts = min(limits.tail_posts, limits.max_posts // 2) if reserve else 0
+        requests = min(limits.tail_requests, limits.max_requests // 4) if reserve else 0
+        size = min(limits.tail_posts * (limits.chunk + 256), limits.max_bytes // 4) if reserve else 0
+        return (
+            self.posts + posts >= limits.max_posts
+            or self.bytes + body_size + size > limits.max_bytes
+            or self.requests + requests >= limits.max_requests
+        )
+
+    def _fit_tail(self):
+        """At the end: the newest text that the remaining post, byte and request caps still allow."""
+        limits = self.limits
+        posts = max(0, min(limits.max_posts - self.posts, limits.max_requests - self.requests))
+        room = max(0, limits.max_bytes - self.bytes)
+        self._drop_oldest(min(posts * limits.chunk, room))
+        while self.text:
+            size = len(self.text.encode()) + len(GAP_MARK % (self.gap + 10**9))
+            needed = -(-size // limits.chunk)
+            if needed <= posts and len(json.dumps(self.text)) + 80 * needed <= room:
+                return
+            self._drop_oldest(max(0, len(self.text.encode()) * 7 // 8 - 1))
 
     def _message(self, kind, text=None, result=None):
         self.seq += 1
@@ -436,21 +493,28 @@ class Reporter:
         limits = self.limits
         if not self.text or not (force or len(self.text) >= limits.chunk or self._flush_due()):
             return
-        chunk = self.text[: limits.chunk]
-        if len(chunk.encode()) > limits.chunk:
-            chunk = chunk.encode()[: limits.chunk].decode("utf-8", "ignore")
-        body_size = len(json.dumps({"seq": self.seq + 1, "kind": "log", "text": chunk}))
-        if (
-            self.posts >= limits.max_posts
-            or self.bytes + body_size > limits.max_bytes
-            or self.requests >= limits.max_requests
-        ):
-            self.omitted += len(self.text.encode())
-            self.text = ""
+        if self.finishing:
+            self._fit_tail()
+            if not self.text:
+                return
+        prefix = GAP_MARK % self.gap if self.gap else ""
+        room = limits.chunk - len(prefix)
+        chunk = self.text[:room]
+        if len(chunk.encode()) > room:
+            chunk = chunk.encode()[:room].decode("utf-8", "ignore")
+        body_size = len(json.dumps({"seq": self.seq + 1, "kind": "log", "text": prefix + chunk}))
+        if self._over(body_size, reserve=not self.finishing):
+            if self.finishing:
+                self.omitted += len(self.text.encode())
+                self.text = ""
+            else:
+                self.tail_mode = True
+                self._drop_oldest(self._tail_keep())
             return
         self.text = self.text[len(chunk) :]
         self.posts += 1
-        self._message("log", chunk)
+        self._message("log", prefix + chunk)
+        self.gap = 0
         self.bytes += len(self.pending["body"])
 
     def _flush_due(self):
@@ -521,6 +585,7 @@ class Reporter:
     def finish(self, result, note, fallback=None):
         """Drain the text, then deliver `result` (if any). Returns the broker's ack or None."""
         self.fallback = fallback
+        self.finishing = True
         end = self.clock() + self.limits.final_budget
         built = result is None
         while not self.dead and self.clock() < end:

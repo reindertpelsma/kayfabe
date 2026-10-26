@@ -3,13 +3,18 @@
 Worker text is display-only. No checkout, cache, binary/artifact input or upload.
 """
 
-import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, urllib.parse
+import contextlib, dataclasses, hashlib, http.client, io, json, math, os, re, secrets, signal, sys, time, traceback, urllib.parse
 from pathlib import Path
 
 MAX_RESPONSE = 262144
 # Status protocol: bump with defaults.json statusProtocol whenever the status shape changes.
 STATUS_PROTOCOL = 6
 MAX_LOG = 4194304
+# Display policy for the box log (gate visibility, 2026-10-26): the job log shows the HEAD and the
+# TAIL of the box output inside the one display budget (65000 bytes, 200 lines, see Runner.show),
+# with an explicit marker for the middle. The tail is where a payload's FINAL SUMMARY lives.
+HEAD_BYTES, HEAD_LINES = 24000, 100
+TAIL_BYTES, TAIL_LINES = 16000, 70
 STATES = {
     "NONE",
     "CREATING",
@@ -64,6 +69,19 @@ def reply_line(status, content_type):
         + str(code)
         + ", content-type "
         + clean(content_type or "none")
+    )
+
+
+def rejected_line(error):
+    """The one trusted line for a 200 reply that failed the runner's own check.
+
+    Only the line number of the raise inside runner.py (an int taken from the traceback of our
+    own code): never a field name, value, header or body.
+    """
+    frames = traceback.extract_tb(error.__traceback__)
+    number = frames[-1].lineno if frames else None
+    return "runner: Worker reply rejected by runner.py check at line " + str(
+        number if type(number) is int else 0
     )
 
 
@@ -133,6 +151,27 @@ def strict_json(raw):
     return value
 
 
+# A run of 32+ [A-Za-z0-9_-] characters is blanked as a possible token, EXCEPT a snake_case test name
+# (2026-10-26, gate run 40263112941: libtest prints `<name> --- FAILED` and 60-character names were
+# blanked, leaving `[redacted] --- FAILED`). Kept only if: lowercase words joined by `_`, at least
+# three, each at most 20 characters, at most 128 characters in all, at most one digit in five. Hex,
+# base64url, mixed-case, hyphenated and digit-heavy strings still match the generic rule; configured
+# secrets and token families are replaced by value or pattern regardless. src/sanitize.js and
+# scripts/ci/vast_payload.py (is_test_identifier) hold the same grammar; test/fixtures/scrub-vectors.json
+# pins all three.
+SNAKE_NAME = re.compile(r"[a-z][a-z0-9]{0,19}(?:_[a-z0-9]{1,20}){2,}")
+
+
+def blank_run(match):
+    run = match[0]
+    keep = (
+        len(run) <= 128
+        and SNAKE_NAME.fullmatch(run)
+        and sum(c.isdigit() for c in run) * 5 <= len(run)
+    )
+    return run if keep else "[redacted]"
+
+
 def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
     """Allow TAB/LF, printable ASCII and precomposed Latin letters U+00C0..FF
     excluding multiplication/division signs. No other Unicode is displayed.
@@ -159,7 +198,7 @@ def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
     text = re.sub(
         r"\b(?:gh[pousr]_[A-Za-z0-9]{20,255}|github_pat_[A-Za-z0-9_]{20,255})\b", "[redacted]", text
     )
-    text = re.sub(r"[A-Za-z0-9_-]{32,}", "[redacted]", text)
+    text = re.sub(r"[A-Za-z0-9_-]{32,}", blank_run, text)
     text = re.sub(
         r":{2,}", lambda x: (": " * (len(x[0]) // 2) + (":" if len(x[0]) % 2 else "")), text
     ).replace("##[", "# [")
@@ -185,6 +224,35 @@ def scrub(raw, max_bytes=65536, max_lines=200, max_line=1000, redactions=()):
         "".join(rows) + ("[" + str(dropped) + " bytes dropped by runner]\n" if dropped else ""),
         dropped,
     )
+
+
+def line_cost(line, max_line=1000):
+    """Display cost of one line as scrub renders it: "[untrusted] " + the line (<= max_line) + LF."""
+    body = line[:-1] if line.endswith("\n") else line
+    return len("[untrusted] ") + min(len(body.encode()), max_line) + 1
+
+
+def take_head(text, max_bytes, max_lines):
+    """Split `text` after the last whole line that fits both budgets: (shown, rest)."""
+    used = count = cut = 0
+    for line in text.splitlines(keepends=True):
+        cost = line_cost(line)
+        if count >= max_lines or used + cost > max_bytes:
+            break
+        used, count, cut = used + cost, count + 1, cut + len(line)
+    return text[:cut], text[cut:]
+
+
+def take_tail(text, max_bytes, max_lines):
+    """Split `text` before the first of the last whole lines that fit both budgets: (rest, shown)."""
+    used = count = 0
+    cut = len(text)
+    for line in reversed(text.splitlines(keepends=True)):
+        cost = line_cost(line)
+        if count >= max_lines or used + cost > max_bytes:
+            break
+        used, count, cut = used + cost, count + 1, cut - len(line)
+    return text[:cut], text[cut:]
 
 
 def integer(v, lo=0, hi=MAX_LOG):
@@ -575,6 +643,11 @@ class Runner:
         self.displayed = 0
         self.display_lines = 0
         self.display_dropped = 0
+        # Head of the box log: shown live until it is full; the rest is kept in self.raw only.
+        self.head_bytes = 0
+        self.head_lines = 0
+        self.head_full = False
+        self.head_end = 0
         self.infrastructure_failure = False
         self.rent_busy = False
         # A configured RENTING_DISABLED refusal of /rent: terminal, the Worker never touched Vast.
@@ -707,6 +780,35 @@ class Runner:
         self.displayed += len(frame.encode())
         self.emit(frame)
 
+    def show_head(self, text):
+        """Live display of the box log: only its first HEAD_BYTES / HEAD_LINES are shown."""
+        if self.head_full:
+            return
+        shown, rest = take_head(text, HEAD_BYTES - self.head_bytes, HEAD_LINES - self.head_lines)
+        if shown:
+            self.show(shown)
+            self.head_end += len(shown.encode())
+            self.head_bytes += sum(line_cost(x) for x in shown.splitlines(keepends=True))
+            self.head_lines += len(shown.splitlines(keepends=True))
+        if rest:
+            self.head_full = True
+
+    def show_tail(self):
+        """The end of the box log, after the head, with the size of the gap in between."""
+        raw = "".join(self.raw).encode()
+        if not self.head_full:
+            # The whole log fit in the head budget; the bounded final log repeats it as before.
+            self.show("".join(self.raw))
+            return
+        rest = raw[self.head_end :].decode("utf-8", errors="ignore")
+        room_bytes = max(0, min(TAIL_BYTES, 65000 - self.displayed - 512))
+        room_lines = max(0, min(TAIL_LINES, 199 - self.display_lines))
+        skipped, tail = take_tail(rest, room_bytes, room_lines)
+        middle = len(raw) - self.head_end - len(tail.encode())
+        if middle > 0:
+            self.emit("[" + str(middle) + " bytes dropped from the middle]\n")
+        self.show(tail)
+
     def pages(self, target):
         while self.cursor < target:
             code, data = self.retry_read("/logs/" + self.ctx["run"] + "?cursor=" + str(self.cursor))
@@ -745,7 +847,7 @@ class Runner:
             if data["log_sha256"] != self.hash:
                 raise Invalid()
             self.cursor = data["next_cursor"]
-            self.show("".join(chunks))
+            self.show_head("".join(chunks))
 
     def execute(self):
         result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
@@ -818,7 +920,15 @@ class Runner:
                 request["preferences"] = self.ctx["preferences"]
             code, data = self.retry_read("/rent", "POST", request)
             for attempt in range(600):
-                data = validate_status(data, self.ctx, self.manifest, code)
+                try:
+                    data = validate_status(data, self.ctx, self.manifest, code)
+                except Diagnosed:
+                    raise
+                except Invalid as error:
+                    # Emitted now, before the /stop the caller sends, so the job log keeps it
+                    # even when the run ends right after.
+                    self.emit(rejected_line(error) + "\n")
+                    raise
                 if code != 200:
                     if self.infrastructure_failure:
                         time.sleep(20)
@@ -876,7 +986,7 @@ class Runner:
         if self.diagnostic and result["verified"] != 1:
             self.emit(self.diagnostic + "\n")
         self.emit("::group::Final bounded log: UNTRUSTED Worker/box output\n")
-        self.show("".join(self.raw))
+        self.show_tail()
         self.emit(
             "["
             + str(self.display_dropped)

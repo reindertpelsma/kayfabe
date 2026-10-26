@@ -96,7 +96,7 @@ GRACE.
 runner sends `POST /stop/<run>` and the Worker destroys the box at once; the PASS 5 / FAIL 10
 minute grace below is only the fallback when that best-effort stop fails.
 [CODE READ: src/index.js, src/onstart.js] States are NONE, CREATING, BOOTING,
-TESTING, GRACE and MANUAL. Creation stores absolute boot (40 minutes), hard
+TESTING, GRACE and MANUAL. Creation stores absolute boot (75 minutes), hard
 (3 hours), soft (hard minus 10 minutes) and manual-ceiling (8 hours) deadlines.
 Empty logs count as heartbeats: the sender emits one within 10 minutes; 15 minutes
 without an authenticated post destroys the box. PASS retains 5 minutes of grace;

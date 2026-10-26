@@ -54,10 +54,26 @@ def merge_rows(text, rc, sha):
     rows = []
     if only(r"^HEAD=([0-9a-f]{40}) CHECKOUT=[^\n]+$", text, "infrastructure") != sha:
         raise EvidenceError("infrastructure")
+    # [2026-10-26] The bar no longer runs the GPU-free crate tests (CI's `stable` job does, on every
+    # commit). The legacy totals line stays red; the opt-in with-KVM stage (kvm_tests.sh) is graded
+    # here, and a request without exactly one passing result is a failure, never a silent skip.
     if re.search(r"^TESTS passed [0-9]+ failed [1-9]", text, re.M):
         raise EvidenceError("kf_tests")
-    count = only(r"^TESTS passed ([1-9][0-9]*) failed 0$", text, "kf_tests", rows)
-    rows.append(row("kf_tests", int(count)))
+    requested = len(re.findall(r"^KVM_TESTS_REQUESTED=1$", text, re.M))
+    results = re.findall(
+        r"^KVM_TESTS passed ([0-9]+) failed ([0-9]+) kvm_ran=([0-9]+) kvm_skipped=([0-9]+)$",
+        text,
+        re.M,
+    )
+    if re.search(r"^KVM_TESTS_RC=[1-9]", text, re.M):
+        raise EvidenceError("kvm_tests", rows)
+    if requested or results:
+        if requested != 1 or len(results) != 1:
+            raise EvidenceError("kvm_tests", rows)
+        passed, failed, ran, skipped = map(int, results[0])
+        if passed < 1 or failed or ran < 1 or skipped:
+            raise EvidenceError("kvm_tests", rows)
+        rows.append(row("kvm_tests", passed))
     only(r"^GATES_RC=0$", text, "gates", rows)
     only(r"^V3_GATES_SUMMARY ([^\n]+)$", text, "gates", rows)
     only(r"^V3_GATES_SUMMARY pass=9 fail=0 gate10=(PASS|FALLBACK)$", text, "gates", rows)
@@ -123,13 +139,237 @@ def ladder_rows(text, rc, mode, sha):
 def red_line(line):
     return bool(
         re.search(
-            r"^(?:BOX|DRIVER|TREE|LADDER|FG|KF3|GATES|SUITE|CARGO)_RC=[1-9][0-9]*\b", line, re.M
+            r"^(?:BOX|DRIVER|TREE|LADDER|FG|KF3|GATES|SUITE|CARGO|KVM_TESTS)_RC=[1-9][0-9]*\b",
+            line,
+            re.M,
         )
         or re.search(r"^(?:BARE|FAST)_CELL_ARM\b.* verdict=(?!PASS\b)[A-Z_]+\b", line, re.M)
         or re.search(r"^V3_GATES_SUMMARY\b.* fail=[1-9]", line, re.M)
         or re.search(r"^TESTS passed [0-9]+ failed [1-9]", line, re.M)
+        or re.search(r"^KVM_TESTS passed [0-9]+ failed [1-9]", line, re.M)
+        or re.search(r"^KVM_TESTS passed .* kvm_skipped=[1-9]", line, re.M)
         or re.search(r"^CL_ROW .* verdict=(?!PASS\b)[A-Z_]+\b", line, re.M)
     )
+
+
+FAIL_LINE = re.compile(
+    r"^(?:error(?:\[E\d+\])?:|NOT_READY\b|KF_[A-Z_]*(?:REFUSED|FAIL)\b|"
+    r"[^\n]*(?:\bFATAL\b|\bpanicked at\b|BENCH_TREE_FAILED|\bFAILED\b|NEW HOST Xid))"
+)
+ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b[ -/]*[@-~]")
+SUMMARY_BEGIN = "KF_FINAL_SUMMARY_BEGIN"
+SUMMARY_END = "KF_FINAL_SUMMARY_END"
+SUMMARY_LIMIT = 4096
+LINE_LIMIT = 240
+# Records of the stages of the current run, in order; the FINAL SUMMARY is built from them.
+STAGE_RECORDS = []
+PROV_DIR = "/root/prov"
+# provision_full.sh writes one log per step; its RC line names the step whose log has the cause.
+PROVISION_STEP_LOGS = {
+    "BOX": "box.log",
+    "DRIVER": "driver.log",
+    "TREE": "tree.log",
+    "FG": "fg.log",
+    "KF3": "kf3.log",
+}
+
+
+def printable(line, limit=LINE_LIMIT):
+    line = ANSI.sub("", line)
+    line = "".join(c if " " <= c <= "~" else " " if c == "\t" else "" for c in line)
+    line = line.strip()
+    return line if len(line) <= limit else line[: limit - 3] + "..."
+
+
+def read_lines(path, limit=2 * 1024 * 1024):
+    try:
+        with open(path, "rb") as source:
+            data = source.read(limit)
+    except OSError:
+        return []
+    return [ANSI.sub("", s) for s in data.decode("utf-8", errors="replace").splitlines()]
+
+
+def is_failing(line):
+    return bool(red_line(line) or FAIL_LINE.search(line))
+
+
+def first_failing_line(paths):
+    """First red line of the stage's logs, in the order given; else the last line printed."""
+    last = ""
+    for path in paths:
+        lines = read_lines(path)
+        for line in lines:
+            if is_failing(line):
+                return printable(line)
+        for line in reversed(lines):
+            if line.strip() and not last:
+                last = line
+    return "no red line found; last line: " + printable(last) if last else "no output found"
+
+
+# Test names. libtest's terse mode prints `<name> --- FAILED`, its verbose mode `test <name> ... FAILED`,
+# and both end with a `failures:` list of indented names. Measured 2026-10-26 (gate run 40263112941):
+# the Worker/runner scrubber blanks any run of 32+ [A-Za-z0-9_-] characters, so a 60-character test
+# name reached the log as `[redacted] --- FAILED`.
+TEST_NAME = r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*"
+FAILED_TEST = re.compile(r"^(?:test )?(" + TEST_NAME + r")(?: \.\.\.| ---) FAILED$")
+FAILURE_ITEM = re.compile(r"^    (" + TEST_NAME + r")$")
+PANIC = re.compile(r"\bpanicked at\b")
+FAILED_TEST_LIMIT = 20
+# A snake_case test name: lowercase words, at least three, each at most 20 characters, at most 128
+# characters in all and at most one digit in five. Hex, base64url, mixed-case, hyphenated and
+# digit-heavy strings are not. ci/vast-broker (sanitize.js, runner.py scrub) uses the same grammar to
+# decide which 32+ character runs a scrubber may keep; scrub-vectors.json pins both sides.
+SNAKE_NAME = re.compile(r"[a-z][a-z0-9]{0,19}(?:_[a-z0-9]{1,20}){2,}")
+LONG_RUN = re.compile(r"[A-Za-z0-9_-]{32,}")
+FOLD = 30
+
+
+def is_test_identifier(run):
+    return (
+        len(run) <= 128
+        and SNAKE_NAME.fullmatch(run) is not None
+        and sum(c.isdigit() for c in run) * 5 <= len(run)
+    )
+
+
+def fold_identifiers(text):
+    """Split test-name-shaped 32+ character runs into pieces of at most 30 joined by "~".
+
+    A scrubber that has not been redeployed still blanks the long form; the pieces stay readable.
+    Anything that is not test-name shaped is left whole, so it still reaches the scrubber whole.
+    """
+    return LONG_RUN.sub(
+        lambda m: (
+            "~".join(m[0][i : i + FOLD] for i in range(0, len(m[0]), FOLD))
+            if is_test_identifier(m[0])
+            else m[0]
+        ),
+        text,
+    )
+
+
+def failed_tests(paths, limit=FAILED_TEST_LIMIT):
+    """(names, total): the failed test names in the logs, in order, de-duplicated, at most `limit`."""
+    seen = []
+    for path in paths:
+        state = None  # "head" after `failures:`, "list" while its indented names continue
+        for line in read_lines(path):
+            if line == "failures:":
+                state = "head"
+                continue
+            item = FAILURE_ITEM.match(line) if state else None
+            state = "list" if item else None
+            found = FAILED_TEST.match(line) or item
+            if found and found[1] not in seen:
+                seen.append(found[1])
+    return seen[:limit], len(seen)
+
+
+def first_panic(paths):
+    """The first panic line of the logs and the message line after it, bounded; "" if none."""
+    for path in paths:
+        lines = read_lines(path)
+        for i, line in enumerate(lines):
+            if PANIC.search(line):
+                following = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                return printable(line.strip() + (" | " + following if following else ""))
+    return ""
+
+
+def step_cause(root, first):
+    """The last lines of the provisioning step log named by a failing RC line."""
+    match = re.match(r"(BOX|DRIVER|TREE|FG|KF3)_RC=", first)
+    if not match:
+        return ""
+    lines = [s for s in read_lines(Path(root) / PROVISION_STEP_LOGS[match[1]]) if s.strip()]
+    return " | ".join(printable(s, 100) for s in lines[-3:])
+
+
+def summary_lines(result, records):
+    stage_rows, fail_rows, suite_rows = [], [], []
+    for record in records:
+        if "rc" not in record:
+            stage_rows.append("stage name=" + record["name"] + " result=NOT_RUN")
+            continue
+        text = (
+            "stage name="
+            + record["name"]
+            + " rc="
+            + str(record["rc"])
+            + " duration_ms="
+            + str(record["duration_ms"])
+            + " result="
+            + record["result"]
+        )
+        if record.get("reason"):
+            text += " reason=" + record["reason"]
+        stage_rows.append(text)
+        if record.get("first_fail"):
+            fail_rows.append(
+                "first_fail stage="
+                + record["name"]
+                + " line="
+                + fold_identifiers(record["first_fail"])
+            )
+        if record.get("panic"):
+            fail_rows.append(
+                "panic stage=" + record["name"] + " line=" + fold_identifiers(record["panic"])
+            )
+        for name in record.get("failed_tests", []):
+            fail_rows.append(
+                "failed_test stage=" + record["name"] + " name=" + fold_identifiers(printable(name))
+            )
+        more = record.get("failed_total", 0) - len(record.get("failed_tests", []))
+        if more > 0:
+            fail_rows.append("failed_tests_more stage=%s count=%d" % (record["name"], more))
+        if record.get("cause"):
+            fail_rows.append("cause stage=" + record["name"] + " log_tail=" + record["cause"])
+    for suite in result["suites"]:
+        text = "suite name=%s pass=%d fail=%d skip=%d" % (
+            suite["name"],
+            suite["pass"],
+            suite["fail"],
+            suite["skip"],
+        )
+        suite_rows.append((suite["fail"] > 0, text))
+    return stage_rows, suite_rows, fail_rows
+
+
+def final_summary(result, records):
+    """One bounded block; it is printed last so a tail-limited log always shows it."""
+    begin = "%s verdict=%s stages=%d" % (SUMMARY_BEGIN, result["verdict"], len(records))
+    stage_rows, suite_rows, fail_rows = summary_lines(result, records)
+    budget = SUMMARY_LIMIT - len(begin) - len(SUMMARY_END) - 2 - 64
+    keep = {}
+    failed = {i for i, record in enumerate(records) if record.get("result") in ("FAIL", "TIMEOUT")}
+    priority = (
+        [("stage", i, s) for i, s in enumerate(stage_rows) if i in failed]
+        + [("fail", i, s) for i, s in enumerate(fail_rows)]
+        + [("suite", i, s) for i, (bad, s) in enumerate(suite_rows) if bad]
+        + [("stage", i, s) for i, s in enumerate(stage_rows) if i not in failed]
+        + [("suite", i, s) for i, (bad, s) in enumerate(suite_rows) if not bad]
+    )
+    dropped = 0
+    for kind, index, text in priority:
+        text = printable(text, LINE_LIMIT + 40)
+        if len(text) + 1 > budget:
+            dropped += 1
+            continue
+        budget -= len(text) + 1
+        keep[(kind, index)] = text
+    lines = [begin]
+    for kind in ("stage", "suite", "fail"):
+        lines += [keep[k] for k in sorted(keep) if k[0] == kind]
+    if dropped:
+        lines.append("truncated lines=%d" % dropped)
+    lines.append(SUMMARY_END)
+    return "\n".join(lines)
+
+
+def print_final_summary(result):
+    print(final_summary(result, STAGE_RECORDS), flush=True)
 
 
 def watch_delta(text, rc):
@@ -319,13 +559,16 @@ def persist_result(destination, result):
 
 def execute_stages(stages, soft, result, destination, runner=run_bounded):
     """Persist the finished prefix even when a later suite times out or fails."""
+    records = STAGE_RECORDS
+    records[:] = [dict(name=stage["name"]) for stage in stages]
     persist_result(destination, result)
-    for stage in stages:
+    for stage, record in zip(stages, records):
         name = stage["name"]
         print("KF_PAYLOAD_STAGE_START name=" + name, flush=True)
         start = time.monotonic()
         rc = runner(stage["command"], soft, stage["output"], stage["progress"])
         elapsed = int((time.monotonic() - start) * 1000)
+        record.update(rc=rc, duration_ms=elapsed, result="PASS")
         print(
             "KF_PAYLOAD_STAGE_END name=" + name + " rc=" + str(rc) + " duration_ms=" + str(elapsed),
             flush=True,
@@ -343,10 +586,19 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             append_arm_failure(result)
             result["verdict"] = "FAIL"
             persist_result(destination, result)
+            record.update(result="TIMEOUT" if rc == 124 else "FAIL", reason=failure)
+            files = [*stage["progress"], stage["output"], *stage.get("detail", [])]
+            record["first_fail"] = first_failing_line(files)
+            record["failed_tests"], record["failed_total"] = failed_tests(files)
+            record["panic"] = first_panic(files)
+            if name == "provision":
+                record["cause"] = step_cause(PROV_DIR, record["first_fail"])
             print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)
+            print_final_summary(result)
             return 1
     result["verdict"] = "PASS"
     persist_result(destination, result)
+    print_final_summary(result)
     return 0
 
 
@@ -567,6 +819,7 @@ def main():
     evidence.mkdir(parents=True, exist_ok=True)
     destination = Path("/workspace/kf-result.json")
     result = {"verdict": "FAIL", "suites": [], "hardware": hardware()}
+    STAGE_RECORDS.clear()
 
     def terminate(*_):
         global STOP
@@ -597,6 +850,10 @@ def main():
             KF_DEVICE="kf3",
             CARGO_TARGET_DIR=str(root / "target"),
             CARGO_BUILD_JOBS=str(min(8, os.cpu_count() or 2)),
+            # Quiet only: cargo's own progress and colour. Lint level and RUSTFLAGS are not touched.
+            CARGO_TERM_QUIET="true",
+            CARGO_TERM_COLOR="never",
+            CARGO_TERM_PROGRESS_WHEN="never",
             BASH_ENV=str(root / "scripts/ci/vast_payload_hooks.sh"),
             KF_PAYLOAD_ROOT=str(root),
             KF_PAYLOAD_XID_ALLOWED=str(evidence / "xid-allowed.jsonl"),
@@ -614,7 +871,7 @@ def main():
         os.environ["PATH"] = str(Path.home() / ".cargo/bin") + ":" + os.environ["PATH"]
         tag = "ci" + nonce[:16]
 
-        def make_stage(name, command, output, progress, grade):
+        def make_stage(name, command, output, progress, grade, detail=()):
             watch_tag = tag + "_" + name
             watcher = bench / ("xid_" + watch_tag + ".log")
             return dict(
@@ -622,6 +879,8 @@ def main():
                 command=watched(command, root, watch_tag),
                 output=output,
                 progress=progress,
+                # Logs read only for the FINAL SUMMARY's first failing line.
+                detail=[*detail, watcher],
                 grade=lambda rc: stage_grade(root, watch_tag, watcher, grade, rc),
             )
 
@@ -647,6 +906,7 @@ def main():
                 evidence / "provision.run",
                 [Path("/root/prov/prov.log")],
                 provision_grade,
+                [Path("/root/prov") / x for x in PROVISION_STEP_LOGS.values()],
             )
         ]
         for mode in ["host"]:
@@ -675,6 +935,19 @@ def main():
                 evidence / "merge.run",
                 [merge, Path("/root/prov") / (tag + "_host.log"), bench / (tag + "_suite.out")],
                 lambda rc: merge_rows(bounded_text(merge), rc, sha),
+                [
+                    Path("/root/prov") / (tag + "_" + x)
+                    for x in [
+                        "tests.log",
+                        "gates.log",
+                        "kf3.log",
+                        "client.log",
+                        "fg.log",
+                        "suite.run",
+                        "census_selftest.log",
+                        "births.log",
+                    ]
+                ],
             )
         )
         path = bench / ("cl_" + tag + "_guest.out")
@@ -700,11 +973,13 @@ def main():
         result["suites"].append(row(error.name, failed=1))
         persist_result(destination, result)
         print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)
+        print_final_summary(result)
         return 1
     except (KeyError, ValueError, OSError, subprocess.SubprocessError, UnicodeError):
         result["suites"].append(row("infrastructure", failed=1))
         persist_result(destination, result)
         print("KF_PAYLOAD_FAIL suite=infrastructure", flush=True)
+        print_final_summary(result)
         return 1
     finally:
         signal.signal(signal.SIGTERM, old_term)

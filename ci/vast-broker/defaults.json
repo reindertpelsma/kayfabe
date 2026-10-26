@@ -5,7 +5,7 @@
   "reserve": 8,
   "dailyCount": 4,
   "gapHours": 24,
-  "bootMinutes": 40,
+  "bootMinutes": 75,
   "hardMinutes": 180,
   "softMarginMinutes": 10,
   "heartbeatMinutes": 10,
