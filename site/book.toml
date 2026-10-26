@@ -1,0 +1,16 @@
+[book]
+title = "kayfabe documentation"
+language = "en"
+src = "src"
+
+[build]
+create-missing = false
+
+[output.html]
+theme = "theme"
+git-repository-url = "https://github.com/reindertpelsma/kayfabe"
+no-section-label = true
+additional-js = ["theme/versions.js"]
+
+[output.html.playground]
+runnable = false

@@ -6,15 +6,8 @@ const actual = await readFile(
   new URL('../../../.github/workflows/gpu-vast.yml', import.meta.url),
   'utf8',
 );
-const bindings =
-  '          WORKER_URL: ${{ secrets.VAST_BROKER_URL }}\n          WORKER_PATH: ${{ secrets.VAST_BROKER_PATH }}\n';
-const canonical = actual
-  .replace('      WORKER_URL: ${{ vars.VAST_BROKER_URL }}\n', '')
-  .replace(
-    '        id: broker\n        shell: bash\n        env:\n',
-    '        id: broker\n        shell: bash\n        env:\n' + bindings,
-  );
-const safe = actual.includes('secrets.VAST_BROKER_URL') ? actual : canonical;
+// FALSIFIER WK1 domain: only the public URL changes context; path and Access stay secrets.
+const safe = actual.replace('secrets.VAST_BROKER_URL', 'vars.VAST_BROKER_URL');
 const errors = (text, extra = {}) => checkWorkflows({ 'gpu-vast.yml': text, ...extra });
 const rejected = (text, extra) =>
   assert.ok(
@@ -28,18 +21,23 @@ const injectBroker = (text, line) => {
   assert.ok(at > start && at < end, 'broker fixture scope');
   return text.slice(0, at) + line + '\n' + text.slice(at);
 };
-test('actual broker uses Actions secrets only inside its execution step', () => {
-  assert.doesNotMatch(actual, /vars\.VAST_BROKER/);
-  assert.match(actual, /          WORKER_URL: \$\{\{ secrets\.VAST_BROKER_URL \}\}/);
+test('actual broker binds public URL and secret path only inside its execution step', () => {
+  assert.doesNotMatch(actual, /secrets\.VAST_BROKER_URL/);
+  assert.match(actual, /          WORKER_URL: \$\{\{ vars\.VAST_BROKER_URL \}\}/);
   assert.match(actual, /          WORKER_PATH: \$\{\{ secrets\.VAST_BROKER_PATH \}\}/);
   const job = actual.split('  gpu:\n')[1].split('  report:\n')[0];
   assert.doesNotMatch(job.split('    steps:')[0], /VAST_BROKER_URL|VAST_BROKER_PATH/);
 });
-test('canonical broker step secret bindings pass the guard', () =>
+test('canonical broker public URL and secret bindings pass the guard', () =>
   assert.deepEqual(errors(safe), []));
 for (const name of ['URL', 'PATH']) {
-  test('public variable cannot replace broker ' + name + ' secret', () =>
-    rejected(safe.replace('secrets.VAST_BROKER_' + name, 'vars.VAST_BROKER_' + name)),
+  test('broker binding context is exact for ' + name, () =>
+    rejected(
+      safe.replace(
+        (name === 'URL' ? 'vars.' : 'secrets.') + 'VAST_BROKER_' + name,
+        (name === 'URL' ? 'secrets.' : 'vars.') + 'VAST_BROKER_' + name,
+      ),
+    ),
   );
   for (const id of ['pending', 'report', 'run'])
     test('another job cannot receive ' + name + ' secret ' + id, () =>
@@ -124,7 +122,7 @@ for (const output of ['url', 'path'])
       ),
     ),
   );
-for (const name of ['WORKER_URL', 'BROKER_PATH_PREFIX'])
+for (const name of ['BROKER_PATH_PREFIX'])
   test('Worker endpoint binding is a secret ' + name, async () => {
     const config = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
     assert.doesNotMatch(config, new RegExp('^' + name + '\\s*=', 'm'));
@@ -152,3 +150,21 @@ for (const variable of ['box_text', 'raw_response'])
       ),
     ),
   );
+
+for (const filename of ['gpu-vast.yml', 'gpu-vast-sweep.yml'])
+  test('domain public URL guard and environment ' + filename, async () => {
+    const workflow = await readFile(
+      new URL('../../../.github/workflows/' + filename, import.meta.url),
+      'utf8',
+    );
+    assert.match(workflow, /    environment: gpu-vast/);
+    assert.match(workflow, /WORKER_URL: \$\{\{ vars\.VAST_BROKER_URL \}\}/);
+    assert.deepEqual(checkWorkflows({ 'gpu-vast.yml': safe, [filename]: workflow }), []);
+    const old = workflow.replace('vars.VAST_BROKER_URL', 'secrets.VAST_BROKER_URL');
+    assert.ok(checkWorkflows({ 'gpu-vast.yml': safe, [filename]: old }).length);
+  });
+test('domain WORKER_URL is public config, while prefix remains secret', async () => {
+  const config = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  assert.match(config, /^WORKER_URL = "https:\/\/ci\.kayfabe\.dev"$/m);
+  assert.doesNotMatch(config, /^BROKER_PATH_PREFIX\s*=/m);
+});

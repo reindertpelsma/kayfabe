@@ -1,5 +1,14 @@
 # Public rental attribution and same-box host reference
 
+## Current master refresh, 2026-10-26
+
+MEASURED 2026-10-26, combined source with master rev 04773c348: all 2185 Node tests, 47 real workerd TAP tests and seven host-reference Python tests pass. combined-mutations.jsonl records 18/18 mutants with at least two killing cases each. The two conflict files are resolved using a regenerated module, preserving current master public vars and budget accounting.
+
+MEASURED 2026-10-26, /tmp/wk1-ids-combined-bundle/index.js: current combined bundle SHA-256 is df9825f613ec3ce790ca51e54978c55fb0f7603af29dbeb194bbc42b23677819. deployment.json and toml carry this hash; the original 7c098c7c... hash below is superseded. The branch incorporates current master with a normal merge/fast-forward push to respect the lane's no-force rule. No deployment or Cloudflare setting change is performed.
+
+The original implementation evidence follows.
+
+
 STATUS: LIVE, 2026-10-26. CODE READ at base b6e308e3e: admission discarded offer geolocation, provider hourly price and host driver label; the literal renderer hid non-Ada models; the active BASE runner omitted the instance id and only retained summary metadata after a final result.
 
 Hypothesis: the requested identity fields are missing from status/rendering, and the existing pre-guest native stage can supply host_reference without adding a stage. Falsifier, stated before tests: baseline status/rendering already supplies those fields and the payload already emits that enum.

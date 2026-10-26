@@ -1,0 +1,12 @@
+{
+  "zola": {
+    "version": "0.23.6",
+    "url": "https://github.com/getzola/zola/releases/download/v0.23.6/zola-v0.23.6-x86_64-unknown-linux-gnu.tar.gz",
+    "sha256": "8f5132b3522412d04e395e0b25f6d68613ad272a873e54a2b3ebf664873024a4"
+  },
+  "mdbook": {
+    "version": "0.4.52",
+    "url": "https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz",
+    "sha256": "c0b903f01dd8f4edc644372ad2b80b1fdddd12552d37b6a098657cbd8eddd768"
+  }
+}

@@ -20,6 +20,7 @@ export const WRANGLER_VERSION = '4.152.0';
 // `wrangler secret put`, and Cloudflare Access is dashboard-only (the Worker reads no ACCESS_*;
 // the box pair BOX_ACCESS_ID/BOX_ACCESS_SECRET is a secret it only passes through).
 export const ALLOWED = new Set([
+  'WORKER_URL',
   'OWNER_GITHUB_ID',
   'RENTING_ENABLED',
   'DENIED_COUNTRIES',
@@ -45,9 +46,6 @@ export const ALLOWED = new Set([
   'MAX_CONCURRENT_CHECK',
   'MAX_CONCURRENT_SWEEP',
 ]);
-// WORKER_URL is a Worker secret (`wrangler secret put WORKER_URL`). The vars file may carry it
-// only so the helper checks its format before any upload; it is never sent as a var.
-export const CHECK_ONLY = new Set(['WORKER_URL']);
 const bareOrigin = (value) => {
   try {
     const u = new URL(value);
@@ -73,7 +71,7 @@ export function parseVars(text) {
     if (/^ACCESS_/.test(key))
       fail(key + ' is retired: Cloudflare Access is configured in the dashboard only');
     if (/^BOX_ACCESS_/.test(key)) fail(key + ' is a secret: use wrangler secret put');
-    if (!ALLOWED.has(key) && !CHECK_ONLY.has(key))
+    if (!ALLOWED.has(key))
       fail(key + ' is not an allowed public var (secrets: wrangler secret put)');
     vars.set(key, value);
   });
@@ -109,6 +107,10 @@ function main(argv) {
   const toml = readFileSync(resolve(broker, 'wrangler.toml'), 'utf8');
   if (tomlVar(toml, 'OWNER_GITHUB_ID') !== vars.get('OWNER_GITHUB_ID'))
     fail('OWNER_GITHUB_ID differs from wrangler.toml');
+  if (!bareOrigin(tomlVar(toml, 'WORKER_URL')))
+    fail('wrangler.toml WORKER_URL must be the bare https origin');
+  if (vars.has('WORKER_URL') && tomlVar(toml, 'WORKER_URL') !== vars.get('WORKER_URL'))
+    fail('WORKER_URL differs from wrangler.toml');
   const manifest = JSON.parse(readFileSync(resolve(broker, 'deployment.json'), 'utf8'));
   if (manifest.bundle_sha256 !== tomlVar(toml, 'DEPLOYED_BUNDLE_SHA256'))
     fail('deployment.json and wrangler.toml DEPLOYED_BUNDLE_SHA256 differ');
@@ -147,7 +149,7 @@ function main(argv) {
       for (const [key, value] of vars) result = result.split(value).join('<' + key + '>');
       return result;
     };
-    const upload = [...vars].filter(([key]) => !CHECK_ONLY.has(key));
+    const upload = [...vars];
     process.stdout.write(
       'deploy: bundle ' +
         digest +
@@ -156,9 +158,13 @@ function main(argv) {
         ' bytes) verified; vars ' +
         upload.map(([key]) => key).join(',') +
         ' (values withheld)' +
-        (vars.has('WORKER_URL') ? '; WORKER_URL format checked (secret, not uploaded)' : '') +
         (dryRun ? '; dry run' : '') +
         '\n',
+    );
+    // A secret and a var cannot have the same name. Only the coordinator runs this migration.
+    process.stdout.write(
+      'deploy: before first public-var deploy, coordinator must run: ' +
+        'wrangler secret delete WORKER_URL\n',
     );
     // Upload exactly the verified bytes; wrangler does not bundle a second time.
     const run = wrangle([

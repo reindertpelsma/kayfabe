@@ -2,6 +2,33 @@ import { runnerBootstrap, sweepBootstrap } from './workflow-bootstrap.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
 import { readdir, readFile } from 'node:fs/promises';
+const pagesCondition =
+  "${{ github.event_name != 'pull_request' && " +
+  "(github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')) }}";
+
+function pagesBoundary(text, jobs) {
+  const build = jobs.find((j) => j.id === 'build'),
+    deploy = jobs.find((j) => j.id === 'deploy');
+  const same = (value, expected) =>
+    JSON.stringify(Object.entries(value ?? {}).sort()) ===
+    JSON.stringify(Object.entries(expected).sort());
+  const condition = deploy?.body.match(/^    if: >-\n((?:      .*\n?)+)/m)?.[1] ?? '';
+  if (
+    jobs.length !== 2 ||
+    !build ||
+    !deploy ||
+    !same(build.grants, { contents: 'read' }) ||
+    !same(deploy.grants, { pages: 'write', 'id-token': 'write' }) ||
+    JSON.stringify(deploy.needs) !== JSON.stringify(['build']) ||
+    condition.replace(/\s/g, '') !== pagesCondition.replace(/\s/g, '') ||
+    !/^    environment:\n      name: github-pages\s*$/m.test(deploy.body) ||
+    !/^  pull_request:/m.test(text) ||
+    /pull_request_target:|\bsecrets\./.test(text) ||
+    [...text.matchAll(/\buses:\s*(\S+)/g)].some((m) => !/@[0-9a-f]{40}$/.test(m[1]))
+  )
+    return ['site.yml: requires read-only build and guarded, pinned Pages-only deploy'];
+  return [];
+}
 function jobsIn(text) {
   const lines = text.split('\n');
   const jobs = [];
@@ -84,11 +111,11 @@ function jobsIn(text) {
 }
 function endpointBoundary(filename, text, jobs) {
   const accessAlias = /\bCF_ACCESS_CLIENT_(?:ID|SECRET)\b/;
-  const secretBindings = {
-    WORKER_URL: 'VAST_BROKER_URL',
-    WORKER_PATH: 'VAST_BROKER_PATH',
-    CF_ACCESS_CLIENT_ID: 'VAST_BROKER_ACCESS_ID',
-    CF_ACCESS_CLIENT_SECRET: 'VAST_BROKER_ACCESS_SECRET',
+  const endpointBindings = {
+    WORKER_URL: 'vars.VAST_BROKER_URL',
+    WORKER_PATH: 'secrets.VAST_BROKER_PATH',
+    CF_ACCESS_CLIENT_ID: 'secrets.VAST_BROKER_ACCESS_ID',
+    CF_ACCESS_CLIENT_SECRET: 'secrets.VAST_BROKER_ACCESS_SECRET',
   };
   const errors = [],
     fail = (reason) => errors.push('Broker endpoint ' + reason);
@@ -123,13 +150,13 @@ function endpointBoundary(filename, text, jobs) {
       for (const line of step.split('\n')) {
         if (/^        env:\s*$/.test(line)) environment = true;
         else if (/^        \S/.test(line)) environment = false;
-        const match = /^          ([A-Z_]+): \$\{\{ secrets\.([A-Z_]+) \}\}$/.exec(line);
+        const match = /^          ([A-Z_]+): \$\{\{ ((?:vars|secrets)\.[A-Z_]+) \}\}$/.exec(line);
         if (
           environment &&
           steps.length === 1 &&
           /^        id: broker\s*$/m.test(step) &&
           match &&
-          secretBindings[match[1]] === match[2]
+          endpointBindings[match[1]] === match[2]
         ) {
           found.add(match[1]);
           continue;
@@ -137,7 +164,7 @@ function endpointBoundary(filename, text, jobs) {
         kept.push(line);
       }
       if (!['WORKER_URL', 'WORKER_PATH'].every((x) => found.has(x)))
-        fail('requires two step-env secret bindings');
+        fail('requires public URL and secret path step-env bindings');
       if (
         /\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE|broker_origin|broker_host|broker_base|audience)\b/.test(
           kept.join('\n').split(/^        run:/m)[0],
@@ -245,6 +272,20 @@ export function checkWorkflows(workflows) {
     }
     const jobs = jobsIn(text),
       map = new Map(jobs.map((j) => [j.id, j]));
+    if (filename === 'site.yml') errors.push(...pagesBoundary(text, jobs));
+    let outsideJobs = text;
+    for (const job of jobs) {
+      outsideJobs = outsideJobs.replace(job.body, '');
+      const gpuOidc = ['gpu-vast.yml', 'gpu-vast-sweep.yml'].includes(filename) && job.id === 'gpu';
+      const releaseOidc = filename === 'release-build.yml' && job.id === 'build';
+      const pagesOidc = filename === 'site.yml' && job.id === 'deploy';
+      if (job.grants['id-token'] === 'write' && !gpuOidc && !releaseOidc && !pagesOidc)
+        errors.push(filename + ': OIDC outside approved GPU/release/Pages job');
+      if (job.grants.pages === 'write' && !pagesOidc)
+        errors.push(filename + ': Pages write outside site deploy');
+    }
+    if (/id-token:\s*write/.test(outsideJobs))
+      errors.push(filename + ': workflow-level OIDC permission is forbidden');
     errors.push(...endpointBoundary(filename, text, jobs));
     const reaches = (job, seen = new Set()) => {
       if (seen.has(job.id)) return false;
