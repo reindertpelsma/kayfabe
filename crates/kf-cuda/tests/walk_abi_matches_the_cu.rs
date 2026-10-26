@@ -935,6 +935,10 @@ fn the_report_constants_match_the_header() {
     assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
     assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
     assert_eq!(
+        parse("KFWR_RF_SPARSE"),
+        u64::from(kf_cuda::abi::KFWR_RF_SPARSE)
+    );
+    assert_eq!(
         parse("KFWR_RF_READ_ONLY"),
         u64::from(kf_cuda::abi::KFWR_RF_READ_ONLY)
     );

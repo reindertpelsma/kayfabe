@@ -58,7 +58,8 @@ pub const KF_MAX_SCOPE: usize = 256;
 /// so only this number (and the PTX's `.param`-independent semantics) tells a PTX built before it
 /// — which writes a 64-byte header — from one that writes 392: the host would otherwise read
 /// 328 bytes of the next region as samples.
-pub const KF_ABI_VERSION: u32 = 6;
+/// 7 (SPR1): sparse placements and explicit sparse/PDE PCF setup in former padding.
+pub const KF_ABI_VERSION: u32 = 7;
 
 /// Refusal samples one walk's report carries. Mirrors `KF_REFUSAL_SAMPLES` in `kf_walk.h`.
 pub const KF_REFUSAL_SAMPLES: usize = 8;
@@ -213,8 +214,12 @@ pub struct KfFormat {
     pub root_align: u32,
     /// The first active slot — where the root table sits.
     pub first_dir: u8,
-    /// Explicit padding.
-    pub pad0: [u8; 3],
+    /// Emit address-free sparse leaf runs when 1; default 0 preserves the legacy report.
+    pub sparse_twin: u8,
+    /// VER3 directory PCF width (distinct from the leaf PCF width).
+    pub pde_pcf_bits: u8,
+    /// VER3 directory sparse-with-ATS PCF enumerant.
+    pub pde_sparse_ats: u8,
     /// The "entry is valid" bit.
     pub valid_bit: u8,
     /// First bit of the aperture nibble.
@@ -962,7 +967,9 @@ pub fn kf_format_ver2() -> KfFormat {
     f.small_ps = PS_4K;
     f.root_align = 4096;
     f.first_dir = 1;
-    f.pad0 = [0; 3];
+    f.sparse_twin = 0;
+    f.pde_pcf_bits = 0;
+    f.pde_sparse_ats = 0;
     f.valid_bit = 0;
     f.ap_lo = 1;
     f.ap_bits = 2;
@@ -1120,6 +1127,8 @@ pub fn kf_format_ver3() -> KfFormat {
         pad: 0,
     };
     f.pcf_sparse = 1;
+    f.pde_pcf_bits = 3;
+    f.pde_sparse_ats = 3;
     f.kind = KfField {
         lo: 8,
         bits: 4,

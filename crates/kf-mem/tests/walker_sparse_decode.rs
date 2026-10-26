@@ -100,8 +100,12 @@ fn nv4k_with_stale_payload_is_not_a_sparse_leaf() {
 }
 
 #[test]
-fn valid_volatile_is_not_a_sparse_leaf_on_either_format() {
+fn valid_volatile_is_not_a_sparse_leaf_on_ver2() {
     agrees(kf_format_ver2(), 9);
+}
+
+#[test]
+fn valid_volatile_is_not_a_sparse_leaf_on_ver3() {
     agrees(kf_format_ver3(), 9);
 }
 

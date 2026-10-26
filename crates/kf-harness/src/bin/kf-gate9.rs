@@ -225,7 +225,7 @@ fn key(r: &KfMapRun) -> (u16, u64, u64, u64, u32, bool) {
         r.va,
         r.len,
         r.gpga,
-        r.flags & (RF_AP.bits() | perm),
+        r.flags & (RF_AP.bits() | perm | kf_cuda::abi::KFWR_RF_SPARSE),
         r.flags & KFWR_RF_HELD != 0,
     )
 }

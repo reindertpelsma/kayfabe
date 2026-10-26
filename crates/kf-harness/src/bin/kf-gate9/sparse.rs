@@ -20,7 +20,15 @@ fn tree(v3: bool, big: bool, raw: u64, stale_small: bool) -> (Image, u64) {
     img.put64(parent, if v3 { ver3::pde(bp) } else { big_pde(bp) });
     img.put64(parent + 8, if v3 { ver3::pde(sp) } else { pde(sp) });
     for i in 0..2 {
-        let word = if raw & 1 != 0 { raw + i * 0x10000 } else { raw };
+        let word = if raw & 1 != 0 {
+            if v3 {
+                ver3::pte(DATA + i * 0x10000)
+            } else {
+                pte(DATA + i * 0x10000)
+            }
+        } else {
+            raw
+        };
         img.put64(if big { bp } else { sp } + i * 8, word);
         if big && stale_small {
             img.put64(sp + i * 128, if v3 { ver3::pte(DATA) } else { pte(DATA) });
@@ -46,8 +54,8 @@ fn scenario(l: &mut Checks, v3: bool, big: bool, enabled: bool) -> Result<(), St
     } else {
         kf_format_ver2()
     };
-    // ABI 6 padding reserved for the ABI 7 default-OFF sparse switch.
-    fmt.pad0[0] = u8::from(enabled);
+    // Explicit setup policy: existing gates keep their default-OFF descriptors.
+    fmt.sparse_twin = u8::from(enabled);
     let cfg = WalkCfg {
         table_version: fmt.table_version,
         ..WalkCfg::default()
@@ -107,6 +115,16 @@ fn wanted(fmt: KfFormat, raw: u64, ps: u64, class: u32, enabled: bool) -> Vec<Kf
     let sparse = kf_mem::sparse::classify_leaf(&fmt, raw) == kf_mem::sparse::LeafState::Sparse;
     if raw & 1 == 0 && !(enabled && sparse) {
         return vec![];
+    }
+    if sparse || ps == 0x10000 {
+        return vec![KfMapRun {
+            va: 0,
+            gpga: if sparse { 0 } else { DATA },
+            len: 2 * ps,
+            flags: class | if sparse { SPARSE } else { 0 },
+            op: KFWR_OP_MAP,
+            pdb_index: 0,
+        }];
     }
     (0..2)
         .map(|i| KfMapRun {
