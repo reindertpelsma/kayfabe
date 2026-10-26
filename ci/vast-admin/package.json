@@ -1,0 +1,11 @@
+{
+  "name": "kayfabe-vast-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "jose": "6.2.13"
+  }
+}
