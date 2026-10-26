@@ -40,12 +40,14 @@ for (const id of [null, undefined])
     await call('/seed', [
       ['cost:100-1', { started, ended: now, price: 0.5, bandwidthCost: 0, ttl: 3600000 }],
       ['record:100-1', { key: '100-1', started, ended: now, closed: 'GONE', id, price: 0 }],
+      ['ended:100-1', now],
     ]);
     const before = await call('/snapshot');
     const admin = await call('/admin/list');
     assert.equal(admin.data.budget.profiles.check.count_today, 0);
     assert.equal(admin.data.budget.rolling_usd, 0);
     assert.deepEqual(await call('/snapshot'), before);
+    if (id === undefined) await call('/expire', { now: now + 2 });
     const r = await call('/reserve', {
       record: {
         key: '101-1',
@@ -64,4 +66,11 @@ for (const id of [null, undefined])
       credit: 20,
     });
     assert.equal(r.status, 200, JSON.stringify(r.data));
+    if (id === null) await call('/expire', { now: now + 2 });
+    const rows = (await call('/snapshot')).data;
+    assert.equal(
+      rows.some(([key]) => key === 'record:100-1'),
+      false,
+    );
+    assert.equal(rows.find(([key]) => key === 'cost:100-1')[1].created, false);
   });

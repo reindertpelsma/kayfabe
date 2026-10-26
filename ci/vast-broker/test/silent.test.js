@@ -16,11 +16,17 @@ for (const [name, phase, http] of [
   ['rent-503', 'rent', '5xx'],
   ['rent-502', 'rent', '5xx'],
   ['no-offers', 'rent', '4xx'],
+  ['no-preferences', 'rent', '4xx'],
   ['bundle', 'rent', '2xx'],
   ['failed-result', 'result', '2xx'],
   ['manifest', 'manifest', 'none'],
   ['preferences', 'preferences', 'none'],
   ['oidc-json', 'oidc', 'none'],
+  ['oidc-shape', 'oidc', 'none'],
+  ['oidc-timeout', 'oidc', 'none'],
+  ['output-pass', 'output', 'none'],
+  ['summary', 'summary', 'none'],
+  ['missing-summary', 'setup', 'none'],
   ['output', 'rent', '4xx'],
 ])
   test('silent nonzero controller emits one trusted diagnosis ' + name, () => {
@@ -39,6 +45,8 @@ for (const [name, phase, http] of [
     assert.match(lines[0], new RegExp('http=' + http + '\\b'));
     assert.match(lines[0], /state=[A-Z_]+/);
     assert.doesNotMatch(lines[0], /PRIVATE-SENTINEL|broker\.example|pppppppp|mock-token/);
+    if (name === 'no-offers') assert.match(lines[0], /NO_ALLOWED_OFFERS/);
+    if (name === 'no-preferences') assert.match(lines[0], /NO_ALLOWED_PREFERENCE/);
     if (name.startsWith('availability-5')) {
       assert.equal(r.calls.filter((x) => x === 'availability').length, 6);
       assert.equal(r.calls.includes('rent'), false);
@@ -79,7 +87,15 @@ for (const id of [null, undefined])
       await ledger.budgets({ ...configuration(env), dailyCount: 1 }, clock, 0.1);
       assert.ok(await storage.get('cost:100-1'), 'the attempt receipt is retained');
     });
-for (const patch of [{ id: '900' }, { ended: null }, { closed: 'UNAVAILABLE' }, { started: 1 }])
+for (const patch of [
+  { id: '900' },
+  { id: '901' },
+  { ended: null },
+  { closed: 'UNAVAILABLE' },
+  { closed: 'BOOT_TIMEOUT' },
+  { started: 1 },
+  { started: clock - 500 },
+])
   test('silent legacy uncertain or real rental still counts ' + JSON.stringify(patch), async () => {
     const storage = new MemoryStorage(),
       ledger = new Ledger(storage);
@@ -101,4 +117,18 @@ for (const patch of [{ id: '900' }, { ended: null }, { closed: 'UNAVAILABLE' }, 
     const s = await ledger.budgetSummary(configuration(env), clock);
     assert.equal(s.profiles.check.count_today, 1);
     assert.ok(s.rolling_usd > 0);
+  });
+
+for (const bytes of [2000, 3000])
+  test('silent diagnostic stays one bounded line ' + bytes, () => {
+    const p = spawnSync(
+      'python3',
+      ['-I', new URL('./silent_runner_fixture.py', import.meta.url).pathname, 'bounded-' + bytes],
+      { encoding: 'utf8' },
+    );
+    assert.equal(p.status, 0, p.stderr);
+    const line = JSON.parse(p.stdout).line;
+    assert.ok(line.length <= 1024);
+    assert.equal(line.split('\n').length, 2);
+    assert.match(line, /phase=availability state=UNAVAILABLE http=5xx status=503/);
   });

@@ -18,6 +18,20 @@ spec.loader.exec_module(m)
 scope = {}
 exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
 case = sys.argv[1]
+if case.startswith("bounded-"):
+    print(
+        json.dumps(
+            {
+                "line": m.diagnostic_line(
+                    "runner: controlled\nrunner: duplicate " + "x" * int(case.split("-")[1]),
+                    "availability",
+                    "UNAVAILABLE",
+                    503,
+                )
+            }
+        )
+    )
+    raise SystemExit(0)
 sentinel = "PRIVATE-SENTINEL"
 m.time.sleep = lambda _: None
 calls = []
@@ -32,6 +46,10 @@ error = {
 
 def client(url, method="GET", headers=None, body=None):
     if url.startswith("https://oidc.example"):
+        if case == "oidc-timeout":
+            raise TimeoutError(sentinel)
+        if case == "oidc-shape":
+            return m.Reply(200, {"content-type": "application/json"}, b'{"value":false}')
         if case == "oidc-json":
             return m.Reply(200, {"content-type": "application/json"}, b"bad-json")
         return m.Reply(200, {"content-type": "application/json"}, b'{"value":"a.b.c"}')
@@ -51,13 +69,16 @@ def client(url, method="GET", headers=None, body=None):
             raise RuntimeError(sentinel)
     elif route == "rent":
         data, status = error, 409
-        if case == "no-offers":
-            data = {**error, "reason": "NO_ALLOWED_OFFERS"}
+        if case in ("no-offers", "no-preferences"):
+            data = {
+                **error,
+                "reason": "NO_ALLOWED_OFFERS" if case == "no-offers" else "NO_ALLOWED_PREFERENCE",
+            }
         elif case == "rent-refusal":
             data = {**error, "state": "NOT_ELIGIBLE"}
         elif case.startswith("rent-5"):
             status = int(case.rsplit("-", 1)[1])
-        elif case in ("bundle", "failed-result"):
+        elif case in ("bundle", "failed-result", "output-pass"):
             nonce = json.loads(body)["runner_nonce"]
             data = {
                 "state": "NONE",
@@ -79,8 +100,10 @@ def client(url, method="GET", headers=None, body=None):
                 "runner_nonce": nonce,
                 "log_sha256": "0" * 64,
                 **manifest,
-                **scope["extra_status"]("FAIL"),
+                **scope["extra_status"]("PASS" if case == "output-pass" else "FAIL"),
             }
+            if case == "output-pass":
+                data["verdict"] = "PASS"
             if case == "bundle":
                 data["bundle_sha256"] = "c" * 64
             status = 200
@@ -106,8 +129,12 @@ with tempfile.TemporaryDirectory(prefix="wk1-silent-") as directory:
     os.environ.clear()
     os.environ.update(
         {
-            "GITHUB_OUTPUT": str(root / ("missing/output" if case == "output" else "output")),
-            "GITHUB_STEP_SUMMARY": str(root / "summary"),
+            "GITHUB_OUTPUT": str(
+                root / ("missing/output" if case in ("output", "output-pass") else "output")
+            ),
+            "GITHUB_STEP_SUMMARY": str(
+                root / ("missing/summary" if case == "summary" else "summary")
+            ),
             "GITHUB_EVENT_PATH": str(root / "event"),
             "GITHUB_SHA": "d" * 40,
             "GITHUB_EVENT_NAME": "pull_request_target",
@@ -121,6 +148,8 @@ with tempfile.TemporaryDirectory(prefix="wk1-silent-") as directory:
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "mock-token",
         }
     )
+    if case == "missing-summary":
+        os.environ.pop("GITHUB_STEP_SUMMARY")
     sys.argv = ["runner.py", str(root / "manifest")]
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         try:

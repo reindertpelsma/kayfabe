@@ -166,6 +166,23 @@ export class Ledger {
       if (typeof at === 'number' && now < at + cfg.logRetention) continue;
       const key = index.slice('ended:'.length),
         record = await this.get('record:' + key);
+      // Preserve confirmed legacy no-instance proof before deleting its only old record.
+      if (
+        record &&
+        record.id == null &&
+        record.closed === 'GONE' &&
+        Number.isFinite(record.ended)
+      ) {
+        const cost = await this.get('cost:' + key);
+        if (cost && cost.created === undefined && cost.started === record.started)
+          await this.put('cost:' + key, {
+            ...cost,
+            ended: record.ended,
+            created: false,
+            price: 0,
+            bandwidthCost: 0,
+          });
+      }
       for (let i = 0; i < (record?.logChunks ?? 0); i++) {
         await this.storage.delete('log:' + key + ':' + i);
         await this.storage.delete('log-hash:' + key + ':' + i);
@@ -201,6 +218,21 @@ export class Ledger {
     for (const [key, stored] of entries) {
       let v = stored;
       if (key === 'cost:' + excludeKey) continue;
+      // A settled legacy failure can retain an old priced cost receipt. Durable no-instance
+      // evidence applies even when that receipt already has an end (and no created marker).
+      if (v.created === undefined) {
+        const record = await this.get('record:' + key.slice(5));
+        if (
+          record &&
+          record.id == null &&
+          record.closed === 'GONE' &&
+          Number.isFinite(record.ended) &&
+          record.started === v.started
+        ) {
+          v = { ...v, ended: record.ended, created: false, price: 0, bandwidthCost: 0 };
+          if (prune) await this.put(key, v);
+        }
+      }
       // Recover old partial settlements from the authoritative durable record, without writes.
       if (v.ended === null) {
         const record = await this.get('record:' + key.slice(5));
@@ -241,7 +273,10 @@ export class Ledger {
       if (v.created === undefined && v.ended !== null && v.price === 0 && bandwidth === 0) {
         const record = await this.get('record:' + key.slice(5));
         uncreated =
-          record?.id === null && record.closed === 'GONE' && Number.isFinite(record.ended);
+          record != null &&
+          record.id == null &&
+          record.closed === 'GONE' &&
+          Number.isFinite(record.ended);
       }
       if (uncreated && (v.price !== 0 || bandwidth !== 0)) refuse();
       const daily =
