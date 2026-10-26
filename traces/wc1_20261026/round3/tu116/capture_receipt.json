@@ -1,0 +1,288 @@
+{
+  "hashes_ok": true,
+  "files": 18,
+  "bytes": 27166297,
+  "cells": [
+    {
+      "cell": "startup1",
+      "capabilities": {
+        "family": "turing",
+        "architecture": 22,
+        "implementation": 8,
+        "boot_path": "libos-mailbox",
+        "method_name": "nearby",
+        "cmd_bytes": 262144,
+        "stat_bytes": 262144,
+        "element_bytes": 4096,
+        "region_pages": 129,
+        "table_max_pages": 512,
+        "queue_max_bytes": 1048576
+      },
+      "discovery": {
+        "method": 4,
+        "layout": 1,
+        "bar0": 3,
+        "gpu_count": 1,
+        "mailbox_reads": 281,
+        "mailbox_status": 2,
+        "scan_bytes": 4504268800,
+        "scan_passes": 0,
+        "scan_candidates": 3,
+        "scan_backoff_resets": 3,
+        "scan_backoff_ticks": 17897725
+      },
+      "stats": {
+        "steps": 60425,
+        "attaches": 1,
+        "detaches": 1,
+        "messages_cmd": 1462,
+        "messages_status": 1481,
+        "lost_messages_exact": 0,
+        "seq_gap_messages": 0,
+        "lapped_messages": 0,
+        "loss_records": 0,
+        "torn_reads": 0,
+        "invalid_elements": 0,
+        "unsupported": 0,
+        "read_failures": 0,
+        "resyncs": 2,
+        "sink_dropped": 0,
+        "records_refused": 0,
+        "events_lost": 0,
+        "sink_loss_pending": 0
+      },
+      "capture": {
+        "records": 2950,
+        "end_seen": 1,
+        "file_ok": 1,
+        "by_kind": {
+          "bind": 2,
+          "elements": 2947,
+          "loss_overflow": 0,
+          "loss_unreadable": 0,
+          "loss_unknown": 0,
+          "end": 1
+        }
+      },
+      "oracle": {
+        "oracle_ok": true,
+        "anomaly_total": 0,
+        "messages": {
+          "cmd": 1462,
+          "status": 1481
+        },
+        "missing_messages": 0
+      }
+    },
+    {
+      "cell": "startup2",
+      "capabilities": {
+        "family": "turing",
+        "architecture": 22,
+        "implementation": 8,
+        "boot_path": "libos-mailbox",
+        "method_name": "nearby",
+        "cmd_bytes": 262144,
+        "stat_bytes": 262144,
+        "element_bytes": 4096,
+        "region_pages": 129,
+        "table_max_pages": 512,
+        "queue_max_bytes": 1048576
+      },
+      "discovery": {
+        "method": 4,
+        "layout": 1,
+        "bar0": 3,
+        "gpu_count": 1,
+        "mailbox_reads": 174,
+        "mailbox_status": 2,
+        "scan_bytes": 2745712640,
+        "scan_passes": 0,
+        "scan_candidates": 2,
+        "scan_backoff_resets": 3,
+        "scan_backoff_ticks": 17897725
+      },
+      "stats": {
+        "steps": 58612,
+        "attaches": 1,
+        "detaches": 1,
+        "messages_cmd": 1441,
+        "messages_status": 1460,
+        "lost_messages_exact": 0,
+        "seq_gap_messages": 0,
+        "lapped_messages": 0,
+        "loss_records": 0,
+        "torn_reads": 0,
+        "invalid_elements": 0,
+        "unsupported": 0,
+        "read_failures": 0,
+        "resyncs": 2,
+        "sink_dropped": 0,
+        "records_refused": 0,
+        "events_lost": 0,
+        "sink_loss_pending": 0
+      },
+      "capture": {
+        "records": 2905,
+        "end_seen": 1,
+        "file_ok": 1,
+        "by_kind": {
+          "bind": 2,
+          "elements": 2902,
+          "loss_overflow": 0,
+          "loss_unreadable": 0,
+          "loss_unknown": 0,
+          "end": 1
+        }
+      },
+      "oracle": {
+        "oracle_ok": true,
+        "anomaly_total": 0,
+        "messages": {
+          "cmd": 1441,
+          "status": 1460
+        },
+        "missing_messages": 0
+      }
+    },
+    {
+      "cell": "warm",
+      "capabilities": {
+        "family": "turing",
+        "architecture": 22,
+        "implementation": 8,
+        "boot_path": "libos-mailbox",
+        "method_name": "scan",
+        "cmd_bytes": 262144,
+        "stat_bytes": 262144,
+        "element_bytes": 4096,
+        "region_pages": 129,
+        "table_max_pages": 512,
+        "queue_max_bytes": 1048576
+      },
+      "discovery": {
+        "method": 2,
+        "layout": 1,
+        "bar0": 3,
+        "gpu_count": 1,
+        "mailbox_reads": 1988,
+        "mailbox_status": 2,
+        "scan_bytes": 3597217792,
+        "scan_passes": 0,
+        "scan_candidates": 3,
+        "scan_backoff_resets": 1,
+        "scan_backoff_ticks": 17897725
+      },
+      "stats": {
+        "steps": 62162,
+        "attaches": 1,
+        "detaches": 1,
+        "messages_cmd": 46,
+        "messages_status": 46,
+        "lost_messages_exact": 0,
+        "seq_gap_messages": 0,
+        "lapped_messages": 0,
+        "loss_records": 2,
+        "torn_reads": 0,
+        "invalid_elements": 0,
+        "unsupported": 0,
+        "read_failures": 0,
+        "resyncs": 2,
+        "sink_dropped": 0,
+        "records_refused": 0,
+        "events_lost": 0,
+        "sink_loss_pending": 0
+      },
+      "capture": {
+        "records": 100,
+        "end_seen": 1,
+        "file_ok": 1,
+        "by_kind": {
+          "bind": 2,
+          "elements": 95,
+          "loss_overflow": 0,
+          "loss_unreadable": 0,
+          "loss_unknown": 2,
+          "end": 1
+        }
+      },
+      "oracle": {
+        "oracle_ok": false,
+        "anomaly_total": 4,
+        "messages": {
+          "cmd": 46,
+          "status": 46
+        },
+        "missing_messages": 3360
+      }
+    }
+  ],
+  "run": "WC1-round3b-TU116-57852545",
+  "date": "2026-10-26",
+  "die": "TU116",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "pci_device": "21C4",
+  "windows_driver": "580.88",
+  "windows_build": "26100.1742",
+  "source": "541033eaf",
+  "gsp": "580.65.05",
+  "bar1_mib": 256,
+  "bar1_exception": true,
+  "independent_rehash": {
+    "utc": "2026-10-26T19:04:50.127392+00:00",
+    "files": 18,
+    "hashes_ok": true,
+    "implementation": "sha256sum external process"
+  },
+  "teardown": {
+    "id": 57852545,
+    "absent": true,
+    "utc": "2026-10-26T19:05:31.409252+00:00",
+    "raw_archived_and_verified_before_destroy": true
+  },
+  "workload": {
+    "d3d1": {
+      "hardware": true,
+      "frames": 60,
+      "pass": true,
+      "hresult": "0x00000000"
+    },
+    "d3d2": {
+      "hardware": true,
+      "frames": 60,
+      "pass": true,
+      "hresult": "0x00000000"
+    },
+    "health1": {
+      "iteration": 1,
+      "restart_exit": 0,
+      "code": 0,
+      "system_1001": 0,
+      "system_6008": 0,
+      "system_4101": 0,
+      "display_errors": 0
+    },
+    "health2": {
+      "iteration": 2,
+      "restart_exit": 0,
+      "code": 0,
+      "system_1001": 0,
+      "system_6008": 0,
+      "system_4101": 0,
+      "display_errors": 0
+    }
+  },
+  "end_code": 0,
+  "code_sampling": "Two restart checks and final sample; no continuous hold",
+  "startup_duration_scope": "Each collector has a 90s maximum and stop-file",
+  "linux_pre_reference": {
+    "driver": "580.95.05",
+    "xid_count": 0,
+    "probe_green": true,
+    "probe_scope": "six driver API device/context calls; no copy or kernel workload",
+    "sha256": "a4912457edd18a2d564a4f8f4760a11a7ca58c1444181341c2dfd0550401ec9b"
+  },
+  "attribution": "Native Windows capture only; no kayfabe verdict",
+  "decode_tag": "580.82.07",
+  "discovery_scope": "libos architecture path; actual methods scan/nearby, not direct mailbox binding"
+}

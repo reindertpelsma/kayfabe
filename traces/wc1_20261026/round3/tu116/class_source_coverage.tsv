@@ -1,0 +1,32 @@
+class_id	tu116_registry_macros	tag	status
+0x0	NV01_ROOT	595.91.07	explicit source registration candidate
+0x4	NV01_TIMER	595.91.07	explicit source registration candidate
+0x70	NV01_MEMORY_VIRTUAL	595.91.07	explicit source registration candidate
+0x73	NV04_DISPLAY_COMMON	595.91.07	explicit source registration candidate
+0x78	NV01_EVENT_KERNEL_CALLBACK	595.91.07	explicit source registration candidate
+0x7e	NV01_EVENT_KERNEL_CALLBACK_EX	595.91.07	explicit source registration candidate
+0x80	NV01_DEVICE_0	595.91.07	explicit source registration candidate
+0x2080	NV20_SUBDEVICE_0	595.91.07	explicit source registration candidate
+0x2081	NV2081_BINAPI	595.91.07	explicit source registration candidate
+0x402c	NV40_I2C	595.91.07	explicit source registration candidate
+0x5080	NV50_DEFERRED_API_CLASS	595.91.07	explicit source registration candidate
+0x902d	FERMI_TWOD_A	595.91.07	explicit source registration candidate
+0x9067	FERMI_CONTEXT_SHARE_A	595.91.07	explicit source registration candidate
+0x9096	GF100_ZBC_CLEAR	595.91.07	explicit source registration candidate
+0x90f1	FERMI_VASPACE_A	595.91.07	explicit source registration candidate
+0x95a1		595.91.07	not in indexed registry; public coverage open
+0xa06c	KEPLER_CHANNEL_GROUP_A	595.91.07	explicit source registration candidate
+0xa140	KEPLER_INLINE_TO_MEMORY_B	595.91.07	explicit source registration candidate
+0xb297		595.91.07	not in indexed registry; public coverage open
+0xc372	NVC372_DISPLAY_SW	595.91.07	explicit source registration candidate
+0xc46f	TURING_CHANNEL_GPFIFO_A	595.91.07	explicit source registration candidate
+0xc4b0	NVC4B0_VIDEO_DECODER	595.91.07	explicit source registration candidate
+0xc4b7	NVC4B7_VIDEO_ENCODER	595.91.07	explicit source registration candidate
+0xc570	NVC570_DISPLAY	595.91.07	explicit source registration candidate
+0xc57a	NVC57A_CURSOR_IMM_CHANNEL_PIO	595.91.07	explicit source registration candidate
+0xc57b	NVC57B_WINDOW_IMM_CHANNEL_DMA	595.91.07	explicit source registration candidate
+0xc57d	NVC57D_CORE_CHANNEL_DMA	595.91.07	explicit source registration candidate
+0xc57e	NVC57E_WINDOW_CHANNEL_DMA	595.91.07	explicit source registration candidate
+0xc597	TURING_A	595.91.07	explicit source registration candidate
+0xc5b5	TURING_DMA_COPY_A	595.91.07	explicit source registration candidate
+0xc5c0	TURING_COMPUTE_A	595.91.07	explicit source registration candidate

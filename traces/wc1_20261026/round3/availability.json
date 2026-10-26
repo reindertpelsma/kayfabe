@@ -128,11 +128,58 @@
         "total_offers": 7,
         "turing_offers": 0,
         "single_gpu_review_candidates": 0
+      },
+      {
+        "utc": "2026-10-26T18:22:33.760187+00:00",
+        "status": "ok",
+        "total_offers": 9,
+        "turing_offers": 1,
+        "single_gpu_review_candidates": 1,
+        "candidates": [
+          {
+            "offer": 56685612,
+            "gpu": "GTX 1660 S",
+            "machine": 54666,
+            "host": 79466,
+            "rate": 0.09444444444444444,
+            "gpus": 1,
+            "country": "CA",
+            "provider_compute_cap": 750,
+            "ready_for_manual_review": true
+          }
+        ]
+      },
+      {
+        "utc": "2026-10-26T19:07:32.173998+00:00",
+        "status": "ok",
+        "total_offers": 8,
+        "turing_offers": 1,
+        "single_gpu_review_candidates": 0,
+        "candidates": [
+          {
+            "offer": 56685612,
+            "gpu": "GTX 1660 S",
+            "machine": 54666,
+            "host": 79466,
+            "rate": 0.09444444444444444,
+            "gpus": 1,
+            "country": "CA",
+            "provider_compute_cap": 750,
+            "ready_for_manual_review": false,
+            "already_captured_machine": true
+          }
+        ]
       }
     ],
     "status": "watching",
-    "next_poll_utc": "2026-10-26T18:22:33.760091+00:00",
+    "next_poll_utc": "2026-10-26T19:32:32.173998+00:00",
     "capture_authority": "Native conversion after archived Linux pre-reference; Windows startup oracle+D3D are the post-reference; no kayfabe verdict.",
-    "scope_renewal": "Round3a post-SSH VFIO limit remains historical; round3b authorizes native-conversion capture on an eligible Turing offer."
+    "scope_renewal": "Round3a post-SSH VFIO limit remains historical; round3b authorizes native-conversion capture on an eligible Turing offer.",
+    "completed_capture": {
+      "die": "TU116",
+      "lease": 57852545,
+      "machine": 54666
+    },
+    "cadence_note": "Watch paused after candidate poll8 while native lease57852545 ran; resumed poll9 after capture archived and exact-id/API-absence teardown. Completed machine excluded from further admission; subsequent free snapshots remain25min until original deadline."
   }
 }

@@ -1,0 +1,241 @@
+{
+  "run": "WC1-round3b-TU116-57852545",
+  "die": "TU116",
+  "pci_device": "21C4",
+  "driver": "580.88",
+  "scope": "One GPU, two complete startups; exact questions only",
+  "rows": [
+    {
+      "control": "0x20800a59",
+      "question": {
+        "zero_bytes": 16
+      },
+      "request_sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+      "values": [
+        "0x2a000",
+        "0x0",
+        "0x40c20",
+        "0x0"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 1,
+          "replies": 1
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 1,
+          "replies": 1
+        }
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u32",
+        "u32"
+      ]
+    },
+    {
+      "control": "0x2080121f",
+      "question": {
+        "maxSlots": 4,
+        "other_request_fields_zero": true
+      },
+      "request_sha256": "63ec4e51dc28c12e3e6f85f1111d3fcb8574ddadc6d35e59b899b9f4a9baa490",
+      "values": [
+        "0x4",
+        "0x5c9000",
+        "0x464",
+        "0x1000",
+        "0x1724000",
+        "0x1000"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 1,
+          "replies": 1
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 1,
+          "replies": 1
+        }
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u64",
+        "u64",
+        "u64",
+        "u64"
+      ]
+    },
+    {
+      "control": "0x20802801",
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "values": [
+        "0x2"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 1,
+          "replies": 1
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 1,
+          "replies": 1
+        }
+      ],
+      "value_types": [
+        "u32"
+      ]
+    },
+    {
+      "control": "0x20802806",
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "values": [
+        "0x0"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 1,
+          "replies": 1
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 1,
+          "replies": 1
+        }
+      ],
+      "value_types": [
+        "u32"
+      ]
+    },
+    {
+      "control": "0x20802a08",
+      "question": {
+        "zero_bytes": 4
+      },
+      "request_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "values": [
+        "0x2000"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 25,
+          "replies": 25
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 25,
+          "replies": 25
+        }
+      ],
+      "value_types": [
+        "u32"
+      ]
+    },
+    {
+      "control": "0x20809001",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x3fc007f",
+        "0x0"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 2,
+          "replies": 2
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 2,
+          "replies": 2
+        }
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ]
+    },
+    {
+      "control": "0x20809009",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0xd"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 1,
+          "replies": 1
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 1,
+          "replies": 1
+        }
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ]
+    },
+    {
+      "control": "0x50700709",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0x34"
+      ],
+      "rm_status": 0,
+      "captures": [
+        {
+          "capture": "57852545/startup1",
+          "requests": 1,
+          "replies": 1
+        },
+        {
+          "capture": "57852545/startup2",
+          "requests": 1,
+          "replies": 1
+        }
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ]
+    }
+  ],
+  "family_rules_admitted": 0
+}

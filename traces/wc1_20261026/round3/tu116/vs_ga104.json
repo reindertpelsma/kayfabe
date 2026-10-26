@@ -1,0 +1,15 @@
+{
+  "run": "WC1-round3b-TU116-57852545",
+  "reference": "ga104",
+  "native_controls": 172,
+  "reference_controls": 179,
+  "coverage": {
+    "both": 165,
+    "reference_only": 14,
+    "native_only": 7
+  },
+  "native_driver": "580.88",
+  "reference_driver": "596.51",
+  "reference_missing_prefix": 10277,
+  "limit": "Observed workload/transport inventories; retained-only is not die absence"
+}
