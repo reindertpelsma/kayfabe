@@ -2,7 +2,7 @@
 
 use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KfMapRun};
 use kf_mem::apply::{Applied, ApplyCfg, DiffRun, PermPolicy, apply_entry};
-use kf_mem::ledger::{Desired, MapTarget, Mapped};
+use kf_mem::ledger::{Desired, MapTarget, Mapped, OwnView};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
@@ -29,6 +29,7 @@ struct Target {
     refuse_sparse_retire: bool,
     refuse_backed_unmap: bool,
     reserved: bool,
+    no_invalid: Cell<bool>,
 }
 
 impl Target {
@@ -56,6 +57,7 @@ impl Target {
             refuse_sparse_retire: false,
             refuse_backed_unmap: false,
             reserved: false,
+            no_invalid: Cell::new(false),
         }
     }
 
@@ -69,6 +71,11 @@ impl Target {
 
     fn check(&self) {
         let pages = self.pages.borrow();
+        if self.no_invalid.get() && pages.values().any(|s| *s == State::Invalid) {
+            self.violations
+                .borrow_mut()
+                .push("transient invalid gap".into());
+        }
         for (&va, state) in self.guard.borrow().iter() {
             if pages.get(&va) != Some(state) {
                 self.violations
@@ -84,6 +91,20 @@ impl Target {
 }
 
 impl MapTarget for Target {
+    fn own_view(&self, va: u64, end: u64) -> Option<OwnView> {
+        Some(OwnView {
+            owned: self
+                .pages
+                .borrow()
+                .iter()
+                .filter_map(|(&p, s)| {
+                    (matches!(s, State::Backed(..)) && p < end && va < p + P)
+                        .then_some((p.max(va), (p + P).min(end)))
+                })
+                .collect(),
+            rigid: vec![],
+        })
+    }
     fn sparse_twin(&self) -> bool {
         self.enabled
     }
@@ -238,6 +259,7 @@ fn apply(t: &Target, runs: &[DiffRun]) -> Applied {
 fn backed_to_sparse(ram: bool, off: u64) {
     let t = Target::new(true);
     t.seed(ram, off);
+    t.no_invalid.set(true);
     let out = apply(
         &t,
         &[
@@ -268,6 +290,7 @@ fn framebuffer_zero_is_not_kept_when_it_becomes_sparse() {
 
 fn sparse_to_backed(ram: bool) {
     let t = Target::new(true);
+    t.no_invalid.set(true);
     let out = apply(
         &t,
         &[
@@ -539,4 +562,60 @@ fn sparse_ranges_must_not_wrap() {
     let out = apply(&t, &[run(true, false, u64::MAX - P + 1, 2 * P, 0, false)]);
     assert_eq!(out.codes, [KFWR_ACK_FAILED]);
     assert!(t.calls.borrow().is_empty());
+}
+
+#[test]
+fn sparse_resegmentation_keeps_every_page_without_a_host_call() {
+    let t = Target::new(true);
+    t.no_invalid.set(true);
+    for i in 0..L / P {
+        t.guard.borrow_mut().insert(VA + i * P, State::Sparse);
+    }
+    let out = apply(
+        &t,
+        &[
+            run(true, true, VA, L, 0, false),
+            run(true, false, VA, L / 2, 0, false),
+            run(true, false, VA + L / 2, L / 2, 0, false),
+        ],
+    );
+    assert_eq!(out.codes, [KFWR_ACK_APPLIED; 3]);
+    assert!(t.calls.borrow().is_empty());
+}
+
+#[test]
+fn sparse_never_claims_part_of_an_existing_vmm_owned_block() {
+    let mut t = Target::new(true);
+    t.reserved = true;
+    let out = apply(&t, &[run(true, false, VA + P, P, 0, false)]);
+    assert_eq!(out.codes, [KFWR_ACK_FAILED]);
+    assert_eq!(out.vmm_overlaps, 1);
+    assert!(t.calls.borrow().is_empty());
+}
+
+#[test]
+fn larger_sparse_ranges_must_not_wrap() {
+    let t = Target::new(false);
+    let out = apply(&t, &[run(true, false, u64::MAX - L + 1, 2 * L, 0, false)]);
+    assert_eq!(out.codes, [KFWR_ACK_FAILED]);
+    assert!(t.calls.borrow().is_empty());
+}
+
+fn held_sparse_retirement_refusal(ram: bool) {
+    let mut t = Target::new(true);
+    t.refuse_sparse_retire = true;
+    let mut old = run(true, true, VA, L, 0, false);
+    old.held = true;
+    let out = apply(&t, &[old, run(false, false, VA, L, 0x10_0000, ram)]);
+    assert_eq!(out.codes, [KFWR_ACK_FAILED, KFWR_ACK_FAILED]);
+    assert!(!t.calls.borrow().contains(&"backed-map"));
+}
+
+#[test]
+fn held_sparse_retirement_failure_blocks_vidmem() {
+    held_sparse_retirement_refusal(false);
+}
+#[test]
+fn held_sparse_retirement_failure_blocks_dma() {
+    held_sparse_retirement_refusal(true);
 }
