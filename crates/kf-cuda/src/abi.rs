@@ -111,6 +111,8 @@ pub const KFWR_OP_MAP: u16 = 1;
 /// ★ A committed placement the host answered "already held" — its UNMAP is retired without asking
 /// the host (P6b ruling (a)). Mirrors `KFWR_RF_HELD`.
 pub const KFWR_RF_HELD: u32 = 1 << 31;
+/// A sparse placement: no backing address, aperture, kind or permission payload.
+pub const KFWR_RF_SPARSE: u32 = 1 << 7;
 /// A leaf's `READ_ONLY` bit, decoded (never the raw PTE). Mirrors `KFWR_RF_READ_ONLY`.
 pub const KFWR_RF_READ_ONLY: u32 = 1 << 3;
 /// A leaf's `ATOMIC_DISABLE` bit (VER3: PCF `NO_ATOMIC`). Mirrors `KFWR_RF_ATOMIC_DISABLE`.

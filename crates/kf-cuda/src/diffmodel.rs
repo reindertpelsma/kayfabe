@@ -36,7 +36,7 @@
 
 use crate::abi::{
     AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_KEY_PERM_ALL,
-    KFWR_RF_KEY_PERM_DEFAULT, KfMapRun, RF_AP, RF_CLASS, RF_KIND,
+    KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_SPARSE, KfMapRun, RF_AP, RF_CLASS, RF_KIND,
 };
 
 /// Page-size classes.
@@ -68,6 +68,9 @@ const RF_PERM_LO: u32 = KFWR_RF_KEY_PERM_ALL.trailing_zeros();
 /// `kf_hkey` (`cuda/walk/kf_walk.cu`), whose `kp` is `KfArgs::key_perm`.
 #[must_use]
 pub fn host_key_with(flags: u32, key_perm: u32) -> u32 {
+    if flags & KFWR_RF_SPARSE != 0 {
+        return 1 << 14;
+    }
     // `RF_AP` is 3 bits wide, so the narrowing is exact.
     let ap = match RF_AP.get(flags) as u8 {
         AP_VID => 0,
@@ -163,7 +166,9 @@ fn covered(p: &KfMapRun, w: &[KfMapRun], key_perm: u32) -> bool {
         if !(r.va <= at && at < rend) || host_key_with(r.flags, key_perm) != key {
             return false;
         }
-        if r.gpga.wrapping_add(at - r.va) != p.gpga.wrapping_add(at - p.va) {
+        if p.flags & KFWR_RF_SPARSE == 0
+            && r.gpga.wrapping_add(at - r.va) != p.gpga.wrapping_add(at - p.va)
+        {
             return false;
         }
         at = rend;
@@ -227,7 +232,11 @@ pub fn diff_with(com: &Committed, walk: &[KfMapRun], cap: usize, key_perm: u32) 
                 if s < e {
                     maps[c].push(KfMapRun {
                         va: s,
-                        gpga: r.gpga.wrapping_add(s - r.va),
+                        gpga: if r.flags & KFWR_RF_SPARSE != 0 {
+                            0
+                        } else {
+                            r.gpga.wrapping_add(s - r.va)
+                        },
                         len: e - s,
                         flags: r.flags & !KFWR_RF_HELD,
                         op: KFWR_OP_MAP,
@@ -335,7 +344,7 @@ pub fn coverage_with(runs: &[KfMapRun], key_perm: u32) -> [Vec<(u64, u64, u32, u
             if let Some(l) = m.last_mut()
                 && l.0 + l.1 == x.0
                 && l.2 == x.2
-                && l.3.wrapping_add(l.1) == x.3
+                && (l.2 == host_key(KFWR_RF_SPARSE) || l.3.wrapping_add(l.1) == x.3)
             {
                 l.1 += x.1;
                 continue;
@@ -387,6 +396,9 @@ mod tests {
     fn the_named_ranges_compute_the_literal_formulas() {
         let literal_class = |f: u32| ((f >> 8) & 0x3) as usize;
         let literal_key = |f: u32, kp: u32| {
+            if f & KFWR_RF_SPARSE != 0 {
+                return 1 << 14;
+            }
             let ap = match f & 0x7 {
                 0 => 0,
                 2 | 3 => 1,

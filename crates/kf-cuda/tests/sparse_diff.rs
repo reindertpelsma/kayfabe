@@ -19,7 +19,11 @@ fn run(va: u64, len: u64, sparse: bool) -> KfMapRun {
 }
 
 fn placed(runs: &[KfMapRun]) -> Committed {
-    diffmodel::commit(&Committed::default(), runs, &vec![AckCode::Applied; runs.len()])
+    diffmodel::commit(
+        &Committed::default(),
+        runs,
+        &vec![AckCode::Applied; runs.len()],
+    )
 }
 
 #[test]
@@ -43,7 +47,10 @@ fn sparse_becoming_vidmem_is_a_change() {
 #[test]
 fn sparse_has_no_backing_or_permission_key() {
     assert_ne!(diffmodel::host_key(SPARSE), diffmodel::host_key(0));
-    assert_eq!(diffmodel::host_key(SPARSE), diffmodel::host_key(SPARSE | 0x00ff_0078));
+    assert_eq!(
+        diffmodel::host_key(SPARSE),
+        diffmodel::host_key(SPARSE | 0x00ff_0078)
+    );
 }
 
 #[test]
@@ -67,13 +74,21 @@ fn extending_sparse_after_a_kept_middle_has_no_backing_offset() {
 #[test]
 fn three_sparse_segments_cover_one_placement() {
     let old = placed(&[run(PAGE, 3 * PAGE, true)]);
-    let walk = [run(PAGE, PAGE, true), run(2 * PAGE, PAGE, true), run(3 * PAGE, PAGE, true)];
+    let walk = [
+        run(PAGE, PAGE, true),
+        run(2 * PAGE, PAGE, true),
+        run(3 * PAGE, PAGE, true),
+    ];
     assert!(diffmodel::diff(&old, &walk, 8).runs.is_empty());
 }
 
 #[test]
 fn three_sparse_segments_have_one_coverage_interval() {
-    let walk = [run(PAGE, PAGE, true), run(2 * PAGE, PAGE, true), run(3 * PAGE, PAGE, true)];
+    let walk = [
+        run(PAGE, PAGE, true),
+        run(2 * PAGE, PAGE, true),
+        run(3 * PAGE, PAGE, true),
+    ];
     assert_eq!(diffmodel::coverage(&walk)[0].len(), 1);
 }
 
@@ -87,7 +102,10 @@ fn adjacent_sparse_statements_cover_one_placement() {
 #[test]
 fn adjacent_sparse_coverage_coalesces_without_backing() {
     let walk = [run(0, PAGE, true), run(PAGE, PAGE, true)];
-    assert_eq!(diffmodel::coverage(&walk), diffmodel::coverage(&[run(0, 2 * PAGE, true)]));
+    assert_eq!(
+        diffmodel::coverage(&walk),
+        diffmodel::coverage(&[run(0, 2 * PAGE, true)])
+    );
 }
 
 #[test]
