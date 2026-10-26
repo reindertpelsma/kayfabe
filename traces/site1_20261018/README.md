@@ -11,17 +11,17 @@ manual. v0.2.0 had no site. Invalid tag-local Zola/mdBook configs and an `exit 9
 script were ignored. The old FAQ canonical targeted the real latest tag; broken local links: 0.
 Both archives were already cached and were SHA-256 checked again; no tool download was required.
 
-MEASURED (SITE1 local run 2026-10-26): 28 Python version/scope/tool/render tests, 6 built-output
+MEASURED (SITE1 local run 2026-10-26): 30 Python version/scope/tool/render tests, 6 built-output
 tests, 46 targeted Node workflow/dropdown tests, and the full 2,090-test broker suite passed.
 The initial expected-red tests had 9/9 Python errors (missing builder) and 12/13 Node failures
 (missing Pages/OIDC guard). Later expected-red commits exposed missing metadata/dropdown support
 and two internal-doc-link failures before implementation.
 
-MEASURED (SITE1 mutation campaign 2026-10-26): all 16 mutants were killed by at least two tests;
+MEASURED (SITE1 mutation campaign 2026-10-26): all 17 mutants were killed by at least two tests;
 `mutants.json` names every killing test. The originals were restored and the baseline rerun.
 Mutants cover version eligibility, artifact/draft filters, publication ordering, root override,
 manual-only copying, internal-link/title checks, rebuilding old versions, archive hashes,
-master book config, release canonicals, broken-link reporting, Pages boundary, OIDC and selector.
+master book config, release canonicals, broken-link reporting, Pages boundary, OIDC, selector and allowing upstream documentation links.
 
 CODE READ (2026-10-26): unchanged FAQ has no Markdown links into internal docs. Its inline code
 references `design/V3_VIOMMU.md`, `design/the_three_channel_kinds.md`, `docs/OWNER_RULINGS.md`,

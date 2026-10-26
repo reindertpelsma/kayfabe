@@ -48,6 +48,14 @@
     ]
   },
   {
+    "mutant": "reject-upstream-docs",
+    "killing_tests": 2,
+    "tests": [
+      "test_other_repository_documentation_links_remain_allowed",
+      "test_vendor_documentation_links_remain_allowed"
+    ]
+  },
+  {
     "mutant": "allow-internal-links",
     "killing_tests": 2,
     "tests": [

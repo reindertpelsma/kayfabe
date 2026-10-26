@@ -276,7 +276,11 @@ def check_page(text, page):
     links = Links()
     links.feed(text)
     for link in links.links:
-        path = unquote(urlsplit(link).path)
+        url = urlsplit(link)
+        if url.netloc and url.netloc != "kayfabe.dev":
+            if url.netloc != "github.com" or not url.path.startswith("/reindertpelsma/kayfabe/"):
+                continue
+        path = unquote(url.path)
         path = posixpath.normpath(posixpath.join("/" + page, "..", path))
         internal = r"/(design|archive)(/|$)|/(OWNER_RULINGS|STATUS_[^/]*|handoff[^/]*)"
         outside_manual = False
