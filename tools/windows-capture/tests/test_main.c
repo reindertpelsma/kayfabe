@@ -1284,6 +1284,24 @@ static void pending_independent_sizes(kfwc_u32 cmd_bytes, kfwc_u32 stat_bytes)
     hn_free(&h);
 }
 
+static void t_pending_mailbox_status_smaller(void)
+{
+    harness h;
+    hn_init(&h, 1, 1, 0);
+    sy_init(&h.s, &h.m, 1, 0x100000, 0x40000, 0x20000, 0);
+    sy_boot_args(&h.s, 0x6F0000, 0x6F1000);
+    sy_post(&h.s, 0, 72, 32);
+    hn_steps(&h, 3);
+    CHECK(h.e->stats.attaches == 1 && h.e->stats.method == KFWC_METHOD_MAILBOX);
+    CHECK(h.e->stats.messages[0] == 1 && h.e->stats.stat_bytes == 0);
+    sy_publish_stat_header(&h.s);
+    sy_post(&h.s, 1, 65, 32);
+    hn_steps(&h, 3);
+    CHECK(h.e->stats.attaches == 1 && h.e->stats.detaches == 0);
+    CHECK(h.e->stats.messages[1] == 1 && sb_losses(&h.sb) == 0);
+    hn_free(&h);
+}
+
 static void t_pending_status_larger(void)
 {
     pending_independent_sizes(0x20000, 0x40000);
@@ -1481,6 +1499,7 @@ typedef void (*test_fn)(void);
 int main(int argc, char **argv)
 {
     static const struct { const char *name; test_fn fn; } tests[] = {
+        {"pending_mailbox_status_smaller", t_pending_mailbox_status_smaller},
         {"pending_status_larger", t_pending_status_larger},
         {"pending_status_smaller", t_pending_status_smaller},
         {"recent_seed_status_first", t_recent_seed_status_first},
