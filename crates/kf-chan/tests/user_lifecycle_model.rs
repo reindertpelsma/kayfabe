@@ -2792,3 +2792,6 @@ fn lazy_every_other_scenario_of_this_file_also_holds_with_lazy_observe_on() {
             .join("\n")
     );
 }
+
+#[path = "ens4_support.rs"]
+mod ens4;
