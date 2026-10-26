@@ -209,3 +209,100 @@ test('V4 smaller full log cap bounds prefix expansion', async () => {
   assert.ok(Buffer.byteLength(page.log_increment_sanitised) <= 600);
   assert.ok(page.bytes_dropped > 0);
 });
+
+// Owner 2026-10-26: provider identity is public diagnostic data. FALSIFIER:
+// admission/result metadata drops it, or either renderer silently hides it.
+for (const restart of [false, true])
+  test('public rental attribution survives result and restart ' + restart, async () => {
+    const h = await setup();
+    Object.assign(h.cloud.offer, { host_id: 3001, driver_version: '570.124.06' });
+    const admitted = await (await h.call()).json();
+    if (restart) h.restart();
+    assert.equal(
+      (
+        await h.report({
+          seq: 1,
+          kind: 'result',
+          result: { nonce, verdict: 'FAIL', host_reference: 'NOT_GREEN' },
+        })
+      ).status,
+      200,
+    );
+    const final = await (await h.call('/status/123-1')).json();
+    for (const data of [admitted, final]) {
+      assert.equal(data.instance_id, '900');
+      assert.equal(data.machine_id, 100001);
+      assert.equal(data.host_id, 3001);
+      assert.equal(data.geolocation, 'Texas, US');
+      assert.equal(data.dph_total, 0.2);
+      assert.equal(data.host_driver_version, '570.124.06');
+      assert.equal(data.die, 'AD104');
+      assert.equal(data.gpu_model, 'RTX_4070');
+      assert.ok(!JSON.stringify(data).includes(h.bindings.VAST_API_KEY));
+    }
+    assert.equal(admitted.host_reference, 'MISSING');
+    assert.equal(final.host_reference, 'NOT_GREEN');
+  });
+
+for (const gpu of ['RTX 3090', 'NVIDIA Quadro RTX 6000']) {
+  const metadata = {
+    state: 'BOOTING',
+    verdict: 'UNAVAILABLE',
+    instance_id: '900',
+    machine_id: 100001,
+    host_id: 3001,
+    geolocation: 'Texas, US',
+    dph_total: 0.2,
+    die: 'GA102',
+    gpu_model: gpu,
+    host_driver_version: '570.124.06',
+    host_reference: 'GREEN',
+  };
+  test('literal summary retains non-Ada rental metadata ' + gpu, async () => {
+    const result = await render('summary', metadata);
+    for (const value of [
+      gpu,
+      '900',
+      '100001',
+      '3001',
+      'Texas, US',
+      '0.200000',
+      'GA102',
+      '570.124.06',
+      'GREEN',
+    ])
+      assert.ok(result.summary.includes(value), value);
+  });
+  test('literal live log begins with one public rental line ' + gpu, async () => {
+    const result = await render('live', {
+      ...metadata,
+      cursor: 0,
+      log_increment_sanitised: 'body\n',
+    });
+    assert.match(result.stdout, /^RENTAL machine=100001 host=3001 instance=900 gpu=/);
+    assert.ok(result.stdout.includes('price=0.200000'));
+    assert.equal((result.stdout.match(/RENTAL /g) ?? []).length, 1);
+    const next = await render('live', {
+      ...metadata,
+      cursor: 1,
+      log_increment_sanitised: 'next\n',
+    });
+    assert.doesNotMatch(next.stdout, /RENTAL /);
+  });
+}
+
+for (const host_reference of ['GREEN', 'NOT_GREEN'])
+  test('result carries host reference ' + host_reference, async () => {
+    const h = await rent();
+    assert.equal(
+      (
+        await h.report({
+          seq: 1,
+          kind: 'result',
+          result: { nonce, verdict: 'FAIL', host_reference },
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await (await h.call('/status/123-1')).json()).host_reference, host_reference);
+  });
