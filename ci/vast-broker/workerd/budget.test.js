@@ -90,3 +90,49 @@ for (const legacy of [false, true])
     const receipt = await call('/snapshot');
     assert.ok(receipt.data.some(([key]) => key === 'cost:100-1'));
   });
+
+for (const failAt of ['cost:', 'ended:'])
+  test('workerd settlement rolls back at ' + failAt, async (t) => {
+    const mf = new Miniflare(
+      convertV4MiniflareOptions({
+        modules: true,
+        script: bundle.outputFiles[0].text,
+        compatibilityDate: '2026-10-21',
+        bindings: env,
+        durableObjects: { TEST_LEDGER: { className: 'AdmissionFixture', useSQLite: true } },
+        outboundService: () => {
+          throw Error('No network allowed');
+        },
+      }),
+    );
+    t.after(() => mf.dispose());
+    const ns = await mf.getDurableObjectNamespace('TEST_LEDGER');
+    const stub = ns.get(ns.idFromName(t.name));
+    const call = async (path, data) => {
+      const r = await stub.fetch('https://internal.invalid' + path, {
+        method: data ? 'POST' : 'GET',
+        ...(data ? { body: JSON.stringify(data) } : {}),
+      });
+      return { status: r.status, data: await r.json() };
+    };
+    const now = Date.now(),
+      record = {
+        key: '100-1',
+        run: '100',
+        sha: 'a'.repeat(40),
+        started: now - 1000,
+        ended: null,
+        price: 0.5,
+        bandwidthCost: 0,
+        ttl: 3600000,
+        id: '900',
+      };
+    await call('/seed', [
+      ['record:100-1', record],
+      ['cost:100-1', record],
+      ['open:100-1', true],
+    ]);
+    const before = await call('/snapshot');
+    assert.equal((await call('/settle', { record, now, failAt })).status, 503);
+    assert.deepEqual(await call('/snapshot'), before);
+  });

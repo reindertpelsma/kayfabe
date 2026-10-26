@@ -21,9 +21,23 @@ export class AdmissionFixture {
     }
     if (path === '/admin/list') return new BrokerLedger(this.ctx, this.env).fetch(request);
     if (path === '/settle') {
-      const { record, now } = await request.json();
-      await new Ledger(this.ctx.storage).settle(record, now);
-      return Response.json({ state: 'SETTLED' });
+      const { record, now, failAt } = await request.json();
+      const failing = (storage) => ({
+        get: (...args) => storage.get(...args),
+        list: (...args) => storage.list(...args),
+        delete: (...args) => storage.delete(...args),
+        put: async (key, value) => {
+          await storage.put(key, value);
+          if (failAt && key.startsWith(failAt)) throw Error('injected settlement fault');
+        },
+        transaction: (action) => storage.transaction((txn) => action(failing(txn))),
+      });
+      try {
+        await new Ledger(failing(this.ctx.storage)).settle(record, now);
+        return Response.json({ state: 'SETTLED' });
+      } catch {
+        return Response.json({ state: 'ERROR' }, { status: 503 });
+      }
     }
     if (path === '/snapshot') {
       return Response.json([...(await this.ctx.storage.list())]);

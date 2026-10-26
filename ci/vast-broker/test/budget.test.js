@@ -68,6 +68,18 @@ for (const variant of [0, 1]) {
         assert.equal(e.state, 'UNAVAILABLE_BUDGET');
         assert.equal(e.reason, 'BUDGET:' + reason);
         assert.equal(e.status, 409);
+        if (
+          ['no-credit', 'daily-count', 'daily-usd', 'rolling-usd', 'credit-reserve'].includes(
+            reason,
+          )
+        ) {
+          assert.equal(e.budget.daily_cap_usd, config.daily);
+          assert.equal(e.budget.rolling_cap_usd, config.rolling);
+          assert.equal(e.budget.count_cap, config.dailyCount);
+          assert.equal(e.budget.reserve_usd, config.reserve);
+          assert.equal(e.budget.cost_usd, cost);
+          assert.equal(e.budget.credit_usd, Number.isFinite(credit) ? credit : null);
+        }
         assert.ok(e.budget && Object.keys(e.budget).length);
         assert.ok(Object.values(e.budget).every((v) => v === null || Number.isFinite(v)));
         return true;
@@ -162,6 +174,13 @@ for (const variant of [0, 1]) {
           secret: 'PRIVATE-SENTINEL',
         }),
       );
+    await storage.put(
+      'cost:old-expired',
+      spent({
+        started: now - (32 + variant) * 86400000,
+        ended: now - (31 + variant) * 86400000,
+      }),
+    );
     const before = JSON.stringify([...(await storage.list())]);
     const response = await new BrokerLedger({ storage }, env).fetch(
       new Request('https://internal.invalid/admin/list'),
@@ -231,6 +250,8 @@ for (const reason of [
 for (const [reason, budget] of [
   ['BUDGET:PRIVATE-SENTINEL', { cost_usd: 1 }],
   ['BUDGET:daily-usd', { secret: 2 }],
+  ['BUDGET:daily-usd', { access_secret: 1 }],
+  ['BUDGET:daily-usd', { url: 1 }],
   ['BUDGET:daily-usd', { cost_usd: 'PRIVATE-SENTINEL' }],
   ['BUDGET:daily-usd', { cost_usd: -1 }],
   ['BUDGET:daily-usd', { cost_usd: { secret: 'PRIVATE-SENTINEL' } }],
@@ -241,3 +262,112 @@ for (const [reason, budget] of [
       assert.equal(run(reason, budget).valid, false);
     },
   );
+
+for (const variant of [0, 1]) {
+  for (const reason of [
+    'cost-key',
+    'sha-gap',
+    'no-credit',
+    'daily-count',
+    'daily-usd',
+    'rolling-usd',
+    'credit-reserve',
+  ])
+    test(`budget HTTP refusal carries reason and public numbers ${reason} ${variant}`, async () => {
+      const overrides =
+        reason === 'daily-count'
+          ? { DAILY_RENTALS: '1' }
+          : reason === 'daily-usd'
+            ? { DAILY_SPEND_USD: '0.01' }
+            : reason === 'rolling-usd'
+              ? { ROLLING_SPEND_USD: '0.01' }
+              : {};
+      const h = await setup(overrides);
+      if (reason === 'cost-key') await h.storage.put('cost:123-1', spent());
+      if (reason === 'sha-gap')
+        await h.storage.put('sha:' + h.cloud.run.head_sha, { started: clock - variant });
+      if (reason === 'daily-count') await h.storage.put('cost:old', spent());
+      if (reason === 'no-credit') h.cloud.credit = variant ? null : undefined;
+      if (reason === 'credit-reserve') h.cloud.credit = 8 + variant * 0.01;
+      const response = await h.call();
+      assert.equal(response.status, 409);
+      const data = await response.json();
+      assert.equal(data.reason, 'BUDGET:' + reason);
+      assert.ok(Object.keys(data.budget).length);
+      assert.ok(Object.values(data.budget).every((x) => x === null || Number.isFinite(x)));
+      assert.equal(JSON.stringify(data).includes(h.bindings.VAST_API_KEY), false);
+      assert.equal(h.cloud.creates, 0);
+    });
+  test('budget confirmed provider absence stops future accrual ' + variant, async () => {
+    const h = await setup();
+    assert.equal((await h.call()).status, 200);
+    h.cloud.instances.delete('900');
+    h.time.value += 60000;
+    if (variant) await h.service.sweep();
+    else assert.equal((await h.call('/status/123-1')).status, 200);
+    const row = await h.storage.get('cost:123-1');
+    assert.equal(row.ended, h.time.value);
+    const ledger = new Ledger(h.storage);
+    const before = await ledger.budgetSummary(cfg(), h.time.value);
+    const after = await ledger.budgetSummary(cfg(), h.time.value + 3600000);
+    assert.equal(after.rolling_usd, before.rolling_usd);
+    assert.equal(after.outstanding_usd, 0);
+  });
+  test('budget contract refusal preserves its diagnostic ' + variant, async () => {
+    const h = await setup();
+    assert.equal((await h.call()).status, 200);
+    h.cloud.credit = variant ? null : 8;
+    Object.assign(h.cloud.instances.get('900'), {
+      dph_total: 0.45,
+      dph_base: 0.45 - (0.12 * 120) / 720,
+    });
+    const response = await h.call(variant ? '/rent' : '/status/123-1');
+    assert.equal(response.status, 409);
+    const data = await response.json();
+    assert.equal(data.reason, 'BUDGET:' + (variant ? 'no-credit' : 'credit-reserve'));
+    assert.equal(data.budget.credit_usd, variant ? null : 8);
+    assert.deepEqual(h.cloud.deletes, ['900']);
+  });
+}
+
+for (const variant of [0, 1]) {
+  test('budget contract excludes its own reserved slot and cost ' + variant, async () => {
+    const h = await setup({ DAILY_RENTALS: '1', DAILY_SPEND_USD: '0.2' });
+    assert.equal((await h.call()).status, 200);
+    Object.assign(h.cloud.instances.get('900'), {
+      dph_total: 0.45,
+      dph_base: 0.45 - (0.12 * 120) / 720,
+    });
+    const response = await h.call(variant ? '/rent' : '/status/123-1');
+    assert.equal(response.status, 200, JSON.stringify(await response.json()));
+    assert.deepEqual(h.cloud.deletes, []);
+  });
+  test('budget runner displays negative prepaid credit safely ' + variant, () => {
+    const r = run('BUDGET:credit-reserve', { credit_usd: -1 - variant });
+    assert.equal(r.valid, true);
+    assert.match(r.text, new RegExp('credit_usd=-' + (1 + variant)));
+  });
+}
+
+for (const path of ['/status/123-1', '/rent'])
+  test('budget repricing credit transport has a fixed public diagnosis ' + path, async () => {
+    const h = await setup();
+    assert.equal((await h.call()).status, 200);
+    Object.assign(h.cloud.instances.get('900'), {
+      dph_total: 0.45,
+      dph_base: 0.45 - (0.12 * 120) / 720,
+    });
+    const fetch = h.cloud.fetch;
+    h.cloud.fetch = (url, init) => {
+      if (String(url).includes('/users/current')) throw Error('PRIVATE-SENTINEL');
+      return fetch(url, init);
+    };
+    h.restart();
+    const response = await h.call(path);
+    assert.equal(response.status, 409);
+    const data = await response.json();
+    assert.equal(data.reason, 'BUDGET:credit-unavailable');
+    assert.equal(data.budget.reserve_usd, 8);
+    assert.equal(JSON.stringify(data).includes('PRIVATE-SENTINEL'), false);
+    assert.deepEqual(h.cloud.deletes, ['900']);
+  });

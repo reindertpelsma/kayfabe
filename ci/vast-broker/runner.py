@@ -502,10 +502,49 @@ OPTIONAL_STATUS_KEYS = {"country"}
 ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
 
+# Public diagnostics are a closed vocabulary and finite numbers, never arbitrary Worker text.
+BUDGET_REASONS = frozenset(
+    "BUDGET:" + reason
+    for reason in (
+        "cost-key",
+        "sha-gap",
+        "no-credit",
+        "daily-count",
+        "daily-usd",
+        "rolling-usd",
+        "credit-reserve",
+        "ledger-full",
+        "invalid-cost",
+        "credit-unavailable",
+    )
+)
+BUDGET_FIELDS = frozenset(
+    {
+        "daily_usd",
+        "rolling_usd",
+        "outstanding_usd",
+        "count_today",
+        "credit_usd",
+        "cost_usd",
+        "daily_cap_usd",
+        "rolling_cap_usd",
+        "count_cap",
+        "reserve_usd",
+        "credit_required_usd",
+        "gap_ms",
+        "elapsed_ms",
+        "started_at",
+        "ended_at",
+        "rows",
+        "rows_cap",
+    }
+)
+
+
 def validate_status(data, ctx, manifest, http_status):
     # A refusal may carry reason/selection (checked below); before edits3 this first test
     # refused them, so every reasoned refusal ended as Invalid.
-    refusal = {"reason", "selection"} if http_status != 200 else set()
+    refusal = {"reason", "selection", "budget"} if http_status != 200 else set()
     if (
         not set(data) <= STATUS_KEYS | OPTIONAL_STATUS_KEYS | refusal
         or data.get("state") not in STATES
@@ -523,16 +562,37 @@ def validate_status(data, ctx, manifest, http_status):
             raise Invalid()
     if http_status != 200:
         if (
-            not ERROR_KEYS <= set(data) <= ERROR_KEYS | {"reason", "selection"}
+            not ERROR_KEYS <= set(data) <= ERROR_KEYS | {"reason", "selection", "budget"}
             or data["verdict"] != "UNAVAILABLE"
         ):
             raise Invalid()
         # A str test first: a list or dict reason is Invalid, not an unhashable TypeError.
         if "reason" in data and (
             not isinstance(data["reason"], str)
-            or data["reason"] not in {"NO_ALLOWED_PREFERENCE", "NO_ALLOWED_OFFERS", "RUNNER_TIME"}
+            or data["reason"]
+            not in BUDGET_REASONS | {"NO_ALLOWED_PREFERENCE", "NO_ALLOWED_OFFERS", "RUNNER_TIME"}
         ):
             raise Invalid()
+        if "budget" in data or data.get("reason") in BUDGET_REASONS:
+            values = data.get("budget")
+            if (
+                http_status != 409
+                or data["state"] != "UNAVAILABLE_BUDGET"
+                or data.get("reason") not in BUDGET_REASONS
+                or type(values) is not dict
+                or not values
+                or not set(values) <= BUDGET_FIELDS
+                or any(
+                    v is not None
+                    and (
+                        type(v) not in {int, float}
+                        or not math.isfinite(v)
+                        or not (-1e15 if k == "credit_usd" else 0) <= v <= 1e15
+                    )
+                    for k, v in values.items()
+                )
+            ):
+                raise Invalid()
         if "selection" in data:
             validate_selection(data["selection"])
         return data
@@ -937,6 +997,19 @@ class Runner:
                             route, "GET" if admitted else "POST", None if admitted else request
                         )
                         continue
+                    if data["state"] == "UNAVAILABLE_BUDGET":
+                        line = "runner: Worker rejected rental: UNAVAILABLE_BUDGET"
+                        if data.get("reason") in BUDGET_REASONS:
+                            line += (
+                                " "
+                                + data["reason"]
+                                + " "
+                                + " ".join(
+                                    k + "=" + ("unknown" if v is None else format(v, ".12g"))
+                                    for k, v in sorted(data["budget"].items())
+                                )
+                            )
+                        self.emit(line + "\n")
                     self.show(data["log_tail_sanitised"])
                     result["state"] = data["state"]
                     break

@@ -117,7 +117,7 @@ test('admin list includes active and ended runs, newest first, exact whitelist',
   const response = await object.fetch(internal('list'));
   assert.equal(response.status, 200);
   const data = await response.json();
-  assert.deepEqual(Object.keys(data), ['runs']);
+  assert.deepEqual(Object.keys(data), ['runs', 'budget']);
   assert.deepEqual(
     data.runs.map((r) => r.run),
     ['1000-1', '999-1'],
