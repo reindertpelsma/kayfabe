@@ -43,6 +43,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 pub mod ens3;
+pub mod ens4;
 
 /// Records per channel ring.
 pub const RING_N: usize = 4096;
