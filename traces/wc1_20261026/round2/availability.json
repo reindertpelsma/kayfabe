@@ -1,0 +1,92 @@
+{
+  "run": "WC1-round2-20261026",
+  "date": "2026-10-26",
+  "module_source": "541033eafbc74f8313863a7b5e7c6a6d59001ffa",
+  "attempts": [
+    {
+      "target_die": "GB205",
+      "lease": 57802404,
+      "candidate_gpu": "NVIDIA GeForce RTX 5070",
+      "created_utc": "2026-10-26T11:03:29.475807+00:00",
+      "api_absence_utc": "2026-10-26T11:36:06.014645+00:00",
+      "api_absent": true,
+      "native_login": true,
+      "status": "two complete native startup captures",
+      "provider_error": null,
+      "receipt": "gb205/capture_receipt.json"
+    },
+    {
+      "target_die": "GB203",
+      "lease": 57807931,
+      "candidate_gpu": "RTX 5070 Ti",
+      "created_utc": "2026-10-26T11:49:49.726683+00:00",
+      "api_absence_utc": "2026-10-26T12:01:04.056536+00:00",
+      "api_absent": true,
+      "native_login": false,
+      "status": "pre-SSH provider failure",
+      "provider_error": "provider could not start VM: /dev/kvm missing",
+      "actual_die_unobserved": true,
+      "capture_driver_not_executed": true
+    },
+    {
+      "target_die": "GB206",
+      "lease": 57809174,
+      "candidate_gpu": "RTX 5060 Ti",
+      "created_utc": "2026-10-26T12:02:17.149440+00:00",
+      "api_absence_utc": "2026-10-26T12:28:05.942321+00:00",
+      "api_absent": true,
+      "native_login": true,
+      "status": "two complete native startup captures",
+      "provider_error": null,
+      "receipt": "gb206/capture_receipt.json"
+    },
+    {
+      "target_die": "GB203",
+      "lease": 57813426,
+      "candidate_gpu": "RTX 5080",
+      "created_utc": "2026-10-26T12:32:05.402517+00:00",
+      "api_absence_utc": "2026-10-26T12:43:00.171032+00:00",
+      "api_absent": true,
+      "native_login": false,
+      "status": "pre-SSH provider failure",
+      "provider_error": "provider stopped: timed out waiting for memory to free",
+      "actual_die_unobserved": true,
+      "capture_driver_not_executed": true
+    }
+  ],
+  "gb205_initial_create": {
+    "contract_id_observed": false,
+    "reason": "unknown: original stderr not retained; repeated authoritative queries found no new object",
+    "retry_consumed_conservatively": true
+  },
+  "gb203_retry_used": true,
+  "gb203_further_rental_authority": false,
+  "gb207": {
+    "status": "no verified VM offer found; no rental or measured die values",
+    "final_queries": [
+      {
+        "observed_utc": "2026-10-26T12:43:01.334370+00:00",
+        "query": "verified=true vms_enabled=true rentable=true rented=false gpu_name=RTX_5050; all GPU counts; storage150",
+        "offers": 0,
+        "response_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "observed_utc": "2026-10-26T12:43:01.374370+00:00",
+        "query": "verified=true rentable=true rented=false gpu_name in [RTX_5050,RTX_5050_Laptop_GPU]; VM unspecified; all GPU counts; storage150",
+        "offers": 0,
+        "response_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    ],
+    "limit": "Point-in-time market snapshots; not evidence that GB207 hardware never exists."
+  },
+  "limits": [
+    "No native GB203 capture; both candidates failed before SSH, so actual die and kfwc discovery were unobserved.",
+    "No native GB207 capture; no neighboring-die value substituted.",
+    "Known supplied Windows observer corpora contain GB202/BW6 and GB205/BW5; no matched GB206 observer was located in the bounded review.",
+    "GA104 raw was not located in supplied directories; its retained census is not a complete startup oracle."
+  ],
+  "cleanup": {
+    "all_attempted_contracts_api_absent": true,
+    "all_owned_watchdogs_cancelled_after_absence": true
+  }
+}

@@ -1,4 +1,4 @@
-STATUS: RESEARCH, 2026-10-26 — proper native Windows580.88 captures on GB202, GB205 and GB206; eight exact-question rows per measured die. GB203/207 remain pending. No neighboring-die values are substituted.
+STATUS: RESEARCH, 2026-10-26 — proper native Windows580.88 captures on GB202, GB205 and GB206; eight exact-question rows per observed die. GB203 blocked by pre-SSH provider failures; GB207 has no qualifying offer. No neighboring-die values are substituted.
 
 # Blackwell Windows reference and die table
 
@@ -143,3 +143,11 @@ MEASURED (2026-10-26, WC1 round2 lease `57809174`; `traces/wc1_20261026/round2/g
 MEASURED (2026-10-26, `traces/wc1_20261026/round2/gb206/constants.json`): 8 exact-question rows agree across both complete captures. The +M cells and appended census column are scoped to this GPU/PCI id/driver; the exact input and typed values are in the receipt. `constant_delta_vs_gb202.tsv` compares only equal full request hashes; a different query is labeled different_question even if its reply matches. The 520-byte opaque row remains a bounded prefix/count observation (`9064_observation.json`).
 
 MEASURED (2026-10-26, `traces/wc1_20261026/round2/gb206/vs_gb202.tsv`, `vs_ga104.tsv`): per-control request/reply sizes and status inventories are compared with complete GB202/580.88 and retained GA104/596.51. GA104 retains its missing-prefix10277 limit. Counts and retained-only calls are not hardware-family invariants.
+
+## Round2 remaining die coverage
+
+MEASURED (2026-10-26, WC1 round2, `traces/wc1_20261026/round2/availability.json`): both GB203-target leases failed before SSH: first the provider lacked `/dev/kvm`, then the different-machine/different-host retry stopped while waiting for memory to free. Neither actual die identity nor kfwc discovery was observed on those boxes. The allowed retry is exhausted; the GB203 column remains open. The unchanged Windows rehearsal was never executed there.
+
+MEASURED (2026-10-26, WC1 round2, `traces/wc1_20261026/round2/availability.json`): final verified RTX5050 searches returned zero offers both with VM enabled/all GPU counts and with VM unspecified/all GPU counts. GB207 remains unmeasured. These are market snapshots, not a claim that the hardware cannot be rented later. Every created instance was destroyed by exact id and verified absent; no extra rental was used to fill a neighboring die's values.
+
+CODE READ (`tools/windows-capture/rehearse/rehearse.ps1:52`): the actual rehearsal requires exactly one NVIDIA display device; multi-GPU offers were excluded. The native template's optional marketplace RAM search default was initially treated too strictly, then corrected before the single-device GB203 retry; no runtime, identity, driver or completeness check changed. The later provider memory timeout establishes a launch failure on that reservation, not a general Windows RAM requirement.
