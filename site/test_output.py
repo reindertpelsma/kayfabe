@@ -24,7 +24,9 @@ class Metadata(HTMLParser):
         if tag == "title":
             self.tags["title"] = True
         elif tag == "meta":
-            self.tags[values.get("name", values.get("property"))] = values.get("content")
+            self.tags[values.get("name", values.get("property", values.get("http-equiv")))] = (
+                values.get("content")
+            )
         elif tag == "link" and values.get("rel") == "canonical":
             self.tags["canonical"] = values.get("href")
         elif tag == "form":
@@ -97,6 +99,8 @@ class BuiltOutput(unittest.TestCase):
         for path in [OUTPUT / "index.html", OUTPUT / "docs/index.html"]:
             self.assertIn({"action": target, "method": "get"}, Metadata(path).forms)
             self.assertIn('name="search"', path.read_text())
+        for path in [OUTPUT / "docs/index.html", OUTPUT / "docs/latest/index.html"]:
+            self.assertEqual(Metadata(path).tags["refresh"], "0;url=" + target)
         index = (OUTPUT / "docs/index.html").read_text()
         for version in versions:
             self.assertIn(version["label"], index)
