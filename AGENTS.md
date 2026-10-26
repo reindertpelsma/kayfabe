@@ -46,6 +46,7 @@ is frozen (see *Layout*).
   emulated channels, which have no GPU work behind them, complete in the VMM.
 - **Unsafe** code only in `kf-linux-raw`, `kf-qemu` and `kf-cuda`, and only in files named
   `*_unsafe.rs`.
+- User-visible behaviour change updates docs/howto/ in the same PR; never put design notes into docs/howto/.
 - **Doc hygiene** (paid for repeatedly):
   - Every design doc opens with a dated `STATUS` line: LIVE / SUPERSEDED / ANSWERED /
     DESIGN-ONLY / RESEARCH.
