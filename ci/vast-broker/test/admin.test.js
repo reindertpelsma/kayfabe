@@ -56,8 +56,9 @@ for (const path of ['list', 'stop']) {
   test('admin public gateway hides ' + path, async () => {
     let calls = 0;
     const gateway = createGateway({ authorize: async () => calls++ });
-    const response = await gateway.fetch(internal(path), {
+    const response = await gateway.fetch(internal(path, undefined, 'https://broker.example'), {
       ...env,
+      RENTING_ENABLED: 'false',
       LEDGER: {
         idFromName: () => 1,
         get: () => {
@@ -104,7 +105,11 @@ for (const path of ['list', 'stop']) {
 
 test('admin list includes active and ended runs, newest first, exact whitelist', async () => {
   const storage = new MemoryStorage();
-  const older = record('999-1', 1000, { ended: 61000, verdict: 'PASS' });
+  const older = record('999-1', 1000, {
+    ended: 61000,
+    verdict: 'PASS',
+    branch: { token: 'PRIVATE-SENTINEL' },
+  });
   await storage.put('record:999-1', older);
   await storage.put('record:1000-1', record('1000-1', 2000));
   await storage.put('log:1000-1:0', 'PRIVATE-SENTINEL');
@@ -121,6 +126,7 @@ test('admin list includes active and ended runs, newest first, exact whitelist',
   assert.equal(data.runs[0].boot_seconds, 42);
   assert.equal(data.runs[1].state, 'NONE');
   assert.equal(data.runs[1].phase, 'NONE');
+  assert.equal(data.runs[1].branch, null);
   assert.equal(data.runs[1].cost_estimate_usd, 0.5 / 60 + 0.01);
   assert.equal(JSON.stringify(data).includes('PRIVATE-SENTINEL'), false);
 });
@@ -148,10 +154,33 @@ test('admin list caps at 100 newest records and excludes nested/non-scalar value
   for (const row of data.runs) assert.deepEqual(Object.keys(row).sort(), fields);
 });
 
-test('admin list refuses a truncated ledger instead of claiming newest records', async () => {
+for (const count of [1000, 1001])
+  test('admin list refuses truncated ledger at ' + count + ' records', async () => {
+    const storage = new MemoryStorage();
+    for (let i = 1; i <= count; i++) await storage.put('record:' + i, record(String(i), i));
+    assert.equal((await new BrokerLedger({ storage }, env).fetch(internal('list'))).status, 503);
+  });
+
+test('admin list cap still holds with ended runs and missing optional fields', async () => {
   const storage = new MemoryStorage();
-  for (let i = 1; i <= 1000; i++) await storage.put('record:' + i, record(String(i), i));
-  assert.equal((await new BrokerLedger({ storage }, env).fetch(internal('list'))).status, 503);
+  for (let i = 1; i <= 101; i++)
+    await storage.put(
+      'record:' + i,
+      record(String(i), i, {
+        ended: i + 1000,
+        firstReportAt: undefined,
+        id: null,
+        phase: undefined,
+      }),
+    );
+  const response = await new BrokerLedger({ storage }, env).fetch(internal('list'));
+  assert.equal(response.status, 200);
+  const { runs } = await response.json();
+  assert.equal(runs.length, 100);
+  assert.equal(runs[0].run, '101');
+  assert.equal(runs.at(-1).run, '2');
+  assert.equal(runs[0].boot_seconds, null);
+  assert.equal(runs[0].instance_id, null);
 });
 
 for (const body of [{ run: '123-1' }, { all: true }]) {
@@ -204,7 +233,11 @@ for (const body of [{ run: '123-1' }, { all: true }]) {
     assert.ok(
       calls
         .slice(deletion + 1)
-        .some((c) => c.method === 'GET' && new URL(c.url).pathname === '/api/v1/instances/'),
+        .some(
+          (c) =>
+            c.method === 'GET' &&
+            new URL(c.url).pathname.replace(/\/$/, '') === '/api/v0/instances/900',
+        ),
     );
   });
 
@@ -218,6 +251,41 @@ for (const body of [{ run: '123-1' }, { all: true }]) {
     assert.equal((await h.storage.get('record:123-1')).ended, null);
     assert.equal((await h.storage.get('record:123-1')).closed, 'STOPPED');
     assert.equal(await h.storage.get('open:123-1'), true);
+  });
+
+  test(
+    'admin stop retains liability after DELETE acknowledgement with instance present: ' + label,
+    async () => {
+      const h = await setup();
+      await h.call();
+      const fetcher = async (input, init) => {
+        if (init?.method === 'DELETE') return Response.json({ success: true });
+        return h.cloud.fetch(input, init);
+      };
+      const object = new BrokerLedger({ storage: h.storage }, h.bindings);
+      object.service = createService({ env: h.bindings, storage: h.storage, fetch: fetcher });
+      assert.equal((await object.fetch(internal('stop', body))).status, 503);
+      assert.equal((await h.storage.get('record:123-1')).ended, null);
+      assert.equal((await h.storage.get('record:123-1')).closed, 'STOPPED');
+      assert.equal((await h.storage.get('cost:123-1')).ended, null);
+      assert.equal(await h.storage.get('open:123-1'), true);
+    },
+  );
+
+  test('admin stop cannot work around missing owner configuration: ' + label, async () => {
+    const object = new BrokerLedger(
+      { storage: new MemoryStorage() },
+      {
+        ...env,
+        OWNER_STOP_TOKEN: '',
+      },
+    );
+    object.service = {
+      fetch: () => {
+        throw Error('must not forward');
+      },
+    };
+    assert.equal((await object.fetch(internal('stop', body))).status, 503);
   });
 }
 

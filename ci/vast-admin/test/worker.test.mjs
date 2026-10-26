@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import { jwt, jwk, clock } from '../../vast-broker/test/helpers.js';
 
 // FALSIFIER: missing/invalid Access identity can read or stop, the wrong owner can enter,
@@ -89,44 +90,47 @@ for (const path of ['/', '/api/list', '/api/stop'])
     assert.equal(h.calls.length, 0);
   });
 
-for (const patch of [
-  { email: undefined },
-  { aud: 'other' },
-  { iss: 'https://other.example' },
-  { exp: clock / 1000 - 1 },
-  { nbf: clock / 1000 + 60 },
-  { exp: undefined },
-])
-  test('admin UI rejects invalid Access claims ' + Object.keys(patch), async () => {
+for (const path of ['/api/list', '/api/stop'])
+  for (const patch of [
+    { email: undefined },
+    { aud: 'other' },
+    { iss: 'https://other.example' },
+    { exp: clock / 1000 - 1 },
+    { nbf: clock / 1000 + 60 },
+    { exp: undefined },
+  ])
+    test('admin UI rejects invalid Access claims ' + path + ' ' + Object.keys(patch), async () => {
+      const h = await fixture();
+      const response = await h.call(path, { bearer: await token(patch) });
+      assert.equal(response.status, patch.email === undefined && 'email' in patch ? 403 : 401);
+      assert.equal(h.calls.length, 0);
+    });
+
+for (const path of ['/api/list', '/api/stop'])
+  for (const patch of [
+    { OWNER_EMAIL: '' },
+    { ACCESS_AUDIENCE: '' },
+    { ACCESS_TEAM_DOMAIN: '' },
+    { ACCESS_TEAM_DOMAIN: 'https://test-team.cloudflareaccess.com' },
+    { ACCESS_TEAM_DOMAIN: 'attacker.example' },
+  ])
+    test('admin UI unconfigured policy ' + path + ' ' + JSON.stringify(patch), async () => {
+      const h = await fixture(patch);
+      assert.equal((await h.call(path, { bearer: await token() })).status, 503);
+      assert.equal(h.calls.length, 0);
+      assert.equal(h.keyCalls.length, 0);
+    });
+
+for (const path of ['/api/list', '/api/stop'])
+  test('admin UI rejects corrupted signature and oversized assertion ' + path, async () => {
     const h = await fixture();
-    const response = await h.call('/api/list', { bearer: await token(patch) });
-    assert.equal(response.status, patch.email === undefined && 'email' in patch ? 403 : 401);
+    const signed = await token();
+    const parts = signed.split('.');
+    parts[2] = (parts[2][0] === 'a' ? 'b' : 'a') + parts[2].slice(1);
+    for (const bearer of [parts.join('.'), 'x'.repeat(8193)])
+      assert.equal((await h.call(path, { bearer })).status, 401);
     assert.equal(h.calls.length, 0);
   });
-
-for (const patch of [
-  { OWNER_EMAIL: '' },
-  { ACCESS_AUDIENCE: '' },
-  { ACCESS_TEAM_DOMAIN: '' },
-  { ACCESS_TEAM_DOMAIN: 'https://test-team.cloudflareaccess.com' },
-  { ACCESS_TEAM_DOMAIN: 'attacker.example' },
-])
-  test('admin UI unconfigured/invalid policy fails closed ' + JSON.stringify(patch), async () => {
-    const h = await fixture(patch);
-    assert.equal((await h.call('/api/list', { bearer: await token() })).status, 503);
-    assert.equal(h.calls.length, 0);
-    assert.equal(h.keyCalls.length, 0);
-  });
-
-test('admin UI rejects corrupted signature and oversized assertion', async () => {
-  const h = await fixture();
-  const signed = await token();
-  const parts = signed.split('.');
-  parts[2] = (parts[2][0] === 'a' ? 'b' : 'a') + parts[2].slice(1);
-  for (const bearer of [parts.join('.'), 'x'.repeat(8193)])
-    assert.equal((await h.call('/api/list', { bearer })).status, 401);
-  assert.equal(h.calls.length, 0);
-});
 
 test('admin UI never trusts email header or Access cookie without a JWT', async () => {
   const h = await fixture();
@@ -175,7 +179,14 @@ for (const body of [{ run: '123-1' }, { all: true }])
     assert.equal(h.calls[0].headers.has('Authorization'), false);
   });
 
-for (const body of [{}, { run: '../cron' }, { all: true, run: '123-1' }, null, []])
+for (const body of [
+  {},
+  { run: '../cron' },
+  { all: true, run: '123-1' },
+  { run: '123-1', extra: true },
+  null,
+  [],
+])
   test('admin UI rejects invalid stop payload ' + JSON.stringify(body), async () => {
     const h = await fixture();
     assert.equal((await h.call('/api/stop', { bearer: await token(), body })).status, 400);
@@ -205,8 +216,13 @@ test('admin UI rejects foreign-origin stop and wrong media type', async () => {
 test('admin UI reconstructs JWKS for each request', async () => {
   const h = await fixture();
   const bearer = await token();
-  await h.call('/api/list', { bearer });
-  await h.call('/api/list', { bearer });
+  for (let i = 0; i < 2; i++) {
+    const response = await h.call('/api/list', { bearer });
+    assert.equal(response.status, 200);
+    assert.ok(Array.isArray((await response.json()).runs));
+    assert.equal(h.calls[i].url, 'https://internal.invalid/admin/list');
+    assert.equal(h.calls[i].method, 'GET');
+  }
   assert.equal(h.keyCalls.length, 2);
 });
 
@@ -231,4 +247,90 @@ test('admin UI binding references the existing broker DO without migrations or s
   assert.match(config, /class_name = "BrokerLedger"/);
   assert.match(config, /script_name = "kayfabe-vast-broker"/);
   assert.doesNotMatch(config, /migrations|VAST_API_KEY|OWNER_STOP_TOKEN/);
+});
+
+const pageFixture = async () => {
+  const h = await fixture();
+  const response = await h.call('/', { bearer: await token() });
+  const html = await response.text();
+  const nodes = new Map();
+  const node = (tag) => ({
+    tag,
+    children: [],
+    textContent: '',
+    append(child) {
+      this.children.push(child);
+    },
+    replaceChildren(fragment) {
+      this.children = fragment.children;
+    },
+    set innerHTML(_) {
+      throw Error('Unsafe HTML insertion');
+    },
+  });
+  for (const id of ['status', 'columns', 'runs', 'stop-all']) nodes.set(id, node(id));
+  const calls = [];
+  let confirmed = false;
+  let timer;
+  const active = { run: '123-1', ended_at: null, branch: '<img src=x onerror=alert(1)>' };
+  const ended = { run: '124-1', ended_at: clock };
+  runInNewContext(/<script>([\s\S]*?)<\/script>/.exec(html)[1], {
+    document: {
+      createElement: node,
+      createDocumentFragment: () => node('fragment'),
+      getElementById: (id) => nodes.get(id),
+    },
+    fetch: async (path, init = {}) => {
+      calls.push({ path, init });
+      return Response.json(path === '/api/list' ? { runs: [active, ended] } : { state: 'NONE' });
+    },
+    confirm: () => confirmed,
+    setInterval: (action, delay) => {
+      timer = { action, delay };
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  return {
+    nodes,
+    calls,
+    timer,
+    active,
+    confirm: () => {
+      confirmed = true;
+    },
+  };
+};
+
+test('admin UI page renders safe cells and Stop only for active runs', async () => {
+  const h = await pageFixture();
+  const rows = h.nodes.get('runs').children;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].children[2].textContent, h.active.branch);
+  assert.equal(rows[1].children.at(-1).children.length, 0);
+  const button = rows[0].children.at(-1).children[0];
+  await button.onclick();
+  const stops = h.calls.filter((c) => c.path === '/api/stop');
+  assert.equal(stops.length, 1);
+  assert.deepEqual(JSON.parse(stops[0].init.body), { run: '123-1' });
+  assert.equal(button.disabled, false);
+  await h.nodes.get('stop-all').onclick({ target: h.nodes.get('stop-all') });
+  assert.equal(h.calls.filter((c) => c.path === '/api/stop').length, 1);
+  assert.equal(h.timer.delay, 10000);
+  const before = h.calls.length;
+  await h.timer.action();
+  assert.equal(h.calls.length, before + 1);
+});
+
+test('admin UI Stop all cancels without request and confirms one stop', async () => {
+  const h = await pageFixture();
+  const button = h.nodes.get('stop-all');
+  assert.equal(h.nodes.get('runs').children[1].children.at(-1).children.length, 0);
+  await button.onclick({ target: button });
+  assert.equal(h.calls.filter((c) => c.path === '/api/stop').length, 0);
+  h.confirm();
+  await button.onclick({ target: button });
+  const stops = h.calls.filter((c) => c.path === '/api/stop');
+  assert.equal(stops.length, 1);
+  assert.deepEqual(JSON.parse(stops[0].init.body), { all: true });
+  assert.equal(button.disabled, false);
 });

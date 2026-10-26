@@ -1058,9 +1058,102 @@ export function createService({
 }
 export class BrokerLedger {
   constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
     this.service = createService({ env, storage: ctx.storage });
   }
   async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith('/admin/')) {
+      if (url.origin !== 'https://internal.invalid' || url.search) return notFound();
+      const json = (data, status = 200) =>
+        Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
+      if (url.pathname === '/admin/list' && request.method === 'GET') {
+        try {
+          const entries = await this.ctx.storage.list({ prefix: 'record:', limit: 1000 });
+          // Never label a truncated storage scan as the newest runs.
+          if (entries.size >= 1000) return json({ error: 'Ledger limit reached' }, 503);
+          const text = (v) => (typeof v === 'string' ? v.slice(0, 256) : null);
+          const number = (v) => (Number.isFinite(v) ? v : null);
+          const runs = [...entries.values()]
+            .sort((a, b) => b.started - a.started || String(b.key).localeCompare(String(a.key)))
+            .slice(0, 100)
+            .map((r) => {
+              const phase =
+                r.ended !== null
+                  ? 'NONE'
+                  : (r.phase ??
+                    (r.resultAt !== undefined
+                      ? 'GRACE'
+                      : r.firstReportAt !== undefined
+                        ? 'TESTING'
+                        : r.id
+                          ? 'BOOTING'
+                          : 'CREATING'));
+              return {
+                run: text(r.key),
+                sha: text(r.sha),
+                branch: text(r.branch),
+                profile: text(r.profile ?? 'check'),
+                die: text(r.die),
+                gpu_model: text(r.hardware?.gpu_name ?? r.gpu),
+                machine_id: providerId(r.machineId),
+                host_id: providerId(r.hostId),
+                instance_id: providerId(r.id),
+                state: text(r.ended !== null ? 'NONE' : (r.closed ?? phase)),
+                phase: text(phase),
+                verdict: text(r.verdict),
+                cost_estimate_usd: number(
+                  ((r.computeStoragePrice ?? r.price) *
+                    Math.max(0, (r.ended ?? Date.now()) - r.started)) /
+                    3600000 +
+                    (r.bandwidthCost ?? 0),
+                ),
+                started_at: number(r.started),
+                ended_at: number(r.ended),
+                boot_seconds: number((r.firstReportAt - r.started) / 1000),
+              };
+            });
+          return json({ runs });
+        } catch {
+          return json({ error: 'List unavailable' }, 503);
+        }
+      }
+      if (url.pathname === '/admin/stop' && request.method === 'POST') {
+        let selection;
+        try {
+          selection = JSON.parse(new TextDecoder().decode(await readBounded(request, 256)));
+          if (
+            !selection ||
+            Object.keys(selection).length !== 1 ||
+            !(
+              selection.all === true ||
+              (typeof selection.run === 'string' &&
+                /^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(selection.run))
+            )
+          )
+            throw Error();
+        } catch {
+          return json({ error: 'Invalid selection' }, 400);
+        }
+        if (!validSecret(this.env.OWNER_STOP_TOKEN))
+          return json({ error: 'Stop unavailable' }, 503);
+        // Enter exactly the existing owner stop path, including its queue and cleanup checks.
+        const path = selection.all ? '/stop-all' : '/stop/' + selection.run;
+        const prefix = this.env.BROKER_PATH_PREFIX ? '/' + this.env.BROKER_PATH_PREFIX : '';
+        const response = await this.service.fetch(
+          new Request(this.env.WORKER_URL + prefix + path, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + this.env.OWNER_STOP_TOKEN },
+          }),
+        );
+        // The owner route's response contains logs/capability bindings; never relay those.
+        return response.ok
+          ? json({ state: 'NONE' })
+          : json({ error: 'Stop unavailable' }, response.status);
+      }
+      return notFound();
+    }
     if (
       new URL(request.url).origin === 'https://internal.invalid' &&
       new URL(request.url).pathname === '/cron'
