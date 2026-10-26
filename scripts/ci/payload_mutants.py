@@ -357,6 +357,165 @@ CASES += [
         ),
         "vast_report.py",
     ),
+    (
+        "summary-not-printed-on-failure",
+        scoped(
+            "execute_stages",
+            '            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)\n            print_final_summary(result)',
+            '            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)',
+        ),
+    ),
+    (
+        "summary-not-printed-on-pass",
+        scoped(
+            "execute_stages",
+            "    persist_result(destination, result)\n    print_final_summary(result)\n    return 0",
+            "    persist_result(destination, result)\n    return 0",
+        ),
+    ),
+    (
+        "summary-printed-before-the-failure-line",
+        scoped(
+            "execute_stages",
+            '            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)\n            print_final_summary(result)',
+            '            print_final_summary(result)\n            print("KF_PAYLOAD_FAIL suite=" + failure, flush=True)',
+        ),
+    ),
+    (
+        "summary-missing-after-preflight-failure",
+        replace(
+            '        print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)\n        print_final_summary(result)',
+            '        print("KF_PAYLOAD_FAIL suite=" + error.name, flush=True)',
+        ),
+    ),
+    (
+        "summary-ignores-the-progress-file",
+        replace(
+            'files = [*stage["progress"], stage["output"], *stage.get("detail", [])]',
+            'files = [stage["output"]]',
+        ),
+    ),
+    (
+        "summary-budget-removed",
+        scoped(
+            "final_summary", "budget = SUMMARY_LIMIT - len(begin)", "budget = 10**9 - len(begin)"
+        ),
+    ),
+    (
+        "summary-failure-queued-behind-passes",
+        scoped(
+            "final_summary",
+            '[("stage", i, s) for i, s in enumerate(stage_rows) if i in failed]\n        + [("fail"',
+            '[]\n        + [("fail"',
+        ),
+    ),
+    (
+        "summary-line-not-cut",
+        scoped(
+            "printable",
+            'return line if len(line) <= limit else line[: limit - 3] + "..."',
+            "return line",
+        ),
+    ),
+    (
+        "summary-keeps-control-characters",
+        scoped("printable", 'c if " " <= c <= "~" else', "c if True else"),
+    ),
+    (
+        "summary-first-red-line-is-the-last",
+        scoped(
+            "first_failing_line",
+            "            if is_failing(line):\n                return printable(line)",
+            "            if is_failing(line):\n                last = line",
+        ),
+    ),
+    (
+        "summary-cause-from-the-wrong-end",
+        scoped("step_cause", "lines[-3:]", "lines[:3]"),
+    ),
+    (
+        "summary-timeout-not-marked",
+        scoped("execute_stages", 'result="TIMEOUT" if rc == 124 else "FAIL"', 'result="FAIL"'),
+    ),
+    (
+        "kvm-totals-not-checked",
+        replace(
+            "        if passed < 1 or failed or ran < 1 or skipped:",
+            "        if False:",
+        ),
+    ),
+    (
+        "kvm-rc-ignored",
+        replace(
+            '    if re.search(r"^KVM_TESTS_RC=[1-9]", text, re.M):',
+            "    if False:",
+        ),
+    ),
+    (
+        "kvm-red-lines-not-red",
+        replace("|CARGO|KVM_TESTS)_RC=", "|CARGO)_RC="),
+    ),
+    (
+        "crate-tests-row-required-again",
+        replace(
+            '    requested = len(re.findall(r"^KVM_TESTS_REQUESTED=1$", text, re.M))',
+            '    only(r"^TESTS passed ([1-9][0-9]*) failed 0$", text, "kf_tests", rows)\n'
+            '    requested = len(re.findall(r"^KVM_TESTS_REQUESTED=1$", text, re.M))',
+        ),
+    ),
+    (
+        "failed-tests-not-listed",
+        replace("            found = FAILED_TEST.match(line) or item", "            found = None"),
+    ),
+    (
+        "failed-test-cap-removed",
+        replace("    return seen[:limit], len(seen)", "    return seen, len(seen)"),
+    ),
+    (
+        "panic-dropped",
+        replace(
+            '            record["panic"] = first_panic(files)', '            record["panic"] = ""'
+        ),
+    ),
+    (
+        "fold-launders-tokens",
+        replace("            if is_test_identifier(m[0])", "            if True"),
+    ),
+    (
+        "fold-pieces-too-long",
+        replace("FOLD = 30", "FOLD = 40"),
+    ),
+    (
+        "fold-digit-rule-dropped",
+        replace("        and sum(c.isdigit() for c in run) * 5 <= len(run)\n", ""),
+    ),
+    (
+        "summary-names-not-folded",
+        replace('" name=" + fold_identifiers(printable(name))', '" name=" + printable(name)'),
+    ),
+    (
+        "summary-panic-not-folded",
+        replace('" line=" + fold_identifiers(record["panic"])', '" line=" + record["panic"]'),
+    ),
+    (
+        "cargo-quiet-not-exported",
+        replace('            CARGO_TERM_QUIET="true",\n', ""),
+    ),
+    (
+        "cargo-colour-not-disabled",
+        replace('            CARGO_TERM_COLOR="never",\n', ""),
+    ),
+    (
+        "cargo-progress-not-disabled",
+        replace('            CARGO_TERM_PROGRESS_WHEN="never",\n', ""),
+    ),
+    (
+        "rustflags-weakened-by-the-payload",
+        replace(
+            '            CARGO_TERM_QUIET="true",\n',
+            '            CARGO_TERM_QUIET="true",\n            RUSTFLAGS="-A warnings",\n',
+        ),
+    ),
 ]
 
 COLLECT = """import io,json,unittest,importlib.util
@@ -400,8 +559,10 @@ def main():
             "test_vast_payload_v7.py",
             "test_vast_payload_admission.py",
             "test_vast_payload_diagnostics.py",
+            "test_vast_payload_failures.py",
             "test_vast_payload_guest_guard.py",
             "test_vast_payload_result_logs.py",
+            "test_vast_payload_summary.py",
             "test_vast_box.py",
             "vast_report.py",
         ]:
@@ -418,12 +579,20 @@ def main():
             "test_owner_copy_family_rule.py",
         ):
             shutil.copyfile(HERE.parent / "bench/tests" / name, bench / "tests" / name)
+        fixtures = root / "ci/vast-broker/test/fixtures"
+        fixtures.mkdir(parents=True)
+        shutil.copyfile(
+            HERE.parents[1] / "ci/vast-broker/test/fixtures/scrub-vectors.json",
+            fixtures / "scrub-vectors.json",
+        )
         for name in ("sweep_ada_20261018", "sweep_dies_20261018", "sweep_windows_20261021"):
             shutil.copytree(HERE.parents[1] / "traces" / name, root / "traces" / name)
         baseline = run(root)
         assert not baseline["killers"], baseline
         for case in CASES:
             name, source = case[:2]
+            if len(sys.argv) > 1 and sys.argv[1] not in name:
+                continue
             shared = len(case) == 3 and case[2] == "native_xid_guard.py"
             shell = len(case) == 3 and case[2] == "vast_payload_hooks.sh"
             reporter = len(case) == 3 and case[2] == "vast_report.py"

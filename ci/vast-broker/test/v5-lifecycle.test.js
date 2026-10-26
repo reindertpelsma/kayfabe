@@ -55,7 +55,7 @@ for (const label of ['money', 'clock'])
           c.passGrace,
           c.failGrace,
         ].map((x) => x / minute),
-        [40, 180, 10, 10, 15, 5, 10],
+        [75, 180, 10, 10, 15, 5, 10],
       );
   });
 for (const restart of [false, true])
@@ -202,7 +202,7 @@ test('V5 default reservation binds owner clock plan into the lease', async () =>
   const h = await unbound();
   await rent(h);
   const r = await record(h);
-  assert.equal(r.bootDeadline, clock + 40 * minute);
+  assert.equal(r.bootDeadline, clock + 75 * minute);
   assert.equal(r.hardDeadline, clock + 180 * minute);
   assert.equal(r.softDeadline, clock + 170 * minute);
 });

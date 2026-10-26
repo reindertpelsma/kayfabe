@@ -11,6 +11,19 @@ function utf8Prefix(text, limit) {
   }
   return '';
 }
+// A run of 32+ [A-Za-z0-9_-] characters is blanked as a possible token, EXCEPT a snake_case test name
+// (2026-10-26, gate run 40263112941: libtest prints `<name> --- FAILED`, and 60-character names were
+// blanked, leaving `[redacted] --- FAILED`). Kept only if: lowercase words joined by `_`, at least three,
+// each at most 20 characters, at most 128 characters in all, at most one digit in five. Hex, base64url,
+// mixed-case, hyphenated and digit-heavy strings still match the generic rule, and known secrets and
+// token families are replaced by value or by pattern regardless. runner.py scrub and
+// scripts/ci/vast_payload.py (is_test_identifier) hold the same grammar; test/fixtures/scrub-vectors.json
+// pins all three.
+const SNAKE_NAME = /^[a-z][a-z0-9]{0,19}(?:_[a-z0-9]{1,20}){2,}$/;
+function keepsRun(value) {
+  if (value.length > 128 || !SNAKE_NAME.test(value)) return false;
+  return value.replace(/[^0-9]/g, '').length * 5 <= value.length;
+}
 export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true } = {}) {
   const raw = new TextDecoder('utf-8').decode(bytes),
     encoder = new TextEncoder();
@@ -34,7 +47,9 @@ export function sanitizeBoxText(bytes, cap = 8192, secrets = [], { tail = true }
       /(?<![A-Za-z0-9_:-])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[A-Za-z0-9]{1,32})?(?![A-Za-z0-9_:-])/gi,
       '[address]',
     )
-    .replace(/[A-Za-z0-9_-]+/g, (value) => (value.length >= 32 ? '[redacted]' : value));
+    .replace(/[A-Za-z0-9_-]+/g, (value) =>
+      value.length >= 32 && !keepsRun(value) ? '[redacted]' : value,
+    );
   text = text.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]');
   for (const secret of secrets) if (secret) text = text.split(secret).join('[redacted]');
   text = text.replace(/:{2,}/g, (value) => value.split('').join(' ')).replaceAll('##[', '# #[');

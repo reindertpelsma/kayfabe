@@ -140,7 +140,7 @@ Main Worker cron schedule: `* * * * *`
 off; `workers_dev = true` remains the public hostname.
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js, src/index.js] Check policy remains
-$1/hour, $6 daily, $30 rolling, $8 reserve, 40-minute boot and 180-minute hard limit.
+$1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and 180-minute hard limit.
 MAX_INET_USD_PER_GB defaults to 0.005 in each direction; the offer query, admission and contract
 recheck enforce it. DENIED_COUNTRIES defaults to CU, IR, KP, SY, CN, HK, MO (owner ruling
 2026-10-24: CN, HK and MO boxes repeatedly had broken or very slow CDN/Ubuntu-mirror access) and

@@ -1,0 +1,32 @@
+{
+  "keep": {
+    "terse-failed-line": "a_very_long_test_name_that_exceeds_thirty_two_characters_bad --- FAILED",
+    "stdout-banner": "---- kf_chan_user_lifecycle_model_rejects_unknown_channel stdout ----",
+    "thread-line": "thread 'registered_tokens_skip_the_exit_and_everything_else_traps_in_order' (382263) panicked at t.rs:2:77:",
+    "failures-list": "    registered_tokens_skip_the_exit_and_everything_else_traps_in_order",
+    "verbose-path": "test kf_linux_raw::kvm_vm_discovery::opens_a_vm_and_maps_one_page_at_a_time ... FAILED",
+    "digits-in-name": "ga106_fb_get_info_v2_reports_the_flat_alias_size_for_ga106 --- FAILED"
+  },
+  "redact": {
+    "one-char-run": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "hex40": "0123456789abcdef0123456789abcdef01234567",
+    "hex64": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "base64url-mixed": "dGhpcy1pcy1hLXZlcnktc2VjcmV0LXRva2VuLTEyMzQ1Ng_x-Y",
+    "upper-snake": "ABC_DEF_GHI_JKL_MNO_PQR_STU_VWX_YZ_ABC",
+    "capitalised-snake": "Test_name_with_upper_case_word_in_the_middle_of_it",
+    "hyphenated": "unit-path-only-pppppppppppppppppppppppppppppppp",
+    "base36-with-underscores": "k3j9x2m8q7h4n6p1_r5c8v0b3w9z4y2_a7s6d5",
+    "two-words": "aaaaaaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbb",
+    "word-over-20": "aaaaaaaaaaaaaaaaaaaaa_bbbbbbbbbb_cccccccccc",
+    "over-128": "word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word_word",
+    "ghs-family": "ghs_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "fine-grained-family": "github_pat_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "digit-heavy-words": "a1b2c3d4e5f6_a1b2c3d4e5f6_a1b2c3d4e5f6",
+    "two-long-words": "abcdefghijklmnopqrst_uvwxyzabcdefghijkl",
+    "over-128-b": "token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token_token",
+    "later-word-over-20": "abcdefgh_ccccccccccccccccccccccccc_de",
+    "leading-capital": "Test_case_name_with_leading_capital_letter",
+    "first-word-over-20-b": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_ab_cd",
+    "later-word-over-20-b": "ab_cd_eeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  }
+}

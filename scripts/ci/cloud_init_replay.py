@@ -384,7 +384,6 @@ def replay():
             [
                 "provision",
                 "cuda_host",
-                "kf_tests",
                 "gates",
                 "kf3_build",
                 "raw_suite",
