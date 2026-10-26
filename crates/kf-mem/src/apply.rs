@@ -91,6 +91,14 @@ pub struct ApplyCfg<'a> {
 pub struct Applied {
     /// One `KFWR_ACK_*` per run, in run order.
     pub codes: Vec<u8>,
+    /// Sparse intents admitted as sparse coverage (not backed memory maps).
+    pub sparse_placed: usize,
+    /// Sparse bytes deliberately left invalid by the disabled/closed fallback.
+    pub sparse_unhonoured_bytes: u64,
+    /// Sparse placements logically retired.
+    pub sparse_retired: usize,
+    /// Retired bytes that an occupied sparse block must continue absorbing.
+    pub sparse_retained_bytes: u64,
     /// Maps placed.
     pub mapped: usize,
     /// Placements removed (host calls).
