@@ -889,3 +889,5 @@ fn only_sparse_bookkeeping_stops_on_a_poisoned_layout() {
         .collect();
     assert_eq!(refused, [(true, false)]);
 }
+
+include!("ens5_tests.rs");
