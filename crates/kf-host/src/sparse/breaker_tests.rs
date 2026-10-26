@@ -1,4 +1,3 @@
-
 // ── ADVERSARY (breaker) tests, 2026-10-26. Every test here is EXPECTED RED against 3e52e0161. ──
 //
 // Occupancy accounting. `Block::live` is a 512-bit mask: it can only describe the FIRST 2 MiB of
@@ -44,7 +43,11 @@ fn breaker_i1_refinement_after_transient_refusal_frees_live_coarse_block() {
     // Rm::release asserts "a populated block must never be freed"
     t.route_map(&r, RANGE, b, PAGE, true).expect("plain map B");
     r.backed(b, PAGE);
-    assert_eq!(r.state(a), Some(PAGE), "map A survived the refinement for B");
+    assert_eq!(
+        r.state(a),
+        Some(PAGE),
+        "map A survived the refinement for B"
+    );
 }
 
 /// I1/I7: with the block count one below the cap, a map in the MIDDLE of a coarse block is
@@ -93,5 +96,8 @@ fn breaker_i1_clear_accepts_a_space_with_a_live_coarse_page() {
     let va = LO + 40 * NORMAL_GRAIN;
     t.route_map(&r, RANGE, va, PAGE, true).expect("plain map");
     r.backed(va, PAGE);
-    assert!(t.clear(&r).is_err(), "a space with a live mapping is not recyclable");
+    assert!(
+        t.clear(&r).is_err(),
+        "a space with a live mapping is not recyclable"
+    );
 }

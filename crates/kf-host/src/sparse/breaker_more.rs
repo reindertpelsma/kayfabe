@@ -1,4 +1,3 @@
-
 // ── More adversary tests (breaker, 2026-10-26). EXPECTED RED unless a comment says otherwise ───
 
 /// I3 / documented fallback: "a sparse run that lands in a POPULATED normal block stays INVALID,
@@ -11,9 +10,13 @@
 fn breaker_i3_sparse_run_in_a_populated_coarse_block_is_a_counted_fallback_not_an_error() {
     let (mut t, r) = wide(100);
     r.fail.set(1);
-    t.route_map(&r, RANGE, LO + PAGE, PAGE, true).expect("plain map");
+    t.route_map(&r, RANGE, LO + PAGE, PAGE, true)
+        .expect("plain map");
     r.backed(LO + PAGE, PAGE);
-    assert_eq!(t.stats.coarse_maps, 1, "precondition: the map is in the coarse block");
+    assert_eq!(
+        t.stats.coarse_maps, 1,
+        "precondition: the map is in the coarse block"
+    );
     let got = t.admit(&r, LO + 10 * NORMAL_GRAIN, SPARSE_GRAIN);
     assert_eq!(got, Ok(false), "closed fallback expected, got {got:?}");
     assert!(
@@ -28,7 +31,8 @@ fn breaker_i3_sparse_run_in_a_populated_coarse_block_is_a_counted_fallback_not_a
 fn breaker_i3_a_refused_sparse_run_is_not_refused_again_by_the_next_walk() {
     let (mut t, r) = wide(100);
     r.fail.set(1);
-    t.route_map(&r, RANGE, LO + PAGE, PAGE, true).expect("plain map");
+    t.route_map(&r, RANGE, LO + PAGE, PAGE, true)
+        .expect("plain map");
     r.backed(LO + PAGE, PAGE);
     let va = LO + 10 * NORMAL_GRAIN;
     let first = t.admit(&r, va, SPARSE_GRAIN);
@@ -58,7 +62,8 @@ fn breaker_i7_budget_recovers_when_every_mapping_is_gone() {
     let va = LO + 60 * NORMAL_GRAIN;
     t.route_map(&r, RANGE, va, PAGE, true).expect("plain map");
     assert_eq!(
-        t.stats.coarse_maps, coarse,
+        t.stats.coarse_maps,
+        coarse,
         "an empty space (no live map) still cannot refine: {} blocks of budget 12",
         t.blocks.len()
     );
@@ -115,8 +120,13 @@ fn top_tree(limit: usize) -> (Reservations, cost::NullRm) {
 #[test]
 fn breaker_edge_plain_map_on_the_last_page_of_the_range() {
     let (mut t, rm) = top_tree(100);
-    for (va, len) in [(TOP - PAGE, PAGE), (TOP - 2 * NORMAL_GRAIN, 2 * NORMAL_GRAIN)] {
-        let p = t.route_map(&rm, 9, va, len, true).expect("plain map at the top");
+    for (va, len) in [
+        (TOP - PAGE, PAGE),
+        (TOP - 2 * NORMAL_GRAIN, 2 * NORMAL_GRAIN),
+    ] {
+        let p = t
+            .route_map(&rm, 9, va, len, true)
+            .expect("plain map at the top");
         assert_eq!(p.iter().map(|x| x.2).sum::<u64>(), len);
         assert_eq!(p.last().map(|x| x.1 + x.2), Some(va + len));
     }
@@ -129,7 +139,9 @@ fn breaker_edge_plain_map_on_the_last_page_of_the_range() {
 fn breaker_edge_row_crossing_the_top_of_the_last_reservation_is_routed() {
     let (mut t, rm) = top_tree(100);
     let va = TOP - 2 * PAGE;
-    let p = t.route_map(&rm, 9, va, 4 * PAGE, true).expect("row across the top");
+    let p = t
+        .route_map(&rm, 9, va, 4 * PAGE, true)
+        .expect("row across the top");
     assert_eq!(p.iter().map(|x| x.2).sum::<u64>(), 4 * PAGE);
     assert!(t.pieces(9, va, 4 * PAGE).is_ok(), "its unmap routes too");
 }
@@ -153,6 +165,12 @@ fn breaker_edge_sparse_at_the_top() {
 fn breaker_edge_arguments_refused_by_the_twin_off_path_only() {
     let (mut t, rm) = top_tree(100);
     assert!(t.route_map(&rm, 9, 0, PAGE, true).is_err());
-    assert!(t.route_map(&rm, 9, u64::MAX - PAGE + 1, 2 * PAGE, true).is_err());
-    assert!(t.route_map(&rm, 9, (1 << 40) + 1, PAGE, true).is_err(), "unaligned");
+    assert!(
+        t.route_map(&rm, 9, u64::MAX - PAGE + 1, 2 * PAGE, true)
+            .is_err()
+    );
+    assert!(
+        t.route_map(&rm, 9, (1 << 40) + 1, PAGE, true).is_err(),
+        "unaligned"
+    );
 }

@@ -1,4 +1,3 @@
-
 // ── Adversarial op-sequence model (breaker, 2026-10-26) ───────────────────────────────────────
 //
 // A deterministic xorshift generator draws hostile sequences of the verbs the VA-manager side
@@ -90,7 +89,11 @@ mod fz {
             Ok(h)
         }
         fn release(&self, h: u32) -> Result<(), RmError> {
-            let (lo, hi, _) = self.blocks.borrow_mut().remove(&h).ok_or(RmError::NoMemory)?;
+            let (lo, hi, _) = self
+                .blocks
+                .borrow_mut()
+                .remove(&h)
+                .ok_or(RmError::NoMemory)?;
             // The RM takes every mapping of a freed reservation with it.
             let gone: Vec<u64> = self
                 .maps
@@ -147,6 +150,9 @@ mod fz {
                     {
                         continue;
                     }
+                    // apply_entry retires the sparse intent of a leaf that becomes valid, and
+                    // preserves the block for the incoming mapping, BEFORE the map
+                    let _ = t.retire(&m, va, len, true);
                     let pieces = t
                         .route_map(&m, RANGE, va, len, !t.poisoned)
                         .map_err(|e| at(&format!("a plain map was refused: {e:?}")))?;
@@ -214,7 +220,9 @@ mod fz {
                         }
                         Err(_) => {
                             if m.sparse_pages() != before_sparse {
-                                return Err(at("a refused admission left sparse state behind (I3)"));
+                                return Err(at(
+                                    "a refused admission left sparse state behind (I3)",
+                                ));
                             }
                             if wanted_pages(&t) != before_wanted {
                                 return Err(at(
@@ -336,8 +344,8 @@ mod fz {
         let tiles = [0, 1, 2, 3, 7, 8, 9, 31, 32, 33, 61, 62, 63];
         let tile = tiles[r.below(tiles.len() as u64) as usize];
         let off = [0, 1, 15, 16, 17, 256, 400, 496, 511][r.below(9) as usize] * PAGE;
-        let len = [1, 1, 2, 15, 16, 17, 32, 64, 255, 511, 512, 513, 1024][r.below(13) as usize]
-            * PAGE;
+        let len =
+            [1, 1, 2, 15, 16, 17, 32, 64, 255, 511, 512, 513, 1024][r.below(13) as usize] * PAGE;
         let va = LO + tile * NORMAL_GRAIN + off;
         let end = (LO + WIDE * NORMAL_GRAIN).min(va + len);
         (va, end - va)
@@ -370,7 +378,11 @@ mod fz {
                     SPARSE_GRAIN * (1 + r.below(3)),
                 )),
                 9 => ops.push(Op::Retire(va, len, r.below(2) == 0)),
-                10 => ops.push(if r.below(3) == 0 { Op::Clear } else { Op::Retry }),
+                10 => ops.push(if r.below(3) == 0 {
+                    Op::Clear
+                } else {
+                    Op::Retry
+                }),
                 _ if fail_ok => ops.push(Op::FailNth(1 + r.below(4) as usize)),
                 _ => {}
             }
@@ -413,7 +425,13 @@ mod fz {
         (ops, msg)
     }
 
-    pub fn campaign(limit: usize, seeds: u64, len: usize, fail_ok: bool, lenient: bool) -> Option<String> {
+    pub fn campaign(
+        limit: usize,
+        seeds: u64,
+        len: usize,
+        fail_ok: bool,
+        lenient: bool,
+    ) -> Option<String> {
         let mut seen: BTreeMap<String, (Vec<Op>, String, u64)> = BTreeMap::new();
         for s in 1..=seeds {
             let ops = draw(s.wrapping_mul(0x9E37_79B9_7F4A_7C15), len, fail_ok);
@@ -447,4 +465,3 @@ mod fz {
         Some(out)
     }
 }
-

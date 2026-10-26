@@ -1,4 +1,3 @@
-
 // ── COST adversary (breaker, 2026-10-26): work per call must not grow with the tree (I4) ──────
 //
 // The space's reservation tree holds up to `BLOCK_LIMIT` (8192) blocks and only ever GROWS
@@ -68,7 +67,11 @@ mod cost {
         let (mut t, rm) = full_tree(blocks);
         // a 64 KiB tile in an EMPTY gap slot near the middle of the space
         let va = BASE + 2 * (blocks as u64 / 4) * NORMAL_GRAIN;
-        assert_eq!(t.admit(&rm, va, SPARSE_GRAIN), Ok(false), "precondition: declined");
+        assert_eq!(
+            t.admit(&rm, va, SPARSE_GRAIN),
+            Ok(false),
+            "precondition: declined"
+        );
         per_call_us(reps, |_| {
             let _ = t.admit(&rm, va, SPARSE_GRAIN);
         })
@@ -80,10 +83,14 @@ mod cost {
         // the coarse remainder after the last tile, populated in its first 2 MiB by a map that
         // could not be refined (refine = false stands for a declined/refused refinement)
         let last = t.blocks.values().next_back().map(|b| b.lo).expect("block");
-        t.route_map(&rm, 9, last + PAGE, PAGE, false).expect("plain map");
+        t.route_map(&rm, 9, last + PAGE, PAGE, false)
+            .expect("plain map");
         // a sparse run elsewhere in that coarse block: replace() meets the occupied mask
         let va = last + 8 * NORMAL_GRAIN;
-        assert!(t.admit(&rm, va, SPARSE_GRAIN).is_err(), "precondition: hard refusal");
+        assert!(
+            t.admit(&rm, va, SPARSE_GRAIN).is_err(),
+            "precondition: hard refusal"
+        );
         per_call_us(reps, |_| {
             let _ = t.admit(&rm, va, SPARSE_GRAIN);
         })
@@ -131,7 +138,9 @@ mod cost {
 
 #[test]
 fn breaker_cost_scaling_table() {
-    eprintln!("blocks | decline us | refused us | map+unmap us | retry us | retire us | admit+retire us");
+    eprintln!(
+        "blocks | decline us | refused us | map+unmap us | retry us | retire us | admit+retire us"
+    );
     for n in [100usize, 1000, 5000, 8190, 20000] {
         let reps = if n >= 5000 { 3 } else { 20 };
         eprintln!(
@@ -175,7 +184,10 @@ fn breaker_i4_declined_admission_cost_does_not_scale_with_the_tree() {
 #[test]
 fn breaker_i4_refused_admission_at_a_full_tree_is_cheap() {
     let us = cost::refused_us(8190, 5);
-    assert!(us < 5_000.0, "a refused sparse admission at 8190 blocks takes {us:.0} us");
+    assert!(
+        us < 5_000.0,
+        "a refused sparse admission at 8190 blocks takes {us:.0} us"
+    );
 }
 
 /// I4: a plain map/unmap pair is O(blocks below it) because `mark` filters after `range_mut`.
@@ -195,7 +207,10 @@ fn breaker_i4_plain_map_cost_does_not_scale_with_the_tree() {
 #[test]
 fn breaker_i4_retry_with_no_held_intent_is_free() {
     let us = cost::retry_us(8190, 5);
-    assert!(us < 500.0, "retry of a tree with no held intent takes {us:.0} us");
+    assert!(
+        us < 500.0,
+        "retry of a tree with no held intent takes {us:.0} us"
+    );
 }
 
 /// I4: a 4000-map apply entry (route_map + mark per map) at a full tree must not reach 25 ms.
@@ -223,5 +238,8 @@ fn breaker_i4_four_thousand_declines_at_a_full_tree_stay_under_one_second() {
         let _ = t.admit(&rm, va, SPARSE_GRAIN);
     }
     let ms = t0.elapsed().as_secs_f64() * 1e3 * 4000.0 / f64::from(N);
-    assert!(ms < 1000.0, "4000 declined admissions would take {ms:.0} ms");
+    assert!(
+        ms < 1000.0,
+        "4000 declined admissions would take {ms:.0} ms"
+    );
 }

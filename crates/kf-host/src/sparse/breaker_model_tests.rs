@@ -1,4 +1,3 @@
-
 /// STRICT: every invariant, including live-page occupancy accuracy (I1).
 #[test]
 fn breaker_model_strict_roomy_budget() {
