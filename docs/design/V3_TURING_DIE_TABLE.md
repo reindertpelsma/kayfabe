@@ -85,7 +85,7 @@ CODE READ (`V3_WINDOWS_ONLY_CONSTANTS_20261013.md`): the existing221-tag classif
 
 ## Round3b native-conversion watch
 
-CODE READ (WC1 round3b operator direction, native installer SHA256 `c9b88d8d2373d9c29818b1321191635bf65f468145b204f8812bb29e7b531ee9`): capture leases use the previously exercised direct native converter after a privately archived/hash-verified Linux reference. The Windows startup oracle and D3D readback supply the post-conversion reference; this produces no kayfabe verdict. The prior retained-Linux/IOMMU stop is historical below and does not gate this route.
+INFERRED (round3b operator plan, `traces/wc1_20261026/round3/availability.json`): eligible capture leases will use the native converter after privately archiving the Linux reference and checking its SHA256. Windows startup oracles and D3D readbacks will supply the post-conversion reference; no kayfabe verdict is planned. This Linux-reference staging has not yet run on a Turing capture lease. FALSIFIER: the hold marker, archive integrity, native identity proof or Windows reference checks fail. The historical retained-Linux/IOMMU stop below is not a prerequisite for direct native conversion.
 
 MEASURED (2026-10-26, `traces/wc1_20261026/round3/availability.json`, round3b poll1): the first broad verified/VM-capable/rate<=0.40 snapshot contains0Turing offers. The read-only watch records25min snapshots until20:24:20UTC; listings require manual admission, with no automatic create/start/destroy. Turing value cells remain unmeasured while the watch runs.
 
