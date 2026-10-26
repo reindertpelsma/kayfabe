@@ -10,7 +10,7 @@ const P: u64 = 4096;
 const L: u64 = 65536;
 const VA: u64 = 0x20_0000;
 const SPARSE: u32 = 1 << 7;
-const SPARSE_KIND: u8 = 4;
+const SPARSE_KIND: u8 = 0x80;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {

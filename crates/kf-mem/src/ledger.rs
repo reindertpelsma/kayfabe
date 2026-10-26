@@ -39,7 +39,7 @@ pub const AP_SYS_COHERENT: u8 = 2;
 /// System memory, non-coherent.
 pub const AP_SYS_NONCOHERENT: u8 = 3;
 /// Internal leaf kind for a sparse run. This is not a hardware aperture code.
-pub const AP_SPARSE: u8 = 4;
+pub const AP_SPARSE: u8 = 0x80;
 
 /// Why a walked leaf could not become a [`Desired`] row. Refused by name, never clamped.
 #[derive(Debug, Clone, PartialEq, Eq)]
