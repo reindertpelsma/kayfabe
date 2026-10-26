@@ -1,0 +1,622 @@
+{
+  "run": "WC1-round3-reference-projection-20261026",
+  "date": "2026-10-26",
+  "kind": "Existing Blackwell measurements only; no Turing observation",
+  "observations": [
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x20800a59",
+      "question": "16 zero bytes",
+      "request_sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+      "values": [
+        "0x6c000",
+        "0x0",
+        "0x1e12c0",
+        "0x0"
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x2080121f",
+      "question": "maxSlots=4; other request fields zero",
+      "request_sha256": "63ec4e51dc28c12e3e6f85f1111d3fcb8574ddadc6d35e59b899b9f4a9baa490",
+      "values": [
+        "0x4",
+        "0x37b1000",
+        "0x464",
+        "0x1000",
+        "0xdec4000",
+        "0x1000"
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u64",
+        "u64",
+        "u64",
+        "u64"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x20802801",
+      "question": "u32=3",
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "values": [
+        "0x1"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x20802806",
+      "question": "u32=11",
+      "request_sha256": "cb30e91817239109ffd0a5870046e128f04619da80c7624d921162fdfe514f76",
+      "values": [
+        "0x0"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x20802a08",
+      "question": "u32=0",
+      "request_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "values": [
+        "0x4000"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x50700709",
+      "question": "8 zero bytes",
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0x24"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x20809001",
+      "question": "8 zero bytes",
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x3fc005f",
+        "0x0"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB202",
+      "windows_driver": "580.88",
+      "pci_device": "0x2b85",
+      "control": "0x20809009",
+      "question": "8 zero bytes",
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0xd"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 3,
+      "source": "gb202_r580_constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x20800a59",
+      "question": {
+        "zero_bytes": 16
+      },
+      "request_sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+      "values": [
+        "0x6c000",
+        "0x0",
+        "0x1e12c0",
+        "0x0"
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x2080121f",
+      "question": {
+        "maxSlots": 4,
+        "other_request_fields_zero": true
+      },
+      "request_sha256": "63ec4e51dc28c12e3e6f85f1111d3fcb8574ddadc6d35e59b899b9f4a9baa490",
+      "values": [
+        "0x4",
+        "0x1631000",
+        "0x464",
+        "0x1000",
+        "0x58c4000",
+        "0x1000"
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u64",
+        "u64",
+        "u64",
+        "u64"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x20802801",
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "values": [
+        "0x1"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x20802806",
+      "question": {
+        "u32": 5
+      },
+      "request_sha256": "2594b6a92ebfb1c3312deb7d01c015fb95e9fbe9bd7bc6b527af07813ec7b910",
+      "values": [
+        "0x0"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x20802a08",
+      "question": {
+        "zero_bytes": 4
+      },
+      "request_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "values": [
+        "0x4000"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x20809001",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x3fc005f",
+        "0x0"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x20809009",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0xd"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB205",
+      "windows_driver": "580.88",
+      "pci_device": "2F04",
+      "control": "0x50700709",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0x24"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb205/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x20800a59",
+      "question": {
+        "zero_bytes": 16
+      },
+      "request_sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+      "values": [
+        "0x6c000",
+        "0x0",
+        "0x1e12c0",
+        "0x0"
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x2080121f",
+      "question": {
+        "maxSlots": 4,
+        "other_request_fields_zero": true
+      },
+      "request_sha256": "63ec4e51dc28c12e3e6f85f1111d3fcb8574ddadc6d35e59b899b9f4a9baa490",
+      "values": [
+        "0x4",
+        "0x106d000",
+        "0x464",
+        "0x1000",
+        "0x41b4000",
+        "0x1000"
+      ],
+      "value_types": [
+        "u32",
+        "u32",
+        "u64",
+        "u64",
+        "u64",
+        "u64"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x20802801",
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "values": [
+        "0x1"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x20802806",
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "values": [
+        "0x0"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x20802a08",
+      "question": {
+        "zero_bytes": 4
+      },
+      "request_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "values": [
+        "0x4000"
+      ],
+      "value_types": [
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x20809001",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x3fc005f",
+        "0x0"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x20809009",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0xd"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    },
+    {
+      "die": "GB206",
+      "windows_driver": "580.88",
+      "pci_device": "2D04",
+      "control": "0x50700709",
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "values": [
+        "0x0",
+        "0x24"
+      ],
+      "value_types": [
+        "u32",
+        "u32"
+      ],
+      "rm_status": 0,
+      "repeated_captures": 2,
+      "source": "round2/gb206/constants.json"
+    }
+  ],
+  "comparison": [
+    {
+      "control": "0x20800a59",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "consistent_so_far",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x2080121f",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "different_values",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x20802801",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "consistent_so_far",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x20802806",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": false,
+      "observation_relation": "different_question",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x20802a08",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "consistent_so_far",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x20809001",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "consistent_so_far",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x20809009",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "consistent_so_far",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    },
+    {
+      "control": "0x50700709",
+      "observed_dies": [
+        "GB202",
+        "GB205",
+        "GB206"
+      ],
+      "same_exact_question": true,
+      "observation_relation": "consistent_so_far",
+      "mechanism_for_unknown_value": null,
+      "family_rule_admitted": false,
+      "turing_observations": 0
+    }
+  ],
+  "ga104_value_comparison": "Unavailable: retained control census has no reviewed typed constant bodies."
+}

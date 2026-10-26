@@ -1,0 +1,53 @@
+{
+  "run": "WC1-round3-ogkm-source-index-20261026",
+  "tag": "595.91.07",
+  "commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+  "source_license": "MIT; Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES",
+  "kind": "CODE READ candidate registration; no native Windows observation or advertised class claim",
+  "per_die": {
+    "TU102": {
+      "registration_rows": 102,
+      "unique_class_macros": 98,
+      "unique_resolved_class_ids": 98,
+      "unresolved_macros": [],
+      "engine_candidate_rows": 53
+    },
+    "TU104": {
+      "registration_rows": 103,
+      "unique_class_macros": 98,
+      "unique_resolved_class_ids": 98,
+      "unresolved_macros": [],
+      "engine_candidate_rows": 54
+    },
+    "TU106": {
+      "registration_rows": 104,
+      "unique_class_macros": 98,
+      "unique_resolved_class_ids": 98,
+      "unresolved_macros": [],
+      "engine_candidate_rows": 55
+    },
+    "TU116": {
+      "registration_rows": 102,
+      "unique_class_macros": 98,
+      "unique_resolved_class_ids": 98,
+      "unresolved_macros": [],
+      "engine_candidate_rows": 53
+    },
+    "TU117": {
+      "registration_rows": 102,
+      "unique_class_macros": 98,
+      "unique_resolved_class_ids": 98,
+      "unresolved_macros": [],
+      "engine_candidate_rows": 53
+    }
+  },
+  "tu106_vs_tu116": {
+    "only_tu106_macros": [],
+    "only_tu116_macros": [],
+    "shared_macros": 98
+  },
+  "numeric_resolution_limit": "Unpreprocessed direct numeric/alias consensus; empty if unresolved.",
+  "engine_limit": "Candidate engine registrations; not physical engine counts or runtime availability.",
+  "native_turing_windows_observations": 0,
+  "family_constant_rules_admitted": 0
+}

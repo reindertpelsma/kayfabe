@@ -1,4 +1,4 @@
-STATUS: RESEARCH, 2026-10-26 — Turing capture preparation; no TU102/TU104/TU106/TU116/TU117 native value measured by WC1 round3 yet.
+STATUS: RESEARCH, 2026-10-26 — no native Turing Windows capture: TU116 retained-Linux passthrough stopped at missing IOMMU; TU106/optional offers unavailable. All Turing Windows value cells remain unmeasured.
 
 # Turing Windows reference and die table
 
@@ -83,6 +83,22 @@ CODE READ (`traces/wc1_20261026/ga104_inventory_receipt.json`, `V3_BLACKWELL_DIE
 
 CODE READ (`V3_WINDOWS_ONLY_CONSTANTS_20261013.md`): the existing221-tag classification supplies current-meaning/layout exclusions for the listed controls. Native Turing allocation/control inventory is pending. The coverage artifact will separate numeric-id matches, public layouts and explicit die registrations; no Windows control or class is currently asserted observed on Turing.
 
-## Host-reference state
+## Linux reference and native-capture outcome
 
-CODE READ (WC1 round3 protocol): Linux host references are required before and after Windows. No round3 host reference is yet available; no kayfabe attribution is admitted. The round3 working plan retains Linux and uses a native VFIO guest; passthrough preflight and both host references are pending.
+MEASURED (2026-10-26, lease `57825549`, `traces/wc1_20261026/round3/tu116_host_preflight.json`): the assigned GTX1660SUPER/PCI21c4 passes the existing CUDA device/context probe on Linux580.95.05 before and after a read-only passthrough preflight; both have Xid0. No copy/kernel workload was claimed. The VM exposes0IOMMUgroups and no DMAR/IVRS/virtio-IOMMU device despite kernel IOMMU support being enabled. Windows, kfwc and kayfabe were never started. No unsafe-no-IOMMU or driver/kernel/firmware change was made. The Linux-after-preflight record is explicitly not a post-Windows reference. There is no guest verdict or Windows constant to promote. Private reference records were archived and hash-verified before exact-id destroy/APIabsence.
+
+MEASURED (2026-10-26, `traces/wc1_20261026/round3/availability.json`): preferredTU116machine21141 disappeared immediately before create, so the expressly allowed54666fallback was used. TU106machine13058 and qualifyingoptionalTU102/TU104 offers were absent from the recorded queries. The later return of21141 was not used to admit a second post-SSH TU116 attempt.
+
+## Concrete source coverage
+
+CODE READ (ogkm595.91.07 `9f087a6d4e86d85acc0ce1d354d6276fe5047b29`, `src/nvidia/generated/g_gpu_class_list.c`; `traces/wc1_20261026/round3/ogkm_turing_class_candidates.tsv`): each of TU102/TU104/TU106/TU116/TU117 has98 distinct resolved class IDs in its explicit generic/non-engine/engine candidate lists. Registration-row counts are102/103/104/102/102 respectively; duplicate engine registrations are retained. These are source candidates, not physical engine counts or observed Windows allocations. TU106 and TU116 share98 class macros; TU106 has two additional `NVC4B0_VIDEO_DECODER` candidates for `ENG_NVDEC(1)` and `(2)`.
+
+CODE READ (same tag, `src/common/sdk/nvidia/inc/class/cl2081.h:33`, `g_gpu_class_list.c:266` and `:372`): `NV2081_BINAPI` has a public class declaration and explicit TU106/TU116 registration. Its class declaration does not close `0x2081010d`, whose current layout/meaning remains a gap in the221-tag Windows inventory. Native Turing issuance is unobserved. `reference_control_numeric_definitions.tsv` separately indexes numeric macro hits at595.91.07 against the existing GA104/GB202/GB205/GB206 censuses; its layout/semantic-match column is unestablished. No numeric match was promoted to a physical reply.
+
+CODE READ (same tag, `src/common/inc/swref/published/nv_ref.h:130`, `src/common/inc/swref/published/nv_arch.h:87`–`:91`, `src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_tu102.c:347`): the source identifies Turing architecture0x16, TU106implementation6 and TU116implementation8, and programs libos arguments through mailbox0/1. kfwc's existing family decoder selects that public route; no live Windows discovery result was obtained here.
+
+## Existing reference observations for the pending Turing diff
+
+MEASURED (2026-10-26, source captures `57752437/startup1`, `57802404/startup1`, `57809174/startup1`; `traces/wc1_20261026/round3/reference_native_alloc_classes.json`): all three Blackwell references contain requests for the same33 distinct GSP RM_ALLOC class IDs. This census excludes CPU-side allocation paths. It contains no Turing allocation observation.
+
+MEASURED (2026-10-26, `traces/wc1_20261026/round3/reference_constant_observations.json`): the same exact `0x2080121f` question has different GfxP size values on GB202/GB205/GB206 despite those matching observed class sets. Six other reviewed exact questions are consistent so far; `0x20802806` uses different inputs and is not a value-equality comparison. The artifact admits0family constant rules and records0Turing observations. GA104 typed-value comparison is unavailable from its retained census. The requested native Turing control/class/value differential remains unperformed.

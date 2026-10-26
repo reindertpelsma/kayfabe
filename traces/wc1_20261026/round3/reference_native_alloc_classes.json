@@ -1,0 +1,41 @@
+{
+  "run": "WC1-round3-existing-native-class-projection-20261026",
+  "source": "Existing private GSP header census only; no raw handles/bodies exported",
+  "function": 103,
+  "scope": "Observed GSP RM_ALLOC classes only, not all CPU-side Windows classes",
+  "unique_class_ids": {
+    "GB202": 33,
+    "GB205": 33,
+    "GB206": 33
+  },
+  "per_pair": [
+    {
+      "left": "GB202",
+      "right": "GB205",
+      "only_left": [],
+      "only_right": [],
+      "shared": 33
+    },
+    {
+      "left": "GB202",
+      "right": "GB206",
+      "only_left": [],
+      "only_right": [],
+      "shared": 33
+    },
+    {
+      "left": "GB205",
+      "right": "GB206",
+      "only_left": [],
+      "only_right": [],
+      "shared": 33
+    }
+  ],
+  "turing_observations": 0,
+  "field_source": {
+    "ogkm_tag": "595.91.07",
+    "public_layout": "src/nvidia/generated/g_rpc-structures.h:1530",
+    "field": "rpc_gsp_rm_alloc_v03_00.hClass",
+    "scope": "Requested allocation classes, not runtime advertised/supported class set"
+  }
+}

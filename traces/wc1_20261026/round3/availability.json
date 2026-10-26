@@ -1,0 +1,73 @@
+{
+  "run": "WC1-round3-market-20261026",
+  "date": "2026-10-26",
+  "queries": [
+    {
+      "query_artifact": "offers_initial",
+      "observed_utc": "2026-10-26T13:57:17.783028+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 0,
+      "tu116_54666_offers": 0,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "initial GPU-name query used noncanonical Super names"
+    },
+    {
+      "query_artifact": "offers_target_machines",
+      "observed_utc": "2026-10-26T13:58:54.810213+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 1,
+      "tu116_54666_offers": 1,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "authoritative market snapshot"
+    },
+    {
+      "query_artifact": "offers_low_rate",
+      "observed_utc": "2026-10-26T13:58:54.897213+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 1,
+      "tu116_54666_offers": 1,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "authoritative market snapshot"
+    },
+    {
+      "query_artifact": "offers_before_create",
+      "observed_utc": "2026-10-26T14:13:22.235867+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 0,
+      "tu116_54666_offers": 1,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "authoritative market snapshot"
+    },
+    {
+      "query_artifact": "offers_after_tu116_preflight",
+      "observed_utc": "2026-10-26T14:28:02.380553+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 1,
+      "tu116_54666_offers": 0,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "authoritative market snapshot"
+    },
+    {
+      "query_artifact": "tu106_requery",
+      "observed_utc": "2026-10-26T14:34:21.612281+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 0,
+      "tu116_54666_offers": 0,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "authoritative market snapshot"
+    },
+    {
+      "query_artifact": "offers_final",
+      "observed_utc": "2026-10-26T14:42:48.029253+00:00",
+      "target_13058_offers": 0,
+      "tu116_21141_offers": 0,
+      "tu116_54666_offers": 1,
+      "optional_2070_2080_models_under_030": 0,
+      "limit": "authoritative market snapshot"
+    }
+  ],
+  "tu106": "machine13058 unavailable in exact-machine and broad low-rate queries",
+  "optional_tu102_tu104": "no qualifying2070/2080 offer observed",
+  "tu116": "one Linux-only lease57825549; no Windows capture; closed/APIabsent",
+  "no_further_tu116_retry": "failure was post-SSH passthrough preflight, not a retryable pre-SSH provider fault"
+}

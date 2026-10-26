@@ -1,0 +1,31 @@
+{
+  "run": "WC1-round3-control-definition-index-20261026",
+  "ogkm_tag": "595.91.07",
+  "ogkm_commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+  "kind": "numeric definitions only; no inferred layouts/values",
+  "per_die": {
+    "GB202": {
+      "observed_control_ids": 183,
+      "numeric_macro_hits": 137,
+      "semantics_match_established": 0
+    },
+    "GB205": {
+      "observed_control_ids": 182,
+      "numeric_macro_hits": 137,
+      "semantics_match_established": 0
+    },
+    "GB206": {
+      "observed_control_ids": 183,
+      "numeric_macro_hits": 137,
+      "semantics_match_established": 0
+    },
+    "GA104": {
+      "observed_control_ids": 179,
+      "numeric_macro_hits": 134,
+      "semantics_match_established": 0
+    }
+  },
+  "turing_native_controls": 0,
+  "ga104_controls_sha256": "ec1cea7ae829543d1dee57574b04d0e130b1e9336d0ca377583d2d74adc0bcb6",
+  "ga104_missing_prefix": 10277
+}
