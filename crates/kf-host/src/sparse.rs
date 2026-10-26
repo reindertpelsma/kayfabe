@@ -67,10 +67,23 @@ pub(crate) struct Reservations {
 impl Reservations {
     pub(crate) fn new(guest: &[GuestVaRange], limit: usize) -> Self {
         Self {
-            blocks: guest.iter().filter(|g| g.handle != 0).map(|g| {
-                (g.lo, Block { lo: g.lo, hi: g.hi, handle: g.handle,
-                    sparse: false, live: [0; 8], wanted: [0; 8] })
-            }).collect(),
+            blocks: guest
+                .iter()
+                .filter(|g| g.handle != 0)
+                .map(|g| {
+                    (
+                        g.lo,
+                        Block {
+                            lo: g.lo,
+                            hi: g.hi,
+                            handle: g.handle,
+                            sparse: false,
+                            live: [0; 8],
+                            wanted: [0; 8],
+                        },
+                    )
+                })
+                .collect(),
             limit,
             stats: Stats::default(),
             poisoned: false,
@@ -83,15 +96,18 @@ impl Reservations {
     pub(crate) fn admit(&mut self, _: &dyn Ops, _: u64, _: u64) -> Result<bool, RmError> {
         Ok(false)
     }
-    pub(crate) fn retire(
-        &mut self, _: &dyn Ops, _: u64, _: u64, _: bool,
-    ) -> Result<u64, RmError> {
+    pub(crate) fn retire(&mut self, _: &dyn Ops, _: u64, _: u64, _: bool) -> Result<u64, RmError> {
         Ok(0)
     }
     pub(crate) fn mark(&mut self, _: u64, _: u64, _: bool) {}
-    pub(crate) fn retry(&mut self, _: &dyn Ops) -> Result<(), RmError> { Ok(()) }
+    pub(crate) fn retry(&mut self, _: &dyn Ops) -> Result<(), RmError> {
+        Ok(())
+    }
     pub(crate) fn pieces(
-        &self, range: u32, va: u64, len: u64,
+        &self,
+        range: u32,
+        va: u64,
+        len: u64,
     ) -> Result<Vec<(u32, u64, u64)>, RmError> {
         Ok(vec![(range, va, len)])
     }
