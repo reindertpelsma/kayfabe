@@ -1451,6 +1451,23 @@ impl GpuMirror {
 }
 
 impl MapTarget for GpuMirror {
+    fn sparse_twin(&self) -> bool {
+        self.bv.vas.sparse_twin()
+    }
+    fn map_sparse(&self, va: u64, len: u64, defer: bool) -> Result<Mapped, String> {
+        self.user_regions.check(va, len)?;
+        self.bv.vas.map_sparse(va, len, defer)
+    }
+    fn unmap_sparse(
+        &self,
+        va: u64,
+        len: u64,
+        replacement: bool,
+        defer: bool,
+    ) -> Result<u64, String> {
+        self.user_regions.check(va, len)?;
+        self.bv.vas.unmap_sparse(va, len, replacement, defer)
+    }
     fn withholds_privileged(&self) -> bool {
         // ★ P1+P2 inc D: ONE atomic load of the per-twin state word (`crate::twin`).
         !self.kernel_vas.is_kernel()
@@ -1671,6 +1688,17 @@ impl MapTarget for GpuMirror {
     }
     fn begin_refresh(&self) {
         self.bv.begin_refresh();
+        if let Err(e) = self.bv.vas.rm.retry_sparse(self.bv.vas.space) {
+            static LOGGED: AtomicU64 = AtomicU64::new(0);
+            if LOGGED
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    (n < 16).then_some(n.saturating_add(1))
+                })
+                .is_ok()
+            {
+                eprintln!("kf3: sparse retry refused: {e:?}");
+            }
+        }
     }
 }
 
@@ -1774,6 +1802,27 @@ pub const PREWARM_SPARES: u64 = 3;
 pub type Mirrors = std::sync::Arc<Mutex<std::collections::HashMap<VasKey, Mirror>>>;
 
 impl MapTarget for Target {
+    fn sparse_twin(&self) -> bool {
+        matches!(self, Target::Gpu(g) if g.sparse_twin())
+    }
+    fn map_sparse(&self, va: u64, len: u64, defer: bool) -> Result<Mapped, String> {
+        match self {
+            Target::Gpu(g) => g.map_sparse(va, len, defer),
+            _ => Ok(Mapped::HeldByHost),
+        }
+    }
+    fn unmap_sparse(
+        &self,
+        va: u64,
+        len: u64,
+        replacement: bool,
+        defer: bool,
+    ) -> Result<u64, String> {
+        match self {
+            Target::Gpu(g) => g.unmap_sparse(va, len, replacement, defer),
+            _ => Ok(0),
+        }
+    }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         match self {
             Target::Window(w) => w.map(d, defer),

@@ -777,6 +777,14 @@ pub struct VaStats {
     pub held: u64,
     /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
     pub vmm_overlaps: u64,
+    /// Sparse runs admitted and retired without backed-memory map rows.
+    pub sparse_placed: u64,
+    /// Sparse intent retirements.
+    pub sparse_retired: u64,
+    /// Closed fallback in normal blocks or at unsupported sparse granules.
+    pub sparse_unhonoured_bytes: u64,
+    /// Sparse-to-invalid bytes retained in occupied sparse blocks.
+    pub sparse_retained_bytes: u64,
     /// ★ Invalidate clears deferred because a target's accepted work was not live yet.
     pub deferred_clears: u64,
     /// ★ Hopper+ usermode-page views a target placed a trap for (BAR1, `V3_BAR1_DOORBELL.md`).
@@ -1647,6 +1655,22 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 .host_invalidates
                 .saturating_add(u64::from(a.invalidated));
             self.stats.held = self.stats.held.saturating_add(a.held as u64);
+            self.stats.sparse_placed = self
+                .stats
+                .sparse_placed
+                .saturating_add(a.sparse_placed as u64);
+            self.stats.sparse_retired = self
+                .stats
+                .sparse_retired
+                .saturating_add(a.sparse_retired as u64);
+            self.stats.sparse_unhonoured_bytes = self
+                .stats
+                .sparse_unhonoured_bytes
+                .saturating_add(a.sparse_unhonoured_bytes);
+            self.stats.sparse_retained_bytes = self
+                .stats
+                .sparse_retained_bytes
+                .saturating_add(a.sparse_retained_bytes);
             self.stats.vmm_overlaps = self
                 .stats
                 .vmm_overlaps

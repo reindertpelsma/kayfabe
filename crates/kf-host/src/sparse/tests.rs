@@ -376,3 +376,74 @@ fn a_late_sparse_admission_refusal_withdraws_the_first_new_tile() {
 fn a_refused_sparse_suffix_withdraws_all_new_intent() {
     late_admission_refusal(6);
 }
+
+fn full_replacement(va: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    assert!(t.admit(&r, va, SPARSE_GRAIN).unwrap());
+    // Replacing the entire sparse intent must leave sparse PTEs until the map.
+    r.guard.borrow_mut().insert(va, Some(0));
+    assert_eq!(t.retire(&r, va, SPARSE_GRAIN, true).unwrap(), 0);
+    r.guard.borrow_mut().clear();
+    populate(&mut t, &r, va, SPARSE_GRAIN);
+    assert_eq!(r.state(va), Some(PAGE));
+}
+#[test]
+fn a_full_sparse_to_vidmem_replacement_has_no_invalid_gap() {
+    full_replacement(LO);
+}
+#[test]
+fn a_full_sparse_to_dma_replacement_has_no_invalid_gap() {
+    full_replacement(LO + NORMAL_GRAIN);
+}
+#[test]
+fn retirement_of_two_pages_preserves_the_other_sparse_intents() {
+    let (mut t, r) = (tree(100), Rm::new());
+    assert!(t.admit(&r, LO, SPARSE_GRAIN).unwrap());
+    r.guard.borrow_mut().insert(LO + 3 * PAGE, Some(0));
+    assert_eq!(t.retire(&r, LO, 2 * PAGE, false).unwrap(), 2 * PAGE);
+    assert_eq!(t.stats.retained_bytes, 2 * PAGE);
+}
+#[test]
+fn sparse_retirement_preserves_a_backing_at_the_far_edge() {
+    let (mut t, r) = (tree(100), Rm::new());
+    let va = LO + NORMAL_GRAIN;
+    assert!(t.admit(&r, va, SPARSE_GRAIN).unwrap());
+    populate(&mut t, &r, va + SPARSE_GRAIN - PAGE, PAGE);
+    r.guard
+        .borrow_mut()
+        .insert(va + SPARSE_GRAIN - PAGE, Some(PAGE));
+    assert_eq!(t.retire(&r, va, SPARSE_GRAIN, false).unwrap(), SPARSE_GRAIN);
+}
+#[test]
+fn held_intent_in_a_different_tile_retries_after_dma_is_removed() {
+    let (mut t, r) = (tree(100), Rm::new());
+    let va = LO + 2 * NORMAL_GRAIN;
+    populate(&mut t, &r, va, 2 * PAGE);
+    assert!(!t.admit(&r, va, SPARSE_GRAIN).unwrap());
+    r.unmap(va, 2 * PAGE);
+    t.mark(va, 2 * PAGE, false);
+    assert_eq!(r.state(va), None);
+    t.retry(&r).unwrap();
+    assert_eq!(r.state(va), Some(0));
+}
+#[test]
+fn a_cancelled_held_suffix_is_not_sparsified_on_retry() {
+    let (mut t, r) = (tree(100), Rm::new());
+    let va = LO + NORMAL_GRAIN;
+    populate(&mut t, &r, va, PAGE);
+    assert!(!t.admit(&r, va, 2 * SPARSE_GRAIN).unwrap());
+    t.retire(&r, va, 2 * SPARSE_GRAIN, false).unwrap();
+    r.unmap(va, PAGE);
+    t.mark(va, PAGE, false);
+    t.retry(&r).unwrap();
+    assert_eq!(r.state(va + SPARSE_GRAIN), None);
+}
+
+#[test]
+fn a_hardware_sized_64k_leaf_run_is_honoured_exactly() {
+    let (mut t, r) = (tree(100), Rm::new());
+    r.guard.borrow_mut().insert(LO, None);
+    r.guard.borrow_mut().insert(LO + 131072, None);
+    assert!(t.admit(&r, LO + 65536, 65536).unwrap());
+    assert_eq!(r.state(LO + 65536), Some(0));
+}

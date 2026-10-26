@@ -514,6 +514,26 @@ impl HostVas<'_> {
 }
 
 impl MapTarget for HostVas<'_> {
+    fn sparse_twin(&self) -> bool {
+        self.rm.sparse_twin()
+    }
+    fn map_sparse(&self, va: u64, len: u64, _: bool) -> Result<Mapped, String> {
+        self.rm
+            .admit_sparse(self.space, va, len)
+            .map(|placed| {
+                if placed {
+                    Mapped::Placed
+                } else {
+                    Mapped::HeldByHost
+                }
+            })
+            .map_err(|e| format!("sparse admit {va:#x}+{len:#x}: {e:?}"))
+    }
+    fn unmap_sparse(&self, va: u64, len: u64, replacement: bool, _: bool) -> Result<u64, String> {
+        self.rm
+            .retire_sparse(self.space, va, len, replacement)
+            .map_err(|e| format!("sparse retire {va:#x}+{len:#x}: {e:?}"))
+    }
     // ★ P1+P2 inc A: a host GPU VA space — its vidmem leaves are bounded by the carve-out.
     fn gpu_space(&self) -> bool {
         true

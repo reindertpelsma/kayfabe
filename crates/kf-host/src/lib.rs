@@ -467,6 +467,16 @@ pub struct HostRm {
     /// ★ The host driver's measured layouts (`kf_abi::hostabi`): every carried struct goes through it.
     abi: kf_abi::hostabi::HostAbi,
     objects: Mutex<Objects>,
+    // Layout changes exclude RM allocations, controls and non-FIXED placements. None
+    // of these verbs is a vCPU operation. OFF does not acquire the new locks.
+    sparse_enabled: bool,
+    placement_gate: std::sync::RwLock<()>,
+    layout_poisoned: std::sync::atomic::AtomicBool,
+    sparse_spaces: Mutex<BTreeMap<u32, std::sync::Arc<Mutex<sparse::Reservations>>>>,
+    sparse_objects: Mutex<std::collections::BTreeSet<u32>>,
+    sparse_object_count: std::sync::atomic::AtomicUsize,
+    sparse_global_overflow: std::sync::atomic::AtomicU64,
+    sparse_totals: [std::sync::atomic::AtomicU64; 6],
     /// Subdevice notifiers this session has armed REPEAT — arming is per SUBDEVICE and legal only
     /// from `DISABLE` (`subdevice_ctrl_event_kernel.c:123-130`), so it is done once, here.
     armed: Mutex<std::collections::BTreeSet<u32>>,
@@ -493,6 +503,20 @@ pub struct HostRm {
 }
 
 impl HostRm {
+    fn placement_read(&self) -> Result<Option<std::sync::RwLockReadGuard<'_, ()>>, RmError> {
+        if !self.sparse_enabled {
+            return Ok(None);
+        }
+        let guard = self.placement_gate.read().map_err(|_| RmError::NoMemory)?;
+        if self
+            .layout_poisoned
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(RmError::NoMemory);
+        }
+        Ok(Some(guard))
+    }
+
     /// Open the one host RM session on GPU `gpu`: `nvidiactl` + `nvidia<N>`, version gate,
     /// `REGISTER_FD`, our own root client, device and subdevice, and the usermode window.
     ///
@@ -575,6 +599,14 @@ impl HostRm {
             classes,
             supported_class_ids: Vec::new(),
             armed: Mutex::new(std::collections::BTreeSet::new()),
+            sparse_enabled: sparse::enabled(),
+            placement_gate: std::sync::RwLock::new(()),
+            layout_poisoned: std::sync::atomic::AtomicBool::new(false),
+            sparse_spaces: Mutex::new(BTreeMap::new()),
+            sparse_objects: Mutex::new(std::collections::BTreeSet::new()),
+            sparse_object_count: std::sync::atomic::AtomicUsize::new(0),
+            sparse_global_overflow: std::sync::atomic::AtomicU64::new(0),
+            sparse_totals: Default::default(),
             arch_info: (0, 0, 0),
             card: CardInfo::default(),
             device_instance: 0,
@@ -963,6 +995,19 @@ impl HostRm {
         params: &mut [u8],
         inside: Option<&birth::InsideBirthPath>,
     ) -> Result<u32, RmError> {
+        let _placement = self.placement_read()?;
+        self.raw_alloc_exact_layout(parent, want, class, params, inside)
+    }
+
+    // Caller holds the exclusive placement guard while replacing empty reservations.
+    fn raw_alloc_exact_layout(
+        &self,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+        inside: Option<&birth::InsideBirthPath>,
+    ) -> Result<u32, RmError> {
         birth::admit_alloc_class(class, inside)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
@@ -1020,6 +1065,7 @@ impl HostRm {
         class: u32,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
+        let _placement = self.placement_read()?;
         birth::admit_alloc_class(class, None)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
@@ -1074,6 +1120,7 @@ impl HostRm {
         inner_at: usize,
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
+        let _placement = self.placement_read()?;
         birth::admit_alloc_class(class, None)?;
         // ⊘ The nested pointer is patched in place, so this block cannot be carried: it is sent
         // at the bench layout, which is only known correct on the interval the encoders were
@@ -1210,6 +1257,7 @@ impl HostRm {
         cmd: u32,
         payload: &mut [u8],
     ) -> Result<u32, RmError> {
+        let _placement = self.placement_read()?;
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
             h_client: self.client.raw(),
@@ -1260,6 +1308,11 @@ impl HostRm {
         is_shared_slice: bool,
         kind: u32,
     ) -> Result<u64, RmError> {
+        let _placement = if at.is_none() {
+            self.placement_read()?
+        } else {
+            None
+        };
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
         // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM
@@ -2227,6 +2280,16 @@ impl HostRm {
         let out = Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.forget(object);
+        if self.sparse_enabled
+            && self
+                .sparse_objects
+                .lock()
+                .expect("sparse objects")
+                .remove(&object)
+        {
+            self.sparse_object_count
+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        }
         Ok(())
     }
 }
