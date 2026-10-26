@@ -111,7 +111,16 @@ for (const count of [2, 4])
       false,
     );
   });
-for (const kind of ['same-machine', 'deadline', 'allowance', 'unclean', 'nonce', 'repeat'])
+for (const kind of [
+  'same-machine',
+  'deadline',
+  'allowance',
+  'unclean',
+  'nonce',
+  'repeat',
+  'cost',
+  'cap',
+])
   for (const variant of [1, 2])
     test('workerd provider replacement rejects ' + kind + variant, async (t) => {
       const { call, record, previous } = await fixture(t);
@@ -130,6 +139,8 @@ for (const kind of ['same-machine', 'deadline', 'allowance', 'unclean', 'nonce',
       const response = await call('/reserve', {
         record,
         retryNonce: kind === 'nonce' ? 'd'.repeat(32) : previous.nonce,
+        ...(kind === 'cost' ? { cost: 1 + variant / 10 } : {}),
+        ...(kind === 'cap' ? { config: variant === 1 ? { dailyCount: 1 } : { daily: 0.01 } } : {}),
       });
       assert.notEqual(response.status, 200);
       assert.deepEqual(await call('/snapshot'), before);

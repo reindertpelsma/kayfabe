@@ -126,3 +126,52 @@ for (const kind of ['pass', 'fault', 'budget'])
       );
       assert.equal(r.status, 0, r.stderr || r.stdout);
     });
+
+for (const price of [0.4, 0.45])
+  test('green actual replacement contract retains allowance ' + price, async () => {
+    const { h } = await fixture();
+    assert.equal((await fault(h)).status, 200);
+    const fetcher = h.cloud.fetch;
+    h.cloud.fetch = async (url, init = {}) => {
+      const response = await fetcher(url, init);
+      if (
+        String(url).replace(/\/$/, '').endsWith('/instances/901') &&
+        (!init.method || init.method === 'GET') &&
+        response.status === 200
+      ) {
+        const data = await response.json();
+        if (data.instances) {
+          data.instances.dph_total = price;
+          data.instances.dph_base = price - 0.02;
+        }
+        return Response.json(data);
+      }
+      return response;
+    };
+    h.restart();
+    const response = await h.call();
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).reason, 'BUDGET:run-usd');
+    assert.equal(h.cloud.instances.has('901'), false);
+    assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
+  });
+for (const kind of ['daily-usd', 'rolling-usd', 'credit-reserve', 'daily-count'])
+  for (const variant of [1, 2])
+    test('green replacement retains ' + kind + variant, async () => {
+      const { h } = await fixture();
+      assert.equal((await fault(h)).status, 200);
+      if (kind === 'credit-reserve') h.cloud.credit = 8;
+      else
+        for (let i = 0; i < (kind === 'daily-count' ? 3 : 1); i++)
+          await h.storage.put('cost:other-' + variant + '-' + i, {
+            started: h.time.value - 3600000,
+            ended: h.time.value,
+            price: kind === 'daily-count' ? 0 : kind === 'daily-usd' ? 3 : 30,
+            profile: kind === 'rolling-usd' ? 'sweep' : 'check',
+            created: true,
+          });
+      const response = await h.call();
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).reason, 'BUDGET:' + kind);
+      assert.equal(h.cloud.created.length, 1);
+    });
