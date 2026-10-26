@@ -833,10 +833,8 @@ fn a_map_with_refinement_off_leaves_the_geometry_untouched() {
 }
 #[test]
 fn routing_survives_a_poisoned_layout_for_every_plain_call() {
-    for routing in [true] {
-        assert!(!poison_refuses(true, routing));
-        assert!(!poison_refuses(false, routing));
-    }
+    assert!(!poison_refuses(true, true));
+    assert!(!poison_refuses(false, true));
 }
 #[test]
 fn only_sparse_bookkeeping_stops_on_a_poisoned_layout() {

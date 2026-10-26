@@ -33,18 +33,43 @@ fault, never random memory. No unmap-then-remap interval: old to sparse and spar
 3. **Reservation tree** (`crates/kf-host/src/sparse.rs`, `channel/sparse.rs`). The static guest reservations become a tree of
    host reservation blocks split only while EMPTY (the RM refuses a reservation inside a live block). Normal blocks have a
    2 MiB grain, sparse blocks 64 KiB, created on demand for a sparse run whose full 64 KiB tile is derived sparse.
-4. **Bounds** (hostile guest). At most 8192 blocks per space and 32768 reservation objects per session; a refusal is
-   counted (`refused`, `overflow`) and the VA stays INVALID. Counters saturate; log lines are capped (128 per process).
+4. **Bounds** (hostile guest). At most 8192 blocks per space and 32768 reservation objects per session; a decline is
+   counted and the sparse VA stays INVALID (a plain map is never declined, see below). Counters saturate; log lines are capped (128 per process).
    Nothing on this path runs on a vCPU thread.
 
-## Fallbacks (all fail closed)
+## Plain maps are never touched (owner ruling 2026-10-26, binding)
 
-- A sparse run inside a POPULATED normal block stays INVALID, is counted (`unhonoured_bytes`) and is retried at a later
-  refresh once the block is empty.
-- A sparse to invalid change inside a sparse block that cannot be freed stays sparse (`retained_bytes`). MEASURED on 2026-10-26 (RTX 4070, bare
-  metal, copy engine only, 38.4 M words, no non-zero word): sparse is not a data channel
+A plain, valid mapping is never refused or changed by the sparse twin. Refining the block tree around a map only
+prepares a later sparse carve, so it is best-effort: when the block budget is exhausted, a block cannot be created, the
+coarse block is already populated, or RM refuses the split, the plain map is placed in the COARSE block exactly as with
+the twin OFF (`Reservations::route_map`, `crates/kf-host/src/sparse.rs`). Only SPARSE runs are best-effort. A map is
+still refused for arguments the twin-OFF path also refuses (below the VA floor, wrapping). A block lost to a failed layout
+repair is routed through the range object like an unreserved range, and routing is not stopped by a poisoned layout
+(only sparse bookkeeping and host auto-placement are). Reservations that are not tree blocks (micro reservations) are not
+counted against the session cap. Why this exists: the first Windows campaign (rev `a5d709d5`) failed at the start of
+`catia-07` because the map that follows a refused refinement was refused (the 8192-object per-space budget was spent; the
+twin's own 2 MiB-tiled windows are a large part of the use, INFERRED from `made=7979 freed=3988` at the first space of a
+Linux boot).
+
+## Fallbacks for sparse (all fail closed)
+
+- A sparse run that the budget declines, or that lands in a POPULATED normal block, stays INVALID, is counted and is not
+  an error: the ack is HELD (the walker does not retry it every refresh). Every tile created for it is withdrawn.
+  A populated-block case is retried at a later refresh once the block is empty.
+- A sparse to invalid change inside a sparse block that cannot be freed stays sparse (`retained_bytes`). MEASURED on
+  2026-10-26 (RTX 4070, bare metal, copy engine only, 38.4 M words, no non-zero word): sparse is not a data channel
   (experiment E2 of branch `claude/sparse-hw-20261026`; shader loads untested).
-- An uncertain layout repair refuses further host placements (`layout_poisoned`).
+- An uncertain layout repair refuses further host auto-placements (`layout_poisoned`).
+
+## Counters (what each says; all saturating events or bytes, cumulative over the session)
+
+`made`/`freed`: tree reservation objects created/released (`made - freed` is the live count). `refused`: host RM verb
+refusals (a reserve or release that RM or the session cap refused). `overflow`: SPARSE admissions declined by the object
+budget, one per declined admission (before the 2026-10-26 fix it also counted every refinement attempt of a plain map,
+which gave 8.3 M on the first Windows campaign: CODE READ). `unhonoured_bytes`: sparse bytes left invalid at admission,
+summed per admission (a retried run is counted again). `retained_bytes`: sparse-to-invalid bytes kept sparse.
+`coarse_maps`: plain maps placed in a coarse block because refinement was declined, one per map call; they are not
+refused. Bounds: 8192 tree blocks per space, 32768 per session, 128 log lines.
 
 ## Flag
 
@@ -61,10 +86,5 @@ states; the session counters read `refused=0 overflow=0`. Not run: Windows, shad
 
 ## Open questions for the owner
 
-1. **Object exhaustion during a plain map.** CODE READ (`crates/kf-host/src/sparse.rs`, `Reservations::normal`; test
-   `normal_object_exhaustion_never_places_a_backing_in_a_coarse_block`): when the block budget is exhausted, a plain map that
-   needs a split is REFUSED rather than placed in the coarse block. That fails closed but also faults a legitimate mapping.
-   Alternative: place it in the coarse block (that block can then never be split, so sparse inside it stays invalid and
-   counted). Recommendation: the alternative, decided after the Windows run shows how close to the cap the counters get
-   (a Linux boot uses about 4000 live objects).
+1. RESOLVED by the owner ruling of 2026-10-26 (section above): plain maps always succeed.
 2. **Default.** Default OFF stays until the Windows one-boot SPEC sequence has run with the counters recorded.
