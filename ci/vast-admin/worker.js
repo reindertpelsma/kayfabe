@@ -43,6 +43,53 @@ export const createAdmin = ({ fetcher = fetch, now = Date.now } = {}) => ({
     }
     if (identity.email !== env.OWNER_EMAIL) return json({ error: 'Forbidden' }, 403);
     const url = new URL(request.url);
+    if (url.pathname === '/log' && request.method === 'GET') {
+      const params = url.searchParams,
+        run = params.get('run'),
+        cursor = params.get('cursor') ?? '0';
+      if (
+        params.getAll('run').length !== 1 ||
+        params.getAll('cursor').length > 1 ||
+        [...params.keys()].some((key) => !['run', 'cursor'].includes(key)) ||
+        !/^[1-9][0-9]{0,19}-[1-9][0-9]{0,19}$/.test(run ?? '') ||
+        !/^(0|[1-9][0-9]{0,6})$/.test(cursor)
+      )
+        return json({ error: 'Invalid log selection' }, 400);
+      const escape = (text) =>
+        String(text).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            })[c],
+        );
+      const html = (body, status = 200) =>
+        new Response('<!doctype html><meta charset="utf-8"><title>Run log</title>' + body, {
+          status,
+          headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      try {
+        const stub = env.LEDGER.get(env.LEDGER.idFromName('owner-shared-vast-account-enam-v1'));
+        const response = await stub.fetch(
+          new Request('https://internal.invalid/admin/log?run=' + run + '&cursor=' + cursor),
+        );
+        if (response.status === 404) return html('<pre>log expired</pre>', 404);
+        if (!response.ok) return html('<pre>log unavailable</pre>', response.status);
+        const page = await response.json();
+        const summary = page.summary ? '<pre>' + escape(page.summary) + '</pre>' : '';
+        const next =
+          Number.isSafeInteger(page.next_cursor) && page.next_cursor > Number(cursor)
+            ? '<a href="' + escape('/log?run=' + run + '&cursor=' + page.next_cursor) + '">Next</a>'
+            : '';
+        return html(summary + '<pre>' + escape(page.text) + '</pre>' + next);
+      } catch {
+        return html('<pre>log unavailable</pre>', 503);
+      }
+    }
     if (url.search) return json({ error: 'Not found' }, 404);
     if (url.pathname === '/' && request.method === 'GET')
       return new Response(PAGE, {
@@ -122,7 +169,7 @@ const fields = [
   'started_at', 'ended_at', 'boot_seconds'
 ];
 const status = document.getElementById('status');
-for (const field of [...fields, 'Stop']) {
+for (const field of [...fields, 'Log', 'Stop']) {
   const th = document.createElement('th');
   th.textContent = field;
   document.getElementById('columns').append(th);
@@ -153,6 +200,12 @@ async function refresh() {
           ? new Date(value).toISOString() : String(value);
         tr.append(td);
       }
+      const log = document.createElement('td');
+      const link = document.createElement('a');
+      link.textContent = 'log';
+      link.href = '/log?run=' + encodeURIComponent(run.run);
+      log.append(link);
+      tr.append(log);
       const td = document.createElement('td');
       if (run.ended_at === null) {
         const button = document.createElement('button');

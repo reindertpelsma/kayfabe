@@ -22,12 +22,13 @@ const fixture = async ({ email = 'owner@example.com', status = 200, data, rows }
       get: () => ({
         fetch: async (request) => {
           calls.push(request);
+          const cursor = Number(new URL(request.url).searchParams.get('cursor') ?? 0);
           return Response.json(
             data ?? {
               text: '<img src=x onerror=alert(1)> & "text"',
               summary: '[box] KF_FINAL_SUMMARY_BEGIN\n<script>bad()</script>\nKF_FINAL_SUMMARY_END',
-              cursor: 0,
-              next_cursor: 1,
+              cursor,
+              next_cursor: cursor + 1,
             },
             { status },
           );
@@ -103,7 +104,8 @@ for (const path of ['/log?run=123-1', '/log?run=456-2&cursor=1']) {
     assert.ok(html.indexOf('KF_FINAL_SUMMARY_BEGIN') < html.indexOf('&lt;img'));
     assert.match(html, /Next/);
     const run = new URL('https://admin.example' + path).searchParams.get('run');
-    assert.match(html, new RegExp('/log\\?run=' + run + '&amp;cursor=1'));
+    const cursor = Number(new URL('https://admin.example' + path).searchParams.get('cursor') ?? 0);
+    assert.match(html, new RegExp('/log\\?run=' + run + '&amp;cursor=' + (cursor + 1)));
     assert.equal(h.calls.length, 1);
     const proxy = new URL(h.calls[0].url);
     assert.equal(proxy.origin, 'https://internal.invalid');
@@ -124,6 +126,7 @@ for (const path of ['/log?run=123-1', '/log?run=456-2&cursor=1']) {
 for (const query of [
   '',
   '?run=../secret',
+  '?run=0-1',
   '?run=123-1&run=456-1',
   '?run=123-1&cursor=-1',
   '?run=123-1&extra=1',

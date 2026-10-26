@@ -1,12 +1,20 @@
 # Owner Vast CI admin
 
-STATUS: LIVE source, 2026-10-26; deployment and Access setup remain coordinator work.
+STATUS: LIVE v2 source, 2026-10-26; deployment and Access setup remain coordinator work.
 
 CODE READ (`worker.js`, `wrangler.toml`): this is owner-only test infrastructure. Its own `kayfabe-vast-admin.<account-subdomain>.workers.dev` hostname serves one plain table, refreshes every ten seconds, and offers Stop per active run and Stop all with a confirmation prompt. Every page and API request verifies `Cf-Access-Jwt-Assertion` with RS256, the team's JWKS, the application's audience and issuer, expiry, and the exact configured owner email. Missing configuration refuses requests.
 
 CODE READ (`worker.js`, broker `src/index.js`): the `LEDGER` binding targets `BrokerLedger` in `kayfabe-vast-broker`, using the existing `owner-shared-vast-account-enam-v1` object name. The admin Worker calls only its `fetch()` with `https://internal.invalid/admin/list` or `/admin/stop`; it never reads storage. The DO executes stops through its existing owner routes, with the main Worker's environment. Keep all Vast credentials and the existing owner stop token in the main Worker; the admin Worker needs neither.
 
 CODE READ (broker `src/index.js`, `src/ledger.js`): listing returns at most 100 retained runs, newest first, with only scalar summary fields: run, sha, branch, profile, die, GPU, machine/host/instance IDs, state, phase, verdict, estimated USD cost, start/end timestamps and boot seconds derived from the first report when recorded. Logs and capabilities are excluded, including from stop responses. Main broker retention still removes old records. The bounded storage read refuses with 503 at 1,000 retained records rather than silently returning the wrong newest page. Cost is an estimate using the broker's recorded rate and bandwidth allowance, not a provider invoice.
+
+## Retained log viewer and Stop check (v2)
+
+CODE READ (`worker.js`, broker `BrokerLedger.fetch`, `Ledger.logPage`): every table row has a `log` link to `/log?run=<key>`. The same Access check protects that page. It proxies only to the DO's internal-origin `/admin/log?run=<key>&cursor=<chunk>`; the public broker cannot route to it. Pages contain at most one 16 KiB UTF-8 relay chunk, an optional last complete `KF_FINAL_SUMMARY_BEGIN`/`END` block from the existing 8 KiB sanitised tail, and numeric cursors. A Next link advances to the next chunk. The summary appears first on every page. The HTML escapes all log/summary content; retained records removed by pruning show `log expired`. Read failures use fixed error text. This adds no stored copy of the logs.
+
+MEASURED (2026-10-26 v2 DOM run, `traces/vast_admin_v2_20261018/checks.txt`): open CREATING, BOOTING, TESTING, GRACE and cleanup-pending STOPPED rows each render a per-row Stop that posts exactly `{run}`. No instance ID is required. Ended rows keep their log link and have no Stop button. The v1 Stop condition was already correct and remains unchanged; no button is expected when every listed run is ended.
+
+INFERRED (source policy plus [local storage model](../../traces/vast_admin_v2_20261018/retention.md)): keep **`LOG_RETENTION_HOURS=6`** with the current default daily limit (four runs per profile) and one active run. The allowed whole-hour range is 1–48, and the variable is already accepted by the deployment helper. Six hours leaves substantially more storage headroom than 48 in the conservative local model. This recommendation assumes pruning keeps up and the current admission/report caps remain in effect; it is not a hosted capacity guarantee. Raising daily/concurrency caps needs a fresh storage check. No deployment variable is changed by this patch.
 
 ## Coordinator setup in Cloudflare (do not run from a lane)
 
@@ -30,7 +38,7 @@ npm ci --prefix ci/vast-broker --ignore-scripts --no-audit --no-fund
 npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
 node --test ci/vast-broker/test
 MINIFLARE_ASSERT_BODIES_CONSUMED=true \
-  node --test ci/vast-broker/workerd/admission.test.js
+  node --test ci/vast-broker/workerd/*.test.js
 node --test ci/vast-admin/test/*.test.mjs
 ci/vast-broker/node_modules/.bin/wrangler deploy \
   --config ci/vast-admin/wrangler.toml --dry-run

@@ -116,6 +116,7 @@ for (const size of [16385, 65536])
 for (const query of [
   '',
   'run=../secret',
+  'run=0-1',
   'run=123-1&run=456-1',
   'run=123-1&cursor=-1',
   'run=123-1&cursor=1.5',

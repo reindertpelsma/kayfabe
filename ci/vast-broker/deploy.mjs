@@ -38,6 +38,8 @@ export const ALLOWED = new Set([
   'BAD_MACHINE_IDS_EXTRA',
   'BAD_HOST_IDS',
   'LOG_RETENTION_HOURS',
+  // Same-SHA gap in hours (1-720, default 24): a required gate must be re-runnable after an infra flake.
+  'SHA_GAP_HOURS',
   // Concurrent rentals (owner ruling 2026-10-24 item 8): account cap 1-4, per-profile lower caps.
   'MAX_CONCURRENT_RENTALS',
   'MAX_CONCURRENT_CHECK',
