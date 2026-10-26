@@ -1,4 +1,4 @@
-STATUS: RESEARCH, 2026-10-26 — no native Turing Windows capture: TU116 retained-Linux passthrough stopped at missing IOMMU; TU106/optional offers unavailable. All Turing Windows value cells remain unmeasured.
+STATUS: RESEARCH, 2026-10-26 — round3b is polling for native-conversion Turing captures through20:24UTC; no Turing Windows value is measured yet.
 
 # Turing Windows reference and die table
 
@@ -83,7 +83,13 @@ CODE READ (`traces/wc1_20261026/ga104_inventory_receipt.json`, `V3_BLACKWELL_DIE
 
 CODE READ (`V3_WINDOWS_ONLY_CONSTANTS_20261013.md`): the existing221-tag classification supplies current-meaning/layout exclusions for the listed controls. Native Turing allocation/control inventory is pending. The coverage artifact will separate numeric-id matches, public layouts and explicit die registrations; no Windows control or class is currently asserted observed on Turing.
 
-## Linux reference and native-capture outcome
+## Round3b native-conversion watch
+
+CODE READ (WC1 round3b operator direction, native installer SHA256 `c9b88d8d2373d9c29818b1321191635bf65f468145b204f8812bb29e7b531ee9`): capture leases use the previously exercised direct native converter after a privately archived/hash-verified Linux reference. The Windows startup oracle and D3D readback supply the post-conversion reference; this produces no kayfabe verdict. The prior retained-Linux/IOMMU stop is historical below and does not gate this route.
+
+MEASURED (2026-10-26, `traces/wc1_20261026/round3/availability.json`, round3b poll1): the first broad verified/VM-capable/rate<=0.40 snapshot contains0Turing offers. The read-only watch records25min snapshots until20:24:20UTC; listings require manual admission, with no automatic create/start/destroy. Turing value cells remain unmeasured while the watch runs.
+
+## Round3a Linux reference and native-capture outcome (historical)
 
 MEASURED (2026-10-26, lease `57825549`, `traces/wc1_20261026/round3/tu116_host_preflight.json`): the assigned GTX1660SUPER/PCI21c4 passes the existing CUDA device/context probe on Linux580.95.05 before and after a read-only passthrough preflight; both have Xid0. No copy/kernel workload was claimed. The VM exposes0IOMMUgroups and no DMAR/IVRS/virtio-IOMMU device despite kernel IOMMU support being enabled. Windows, kfwc and kayfabe were never started. No unsafe-no-IOMMU or driver/kernel/firmware change was made. The Linux-after-preflight record is explicitly not a post-Windows reference. There is no guest verdict or Windows constant to promote. Private reference records were archived and hash-verified before exact-id destroy/APIabsence.
 

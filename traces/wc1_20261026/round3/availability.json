@@ -69,5 +69,28 @@
   "tu106": "machine13058 unavailable in exact-machine and broad low-rate queries",
   "optional_tu102_tu104": "no qualifying2070/2080 offer observed",
   "tu116": "one Linux-only lease57825549; no Windows capture; closed/APIabsent",
-  "no_further_tu116_retry": "failure was post-SSH passthrough preflight, not a retryable pre-SSH provider fault"
+  "no_further_tu116_retry": "failure was post-SSH passthrough preflight, not a retryable pre-SSH provider fault",
+  "round3b": {
+    "run": "WC1-round3b-market-20261026",
+    "started_utc": "2026-10-26T15:24:20+00:00",
+    "poll_deadline_utc": "2026-10-26T20:24:20+00:00",
+    "interval_seconds": 1500,
+    "query": "verified=true vms_enabled=true rentable=true rented=false dph_total<=0.4",
+    "storage_for_quote_gib": 150,
+    "scope": "Turing/TU1xx only; provider model/compute-cap candidates require manual review",
+    "paid_automation": false,
+    "polls": [
+      {
+        "utc": "2026-10-26T15:27:33.759418+00:00",
+        "status": "ok",
+        "total_offers": 6,
+        "turing_offers": 0,
+        "single_gpu_review_candidates": 0
+      }
+    ],
+    "status": "watching",
+    "next_poll_utc": "2026-10-26T15:52:33.759418+00:00",
+    "capture_authority": "Native conversion after archived Linux pre-reference; Windows startup oracle+D3D are the post-reference; no kayfabe verdict.",
+    "scope_renewal": "Round3a post-SSH VFIO limit remains historical; round3b authorizes native-conversion capture on an eligible Turing offer."
+  }
 }
