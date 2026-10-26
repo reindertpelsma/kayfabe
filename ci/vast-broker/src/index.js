@@ -848,7 +848,13 @@ export function createService({
     const runToken = await tokens.issue(r),
       script = onstart(target.sha, cfg.repo);
     r.scriptHash = await sha256Hex(script);
-    await ledger.reserve(r);
+    try {
+      await ledger.reserve(r, { cfg, now: now(), cost, credit });
+    } catch (e) {
+      if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')
+        e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };
+      throw e;
+    }
     await workerLine(
       r,
       'selection profile=' +
