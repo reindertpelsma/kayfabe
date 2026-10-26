@@ -21,9 +21,9 @@ calls = []
 
 
 def status(verdict="UNAVAILABLE"):
-    final = verdict == "PASS"
+    final = verdict in {"PASS", "FAIL"}
     return {
-        **scope["extra_status"](pending=not final),
+        **scope["extra_status"](verdict=verdict, pending=not final),
         "state": "GRACE" if final else "NONE" if verdict == "PROVIDER_FAULT" else "BOOTING",
         "verdict": verdict,
         "run": ctx["run"],
@@ -69,7 +69,15 @@ def client(route, method="GET", body=None):
         else:
             data = status()
     elif route.startswith("/status/"):
-        data = status("PASS" if rents == 2 and case.startswith("pass") else "PROVIDER_FAULT")
+        verdict = "PROVIDER_FAULT"
+        if rents == 2:
+            if case.startswith("pass"):
+                verdict = "PASS"
+            elif case.startswith("fail"):
+                verdict = "FAIL"
+        data = status(verdict)
+        if rents == 2 and case.startswith("unavailable"):
+            data.update(state="NONE", verdict="UNAVAILABLE", result_at=None, suites=[])
     else:
         data = {}
     return m.Reply(code, {"content-type": "application/json"}, json.dumps(data).encode())
@@ -78,8 +86,11 @@ def client(route, method="GET", body=None):
 messages, summary = [], io.StringIO()
 result = m.Runner(ctx, manifest, client, emit=messages.append, summary=summary).execute()
 assert rents == 2, (result, calls)
-assert result["verdict"] == ("PASS" if case.startswith("pass") else "PROVIDER_FAULT"), result
-if not case.startswith("pass"):
+expected = (
+    "PASS" if case.startswith("pass") else "FAIL" if case.startswith("fail") else "PROVIDER_FAULT"
+)
+assert result["verdict"] == expected, result
+if expected == "PROVIDER_FAULT":
     assert result["state"] == "PROVIDER_FAULT", result
 text = "".join(messages)
 assert text.count("RENTAL machine=") == (1 if case.startswith("budget") else 2), text

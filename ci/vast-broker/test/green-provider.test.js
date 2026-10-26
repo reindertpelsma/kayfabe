@@ -125,7 +125,7 @@ for (const price of [0.4, 0.45])
     assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
   });
 
-for (const kind of ['pass', 'fault', 'budget'])
+for (const kind of ['pass', 'fault', 'budget', 'fail', 'unavailable'])
   for (const variant of [1, 2])
     test('green BASE runner provider replacement ' + kind + variant, async () => {
       const { spawnSync } = await import('node:child_process');
@@ -168,6 +168,7 @@ for (const price of [0.4, 0.45])
     assert.equal((await response.json()).reason, 'BUDGET:run-usd');
     assert.equal(h.cloud.instances.has('901'), false);
     assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
+    assert.equal((await h.storage.get('cost:123-1')).price, price);
   });
 for (const kind of ['daily-usd', 'rolling-usd', 'credit-reserve', 'daily-count'])
   for (const variant of [1, 2])
