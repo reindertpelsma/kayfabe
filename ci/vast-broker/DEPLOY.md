@@ -107,6 +107,7 @@ placeholders:
 ```sh
 # /path/outside/checkout/broker.vars - KEY=VALUE, public values only
 OWNER_GITHUB_ID=<numeric owner id, must equal wrangler.toml>
+WORKER_URL=https://ci.kayfabe.dev
 ```
 
 ```sh
@@ -119,8 +120,8 @@ symlink is followed); a line is not `KEY=VALUE`; a key repeats; a key is not a l
 (secret names, `ALLOW_TEST_ISSUER`, `TEST_ISSUER`); a key is a retired `ACCESS_*` var or a
 `BOX_ACCESS_*` secret (so an old Access vars file is refused); `OWNER_GITHUB_ID` is missing,
 non-numeric or differs from `wrangler.toml`; `deployment.json` and `DEPLOYED_BUNDLE_SHA256`
-differ; a check-only `WORKER_URL` entry is not the bare https origin (review f; the entry is
-never uploaded, WORKER_URL stays a Worker secret); the wrangler at the pinned path is not 4.152.0;
+differ; the toml `WORKER_URL` is not a bare https origin; a vars-file `WORKER_URL` entry is not
+a bare https origin or differs from toml; the wrangler at the pinned path is not 4.152.0;
 or the module wrangler emits for
 `--dry-run --outdir <temp>` does not hash to `deployment.json`. It then uploads exactly that
 hash-checked file (`wrangler deploy --no-bundle <temp>/index.js`, so wrangler does not bundle twice)
@@ -137,7 +138,15 @@ deploy without it refuses rentals with `CONFIG_VAR:OWNER_GITHUB_ID` and the cron
 Main Worker cron schedule: `* * * * *`
 
 `preview_urls = false` (supported by the wrangler 4.152.0 schema) keeps version preview hostnames
-off; `workers_dev = true` remains the public hostname.
+off. The public origin is `https://ci.kayfabe.dev`; `workers_dev = true` retains the fallback
+hostname only while it too is behind hostname-wide Access.
+
+[CODE READ: pinned wrangler 4.152.0, `triggers/deploy.ts` and
+`triggers/publish-routes.ts` in its installed CLI] With no configured custom-domain routes,
+Wrangler skips `publishCustomDomains` entirely; it does not replace dashboard custom domains.
+Keep `routes` absent. The dashboard-attached domain stays coordinator-managed. The public var
+changes config, not emitted JavaScript: `deployment.json.bundle_sha256` changes only if the
+emitted module changes. See the WK1 domain trace for the local dry-run hashes.
 
 [CODE READ: defaults.json, src/policy.js, src/offers.js, src/index.js] Check policy remains
 $1/hour, $6 daily, $30 rolling, $8 reserve, 75-minute boot and 180-minute hard limit.
@@ -220,15 +229,29 @@ cleanup backstop.
 
 ## Worker and GitHub secrets
 
+[CODE READ: deploy.mjs, wrangler.toml, src/policy.js, runner.py] `WORKER_URL` is a public
+Worker var committed as `https://ci.kayfabe.dev`, a bare HTTPS origin without a trailing slash,
+path, query, port or user part (the runner accepts no port). It is the exact OIDC audience and
+base of the box `KF_BROKER_URL`. GitHub environment `gpu-vast` must have the public **variable**
+`VAST_BROKER_URL` with the same origin. Change the runner variable and Worker var together:
+a mismatch fails OIDC authentication. An optional vars-file `WORKER_URL=...` entry is uploaded
+as a public var and must equal toml; omitting it uses toml. Other origin forms refuse with
+`CONFIG_VAR:WORKER_URL`.
+
+Before the **first** deployment using the var, the coordinator must delete the former Worker
+secret with the pinned CLI from `ci/vast-broker`:
+
+```sh
+wrangler secret delete WORKER_URL
+```
+
+A Worker secret and a public var with the same name conflict. Delete the old secret before the
+var deployment; `deploy.mjs` prints this prerequisite and never deletes secrets itself. This is
+a coordinator migration step, not an instruction for a coding lane to change Cloudflare.
+
 [CODE READ: src/tokens.js, src/routes.js] Set Worker secrets with the pinned CLI (`wrangler secret
-put <NAME>`): WORKER_URL, VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN
-and BROKER_PATH_PREFIX (required when renting is enabled). Generate independent values without
-printing them into logs. WORKER_URL is the bare https origin, exactly
-`https://<name>.<account>.workers.dev`: no trailing slash, path, query, port or user part (the
-runner accepts no port either). It is the OIDC audience (the runner sends its origin without a slash) and the
-base of the box `KF_BROKER_URL`; any other form makes every route and the cron answer
-`CONFIG_VAR:WORKER_URL`. Put the same value as `WORKER_URL=...` in the vars file so the deploy
-helper checks it before upload (it is not uploaded as a var):
+put <NAME>`): VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN and BROKER_PATH_PREFIX
+(required when renting is enabled). Generate independent values without printing them into logs:
 
 ```sh
 head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'
@@ -237,8 +260,8 @@ head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n'
 [CODE READ: src/tokens.js, src/routes.js, src/index.js] The alphabet is `[A-Za-z0-9_-]`;
 signing/owner secrets accept 32-256 characters and the prefix 32-128. Raw padded base64 with `+`,
 `/` or `=` refuses. An owner-authenticated availability request reports
-CONFIG_SECRET_FORMAT:<name> without the value; other callers receive a generic refusal. URL and
-prefix secrecy reduce scanning noise; OIDC, the run read, live-ledger checks and the per-run
+CONFIG_SECRET_FORMAT:<name> without the value; other callers receive a generic refusal. Prefix
+secrecy reduces scanning noise; OIDC, the run read, live-ledger checks and the per-run
 HS256 JWT run token (jose; signed with RUN_TOKEN_SECRET, expires at the hard limit) are the
 authentication. Owner-token and prefix comparisons use the platform's `timingSafeEqual`.
 A Vast operator can read its KF_* env and callback URL; the box holds only
@@ -257,7 +280,8 @@ BLOB_ALLOWED_TAG_PREFIXES JSON array such as ["ci-image-"]. Missing/empty prefix
 The Worker returns only an approved short-lived release-asset redirect URL, size and asset name.
 
 [CODE READ: gpu-vast.yml, gpu-vast-sweep.yml, workflow-guard.js] GitHub environment gpu-vast holds
-VAST_BROKER_URL and VAST_BROKER_PATH, plus optional runner token A (VAST_BROKER_ACCESS_ID and
+public variable VAST_BROKER_URL=https://ci.kayfabe.dev, secret VAST_BROKER_PATH, and optional
+runner token A secrets (VAST_BROKER_ACCESS_ID and
 VAST_BROKER_ACCESS_SECRET), bound only in the sole trusted BASE broker step and passed to the
 controller as CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET. Keep the environment's deployment-branch
 policy master-only with a required reviewer (review V8); the Worker no longer honours branch
@@ -266,7 +290,9 @@ copies, so widening it buys nothing and exposes the environment secrets to branc
 ## Cloudflare Access is dashboard-only
 
 [CODE READ: src/index.js; owner rulings 19:10 and 21:45] Access is a dashboard-only front door:
-one hostname-wide policy on the workers.dev hostname with two service tokens. The Worker never
+one hostname-wide policy on `ci.kayfabe.dev` with the same two service tokens below. The
+workers.dev fallback may stay enabled only with its own equivalent hostname-wide Access policy.
+The admin UI at `https://admin.kayfabe.dev` uses its separate owner-identity Access application. The Worker never
 reads or verifies an Access header, JWT or var; Cloudflare checks the token at the edge.
 
 - Runner (token A): GitHub environment secrets `VAST_BROKER_ACCESS_ID` /
@@ -385,7 +411,9 @@ deployment, secret configuration or a successful hosted run.
    Check its deployment-branch policy read-only with
    `gh api repos/<repo>/environments/gpu-vast`; branch workflows must not bind its secrets.
 3. Review the scoped main Vast key against [Vast key scope](#vast-key-scope), and configure the
-   Worker secrets listed [above](#worker-and-github-secrets), including bare-origin WORKER_URL.
+   Worker secrets listed [above](#worker-and-github-secrets). Set the public WORKER_URL var and
+   GitHub environment VAST_BROKER_URL variable to the same origin; the coordinator deletes the
+   old WORKER_URL secret before the first var deploy, as documented above.
    With hostname-wide Access, require both runner token A secrets and both box token B secrets
    before renting; see [Cloudflare Access](#cloudflare-access-is-dashboard-only). Keep the two
    tokens distinct and credentials out of logs and payloads.
@@ -444,8 +472,9 @@ rental with `RENTING_ENABLED=true`, in this order:
 2. GitHub environment `gpu-vast`: set the deployment-branch policy to `master` only (review W1:
    today any branch workflow can bind it) and, if wanted, a required reviewer. Check with a
    read-only `gh api repos/<repo>/environments/gpu-vast`.
-3. Worker secrets: WORKER_URL in the bare-origin form above, VAST_API_KEY with the scoped
-   permission JSON below, BOX_ACCESS_ID / BOX_ACCESS_SECRET (token B; without them the
+3. Public vars: WORKER_URL=https://ci.kayfabe.dev in toml and the same GitHub environment
+   VAST_BROKER_URL variable. The coordinator runs `wrangler secret delete WORKER_URL` before
+   the first var deploy. Worker secrets: VAST_API_KEY with the scoped permission JSON below, BOX_ACCESS_ID / BOX_ACCESS_SECRET (token B; without them the
    hostname-wide Access policy blocks every box callback and the box bills until BOOT_TIMEOUT).
 4. The reaper is deployed with its own list+delete key (see *Independent reaper*) and its deploy
    output lists `*/5 * * * *`.

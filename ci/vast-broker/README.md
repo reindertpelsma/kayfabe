@@ -17,6 +17,14 @@ The ledger reserves liability before rental and applies daily and rolling budget
 
 ## Current setup and further reading
 
+[CODE READ: wrangler.toml, gpu-vast.yml, gpu-vast-sweep.yml] The public broker origin is
+`https://ci.kayfabe.dev`; Worker var `WORKER_URL` and GitHub environment `gpu-vast` variable
+`VAST_BROKER_URL` must match because the origin is the OIDC audience. The path and both Access
+credentials stay secrets. Protect the whole `ci.kayfabe.dev` hostname with Access and the same
+runner/box service tokens; keep workers.dev as a fallback only if it also stays behind Access.
+The admin UI uses `https://admin.kayfabe.dev` and its separate owner-identity Access app. Before
+the first var deploy the coordinator deletes the old `WORKER_URL` secret, following [DEPLOY](DEPLOY.md).
+
 Renting is enabled by the deployed vars file, which is kept outside the repository ([deployment guide](DEPLOY.md)); `RENTING_ENABLED=false` in the committed [Worker configuration](wrangler.toml) is only the safe default. `RUN_TOKEN_SECRET` signs run capabilities and `OWNER_STOP_TOKEN` controls emergency cleanup. As of 2026-10-25 acceptance of the current hosted workflow with the protocol-7 payload is still open; historical local smoke results do not establish it.
 
 - [Threat model](docs/THREAT_MODEL.md): who is trusted, and which behaviours are intended design rather than vulnerabilities.

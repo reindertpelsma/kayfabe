@@ -162,24 +162,50 @@ for (const [name, vars, options] of [
       await rm(f.root, { recursive: true });
     }
   });
-test('review f: a bare WORKER_URL is checked, then never uploaded as a var', async () => {
-  const f = await fixture();
-  try {
-    const r = await deploy(
-      f,
-      'OWNER_GITHUB_ID=' + OWNER + '\nWORKER_URL=https://quiet-value-123.workers.example\n',
-    );
-    assert.equal(r.status, 0, r.text);
-    const [upload] = uploads(r.calls);
-    assert.ok(upload, r.text);
-    assert.equal(upload.argv.join(' ').includes('WORKER_URL'), false);
-    assert.equal(upload.argv.join(' ').includes('quiet-value-123'), false);
-    assert.ok(!r.text.includes('quiet-value-123'), r.text);
-    assert.match(r.text, /WORKER_URL format checked/);
-  } finally {
-    await rm(f.root, { recursive: true });
-  }
-});
+// FALSIFIER WK1: the helper omits a public URL, accepts another audience, or omits migration.
+for (const dry of [false, true])
+  test('domain public WORKER_URL is checked and uploaded ' + dry, async () => {
+    const f = await fixture();
+    try {
+      const r = await deploy(
+        f,
+        'OWNER_GITHUB_ID=' + OWNER + '\nWORKER_URL=https://ci.kayfabe.dev\n',
+        dry ? ['--dry-run'] : [],
+      );
+      assert.equal(r.status, 0, r.text);
+      const [upload] = uploads(r.calls);
+      assert.ok(upload.argv.includes('WORKER_URL:https://ci.kayfabe.dev'));
+      assert.match(r.text, /wrangler secret delete WORKER_URL/);
+    } finally {
+      await rm(f.root, { recursive: true });
+    }
+  });
+for (const url of ['https://other.example', 'https://ci.kayfabe.dev:8443'])
+  test('domain public WORKER_URL must equal toml ' + url, async () => {
+    const f = await fixture();
+    try {
+      const r = await deploy(f, 'OWNER_GITHUB_ID=' + OWNER + '\nWORKER_URL=' + url + '\n');
+      assert.notEqual(r.status, 0, r.text);
+      assert.equal(r.calls.length, 0);
+      assert.match(r.text, /WORKER_URL differs from wrangler.toml/);
+    } finally {
+      await rm(f.root, { recursive: true });
+    }
+  });
+for (const value of ['', 'https://ci.kayfabe.dev/'])
+  test('domain toml origin must be valid even with no vars-file override ' + value, async () => {
+    const f = await fixture();
+    try {
+      const path = join(f.site, 'wrangler.toml');
+      const toml = await readFile(path, 'utf8');
+      await writeFile(path, toml.replace(/^WORKER_URL = .*$/m, 'WORKER_URL = "' + value + '"'));
+      const r = await deploy(f, 'OWNER_GITHUB_ID=' + OWNER + '\n');
+      assert.notEqual(r.status, 0, r.text);
+      assert.equal(r.calls.length, 0);
+    } finally {
+      await rm(f.root, { recursive: true });
+    }
+  });
 for (const via of ['path', 'symlink'])
   test('round deploy helper refuses a vars file inside the checkout ' + via, async () => {
     const f = await fixture();
