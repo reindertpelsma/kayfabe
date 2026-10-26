@@ -1188,9 +1188,10 @@ pub struct MicroResv {
 /// ★ Review 3 item 5 — **what the falcon-context steer does with each answer.** The steer exists so
 /// that host RM's own context lands ON the guest's context VA, not beside it (`[measured vvid vid10, V3_VIDEO_ENGINES.md]`
 /// host RM took G+0x1000 where nvcuvid then mapped a live buffer: NVDEC wrote the wrong frames). So the
-/// host allocation may proceed ONLY after [`HandOver::Free`]: every other answer — `Busy` (a map in
-/// flight), `StillOurs` (a mapping of ours landed again), `StillReserved` (a micro reservation covers
-/// it), `Refused` (host RM refused the unmap) — is retried a bounded number of times and then REFUSES
+/// host allocation may proceed ONLY after [`HandOver::Free`]: every other answer — `Busy`
+/// (a map or invalidate in flight), `StillOurs` (a mapping of ours landed again),
+/// `StillReserved` (a micro reservation covers it), or `Refused` (host RM refused the unmap) —
+/// is retried a bounded number of times and then REFUSES
 /// the birth by name (a visible failure, never a silent wrong placement); `StillReserved` refuses at
 /// once (a reservation holding other rows cannot clear by retrying). The act thread never waits
 /// for the VA thread: a retry is the step re-queued behind the other acts, after
@@ -1242,9 +1243,9 @@ pub enum HandOver {
     StillReserved,
     /// A mapping of ours is there again (the VA thread mapped a new row meanwhile).
     StillOurs,
-    /// ★ Review item 5: a map is in flight over (part of) the range — the VA thread is placing a
-    /// row there right now. Nothing was touched; the act thread never waits for the VA thread, so
-    /// the host placement stays unsteered, exactly as for [`HandOver::StillOurs`].
+    /// A map claim, mapping operation or deferred invalidate still holds the range or a
+    /// reservation covering it. The act worker retries without waiting; host placement remains
+    /// unsteered until a later call returns [`HandOver::Free`].
     Busy,
     /// Host RM refused (or the range would split one of ours in the `NV01` range); the ledger
     /// keeps whatever is still ours.
@@ -2091,8 +2092,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             HandOver::Busy
         } else if self.hold(&self.own, |o| (o.any_in(va, end), 1)) {
             HandOver::StillOurs
-        } else if self.micro_covers(va, end) {
-            HandOver::StillReserved
+        } else if let Some(reservation) = self.micro_covering(va, end) {
+            if reservation.pins != 0 {
+                // A deferred unmap or its invalidate still owns this reservation. Let the
+                // existing act-worker retry path run after it completes; never block here.
+                HandOver::Busy
+            } else {
+                HandOver::StillReserved
+            }
         } else {
             HandOver::Free
         }
@@ -2103,15 +2110,22 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// (reservations never overlap: only the predecessor can reach into `va`).
     #[must_use]
     pub fn micro_covers(&self, va: u64, end: u64) -> bool {
+        self.micro_covering(va, end).is_some()
+    }
+
+    /// The first intersecting reservation, including its transient map/invalidate pin state.
+    fn micro_covering(&self, va: u64, end: u64) -> Option<MicroResv> {
         if end <= va {
-            return false;
+            return None;
         }
         self.hold(&self.micro, |m| {
-            (
-                m.range(..va).next_back().is_some_and(|(_, r)| r.hi > va)
-                    || m.range(va..end).next().is_some(),
-                2,
-            )
+            let hit = m
+                .range(..va)
+                .next_back()
+                .filter(|(_, r)| r.hi > va)
+                .or_else(|| m.range(va..end).next())
+                .map(|(_, r)| *r);
+            (hit, 2)
         })
     }
 

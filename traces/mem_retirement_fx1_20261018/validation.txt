@@ -2,10 +2,12 @@ MEASURED validation run 2026-10-26
 kf-mem final: 217 passed, 0 failed, 3 existing ignored
 kf-chan full: 678 passed, 0 failed, 4 existing OPEN ignored
 kf-qemu final rerun: 440 passed, 0 failed, 4 new OPEN scope tests ignored
-mutants: 14 compiled, 14 killed, minimum 2 independent killing tests
+mutants: 15 compiled, 15 killed, minimum 2 independent killing tests
 clippy: existing-debt=248 new=0 resolved=284
 Rust formatting: PASS
 Changed Rust lines <=100 columns: PASS
 Diff whitespace: PASS
 Claims gate: new=0
 No debt baselines modified; no production timeout or threshold changed.
+Final steer-aware source: kf-mem + kf-qemu 657 passed, 0 failed, 7 ignored.
+Transient steer verdict: EXPECTED RED 0 passed / 2 failed; fixed cases now pass.

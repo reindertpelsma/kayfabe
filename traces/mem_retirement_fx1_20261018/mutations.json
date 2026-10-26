@@ -132,6 +132,14 @@
     ]
   ],
   [
+    "steer_refuses_temporary_pins",
+    101,
+    [
+      "batch::tests::a_batch_retired_during_invalidate_keeps_its_pin_until_the_next_completion",
+      "batch::tests::a_micro_retired_during_invalidate_waits_for_the_next_completion"
+    ]
+  ],
+  [
     "model_forgets_reuse",
     101,
     [

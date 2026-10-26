@@ -1,6 +1,6 @@
 {
   "crates/kf-mem/src/apply.rs": "ec06e12631a19f2e7d1620191f82cedfb41d172029c667a890b5c6c4cebfcb8c",
-  "crates/kf-mem/src/batch.rs": "b4f218463337fda008bfc2b66e60277130d73f0b697d97a92fe43211d3c436db",
+  "crates/kf-mem/src/batch.rs": "333c77703122f03911c2b2d2f9ef86af8e5431320379d13a628737382d942105",
   "crates/kf-mem/src/ledger.rs": "20092ee0bda95735f93684c0d39d998e349cd53c7ae7fa4c46d799630a1322b7",
   "crates/kf-mem/src/sim.rs": "339c3bf971c3157a561c428ab1a90ea3304de4169be06d9f7bf7dc2f441ee3ed",
   "crates/kf-mem/src/sim/adversarial.rs": "fb55dd05beec7ddea86751e38c068126d84ce88b2e6bf8a0aec28d9d9dc53a16",

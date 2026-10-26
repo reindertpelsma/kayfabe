@@ -16,6 +16,7 @@ Pre-run hypotheses and falsifiers:
 - H2: a retry with no successful new rows can still owe resource retirement. Falsifier: an empty retry completes the pending retirement without an explicit pending-work hook.
 - H3: pending reservation pins can be bounded by reservation rather than by repeated unmaps/retries. Falsifier: a second unmap or failed-invalidate retry needs a second retained pin for that same reservation.
 - H4: the current inbox predicate blocks unrelated USER rings. Falsifier: a queued/running split or scoped statement for A leaves the current predicate clear for B.
+- H5: a reservation pinned for a pending/in-flight invalidate is a temporary steer hold. Falsifier: the existing worker already retries both states instead of refusing them as `StillReserved`.
 
 MEASURED in the 2026-10-26 runs summarized in [results.txt](results.txt):
 
@@ -25,22 +26,23 @@ MEASURED in the 2026-10-26 runs summarized in [results.txt](results.txt):
 | Original retirement EXPECTED RED | 1 | 6 | Negative control passes; original production ordering fails |
 | Empty-retry EXPECTED RED | 0 | 2 | Pending resources require an otherwise-empty refresh to invalidate |
 | Duplicate-pin EXPECTED RED | 0 | 2 | Intermediate fix retained 2 pins where 1 suffices |
+| Temporary-steer-hold EXPECTED RED | 0 | 2 | Pending and in-flight invalidate pins require worker retry |
 | Coalesced full memory suite | 217 | 0 | 3 existing ignored tests |
 | Full channel suite | 678 | 0 | 4 existing OPEN model exclusions |
 | Full QEMU suite | 440 | 0 | 4 new, explicitly parked scope questions |
 | Proposed scoped gate, selected with `--ignored` | 0 | 4 | Production policy deliberately remains global |
 
-The first two test-only commits are `47e12b9cc` and `ae59dc7f2`; the bounded-pin test-only commit is `8a4a1742a`. Each is labelled EXPECTED RED. All Task 1 regressions are active default tests. The four Task 2 tests are deliberately OPEN and ignored because there is no scoped implementation or resolved dependency policy.
+The first two test-only commits are `47e12b9cc` and `ae59dc7f2`; the bounded-pin test-only commit is `8a4a1742a`, and the temporary-steer-hold test-only commit is `808158236`. Each is labelled EXPECTED RED. All Task 1 regressions are active default tests. The four Task 2 tests are deliberately OPEN and ignored because there is no scoped implementation or resolved dependency policy.
 
 MEASURED in `green-mem-first.log` (2026-10-26; summary in `results.txt`): the initial fix's full run had seven failures. Five direct-call tests still expected immediate release or old free-call indices and were updated to assert the explicit completion boundary. The hostile-input fuzz test found the empty-refresh retirement hole, which received the two failing-first retry tests and a pending-invalidate hook. One existing lock-latency test also failed its wall-time assertion once; its thresholds were unchanged, and subsequent full memory runs passed. The cause of that one timing failure is unverified.
 
-MEASURED in the final 2026-10-26 validation (`final-mem-qemu.log`, `reset-isolated.log` and `final-qemu-rerun.log`, summarized in `results.txt`): memory passed 217 tests. The first final QEMU run hit one unchanged reset-test timing assertion (`TimedOut(Idle)` versus `TimedOut(Release)` at a 50 ms deadline). That test passed unchanged in isolation, then the full default QEMU suite passed unchanged with 440 tests. `reset.rs` has no diff from the base; the scheduling-sensitivity hypothesis remains an inference, and its root cause is unverified. No timeout or threshold was changed.
+MEASURED in the final 2026-10-26 validation (`final-mem-qemu.log`, `reset-isolated.log` and `final-qemu-rerun.log`, summarized in `results.txt`): memory passed 217 tests. The first final QEMU run hit one unchanged reset-test timing assertion (`TimedOut(Idle)` versus `TimedOut(Release)` at a 50 ms deadline). That test passed unchanged in isolation, then the full default QEMU suite passed unchanged with 440 tests. `reset.rs` has no diff from the base; the scheduling-sensitivity hypothesis remains an inference, and its root cause is unverified. No timeout or threshold was changed. The final steer-aware run (`final-steer-mem-qemu.log`, summarized in `results.txt`) then passed all 657 memory/QEMU tests with 7 documented exclusions.
 
 MEASURED in the 2026-10-26 targeted Clippy run (`validation.txt`): compilation succeeded with no new warning sites. Formatting, added-line length, diff whitespace and the claims gate also passed; no debt baseline was edited.
 
 ## Fix and model boundary
 
-CODE READ in this lane's source snapshot ([hashes](source-sha256.json)): emptied deferred batch handles are queued; an invalidate takes a retirement snapshot before the host call and frees only that snapshot after success. Failure restores it. Deferred micro unmaps hold an existing reservation pin from before the host call until completion; repeated pending pins coalesce per reservation. Later retirements remain for the next invalidate. Host calls run outside ledger locks. `GpuMirror`, its target enum, and the simulator use this path. A pending-work hook handles empty retries, and drain invalidates even when a failed unmap left the batch booked instead of queued.
+CODE READ in this lane's source snapshot ([hashes](source-sha256.json)): emptied deferred batch handles are queued; an invalidate takes a retirement snapshot before the host call and frees only that snapshot after success. Failure restores it. Deferred micro unmaps hold an existing reservation pin from before the host call until completion; repeated pending pins coalesce per reservation. Later retirements remain for the next invalidate. Host calls run outside ledger locks. `GpuMirror`, its target enum, and the simulator use this path. A pending-work hook handles empty retries, and drain invalidates even when a failed unmap left the batch booked instead of queued. A context steer that meets a reservation pin returns `Busy` through the existing worker retry path; it does not treat the pending/in-flight invalidate as a permanent reservation refusal. Once pins are gone, the existing reserved/free verdicts apply.
 
 CODE READ in the same production source snapshot: no map/unmap sequence, GPU scheduling pause, timeout or vCPU operation was added. Existing unchanged-VA guards, ownership checks, hostile-input fuzzing, chunk bounds and lifecycle/model/property expectations remain active. Tests that call deferred APIs directly now complete the invalidate before asserting resource release.
 
@@ -48,7 +50,7 @@ INFERRED limits: the simulator models warmed stale translations, last batch pins
 
 ## Mutation evidence
 
-MEASURED, 2026-10-26: [all 14 mutants](mutations.md) compiled and were killed by at least two independent tests each. [mutations.json](mutations.json) preserves all killing names. The corpus includes concurrent retirement during an invalidate, refused/retried invalidates, failed unmaps that already acted, bounded duplicate pins and two simulator mutations. The original sources were restored before final validation.
+MEASURED, 2026-10-26: [all 15 mutants](mutations.md) compiled and were killed by at least two independent tests each. [mutations.json](mutations.json) preserves all killing names. The corpus includes concurrent retirement during an invalidate, refused/retried invalidates, failed unmaps that already acted, bounded duplicate pins and two simulator mutations. The original sources were restored before final validation.
 
 ## Walk gate: analysis only
 
