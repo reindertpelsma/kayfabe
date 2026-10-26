@@ -3228,6 +3228,11 @@ mod tests {
             }
         }
         bv.unmap_range(a, len, true).unwrap();
+        assert_eq!(
+            bv.hand_to_host(a, len),
+            HandOver::Busy,
+            "pending invalidate"
+        );
         let (entered, wait_entered) = std::sync::mpsc::channel();
         let (go, wait_go) = std::sync::mpsc::channel();
         *host.invalidate_gate.lock().unwrap() = Some((entered, wait_go));
@@ -3238,6 +3243,11 @@ mod tests {
                 .unwrap();
             bv.unmap_range(b, len, true).unwrap();
             bv.unmap_range(a, len, true).unwrap();
+            assert_eq!(
+                bv.hand_to_host(a, len),
+                HandOver::Busy,
+                "an in-flight invalidate is a temporary hold, not a birth refusal"
+            );
             assert!(
                 host.freed.lock().unwrap().is_empty(),
                 "completion still pending"
