@@ -1262,6 +1262,21 @@ static void t_end_record(void)
 
 /* Source: ogkm 595.91.07 nv_ref.h architecture bits and GH100 FSP boot args.
  * The queue bytes are produced independently by synth.h from msgq/message_queue_priv.h. */
+static void t_recent_seed_status_first(void)
+{
+    harness h;
+    kfwc_u32 i;
+    hn_init(&h, 1, 1, 0);
+    hn_steps(&h, 2);
+    for (i = 0; i < 100; i++) sy_post(&h.s, 1, 76, 16);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == 0);
+    for (i = 0; i < 100; i++) sy_post(&h.s, 0, 76, 16);
+    hn_steps(&h, 2);
+    CHECK(kfwc_engine_recent_table(h.e) == h.s.table_pa);
+    hn_free(&h);
+}
+
 static void t_recent_moved_pending_status(void)
 {
     harness h;
@@ -1429,6 +1444,7 @@ typedef void (*test_fn)(void);
 int main(int argc, char **argv)
 {
     static const struct { const char *name; test_fn fn; } tests[] = {
+        {"recent_seed_status_first", t_recent_seed_status_first},
         {"recent_moved_pending_status", t_recent_moved_pending_status},
         {"legacy_family_exact_records", t_legacy_families_keep_exact_records},
         {"family_boot_capabilities", t_family_boot_capabilities},
