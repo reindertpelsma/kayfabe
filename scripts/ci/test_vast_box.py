@@ -634,6 +634,35 @@ class Reporter(Daemon):
         self.assertLessEqual(sent, 10000)
         self.assertRegex(b.accepted[-1]["text"], r"omitted [1-9][0-9]* raw bytes")
 
+    def test_post_cap_keeps_the_last_bytes(self):
+        b = self.broker()
+        text = "".join("line %04d %s\n" % (i, "x" * 80) for i in range(400))
+        self.start(b, ["--max-posts", "3"], log_text=text)
+        result_file(self.result)
+        self.assertEqual(self.finish()[0], 0)
+        logs = [p for p in b.accepted if p["kind"] == "log" and p["text"]]
+        self.assertLessEqual(len(logs), 3)
+        self.assertIn("line 0399", b.texts())
+        self.assertIn("line 0000", b.texts())
+
+    def test_byte_cap_keeps_the_last_bytes(self):
+        b = self.broker()
+        text = "".join("line %04d %s\n" % (i, "y" * 80) for i in range(500))
+        self.start(b, ["--max-bytes", "9000"], log_text=text)
+        result_file(self.result)
+        self.assertEqual(self.finish()[0], 0)
+        sent = sum(len(r["body"]) for r in b.reports() if b"line 0" in r["body"])
+        self.assertLessEqual(sent, 9000)
+        self.assertIn("line 0499", b.texts())
+
+    def test_a_gap_in_the_log_is_marked(self):
+        b = self.broker()
+        text = "".join("line %04d %s\n" % (i, "z" * 80) for i in range(400))
+        self.start(b, ["--max-posts", "3"], log_text=text)
+        result_file(self.result)
+        self.assertEqual(self.finish()[0], 0)
+        self.assertRegex(b.texts(), r"\[kf-report\] [1-9][0-9]* bytes omitted\n")
+
     def test_chunks_are_bounded(self):
         b = self.broker()
         self.start(b, log_text="".join("z" * 99 + "\n" for _ in range(300)))
