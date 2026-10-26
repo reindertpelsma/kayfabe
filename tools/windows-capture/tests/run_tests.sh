@@ -97,6 +97,13 @@ PY
 else
     echo "(KFWC_KIT not set: driver build steps skipped)"
 fi
+if [[ -n ${KFWC_PWSH:-} ]]; then
+    step "PowerShell operator helpers"
+    run "$KFWC_PWSH" -NoProfile -File "$here/test_driver_key.ps1" \
+        -Helper "$root/rehearse/driver_key.ps1"
+    run "$KFWC_PWSH" -NoProfile -File "$here/test_capture_dir.ps1" \
+        -Helper "$root/rehearse/capture_dir.ps1"
+fi
 step "summary"
 if [[ $fail -eq 0 ]]; then echo "ALL STEPS PASSED"; else echo "$fail STEP(S) FAILED"; fi
 exit $((fail > 0))

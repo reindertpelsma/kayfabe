@@ -8,6 +8,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'driver_key.ps1')
+. (Join-Path $PSScriptRoot 'capture_dir.ps1')
 $root = 'C:\kfwc_wc1'
 $build = Join-Path $root 'build'
 $out = Join-Path $root 'out'
@@ -93,7 +94,7 @@ try {
         throw 'Native NVIDIA GSP firmware is not active; queue discovery is not testable.'
     }
     $gsp[0].Trim() | Set-Content -Encoding ASCII (Join-Path $out 'gsp-version.txt')
-    $warm = Join-Path $out 'warm'
+    $warm = New-KfwcCaptureDirectory (Join-Path $out 'warm')
     & $collector $warm --seconds 120 --decode-tag $DecodeTag `
         1> (Join-Path $out 'warm.stdout.txt') 2> (Join-Path $out 'warm.stderr.txt')
     if ($LASTEXITCODE) {
@@ -104,7 +105,7 @@ try {
         throw 'No warm binding; preserve diagnostics.'
     }
     for ($iteration = 1; $iteration -le $Repeats; $iteration++) {
-        $cell = Join-Path $out "startup$iteration"
+        $cell = New-KfwcCaptureDirectory (Join-Path $out "startup$iteration")
         $stop = Join-Path $out "startup$iteration.stop"
         $collectorArgs = @($cell, '--seconds', '90', '--stop-file', $stop,
             '--decode-tag', $DecodeTag)

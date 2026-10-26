@@ -112,6 +112,24 @@
         "test_unlisted_text_refused_before_pull"
       ],
       "pass": true
+    },
+    {
+      "mutant": "enumerate_protected_driver_key_siblings",
+      "exit": 1,
+      "killing_tests": [
+        "active_driver_0000",
+        "active_driver_0012"
+      ],
+      "pass": true
+    },
+    {
+      "mutant": "capture_directory_not_created",
+      "exit": 1,
+      "killing_tests": [
+        "creates_warm",
+        "creates_startup1"
+      ],
+      "pass": true
     }
   ],
   "pass": true

@@ -50,7 +50,7 @@ ssh "${ssh_opts[@]}" "$win_alias" \
 scp "${ssh_opts[@]}" "$build_dir/"{kfwc.sys,kfwc_collect.exe,d3d_minimal.exe,SHA256SUMS} \
     "$win_alias:C:/kfwc_wc1/build/"
 scp "${ssh_opts[@]}" "$here/../install/install.ps1" "$here/rehearse.ps1" \
-    "$here/driver_key.ps1" \
+    "$here/driver_key.ps1" "$here/capture_dir.ps1" \
     "$win_alias:C:/kfwc_wc1/"
 setup=$(ssh "${ssh_opts[@]}" "$win_alias" "$setup_command")
 printf '%s\n' "$setup"
