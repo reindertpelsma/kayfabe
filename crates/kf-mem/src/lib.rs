@@ -38,6 +38,7 @@ pub mod gatelog;
 pub mod ledger;
 pub mod maplog;
 pub mod refusal_dump;
+pub mod recent;
 #[cfg(test)]
 pub(crate) mod sim;
 pub mod sparse;
