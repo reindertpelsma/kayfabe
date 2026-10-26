@@ -1,0 +1,14 @@
+test acknowledged_sparse_is_quiet_and_plain_invalid_retires_it ... ok
+test adjacent_sparse_statements_cover_one_placement ... FAILED
+test adjacent_sparse_coverage_coalesces_without_backing ... FAILED
+test old_vidmem_becoming_sparse_is_a_change ... FAILED
+test refused_sparse_map_is_retried ... ok
+test extending_sparse_after_a_kept_middle_has_no_backing_offset ... FAILED
+test sparse_becoming_vidmem_is_a_change ... FAILED
+test sparse_has_no_backing_or_permission_key ... FAILED
+test sparse_subrange_keeps_no_linear_offset ... FAILED
+test three_sparse_segments_cover_one_placement ... FAILED
+test three_sparse_segments_have_one_coverage_interval ... FAILED
+failures:
+failures:
+test result: FAILED. 2 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

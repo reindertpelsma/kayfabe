@@ -1,0 +1,97 @@
+test abi::tests::a_short_buffer_is_refused_loudly - should panic ... ok
+test abi::tests::the_flags_ranges_are_disjoint_and_each_accessor_reads_its_own ... ok
+test capacity::tests::a_new_slot_gets_the_default_and_the_walk_region_covers_it ... ok
+test abi::tests::every_report_struct_round_trips_through_its_own_layout ... ok
+test abi::tests::the_report_structs_have_the_headers_documented_layout ... ok
+test capacity::tests::a_space_past_the_old_uniform_cap_is_held_after_one_growth ... ok
+test capacity::tests::required_growth_that_does_not_fit_preserves_source_and_pool ... ok
+test capacity::tests::fragmented_pool_accepts_required_growth_without_optional_headroom ... ok
+test capacity::tests::the_ceilings_refuse_by_name ... ok
+test capacity::tests::the_previous_layout_is_carried_for_the_commit ... ok
+test diffmodel::tests::a_diff_that_could_overflow_the_slot_withholds_its_maps ... ok
+test diffmodel::tests::a_failed_map_is_retried_and_a_successful_one_never_re_emitted ... ok
+test diffmodel::tests::a_held_map_is_committed_held_and_retired_as_held ... ok
+test diffmodel::tests::a_first_walk_maps_every_run_and_then_is_quiet ... ok
+test diffmodel::tests::a_partial_downgrade_splits_the_placement_by_permission ... ok
+test capacity::tests::release_returns_exactly_what_the_slot_owned_across_a_churn ... ok
+test diffmodel::tests::a_partly_changed_placement_is_unmapped_whole_and_its_rest_remapped ... ok
+test diffmodel::tests::a_root_move_keeps_what_the_new_root_still_maps ... ok
+test diffmodel::tests::a_rw_to_ro_downgrade_over_the_same_backing_unmaps_and_remaps ... ok
+test diffmodel::tests::classes_are_diffed_separately ... ok
+test diffmodel::tests::growth_maps_only_the_new_page_and_keeps_the_old_placements ... ok
+test diffmodel::tests::the_key_is_the_hosts_policy ... ok
+test diffmodel::tests::the_named_ranges_compute_the_literal_formulas ... ok
+test display::tests::a_compose_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::a_pack_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::a_yuv_launch_is_bounded_before_it_is_queued ... ok
+test display::tests::the_compose_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::color_ptx_matches_its_source_and_launch_abi ... ok
+test display::tests::the_output_kernel_packs_bgra_bytes ... ok
+test display::tests::the_output_launch_passes_the_tables_mirror_flag_last ... ok
+test display::tests::the_pack_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::the_pack_ptx_was_made_from_the_committed_source ... ok
+test display::tests::the_sum_kernel_declares_the_parameters_the_launch_passes ... ok
+test display::tests::the_yuv_ptx_was_made_from_the_committed_source_and_matches_its_launch ... ok
+test driver_unsafe::completion_fd_tests::the_host_function_signals_the_fd_and_drain_consumes_it ... ok
+test posture::tests::a_bit_that_cannot_be_cleared_refuses_the_cuda_call ... ok
+test posture::tests::a_root_thread_is_cleared_for_its_life ... ok
+test posture::tests::live_cap_cuda_thread_clears_before_the_first_call ... ok
+test posture::tests::live_cap_open_clears_before_dlopen ... ok
+test refusal_samples::tests::a_count_past_the_array_is_clamped_not_trusted ... ok
+test refusal_samples::tests::a_sample_is_one_line_with_every_field ... ok
+test refusal_samples::tests::an_entry_the_report_no_longer_names_prints_its_index ... ok
+test refusal_samples::tests::no_samples_prints_nothing ... ok
+test refusal_samples::tests::the_process_cap_is_32_lines_across_walks ... ok
+test synth::tests::the_fixture_big_half_is_invalid_not_a_table_at_zero ... ok
+test diffmodel::tests::random_sequences_hold_every_protocol_property ... ok
+test diffmodel::tests::thirteen_thousand_rows_one_added_per_step_is_one_map_each ... ok
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test every_cuda_entry_clears_cap_sys_admin_before_its_foreign_call ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test a_diff_report_is_accepted ... ok
+test a_report_without_the_diff_flag_is_refused ... ok
+test a_run_ending_exactly_at_the_span_is_the_last_legal_page ... ok
+test a_run_straddling_the_end_is_refused ... ok
+test a_run_past_the_span_is_refused_by_name ... ok
+test a_run_wholly_inside_the_span_is_accepted ... ok
+test a_sysmem_run_is_not_bounded_by_the_store_span ... ok
+test a_vidmem_or_peer_run_past_the_span_is_still_refused ... ok
+test an_unmap_is_exempt_because_it_names_no_memory ... ok
+test sparse_coverage_may_be_larger_than_the_framebuffer ... ok
+test sparse_coverage_needs_no_framebuffer ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test acknowledged_sparse_is_quiet_and_plain_invalid_retires_it ... ok
+test adjacent_sparse_coverage_coalesces_without_backing ... ok
+test adjacent_sparse_statements_cover_one_placement ... ok
+test extending_sparse_after_a_kept_middle_has_no_backing_offset ... ok
+test old_vidmem_becoming_sparse_is_a_change ... ok
+test refused_sparse_map_is_retried ... ok
+test sparse_becoming_vidmem_is_a_change ... ok
+test sparse_has_no_backing_or_permission_key ... ok
+test sparse_subrange_keeps_no_linear_offset ... ok
+test three_sparse_segments_cover_one_placement ... ok
+test three_sparse_segments_have_one_coverage_interval ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test an_image_at_an_origin_names_absolute_addresses_and_rewrites_nothing ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test the_committed_ptx_declares_the_same_kfargs_size ... ok
+test the_committed_ptx_is_turing_targeted ... ok
+test the_report_constants_match_the_header ... ok
+test the_rust_ver3_descriptor_matches_the_cu_byte_for_byte ... ok
+test the_rust_mirror_matches_the_cu_byte_for_byte ... ok
+test the_rust_ver2_descriptor_matches_the_cu_byte_for_byte ... ok
+test every_report_field_decodes_to_what_the_c_compiler_reads ... ok
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test a_probe_cannot_mask_a_missing_store_completion ... ok
+test a_store_completion_cannot_be_smuggled_into_ack ... ok
+test a_probe_sync_cannot_be_moved_to_submit ... ok
+test a_store_completion_cannot_be_smuggled_into_submit ... ok
+test a_store_completion_cannot_mask_a_missing_probe ... ok
+test a_store_sync_cannot_be_moved_to_ack ... ok
+test the_ack_only_stages_a_per_run_verdict ... ok
+test the_known_positive_is_found ... ok
+test the_worker_store_completion_is_allowed_and_found ... ok
+test the_walk_verbs_do_not_synchronize ... ok
+test only_the_probe_and_store_completion_synchronize ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
