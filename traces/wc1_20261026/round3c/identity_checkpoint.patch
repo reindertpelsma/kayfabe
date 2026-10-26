@@ -1,6 +1,6 @@
 --- a/native_admission_helper.py
 +++ b/native_admission_helper.py
-@@ -72,7 +72,14 @@
+@@ -72,7 +72,16 @@
      if not state and key:state={'first_mono':started,'first_utc':utc,'host':host,'port':port}
      if not state:print(json.dumps({'state':'scan-wait','status':row.get('actual_status')}));return
      if time.monotonic()>=state['first_mono']+1200:raise ValueError('REFUSED native identity deadline')
@@ -12,6 +12,8 @@
 +            capture_output=True,text=True,timeout=25,check=True)
 +    except subprocess.CalledProcessError as error:
 +        (root/'console-read-error.txt').write_text(error.stderr or '')
++        advance(state,time.monotonic(),None,None,None)
++        state_path.write_text(json.dumps(state,indent=2)+'\n')
 +        raise
      latest,windows=pins(console_result.stdout);scanned=fp(key) if key else None
      admitted,stable=advance(state,time.monotonic(),latest,scanned,windows)
