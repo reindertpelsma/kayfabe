@@ -1,5 +1,12 @@
 # Public rental attribution and same-box host reference
 
+## Refresh after SILENT merged, 2026-10-26
+
+MEASURED 2026-10-26, combined source with master rev 073b3913c after PR153: all 2225 Node tests, 49 real workerd TAP tests and seven host-reference Python tests pass. post153-ids-mutations.jsonl records 18/18 IDS mutants and post153-silent-mutations.jsonl records 16/16 SILENT mutants, each with at least two named killing cases. Formatting and claims gate pass. Only the two hash files conflicted; the runner and tests merged without manual edits.
+
+MEASURED 2026-10-26, /tmp/wk1-ids-post153-bundle/index.js: the regenerated combined module SHA-256 is 1956872e2723ebf992ae749db75501abeb45971562c6f950b34b9160eb419174. deployment.json and toml carry it. This supersedes the pre-PR153 refresh below. The update uses a normal merge and fast-forward push; no force push, deployment or Cloudflare setting change is performed.
+
+
 ## Current master refresh, 2026-10-26
 
 MEASURED 2026-10-26, combined source with master rev 04773c348: all 2185 Node tests, 47 real workerd TAP tests and seven host-reference Python tests pass. combined-mutations.jsonl records 18/18 mutants with at least two killing cases each. The two conflict files are resolved using a regenerated module, preserving current master public vars and budget accounting.

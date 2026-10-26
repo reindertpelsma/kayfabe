@@ -206,7 +206,7 @@ elif case == "main":
     assert len(posts) == 1, posts
     assert status == 1, status  # same as every other terminal refusal: not a GPU success
     assert outputs == "state=RENTING_DISABLED\nverdict=UNAVAILABLE\nverified=0\n", outputs
-    assert out.split("\n").count(LINE) == 1, out
+    assert sum(line.startswith(LINE + " phase=") for line in out.split("\n")) == 1, out
     assert "| State | RENTING_DISABLED |" in summary, summary
     assert not stops(), [c[:2] for c in calls]
     assert sleeps == [], sleeps

@@ -39,6 +39,14 @@ export class AdmissionFixture {
         return Response.json({ state: 'ERROR' }, { status: 503 });
       }
     }
+    if (path === '/expire') {
+      const { now } = await request.json();
+      await new Ledger(this.ctx.storage).expire(now, {
+        ...configuration(this.env),
+        logRetention: 1,
+      });
+      return Response.json({ state: 'EXPIRED' });
+    }
     if (path === '/snapshot') {
       return Response.json([...(await this.ctx.storage.list())]);
     }
