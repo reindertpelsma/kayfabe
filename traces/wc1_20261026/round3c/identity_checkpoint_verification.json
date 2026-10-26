@@ -1,0 +1,30 @@
+{
+  "run": "WC1-round3c-offline-identity-checkpoint-20261026",
+  "source": "Offline mocked console failure and keyscan; no network or hardware",
+  "expected_red_commit": "63bb6784d",
+  "before_tests": {
+    "total": 2,
+    "failures": 1,
+    "errors": 1
+  },
+  "after_tests": {
+    "total": 2,
+    "passed": 2
+  },
+  "mutations": [
+    {
+      "name": "suppress_first_reach_checkpoint",
+      "killers": 2
+    },
+    {
+      "name": "suppress_console_error_record",
+      "killers": 2
+    }
+  ],
+  "helper_before_sha256": "404d134c8d23fdc51a44c2dc37c07b58dd81fdca24e896e459a03a9cce37e26b",
+  "helper_after_sha256": "0e779bc5a379ac0992600a5fe50bf560817a42dbc15a4d66830621127be8404c",
+  "changed": "Persist first-reachable time and endpoint before fallible console I/O; retain stderr",
+  "unchanged": "1200s original deadline,120s key stability,endpoint equality,latest/scan/Windows match",
+  "scope": "Operator admission helper only; kfwc binary/source541033eaf unchanged",
+  "live_retest": "Pending one pre-SSH retry after closed57882956"
+}
