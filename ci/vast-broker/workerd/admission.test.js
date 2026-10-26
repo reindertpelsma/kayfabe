@@ -301,58 +301,71 @@ test('workerd admission is transactional without shared service state', async (t
       assert.deepEqual(await (await call('/snapshot')).json(), []);
     });
   }
-  for (const cap of [1, 2]) {
-    await t.test('simultaneous /rent independent services cap ' + cap, async (t) => {
-      const { stub, cloud, call } = await runtime(t, {
-        MAX_CONCURRENT_RENTALS: String(cap),
-      });
-      const tokens = await Promise.all(
-        [1, 2, 3, 4].map(async (i) => {
-          const id = String(1000 + i),
-            head = i.toString(16).padStart(40, '0');
-          cloud.runs.set(id, {
-            ...cloud.run,
-            id: Number(id),
-            head_sha: head,
-            head_branch: 'branch-' + i,
-          });
-          return jwt({
-            run_id: id,
-            sha: head,
-            iat: Math.floor(Date.now() / 1000),
-            nbf: Math.floor(Date.now() / 1000) - 1,
-            exp: Math.floor(Date.now() / 1000) + 300,
-          });
-        }),
-      );
-      const responses = await Promise.all(
-        tokens.map((token, i) =>
-          stub.fetch(env.WORKER_URL + '/' + bindings.BROKER_PATH_PREFIX + '/rent', {
-            method: 'POST',
-            headers: {
-              Authorization: 'Bearer ' + token,
-              'X-KF-Protocol': '6',
-              'X-Test-Run': String(1001 + i),
-            },
-            body: JSON.stringify({
-              runner_nonce: 'b'.repeat(64),
-              tested_sha: (i + 1).toString(16).padStart(40, '0'),
-              profile: 'check',
-              remaining_seconds: 3600,
-            }),
+  for (const independent of [true, false]) {
+    for (const cap of [1, 2]) {
+      const mode = independent ? 'independent services' : 'production gateway';
+      await t.test('simultaneous /rent ' + mode + ' cap ' + cap, async (t) => {
+        const { mf, stub, cloud, call } = await runtime(t, {
+          MAX_CONCURRENT_RENTALS: String(cap),
+        });
+        const tokens = await Promise.all(
+          [1, 2, 3, 4].map(async (i) => {
+            const id = String(1000 + i),
+              head = i.toString(16).padStart(40, '0');
+            cloud.runs.set(id, {
+              ...cloud.run,
+              id: Number(id),
+              head_sha: head,
+              head_branch: 'branch-' + i,
+            });
+            return jwt({
+              run_id: id,
+              sha: head,
+              iat: Math.floor(Date.now() / 1000),
+              nbf: Math.floor(Date.now() / 1000) - 1,
+              exp: Math.floor(Date.now() / 1000) + 300,
+            });
           }),
-        ),
-      );
-      const data = await Promise.all(responses.map((r) => r.json()));
-      assert.equal(
-        data.filter((r) => r.state === 'BOOTING').length,
-        cap,
-        JSON.stringify(data.map((r) => r.state)),
-      );
-      assert.equal(data.filter((r) => r.state === 'BUSY').length, 4 - cap);
-      const rows = await (await call('/snapshot')).json();
-      assert.equal(rows.filter(([k]) => k.startsWith('cost:')).length, cap);
-      assert.equal(cloud.created.length, cap);
-    });
+        );
+        const fetchRequest = (url, init) =>
+          independent ? stub.fetch(url, init) : mf.dispatchFetch(url, init);
+        if (!independent) {
+          const available = await fetchRequest(
+            env.WORKER_URL + '/' + bindings.BROKER_PATH_PREFIX + '/availability?profile=check',
+            { headers: { Authorization: 'Bearer ' + tokens[0], 'X-KF-Protocol': '6' } },
+          );
+          assert.equal(available.status, 200);
+          assert.ok(Array.isArray((await available.json()).offers));
+        }
+        const responses = await Promise.all(
+          tokens.map((token, i) =>
+            fetchRequest(env.WORKER_URL + '/' + bindings.BROKER_PATH_PREFIX + '/rent', {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + token,
+                'X-KF-Protocol': '6',
+                'X-Test-Run': String(1001 + i),
+              },
+              body: JSON.stringify({
+                runner_nonce: 'b'.repeat(64),
+                tested_sha: (i + 1).toString(16).padStart(40, '0'),
+                profile: 'check',
+                remaining_seconds: 3600,
+              }),
+            }),
+          ),
+        );
+        const data = await Promise.all(responses.map((r) => r.json()));
+        const admitted = data.filter((r) => r.state === 'BOOTING').length;
+        if (independent) assert.equal(admitted, cap, JSON.stringify(data.map((r) => r.state)));
+        else assert.ok(admitted > 0 && admitted <= cap, JSON.stringify(data.map((r) => r.state)));
+        assert.equal(data.filter((r) => r.state === 'BUSY').length, 4 - admitted);
+        if (independent) {
+          const rows = await (await call('/snapshot')).json();
+          assert.equal(rows.filter(([k]) => k.startsWith('cost:')).length, cap);
+        }
+        assert.equal(cloud.created.length, admitted);
+      });
+    }
   }
 });

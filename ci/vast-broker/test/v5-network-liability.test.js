@@ -22,7 +22,12 @@ for (const ended of [false, true])
         bandwidthCost: 0.017,
         ttl: 10800000,
       };
-    await ledger.reserve(r);
+    await ledger.reserve(r, {
+      cfg: configuration(env),
+      now: clock,
+      cost: 0.377,
+      credit: 20,
+    });
     const row = await storage.get('cost:' + r.key);
     assert.equal(row.price, 0.12);
     assert.equal(row.bandwidthCost, 0.017);
