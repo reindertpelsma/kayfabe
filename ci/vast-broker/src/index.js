@@ -1,7 +1,15 @@
 // prettier-ignore
 import {DEFAULTS} from './defaults.js';
-// prettier-ignore
-import {BrokerError,refuse,configuration,numericId,hexSha,localIdentity,readBounded} from './policy.js';
+import {
+  BrokerError,
+  refuse,
+  budgetRefuse,
+  configuration,
+  numericId,
+  hexSha,
+  localIdentity,
+  readBounded,
+} from './policy.js';
 // prettier-ignore
 import {RunTokens,constantTimeEqual,validSecret,sha256Hex} from './tokens.js';
 // prettier-ignore
@@ -258,14 +266,11 @@ export function createService({
       const total = (computeStorage * ttl) / 3600000 + bandwidth;
       try {
         const credit = await vast.credit();
-        if (typeof credit !== 'number' || !Number.isFinite(credit))
-          refuse('UNAVAILABLE_BUDGET', 409);
-        // Item 8b: the reserve also covers what the other active runs may still bill.
-        const outstanding = await ledger.budgets(cfg, now(), total, record.key);
-        if (credit < cfg.reserve + total + outstanding) refuse('UNAVAILABLE_BUDGET', 409);
-      } catch {
+        await ledger.budgets(cfg, now(), total, record.key, { credit });
+      } catch (error) {
         await close(record, vast, 'CONTRACT_BUDGET', 'UNAVAILABLE');
-        refuse('UNAVAILABLE_BUDGET', 409);
+        if (error instanceof BrokerError && error.state === 'UNAVAILABLE_BUDGET') throw error;
+        budgetRefuse('credit-unavailable', { cost_usd: total, reserve_usd: cfg.reserve });
       }
       record.computeStoragePrice = computeStorage;
       record.bandwidthCost = bandwidth;
@@ -276,6 +281,7 @@ export function createService({
         started: record.started,
         ended: null,
         ttl,
+        created: true,
         price: computeStorage,
         bandwidthCost: bandwidth,
       });
@@ -742,14 +748,16 @@ export function createService({
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
     // (owner only; GitHub allows a run up to 35 days) could rent again. Not guaranteed beyond.
-    if (await ledger.get('cost:' + key)) refuse('UNAVAILABLE_BUDGET', 409);
+    const previousCost = await ledger.get('cost:' + key);
+    if (previousCost)
+      budgetRefuse('cost-key', { started_at: previousCost.started, ended_at: previousCost.ended });
     // Review B2: the commit gap before the cap, so a repeated commit is refused at once instead
     // of waiting BUSY, and before the supersede, so it closes nobody.
     const cached = await ledger.get('sha:' + target.sha),
       force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
     // A fresh runner nonce may not inherit another run's result.
-    if (cached && !force) refuse('UNAVAILABLE_BUDGET', 409);
-    if (cached && now() - cached.started < cfg.gap) refuse('UNAVAILABLE_BUDGET', 409);
+    if (cached && (!force || now() - cached.started < cfg.gap))
+      budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now() - cached.started) });
     // Review B1: a run whose remaining budget cannot hold the hard limit plus the margin is not
     // admitted (it would time out with a paid box) and supersedes nothing.
     if (rentRequest.remaining_seconds * 1000 < cfg.hard + DEFAULTS.admissionMarginMinutes * 60000)
@@ -784,10 +792,7 @@ export function createService({
       cost = offer.pricing.total,
       credit = await vast.credit();
     try {
-      if (typeof credit !== 'number' || !Number.isFinite(credit)) refuse('UNAVAILABLE_BUDGET', 409);
-      // Item 8b: daily, rolling and the credit reserve sum the liabilities of all active runs.
-      const outstanding = await ledger.budgets(cfg, now(), cost);
-      if (credit < cfg.reserve + cost + outstanding) refuse('UNAVAILABLE_BUDGET', 409);
+      await ledger.budgets(cfg, now(), cost, null, { credit });
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')
         e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };
@@ -903,6 +908,7 @@ export function createService({
         await ledger.settle(r, now());
         await clearFailedSha(r);
       }
+      if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET') throw e;
       refuse();
     }
     r.phase = 'BOOTING';
@@ -1023,6 +1029,7 @@ export function createService({
             bytes_dropped: 0,
             ...(e instanceof BrokerError && e.reason ? { reason: e.reason } : {}),
             ...(e instanceof BrokerError && e.selection ? { selection: e.selection } : {}),
+            ...(e instanceof BrokerError && e.budget ? { budget: e.budget } : {}),
           },
           e instanceof BrokerError ? e.status : 503,
         );
@@ -1170,7 +1177,11 @@ export class BrokerLedger {
                 boot_seconds: number((r.firstReportAt - r.started) / 1000),
               };
             });
-          return json({ runs });
+          const budget = await new Ledger(this.ctx.storage).budgetSummary(
+            configuration(this.env),
+            Date.now(),
+          );
+          return json({ runs, budget });
         } catch {
           return json({ error: 'List unavailable' }, 503);
         }

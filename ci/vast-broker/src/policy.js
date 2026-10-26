@@ -13,6 +13,14 @@ export class BrokerError extends Error {
 export function refuse(state = 'UNAVAILABLE', status = 503, reason, why) {
   throw new BrokerError(state, status, reason, why);
 }
+// Public budget diagnostics contain only fixed keys and finite numbers (or unknown/null).
+export function budgetRefuse(reason, values = {}) {
+  const error = new BrokerError('UNAVAILABLE_BUDGET', 409, 'BUDGET:' + reason);
+  error.budget = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, Number.isFinite(value) ? value : null]),
+  );
+  throw error;
+}
 export const numericId = (v) => typeof v === 'string' && /^[1-9][0-9]{0,19}$/.test(v);
 export const hexSha = (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
 // Public Vast ids (machine_id, host_id) as shown in /availability and the status object
