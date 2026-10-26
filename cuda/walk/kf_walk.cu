@@ -350,7 +350,7 @@ __device__ __forceinline__ bool kf_pde_sparse(const KfFormat &F, uint64_t raw)
 __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
                                                uint32_t apc, bool leaf_capable)
 {
-    if (kf_pde_sparse(F, raw)) return false;
+    if (F.sparse_twin && kf_pde_sparse(F, raw)) return false;
     switch (F.table_version) {
     case KF_TBL_VER2:
         /* The aperture IS the validity. `kern_gmmu_fmt_gm10x.c:165-182`. */
