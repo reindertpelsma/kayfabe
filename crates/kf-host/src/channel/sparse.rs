@@ -106,6 +106,18 @@ impl HostRm {
             .unwrap_or(Ok(()))
     }
 
+    /// Clear all sparse state before this empty host space becomes a spare for a
+    /// different guest space. A refusal makes it ineligible for reuse.
+    pub fn reset_sparse(&self, space: VaSpace) -> Result<(), RmError> {
+        let result = self
+            .with_sparse(space.space, |tree, ops| tree.clear(ops))
+            .unwrap_or(Ok(()));
+        if self.sparse_enabled {
+            self.log_sparse(space.space, self.sparse_totals());
+        }
+        result
+    }
+
     /// Session totals read with atomics only; safe for the existing heartbeat.
     #[must_use]
     pub fn sparse_totals(&self) -> Stats {

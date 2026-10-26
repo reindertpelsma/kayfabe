@@ -450,7 +450,25 @@ impl Reservations {
         Ok(pieces)
     }
 
-    pub(crate) fn clear(&mut self, _: &dyn Ops) -> Result<(), RmError> {
+    pub(crate) fn clear(&mut self, ops: &dyn Ops) -> Result<(), RmError> {
+        // Reuse belongs to a new guest VA space. No leaf intent or sparse absorb
+        // from the previous space may survive it, including unhonoured intent.
+        if self.blocks.values().any(Self::occupied) {
+            self.stats.refused = self.stats.refused.saturating_add(1);
+            return Err(RmError::NoMemory);
+        }
+        for block in self.blocks.values_mut() {
+            block.wanted = [0; 8];
+        }
+        let sparse: Vec<_> = self
+            .blocks
+            .values()
+            .filter(|b| b.sparse)
+            .map(|b| (b.lo, b.hi))
+            .collect();
+        for (lo, hi) in sparse {
+            self.replace(ops, lo, lo, hi, false)?;
+        }
         Ok(())
     }
 

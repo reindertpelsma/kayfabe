@@ -3537,6 +3537,11 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     if nrows > 0 && g.invalidate().is_err() {
         refused = refused.saturating_add(1);
     }
+    // Sparse reservations and held intents are not backed rows. They must also
+    // be cleared before a different guest space can inherit this host VA space.
+    if refused == 0 && rm.reset_sparse(g.vas.space).is_err() {
+        refused = refused.saturating_add(1);
+    }
     let unmap_us = t_unmap.elapsed().as_micros();
     let recycled = match mirror.as_ref().and_then(|mi| retire_spare(mi, refused)) {
         Some(sp) => plane
