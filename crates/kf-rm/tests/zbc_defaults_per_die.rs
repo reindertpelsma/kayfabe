@@ -118,11 +118,15 @@ fn no_die_is_served_another_dies_defaults() {
 #[test]
 fn a_zbc_row_is_per_die_with_a_wildcard_branch_only_in_the_host_state_namespace() {
     let hdr = "key\tdie\tbranch\tsize\tinputs\twords\tsource\tevidence\n";
+    // CODE READ: historical text at commit 007ba1eb0:121;
+    // BW9 quotes this statement without independently validating its evidence.
     // allowed: zbc.* measured per die, branch *
     let ok = format!(
         "{hdr}zbc.color\tTU116\t*\t44\t-\t0 0 0 0 0 0 0 0 0 0 1\tmeasured:TU116,580.178.04,2026-10-14\tx\n"
     );
     assert!(consttab::parse(&ok).is_ok());
+    // CODE READ: historical text at commit 007ba1eb0:126;
+    // BW9 quotes this statement without independently validating its evidence.
     // a measured wildcard BRANCH anywhere else is still refused
     let bad = format!(
         "{hdr}rm.0x20802a08\tGA106\t*\t4\t-\t0x5000\tmeasured:GA106,580.105.07,2026-10-14\tx\n"

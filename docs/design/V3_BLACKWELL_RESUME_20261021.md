@@ -86,7 +86,7 @@ this document is derived from a closed binary; no closed-driver bytes were opene
 
 # 2. Is the Xid32 a product defect or a consequence of the crash?
 
-**Verdict: not a consequence of the 0x116 bugcheck (MEASURED: it is 18.5 s earlier, and 5.3 s before the
+CODE READ (commit 007ba1eb0:89): quoted historical statement, evidence not revalidated by BW9. **Verdict: not a consequence of the 0x116 bugcheck (MEASURED: it is 18.5 s earlier, and 5.3 s before the
 guest's own recovery starts). Probably a product-side event, contained to QEMU's own channels.**
 Evidence for "product-side": the pair appears only in the two revisions that forward Blackwell GR methods
 to the host twin (fix4, af8) and in none of six Code-0 arms that kill that channel inside kayfabe instead
@@ -105,7 +105,7 @@ Falsifiers are stated here, before any run (part 7 records what was run).
 
 ## (a) Display ON: guest bugcheck 0x50 about 11 s after enable, after the 4th cursor allocation
 
-| # | hypothesis | for | against | cheapest decisive experiment | falsifier (written first) |
+| CODE READ (commit 007ba1eb0:108): quoted historical statement, evidence not revalidated by BW9.  # | hypothesis | for | against | cheapest decisive experiment | falsifier (written first) |
 |---|---|---|---|---|---|
 | A1 | **Incoherent display caps.** Serving POSTCOMP `CAPB` (output LUT capacity) opens a driver path that dereferences state initialised from the dependent fields that kayfabe leaves zero or partial (POSTCOMP `CAPC..G`, PRECOMP `CAPC/E/F` and the low half of `CAPA`, tiles 4-7). | MEASURED ladder (item 5): `CAPB` present + PRECOMP not the die's -> 0x50 in two differently served pages; both words the die's -> Code 0; `CAPB` absent -> Code 43. MEASURED same fault signature (item 3) with two different `CAPB` values, so it is the presence of the path, not a value. | n=1 per page; the oracle shows 125 other words differ and only the 0x680-0x87c ones were bisected. | **One binary, one env var:** ON with the derived page (PR65 candidate, see A2) versus the same page with ONLY the die's PRECOMP words (0x780-0x87c) from this box's own read through `KF3_DIAG_CAPS_PAGE_FILE` (diag branch, never shipped). | 0x50 persists with the same low-16-bit P3 / low-24-bit P1 signature while PRECOMP is the die's. |
 | A2 | **Missing width contract.** POSTCOMP `CAPA` lacks `FULL_WIDTH/UNIT_WIDTH`; the driver divides or shifts by it (Codex's PR65 `296636c66` derives the unit width from public NVKMS). | CODE READ: public NVKMS asserts the unit width on this family; served `CAPA=0x007b0000` has the low half zero where the die has it set (item 4). Fix5 (`CAPA` without widths) gave Code 43, af8 (plus `CAPB`) gives 0x50: consistent with widths being needed but not sufficient. | GPU-free tested only; widths are the least-informed of the missing bits. | The PR65 candidate in the ON arm, no other change. | PR65 candidate still 0x50 with the same signature. |
@@ -113,12 +113,12 @@ Falsifiers are stated here, before any run (part 7 records what was run).
 | A5 | **The crash is in the guest's own step between the 4th `CA7A` reply and the first `0x0073010c` (MEASURED, item 9).** Candidates: a mapping of the four cursor channels' control area or of the display user area that is not set up, or per-head state derived from the caps words (A1/A2). | item 9 (same object order; real driver continues with GET_ACTIVE x4); identical fault offsets across pages. | no guest-side symbol; BAR0 reads are not trapped. | ON arm with a bounded BAR0 display-region access trace (read and write, host clock) for the last 2 s before the bugcheck, or the dump's faulting module (RE step, to confirm with the coordinator first). | The trace shows no display-region access by the guest between the 4th `CA7A` and the crash (then the fault is not an I/O mapping). |
 | A4 | An unobserved GSP reply or event (quiet events, CA7A reply params 16 B) is wrong. | `current_blackwell_differential` cannot falsify it; selective logs are not a journal. | Successful headers; a wrong reply would not give a fixed code offset across different caps pages. | Export the four CA7A reply param words (public struct) with the capture kit and compare with the VFIO reference. | The words equal the reference. |
 
-Ranking reason: A1 and A2 are testable with one binary in two ON arms and carry the measured ladder; A3/A4
+CODE READ (commit 007ba1eb0:116): quoted historical statement, evidence not revalidated by BW9. Ranking reason: A1 and A2 are testable with one binary in two ON arms and carry the measured ladder; A3/A4
 need new capture before they can be decisive.
 
 ## (b) Display OFF: Code 0, then ~40 s class TDR (here 141 reports, 0x116 at +22 s)
 
-| # | hypothesis | for | against | cheapest decisive experiment | falsifier |
+| CODE READ (commit 007ba1eb0:121): quoted historical statement, evidence not revalidated by BW9.  # | hypothesis | for | against | cheapest decisive experiment | falsifier |
 |---|---|---|---|---|---|
 | B1 | **A forwarded method is rejected by the host PBDMA (Xid32 METHOD) on one or both GR-tier rings; the rings are RC'd; kayfabe never notices; the guest's GR work never completes; Windows times out (141), tries `RESET_CHANNEL` (refused 0x56), resets the adapter.** | item 1 timeline (Xid first, ~3 s of silence, recovery 5 s later); item 2 (Xid only with fix4 admission); item 7 (RC invisible to kayfabe); CODE READ + docs (G17/H-ESCALATE: a refused `RESET_CHANNEL` escalates to an adapter reset, kept refused, owner's decision). | n=2; ring identity and method unknown; the 141 time is unknown (the first 141 could precede the Xid and Xid32 be a reaction to guest recovery). | One OFF arm with: `KF3_COMPLETION_PROBE=500` (earliest overdue fence, host clock), a per-ring forwarded-method tail and host chid at birth, host kernel journal with timestamps, key-line byte offsets for time mapping. | The first overdue fence / first 141 evidence is **earlier than 27.2 s**, or the two RC'd rings' last methods contain no GR method the admission added (then the Xid32 is a reaction, B2 stands alone). |
 | B2 | **The terminal 0x116 is independent of what hung: after the guest unloads its driver, no re-init ever arrives, and the reset path fails with the same status.** | MEASURED: identical P3 `0xC000009A`, P4 4, no RPC after `UnloadingGuestDriver`, in every Code-0 arm over four revisions, two boards, with the GR ring dead by kayfabe's own refusal (fix2/3) or by host RC (fix4/af8). Owner item "driver unload/reload" is listed as pending. | It does not say why the first TDR started; a recoverable TDR needs the reload to work. | Read the host side after `UnloadingGuestDriver` (GSP cycle log lines, queue binding: the tail shows `QueueNotBound` x2) and compare with the Ada Windows runs where the same TDR recovers (GSP cycle then reload). | An OFF arm where the first TDR recovers (4101) on GB202, or a GSP cycle line on GB202 after the unload. |
@@ -158,7 +158,7 @@ coordinator's 6 USD hard stop stays; auto-destroy at 180 min.
 
 Arms in order (one variable each; riskiest last; every ON arm ends by itself at the bugcheck):
 
-| arm | rev / flags | variable | expected | falsifier (before) | decision |
+| CODE READ (commit 007ba1eb0:161): quoted historical statement, evidence not revalidated by BW9.  arm | rev / flags | variable | expected | falsifier (before) | decision |
 |---|---|---|---|---|---|
 | 0 | native health: unprivileged die probe, gates 9/9+10, raw 30/30, CUDA 4/4 | -- | PASS | any refusal -> stop, no guest | stop |
 | 1 `on_a` | R = frozen af8 + PR65 (`296636c66`, 2 commits) + diag hook, hook unset, P19 + `KF3_RPC_TRACE/BODY_TRACE`, capture kit | PR65 vs the n=1 af8 0x50 | A2 predicts Code 43 / Code 0 / a different bugcheck | 0x50 with P3 low 16 bits `a1b0` | A2 falsified -> arm 2; else go to OFF behaviour of an ON that reaches Code 0 |
@@ -183,7 +183,7 @@ verified API absence, then write the lease into `traces/die_driver_sweep_2026101
 
 # 5a. Owner rulings relayed during the session (2026-10-21 evening) and what they change
 
-1. **Blackwell is the priority; the card does not matter; constants follow the table.** Anything this lane
+1. CODE READ (commit 007ba1eb0:186): quoted historical statement, evidence not revalidated by BW9. **Blackwell is the priority; the card does not matter; constants follow the table.** Anything this lane
    would ship must come from the per-die constant table's tier order (`kf_rm::consttab`; public ogkm, then
    host-derived, then the VFIO reference), never from a captured page. The `KF3_DIAG_CAPS_PAGE_FILE` arm
    (A1) reads this box's own die and therefore stays a **diagnostic on a separate, never-merged branch**

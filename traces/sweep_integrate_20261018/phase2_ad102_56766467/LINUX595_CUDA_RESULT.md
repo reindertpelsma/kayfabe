@@ -25,7 +25,7 @@ The launcher prints its source revision249 alongside the overridden binary;
 the authoritative binary stamp in the control driver log is0452613b.
 This control is separate from the earlier frozen raw30 R19 comparison.
 
-CODE READ follow-up: stage_fat_guest.sh explicitly forbids writing its580base
+CODE READ (commit 007ba1eb0:28): quoted historical statement, evidence not revalidated by BW9. CODE READ follow-up: stage_fat_guest.sh explicitly forbids writing its580base
 while595overlay exists. The subsequent580CUDA boots did write that base.
 This measured orchestration order violates the image invariant and is a strong
 candidate for the ext4error; original corruption cause is not proven. Next

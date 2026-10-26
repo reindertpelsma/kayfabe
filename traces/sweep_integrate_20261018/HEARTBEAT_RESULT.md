@@ -2,20 +2,20 @@
 
 STATUS: LIVE, 2026-10-19. GPU-free acceptance PASS; hardware UNRUN.
 
-MEASURED: fixture-only94518f95b restores complete QEMU compilation,389/0/0.
+CODE READ (commit 007ba1eb0:5): quoted historical statement, evidence not revalidated by BW9. MEASURED: fixture-only94518f95b restores complete QEMU compilation,389/0/0.
 Behavior-preserving extractionf041ceab3 preceded tests-only EXPECTED RED16e80e802:
 18 runtime failures,5 passes. Helpers32eebb3ab then Device wiring4e0e0b645 made
 all23 targeted tests pass. Fresh-queue tests-only EXPECTED RED39b11e805 failed
 in both Falcon/FSP paths; fixd99c2367b clears only the clock readiness bit using
 the existing fresh-instance decision. The complete25 targeted tests pass.
 
-MEASURED: heartbeat mutations kill5/3/4/2/2/2/2/2/2/2 tests. Actual blocking
+CODE READ (commit 007ba1eb0:12): quoted historical statement, evidence not revalidated by BW9. MEASURED: heartbeat mutations kill5/3/4/2/2/2/2/2/2/2 tests. Actual blocking
 GSP and fn72 lock mutants each fail two distinct contention tests. A populated
 metadata contention case was strengthened in3cf12a4b9 and rechecked with2 kills.
 One parallel stderr line interleaved FAILED with fn72 logging; the authoritative
 failures footer proves both runtime failures in the unchanged hashed log.
 
-MEASURED full release at7e9145ff8: QEMU389->407/0/0, GSP54->61/0/0;
+CODE READ (commit 007ba1eb0:18): quoted historical statement, evidence not revalidated by BW9. MEASURED full release at7e9145ff8: QEMU389->407/0/0, GSP54->61/0/0;
 all14touched crate suites3338/0/21, no candidate4/candidate5 test removed.
 C4QEMU312 and C5QEMU377 are both exceeded. Existing ignored tests remain;
 the two extra ignored display data emitters predate this heartbeat topic.

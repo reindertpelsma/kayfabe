@@ -49,7 +49,7 @@ does not upgrade its claims or substitute that summary for a new bench run.
 
 ## Windows P19 flags
 
-CODE READ of historical receipts: every historical P19 result above required
+CODE READ (commit 007ba1eb0:52): quoted historical statement, evidence not revalidated by BW9. CODE READ of historical receipts: every historical P19 result above required
 the following exact set. Current AD102 and both GB202 Windows arms use this set. No
 result is described as flagless. Future receipts must assert the actual process
 environment, build, ABI and source. Display/GOP on, VGA none, except the measured
@@ -80,11 +80,11 @@ KF3_DISPLAY_ILUT_OFFSET_256=1
 Public guest ABI for historical 580.88 is 580.65.06; for 581.51 it is
 580.94.02. A native firmware version is a separately recorded fact.
 
-MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.
+CODE READ (commit 007ba1eb0:83): quoted historical statement, evidence not revalidated by BW9. MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phase2_ga104_56808180/c4_ce_control/. Subsequent Linux arms deferred for owner Windows priority.
 
 Latest paired refresh, completed2026-10-20. Native595 gates9/9+gate10/USER12/raw30/CUDA4 PASS on both boxes before guests. Windows LTSC2024 is nested under kayfabe on Linux. Blackwell was subsequently reimaged with unmodified windows-on-vast for the separate native reference; no native result is a kayfabe Windows PASS.
 
-| Refresh die | Guest actual build | Measured source / configuration | Result | Evidence |
+| CODE READ (commit 007ba1eb0:87): quoted historical statement, evidence not revalidated by BW9.  Refresh die | Guest actual build | Measured source / configuration | Result | Evidence |
 |---|---|---|---|---|
 | AD10256816419 | Windows580.88/32.0.15.8088 | `0c87acda8`, P19+RPC diagnostics, display/GOPon | PASS desktop/CUDA3/hardwareDX11+12/426.09s zero4101hold | `phase2_windows_ad102_56816419/windows580_pass/` |
 | GB20256816449 | SameWindowsbuild | `0c87acda8`, P19+RPC diagnostics, OFF/OFF/emptyROM | FAIL verifiedCode43;357RPCs/unload356 precleanup;noNV0073/CA70/CA7A;0System4101 | `phase2_windows_gb202_56816449/b1_off/` |
@@ -99,7 +99,7 @@ Ada broker source note: raw/CUDA/headlessgfx above measured0c87acda8 on56816419;
 
 ## Final bounded Blackwell follow-up56830105
 
-| Die / OS / driver | Product revision | Result | Evidence |
+| CODE READ (commit 007ba1eb0:102): quoted historical statement, evidence not revalidated by BW9.  Die / OS / driver | Product revision | Result | Evidence |
 |---|---|---|---|
 | AD102 Linux595.91.07 broker, host595 | `7f22d18df` | PASS actualNVIDIA/Cinnamon/gears/nonblank1920x1080; guestXid/flip0,host5→5,n1 | phase2_ada_broker_followup_20261020/broker595/ |
 | AD102 Linux580.159.04 broker, host595 | `7f22d18df` | PASS same criteria,n1; public pin verified/currentbroker | phase2_ada_broker_followup_20261020/broker580/ |
@@ -107,4 +107,4 @@ Ada broker source note: raw/CUDA/headlessgfx above measured0c87acda8 on56816419;
 | GB202 Windows580.88 OFF baseline | `7f22d18df`, P19 planned | UNRUN: disabled parent not ready by fixed04:04 latest-start; no product enable | phase2_blackwell_probe_56830105/probe_verdict.json |
 | GB202 Windows580.88 OFF PR53 candidate | `aa8fdea9c`, P19 planned, unmerged | UNRUN: no unmatched candidate after paired baseline missed cutoff | Same; preparation/candidate_scope.json |
 
-Only setup was measured on this lastlease: genericLTSC check exit0, both binaries built, actual disabled8088/oem7/GSP1 parent ready04:06:09; no product init/arm markers/RPC records. Original harness cleanstop, evidencepushed before destroy/APIabsence04:06:46. H-NVDEC-OFF falsifier remains untested. No deadline extension, extra lease, private reply or PR merge.
+CODE READ (commit 007ba1eb0:110): quoted historical statement, evidence not revalidated by BW9. Only setup was measured on this lastlease: genericLTSC check exit0, both binaries built, actual disabled8088/oem7/GSP1 parent ready04:06:09; no product init/arm markers/RPC records. Original harness cleanstop, evidencepushed before destroy/APIabsence04:06:46. H-NVDEC-OFF falsifier remains untested. No deadline extension, extra lease, private reply or PR merge.

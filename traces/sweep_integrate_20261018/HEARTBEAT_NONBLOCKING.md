@@ -28,7 +28,7 @@ No console cell is cleared, no reset decision is changed, no scrub is changed.
 GOP off retains fn72 clock metadata but still creates no console seat. A guest-
 chosen offset changes only bounded u32 clock arithmetic, never a host RM action.
 
-MEASURED initial23 tests green, then two fresh-queue tests independently failed
+CODE READ (commit 007ba1eb0:31): quoted historical statement, evidence not revalidated by BW9. MEASURED initial23 tests green, then two fresh-queue tests independently failed
 and were fixed. Contention tests hold each mutex on one thread and require the
 reader's result while that lock remains held; watchdog expiry fails the test,
 then releases and joins the worker. Two distinct tests target each blocking

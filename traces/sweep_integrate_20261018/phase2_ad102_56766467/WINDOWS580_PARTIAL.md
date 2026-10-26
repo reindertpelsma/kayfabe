@@ -20,7 +20,7 @@ abcd1234; cup3 returned43; cup8 N2048,bad0,maxerr0. Hardware NVIDIA D3D11/12
 both RESULT OK; Basic Render/WARP excluded. Since-boot System4101count0.
 The420shold is still active; no full cell PASS until its duration/TDRchecks finish.
 
-The original cold validator stopped at SIGNIN_FAILED before probes. SSH then
+CODE READ (commit 007ba1eb0:23): quoted historical statement, evidence not revalidated by BW9. The original cold validator stopped at SIGNIN_FAILED before probes. SSH then
 observed real KFWIN\kf, noLogonUI, Explorer1,DWM1 andCode0; screenshot showed
 its desktop. Same logical readiness guard was independently satisfied over
 SSH and recorded before resuming the still-unrun probes in the SAMEcoldboot.

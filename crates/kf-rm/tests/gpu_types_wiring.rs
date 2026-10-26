@@ -372,6 +372,8 @@ fn resolve_names_a_withheld_key_and_never_serves_it() {
     }
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:375;
+/// BW9 quotes this statement without independently validating its evidence.
 /// The doc's machine-readable lines (`ZBC-MEASURED:`, `BOARD-SPECIFIC:`) equal the data.
 #[test]
 fn the_design_doc_lists_the_zbc_dies_and_the_board_specific_pairs_the_data_has() {

@@ -42,6 +42,8 @@ pub enum Tier {
     Rule,
     /// T2: the host's own unprivileged control reply.
     Host,
+    /// CODE READ: historical text at commit 007ba1eb0:45;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// T3: a privileged per-die measurement row.
     Measured,
 }
@@ -55,11 +57,15 @@ pub struct Die {
     pub implementation: u32,
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:58;
+/// BW9 quotes this statement without independently validating its evidence.
 /// One measured word of one die (tier 3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeasuredWord {
     /// The die it was read on.
     pub die: Die,
+    /// CODE READ: historical text at commit 007ba1eb0:63;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// The guest-driver branch the row was measured for (`580`), or `*` for a row the driver does not matter to.
     pub branch: String,
     /// The caps class of the page it was read from.
@@ -68,6 +74,8 @@ pub struct MeasuredWord {
     pub offset: u32,
     /// The value.
     pub value: u32,
+    /// CODE READ: historical text at commit 007ba1eb0:71;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// Where it came from (`measured:<die>,<how>,<date>`); a row without one is refused.
     pub source: String,
 }
@@ -79,6 +87,8 @@ pub struct HostFacts {
     pub precomp: Option<crate::hostcaps::HostPrecomp>,
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:82;
+/// BW9 quotes this statement without independently validating its evidence.
 /// The measured words shipped with kayfabe (`data/caps_measured.tsv`).
 ///
 /// # Panics
@@ -197,6 +207,8 @@ pub struct Provenance {
     pub offset: u32,
     /// The tier that last wrote it.
     pub tier: Tier,
+    /// CODE READ: historical text at commit 007ba1eb0:200;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// What wrote it (a rule's basis, or the measurement's source).
     pub why: String,
 }
@@ -208,6 +220,8 @@ pub struct Derived {
     pub page: CapsPage,
     /// Per word: tier and reason (every word of the page, in offset order).
     pub provenance: Vec<Provenance>,
+    /// CODE READ: historical text at commit 007ba1eb0:211;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// Words the Windows display driver needs that no header names and that have no measured row for
     /// this die: `(offset, why it is needed)`. Empty when the die is measured.
     pub unmeasured: Vec<(u32, &'static str)>,
@@ -256,6 +270,8 @@ fn resolve_row(
     Ok(Some((off, f, v)))
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:259;
+/// BW9 quotes this statement without independently validating its evidence.
 /// ★ Derive the page one die presents.
 ///
 /// `sdr` selects the SDR-colour base page (the production profile); `rows` are the window-layer family
@@ -335,6 +351,8 @@ pub fn derive(
     // Tier1 derives each supported named field. Host facts remain physical
     // observations: no residual field is eligible to alter this virtual page.
     crate::precomp_fields::apply(t, row, die, &mut words)?;
+    // CODE READ: historical text at commit 007ba1eb0:338;
+    // BW9 quotes this statement without independently validating its evidence.
     // T3: this die's measured words
     let mut unmeasured: Vec<(u32, &'static str)> = Vec::new();
     for (off, because) in REQUIRED_UNNAMED {

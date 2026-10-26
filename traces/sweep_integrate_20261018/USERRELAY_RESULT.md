@@ -2,7 +2,7 @@
 
 STATUS: LIVE, 2026-10-19. Approved narrow topic implemented and verified GPU-free.
 
-MEASURED: unchanged predicate extraction + eight tests committed alone as
+CODE READ (commit 007ba1eb0:5): quoted historical statement, evidence not revalidated by BW9. MEASURED: unchanged predicate extraction + eight tests committed alone as
 EXPECTED RED 2fb8aa503 (five pass, three runtime failures). Fix 871c38fad passes
 full release kf-qemu: 312/0/0 before -> 320/0/0 after; all 312 previous test
 names remain. Four mutants killed by 3/2/4/2 tests respectively (see JSON).

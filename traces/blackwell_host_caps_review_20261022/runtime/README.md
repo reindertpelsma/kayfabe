@@ -41,7 +41,7 @@ base-only supplement, keyed by level/code/message/primary relative file/source s
 line-number movement. Base union462diagnostics, after457; added0, removed5. Removal reflects
 which inherited targets were reached, not a claimed product cleanup. See `clippy.json`.
 
-Rustfmt passed on every changed Rust file without formatting unrelated baseline files. The public
+CODE READ (commit 007ba1eb0:44): quoted historical statement, evidence not revalidated by BW9. Rustfmt passed on every changed Rust file without formatting unrelated baseline files. The public
 layout generator reproduces the committed file from the five measured C probe TSVs. To reproduce:
 compile `../abi/layout_probe.c` with each pinned SDK's `src/common/sdk/nvidia/inc` include path,
 compare output and source hashes against `../abi/sources.json`, then run
@@ -55,7 +55,7 @@ There is no permission or Windows success claim. A lawful API can still refuse t
 range; the product then keeps its whole derived PRECOMP rule. Physical capability facts alone
 do not establish complete virtual FVLUT semantics. No rental, captured fallback or trusted-host use.
 
-Optional B1 interaction verification (MEASURED after primary evidence publication): actual isolated
+CODE READ (commit 007ba1eb0:58): quoted historical statement, evidence not revalidated by BW9. Optional B1 interaction verification (MEASURED after primary evidence publication): actual isolated
 merge178862f82 passed full release for kf-host84/0ignored, kf-disp311/5ignored,
 kf-chan672/4ignored and kf-qemu436/0ignored, zero failures. Prior B1 parent2add71e8c counts
 are recorded alongside; no decrease. This is a four-crate rerun, not a repeat of the earlier

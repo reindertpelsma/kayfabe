@@ -13,7 +13,7 @@ the native RunlistApi constructor or prove Windows will initialize successfully.
 Evidence: the [pinned Windows allocation and successful-use audit](https://github.com/reindertpelsma/kayfabe/blob/ff820182/tools/windows-debug-capture/evidence/2026-10-05-nvcd/b297-usage.md)
 and the [independent proprietary Linux/source comparison](https://github.com/reindertpelsma/kayfabe/blob/8223efc9/tools/windows-debug-capture/evidence/runlist-20261005/README.md).
 
-## Windows 581.51: native measurement and public layout
+## Windows 581.51: native measurement and public layout — CODE READ (commit 007ba1eb0:16): quoted historical statement, evidence not revalidated by BW9.
 
 The original restriction to Windows 580.88 caused the first new allocation refusal
 in the AD102 Windows 581.51 guest (`first_seq=216`, class `0xb297`). The same physical
@@ -50,7 +50,7 @@ policy still refuses `0x20801111` for the new build. Although native metadata sh
 that control succeeds with 40 bytes, its reply body semantics are **NOT DERIVABLE**
 from the retained metadata/public headers. No copied neighboring-build echo is added.
 
-Hypothesis, before the CPU regression: admitting this exact bounded allocation
+CODE READ (commit 007ba1eb0:53): quoted historical statement, evidence not revalidated by BW9. Hypothesis, before the CPU regression: admitting this exact bounded allocation
 removes the first unsupported-cell refusal. CPU falsifier: a valid exact identity
 and public layout still refuse, or admission also authorizes scheduling. The test
 fails before the change with the measured unsupported-cell reason, then passes.

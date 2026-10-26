@@ -4,7 +4,7 @@ at01:30:18UTC after no required decision arrived before the stated idle cutoff. 
 rebind, first enable or validation arm performed while pending. The old resume request can no longer
 apply to this destroyed lease; a later rental would require new explicit authority.
 
-| Cell | Frozen source | Measured outcome |
+| CODE READ (commit 007ba1eb0:7): quoted historical statement, evidence not revalidated by BW9.  Cell | Frozen source | Measured outcome |
 |---|---|---|
 | N0 native open595.91.07 | `8f3a9bb3a5d652b3f536ca015bf95735ec588924` | PASS n=1: gates9/9+10, raw30/30, CUDA4/4, corrected GR/CE PASS; only5 source/PID/device-matched intentional31, no native32 |
 | LTSC install +580.88 disabled bind | same | Install/base seal PASS; CIM32.0.15.8088, Code22, cold-ready/GSP readback1; post-shutdown QEMU census exited1 before bound-parent seal |

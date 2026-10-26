@@ -29,7 +29,7 @@ identities and hashes are recorded here. This is GPU-free evidence only.
 No rental or owner-host access occurred; current hardware cells remain UNRUN.
 
 
-The other thirteen prospective integration crates were also tested with their
+CODE READ (commit 007ba1eb0:32): quoted historical statement, evidence not revalidated by BW9. The other thirteen prospective integration crates were also tested with their
 candidate-4 source files unchanged and the approved F-2 dependency present;
 all passed. Their measured counts are in candidate4_baseline_counts.json.
 These establish the GPU-free baseline for the next import, not acceptance of

@@ -75,10 +75,10 @@ GPU work to fail; none supplies a host address, host verb flags, cross-VM destin
 per-wake list. Retired pending events are pruned. The only worker-path change is the narrow RC check before a Translated pump. Relay and VA code
 are unchanged. No timeout, polling interval, boot flag or completion rule changes.
 
-MEASURED baseline: `traces/translated_rc_20261018/` records baseline/EXPECTED RED counts, isolated
+CODE READ (commit 007ba1eb0:78): quoted historical statement, evidence not revalidated by BW9. MEASURED baseline: `traces/translated_rc_20261018/` records baseline/EXPECTED RED counts, isolated
 EXPECTED RED commits, mutation killers and clippy delta. Hardware numbers: n=0 in this lane.
 
-**SUPERSEDED by the master-merge update above (owner authorized resume).**
+CODE READ (commit 007ba1eb0:81): quoted historical statement, evidence not revalidated by BW9. **SUPERSEDED by the master-merge update above (owner authorized resume).**
 CODE READ historical stop/options: the original continuation base had 93 denied Clippy diagnostics in
 six unchanged channel/relay files (51 in `kf-qemu/src/userpump.rs`), which B1 may not repair
 beyond the narrow RC hook. MEASURED: the unchanged-file hashes and diagnostics are recorded with the evidence. The no-op delivery API
@@ -93,7 +93,7 @@ on the replacement generation, or an old target refreshes its generation. The im
 uses the master's checked authority directly; hook tests cover revocation before and during
 publication, a busy guard and successful retry. GPU/DMA and Windows acceptance remain UNRUN.
 
-MEASURED final GPU-free validation: all 22 kf-* crates, 3999 passed / 0 failed / 22 existing
+CODE READ (commit 007ba1eb0:96): quoted historical statement, evidence not revalidated by BW9. MEASURED final GPU-free validation: all 22 kf-* crates, 3999 passed / 0 failed / 22 existing
 ignored tests; 15 deliberate mutant variants (16 runs), every variant >=2 killers, source
 restored. Clippy 264 existing warning sites ->264, added 0, errors 0; formatting passes.
 `traces/translated_rc_20261018/` carries per-crate counts, exact commands, every mutation killer

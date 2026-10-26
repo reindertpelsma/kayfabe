@@ -19,7 +19,7 @@ Each proposed head contains code/tests only; evidence stays on the integrate/evi
 | Tracer rediscovery/FMC/sequence tooling | candidate5 | sweep-capture | 3independent topics; path/commit manifests give exact sizes |
 | Guest-driver/QGA/process harness corrections | candidate5 | sweep-harness | one source-topic commit per correction, with existing failing-first history and53benchtests |
 
-The full stack's immutable original-to-import commit mappings are in
+CODE READ (commit 007ba1eb0:22): quoted historical statement, evidence not revalidated by BW9. The full stack's immutable original-to-import commit mappings are in
 stack_imports.json and stack_extras_imports.json. Generated public ABI data
 dominates display diffs; keep generated tables separate from logic when cutting
 review branches. Do not include obsolete USER batching/measurement, perf PR17,

@@ -2,7 +2,7 @@
 
 STATUS: LIVE, 2026-10-19. GPU-free runtime kills; fixed sources restored.
 
-MEASURED: F-2 four mutants killed3/2/2/3 tests; family admission four killed
+CODE READ (commit 007ba1eb0:5): quoted historical statement, evidence not revalidated by BW9. MEASURED: F-2 four mutants killed3/2/2/3 tests; family admission four killed
 3/2/4/2; bounded rowserve notices three killed2/2/2.
 The additional stack sweep ran17 mutants;16 immediately had >=2 kills and
 ignored branch scope had1. Added an independent exact-row property test and

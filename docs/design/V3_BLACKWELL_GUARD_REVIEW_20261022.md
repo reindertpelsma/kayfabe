@@ -25,7 +25,7 @@ The closed lease ran no Windows arm, so this gap did not contaminate its native 
 Clean N0 on lease 57132969 passed (n=1); Windows validation is held
 at the post-bind shutdown census, with every Windows arm UNRUN pending the requested decision.
 
-MEASURED correction to the historical parked-patch checkpoint below: fixture EXPECTED RED
+CODE READ (commit 007ba1eb0:28): quoted historical statement, evidence not revalidated by BW9. MEASURED correction to the historical parked-patch checkpoint below: fixture EXPECTED RED
 `524ea6c4d` precedes fix `a3f39a633`; release kf-harness 15 ->19 pass, zero fail/ignored,
 two mutants each killed by two tests, clippy 284 ->284 / added 0, rustfmt. Guard test-first
 `b22e1be62` and supplemental `59f07cff0` precede `8f3a9bb3a`: 65 executions /59 distinct
@@ -36,7 +36,7 @@ pidfd smoke passed; it retains complete-boot history and revalidates PID/startti
 Evidence: [this lease](../../traces/blackwell_validation_20261022/), including N0 verdict,
 source-bound native controls and guard/source receipts. No wildcard native exception was added.
 
-MEASURED: N0 gates 9/9 +10, raw 30/30, CUDA 4/4 and GR/CE PASS; only five exact intentional
+CODE READ (commit 007ba1eb0:39): quoted historical statement, evidence not revalidated by BW9. MEASURED: N0 gates 9/9 +10, raw 30/30, CUDA 4/4 and GR/CE PASS; only five exact intentional
 source/PID/device controls. The prior native Xid32 did not recur. INFERRED: this supports the
 fixture hypothesis, without establishing a physical-channel mapping or general causal proof.
 The old counterfactual/unfinished statements below are historical, superseded by this correction;
@@ -75,7 +75,7 @@ absence of the same Xid on that lease is therefore UNVERIFIED.
 
 Review of classifier `cc593e3be`:
 
-| Finding | Evidence / consequence | Required future policy |
+| CODE READ (commit 007ba1eb0:78): quoted historical statement, evidence not revalidated by BW9.  Finding | Evidence / consequence | Required future policy |
 |---|---|---|
 | The explicit exception is appropriately narrow | Own QEMU PID, Xid 32, `intr 00200000`, at most one plain chid below 0x100 and one `0x0e0000xx`, no repeated chid, maximum two, approved ON/OFF phase | Keep every bound; EXPECTED remains a product failure, never a clean baseline |
 | Parsing is too permissive | Unanchored regex accepts trailing payloads and can skip an unexplained first Xid marker on the same line | Exactly one Xid record per journal record; complete anchored shape; unknown shape fatal |
@@ -84,7 +84,7 @@ Review of classifier `cc593e3be`:
 | Native-to-arm gap is uncovered | Per-arm journal followers started after native Xid 32 at 22:20:19 | Full-boot source-verified baseline frozen before GR/CE fixture, continuously guarded through bind and every arm |
 | Per-call limits can be reset | Calling the stateless classifier separately for each new journal slice grants a fresh limit | Track cumulative per-arm records and immutable accepted history; lost/replaced history or third/duplicate event fatal |
 
-MEASURED CPU-only [review probes](../../traces/blackwell_resume_cont_20261022/review_drafts/classifier_review_probes.json)
+CODE READ (commit 007ba1eb0:87): quoted historical statement, evidence not revalidated by BW9. MEASURED CPU-only [review probes](../../traces/blackwell_resume_cont_20261022/review_drafts/classifier_review_probes.json)
 reproduce EXPECTED for trailing junk, PID 0, PID 1 and a hidden first marker. A supplied
 pre-init boolean correctly refuses; the native `intr1` record itself is also refused if fed
 into the classifier. Its absence from the arm slice caused the campaign coverage failure.

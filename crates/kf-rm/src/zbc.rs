@@ -114,6 +114,8 @@ fn defaults(t: TableType, die: kf_chip::DieId) -> Vec<ZbcValue> {
     }
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:117;
+/// BW9 quotes this statement without independently validating its evidence.
 /// How many (table, die) default sets were refused for want of a measured row (counted clean fallback).
 pub static ZBC_DEFAULTS_REFUSED: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);

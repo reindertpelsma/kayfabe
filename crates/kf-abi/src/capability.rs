@@ -1574,6 +1574,8 @@ pub(crate) static CLASSES_FROM_570_86_15: &[ClassEntry] = &[
         name: "NVCFB7_VIDEO_ENCODER",
         origin: Origin::Nvproxy,
     },
+    // CODE READ: historical text at commit 007ba1eb0:1577;
+    // BW9 quotes this statement without independently validating its evidence.
     // Public580resource_list.h:1877: OfaContext under KernelChannel, optional
     // NV_OFA_ALLOCATION_PARAMETERS, the same modeled constructor as admitted C9FA.
     // [measured GB202 Win580.88] the guest's next wall once CFB0 is admitted.

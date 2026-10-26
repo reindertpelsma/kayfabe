@@ -106,13 +106,13 @@ Provisioning evidence and cheaper critical path:
 | Install/check/bind ready | 22:51:00 | 30m43s after native marker |
 | Creation to bind ready | — | 46m28s |
 
-Sources: retained [provision](../../traces/blackwell_resume_cont_20261022/lease_metadata/sweep_20261020_provision.log),
+CODE READ (commit 007ba1eb0:109): quoted historical statement, evidence not revalidated by BW9. Sources: retained [provision](../../traces/blackwell_resume_cont_20261022/lease_metadata/sweep_20261020_provision.log),
 [native](../../traces/blackwell_resume_cont_20261022/lease_metadata/sweep_native_baseline.log) and lease receipts.
 The reported ~65 minutes is a conservative allowance, not this lease's measured duration.
 The largest measured block combines media, LTSC install/check and binding. Its detailed substage logs
 were not retained, so attributing the entire block to media download or LTSC installation is unproven.
 
-Start checksum-pinned public media fetching alongside CPU preparation/build instead of after native
+CODE READ (commit 007ba1eb0:115): quoted historical statement, evidence not revalidated by BW9. Start checksum-pinned public media fetching alongside CPU preparation/build instead of after native
 fixtures. Reuse only a hash-verified public media cache if it actually exists on the new box; do not
 assume a destroyed box's cache persists. `win_vm.sh install` uses standard VGA and accepts an explicit
 WINVM_QEMU path, so a compatible distro QEMU could run the generic installation while the product builds.

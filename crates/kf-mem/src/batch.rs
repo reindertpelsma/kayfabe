@@ -4316,6 +4316,8 @@ mod tests {
         assert_eq!(bv.place(f.as_fd(), &ok, true), Ok(()));
     }
 
+    // CODE READ: historical text at commit 007ba1eb0:4319;
+    // BW9 quotes this statement without independently validating its evidence.
     // RSS belongs to the process: another concurrently running model test can allocate hundreds of
     // MiB between our samples. Run each memory-bound oracle alone in a fresh test process, keeping
     // the allocation/refusal assertions and the measured bound unchanged.

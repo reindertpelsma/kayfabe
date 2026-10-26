@@ -105,7 +105,7 @@ Own SW2 lease56949833: created2026-10-20T20:49:07Z; timer175min armedfirst; dest
 
 ## Integration stretch continuation — 2026-10-19
 
-STATUS: LIVE. New stretch append; earlier campaign cost history remains on
+CODE READ (commit 007ba1eb0:108): quoted historical statement, evidence not revalidated by BW9. STATUS: LIVE. New stretch append; earlier campaign cost history remains on
 `codex/sweep-blackwell-20261015` (not imported with old evidence trees). Owner
 raised the whole-stretch cap to25USD, stop renting/report at20USD. Phase1
 accepted before rental. Starting own spend0USD, own active IDs0, fresh observed
@@ -119,7 +119,7 @@ Entries below will record every created ID and actual/conservative cost.
   image; no hardware test yet. Cost pending settlement; maximum runtime charge
   at observed rate0.525USD plus transfer. One active own instance.
 
-- DESTROYED56765201; API absence verified2026-10-19T17:49:06Z. Preflight
+- CODE READ (commit 007ba1eb0:122): quoted historical statement, evidence not revalidated by BW9. DESTROYED56765201; API absence verified2026-10-19T17:49:06Z. Preflight
   HOST_FAULT:5CPUs(<8), missing NVIDIA device nodes, NVIDIA-SMI unavailable.
   No product build or guest test. Actual attribution pending invoice: runtime
   estimate0.018653USD, observed shared-account credit delta0.005332USD. The
@@ -145,7 +145,7 @@ Entries below will record every created ID and actual/conservative cost.
   Active own IDs0. Owner directs next lease Blackwell B1/B2/B3 (any Blackwell
   permitted); no Ampere lease created. Cap25USD, stop renting/report20USD unchanged.
 
-- CREATED56788212 at2026-10-19T20:48:41.537703Z, RTX5090offer56778084,
+- CODE READ (commit 007ba1eb0:148): quoted historical statement, evidence not revalidated by BW9. CREATED56788212 at2026-10-19T20:48:41.537703Z, RTX5090offer56778084,
   creationheadf9849e500, runtimeproductfrozen24906bf33. Auto-destroy180min
   immediately armed/verifiedPID144987 before SSH. Observed rate0.783333USD/h
   with180GBdisk, maximum180min runtime2.35USDplus transfer. Reserved32effective
@@ -178,7 +178,7 @@ Entries below will record every created ID and actual/conservative cost.
 
 2026-10-20 01:05UTC owner Windows-night amendment: API credit39.7773407655USD. Cap30USD total sweep, stop/report25USD; reserve5USD; at most Ada+Blackwell Windows two boxes, <=180min each, ALL teardown by2026-10-20 04:30UTC (06:30CEST). Credit>=35 qualifies conservatively. Own settled invoices so far3.782USD including partial GA1040.184USD; not final charges. Shared credit is not own spend attribution.
 
-MEASURED GA10456808180 API-absent2026-10-20T01:05:56.954502Z; observed rate0.16USD/h, elapsed1.286671h, runtime estimate0.205867USD, conservative guard1.205867USD including1USD reserve for delayed billing. New Ada56816419 quote0.561667USD/h, Blackwell56816449 quote1.001389USD/h; timers294763/295834180min armed before SSH, expires before04:30UTC. Shared credit39.77734USD pre-pair; final invoices pending.
+CODE READ (commit 007ba1eb0:181): quoted historical statement, evidence not revalidated by BW9. MEASURED GA10456808180 API-absent2026-10-20T01:05:56.954502Z; observed rate0.16USD/h, elapsed1.286671h, runtime estimate0.205867USD, conservative guard1.205867USD including1USD reserve for delayed billing. New Ada56816419 quote0.561667USD/h, Blackwell56816449 quote1.001389USD/h; timers294763/295834180min armed before SSH, expires before04:30UTC. Shared credit39.77734USD pre-pair; final invoices pending.
 
 2026-10-20T01:41:11UTC APIcredit38.9078384275USD, reserve5USD intact; no budget threshold reached. AD102current580PASS426.09shold; GB202twoCode43arms complete. Conditional native/VFIOreference on same owned56816449 next, within unchanged180mintimer and04:30UTCglobaldeadline; no third product initialization.
 
@@ -196,7 +196,7 @@ FINAL approved follow-up: Blackwell56830105 destroyed/API-absent2026-10-20T04:06
 
 NEW owner task5 stretch2026-10-20: start2026-10-20T20:19:59.254893+00:00, APIcredit29.987922USD. Newstretch cap15USD/stop12USD/reserve5USD; previouscampaign costs retained as history and predecessor charges are separate. Ownnewleases0; observed other-session56939139 notaccessed/actedon. Onebox/max180min/timerfirst/ownIDs/APIabsence; hardteardown2026-10-21 04:30UTC. Receipt ../sweep_continue_20261020/start_receipt.json.
 
-CREATED NEW sweep2 own56949833 at2026-10-20T20:49:07.435255+00:00, RTX5090offer56638596/machine53347, quote1.068056USD/h, requested180GB. Auto-destroy175min PID1382696 armed/verified FIRST. Frozen runtime90e7f2a54dcf4a885d5d1bb7cd442a8b96309686 (productequal048c), GPU-free2733/0/8,9mutants>=2,clippy0added. Creditbefore29.717980USD, newstretchspent0, cap15/stop12/reserve5. Predecessor leases verifiedabsent before create; noSSH/use yet. Hardglobal04:30UTCtomorrow, perlease175mintimer earlier. Receipt ../sweep_continue_20261020/owned_instances.json.
+CODE READ (commit 007ba1eb0:199): quoted historical statement, evidence not revalidated by BW9. CREATED NEW sweep2 own56949833 at2026-10-20T20:49:07.435255+00:00, RTX5090offer56638596/machine53347, quote1.068056USD/h, requested180GB. Auto-destroy175min PID1382696 armed/verified FIRST. Frozen runtime90e7f2a54dcf4a885d5d1bb7cd442a8b96309686 (productequal048c), GPU-free2733/0/8,9mutants>=2,clippy0added. Creditbefore29.717980USD, newstretchspent0, cap15/stop12/reserve5. Predecessor leases verifiedabsent before create; noSSH/use yet. Hardglobal04:30UTCtomorrow, perlease175mintimer earlier. Receipt ../sweep_continue_20261020/owned_instances.json.
 
 NEW owner task6 stretch, 2026-10-21 midday: opening API credit24.727565990962717USD; cap8USD/stop6USD/reserve5USD. Old task5 invoices56949833=2.189USD and56964717=2.802USD (4.991USD total) are outside this new stretch; both API-absent. New own57046541 created11:42:55UTC, quote1.201389USD/h / observed1.25USD/h, auto-destroy175min PID1903926 armed first, expiry14:37:55UTC; cleanup14:27UTC. Reservation4.529659USD is a budget guard, not measured spend. Productaf8bdcda4 includes sweep+candidate89fc8a222. Onebox, ownids only, hostGPUofflimits. Native595 GB202 SOUND/gates9+10/raw30/CUDA4/correctedGRoracle passed; Windows install active, product init UNRUN at12:16UTC. Own current ledger: ../sweep_windows_20261021/owned_instances.json.
 

@@ -6,7 +6,7 @@ assertion failures. Focused tests3before->13after; fullbench53before->63after,
 have2/2/2/3runtime killers; compilation errors not counted. bash-n passes.
 No Rust source, driver protocol, QEMU device, grader or timer is changed.
 
-MEASURED own56788212 initial proprietary575.51.03 cannot initialize PCI2b85:
+CODE READ (commit 007ba1eb0:9): quoted historical statement, evidence not revalidated by BW9. MEASURED own56788212 initial proprietary575.51.03 cannot initialize PCI2b85:
 NVIDIA says open modules required. Original host_preflight erroneously emits
 SOUND because it accepts stdout error text while head hides query status. This
 is retained as FALSE GREEN, never host health evidence. Approved standard stock

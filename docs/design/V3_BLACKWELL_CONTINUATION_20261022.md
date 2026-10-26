@@ -34,7 +34,7 @@ RPC/body metadata capture and progress1000. The diagnostic caps-file hook stays 
 it is not imported into product code here. Per-process flags/QOM and binary receipts are in each arm.
 The OFF process includes the approved empty GOP ROM override; its process flags record completion probe500.
 
-| Arm | Variable relative to control | MEASURED result | Canonical RPC count | Scope |
+| CODE READ (commit 007ba1eb0:37): quoted historical statement, evidence not revalidated by BW9.  Arm | Variable relative to control | MEASURED result | Canonical RPC count | Scope |
 |---|---|---|---|---|
 | earlier `on_a` | PR65 width, no page replacement | 0x50 after fourthCA7A |278| Earlier lease57108853; original evidence retained in parent branch |
 | earlier `on_b` | Full PRECOMP region from diagnostic die read | No0x50, then0x116/Xid pair |4580| Earlier lease; original narrow exporter counted4577, timing parser includes Other(4) |
@@ -73,7 +73,7 @@ CLEAN/EXPECTED results do not establish a healthy baseline. No re-run may treat 
 All subsequent hardware work stopped; future hardware requires resolving this native event and a guard
 covering the gap before the first Windows arm.
 
-Lease57117614 created22:04:32.564106UTC, auto-destroyPID2537232 armed first for170minutes, verified alive
+CODE READ (commit 007ba1eb0:76): quoted historical statement, evidence not revalidated by BW9. Lease57117614 created22:04:32.564106UTC, auto-destroyPID2537232 armed first for170minutes, verified alive
 at takeover; expiry00:54:32UTC was earlier than the handoff's approximate00:56. Controller ended23:11:18;
 no QEMU remained at23:27:52. Five arm exports were pushed as4aa090bf4 before teardown. An extra final
 kernel projection was exported locally before teardown but its first single-JSON-file commit invocation
@@ -98,7 +98,7 @@ canonical ordinal3673; unload4006 at23:07:45.052210; QMP0x116 at23:07:48.144427 
 The recovered dump header says0x116 at guest23:07:47.734598; recovery-clock offset is7.05s and is not
 assumed identical to the crashing boot. The additional live dump is0x193, not a first141 timestamp.
 
-The probe emitted eight GUEST-SILENT-AFTER-COMPLETION summaries, **zero HOST-FENCE-OVERDUE** summaries
+CODE READ (commit 007ba1eb0:101): quoted historical statement, evidence not revalidated by BW9. The probe emitted eight GUEST-SILENT-AFTER-COMPLETION summaries, **zero HOST-FENCE-OVERDUE** summaries
 and zero in-flight fence lines. First probe bounds are23:07:13.702358..13.702378UTC. Source probe_tick
 samples currently readable Translated slots, skips busy slots and prints once per condition. It does
 not identify the Xid channel or provide a continuous method tail. Therefore the expected first-overdue-GR
@@ -123,7 +123,7 @@ cannot establish implemented engine functionality. Further work needs public-sou
 the corresponding implementation where needed, or a discriminating bit-level experiment;
 no extra rental is allowed past the unmatched-native-Xid STOP. No reverse engineering was needed.
 
-MEASURED GPU-free verification: kf-disp293/0/5 ->296/0/5, three mutants each2killers, restored source,
+CODE READ (commit 007ba1eb0:126): quoted historical statement, evidence not revalidated by BW9. MEASURED GPU-free verification: kf-disp293/0/5 ->296/0/5, three mutants each2killers, restored source,
 clippy77->77/added0, rustfmt. Family listing regenerated193->225 rows with only32 new CAPC words.
 The historical AD104 f5 case retains its full comparison of all other words; explicit precision checks
 precede projection of only the two intentional new fields. Case renamed, none dropped/newly ignored.

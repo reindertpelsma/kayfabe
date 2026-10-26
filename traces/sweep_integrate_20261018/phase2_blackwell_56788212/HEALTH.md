@@ -7,7 +7,7 @@ Strict preflightc325497c8 SHA f47a512ca79007fc7cff7051ebee47cc3a147e349c144619fd
 passed20:59:18UTC before any native gate: actualRTX5090/595.91.07,160Gfree,
 48GRAM,30CPUs,KVM/nodes/egress. Full native workloads still pending.
 
-An initial automatic stage-barrier helper failed quoting (no native gate had run).
+CODE READ (commit 007ba1eb0:10): quoted historical statement, evidence not revalidated by BW9. An initial automatic stage-barrier helper failed quoting (no native gate had run).
 The owned parent2041 was then explicitly held while its stock-driver child23079
 finished normally (rc0 at20:58:51), strict health was verified, and parent resumed
 20:59:19. Its stopped state, completed driver child and absence of gates file are

@@ -38,13 +38,13 @@ that narrower observation into a zero-host-Xid claim for the whole lease.
 
 ## B1: display comparison remains inconclusive
 
-Both measured Windows arms started from fresh children of the same stopped,
+CODE READ (commit 007ba1eb0:41): quoted historical statement, evidence not revalidated by BW9. Both measured Windows arms started from fresh children of the same stopped,
 disabled-NVIDIA parent. The parent hash was rechecked; actual driver 8088, GSP
 registry settings and disabled state were verified before the single enable in
 each arm. Original TPM/Secure Boot identity was retained. No recovery, re-enable,
 timer change or third initialization was attempted.
 
-ON's early 99-RPC snapshot was transient. Its final log contains 386 RPCs,
+CODE READ (commit 007ba1eb0:47): quoted historical statement, evidence not revalidated by BW9. ON's early 99-RPC snapshot was transient. Its final log contains 386 RPCs,
 including CA70 at ordinal 233, CA7A at 271/273/275/277, SET_RMFREE_FLAGS at 278,
 first Free at 279, and explicit function-47 unload at **385**, following
 20800AFE at 384. The final log was acquired during cleanup after powerdown was
@@ -69,7 +69,7 @@ unresponsive guest and QMP shutdown do not prove that no such event occurred.
 No opaque Windows reply bodies, EVTX/XML, VM images or executables were exported;
 only screened metadata, public fields and hashes are committed.
 
-CODE READ / measured limitations: CBCB remains NOT_DERIVABLE; old exact-GB206
+CODE READ (commit 007ba1eb0:72): quoted historical statement, evidence not revalidated by BW9. CODE READ / measured limitations: CBCB remains NOT_DERIVABLE; old exact-GB206
 native data had 120-byte replies with 43 distinct values, and there is no native
 GB202 Windows reference. AB2 sizes differ between native 580 and host 595. No
 neighbor-die or cross-ABI value was borrowed. No new CMC or caps-word probe was
@@ -108,7 +108,7 @@ and 160 over 61.867 ms, separated by 5.609766 s; overlapping pre/post captures
 must not be added. Graphics had 104 before / 214 after, also overlapping.
 Linux 580 CUDA and graphics captures had zero heartbeat warnings.
 
-H_CLOCK_VIEWS falsifier was stated before probing: native PTIMER and VF_TIME
+CODE READ (commit 007ba1eb0:111): quoted historical statement, evidence not revalidated by BW9. H_CLOCK_VIEWS falsifier was stated before probing: native PTIMER and VF_TIME
 agree within the existing 10 ms bound in all three samples. Result: **falsified**
 the native mismatch lead, deltas 5696/5696/5728 ns, UID 65534, no capabilities.
 This does not prove guest epoch/lifecycle handling. INFERRED next lead: an epoch

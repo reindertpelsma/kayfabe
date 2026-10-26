@@ -47,6 +47,8 @@ impl ReplyBodyTrace {
                 .ok()
                 .map(|q| q.class)
         } else if rpc.function == 4 {
+            // CODE READ: historical text at commit 007ba1eb0:50;
+            // BW9 quotes this statement without independently validating its evidence.
             // The two Other(4) calls in the measured display subtree. Observe
             // bytes only; no semantics or successful response is invented here.
             None

@@ -2,7 +2,7 @@
 
 STATUS: LIVE, 2026-10-19. Implemented and verified GPU-free.
 
-MEASURED: EXPECTED RED9aded4379 has two runtime failures:2048actual lines
+CODE READ (commit 007ba1eb0:5): quoted historical statement, evidence not revalidated by BW9. MEASURED: EXPECTED RED9aded4379 has two runtime failures:2048actual lines
 versus64expected, for repeated counters and changing branches. Fix44e870e4d
 bounds retained state at64 entries and emits one limit marker. Both real
 responder tests and two independent in-memory quota/dedup tests pass.

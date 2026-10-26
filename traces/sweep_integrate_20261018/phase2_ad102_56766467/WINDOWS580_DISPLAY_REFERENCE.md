@@ -10,7 +10,7 @@ Observed:73010c24times(policy0),c3700201once(policy0),2801and2806onceeach
 passing Ada driver DOES issue73010c/c3700201. The old rank1falsifier that Ada
 might also skip both is not observed. Metadata alone establishes no body semantics.
 
-Posted diagnostics captured512records, ofwhich74public display-control records
+CODE READ (commit 007ba1eb0:13): quoted historical statement, evidence not revalidated by BW9. Posted diagnostics captured512records, ofwhich74public display-control records
 and20screened public display allocations were selected. Compiler sizeof/offsetof
 from exact public580.65.06headers defines24control schemas and known fields.
 Control params start40(not32); pushbuffer params sizeof56,physicalAddr@8,

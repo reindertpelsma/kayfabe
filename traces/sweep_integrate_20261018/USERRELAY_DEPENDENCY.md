@@ -15,7 +15,7 @@ accepts only generated AMPERE_CHANNEL_GPFIFO_A. The sweep's retained Turing
 fix needs `crates/kf-qemu/src/userrelay.rs`, which the latest coordinator
 instruction explicitly leaves protected after approving F-2's two files.
 
-Exact upstream proof/fix history: `0b1a1fe7e` (extract unchanged declaration
+CODE READ (commit 007ba1eb0:18): quoted historical statement, evidence not revalidated by BW9. Exact upstream proof/fix history: `0b1a1fe7e` (extract unchanged declaration
 predicate and add failing tests), `c5ee774cb` (generated-family fixture),
 `8e3a9d325` (use the actual family's generated ChannelGpfifo class membership).
 The bounded proposal is `userrelay_family_gate_PROPOSAL.patch`, derived only
@@ -23,7 +23,7 @@ from that three-commit topic; it is NOT applied to the product. No GPU or host
 session was used to establish this CODE READ finding. Current-revision Windows
 hardware consequences remain UNRUN, not a measured failure claim.
 
-Proposed scope: only source_declaration and its call in Birth::new, and two
+CODE READ (commit 007ba1eb0:26): quoted historical statement, evidence not revalidated by BW9. Proposed scope: only source_declaration and its call in Birth::new, and two
 pure declaration tests in userrelay.rs. Class membership uses
 family.classes().kind_of(class) == Some(ChannelGpfifo). Preserve entry bounds,
 power-of-two/alignment/overflow checks, USERD and subdevice ownership, native

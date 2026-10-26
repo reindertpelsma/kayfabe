@@ -1,6 +1,6 @@
 STATUS: ANSWERED, 2026-10-22. GPU-free diagnostic repair AFTER the rental was destroyed.
 
-On measured OFF, the second independent watcher replaced the original fatal reason with its
+CODE READ (commit 007ba1eb0:3): quoted historical statement, evidence not revalidated by BW9. On measured OFF, the second independent watcher replaced the original fatal reason with its
 prior-marker notice. No first refusal reason can be reconstructed as MEASURED. This fix changes
 receipt publication only; parsing, Code0/progress timing, native32 fatality, exact QEMU32 exception
 and owned PIDfd/tree termination are unchanged.
@@ -13,7 +13,7 @@ A unique temporary file is completely written/flushed before atomic create-via-l
 bytes are retained, even malformed; later watchers still terminate their own controllers. No lock,
 Xid admission or product/driver timing change. Python compile passed; Rust checks not applicable.
 
-Run check_mutants.py from the repository root. Mutants replace-first-cause/omit-new-marker/
+CODE READ (commit 007ba1eb0:16): quoted historical statement, evidence not revalidated by BW9. Run check_mutants.py from the repository root. Mutants replace-first-cause/omit-new-marker/
 bypass-watcher-call are killed by5/2/2distincttests; source SHA restored in mutations.json.
 Prior campaign31mutants retained unchanged, combined34. Hardware remains measured at the OLD
 publication version; this new diagnostic behavior has hardware n=0 and does not repair old evidence.

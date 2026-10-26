@@ -6,7 +6,7 @@ The requested expectation of no differences is NOT established. These paths
 differ; the current product has not been hardware-validated on the owner GPU.
 The guest wire tag is580.65.06; host595.91.07 appears only in the stored oracle.
 
-MEASURED CPU: cudart_gate_ad104_oracle, host_facts_ga106, the per-die/wiring
+CODE READ (commit 007ba1eb0:9): quoted historical statement, evidence not revalidated by BW9. MEASURED CPU: cudart_gate_ad104_oracle, host_facts_ga106, the per-die/wiring
 and consttab tests passed in the integrated release batch. The independent
 strict caps comparison against the stored native AD104 page FAILS with100
 differing words (ad104_caps_strict_comparison.tsv). The derived-field test and

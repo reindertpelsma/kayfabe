@@ -33,7 +33,7 @@ no count decreases versus the prior B1 parent. Evidence is in the runtime b1_rel
 The only manual merge edit redacts one inherited private path in CI metadata; product Rust was
 automatically merged. RESET_CHANNEL stays unchanged. No CE2 combination or fix-to-fix iteration.
 
-Before rental, the independent actual-CIM observer must be test-first implemented and verified
+CODE READ (commit 007ba1eb0:36): quoted historical statement, evidence not revalidated by BW9. Before rental, the independent actual-CIM observer must be test-first implemented and verified
 against the existing Code0/1000-RPC gate. It must start BEFORE enable580, bind observations to
 this arm/PID/starttime and record them on the host before any fault. The inherited enable helper
 waits20s before returning diagnostics; the last pair occurred inside that gap. This topic does
@@ -109,13 +109,13 @@ BEFORE SSH/upload, plus an independent earlier cost/deadline teardown. Never ext
 |1.033333 (last lease's actual)|84min|80min; likely only first full arm|6.916701USD|
 |1.25|69min|65min; skip unless a complete primary cell demonstrably fits|6.889548USD|
 
-The105min case projects actual elapsed rental1.365USD, lane6.197257USD before uncertainty.
+CODE READ (commit 007ba1eb0:112): quoted historical statement, evidence not revalidated by BW9. The105min case projects actual elapsed rental1.365USD, lane6.197257USD before uncertainty.
 These are reservations/projections, not new spend. The cheapest verified/KVM market quote at the
 snapshot was0.908056USD/h;0.78 is not currently promised. Quote alone excludes possible overhead.
 Prefer waiting GPU-free for a fitting offer to paying for a run that cannot finish. Do not use an
 anticipated early crash to justify a budget that cannot fit the successful600s holds and workloads.
 
-Proposed105min schedule:0–25min provision/build/N0/H0, public media fetch in parallel;25–45min
+CODE READ (commit 007ba1eb0:118): quoted historical statement, evidence not revalidated by BW9. Proposed105min schedule:0–25min provision/build/N0/H0, public media fetch in parallel;25–45min
 install/check/disabled bind/seal;45–65min full A1;65–85min full A2;85–105min evidence/final census/
 destroy/API-absence. Treat these as planning estimates. Freeze a last-arm-start cutoff that leaves
 the measured full cell plus export/teardown margin; if markers slip, mark A2 UNRUN. No new arms,
@@ -123,11 +123,11 @@ second lease, idle decision wait or timer extension. An80min window cannot assum
 
 Cutting preparation cost without changing the experiment
 
-MEASURED last lease: create-to-bind41m42; media occupied about24min while CPU build/N0 ran.
+CODE READ (commit 007ba1eb0:126): quoted historical statement, evidence not revalidated by BW9. MEASURED last lease: create-to-bind41m42; media occupied about24min while CPU build/N0 ran.
 LTSC installation was7m05 and check/seal1m09. Media fetch is the largest observed critical path;
 the older65min provisioning figure is not all Windows installation.
 
-Pre-stage and checksum the public download manifest and source-only kit locally; verify download
+CODE READ (commit 007ba1eb0:130): quoted historical statement, evidence not revalidated by BW9. Pre-stage and checksum the public download manifest and source-only kit locally; verify download
 URLs/range or parallel-transfer support before rental. After arming teardown, fetch approved public
 media while CPU compilation/N0 proceed, without concurrent GPU workloads. Run H0 immediately after
 clean N0; abort before installing LTSC if access fails. Build primary, H0 CLI and optional binary

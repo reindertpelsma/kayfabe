@@ -15,6 +15,8 @@ pub struct AllocationCell {
     pub wire_version: crate::DriverVersion,
     /// Exact published Windows build name.
     pub windows_name: &'static str,
+    /// CODE READ: historical text at commit 007ba1eb0:18;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// Measured external allocation class, not a public SDK define.
     pub class: u32,
     /// Compiler-derived parameter bytes.
@@ -27,6 +29,8 @@ pub struct AllocationCell {
     pub qos: usize,
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:30;
+/// BW9 quotes this statement without independently validating its evidence.
 /// A measurement is scoped to its exact host die and guest build.
 pub(super) struct MeasuredAllocationCell {
     pub architecture: u32,

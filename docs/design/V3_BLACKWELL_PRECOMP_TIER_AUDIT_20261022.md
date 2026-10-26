@@ -66,7 +66,7 @@ Windows sufficiency was already falsified on clean GB202 and remains falsified.
 
 The full PRECOMP disposition (all41 fields, not just the deciding word)
 
-The machine-readable precomp_fields.tsv lists EVERY field, bit range, current T1 main/overlay
+CODE READ (commit 007ba1eb0:69): quoted historical statement, evidence not revalidated by BW9. The machine-readable precomp_fields.tsv lists EVERY field, bit range, current T1 main/overlay
 output and source-policy category. Values there are decoded from the committed authored family
 report, not a native page or a fresh acceptance measurement. Categorization describes current
 source provenance; it does not certify full CA numerical/feature fidelity.
@@ -87,7 +87,7 @@ source provenance; it does not certify full CA numerical/feature fidelity.
 |CAPE CSC10/11_UNITY_CLAMP, CSC1LUT_DIRECT / FVLUT|T1-unclaimed|Separate output-side stages require their own public behavior/implementation evidence|
 |CAPF VSCLR_MAX_PIXELS_2TAP / 5TAP|Unresolved|Derive virtual scaler limits after establishing field semantics; no assumed physical zeros|
 
-Totals:15 existing T1-authored fields,2 T1-authored precision candidates,10 explicitly unclaimed
+CODE READ (commit 007ba1eb0:90): quoted historical statement, evidence not revalidated by BW9. Totals:15 existing T1-authored fields,2 T1-authored precision candidates,10 explicitly unclaimed
 fields and14 unresolved numeric/behavioral fields. All41 physical values are candidates for a
 same-die read, but NONE is a verified runtime host-read result and none is automatically approved
 as a virtual capability. Unassigned bits stay outside any field-level rule.
@@ -121,7 +121,7 @@ A complete physical snapshot can be checked for integrity while only explicitly 
 are eligible to influence a guest page. It must never replace an already derived virtual field
 simply because the host provided a different physical value.
 
-T3 is not used to fix CAPC here. `kf_rm::consttab` enforces exact die/branch/request scope, source
+CODE READ (commit 007ba1eb0:124): quoted historical statement, evidence not revalidated by BW9. T3 is not used to fix CAPC here. `kf_rm::consttab` enforces exact die/branch/request scope, source
 tags, no board data, no blob values, and mechanism-only wildcards. Those rules are the reference
 for any later authorized residual measurement. The existing display caps_measured.tsv adapter is
 separate legacy data for the unnamed page word0x00c; that word is outside PRECOMP and unchanged.

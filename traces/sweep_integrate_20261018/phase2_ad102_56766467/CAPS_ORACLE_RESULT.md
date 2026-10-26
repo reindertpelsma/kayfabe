@@ -8,7 +8,7 @@ BAR0 640000+1000 only. No register write, driver unbind or captured-table import
 The complete native sparse page has99nonzero words,00c=100 and even-window
 CAPA01df21d0. This is evidence only; existing exact die+branch policy stays.
 
-MEASURED strict caps_oracle580.65.06/190/2 against that complete native page
+CODE READ (commit 007ba1eb0:11): quoted historical statement, evidence not revalidated by BW9. MEASURED strict caps_oracle580.65.06/190/2 against that complete native page
 returns1, EXACT_NATIVE_PAGE_EQUAL=false,differing_words=100. Tool built/run at
 frozen24906bf33; all offsets/header names/bases are in native_caps_strict_ad102.txt.
 This confirms a page difference, not causation for a driver failure. The expected

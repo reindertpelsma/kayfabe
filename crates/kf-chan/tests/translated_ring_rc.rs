@@ -1,3 +1,5 @@
+//! CODE READ: historical text at commit 007ba1eb0:1;
+//! BW9 quotes this statement without independently validating its evidence.
 //! Tests-first B1 regression (EXPECTED RED committed before the fix): an Xid 32 raised by the host on one of
 //! kayfabe's own Translated rings must reach kayfabe's RC handling.
 //!

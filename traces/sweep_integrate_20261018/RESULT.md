@@ -4,7 +4,7 @@ STATUS: LIVE. Both protected decisions approved and implemented. Phase1 GPU-free
 acceptance PASS; Phase2 rental execution now authorized and next. This section
 supersedes the historical pending/partial checkpoint below.
 
-MEASURED:14full release suites3338passed/0failed/21ignored; QEMU389->407,
+CODE READ (commit 007ba1eb0:7): quoted historical statement, evidence not revalidated by BW9. MEASURED:14full release suites3338passed/0failed/21ignored; QEMU389->407,
 GSP54->61, kf-chan530. All candidate4/candidate5 tests retained.49distinct
 mutants each have>=2runtime killing tests. Clippy0new on changed lines with89
 inherited denied errors; rustfmt81files plus approved userrelay-region proof.
@@ -22,7 +22,7 @@ at7fb36324a. AD104_PATH_AUDIT.md names every known path difference, including
 heartbeat. No current hardware or owner-host parity claim follows. All old PASS
 cells remain STALE. Windows tracer build/static tests pass; current load UNRUN.
 
-Current stretch spend0USD, own active IDs0 before Phase2. Cap25USD, stop renting
+CODE READ (commit 007ba1eb0:25): quoted historical statement, evidence not revalidated by BW9. Current stretch spend0USD, own active IDs0 before Phase2. Cap25USD, stop renting
 and report at20USD, one owned box, maximum180min, auto-destroy before SSH, ownIDs
 only and API-verified teardown. Host off-limits; windows-on-vast unmodified.
 
@@ -41,13 +41,13 @@ present. Five heartbeat source commits and all their dependent edits are held
 by corrective32d1128b4. The original obsolete USER exclusions remain complete.
 F-2 and the family admission approval are implemented, tested and pushed.
 
-MEASURED:13full crate suites pass2924tests; all21QEMU integration tests pass.
+CODE READ (commit 007ba1eb0:44): quoted historical statement, evidence not revalidated by BW9. MEASURED:13full crate suites pass2924tests; all21QEMU integration tests pass.
 Full QEMU unit compilation awaits only the proposed None cache-key field in
 one current life-reset/scrub test. Family component312->320 was fully tested
 before candidate5; it accepts Ada exactlyc56f. Before/after per-crate counts
 and source retention are in current_crate_counts.tsv/source_test_retention.json.
 
-MEASURED:39distinct final mutants each have>=2runtime killing tests;53bench
+CODE READ (commit 007ba1eb0:50): quoted historical statement, evidence not revalidated by BW9. MEASURED:39distinct final mutants each have>=2runtime killing tests;53bench
 Python tests pass. Native portable tracer/observer sanitizers pass. The Windows
 driver/collector cross-build with the pinned SDK/WDK, PE/import guards pass,
 and an injected BAR0 store is rejected as read-only by the compiler. No current
@@ -83,7 +83,7 @@ The publication receipt beside the local SWEEP.md records the final evidence
 head and exact origin equality after push. Neither candidate 5 nor the remaining
 gpu-types/stacked sweep topics are integrated yet. Phase 1 is PARTIAL.
 
-## Result (MEASURED unless marked CODE READ)
+## Result (MEASURED unless marked CODE READ) — CODE READ (commit 007ba1eb0:86): quoted historical statement, evidence not revalidated by BW9.
 
 - DONE: isolated two-file F-2 public-header class-width fix and test-first history.
 - DONE: full kf-chan release 521/0/3 before -> 530/0/3 after; no old test dropped.
@@ -114,7 +114,7 @@ AD104's internal call path now selects a class width, but its Ada classes still
 select 8 bits: no observable width-rule change is introduced there. This is
 CODE READ plus CPU regression coverage, not an AD104 hardware result.
 
-| Check | Before | After |
+| CODE READ (commit 007ba1eb0:117): quoted historical statement, evidence not revalidated by BW9.  Check | Before | After |
 |---|---|---|
 | kf-chan release (MEASURED) | 521 pass, 0 fail, 3 ignored | 530 pass, 0 fail, 3 ignored |
 | Focused F-2 before fix / after fix | 6 pass, 3 fail (EXPECTED RED) | 9 pass, 0 fail |
@@ -130,7 +130,7 @@ report; raw build logs stay in the lane's own scratch rather than enlarging Git.
 
 ## Broader release baseline
 
-The following are MEASURED local runs with candidate-4 files unchanged outside
+CODE READ (commit 007ba1eb0:133): quoted historical statement, evidence not revalidated by BW9. The following are MEASURED local runs with candidate-4 files unchanged outside
 the approved F-2 dependency. They establish the next import's baseline and do
 not validate the unimported sweep code. `cpu_counts.tsv` compares them with the
 candidate-4 reference from the announced candidate-5 evidence (CODE READ).

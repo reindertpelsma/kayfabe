@@ -15,7 +15,7 @@ mutex while servicing the FSM; `heartbeat::try_sample` acquires that same mutex
 with try_lock before reading the flag and borrowing the cell. No fix is proposed
 for a flag-before-body ordering that this code does not have.
 
-MEASURED from the already-exported `linux595_cuda/rungs/cup3/qemu.txt`: three
+CODE READ (commit 007ba1eb0:18): quoted historical statement, evidence not revalidated by BW9. MEASURED from the already-exported `linux595_cuda/rungs/cup3/qemu.txt`: three
 fn72 records occur at lines350,1074,1541; the latter two follow Halted -> Booted
 and GSP-PUBLISH of fresh queue addresses. The corresponding complete guest log
 contains two nonzero-heartbeat warning bursts, 144 and160 records. These counts
@@ -35,7 +35,7 @@ Correlate actual fn72 epoch, old/new mailbox words and the first guest check;
 do not infer the join solely from similar counts. Any diagnostic must be bounded,
 off by default, nonblocking and leave the500ms period and workload oracle intact.
 
-No protected lifecycle/reset/scrub/relay change is authorized by this hypothesis.
+CODE READ (commit 007ba1eb0:38): quoted historical statement, evidence not revalidated by BW9. No protected lifecycle/reset/scrub/relay change is authorized by this hypothesis.
 Any required dependency there must be named under the existing STOP rule before
 changing it. Native PTIMER/VF_TIME agreement remains measured and rules out only
 that sampled native clock-view mismatch, not this proposed cross-start mechanism.

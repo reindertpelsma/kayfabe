@@ -24,6 +24,8 @@ fn words_le(w: &[u32], size: usize) -> Vec<u8> {
     b
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:27;
+/// BW9 quotes this statement without independently validating its evidence.
 /// cudart's request for `0x20809064` (`[measured]` words 1, 2, 6).
 fn req_9064() -> Vec<u8> {
     words_le(&[0, 2, 1, 0, 0, 0, 4], 520)

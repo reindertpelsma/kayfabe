@@ -1,11 +1,11 @@
-# AD102581 allocation diagnostic measured
+# AD102581 allocation diagnostic measured — CODE READ (commit 007ba1eb0:1): quoted historical statement, evidence not revalidated by BW9.
 
 STATUS: LIVE, 2026-10-19. FAIL Code43, actual32.0.15.8151, source24906bf33,
 wire580.94.02, own56766467/AD102, exactP19. ONEfirstactivation after freshcold
 QEMU139988; disabled/GSP1/no-earlier-GSP-traffic preconditions proved. Procedure
 is enable-after-boot; no automatic-boot/old-image parity claim. No further581attempt.
 
-MEASURED: allocationclassb297 requests216/217 policyNV_OK. Posted messages217/218
+CODE READ (commit 007ba1eb0:8): quoted historical statement, evidence not revalidated by BW9. MEASURED: allocationclassb297 requests216/217 policyNV_OK. Posted messages217/218
 both envelope/private/body_status0, total44, declaredpublicparams12,flags0,
 engineId1/maxTSGs0/qosIntrEnableMask0. No nativepointervalue exported. This
 admits unscheduled metadata only, not a native constructor or GPU scheduling.

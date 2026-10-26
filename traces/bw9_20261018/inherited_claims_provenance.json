@@ -1,0 +1,1833 @@
+{
+  "source_commit": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+  "meaning": "Exact source-block quotations, not independent validation of historical experiments.",
+  "source_blocks": [
+    {
+      "path": "crates/kf-abi/src/capability.rs",
+      "line": 1577,
+      "source_lines": [
+        1577
+      ],
+      "digest": "b1529dd43e404d35e0971938e07e92d2228e3ca34ff82e47c18a814607ebf53d",
+      "text": "[measured GB202 Win580.88] the guest's next wall once CFB0 is admitted."
+    },
+    {
+      "path": "crates/kf-abi/src/sw_runlist.rs",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "4d83d88901a1c9adaf498cd10709e8fccca13bccc9d6a859d5f8334ee6e9bfc2",
+      "text": "Measured external allocation class, not a public SDK define."
+    },
+    {
+      "path": "crates/kf-abi/src/sw_runlist.rs",
+      "line": 30,
+      "source_lines": [
+        30
+      ],
+      "digest": "dd7b143812ea1f422f08299776c9adb2d335a0515a0cf5cb24f01962b52d1acd",
+      "text": "A measurement is scoped to its exact host die and guest build."
+    },
+    {
+      "path": "crates/kf-chan/src/grtables.rs",
+      "line": 557,
+      "source_lines": [
+        557
+      ],
+      "digest": "21d3b07297253f4725c656edebd25c5506d527e21a31a946131d23ee56408f7f",
+      "text": "BLACKWELL_A (0xCD97) on its own: the measured Windows release shape (A=1, lower, payload,"
+    },
+    {
+      "path": "crates/kf-chan/tests/translated_ring_rc.rs",
+      "line": 1,
+      "source_lines": [
+        1
+      ],
+      "digest": "3383e08309f55e6cfaea65ec09b3d94920c27a298dd50444a415b9b5fb0e5f2f",
+      "text": "Measured (`traces/blackwell_resume_20261021/`, GB202 Windows 580.88, 4 runs over two leases): the host"
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 45,
+      "source_lines": [
+        45
+      ],
+      "digest": "157d8b75f0bdc6bdd7052edfba848e5a18679a4c9eef442e5dc5027f99180312",
+      "text": "T3: a privileged per-die measurement row."
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 58,
+      "source_lines": [
+        58
+      ],
+      "digest": "a7dec9d852a41eff5eb6611c14bd57b7518602b6f816597f115f0efda191eedf",
+      "text": "One measured word of one die (tier 3)."
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 63,
+      "source_lines": [
+        63
+      ],
+      "digest": "0b20c5ab6b9c61ea4d4b689b2843bb91e5473ee3827cd9b6e60dd628c172e956",
+      "text": "The guest-driver branch the row was measured for (`580`), or `*` for a row the driver does not matter to."
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 71,
+      "source_lines": [
+        71
+      ],
+      "digest": "548581616588b16ef0f77933b71669ac8d69ae12424820d70451abc436c80512",
+      "text": "Where it came from (`measured:<die>,<how>,<date>`); a row without one is refused."
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 82,
+      "source_lines": [
+        82
+      ],
+      "digest": "a45d9d314e6a6b51c3493ea70cbc7ef861a05dcc3bce281da4471c7c6d0b7b55",
+      "text": "The measured words shipped with kayfabe (`data/caps_measured.tsv`)."
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 200,
+      "source_lines": [
+        200
+      ],
+      "digest": "4a92648a974595c4c3b1c0249df716b8d0ac03b0dfca34db0d6cbd621dad2da1",
+      "text": "What wrote it (a rule's basis, or the measurement's source)."
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 211,
+      "source_lines": [
+        211
+      ],
+      "digest": "631bdb82690d0c310dc1681d457625fb51da669743b4121161498895cf7c211b",
+      "text": "Words the Windows display driver needs that no header names and that have no measured row for"
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 259,
+      "source_lines": [
+        259
+      ],
+      "digest": "73203bec4ddfe0ed69e7a342be3d60dd9ad681392d050710770197a12efab04a",
+      "text": "rows; `measured` the T3 rows (only this die's, this class's and this driver `branch`'s rows are used);"
+    },
+    {
+      "path": "crates/kf-disp/src/capsderive.rs",
+      "line": 338,
+      "source_lines": [
+        338
+      ],
+      "digest": "cec463282ea33cec6e1951143dd75d1c33f99d3872c6b9569886c2cee4bd268b",
+      "text": "T3: this die's measured words"
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 84,
+      "source_lines": [
+        84
+      ],
+      "digest": "b9f500af9bbd246cb4933c0b53478e7fb1e5e286b26cf5471c8cccceefc2603b",
+      "text": "Why a field of the measured AD104 page is NOT claimed by the derived page. Every difference the test"
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 137,
+      "source_lines": [
+        137
+      ],
+      "digest": "8b8b21ce0ac78b5f83e510b3f0f6b47b0b92851610aff0a645ba3e7661056ae7",
+      "text": "\u2605 THE field-by-field comparison. The derived AD104 page equals the measured page in every field that"
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 149,
+      "source_lines": [
+        149
+      ],
+      "digest": "ada9bca9267b078b299efc3d903027a4e312fbbc9ae9e69413ffdfd8f9e54397",
+      "text": "every claimed word is exactly the measured one: the decisive facts are not in the diff"
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 168,
+      "source_lines": [
+        168
+      ],
+      "digest": "f299b3f8f4cdee58f13d8d3c5765c63e6b9ced478b26d6f707c4010a683b4208",
+      "text": "The fields the Windows driver was bisected to need are in the page, with the measured value."
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 317,
+      "source_lines": [
+        317
+      ],
+      "digest": "d7de45ea76c683d888ae1aeae6e1bd7055f5acb45cb56d382d2e8cb393bd85af",
+      "text": "The T3 file refuses a row with no `measured:` source (a blob-derived row is refused, ruling \u00a7AF)."
+    },
+    {
+      "path": "crates/kf-disp/tests/caps_derive.rs",
+      "line": 497,
+      "source_lines": [
+        497
+      ],
+      "digest": "a8b389913bc0c158416186080168816027ce0d6b915a24bfe75746d5d996ceac",
+      "text": "Exact AD102/580 native-Windows measurement, not inheritance from AD104."
+    },
+    {
+      "path": "crates/kf-gsp/src/replytrace.rs",
+      "line": 50,
+      "source_lines": [
+        50
+      ],
+      "digest": "7b3c9e2e85effb5c83d2b08aceb104560fc90563384885cd565a3d96449b6944",
+      "text": "The two Other(4) calls in the measured display subtree. Observe"
+    },
+    {
+      "path": "crates/kf-host/src/precomp.rs",
+      "line": 1,
+      "source_lines": [
+        1
+      ],
+      "digest": "901d62b3e2a02c21e3fcd33875e56e3bfe387ed2cd54c3c01153bc7c0af6acb9",
+      "text": "This compound pointer ABI is encoded directly in the exact HOST layout measured"
+    },
+    {
+      "path": "crates/kf-host/src/precomp_layout.rs",
+      "line": 1,
+      "source_lines": [
+        1
+      ],
+      "digest": "73207937f5f1a8298f8592451a5863a3ef732988cfa88ed85758a1d2e7161af9",
+      "text": "Exact measured SDK membership only; an unknown host gets the derived fallback."
+    },
+    {
+      "path": "crates/kf-mem/src/batch.rs",
+      "line": 4319,
+      "source_lines": [
+        4319
+      ],
+      "digest": "789b01655704a1e25113fc0d8333b95ab0e88b79bd9327bcda91d5721fded25c",
+      "text": "the allocation/refusal assertions and the measured bound unchanged."
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "line": 38,
+      "source_lines": [
+        38
+      ],
+      "digest": "59fda1793f4604c7feaf931e5e127684b8db00a613ed73f96b3e0c53f0a7fe61",
+      "text": "Measured rows exist but are deliberately NOT served (the reason names the decision)."
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "line": 94,
+      "source_lines": [
+        94
+      ],
+      "digest": "c1a28c2859d738b9ae62a6caa7734f314fe4be3f104eace31e3819f44cecb909",
+      "text": "A row measured on this (die, branch)."
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "line": 223,
+      "source_lines": [
+        223
+      ],
+      "digest": "d4711bacbf0c852ad8379a6711d1e9f0b99b5c373cf8e3a6eaac50d3bf9f3d83",
+      "text": "The GMMU static info for `(die, branch)`: the measured row validated like the authored one, else the authored row."
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "line": 236,
+      "source_lines": [
+        236
+      ],
+      "digest": "260b585d53bae23562b46d327188837f9d27d6bf9afa77f5f37ba6c94163c5a0",
+      "text": "a measured row passes the same invariants the encoder enforces (non-zero, packet-aligned)"
+    },
+    {
+      "path": "crates/kf-rm/src/rowserve.rs",
+      "line": 254,
+      "source_lines": [
+        254
+      ],
+      "digest": "f23c96dd7e5a8256156f1853356b25b6d2a3fe3b6304bcf7e2239dc8fd2dcc85",
+      "text": "The CE fault-method buffer size for `(die, branch)`: measured, else the authored value (labelled)."
+    },
+    {
+      "path": "crates/kf-rm/src/zbc.rs",
+      "line": 117,
+      "source_lines": [
+        117
+      ],
+      "digest": "126f0c4e1d79c42bf3552d1739e18ff2eabd645e37c43a6ab45442a84729e974",
+      "text": "How many (table, die) default sets were refused for want of a measured row (counted clean fallback)."
+    },
+    {
+      "path": "crates/kf-rm/tests/cudart_gate_ad104_oracle.rs",
+      "line": 27,
+      "source_lines": [
+        27
+      ],
+      "digest": "c784e04315280a810b3131fe922a3d6bd587808f13661b366c958a25f5eda973",
+      "text": "cudart's request for `0x20809064` (`[measured]` words 1, 2, 6)."
+    },
+    {
+      "path": "crates/kf-rm/tests/cudart_gate_per_die.rs",
+      "line": 118,
+      "source_lines": [
+        118
+      ],
+      "digest": "76b56cfa7944eea80ab01c53dd8042c934e21ce4ead2e57b5590d46ab78c4c5d",
+      "text": "the measured die."
+    },
+    {
+      "path": "crates/kf-rm/tests/gpu_types_wiring.rs",
+      "line": 375,
+      "source_lines": [
+        375
+      ],
+      "digest": "4f19090ea38b4a841bb65034ce5bf11bf7c2f4cc677a0e578466e10093040b2d",
+      "text": "The doc's machine-readable lines (`ZBC-MEASURED:`, `BOARD-SPECIFIC:`) equal the data."
+    },
+    {
+      "path": "crates/kf-rm/tests/zbc_defaults_per_die.rs",
+      "line": 121,
+      "source_lines": [
+        121
+      ],
+      "digest": "c3e62691d391027519c41515caa22c103419dcffd0dc60207b369b7ed677a34e",
+      "text": "allowed: zbc.* measured per die, branch *"
+    },
+    {
+      "path": "crates/kf-rm/tests/zbc_defaults_per_die.rs",
+      "line": 126,
+      "source_lines": [
+        126
+      ],
+      "digest": "b5206bfde46e7ae4c1c988d3e9a05b394215c799ee6e1e7a7da0075dd79f3db2",
+      "text": "a measured wildcard BRANCH anywhere else is still refused"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_CONTINUATION_20261022.md",
+      "line": 37,
+      "source_lines": [
+        37
+      ],
+      "digest": "d7b217d309b272094be53ba22b16b4e6c1cb9a64184b361235cb6f9e603972ae",
+      "text": "| Arm | Variable relative to control | MEASURED result | Canonical RPC count | Scope |"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_CONTINUATION_20261022.md",
+      "line": 76,
+      "source_lines": [
+        76
+      ],
+      "digest": "62fb5b93e797b1fb860c96b754ef4281c84a5a5dffe68f989bfb5e1e2798495d",
+      "text": "Lease57117614 created22:04:32.564106UTC, auto-destroyPID2537232 armed first for170minutes, verified alive"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_CONTINUATION_20261022.md",
+      "line": 101,
+      "source_lines": [
+        101
+      ],
+      "digest": "c7d041d94cd7f9cf3db1e75fa339f3b655e5de4a35b237247f38d27217e5bbf8",
+      "text": "reset/unload remains measured, but neither causal method nor affected ring is established. No completion"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_CONTINUATION_20261022.md",
+      "line": 126,
+      "source_lines": [
+        126
+      ],
+      "digest": "867e65d519b0b36756744eb2167c5a488f9a4a18770da01906b59e027b000c02",
+      "text": "MEASURED GPU-free verification: kf-disp293/0/5 ->296/0/5, three mutants each2killers, restored source,"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_GUARD_REVIEW_20261022.md",
+      "line": 28,
+      "source_lines": [
+        28
+      ],
+      "digest": "28ab15a245586bea9b8734d8ffabefc728cfc3182fb4c5c9306082f393728d19",
+      "text": "MEASURED correction to the historical parked-patch checkpoint below: fixture EXPECTED RED"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_GUARD_REVIEW_20261022.md",
+      "line": 39,
+      "source_lines": [
+        39
+      ],
+      "digest": "a871b6bf1ed2624575d097b460ea2fa9c488b85767c8172299fe76161dfc7a64",
+      "text": "MEASURED: N0 gates 9/9 +10, raw 30/30, CUDA 4/4 and GR/CE PASS; only five exact intentional"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_GUARD_REVIEW_20261022.md",
+      "line": 78,
+      "source_lines": [
+        78
+      ],
+      "digest": "523764747f66ec787aed46f6572b2921af767829e2fc6883a1103222f702721e",
+      "text": "| Native-to-arm gap is uncovered | Per-arm journal followers started after native Xid 32 at 22:20:19 | Full-boot source-verified baseline frozen befor"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_GUARD_REVIEW_20261022.md",
+      "line": 87,
+      "source_lines": [
+        87
+      ],
+      "digest": "ba9eb05f04893561aa96ee92146e6bb8d8ca61690aee5bebd01b1261bce3da28",
+      "text": "MEASURED CPU-only [review probes](../../traces/blackwell_resume_cont_20261022/review_drafts/classifier_review_probes.json)"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_CAPS_20261022.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "f73313a01b7a27f5fab086f4e7fb83b0770f643f806336bad09e8ff8a8f555a7",
+      "text": "MEASURED retained input: own GB202 native measurement text SHA256"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_CAPS_20261022.md",
+      "line": 39,
+      "source_lines": [
+        39
+      ],
+      "digest": "06c7fe00158aafea2d3dbdfcda38e7c1bbdc0f97c76efc596d7ff9d0ac42b078",
+      "text": "host measurement fact, not a public-source derivation."
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_CAPS_20261022.md",
+      "line": 50,
+      "source_lines": [
+        50
+      ],
+      "digest": "196cbbec961a6c0243cec3a77cf82c427d4d0fccf96a9662dce8ffd3ab540e58",
+      "text": "MEASURED earlier whole-CAPC replacement avoided0x50 but its native baseline had an unmatched32."
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_CAPS_20261022.md",
+      "line": 59,
+      "source_lines": [
+        59
+      ],
+      "digest": "99da9eff6d2ba2fbd3a0b41d7147504dde4ae2c889410c0005b876281f1e409e",
+      "text": "That is a privileged measurement route (tier3), even though it performs no writes. It is not"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_CAPS_20261022.md",
+      "line": 101,
+      "source_lines": [
+        101
+      ],
+      "digest": "6c353c884bf9c7c0bbd29a03b15854fc36c02972d51e91a741e3f64ed803b46a",
+      "text": "it does not OR derived bits into the measured values. No captured word, per-die table or forced"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md",
+      "line": 36,
+      "source_lines": [
+        36
+      ],
+      "digest": "f877e04c71a7c80430b4d13baa88a1e1b42a55e9013a8c2d58e34a986c211289",
+      "text": "Before rental, the independent actual-CIM observer must be test-first implemented and verified"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md",
+      "line": 112,
+      "source_lines": [
+        112
+      ],
+      "digest": "14f5fa38cdba2efaa36064b20e9970824de02a7817a3a0981e6934141e48c6b0",
+      "text": "These are reservations/projections, not new spend. The cheapest verified/KVM market quote at the"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md",
+      "line": 118,
+      "source_lines": [
+        118
+      ],
+      "digest": "c1349fca4ca599ad3eee677fae11d170912960b14fe16846210f8e2b15909da2",
+      "text": "the measured full cell plus export/teardown margin; if markers slip, mark A2 UNRUN. No new arms,"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md",
+      "line": 126,
+      "source_lines": [
+        126
+      ],
+      "digest": "19ca7e10340fddf8d1885b3dfd430ceff17b0c673502a30a554cc8231b71fc4e",
+      "text": "MEASURED last lease: create-to-bind41m42; media occupied about24min while CPU build/N0 ran."
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_HOST_PRECOMP_VALIDATION_20261022.md",
+      "line": 130,
+      "source_lines": [
+        130
+      ],
+      "digest": "6bc2e45d842ac1026ab86500b58cb916c06745009a89c09f43e296e73603f2ea",
+      "text": "media cache only when actually found on the new box and independently checksum-verified. Do not"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_NEXT_VALIDATION_20261022.md",
+      "line": 109,
+      "source_lines": [
+        109
+      ],
+      "digest": "1525cf142b3734118e4b8f6f69f89b3c0aed143e47b9b5d6aa6dc310e5fb7098",
+      "text": "The reported ~65 minutes is a conservative allowance, not this lease's measured duration."
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_NEXT_VALIDATION_20261022.md",
+      "line": 115,
+      "source_lines": [
+        115
+      ],
+      "digest": "5435450a3db495f841f75d2262224d8a5d6c00c1f3923d9f6b110649680902e6",
+      "text": "fixtures. Reuse only a hash-verified public media cache if it actually exists on the new box; do not"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md",
+      "line": 69,
+      "source_lines": [
+        69
+      ],
+      "digest": "6e8907519b84696fcfc32aa98af385323b41a64c77213dd244dd30873e058dc9",
+      "text": "report, not a native page or a fresh acceptance measurement. Categorization describes current"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md",
+      "line": 90,
+      "source_lines": [
+        90
+      ],
+      "digest": "b2c0c3fe42833b0f5b3e412fb10faf39f8b7f522eb8e30c96d8e8d15f8020f6e",
+      "text": "same-die read, but NONE is a verified runtime host-read result and none is automatically approved"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_PRECOMP_TIER_AUDIT_20261022.md",
+      "line": 124,
+      "source_lines": [
+        124
+      ],
+      "digest": "5bdb5847984fd523639e7396410932a52352c3e8497cd9c0b5c685d9a2b78934",
+      "text": "for any later authorized residual measurement. The existing display caps_measured.tsv adapter is"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_RESUME_20261021.md",
+      "line": 89,
+      "source_lines": [
+        89
+      ],
+      "digest": "fbfad2831e95a7bc4ffd6b08545918d2da16207d88b3b941e469628bd80e708d",
+      "text": "**Verdict: not a consequence of the 0x116 bugcheck (MEASURED: it is 18.5 s earlier, and 5.3 s before the"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_RESUME_20261021.md",
+      "line": 108,
+      "source_lines": [
+        108
+      ],
+      "digest": "174ca38d9e4ae669f3238935a0734181607c5b66aa1ffe2dd5bbe909a3ba11ec",
+      "text": "| A1 | **Incoherent display caps.** Serving POSTCOMP `CAPB` (output LUT capacity) opens a driver path that dereferences state initialised from the dep"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_RESUME_20261021.md",
+      "line": 116,
+      "source_lines": [
+        116
+      ],
+      "digest": "1539e934d38aa0f90efdc7429870c82d349a3f4437b177428234edf084918191",
+      "text": "Ranking reason: A1 and A2 are testable with one binary in two ON arms and carry the measured ladder; A3/A4"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_RESUME_20261021.md",
+      "line": 121,
+      "source_lines": [
+        121
+      ],
+      "digest": "87ea361fc3297afeb44223121fe23c934402c7e8f07297e6ecc55f1818adcf3b",
+      "text": "| B2 | **The terminal 0x116 is independent of what hung: after the guest unloads its driver, no re-init ever arrives, and the reset path fails with th"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_RESUME_20261021.md",
+      "line": 161,
+      "source_lines": [
+        161
+      ],
+      "digest": "a2b961f9a3a1374a5d052816d25382c6f63f0db21c8da09e8a8a3fa2b6a1d4be",
+      "text": "| 3 `off_c` | same binary, display off (empty ROM, as `bw_off_m1`), P19 + RPC trace + `KF3_COMPLETION_PROBE=500` + C1 if landed | measurement only | B"
+    },
+    {
+      "path": "docs/design/V3_BLACKWELL_RESUME_20261021.md",
+      "line": 186,
+      "source_lines": [
+        186
+      ],
+      "digest": "c78b31f34231270a87c471f04efdf4a1fbd5d3016398abf9ebaf0a0fa1883382",
+      "text": "no host action. Recorded for the record: without it the display-OFF path stops at Code 43 (MEASURED, fix1"
+    },
+    {
+      "path": "docs/design/V3_PRECOMP_CSC_PRECISION_20261022.md",
+      "line": 42,
+      "source_lines": [
+        42
+      ],
+      "digest": "fcb6eaa068bff11e6a14a35e4a9d6199895fb051422a85c7357cef9a485e90c5",
+      "text": "MEASURED earlier: the bisect isolated CAPC **as a whole** on GB202. Those words changed precision"
+    },
+    {
+      "path": "docs/design/V3_TRANSLATED_RC_20261022.md",
+      "line": 78,
+      "source_lines": [
+        78
+      ],
+      "digest": "bba37bd4397d91c3fbfec96b635ff7d3401dd5a2eb265444708b9ffb237905af",
+      "text": "MEASURED baseline: `traces/translated_rc_20261018/` records baseline/EXPECTED RED counts, isolated"
+    },
+    {
+      "path": "docs/design/V3_TRANSLATED_RC_20261022.md",
+      "line": 81,
+      "source_lines": [
+        81
+      ],
+      "digest": "7bdafed5163127e45d578d467c84af3790285451591e9af398c6979aef9f754e",
+      "text": "beyond the narrow RC hook. MEASURED: the unchanged-file hashes and diagnostics are recorded with the evidence. The no-op delivery API"
+    },
+    {
+      "path": "docs/design/V3_TRANSLATED_RC_20261022.md",
+      "line": 96,
+      "source_lines": [
+        96
+      ],
+      "digest": "e4747190d12bb773005cb5b30c57a17044101a0f191557f40d2803e3840139dc",
+      "text": "MEASURED final GPU-free validation: all 22 kf-* crates, 3999 passed / 0 failed / 22 existing"
+    },
+    {
+      "path": "tools/windows-runlist-probe/README.md",
+      "line": 16,
+      "source_lines": [
+        16
+      ],
+      "digest": "85c5f7bcae2b1282918b709f125a4e572d5741cfa606586efcde67d4231a1421",
+      "text": "## Windows 581.51: native measurement and public layout"
+    },
+    {
+      "path": "tools/windows-runlist-probe/README.md",
+      "line": 53,
+      "source_lines": [
+        53
+      ],
+      "digest": "a8019056769570717273c420587528505f916435e7c57f9b5bb18ad6e8246897",
+      "text": "fails before the change with the measured unsupported-cell reason, then passes."
+    },
+    {
+      "path": "traces/blackwell_host_caps_review_20261022/runtime/README.md",
+      "line": 44,
+      "source_lines": [
+        44
+      ],
+      "digest": "60930ad195bc67876ccabf4f7e27d9a45c78054029bf02fd34da97cf10ebcc4c",
+      "text": "layout generator reproduces the committed file from the five measured C probe TSVs. To reproduce:"
+    },
+    {
+      "path": "traces/blackwell_host_caps_review_20261022/runtime/README.md",
+      "line": 58,
+      "source_lines": [
+        58
+      ],
+      "digest": "b0d9b56a4755dd46282f380e846cc88093f6a07c1d4b39b229967f64e6dbc886",
+      "text": "Optional B1 interaction verification (MEASURED after primary evidence publication): actual isolated"
+    },
+    {
+      "path": "traces/blackwell_host_caps_review_20261022/tier_audit/README.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "5e522fd0e9040a694c17561517f803ce3245094fcdf60965ea2439579ca03e36",
+      "text": "are source review, not a new build or hardware measurement. Rerunning must reproduce"
+    },
+    {
+      "path": "traces/blackwell_host_caps_review_20261022/tier_audit/README.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "3c0280b54100a3576f4e352be1df63d78a3ecb7dabe9abb0299c905130b41fcc",
+      "text": "across five tags, verified from git blobs even when a reference checkout is sparse. This"
+    },
+    {
+      "path": "traces/blackwell_nvdec_admission_20261020/RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "33368fa524286c6fb7d33eafa2b9222b4e0a3ad392bb29603754713c7dbb193b",
+      "text": "MEASURED product0c87acda8 on GB20256816449: display-off Windows580.88 refusesCFB0 at ordinal277 immediately before teardown. Native Windows580.88/GSP5"
+    },
+    {
+      "path": "traces/blackwell_nvdec_admission_20261020/RESULT.md",
+      "line": 9,
+      "source_lines": [
+        9
+      ],
+      "digest": "02786f6d61a63f44eefc374c0fe15d0c2d77b31417ef4e8cbcf4fb3a51f29d42",
+      "text": "MEASURED expectedRED340c12909 alone:10new tests,6fail/4pass. Fix release: kf-abi594\u2192604, kf-chip84\u219286, kf-rm811\u2192811, kf-qemu407\u2192407;1908PASS/0FAIL/0ig"
+    },
+    {
+      "path": "traces/blackwell_nvdec_admission_20261020/RESULT.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "6591d18f251d604775d69e905a24a68ec068f6feca3414fed954edf71aa9dd0e",
+      "text": "CODE READ AD104 limit: the native-family guard in kf-qemu/src/chan.rs remains byte unchanged and refuses these foreign engine classes before host allo"
+    },
+    {
+      "path": "traces/blackwell_resume_cont_20261022/FATAL_NATIVE_XID.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "a3a58bb77252e011a0645f9e8847006f63af5458d6df11b68078cd1817542304",
+      "text": "MEASURED final_kernel_xids.json: native kf-gr-tier PID90663 emitted Xid32 at22:20:19.302750UTC, channel0x0d00000a intr1 00000010 HCE_DBG0 00000000 HCE"
+    },
+    {
+      "path": "traces/blackwell_resume_cont_20261022/FATAL_NATIVE_XID.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "a6b5a9f33d11b4f05e09db6f32a6318441cf5b1118adebab27b79243f0a8e27c",
+      "text": "The four ON comparisons and OFF probe remain measured exploratory results, with this contamination qualification; none is Windows acceptance PASS. Str"
+    },
+    {
+      "path": "traces/blackwell_resume_cont_20261022/INTAKE.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "b1592cdbd995bbb0343f38db2b7567bfe1a4aec7e13b1bb601ed9407ea302618",
+      "text": "MEASURED local inherited watcher: on_c0 PANIC50/278RPC; on_c1 types0,1,2 FIXED/4542RPC; on_c2 types0,1 PANIC50/278RPC; on_c3 led to minimal_candidate2"
+    },
+    {
+      "path": "traces/blackwell_validation3_20261022/README.md",
+      "line": 11,
+      "source_lines": [
+        11
+      ],
+      "digest": "b8b21df0c8d889fd5a0173fead43768c56fc799deba9ceeaa6cc2dc01438089c",
+      "text": "The first group-identity check raced setsid startup; later bounded revalidation proved the same"
+    },
+    {
+      "path": "traces/blackwell_validation4_20261022/RESULT.md",
+      "line": 16,
+      "source_lines": [
+        16
+      ],
+      "digest": "b5fa946405c4feb49226ed4b6b1e9eb8c6a6d2e2ca4abd2aeaf189c6472e2931",
+      "text": "product/driver timers and fresh sealed-parent siblings. Both measured binaries are source8f3a9bb3a,"
+    },
+    {
+      "path": "traces/blackwell_validation4_20261022/RESULT.md",
+      "line": 22,
+      "source_lines": [
+        22
+      ],
+      "digest": "b86180655e409d0b3496ea861b44e26451b5faf2f967065a3d2cfdcee2ee0e82",
+      "text": "OFF guard analysis (CODE READ unless marked MEASURED):"
+    },
+    {
+      "path": "traces/blackwell_validation4_20261022/RESULT.md",
+      "line": 43,
+      "source_lines": [
+        43
+      ],
+      "digest": "16ab683fb6d1708cf8ff8e0c2dd888c459a710c413753b32e0b2be2d08c80670",
+      "text": "on the host and preserves the original1000-RPC/prior-Code0 gate. Falsifier: no proven Code0"
+    },
+    {
+      "path": "traces/blackwell_validation4_20261022/fatal_receipt/README.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "10ef7a5a8de99d6ccad8303fc5de87833c6977ee5023e54815b29bff1875240b",
+      "text": "On measured OFF, the second independent watcher replaced the original fatal reason with its"
+    },
+    {
+      "path": "traces/blackwell_validation4_20261022/fatal_receipt/README.md",
+      "line": 16,
+      "source_lines": [
+        16
+      ],
+      "digest": "e127d354013693573b66b5153b0148b06404de203eae858a5f7e1de735d8e133",
+      "text": "Prior campaign31mutants retained unchanged, combined34. Hardware remains measured at the OLD"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/README.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "65262baef78cc322f58fd670c4e64413f7b83966f64ca7049a4cd6d92cd5d41a",
+      "text": "| Cell | Frozen source | Measured outcome |"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "08563a27d5980ed72b5273012859c04486e908cf223541c69a2dfe67418df918",
+      "text": "MEASURED: owner-authorized merge `82effe99f` incorporates master `e64b8e5f6`, including PR #63."
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "d077a0987948942ecd7d9183ccb156d8bc9d4119912be840975da8e5ea94c22f",
+      "text": "MEASURED: core target 25/25; hook target 15/15. Full 22-crate suite: 3999 passed / 0 failed / 22 ignored / 234 targets"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "56a0d91df01e2d78b287d466737434a31eae61a385e49d48d3c4c874cb02bc31",
+      "text": "MEASURED: 15 distinct deliberate mutants, 16 runs, all killed by at least two tests. The RAM generation"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 22,
+      "source_lines": [
+        22
+      ],
+      "digest": "bc7cfbc17680312d724b63ecfd43bd69fd867decee75472bdf441ed34bd55706",
+      "text": "| Mutant variant | MEASURED killers |"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 57,
+      "source_lines": [
+        57
+      ],
+      "digest": "deb186be91fa0f7e1ed058fad9b21c678044b2418cc9a83f3c7f41a9dc361779",
+      "text": "MEASURED: seed merge `3c7bf3e9d5e6c8999fcc982af787b66ed334df2e` contains the two required"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 69,
+      "source_lines": [
+        69
+      ],
+      "digest": "7b4ac439723c6cc04305fe7892ca0b9df187c2202134604ec502b27cd9ed379e",
+      "text": "required bounded flock. MEASURED: disk free before builds was 28/27/27 GiB, above guard."
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 97,
+      "source_lines": [
+        97
+      ],
+      "digest": "aabe02a22c3aeb20c444fc502033a8fa9362850572adbe6c16e84a80fc9bd678",
+      "text": "MEASURED final scope: all 22 `kf-*` packages in the workspace were tested with --release -j2"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/b1_gate/README.md",
+      "line": 102,
+      "source_lines": [
+        102
+      ],
+      "digest": "a9d03f7eeee3fa415ffcaaea568d64b4b135d830cbdc9810d1c8bb9c64ef772a",
+      "text": "MEASURED cleanup at closure: all cargo/mutation processes exited, their shared-lock invocations"
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/guard_code0/README.md",
+      "line": 4,
+      "source_lines": [
+        4
+      ],
+      "digest": "9044d7698f2638c260bfed7679989a3eec1711fe608682d1d45bf1beb67bdfd6",
+      "text": "CODE READ/CPU MEASURED: a1000-RPC prefix alone was insufficient to prove actual Windows init."
+    },
+    {
+      "path": "traces/blackwell_validation_20261022/guard_code0/README.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "7f0612f743b18e2aeb3c529b1f4052c12c9812bfc4f21d15db5e4b6f216876b6",
+      "text": "MEASURED: full Python suite72->86 executions (66->80distinct cases),0failures."
+    },
+    {
+      "path": "traces/die_driver_sweep_20261015/COST.md",
+      "line": 108,
+      "source_lines": [
+        108
+      ],
+      "digest": "c127e2c96c1dbdeab28b97de29e429d6c6ca4855e9dcbbcf600c70bca30406bb",
+      "text": "One own box at a time, <=180min, auto-destroy armed first, teardown API-verified."
+    },
+    {
+      "path": "traces/die_driver_sweep_20261015/COST.md",
+      "line": 122,
+      "source_lines": [
+        122
+      ],
+      "digest": "6046b2a694fa02e5ef54738371919561f965b89f8bd17dbc3265662d856ba55d",
+      "text": "of actual spend. Own timer cancelled only after verified absence. ActiveIDs0."
+    },
+    {
+      "path": "traces/die_driver_sweep_20261015/COST.md",
+      "line": 148,
+      "source_lines": [
+        148
+      ],
+      "digest": "190ffa02691fc7d627e1358cc58c724038a0193112c97a072c552c6e0db28100",
+      "text": "CPUs/63GBRAM; actual health/die not yet verified. PreviousownID absence verified"
+    },
+    {
+      "path": "traces/die_driver_sweep_20261015/COST.md",
+      "line": 181,
+      "source_lines": [
+        181
+      ],
+      "digest": "e1e056c79c101e794f33d74e6b7ec92bd6c736bb41ef480eaffe3fac348ed574",
+      "text": "MEASURED GA10456808180 API-absent2026-10-20T01:05:56.954502Z; observed rate0.16USD/h, elapsed1.286671h, runtime estimate0.205867USD, conservative guar"
+    },
+    {
+      "path": "traces/die_driver_sweep_20261015/COST.md",
+      "line": 199,
+      "source_lines": [
+        199
+      ],
+      "digest": "67852f29b17f15a250d8dba561976790d789fb084ff829137abbd72892b09761",
+      "text": "CREATED NEW sweep2 own56949833 at2026-10-20T20:49:07.435255+00:00, RTX5090offer56638596/machine53347, quote1.068056USD/h, requested180GB. Auto-destroy"
+    },
+    {
+      "path": "traces/postcomp_units_20261021/RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "ab2ad4fe6b7904354691d015ad929be2f171f2f59f19172629cbf0501c2bee74",
+      "text": "CODE READ: public OGKM580.159.04 @b81d58ee0224d1d290bef1c080592b619e184042, nvkms-evo3.c:5858-5863, requires POSTCOMP UNIT_WIDTH=16 for every usable o"
+    },
+    {
+      "path": "traces/postcomp_units_20261021/RESULT.md",
+      "line": 16,
+      "source_lines": [
+        16
+      ],
+      "digest": "9a17e9195386af4bc21f2cff26c86eacc24f6740bf2dc94793684f5a7851079a",
+      "text": "Hardware hypothesis, stated before any future arm: this public class invariant may affect the ON initialization path. Falsifier: the same frozen sibli"
+    },
+    {
+      "path": "traces/sweep_continue_20261020/FOLLOWUP.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "a371b9f05ce3d48cf92ceefc7d6435e932beadd1150225a855b1505bd011328a",
+      "text": "CA73 SDR OLUT: public clca73.h CAPB684+32i OLUT_SZ12:1; derive1025samples from the existing LUT_BYTES bound minus4headerentries, DIRECT/SFCLOAD=true, "
+    },
+    {
+      "path": "traces/sweep_continue_20261020/HANDOFF_RECONCILIATION.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "4f422ab33b220f522d70a3cf8e2b64b5c1de30ef7d17964e991f7e766ce1ddc6",
+      "text": "MEASURED predecessor fix4 OFF71588cecb: Code0 but0x116 persists around40seconds,3965RPCs/teardown~3700; GRtoken3 dead=None andGET=PUT2,33methods; copy"
+    },
+    {
+      "path": "traces/sweep_continue_20261020/HANDOFF_RECONCILIATION.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "3cc0d143172426e62a54d3f27aa1b256787c40d9491c02630a04c0d4e046007f",
+      "text": "MEASURED predecessor fix5 ON048c28b9c: sameCode43/cursor4ordinal275/384RPCs despite45authoredwords. H-POSTCOMP-DERIVED sixCAPApresencefields is falsif"
+    },
+    {
+      "path": "traces/sweep_continue_20261020/PLAN.md",
+      "line": 15,
+      "source_lines": [
+        15
+      ],
+      "digest": "8a37469d489724c3f4cb157e3d4ccb3f94394e70d76d217934941353eb93b315",
+      "text": "- H-PAGING: copy-engine paging work remains uncompleted after GR completion. Falsifier: actual submitted CE GET/real semaphore reachesPUT beforeTDR. O"
+    },
+    {
+      "path": "traces/sweep_continue_20261020/PLAN.md",
+      "line": 24,
+      "source_lines": [
+        24
+      ],
+      "digest": "99196e4f984fb02c5fb1258b0068d4c3e5e9c0d622b5edd12d0c2a3b025b9204",
+      "text": "Only after TDR/display work, or independent preparation while a lease waits: AD103/AD106Windows580.88, GA104Windows580.88 after verified native bindin"
+    },
+    {
+      "path": "traces/sweep_continue_20261020/lease_56964717/RESULT.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "87ed11f9598b4c99878b9d662595f537e51afced37a57594ae016b38390c9cdc",
+      "text": "MEASURED inventory only: nestedKVM,175GBdisk,151GBRAM; stock image driver reported no devices before standard595provisioning. Outbound script deployme"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/AD104_PATH_AUDIT.md",
+      "line": 9,
+      "source_lines": [
+        9
+      ],
+      "digest": "241e3c6318e168f1bc1c2b72ee7df953164add7a540487c19e80e9dc486941aa",
+      "text": "MEASURED CPU: cudart_gate_ad104_oracle, host_facts_ga106, the per-die/wiring"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/CONFLICTS.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "244ccfb91806616e976b7745cbfe6be5d2346d27c7985064885a407e73f5a752",
+      "text": "No excluded USER measurement/batching edit is restored. Five held historical"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/CONFLICTS.md",
+      "line": 111,
+      "source_lines": [
+        111
+      ],
+      "digest": "cd7b6140eaf8d1f7173421bce10c6ba3ec504b81f837daa48cb6a746a0065fb8",
+      "text": "STATUS: LIVE. F-2 APPROVED and VERIFIED for exactly grtables.rs and tmode.rs."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/CONFLICTS.md",
+      "line": 327,
+      "source_lines": [
+        327
+      ],
+      "digest": "d9e8823417c18d88253919bfc6615ea44d74a9e14dd617b76f06bbe1dad3e503",
+      "text": "(flow/stage measurement), `639acf57d` (histograms), `7476ef69f` (EXPECTED RED"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/CONFLICTS.md",
+      "line": 337,
+      "source_lines": [
+        337
+      ],
+      "digest": "992751fad172dd438a493b643279d4b079dc8be0ae403fa0698cbbc0333ccf1e",
+      "text": "and measurement topic, including its dependent nonconflicting edits, from the"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/CONFLICTS.md",
+      "line": 346,
+      "source_lines": [
+        346
+      ],
+      "digest": "d61adce3320acbf055c2fd510b55c310aa4ef006b80e57e182fc23cf88f94329",
+      "text": "Alternative: request a dedicated port of the old batching/measurement behavior"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/F2_RESULT.md",
+      "line": 32,
+      "source_lines": [
+        32
+      ],
+      "digest": "91bfd63694bde38f4b92588404c52627a2b363ac2dd7db133befb24e296ebed0",
+      "text": "all passed. Their measured counts are in candidate4_baseline_counts.json."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/HEARTBEAT_NONBLOCKING.md",
+      "line": 31,
+      "source_lines": [
+        31
+      ],
+      "digest": "c5cb445d3b34813fa7c5cb277d8a5a8b4a9dbf06f8962ad79445dfae6e9ef169",
+      "text": "MEASURED initial23 tests green, then two fresh-queue tests independently failed"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/HEARTBEAT_PLAN.md",
+      "line": 6,
+      "source_lines": [
+        6
+      ],
+      "digest": "b09590606157e5b8c3ee40103b1769d0a16682d1c1bce195d64f459dd2726a02",
+      "text": "MEASURED pre-topic kf-qemu full release: 389 passed, zero failed/ignored,"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/HEARTBEAT_RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "89adfd03cc78931686a5bea8b8510e0bb11ac4939b742149ce8c0c2bfa85d519",
+      "text": "MEASURED: fixture-only94518f95b restores complete QEMU compilation,389/0/0."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/HEARTBEAT_RESULT.md",
+      "line": 12,
+      "source_lines": [
+        12
+      ],
+      "digest": "2df24a025129441674599e40208ad464a65a83de05faa314fe26783021d3c0ea",
+      "text": "MEASURED: heartbeat mutations kill5/3/4/2/2/2/2/2/2/2 tests. Actual blocking"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/HEARTBEAT_RESULT.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "c265cad1c99888016f44352a399be99880b5793edfa47d5213e99b5c74025e13",
+      "text": "MEASURED full release at7e9145ff8: QEMU389->407/0/0, GSP54->61/0/0;"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/MATRIX.md",
+      "line": 52,
+      "source_lines": [
+        52
+      ],
+      "digest": "eaee8904ecaa2534cf062fe3a42bbd51084f02e393feb29d1ad01e80b2858007",
+      "text": "environment, build, ABI and source. Display/GOP on, VGA none, except the measured"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/MATRIX.md",
+      "line": 83,
+      "source_lines": [
+        83
+      ],
+      "digest": "0a469ba40dacdd1c18de76f6e08252a2ea1a5d6edcd7b099ba4339a694406c7b",
+      "text": "MEASURED GA104580 R34 matched candidate-4 control0452613b5: PASS159s versus integrated e8553e6c timeout180s, n=1 each, fixed180s budget. Evidence phas"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/MATRIX.md",
+      "line": 87,
+      "source_lines": [
+        87
+      ],
+      "digest": "edf3e31c1a1e286b2c6a2a9d63900e28e7d8f9185314d6a75074a61be1b81c8f",
+      "text": "| Refresh die | Guest actual build | Measured source / configuration | Result | Evidence |"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/MATRIX.md",
+      "line": 102,
+      "source_lines": [
+        102
+      ],
+      "digest": "7e40ab8b268663f0ac3afd83eb050e149db3fb66d5bc691252547e58c91eb63e",
+      "text": "| AD102 Linux580.159.04 broker, host595 | `7f22d18df` | PASS same criteria,n1; public pin verified/currentbroker | phase2_ada_broker_followup_20261020"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/MATRIX.md",
+      "line": 110,
+      "source_lines": [
+        110
+      ],
+      "digest": "a354dc7f9e97f47c5e4e358aa0dde3d6ac9e25fead24dafe6822613c2d752cd6",
+      "text": "Only setup was measured on this lastlease: genericLTSC check exit0, both binaries built, actual disabled8088/oem7/GSP1 parent ready04:06:09; no produc"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/MUTATION_RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "68428412ba73ce5a8c803dd9c2646bcce2103d95bb7140a6193b9883013ab963",
+      "text": "MEASURED: F-2 four mutants killed3/2/2/3 tests; family admission four killed"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/PHASE2_GA104_PLAN.md",
+      "line": 37,
+      "source_lines": [
+        37
+      ],
+      "digest": "09de908213cf0555c8fdf05abea2cae2bce2687631c2231edfcd1295030a7693",
+      "text": "No kayfabe Windows acceptance is attempted before the native binding is verified."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/PHASE2_PLAN.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "a45467ab46b176ff4b9d823501aae16b15e3980da24ef42f5f6859b3728d6866",
+      "text": "and guest Linux580.159.04 and595.91.07 are separate verified axes. Any new red"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/PHASE2_PLAN.md",
+      "line": 47,
+      "source_lines": [
+        47
+      ],
+      "digest": "31e27d14e75f922cd3cf4f135c38810ae798decc2f477546b39919b118d055d5",
+      "text": "IDs and API-verified; do not leave a box idle while waiting for a scope decision."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/PR_PLAN.md",
+      "line": 22,
+      "source_lines": [
+        22
+      ],
+      "digest": "62e843d351cd1c83aba57b104437f464481b1bab66cf39533135e52759fc7986",
+      "text": "review branches. Do not include obsolete USER batching/measurement, perf PR17,"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "a140338bf1af303e4379f1a4ac0904d0221708487ab9e2ccaff3aa2203a4fedb",
+      "text": "MEASURED:14full release suites3338passed/0failed/21ignored; QEMU389->407,"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 25,
+      "source_lines": [
+        25
+      ],
+      "digest": "200fad606d50b1e154c05462673a348e6960a763b378a4be09a073884c701b95",
+      "text": "only and API-verified teardown. Host off-limits; windows-on-vast unmodified."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 44,
+      "source_lines": [
+        44
+      ],
+      "digest": "f2dfcb0f3bb0c60c332802bafc407ef1be020771ae2f361acaf98225788e9c2f",
+      "text": "MEASURED:13full crate suites pass2924tests; all21QEMU integration tests pass."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 50,
+      "source_lines": [
+        50
+      ],
+      "digest": "2f3129f7ca7acc4fd3f1af936876ffebeeb920c6055b46fe6fbbd5d46ce7b7d3",
+      "text": "MEASURED:39distinct final mutants each have>=2runtime killing tests;53bench"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 86,
+      "source_lines": [
+        86
+      ],
+      "digest": "85bd8ddce2f4e76ea6493306240e7d6e3a51c7c30f2cc45a47406e794db7df67",
+      "text": "## Result (MEASURED unless marked CODE READ)"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 117,
+      "source_lines": [
+        117
+      ],
+      "digest": "8670b040aee2b5e223f3d2b54e0ec7e6e5f1ae556917c7ac75a5ce925dd9eeec",
+      "text": "| kf-chan release (MEASURED) | 521 pass, 0 fail, 3 ignored | 530 pass, 0 fail, 3 ignored |"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/RESULT.md",
+      "line": 133,
+      "source_lines": [
+        133
+      ],
+      "digest": "143505a90f588b4560fc4bc5c4111d662ad979a624019a7e1de9fe3d3e122ed1",
+      "text": "The following are MEASURED local runs with candidate-4 files unchanged outside"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/ROWSERVE_NOTICE_RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "3993f3bc24f5c7ee528e5ebdd4c1261869c99e23acf55eafedb21f82a45703e6",
+      "text": "MEASURED: EXPECTED RED9aded4379 has two runtime failures:2048actual lines"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/USERRELAY_DEPENDENCY.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "1eeaaa22fcfb9331947b89b8d2485a696212b62c96eb3ad98519af026395bfb9",
+      "text": "hardware consequences remain UNRUN, not a measured failure claim."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/USERRELAY_DEPENDENCY.md",
+      "line": 26,
+      "source_lines": [
+        26
+      ],
+      "digest": "04cee89f435bbf992cdc3049bd760cd32d72c364cdb81c8084c1cc698ef81c13",
+      "text": "publication/doorbell paths and channel groups. No old USER batching/measurement"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/USERRELAY_RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "eebd6dfd585c35ed0de319f0a5e8c74c5b9ff8de41fa1317f9ae22fbbf41c9e6",
+      "text": "MEASURED: unchanged predicate extraction + eight tests committed alone as"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/WINDOWS_NIGHT_20261020.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "56e0c2bf62123f48ea22e05f17d9775ac559112af8657da1e3347eaf6ad325eb",
+      "text": "Plan BEFORE runs: refresh AD102 Windows580.88 at current accepted product revision, P19 printed/actual environment verified, original secure-boot/TPM "
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/WINDOWS_NIGHT_20261020.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "c77cae4b8863ddfdd4f6f0872f55c6dacacd95315472e0490000bac341549e26",
+      "text": "Optional CE95e23df77 arm only upon verified Windows TDR, separate binary, never merged. Linux regressions lower priority. Cap30USD, stop/report25USD, "
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/CAPS_ORACLE_RESULT.md",
+      "line": 11,
+      "source_lines": [
+        11
+      ],
+      "digest": "5a0c3306eea22e524658516dbe5d2f94a6f152e38dd485acc80347e16280baea",
+      "text": "MEASURED strict caps_oracle580.65.06/190/2 against that complete native page"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/LINUX595_CUDA_RESULT.md",
+      "line": 28,
+      "source_lines": [
+        28
+      ],
+      "digest": "62f5d2aed277ccaea68fc08f0b41cf9d7246752aac40150182049656eab3b95c",
+      "text": "This measured orchestration order violates the image invariant and is a strong"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/WINDOWS580_DISPLAY_REFERENCE.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "33cf5df7cd9c8bc1e1f0ec3893a7a6c5c54165b1c06934dc876402fe625a4eaa",
+      "text": "is bounded by its declared buffer and verified block checksums. AllocpControl"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/WINDOWS580_PARTIAL.md",
+      "line": 23,
+      "source_lines": [
+        23
+      ],
+      "digest": "9dec3eb7adb9f9201fa4ced7e0a50e8b04d720192d43aff1666eb29db7f4d45f",
+      "text": "report it as a measured GPU failure or silently replace its original failure log."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/WINDOWS581_RESULT.md",
+      "line": 1,
+      "source_lines": [
+        1
+      ],
+      "digest": "95fc8d5efca0df4ac0c35ac0f53435d0bdb10db9922bee3ed693d5c17da3d78e",
+      "text": "# AD102581 allocation diagnostic measured"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/WINDOWS581_RESULT.md",
+      "line": 8,
+      "source_lines": [
+        8
+      ],
+      "digest": "d807631ac134d35081f013a095b89708379ec50d11f115af145df178a4157bfd",
+      "text": "MEASURED: allocationclassb297 requests216/217 policyNV_OK. Posted messages217/218"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_ad102_56766467/WINDOWS_PLAN.md",
+      "line": 25,
+      "source_lines": [
+        25
+      ],
+      "digest": "b8616b49aa43a72d9339c5f9fae86714f2aefeef48a1fe42b56dea7600074617",
+      "text": "H_AD102_581 allocation diagnostic (one run, after580): native-measured exact"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/B2_RESULT.md",
+      "line": 6,
+      "source_lines": [
+        6
+      ],
+      "digest": "799956076461231cfd73fe5d6b84377c3c1d22f69c25392061c96f572be6b665",
+      "text": "format defect is CPU-proved but the black-frame cause remains unresolved."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/B2_RESULT.md",
+      "line": 25,
+      "source_lines": [
+        25
+      ],
+      "digest": "632c116238b8c8878b86a4d2661b4c9051ac6f1b05de70451de3dd8524968ff7",
+      "text": "with X11's SI:localuser:kfbench, verified xdpyinfo as that user, then reran the"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/B2_RESULT.md",
+      "line": 34,
+      "source_lines": [
+        34
+      ],
+      "digest": "72fa65e7ac3af48d8c91467e053e8523497fc29beef24eaa0a7b8d2c80cdac20",
+      "text": "SUPERSEDED candidate-status below: the candidate is now complete and measured FAIL."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/B3_CODE_REVIEW.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "6038990c9d3e89c77e4d097d346a99b9fe1019a5cd4c03635c92ab3707ed2c4f",
+      "text": "MEASURED from the already-exported `linux595_cuda/rungs/cup3/qemu.txt`: three"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/B3_CODE_REVIEW.md",
+      "line": 38,
+      "source_lines": [
+        38
+      ],
+      "digest": "637daa7b8e16d2ff6a5e72350acfccd5b22716d1fcd8afe8fba368bb51dfac26",
+      "text": "changing it. Native PTIMER/VF_TIME agreement remains measured and rules out only"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/B3_RESULT.md",
+      "line": 41,
+      "source_lines": [
+        41
+      ],
+      "digest": "6b3ff183cb43a291ff52b0fbd34e657159a24a7813a5c19b3d888d70b8d71df5",
+      "text": "is an INFERRED nextlead, not proved or patched.500ms period unchanged."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/FINAL.md",
+      "line": 41,
+      "source_lines": [
+        41
+      ],
+      "digest": "8ee666413cafb0ebe3d331d78b4cf4a00e606497b6a1651fd99730ff6014f9f4",
+      "text": "Both measured Windows arms started from fresh children of the same stopped,"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/FINAL.md",
+      "line": 47,
+      "source_lines": [
+        47
+      ],
+      "digest": "95bdc8a7f252429947eefdb8f2e5e63f0f12cf5d8e61664d3ea2902da6825af1",
+      "text": "unload ordinal, **not a proven StartDevice abort ordinal**. Alignment against the"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/FINAL.md",
+      "line": 72,
+      "source_lines": [
+        72
+      ],
+      "digest": "2ca83dad597bdd7ca126b9d47fef4cbb2762e85ec9ab1fd53283b94aa612266e",
+      "text": "CODE READ / measured limitations: CBCB remains NOT_DERIVABLE; old exact-GB206"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/FINAL.md",
+      "line": 111,
+      "source_lines": [
+        111
+      ],
+      "digest": "67d9a15b274e3ff7d7eddd4719fef9675c28d54152cb59f4743b1d9679836b8b",
+      "text": "current time. That mechanism is not proved or patched; protected reset/scrub/"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/HEALTH.md",
+      "line": 10,
+      "source_lines": [
+        10
+      ],
+      "digest": "71599d83fc5aae91fa7caa08da752c74053207c60fcdcb0c2b2c218e770877c8",
+      "text": "finished normally (rc0 at20:58:51), strict health was verified, and parent resumed"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_56788212/b1_preparation/README.md",
+      "line": 1,
+      "source_lines": [
+        1
+      ],
+      "digest": "686408105ebe75583bd5f810cdc2b3121ba2021ba89f5fa27adf0a721618536a",
+      "text": "# GB202 verified Windows preparation"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_preflight_20261019/README.md",
+      "line": 17,
+      "source_lines": [
+        17
+      ],
+      "digest": "ad672c4f3393953d0674b47f82b778b594a19410f31d0931bf4b11d788ff55a0",
+      "text": "MEASURED offline current aligner rerun:9synthetic tests pass, no code change."
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_preflight_20261019/README.md",
+      "line": 49,
+      "source_lines": [
+        49
+      ],
+      "digest": "b66451382298e3a9d17d82bb95fed19a45079e381c7acfe6558e1fcdb5f4973e",
+      "text": "an overlay exists. The later580CUDA run booted that base. MEASURED stage/580CUDA/"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_preflight_20261019/README.md",
+      "line": 58,
+      "source_lines": [
+        58
+      ],
+      "digest": "444c2d83572f97311d5bbf45e0c5926916ec03feab17cdf1a59eba701d43dee8",
+      "text": "MEASURED typed comparison now also projects all44old GB206 public display"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_blackwell_preflight_20261019/host_health_result.md",
+      "line": 9,
+      "source_lines": [
+        9
+      ],
+      "digest": "c63dc8f1716a28039b6c00ebd382e433be76f0a59c803ab952cd168b32810412",
+      "text": "MEASURED own56788212 initial proprietary575.51.03 cannot initialize PCI2b85:"
+    },
+    {
+      "path": "traces/sweep_integrate_20261018/phase2_windows_gb202_56816449/b1_off/README.md",
+      "line": 1,
+      "source_lines": [
+        1
+      ],
+      "digest": "270c35a664ea0bce761e8850e1f192359b9bd75540304fb57b6bcc8fa242bb62",
+      "text": "STATUS: LIVE,2026-10-20T01:48:03.011142+00:00. MEASURED OFF Code43 (actual8088/oem7),0System4101, SSH reachable.357GSPRPCs; explicit function47 unload"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/CLIPPY_POLICY.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "e6abe377807c9e4c0fb8bd4023ba147bc0ef7ef3f1d3b61e3de02303d209640f",
+      "text": "This is an integration of two source parents, not a new rewrite. Report the full merged-vs-M diagnostic delta and retain the raw records. Earlier owne"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/CLOSEOUT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "ab5b2d34f2f0487189f7406be9b275b3274e57b7110e9226b79aab6bf82ea676",
+      "text": "Branch codex/sweep-win-20261021: sweep + candidateM89fc8a222 clean merge d93cf38e5. Frozen GB202 runtime af8bdcda4c700d8b40163ee3bf27feb7cfa6539c; fro"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/CLOSEOUT.md",
+      "line": 19,
+      "source_lines": [
+        19
+      ],
+      "digest": "96406aebf49c92b8e128b0e1571229cc6aad3b48356487e9bb68df5a694f1d51",
+      "text": "Blackwell findings, MEASURED unless qualified: ON enable12:47:22.5920985UTC ->0x50 at12:47:33.658586,11.066s. Last API fourthcursor legacy275/canonica"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/CLOSEOUT.md",
+      "line": 27,
+      "source_lines": [
+        27
+      ],
+      "digest": "f5391059b05dee6da6d145d320ab5945554c1123d38be786c303e6a92dc18b8f",
+      "text": "Independent source-backed topic: codex/sweep-postcomp-units-20261021 @296636c66264b94b591f77fb38dae71d4b13ef1a, verified on origin; draft PR65 https:/"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/CLOSEOUT.md",
+      "line": 36,
+      "source_lines": [
+        36
+      ],
+      "digest": "c36049de041932cf55d6512f2287318fa4ee49386867b8848cc30fc87b890372",
+      "text": "3. Review isolated PR65 (recommend draft until measured); current POSTCOMP/OLUT topics and notifier196 stub also remain owner-review items, not promot"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/CLOSEOUT.md",
+      "line": 43,
+      "source_lines": [
+        43
+      ],
+      "digest": "0aa98f4bcf7b986493d19847eb5be76e53182abdf1f88218beb421aecc77aa80",
+      "text": "Cleanup: no owned lease, QEMU/NBD or symbol proxy remains; both own timer PIDs cancelled after verified absence. Own /workspace/sweep-target2 and /wor"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/DECISION2_CUTOFF.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "3e4c7f53fa9375d56dff7de194f544ff9620f53e92dbf54a98c098916d6b46b6",
+      "text": "MEASURED: the first clock read after receiving decision2 was 18:01:23UTC, after the binding 18:00UTC lease-start cutoff. At 18:01:53UTC, the Vast API "
+    },
+    {
+      "path": "traces/sweep_windows_20261021/DECISION2_CUTOFF.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "59dea37a17a4061ac9f63329ab68674aa47eaa515b7dfb17b524d5337729ab58",
+      "text": "Owner decision2 authorizes ONLY pinned-suite intentional guest controls proved from this run's source FAULT_MARK address/type, actual QEMU PID, host-t"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/DECISION2_CUTOFF.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "737d6e37e8d6218a45e918d789f47defc34aef8590a8ec4bb17d81639d94571a",
+      "text": "Route difference, CODE READ: the Linux guest missing-page arm forces --probe-launch-dma, whereas the native missing-page baseline used sem-release. Pr"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/DECISION2_CUTOFF.md",
+      "line": 9,
+      "source_lines": [
+        9
+      ],
+      "digest": "0e59e395c74c561e2c194287d1d9aaaaaa7360bbedae4f3c7ea3606f741231b3",
+      "text": "- AD106 native595.91.07/source74aa78abe: PASS (SOUND, gates9/9+10, raw30/30, CUDA4/4, corrected nativeGR); five source-matched native controls proved."
+    },
+    {
+      "path": "traces/sweep_windows_20261021/DECISION2_CUTOFF.md",
+      "line": 15,
+      "source_lines": [
+        15
+      ],
+      "digest": "1c6bff233de1923f443a889ccca5bbdd7133bc8ddd21abd3707a20842c78da62",
+      "text": "Cost: no additional rental spend; combined runtime estimate3.540056USD for this stretch, below6USD stop. Latest shared-account credit21.381071USD, abo"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/DUMP_ANALYSIS_STOP.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "bfb51f84bbc30ae1d5138ff39a9b67d84d6ab8baf3a15d79e0474a7390852255",
+      "text": "Lease57046541 was subsequently destroyed/APIabsent14:00:44UTC under the no-idle/max3h rules. Rawdumps/binaries neverleftthe rental and are nowunavaila"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/RESULT.md",
+      "line": 11,
+      "source_lines": [
+        11
+      ],
+      "digest": "17a8904a30ba1d3bda7f6c59615664be3f47da5becbc931777da125e6de318ba",
+      "text": "MEASURED firstON bw_on_m1: af8bdcda4/P19+RPC/BODY+DIAG_PROGRESS1000, signedGOP, actual8088disabled/GSP1precondition passed. Singleenable12:47:22.59209"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/RESULT.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "a1e4ddbc2c56d349594c7b05404d75d5a5e7390fb7f46d553dc5fac2f8452be6",
+      "text": "MEASURED OFF bw_off_m1 sameaf8/P19+progress1000, approvedGOPoff/emptyROM: actualCode0 at13:42:23.6440579UTC then0x116SystemTime13:42:45.709353/QMP13:4"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/RESULT.md",
+      "line": 17,
+      "source_lines": [
+        17
+      ],
+      "digest": "53264f055db01dd5c2c34fff44c550cfa3e9fc2012b9d93ece172409ad8f2592",
+      "text": "MEASURED lease57046541 CLOSED/APIabsent14:00:44UTC; runtimeestimate2.871614USD, creditdelta2.714426USD (notsettledattribution), timer cancelled aftera"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/current_blackwell_differential/RESULT.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "f467471b4096ea93f3d91c42e54d16a9f74550dd6363996b0d1554b3312fa4fe",
+      "text": "MEASURED inputs: complete canonical ON278 RPCs and OFF3921 RPCs from lease57046541; native forced-GSP Windows580.88 GB202 trace from own prior commit0"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/current_blackwell_differential/RESULT.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "41ee49cdcadac90a0d86af4353ce0dcd349a308eca579a8c1fc18e452a2e66a3",
+      "text": "MEASURED first aligned native-OK/virtual-policy-nonzero difference is still function76/0x20809064: native command118/status136 returns0; ON virtual109"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/current_blackwell_differential/RESULT.md",
+      "line": 11,
+      "source_lines": [
+        11
+      ],
+      "digest": "e4b038c181bdf2d5494c97f23bc3c1964df791e7696900530020aa13fbc9f880",
+      "text": "MEASURED OFF: CFB0 constructors with declared parameter sizes0 and12 both post successful public-header outcomes, then Code0 and a later116 occur. Thu"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/NATIVE_XID_STOP.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "91a6f69a4f2807351d508a27df4776e5a69e909966afb9fc46b4e6e94762ce55",
+      "text": "MEASURED kernelXids: five31 records14:21:42..55 from native kayfabe-rm-ladder (neverQEMU): CE readFAULT_PTE at6000010000 once,6200010000 twice,6400010"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/NATIVE_XID_STOP.md",
+      "line": 5,
+      "source_lines": [
+        5
+      ],
+      "digest": "0dc03f1fc45c07d7c8569f08407b469d069911a34e8d5b7900065ba4bb3a88d0",
+      "text": "Proposed scoped continuation, requiring decision underCOMMON's stop-after-refusal rule: retain these five source-marked nativeXid31s as the measured b"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/preparation/README.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "962a5ec05cacda9b7b6f029f0fdb74f676572ddd5edb80949b457005a9416b8f",
+      "text": "cost_midpoint.json is an account observation/runtime estimate, not a settled exclusive invoice. If the setup ends without a decision, destroy this own"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/preparation/README.md",
+      "line": 9,
+      "source_lines": [
+        9
+      ],
+      "digest": "0b99e7a819dc17e633c0c27cbc9c45b000165feaacdf477d744b5ae3c78ea4b7",
+      "text": "MEASURED completion15:08:44UTC: install/check boots exited0, WIN_CHECK_DONE fail0, LTSCbuild26100/SecureBoot/TPM2/VirtIO/services/VBSoff checksPASS. G"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/GUEST_NEGATIVE_STOP.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "0afc3ff31e48b711a19267361e47288bd03474d6f8b5f4d3600e53bd8768c1a2",
+      "text": "MEASURED: five approved native controls matched; native595 raw30/CUDA4/GR PASS. During guest --defer-liveness, four new Xid31 CE0/HUBCLIENT_CE1 FAULT_"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/xid_abort_tree_fix/RESULT.md",
+      "line": 7,
+      "source_lines": [
+        7
+      ],
+      "digest": "bd4cae1d1539166d7999917cb53a7fec235325d696e4e02ae0bb7373c551b7ae",
+      "text": "MEASURED:23/23 Python tests pass (the prior18 native/frozen-baseline tests plus5 abort/identity tests). Three new mutants each killed by at least2test"
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 3,
+      "source_lines": [
+        3
+      ],
+      "digest": "08563a27d5980ed72b5273012859c04486e908cf223541c69a2dfe67418df918",
+      "text": "MEASURED: owner-authorized merge `82effe99f` incorporates master `e64b8e5f6`, including PR #63."
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 13,
+      "source_lines": [
+        13
+      ],
+      "digest": "d077a0987948942ecd7d9183ccb156d8bc9d4119912be840975da8e5ea94c22f",
+      "text": "MEASURED: core target 25/25; hook target 15/15. Full 22-crate suite: 3999 passed / 0 failed / 22 ignored / 234 targets"
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 18,
+      "source_lines": [
+        18
+      ],
+      "digest": "56a0d91df01e2d78b287d466737434a31eae61a385e49d48d3c4c874cb02bc31",
+      "text": "MEASURED: 15 distinct deliberate mutants, 16 runs, all killed by at least two tests. The RAM generation"
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 22,
+      "source_lines": [
+        22
+      ],
+      "digest": "bc7cfbc17680312d724b63ecfd43bd69fd867decee75472bdf441ed34bd55706",
+      "text": "| Mutant variant | MEASURED killers |"
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 57,
+      "source_lines": [
+        57
+      ],
+      "digest": "deb186be91fa0f7e1ed058fad9b21c678044b2418cc9a83f3c7f41a9dc361779",
+      "text": "MEASURED: seed merge `3c7bf3e9d5e6c8999fcc982af787b66ed334df2e` contains the two required"
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 69,
+      "source_lines": [
+        69
+      ],
+      "digest": "7b4ac439723c6cc04305fe7892ca0b9df187c2202134604ec502b27cd9ed379e",
+      "text": "required bounded flock. MEASURED: disk free before builds was 28/27/27 GiB, above guard."
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 97,
+      "source_lines": [
+        97
+      ],
+      "digest": "aabe02a22c3aeb20c444fc502033a8fa9362850572adbe6c16e84a80fc9bd678",
+      "text": "MEASURED final scope: all 22 `kf-*` packages in the workspace were tested with --release -j2"
+    },
+    {
+      "path": "traces/translated_rc_20261018/README.md",
+      "line": 102,
+      "source_lines": [
+        102
+      ],
+      "digest": "a9d03f7eeee3fa415ffcaaea568d64b4b135d830cbdc9810d1c8bb9c64ef772a",
+      "text": "MEASURED cleanup at closure: all cargo/mutation processes exited, their shared-lock invocations"
+    }
+  ],
+  "source_comment_checks": {
+    "crates/kf-abi/src/capability.rs": "whole-line comments only",
+    "crates/kf-abi/src/sw_runlist.rs": "whole-line comments only",
+    "crates/kf-chan/src/grtables.rs": "whole-line comments only",
+    "crates/kf-chan/tests/translated_ring_rc.rs": "whole-line comments only",
+    "crates/kf-disp/src/capsderive.rs": "whole-line comments only",
+    "crates/kf-disp/tests/caps_derive.rs": "whole-line comments only",
+    "crates/kf-gsp/src/replytrace.rs": "whole-line comments only",
+    "crates/kf-host/src/precomp.rs": "whole-line comments only",
+    "crates/kf-host/src/precomp_layout.rs": "whole-line comments only",
+    "crates/kf-mem/src/batch.rs": "whole-line comments only",
+    "crates/kf-rm/src/rowserve.rs": "whole-line comments only",
+    "crates/kf-rm/src/zbc.rs": "whole-line comments only",
+    "crates/kf-rm/tests/cudart_gate_ad104_oracle.rs": "whole-line comments only",
+    "crates/kf-rm/tests/cudart_gate_per_die.rs": "whole-line comments only",
+    "crates/kf-rm/tests/gpu_types_wiring.rs": "whole-line comments only",
+    "crates/kf-rm/tests/zbc_defaults_per_die.rs": "whole-line comments only"
+  }
+}

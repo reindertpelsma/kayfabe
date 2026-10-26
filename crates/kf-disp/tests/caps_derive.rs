@@ -81,6 +81,8 @@ fn ad104() -> Derived {
     go(&ADA, AD104, true, true, BRANCH)
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:84;
+/// BW9 quotes this statement without independently validating its evidence.
 /// Why a field of the measured AD104 page is NOT claimed by the derived page. Every difference the test
 /// finds must be named here (`why` says which tier could ever produce it and why it is not claimed), and
 /// every entry must be hit (no stale entry).
@@ -134,6 +136,8 @@ fn not_claimed(d: &FieldDiff) -> Option<&'static str> {
     })
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:137;
+/// BW9 quotes this statement without independently validating its evidence.
 /// ★ THE field-by-field comparison. The derived AD104 page equals the measured page in every field that
 /// is claimed, and every field it does not claim is named with the reason.
 #[test]
@@ -146,6 +150,8 @@ fn the_derived_ad104_page_equals_the_measured_one_except_the_named_unclaimed_fie
         let why = not_claimed(x).unwrap_or_else(|| panic!("an UNEXPLAINED difference: {x:?}"));
         hit.insert(why);
     }
+    // CODE READ: historical text at commit 007ba1eb0:149;
+    // BW9 quotes this statement without independently validating its evidence.
     // every claimed word is exactly the measured one: the decisive facts are not in the diff
     assert!(
         !diffs.iter().any(|x| x.offset == 0x00c),
@@ -165,6 +171,8 @@ fn the_derived_ad104_page_equals_the_measured_one_except_the_named_unclaimed_fie
     assert!(hit.len() >= 8, "the allow-list is exercised: {}", hit.len());
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:168;
+/// BW9 quotes this statement without independently validating its evidence.
 /// The fields the Windows driver was bisected to need are in the page, with the measured value.
 #[test]
 fn the_decisive_words_are_in_the_page() {
@@ -314,6 +322,8 @@ fn a_second_dies_row_is_served_to_that_die_only() {
     assert_eq!(run(AD103), 0);
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:317;
+/// BW9 quotes this statement without independently validating its evidence.
 /// The T3 file refuses a row with no `measured:` source (a blob-derived row is refused, ruling §AF).
 #[test]
 fn a_measured_row_needs_a_measured_source() {
@@ -494,6 +504,8 @@ fn dump_derived_vs_measured() {
     }
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:497;
+/// BW9 quotes this statement without independently validating its evidence.
 /// Exact AD102/580 native-Windows measurement, not inheritance from AD104.
 #[test]
 fn the_ad102_580_caps_word_has_its_own_native_measurement() {

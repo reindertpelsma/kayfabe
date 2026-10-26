@@ -13,13 +13,13 @@ There is no Windows acceptance PASS, Code43 result, or natural OFF0x116 measurem
 | off_c, same product/binary, displayoff/gopoff/gop-efi=, completionprobe500 | ABORTED by guard after exact-shaped QEMU32 pair; no0x50 observed before abort | arms/off_c/xid_policy.json. Canonical3303rows,0unparsed/EOF. QEMUexit137 is our stop, not measured guest TDR/0x116; no workloads or recovery GPU launch afterward. |
 | on_b1, prepared separate merge2add71e8c | UNRUN after fatal guard, not an acceptance result | lease_metadata/optional_b1.json: built03:07:49 before arms. Parents8f3a9bb3a +1c6452a27; includes CI-repair parent confounder. First optional arm on a future separately authorized lease; no CE2 combination. |
 
-All Windows arms retain the printed nineteen flags, actual580.88 checked before enable, unchanged
+CODE READ (commit 007ba1eb0:16): quoted historical statement, evidence not revalidated by BW9. All Windows arms retain the printed nineteen flags, actual580.88 checked before enable, unchanged
 product/driver timers and fresh sealed-parent siblings. Both measured binaries are source8f3a9bb3a,
 sha256 a7c86110b7c55121eff8ecbe2e4fdd3829f628e18d1ae3f15b5e2a8ff44f27de.
 The guest-driver580.65.06 QOM value is the compatibility profile, not the installed version.
 No captured CAPC words, diagnostic caps-page hook or new product wall-clearing arm was used.
 
-OFF guard analysis (CODE READ unless marked MEASURED):
+CODE READ (commit 007ba1eb0:22): quoted historical statement, evidence not revalidated by BW9. OFF guard analysis (CODE READ unless marked MEASURED):
 
 - MEASURED enable started03:45:32.529guestUTC; the pair was host03:45:39.791886/.800844,
   PID110641, selectedPCI0000:00:07, intr00200000, channels0x0000000c and0x0e000007.
@@ -40,7 +40,7 @@ OFF guard analysis (CODE READ unless marked MEASURED):
 
 Remaining hypotheses and next work (no new hardware grant implied):
 
-1. Precision14 alone avoids0x50: FALSIFIED here. The public header gives field layout, not a
+1. CODE READ (commit 007ba1eb0:43): quoted historical statement, evidence not revalidated by BW9. Precision14 alone avoids0x50: FALSIFIED here. The public header gives field layout, not a
    mandated14; public NVKMS S5.14 motivates an inferred virtual rule. FVLUT/DIRECT/clamp semantics,
    numeric fidelity and instruction-level crash cause remain unresolved. Earlier whole-CAPC arms
    changed more fields and had contaminated native32 baseline; they do not prove FVLUT necessity.

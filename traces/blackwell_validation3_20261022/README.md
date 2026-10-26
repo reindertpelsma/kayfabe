@@ -8,7 +8,7 @@ Ownid57143789, machine152912, providerunverified, RTX5090. Created02:10:10UTC, a
 at06:50CEST). Independent budget watcher ends at the same deadline. Before every arm leave25min
 for observation/export/teardown. Both timer PIDs/starttimes retained; cancel only afterAPIabsence.
 
-The local receipt-parent directory was missing after successful creation. This interrupted
+CODE READ (commit 007ba1eb0:11): quoted historical statement, evidence not revalidated by BW9. The local receipt-parent directory was missing after successful creation. This interrupted
 bookkeeping before SSH/GPU work; recovery identified the unique task-label instance against
 precreate empty-account proof, armed its exact-id timer and retained ownership metadata.
 The first group-identity check raced setsid startup; later bounded revalidation proved the same

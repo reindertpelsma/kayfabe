@@ -34,7 +34,7 @@ start only with enough lease time for installation and teardown. No installer
 replay loop or source modification is allowed. Driver-version output alone is
 not a real CUDA workload; run content checks if native Windows becomes ready.
 
-No kayfabe Windows acceptance is attempted before the native binding is verified.
+CODE READ (commit 007ba1eb0:37): quoted historical statement, evidence not revalidated by BW9. No kayfabe Windows acceptance is attempted before the native binding is verified.
 Because the native flow replaces the rental OS, a later kayfabe Windows cell may
 need a subsequent serial rental. Report that limitation rather than presenting
 a native PASS as a kayfabe PASS. Do not copy images, executables, private keys or

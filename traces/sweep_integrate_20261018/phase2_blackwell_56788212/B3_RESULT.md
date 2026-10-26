@@ -38,7 +38,7 @@ maydiffer. Existingkf-timer-probecomparesthem3timeswithoutGPUwork, UID65534
 andnocaps. Falsifier: viewsagreewithinexisting10msboundineveryround.
 ProbeplannedafterCUDA580ends; no heartbeat500ms/clock/timeoutchange.
 
-H_CLOCK_VIEWSresult: FALSIFIED for the native sampledviews. Existingprobe
+CODE READ (commit 007ba1eb0:41): quoted historical statement, evidence not revalidated by BW9. H_CLOCK_VIEWSresult: FALSIFIED for the native sampledviews. Existingprobe
 ranUID65534/allcaps0/NoNewPrivs1, source24906bf33,3open/read/drop rounds.
 PTIMERvsVFdelta5696/5696/5728ns, wellbelowexisting10msbound. NoGPUwork/VM.
 Thisdoesnotproveguestepoch/lifecyclebehaviorcorrect; no clocksourcefixmade.

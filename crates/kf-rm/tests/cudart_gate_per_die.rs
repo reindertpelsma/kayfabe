@@ -115,6 +115,8 @@ fn a_neighbour_die_is_refused_not_served_ga106s_bytes() {
     }
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:118;
+/// BW9 quotes this statement without independently validating its evidence.
 /// ⊘ The request is part of the question: the encoder's `{0, 1, 8}` is not cudart's, even on
 /// the measured die.
 #[test]

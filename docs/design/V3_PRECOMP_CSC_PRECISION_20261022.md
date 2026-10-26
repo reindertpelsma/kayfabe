@@ -39,7 +39,7 @@ CODE READ — the public layout and the numeric basis establish different facts:
   but the FVLUT-to-CURVE relationship, required LUT implementation and driver expectations remain
   UNRESOLVED. This patch advertises none of FVLUT, DIRECT or unity clamping.
 
-MEASURED earlier: the bisect isolated CAPC **as a whole** on GB202. Those words changed precision
+CODE READ (commit 007ba1eb0:42): quoted historical statement, evidence not revalidated by BW9. MEASURED earlier: the bisect isolated CAPC **as a whole** on GB202. Those words changed precision
 and FVLUT together; precision alone was not isolated. The baseline also contained an unmatched
 native Xid 32, so these comparisons remain exploratory. Hypothesis for a future clean-baseline
 derived-only ON arm: precision 14 avoids the previous 0x50. Falsifier: the same 0x50 recurs.

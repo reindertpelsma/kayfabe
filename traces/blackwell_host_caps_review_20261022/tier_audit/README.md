@@ -4,13 +4,13 @@ Read V3_CONSTANT_STRATEGY, OWNER_RULINGS AF/AH, kf_rm::consttab and kf-chip fami
 No native capture was read or replayed by this audit. No production code, values, T3 rows,
 SDK tables or tests changed. No build, GPU job, rental or host/foreign-tree write.
 
-inventory.py reads only generated class TSVs and the committed AUTHORED family report. It
+CODE READ (commit 007ba1eb0:7): quoted historical statement, evidence not revalidated by BW9. inventory.py reads only generated class TSVs and the committed AUTHORED family report. It
 asserts all41 CA73 fields exist and agree across five public SDK layouts, then emits every
 field's bit range, current model main/overlay values and source-policy status. Those values
 are source review, not a new build or hardware measurement. Rerunning must reproduce
 precomp_fields.tsv and inventory.json byte for byte.
 
-family_mechanism.json records the pinned public generated IP/class binding for five dies
+CODE READ (commit 007ba1eb0:13): quoted historical statement, evidence not revalidated by BW9. family_mechanism.json records the pinned public generated IP/class binding for five dies
 across five tags, verified from git blobs even when a reference checkout is sparse. This
 proves common layout selection; it does not prove equal physical caps. Literal FVLUT search
 scope and the sparse-checkout limit are explicit. linux_sources.json pins the inspected

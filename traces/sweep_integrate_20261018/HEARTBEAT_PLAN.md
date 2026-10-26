@@ -3,7 +3,7 @@
 STATUS: LIVE, 2026-10-19. Coordinator approved this isolated drainer topic and
 only None in the scrub fixture. Candidate5 f8f9d1a5f refreshed before changes.
 
-MEASURED pre-topic kf-qemu full release: 389 passed, zero failed/ignored,
+CODE READ (commit 007ba1eb0:6): quoted historical statement, evidence not revalidated by BW9. MEASURED pre-topic kf-qemu full release: 389 passed, zero failed/ignored,
 including every candidate4 and candidate5 test; prior scrub fixture E0308 fixed
 by 94518f95b, with every assertion retained. No production scrub edit.
 

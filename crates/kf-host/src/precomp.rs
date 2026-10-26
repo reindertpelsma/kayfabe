@@ -1,3 +1,5 @@
+//! CODE READ: historical text at commit 007ba1eb0:1;
+//! BW9 quotes this statement without independently validating its evidence.
 //! Startup-only, host-authored PRECOMP reads. No guest control is forwarded here.
 //! The stock driver's generic regops endpoint is unprivileged, but its per-register
 //! GSP allowlist may refuse display addresses. A refusal is a complete fallback.

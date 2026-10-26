@@ -1,4 +1,4 @@
-# GB202 verified Windows preparation
+# GB202 verified Windows preparation — CODE READ (commit 007ba1eb0:1): quoted historical statement, evidence not revalidated by BW9.
 
 STATUS: LIVE,2026-10-19. Preparation PASS; GPU suite still UNRUN.
 Generic Windows11EnterpriseLTSC2024Eval installed from pinned public media,

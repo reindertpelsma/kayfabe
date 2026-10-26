@@ -15,7 +15,7 @@ The earlier native read was privileged BAR0 mapping, not an unprivileged RM cont
 public unprivileged alternative is implemented below, subject to the driver's register allowlist; do not treat the old tool as a runtime T2 source.
 This is a field-level comparison, not a pasted page or a production captured-word table.
 
-MEASURED retained input: own GB202 native measurement text SHA256
+CODE READ (commit 007ba1eb0:18): quoted historical statement, evidence not revalidated by BW9. MEASURED retained input: own GB202 native measurement text SHA256
 `6f9d39cff8daf9681d19e2560c919094dbc07ed59616b6a13497ee466efb6287`.
 CODE READ derived comparison: product8f3a9bb3a, caps_rows.tsv SHA256
 `4a6d22792c9cf48d29b8a4b82bb6ac05515c969d31a1aab1b49a482f13f0e2d3`.
@@ -36,7 +36,7 @@ Native slots8–31 have all six fields zero; the virtual page's inactive slots a
 CAPC layout has32 slots, while this comparison's active set is0–7. This says nothing about CAPA/B/D/E/F
 or POSTCOMP. Machine-readable decoded-only receipt: traces/blackwell_host_caps_review_20261022/field_comparison.json.
 
-Public source: NVIDIA/open-gpu-kernel-modules580.159.04, MIT,
+CODE READ (commit 007ba1eb0:39): quoted historical statement, evidence not revalidated by BW9. Public source: NVIDIA/open-gpu-kernel-modules580.159.04, MIT,
 `b81d58ee0224d1d290bef1c080592b619e184042`,
 [clca73.h:846–861](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/b81d58ee0224d1d290bef1c080592b619e184042/src/common/sdk/nvidia/inc/class/clca73.h#L846).
 This defines every compared field and the differing FVLUT field's boolean encoding. It does NOT
@@ -47,7 +47,7 @@ defines normalization scaling, interpolation, mirror, enable and CURVE selection
 Those are relevant public method semantics; neither this header nor the inspected NVKMS source
 establishes an equivalence between CURVE support and the FVLUT capability. Do not invent that rule.
 
-MEASURED earlier whole-CAPC replacement avoided0x50 but its native baseline had an unmatched32.
+CODE READ (commit 007ba1eb0:50): quoted historical statement, evidence not revalidated by BW9. MEASURED earlier whole-CAPC replacement avoided0x50 but its native baseline had an unmatched32.
 The clean precision-only ON reproduces0x50. INFERRED candidate: FVLUT is the remaining relevant
 CAPC variable. FALSIFIER for any later lawful host-sourced arm:0x50 persists with same-die CAPC
 successfully obtained, while the source/binary/flags and fresh sibling remain fixed. No captured
@@ -56,7 +56,7 @@ fallback or blanket FVLUT declaration follows from the current comparison.
 
 Public access audit (CODE READ)
 
-The original `read_display_caps_page.py` opens sysfs BAR0 `resource0` and maps it read-only.
+CODE READ (commit 007ba1eb0:59): quoted historical statement, evidence not revalidated by BW9. The original `read_display_caps_page.py` opens sysfs BAR0 `resource0` and maps it read-only.
 That is a privileged measurement route (tier3), even though it performs no writes. It is not
 an RM control kayfabe may silently substitute for an unprivileged runtime query.
 
@@ -98,7 +98,7 @@ short/long reply or all-zero/all-ones snapshot abandons the complete snapshot. T
 partial host/derived PRECOMP blend. An unavailable query keeps the existing complete T1
 PRECOMP rule. Other capability-page regions retain their existing derivation and precedence.
 
-A successful immutable snapshot is tied to die architecture/implementation, caps class, active
+CODE READ (commit 007ba1eb0:101): quoted historical statement, evidence not revalidated by BW9. A successful immutable snapshot is tied to die architecture/implementation, caps class, active
 window count and the full public PRECOMP layout. A guest vocabulary change cannot reinterpret
 it. T2 replaces the corresponding T1 words, including host zeros, and records Host provenance;
 it does not OR derived bits into the measured values. No captured word, per-die table or forced

@@ -35,6 +35,8 @@ pub enum Fallback {
 pub enum Use {
     /// Served on a hit; `Fallback` on a miss.
     Serve(Fallback),
+    /// CODE READ: historical text at commit 007ba1eb0:38;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// Measured rows exist but are deliberately NOT served (the reason names the decision).
     Withheld(&'static str),
 }
@@ -91,6 +93,8 @@ pub fn use_of(key: &str) -> Option<Use> {
 /// How a value reached the guest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
+    /// CODE READ: historical text at commit 007ba1eb0:94;
+    /// BW9 quotes this statement without independently validating its evidence.
     /// A row measured on this (die, branch).
     Measured,
     /// The authored value, labelled.
@@ -220,6 +224,8 @@ pub fn resolve(
     }
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:223;
+/// BW9 quotes this statement without independently validating its evidence.
 /// The GMMU static info for `(die, branch)`: the measured row validated like the authored one, else the authored row.
 ///
 /// # Errors
@@ -233,6 +239,8 @@ pub fn gmmu_static(
     let request = vec![0u8; a.len()];
     match resolve("rm.0x20800a59", die, branch, &request, Some(&a)) {
         Resolution::Serve(bytes, origin) => {
+            // CODE READ: historical text at commit 007ba1eb0:236;
+            // BW9 quotes this statement without independently validating its evidence.
             // a measured row passes the same invariants the encoder enforces (non-zero, packet-aligned)
             if matches!(origin, Origin::Measured) {
                 let row = kf_abi::gmmustatic::GmmuStaticRow {
@@ -251,6 +259,8 @@ pub fn gmmu_static(
     }
 }
 
+/// CODE READ: historical text at commit 007ba1eb0:254;
+/// BW9 quotes this statement without independently validating its evidence.
 /// The CE fault-method buffer size for `(die, branch)`: measured, else the authored value (labelled).
 ///
 /// # Errors

@@ -3,7 +3,7 @@
 STATUS: LIVE, 2026-10-19. MEASURED FAIL presentation at product24906bf33,
 stock host595.91.07, actual guest580.159.04/kernel6.8.0-147-generic.
 
-Second/final B2 arm,22:07:32..22:10:53UTC: isolated codec45a4d91b5,
+CODE READ (commit 007ba1eb0:6): quoted historical statement, evidence not revalidated by BW9. Second/final B2 arm,22:07:32..22:10:53UTC: isolated codec45a4d91b5,
 QEMU SHA4e57223b50c474718c90b7939110a7e064ce74aad207a9a0b901235182b2590d,
 unchanged broker24906bf33. Native candidate gates9/9+10/12USER PASS.
 Guest580.159.04 again produced the same1920x1080 one-color black frame
@@ -22,7 +22,7 @@ This is not a working desktop. Current source-built broker SHA001791413c1ab10c4e
 actual process/binary/flags receipt adjacent. Legacy broker built by prep was
 not used at runtime. Real seat0/sessionc1/kfbench/Xorg; no session/pgrep stubs.
 
-Preparation refusals are retained: missing pinned public nvkvm-pv reference
+CODE READ (commit 007ba1eb0:25): quoted historical statement, evidence not revalidated by BW9. Preparation refusals are retained: missing pinned public nvkvm-pv reference
 was fetched atbadf2d707da47a625e0ce69172a84785d20f81b8, and first broker
 launch was NOTRUN because its user lacked X11 authorization (no QEMU started).
 Installed the missing xhost tool, authorized only the actual local seat user
@@ -31,7 +31,7 @@ same binary. No launcher/no-QEMU/session/owned-receipt guard was bypassed.
 The actual baseline ran21:24:54..21:27:51UTC; owned QEMU stop used documented
 ACPI/TERM fallback. Original image is stopped; the second measured B2 arm is reported above.
 
-SUPERSEDED candidate-status below: the candidate is now complete and measured FAIL.
+CODE READ (commit 007ba1eb0:34): quoted historical statement, evidence not revalidated by BW9. SUPERSEDED candidate-status below: the candidate is now complete and measured FAIL.
 CODE READ independent lead: CA7D/CA7E DMA method/jump fields end at bit15;
 current decoder and worker use legacy masks/4KiB clipping. Standalone test
 branche3cc4570c records6runtime failures against public headers, with2legacy

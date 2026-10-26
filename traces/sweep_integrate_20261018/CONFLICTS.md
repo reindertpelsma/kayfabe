@@ -15,7 +15,7 @@ try-lock reads plus actual current-life fn72 readiness. Historical intermediate
 PTIMER-vs-VF_TIME hypotheses are not shipped as clock-domain switches: the exact
 public formula uses the existing validated read_ns layout and guest offset.
 
-No excluded USER measurement/batching edit is restored. Five held historical
+CODE READ (commit 007ba1eb0:18): quoted historical statement, evidence not revalidated by BW9. No excluded USER measurement/batching edit is restored. Five held historical
 heartbeat source commits are represented by this new reviewed topic, not blindly
 reapplied: drop the old blocking lock/latest/clone implementation and command_seq
 freshness heuristic; replace them with try-lock borrowed reads and a per-life
@@ -108,7 +108,7 @@ birth_group remain protected. Candidate-5 f8f9d1a5f will be merged before hardwa
 
 # Current approval and verification update, 2026-10-19
 
-STATUS: LIVE. F-2 APPROVED and VERIFIED for exactly grtables.rs and tmode.rs.
+CODE READ (commit 007ba1eb0:111): quoted historical statement, evidence not revalidated by BW9. STATUS: LIVE. F-2 APPROVED and VERIFIED for exactly grtables.rs and tmode.rs.
 
 The coordinator approved the independent public-header class-width topic as a
 separate test-first/fix topic. EXPECTED RED commit `08424cf11` adds nine tests
@@ -324,7 +324,7 @@ per-side hunk hashes, sizes, and short source excerpts for reproduction.
 | same | H8, 2844–2855 | `core` scan/cursor and lifecycle accounting | Old scan/cursor and segment-turn count | UNRESOLVED; protected lifecycle/relay |
 | same | H9, 2939–2948 | `core` scan plus lifecycle accounting | Old scan plus rare-entry turn counter | UNRESOLVED; protected lifecycle/relay |
 
-CODE READ: incoming history affecting these files includes `24e7a297a`
+CODE READ (commit 007ba1eb0:327): quoted historical statement, evidence not revalidated by BW9. CODE READ: incoming history affecting these files includes `24e7a297a`
 (flow/stage measurement), `639acf57d` (histograms), `7476ef69f` (EXPECTED RED
 batching tests), and `edcaaca67` (claim batching), merged through `29eae05a4`.
 The conflict is not merely additive die data: it overlaps the later production
@@ -334,7 +334,7 @@ nonconflicting dependent edits unreviewed. Neither choice was applied.
 
 ## Historical owner request — APPROVED by the subsequent coordinator decision
 
-INFERRED recommendation: authorize excluding this obsolete USER relay batching
+CODE READ (commit 007ba1eb0:337): quoted historical statement, evidence not revalidated by BW9. INFERRED recommendation: authorize excluding this obsolete USER relay batching
 and measurement topic, including its dependent nonconflicting edits, from the
 gpu-types import. Preserve current integration relay/lifecycle/doorbell behavior
 and its tests; integrate the independent die/ABI/constants/display topics only.
@@ -343,7 +343,7 @@ birth/groups, stop again with the exact dependency. Any desired measurement
 port would be a separate topic against the current relay, with failing-first
 tests and mutation checks, after explicit direction.
 
-Alternative: request a dedicated port of the old batching/measurement behavior
+CODE READ (commit 007ba1eb0:346): quoted historical statement, evidence not revalidated by BW9. Alternative: request a dedicated port of the old batching/measurement behavior
 onto the current relay before continuing the sweep. This is not covered by an
 automatic conflict resolution and would require its own tests and review.
 

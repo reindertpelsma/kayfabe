@@ -554,6 +554,8 @@ mod tests {
         assert!(reauthor_report_semaphore_d(0x1000_f011).is_err());
     }
 
+    // CODE READ: historical text at commit 007ba1eb0:557;
+    // BW9 quotes this statement without independently validating its evidence.
     // BLACKWELL_A (0xCD97) on its own: the measured Windows release shape (A=1, lower, payload,
     // D=0x1000f010) passes, and an upper address above 7:0 but within 24:0 is carried.
     #[test]

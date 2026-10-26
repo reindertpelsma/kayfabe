@@ -14,7 +14,7 @@ Linux mode validation vs black scanout/broker; fixed-heartbeat warnings and180s
 concurrency; exact guest build/public ABI and actual Blackwell die; TDR response
 to optional CE branch. No private scheduler/CCU reply guessing or captured caps.
 
-MEASURED offline current aligner rerun:9synthetic tests pass, no code change.
+CODE READ (commit 007ba1eb0:17): quoted historical statement, evidence not revalidated by BW9. MEASURED offline current aligner rerun:9synthetic tests pass, no code change.
 All385complete old GB206 commands retained against4807native/8461current Ada
 commands;301/305API-key matches respectively. Pairing is inferred; bodies and
 handle identity are unavailable. Native-headless display is not a display oracle.
@@ -46,7 +46,7 @@ fields. If TDR necessitates CEarm, stay within attempt cap. B2falsifier: public
 one-group prerequisite no longer gives valid modes, or presentation remains black/
 flip timed out. Separate mode/scanout/broker; no caps-page oracle injection.
 
-CODE READ fixture finding from preceding AD102 lease: stage_fat_guest.sh makes
+CODE READ (commit 007ba1eb0:49): quoted historical statement, evidence not revalidated by BW9. CODE READ fixture finding from preceding AD102 lease: stage_fat_guest.sh makes
 595an overlay of guest.qcow2 and explicitly requires base never written while
 an overlay exists. The later580CUDA run booted that base. MEASURED stage/580CUDA/
 595error ordering violates that invariant; this is a concrete candidate for the
@@ -55,7 +55,7 @@ with qemu-img convert while no QEMU is running, and use a separate580scratch
 image. No old input repaired, CUDA595 still incomplete. This is orchestration,
 not a product behavior change. No image/executable copied back from a rental.
 
-MEASURED typed comparison now also projects all44old GB206 public display
+CODE READ (commit 007ba1eb0:58): quoted historical statement, evidence not revalidated by BW9. MEASURED typed comparison now also projects all44old GB206 public display
 records against the same public580.65.06 compiler schema as current Ada. Comparable
 NV0073fields show no projected scalar differences by occurrence; command counts
 and missing controls differ. A58has21records per side: family hclass differs in

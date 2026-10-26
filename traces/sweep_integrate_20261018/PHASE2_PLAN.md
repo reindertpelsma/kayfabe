@@ -10,7 +10,7 @@ helper for180minutes and verify its PID/deadline BEFORE SSH/provisioning. Confir
 real free disk and /dev/kvm. Own IDs only; verify API absence after destruction.
 Never use the trusted host, its baseline image or any of its GPU/VM/locks.
 
-Prepared regression order: query current live offers for one cheap die in each
+CODE READ (commit 007ba1eb0:13): quoted historical statement, evidence not revalidated by BW9. Prepared regression order: query current live offers for one cheap die in each
 consumer family, then choose by real quote. Build the integrated descendant of
 candidate5 through the normal build_kf3 flow; record exact revision, host and
 guest driver, and environment. Bare metal first, then gates9/9+USERbirths,
@@ -44,7 +44,7 @@ AD102581.51: run the exact native-scoped PR46 allocation diagnostic once after
 regression, preserving scheduling refusal. Falsifier: allocation is accepted yet
 the driver aborts at the same point. Current hardware for PR46 is UNRUN.
 
-Matrix updates and text evidence after every run, including red/partial results.
+CODE READ (commit 007ba1eb0:47): quoted historical statement, evidence not revalidated by BW9. Matrix updates and text evidence after every run, including red/partial results.
 No captured-page shipping, no invented acks, no neighboring-die constants, no
 wall loop, no failed-installer replay. Rental conversion and teardown are by own
 IDs and API-verified; do not leave a box idle while waiting for a scope decision.
