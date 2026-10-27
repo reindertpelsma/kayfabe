@@ -948,7 +948,9 @@ mod native_recorder_tests {
         let mut tracker = Tracker::default();
         tracker.configure(kind, 0x80c, Some(19));
         tracker.observe();
+        contention(Cause::PtLock, 999);
         tracker.waiting(Some(Cause::OwnWalk));
+        tracker.waiting(Some(Cause::PtLock));
         let rm = activity(Activity::Rm(5));
         let control = activity(Activity::Control(0x1234));
         split_request_at(1, 0x80c, SplitScope::Space(0x2a3), now());
@@ -1001,7 +1003,18 @@ mod native_recorder_tests {
             assert_eq!(sample.source, Some(expected));
             assert_eq!(sample.gpu, None);
             assert!(sample.stages().unwrap()[0] >= SLOW_NS);
-            assert!(sample.waits.iter().any(|w| w.cause == Cause::OwnWalk));
+            assert!(
+                sample
+                    .waits
+                    .iter()
+                    .any(|w| w.cause == Cause::OwnWalk && w.owner == 0)
+            );
+            assert!(
+                sample
+                    .waits
+                    .iter()
+                    .any(|w| w.cause == Cause::PtLock && w.owner == 999)
+            );
             assert!(sample.work.iter().any(|w| w.code == 64));
             assert!(
                 sample
