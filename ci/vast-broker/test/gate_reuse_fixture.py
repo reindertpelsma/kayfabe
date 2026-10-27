@@ -126,8 +126,18 @@ if case == "api-error":
     data.clear()
 
 
+commit_reads = 0
+
+
 def get(path):
-    return json.loads(json.dumps(data[path]))
+    global commit_reads
+    value = json.loads(json.dumps(data[path]))
+    if path == "/commits/" + sha:
+        commit_reads += 1
+        # A SHA cannot have two trees; inject inconsistent API responses for FF negatives.
+        if variant == "fast-forward" and case in {"tree", "release-tree"} and commit_reads == 1:
+            value["commit"]["tree"]["sha"] = tree
+    return value
 
 
 if case.startswith("release"):

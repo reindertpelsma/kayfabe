@@ -1,0 +1,8 @@
+{
+  ".github/workflows/gpu-vast.yml": "b491de89bf0c056d2c803f7ed41f93f692be772c517b98907fd516fc521f54f6",
+  ".github/workflows/release-build.yml": "d65275f4928d4efda96a4f22553d36eaa7c6ce84a8c22449d0d988d25cf4f031",
+  "ci/vast-broker/gate_reuse.py": "3655afd089bde063db4ef54ed3ad9e23b1f1a0221add926c3fdb7446c26b1884",
+  "ci/vast-broker/release_gate.py": "178ab18dc169fd9246978e70094ea8092828abd46222f85728e465e116d92afa",
+  "ci/vast-broker/workflow-guard.js": "c619183fa714452d20affe69f2c9a10bfaa7bb19c5a5352f49b591cb81ed58c8",
+  "ci/vast-broker/reuse-bootstrap.js": "f8d7dfcea14379a865d55493c3d11ec34365c6ee220cc62f5e22a667e5541608"
+}

@@ -1,0 +1,18 @@
+{
+  "parent": "858ca1e8ad4a2b264656b8e499d820856bcc7310",
+  "tree": "626fb45822b039801d3d254bebc897030581d1bc",
+  "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/40588779558",
+  "description": "GPU broker GRACE",
+  "run_id": 40588779558,
+  "lines": [
+    "RENTAL machine=23863 host=79466 instance=58016000 gpu=RTX_3060 price=0.142222",
+    "[untrusted] [Worker] selection profile=check die=GA106 reason=DEFAULT_ORDER ignored=0",
+    "[untrusted] [box] CUDA_LADDER_STARTED=2026-10-27T21:59:04+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=858ca1e8",
+    "[untrusted] [box] CUDA_LADDER_STARTED=2026-10-27T22:22:27+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=858ca1e8",
+    "[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4",
+    "[untrusted] [box] stage name=provision rc=0 duration_ms=724101 result=PASS",
+    "[untrusted] [box] stage name=cuda_host rc=0 duration_ms=16399 result=PASS",
+    "[untrusted] [box] stage name=merge_bar rc=6 duration_ms=1386312 result=PASS",
+    "[untrusted] [box] stage name=cuda_guest rc=0 duration_ms=379497 result=PASS"
+  ]
+}
