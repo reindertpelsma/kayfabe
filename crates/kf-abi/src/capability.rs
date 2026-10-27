@@ -199,9 +199,6 @@ pub enum Origin {
     /// for a control, [`crate::versions::DriverAbiTable::alloc_params`] for a class.
     /// Nothing carries this tag on the strength of a header alone.
     Mode2Rpc,
-    /// Public NVIDIA SDK layout and NON_PRIVILEGED export, with a gated authored adapter.
-    /// This does not claim nvproxy or a captured per-die implementation constant.
-    Ogkm,
 }
 
 /// One permitted control command.
@@ -788,18 +785,7 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x20801201, name: "NV2080_CTRL_CMD_GR_GET_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801206, name: "NV2080_CTRL_CMD_GR_GET_ZCULL_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801208, name: "NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND", origin: Origin::Nvproxy },
-    // OGKM580/595 g_subdevice_nvoc.c: NON_PRIVILEGED, access mask0.
-    ControlEntry {
-        cmd: 0x20801209,
-        name: "NV2080_CTRL_CMD_GR_CTXSW_PM_BIND",
-        origin: Origin::Ogkm,
-    },
     ControlEntry { cmd: 0x20801210, name: "NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE", origin: Origin::Nvproxy },
-    ControlEntry {
-        cmd: 0x20801211,
-        name: "NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND",
-        origin: Origin::Ogkm,
-    },
     ControlEntry { cmd: 0x20801218, name: "NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_SIZE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20801219, name: "NV2080_CTRL_CMD_GR_GET_CTX_BUFFER_INFO", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x2080121b, name: "NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER", origin: Origin::Nvproxy },
@@ -2603,11 +2589,7 @@ mod tests {
         );
         for (label, (a, b, c), n_ctl, n_cls, own) in want {
             let t = at(*a, *b, *c);
-            // GFXP1 adds the two public NP GR bind controls to every shared boundary.
-            assert_eq!(t.all_controls().count(), *n_ctl + 2, "{label} controls");
-            for cmd in [0x20801209, 0x20801211] {
-                assert!(t.control(ControlCmd(cmd)).is_permitted());
-            }
+            assert_eq!(t.all_controls().count(), *n_ctl, "{label} controls");
             // ★ +18 on 2026-09-27 (v3-display): the display classes joined the SHARED floor, so
             // every boundary's class count moves by the same 18.
             // +1 on 2026-10-05: source-audited NV01_TIMER allocation bookkeeping.
@@ -3186,8 +3168,7 @@ mod tests {
         // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-        // Includes v3-promote, four §U controls and two audited GFXP1 GR binds.
-        assert_eq!(bench().all_controls().count(), 172, "controls");
+        assert_eq!(bench().all_controls().count(), 170, "controls"); // +1 v3-promote: GPU_EVICT_CTX; +4 §U: the 5080 controls
         // ★ +18 on 2026-09-27 (v3-display): the display classes the guest's KERNEL allocates and
         // RPCs to us (`NVC372_DISPLAY_SW`, the C57x/C67x/C77x/CA7x display objects and their
         // core/window/window-immediate/cursor channels). SHARED, so every boundary moves by 18.

@@ -24,7 +24,6 @@ pub mod ffi_unsafe;
 pub mod gop;
 pub mod gpucopy;
 pub mod gpuuid;
-mod grbinds;
 pub mod hostfacts;
 pub mod latejoin;
 pub mod mem;

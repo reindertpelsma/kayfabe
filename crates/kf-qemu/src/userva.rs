@@ -38,34 +38,6 @@ pub struct SteerClaim {
     regions: Arc<Regions>,
     id: u64,
 }
-impl SteerClaim {
-    /// Add a span to this same worker's handover exclusion. Own overlaps are allowed;
-    /// other handovers/private slots still refuse. No lock survives the call.
-    pub(crate) fn extend(&self, va: u64, len: u64) -> Result<(), String> {
-        let end = va
-            .checked_add(len)
-            .filter(|e| *e > va)
-            .ok_or("GR_BIND_SPAN")?;
-        let mut s = self
-            .regions
-            .state
-            .lock()
-            .map_err(|_| "GR_BIND_REGIONS_POISONED")?;
-        if s.steers.len() >= REQUESTS
-            || s.slots.iter().any(|&(a, b)| va < b && a < end)
-            || s.steers
-                .iter()
-                .any(|&(id, a, b)| id != self.id && va < b && a < end)
-        {
-            return Err("GR_BIND_STEER_BUSY".into());
-        }
-        s.steers
-            .try_reserve(1)
-            .map_err(|_| "GR_BIND_STEER_ALLOCATION")?;
-        s.steers.push((self.id, va, end));
-        Ok(())
-    }
-}
 impl Drop for SteerClaim {
     fn drop(&mut self) {
         if let Ok(mut state) = self.regions.state.lock() {
@@ -708,27 +680,6 @@ mod tests {
         assert!(r.steer(BASE - 4, 8).is_ok());
         assert!(r.steer(u64::MAX - 3, 8).is_err());
         assert!(r.steer(BASE, 0).is_err());
-    }
-    #[test]
-    fn private_bind_exclusion_rejects_an_existing_private_slot() {
-        let r = Arc::new(Regions::default());
-        r.claim(BASE).unwrap();
-        let claim = r.steer(BASE - 8192, 4096).unwrap();
-        assert!(claim.extend(BASE, 4096).is_err());
-        drop(claim);
-        assert!(r.check(BASE, 4096).is_err());
-        r.release(BASE).unwrap();
-        assert!(r.steer(BASE, 4096).is_ok());
-    }
-    #[test]
-    fn private_bind_exclusion_rejects_partial_overlap_and_preserves_the_slot() {
-        let r = Arc::new(Regions::default());
-        r.claim(BASE).unwrap();
-        let claim = r.steer(BASE - 8192, 4096).unwrap();
-        assert!(claim.extend(BASE + BYTES - 2048, 4096).is_err());
-        drop(claim);
-        assert!(r.check(BASE + BYTES - 2048, 4096).is_err());
-        assert_eq!(r.ranges(), [(BASE, BASE + BYTES)]);
     }
     #[derive(Default)]
     struct Fake {

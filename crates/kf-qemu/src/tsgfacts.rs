@@ -18,8 +18,6 @@ pub enum Request {
     Ctxsw(u32, u32, u32),
     /// Zcull binding mode.
     Zcull(u32),
-    /// PM binding mode.
-    Pm(u32),
 }
 /// Only explicit one enables fact collection.
 pub fn flag_on(value: Option<&str>) -> bool {

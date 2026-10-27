@@ -13,7 +13,6 @@ pub mod birth;
 pub mod channel;
 pub mod diag;
 pub mod event;
-pub mod grbind;
 pub mod sparse;
 pub mod tier;
 pub mod timer;

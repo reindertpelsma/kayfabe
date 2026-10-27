@@ -2390,7 +2390,7 @@ pub struct ChanPlane {
     groups: Mutex<crate::tsgmirror::GroupMap>,
     /// Bounded guest TSG intent; native calls are made only by acts.
     timeslices: crate::timeslice::Replay,
-    tsg_facts: Arc<crate::tsgfacts::Facts>,
+    tsg_facts: crate::tsgfacts::Facts,
     /// ★ tsg-mirror counters (`mirror=[...]` in the status line).
     pub mirror_stats: crate::tsgmirror::Stats,
     /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
@@ -3058,11 +3058,7 @@ impl ChanPlane {
                 crate::timeslice::PER_CLIENT,
                 crate::timeslice::TOTAL,
             ),
-            tsg_facts: Arc::new(crate::tsgfacts::Facts::new(
-                crate::tsgfacts::enabled(),
-                65536,
-                100000,
-            )),
+            tsg_facts: crate::tsgfacts::Facts::new(crate::tsgfacts::enabled(), 65536, 100000),
             mirror_stats: crate::tsgmirror::Stats::default(),
             guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
             enc_sessions: Mutex::new(HashMap::new()),
@@ -3741,7 +3737,6 @@ impl ChanPlane {
     /// runs on the act thread (P5b).
     pub fn statement(&self, st: ChanStatement) -> ChanAnswer {
         match st {
-            ChanStatement::GrBind { request } => self.direct_gr_bind(request),
             ChanStatement::Alloc(a) => self.birth(a),
             ChanStatement::Schedule {
                 client,

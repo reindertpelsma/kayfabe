@@ -651,11 +651,6 @@ pub enum ChanStatement {
         /// `zcullMode` (`0..=2`).
         mode: u32,
     },
-    /// Opt-in direct GR bind, served only by the validated USER adapter.
-    GrBind {
-        /// Decoded logical intent; host handles are authored separately.
-        request: kf_abi::grbind::Request,
-    },
     /// ★ w827: `SET_TIMESLICE` on a TSG (`[measured ctx_r1 i=427]`: 2048 µs).
     Timeslice {
         /// `hClient`.
@@ -939,8 +934,6 @@ pub struct ChannelPolicy {
     system_pid_is_kernel: bool,
     /// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`], read once, refused without [`DEBUG_PROFILE`]).
     force_migratable: bool,
-    /// Explicit opt-in for the validated default USER GR bind adapter.
-    gr_binds: bool,
 }
 
 /// ★ 2026-10-08: the flag of [`windows_user_work`].
@@ -977,14 +970,7 @@ impl ChannelPolicy {
             windows_kernel_pid: None,
             system_pid_is_kernel: kernel_pid4_enabled(),
             force_migratable: force_migratable_enabled(),
-            gr_binds: std::env::var("KF3_GR_BINDS").as_deref() == Ok("1"),
         }
-    }
-
-    /// Explicit constructor selection for GPU-free adapter tests; production reads the flag.
-    pub fn with_gr_binds(mut self, on: bool) -> Self {
-        self.gr_binds = on;
-        self
     }
 
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, set explicitly (tests; [`ChannelPolicy::new`] reads
@@ -1637,41 +1623,6 @@ impl ChannelPolicy {
             }
             return None;
         };
-        if self.gr_binds && matches!(h.cmd, 0x20801208 | 0x20801209 | 0x20801211) {
-            if kf_abi::rpc_params_are_serialized(h.rmapi_rpc_flags) {
-                return Some(Self::refusal(
-                    NV_ERR_NOT_SUPPORTED,
-                    "serialized GR bind parameters are unsupported",
-                    cmd,
-                ));
-            }
-            if !self
-                .abi
-                .capabilities()
-                .control(kf_arch::ids::ControlCmd(h.cmd))
-                .is_permitted()
-            {
-                return None;
-            }
-            let Some(request) =
-                kf_abi::grbind::decode_control(self.abi.driver_version(), h.cmd, params)
-            else {
-                return Some(Self::refusal(
-                    NV_ERR_INVALID_ARGUMENT,
-                    "invalid GR bind layout",
-                    cmd,
-                ));
-            };
-            if let Some(reply) =
-                self.carry_control_statement(ChanStatement::GrBind { request }, cmd, &h)
-            {
-                return Some(reply);
-            }
-            // Ordinary Linux Passthrough keeps its existing direct zcull adapter.
-            if h.cmd != GR_CTXSW_ZCULL_BIND {
-                return None;
-            }
-        }
         let st = match h.cmd {
             GPFIFO_SCHEDULE | TSG_GPFIFO_SCHEDULE => {
                 // `{NvBool bEnable; NvBool bSkipSubmit; NvBool bSkipEnable}` — all [IN].
@@ -3756,203 +3707,6 @@ mod tests {
                 engine_type: 1
             })
         );
-    }
-
-    mod gfxp1_direct_tests {
-        use super::*;
-        use kf_abi::grbind::{Kind, Request, encode};
-        fn params(pm: bool, client: u32) -> (u32, Vec<u8>) {
-            let mut buffers = [0; 9];
-            buffers[0] = 0x10000;
-            let kind = if pm {
-                Kind::Pm {
-                    va: 0x10000,
-                    mode: 1,
-                }
-            } else {
-                Kind::Preemption {
-                    flags: 2,
-                    gfxp: 1,
-                    cilp: 0,
-                    buffers,
-                }
-            };
-            encode(
-                kf_abi::versions::BENCH_DRIVER,
-                Request {
-                    client,
-                    channel: 0x40,
-                    kind,
-                },
-            )
-            .unwrap()
-        }
-        #[test]
-        fn direct_preemption_is_held_for_the_real_user_adapter() {
-            carried(false);
-        }
-        #[test]
-        fn direct_pm_is_held_for_the_real_user_adapter() {
-            carried(true);
-        }
-        fn carried(pm: bool) {
-            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-            let d = kf_gsp::Deferred::new();
-            let done = d.clone();
-            let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-            let events = seen.clone();
-            let mut link = ChannelPolicy::new(
-                abi,
-                kf_abi::GuestOs::Windows,
-                std::sync::Arc::new(move |st| {
-                    events.lock().unwrap().push(st);
-                    ChanAnswer::Deferred(done.clone())
-                }),
-            )
-            .with_gr_binds(true);
-            let (cmd, bytes) = params(pm, 0x31);
-            let input = control_on(0x31, 0x33, cmd, &bytes);
-            let reply = link.respond(&input).expect("must reach owned USER adapter");
-            assert_eq!(reply.rpc_result, 0);
-            assert_eq!(reply.body, input.payload);
-            let held = link.defers(&input).expect("must remain asynchronous");
-            assert_eq!(held.outcome(), None);
-            assert_eq!(seen.lock().unwrap().len(), 1);
-            d.resolve(0x1a);
-            assert_eq!(held.outcome(), Some(0x1a));
-        }
-        #[test]
-        fn explicit_off_keeps_new_direct_controls_unserviced() {
-            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-            let mut link = ChannelPolicy::new(
-                abi,
-                kf_abi::GuestOs::Windows,
-                std::sync::Arc::new(|_| panic!("disabled adapter called")),
-            )
-            .with_gr_binds(false);
-            for pm in [false, true] {
-                let (cmd, p) = params(pm, 0x31);
-                assert!(link.respond(&control_on(0x31, 0x33, cmd, &p)).is_none());
-            }
-        }
-        #[test]
-        fn malformed_direct_preemption_size_refuses_before_target_dispatch() {
-            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-            let mut link = ChannelPolicy::new(
-                abi,
-                kf_abi::GuestOs::Windows,
-                std::sync::Arc::new(|_| panic!("malformed target dispatched")),
-            )
-            .with_gr_binds(true);
-            let (cmd, mut p) = params(false, 0x31);
-            p.pop();
-            assert_eq!(
-                link.respond(&control_on(0x31, 0x33, cmd, &p))
-                    .unwrap()
-                    .rpc_result,
-                NV_ERR_INVALID_ARGUMENT
-            );
-        }
-        #[test]
-        fn a_logical_cross_client_pm_target_is_resolved_by_the_vm_adapter() {
-            cross_client(false);
-        }
-        #[test]
-        fn kernel_zcull_can_name_a_process_client_without_copying_its_host_handle() {
-            cross_client(true);
-        }
-        fn cross_client(zcull: bool) {
-            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-            let mut link = ChannelPolicy::new(
-                abi,
-                kf_abi::GuestOs::Windows,
-                std::sync::Arc::new(|st| {
-                    assert!(matches!(st, ChanStatement::GrBind { request }
-                        if request.client == 0x32 && request.channel == 0x40));
-                    ChanAnswer::Done
-                }),
-            )
-            .with_gr_binds(true);
-            let (cmd, p) = if zcull {
-                encode(
-                    abi.driver_version(),
-                    Request {
-                        client: 0x32,
-                        channel: 0x40,
-                        kind: Kind::Zcull {
-                            va: 0x10000,
-                            mode: 2,
-                        },
-                    },
-                )
-                .unwrap()
-            } else {
-                params(true, 0x32)
-            };
-            assert_eq!(
-                link.respond(&control_on(0x31, 0x33, cmd, &p))
-                    .unwrap()
-                    .rpc_result,
-                0
-            );
-        }
-        #[test]
-        fn opt_in_does_not_remove_the_existing_linux_passthrough_zcull_adapter() {
-            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-            let mut link = ChannelPolicy::new(
-                abi,
-                kf_abi::GuestOs::Linux,
-                std::sync::Arc::new(|st| match st {
-                    ChanStatement::GrBind { .. } => ChanAnswer::NotOurs,
-                    ChanStatement::ZcullBind { .. } => ChanAnswer::Done,
-                    _ => panic!("unexpected statement"),
-                }),
-            )
-            .with_gr_binds(true);
-            let r = Request {
-                client: 0x31,
-                channel: 0x40,
-                kind: Kind::Zcull {
-                    va: 0x10000,
-                    mode: 2,
-                },
-            };
-            let (cmd, p) = encode(abi.driver_version(), r).unwrap();
-            assert_eq!(
-                link.respond(&control_on(0x31, 0x33, cmd, &p))
-                    .unwrap()
-                    .rpc_result,
-                0
-            );
-        }
-        #[test]
-        fn opted_in_zcull_reaches_the_typed_user_target_before_legacy_fallback() {
-            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
-            let wanted = Request {
-                client: 0x31,
-                channel: 0x40,
-                kind: Kind::Zcull {
-                    va: 0x10000,
-                    mode: 2,
-                },
-            };
-            let mut link = ChannelPolicy::new(
-                abi,
-                kf_abi::GuestOs::Windows,
-                std::sync::Arc::new(move |st| {
-                    assert_eq!(st, ChanStatement::GrBind { request: wanted });
-                    ChanAnswer::Done
-                }),
-            )
-            .with_gr_binds(true);
-            let (cmd, p) = encode(abi.driver_version(), wanted).unwrap();
-            assert_eq!(
-                link.respond(&control_on(0x31, 0x33, cmd, &p))
-                    .unwrap()
-                    .rpc_result,
-                0
-            );
-        }
     }
 
     /// ★ v3-gfx: `GR_CTXSW_ZCULL_BIND` reaches the plane decoded (VA across two words, the mode);

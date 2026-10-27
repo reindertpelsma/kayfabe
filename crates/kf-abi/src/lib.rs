@@ -123,7 +123,6 @@ pub mod gfxpool;
 pub mod gmmustatic;
 pub mod gpuatomics;
 pub mod gpuinfo;
-pub mod grbind;
 pub mod grfsinfo;
 pub mod grinfo;
 pub mod grstatic;

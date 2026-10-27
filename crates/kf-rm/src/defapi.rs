@@ -71,8 +71,6 @@ pub struct Entry {
     /// The bundle decoded at the registering guest's own layout (registration never refuses on
     /// it: the trigger decides).
     pub decoded: Bundle,
-    /// Typed GR intent decoded at the registering driver version; no host authority.
-    pub gr_bind: Option<kf_abi::grbind::Request>,
     /// The recorded privilege.
     pub registrant: Registrant,
     /// `DEFERRED_API_INFO_FLAGS_HAS_EXECUTED`.
@@ -286,7 +284,7 @@ impl Registry {
         decoded: Bundle,
         live_handle: impl Fn(u32) -> bool,
     ) -> u32 {
-        self.register_filtered(key, reg, decoded, live_handle, false, None)
+        self.register_filtered(key, reg, decoded, live_handle, false)
     }
 
     fn register_filtered(
@@ -296,7 +294,6 @@ impl Registry {
         decoded: Bundle,
         live_handle: impl Fn(u32) -> bool,
         refuse_fifo_update: bool,
-        gr_bind: Option<kf_abi::grbind::Request>,
     ) -> u32 {
         let mut st = self.st();
         // `serverutilValidateNewResourceHandle(hClient, hDeferredApi)` (`:76-79`), then a
@@ -340,7 +337,6 @@ impl Registry {
             device_va: reg.device_va,
             bundle: reg.bundle,
             decoded,
-            gr_bind,
             registrant: Registrant::GuestKernelRpc,
             executed: false,
             tlb_flushed: false,
@@ -516,9 +512,8 @@ pub fn serve_with_fifo_refusal(
         Control::Register(form) => match abi.decode_registration(form, params) {
             Ok(r) => {
                 let decoded = abi.decode_bundle(r.cmd, &r.bundle);
-                let gr_bind = kf_abi::grbind::decode(abi.version, r.cmd, &r.bundle);
                 let refuse = refuse_on_channel && r.cmd == abi.cmds.update_channel_info;
-                reg.register_filtered(key, r, decoded, live_handle, refuse, gr_bind)
+                reg.register_filtered(key, r, decoded, live_handle, refuse)
             }
             Err(_) => kf_abi::defapi::NV_ERR_INVALID_PARAM_STRUCT,
         },
