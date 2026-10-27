@@ -512,3 +512,58 @@ fn per_space_applied_milestone_never_clears_a_newer_untaken_request_for_the_same
     inbox.finish_gate_loop(vec![B], false, None, true, None);
     assert!(inbox.walk_busy_for(A));
 }
+
+#[test]
+fn applied_space_is_released_at_scope_publication_before_foreign_synchronous_apply() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(page_dir(A));
+    inbox.take();
+    inbox.note_statements_applied(1);
+    inbox.wait_walk_for(A, 7);
+    inbox.set_walk_scope(vec![B], false, None);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+    assert!(!inbox.all_settled());
+}
+
+#[test]
+fn new_doorbell_for_applied_space_does_not_wait_for_the_foreign_apply_to_return() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(page_dir(A));
+    inbox.take();
+    inbox.note_statements_applied(1);
+    inbox.set_walk_scope(vec![B], false, None);
+    assert!(!inbox.source_gate(A, 7).held());
+    assert!(inbox.walk_busy_for(B));
+}
+
+// Old registration notified the VA loop but supplied no immediate-ready continuation.
+trait ReadyRegistration {
+    fn register_walk_waiter(&self, key: VasKey, token: u32) -> bool;
+}
+impl ReadyRegistration for Inbox {
+    fn register_walk_waiter(&self, key: VasKey, token: u32) -> bool {
+        self.wait_walk_for(key, token);
+        false
+    }
+}
+
+#[test]
+fn registration_after_release_returns_ready_without_waiting_for_a_foreign_walk() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    assert!(inbox.walk_busy_for(A));
+    inbox.set_walk_scope(vec![B], false, None);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    assert!(inbox.register_walk_waiter(A, 7));
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn registration_after_idle_release_preserves_the_immediate_continuation() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    assert!(inbox.walk_busy_for(A));
+    inbox.set_walk_scope(vec![], false, None);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    assert!(inbox.register_walk_waiter(A, 7));
+}
