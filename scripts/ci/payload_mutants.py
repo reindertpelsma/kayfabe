@@ -171,7 +171,7 @@ CASES = [
     (
         "non-ce-client-admitted",
         guard_replace(
-            'return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None', "return True"
+            'return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None', "return True"
         ),
         "native_xid_guard.py",
     ),
@@ -235,7 +235,7 @@ CASES += [
     (
         "native-ce-instance-hardcoded",
         guard_replace(
-            'return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None',
+            'return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None',
             'return name == "HUBCLIENT_CE1"',
         ),
         "native_xid_guard.py",
