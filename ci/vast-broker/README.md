@@ -5,7 +5,7 @@ The broker connects GitHub Actions to rented NVIDIA GPU machines on Vast.ai so k
 ## How a GPU check uses it
 
 1. The [GPU workflow](../../.github/workflows/gpu-vast.yml) uses one action-free job to decide whether a master push or PR needs a check. It runs the trusted BASE matcher with the runner's preinstalled Node, without checking out proposed code. Only a successful explicit `run=0` decision with a skipped GPU job reports `NOT_NEEDED`; uncertain metadata requests a GPU check.
-2. The controller presents GitHub OIDC identity. The Worker checks the pinned workflow, the run's owner triggering actor and the exact tested commit, then applies offer eligibility, concurrency and spending policy before creating a rental.
+2. The controller presents GitHub OIDC identity. The Worker checks the pinned workflow, the exact run attempt's owner triggering actor and the exact tested commit, then applies offer eligibility, concurrency and spending policy before creating a rental.
 3. The box bootstrap checks out that exact commit and runs the [repository-side payload and reporter](../../scripts/ci/README.md). Its scoped run token lets it report progress, logs and a structured result, request its own destruction, and obtain permitted private asset download URLs.
 4. The GitHub controller independently validates the result bindings and log hashes, scrubs displayed output and supplies the workflow's `gpu-vast` status. After fetching the final log it requests immediate destruction; result grace and Worker deadlines provide fallback cleanup.
 
@@ -36,3 +36,5 @@ Renting is enabled by the deployed vars file, which is kept outside the reposito
 After deploying the matching Worker bundle, use a fresh GPU-relevant commit to start validation; reruns retain the original trusted BASE pin.
 
 CODE READ (`src/provider-fault.js`, `src/ledger.js`, `runner.py`): provider failures stop and destroy the box before one replacement on a different known host. Two failed machines condemn their shared host; static seed `224600` comes from runs 40425285335 and 40478005010. An exhausted replacement stays a non-passing infrastructure error, with no kayfabe verdict. See [provider-fault handling](../../docs/howto/vast-provider-faults.md).
+
+CODE READ 2026-10-27 (`src/github.js`): attempt3 and later have no special authorization ceiling. Admission reads the signed attempt's REST resource and retains strict actor, repository, status and SHA bindings. For a 401, use the fixed field-only observability code; see [rerun authorization](../../docs/howto/vast-rerun-auth.md).
