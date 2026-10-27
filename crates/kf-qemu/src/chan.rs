@@ -8274,7 +8274,10 @@ impl ChanPlane {
         // ★ Review fix 2026-10-04 (§3.5): a stash waiting for a pending walk is rung by the VA
         // thread once it is idle again.
         if g.chan.waiting_on_walk() {
-            self.inbox.wait_walk_for(g.key, g.guest_idx);
+            self.inbox
+                .register_walk_waiter_and_rearm(g.key, g.guest_idx, |token| {
+                    let _ = self.plane.ring_internal(token);
+                });
         }
         // ★ P1+P2 inc A: what this pump counted (count-only), summed for the status line.
         let inca = g.chan.inca().total();

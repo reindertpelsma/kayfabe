@@ -2234,6 +2234,12 @@ impl Device {
             self.mem
                 .inbox
                 .set_walk_scope(keys, global, armed.map(|r| r.seq));
+            // Wake independent ready rings before entering another target's synchronous apply.
+            for tok in self.mem.inbox.take_ready_walk_waiters() {
+                if self.plane.ring_internal(tok) {
+                    let _ = self.worker_efd.signal();
+                }
+            }
             let r = m.on_walk_ready(trigger);
             // ★ Ruling 2026-09-26 (5): a BAR1 doorbell overlay the main loop has now made live (or
             // removed) releases the invalidate clear it was holding. Never a wait: with nothing

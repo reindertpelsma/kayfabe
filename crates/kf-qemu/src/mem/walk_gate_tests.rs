@@ -360,7 +360,10 @@ fn manager_scope_is_published_before_synchronous_walk_apply_and_after_ack() {
         .split("let r = m.on_walk_ready(trigger);")
         .next()
         .unwrap();
-    assert!(before.rsplit("set_walk_scope(").next().unwrap().len() < 256);
+    assert!(
+        before.rfind("set_walk_scope(").unwrap()
+            < before.rfind("take_ready_walk_waiters()").unwrap()
+    );
     assert_eq!(src.matches("m.walk_gate_scope(armed)").count(), 2);
     assert!(src.contains("finish_gate_loop("));
 }
@@ -536,17 +539,6 @@ fn new_doorbell_for_applied_space_does_not_wait_for_the_foreign_apply_to_return(
     assert!(inbox.walk_busy_for(B));
 }
 
-// Old registration notified the VA loop but supplied no immediate-ready continuation.
-trait ReadyRegistration {
-    fn register_walk_waiter(&self, key: VasKey, token: u32) -> bool;
-}
-impl ReadyRegistration for Inbox {
-    fn register_walk_waiter(&self, key: VasKey, token: u32) -> bool {
-        self.wait_walk_for(key, token);
-        false
-    }
-}
-
 #[test]
 fn registration_after_release_returns_ready_without_waiting_for_a_foreign_walk() {
     let inbox = Inbox::new().unwrap();
@@ -566,4 +558,60 @@ fn registration_after_idle_release_preserves_the_immediate_continuation() {
     inbox.set_walk_scope(vec![], false, None);
     assert!(inbox.take_ready_walk_waiters().is_empty());
     assert!(inbox.register_walk_waiter(A, 7));
+}
+
+#[test]
+fn source_gate_continues_when_release_drains_between_check_and_registration() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    let reason = inbox.source_gate_between(A, 7, || {
+        inbox.set_walk_scope(vec![B], false, None);
+        assert!(inbox.take_ready_walk_waiters().is_empty());
+    });
+    assert!(!reason.held());
+    assert!(inbox.walk_busy_for(B));
+}
+#[test]
+fn source_gate_continues_when_idle_release_precedes_its_registration() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    let reason = inbox.source_gate_between(A, 7, || {
+        inbox.set_walk_scope(vec![], false, None);
+        inbox.take_ready_walk_waiters();
+    });
+    assert!(!reason.held());
+}
+#[test]
+fn translated_wait_reowes_the_exact_guest_token_if_ready_during_a_foreign_walk() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![B], false, None);
+    let mut owed = Vec::new();
+    inbox.register_walk_waiter_and_rearm(A, 7, |token| owed.push(token));
+    assert_eq!(owed, vec![7]);
+}
+#[test]
+fn translated_wait_reowes_after_idle_release_but_not_while_its_own_walk_is_active() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    let mut owed = Vec::new();
+    inbox.register_walk_waiter_and_rearm(A, 7, |token| owed.push(token));
+    assert!(owed.is_empty());
+    inbox.set_walk_scope(vec![], false, None);
+    inbox.register_walk_waiter_and_rearm(A, 7, |token| owed.push(token));
+    assert_eq!(owed, vec![7]);
+}
+#[test]
+fn caller_announces_processed_statements_after_apply_and_wakes_before_foreign_apply() {
+    let src = include_str!("../device.rs");
+    let apply = src.find("let line = crate::mem::apply_statement(").unwrap();
+    let note = src
+        .find("self.mem.inbox.note_statements_applied(taken);")
+        .unwrap();
+    let gpu = src.find("let r = m.on_walk_ready(trigger);").unwrap();
+    assert!(apply < note && note < gpu);
+    assert!(src[..gpu].rfind("take_ready_walk_waiters()").unwrap() > note);
+    assert!(
+        include_str!("../chan.rs")
+            .contains("register_walk_waiter_and_rearm(g.key, g.guest_idx, |token|")
+    );
 }

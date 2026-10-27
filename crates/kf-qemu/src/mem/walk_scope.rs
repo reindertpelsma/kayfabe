@@ -88,6 +88,17 @@ impl Inbox {
                 global,
                 sequence,
             });
+            // Publish the complete target set before retiring applied statement holds.
+            // Readers retain this scope guard until they have checked those holds.
+            if let Some(snapshot) = scope.as_ref()
+                && let Ok(mut statements) = self.statement_scope.lock()
+            {
+                statements.release_applied(
+                    self.statement_applied.load(Ordering::Acquire),
+                    &snapshot.keys,
+                    snapshot.global,
+                );
+            }
         }
     }
 
@@ -166,11 +177,42 @@ impl Inbox {
 impl Inbox {
     /// Shared by turn entry, guarded publication, migration and the adversarial relay adapter.
     pub(crate) fn source_gate(&self, key: VasKey, token: u32) -> Reason {
+        self.source_gate_between(key, token, || {})
+    }
+
+    /// The same production decision with a controllable check/register boundary for the model.
+    pub(super) fn source_gate_between(
+        &self,
+        key: VasKey,
+        token: u32,
+        between: impl FnOnce(),
+    ) -> Reason {
         let reason = self.walk_reason(key);
         if reason.held() {
-            self.wait_walk_for(key, token);
+            between();
+            if self.register_walk_waiter(key, token) {
+                return self.walk_reason(key);
+            }
         }
         reason
+    }
+
+    /// A release racing insertion cannot wait for the VA thread's next, possibly long, turn.
+    pub(crate) fn register_walk_waiter(&self, key: VasKey, token: u32) -> bool {
+        self.wait_walk_for(key, token);
+        !self.walk_busy_for(key)
+    }
+
+    /// A Translated pump already returned Waiting: re-owe its consumed edge if it is ready now.
+    pub(crate) fn register_walk_waiter_and_rearm(
+        &self,
+        key: VasKey,
+        token: u32,
+        rearm: impl FnOnce(u32),
+    ) {
+        if self.register_walk_waiter(key, token) {
+            rearm(token);
+        }
     }
 
     /// Register first and wake the VA thread: a release racing insertion is observed next loop.
@@ -327,7 +369,7 @@ impl Stats {
         };
         format!(
             "hold[count/us/max_us] own={} split={} global={} other_allowed={} \
-            ref_changes_walk={} completion_wb_busy_walk={} completion_wb_busy_max_us={}",
+            ref_changes_walk={} get_wb_busy_walk={} get_wb_busy_max_us={}",
             row(&self.own),
             row(&self.split),
             row(&self.global),
@@ -345,6 +387,35 @@ impl Inbox {
         let reason = self.source_gate(key, token);
         self.walk_stats.observe(hold, reason);
         !reason.held()
+    }
+}
+
+impl Inbox {
+    /// VA worker only, after every statement through `n` has been processed. This is not an RPC
+    /// acknowledgement: its target can still have pending walk/apply/settlement work.
+    pub(crate) fn note_statements_applied(&self, n: u64) {
+        self.statement_applied.fetch_max(n, Ordering::Release);
+    }
+
+    /// The VA loop's release transaction: settle before computing readiness or draining waiters.
+    /// A waiter release is a hint only; every later source admission rechecks the current state.
+    pub(crate) fn finish_gate_loop(
+        &self,
+        keys: Vec<VasKey>,
+        global: bool,
+        sequence: Option<u64>,
+        manager_busy: bool,
+        settled: Option<u64>,
+    ) -> (bool, Vec<u32>) {
+        let advanced = settled.is_some_and(|n| self.settle(n));
+        let busy = manager_busy || !self.all_settled();
+        self.set_walk_busy(busy);
+        self.set_walk_scope(keys, global, sequence);
+        let mut ready = self.take_ready_walk_waiters();
+        if !busy {
+            ready.extend(self.take_walk_waiters());
+        }
+        (advanced, ready)
     }
 }
 
@@ -411,41 +482,5 @@ mod tests {
         stats.writeback_at(&mut since, false, false, 90);
         assert_eq!(stats.writeback_busy_walk.load(Ordering::Relaxed), 2);
         assert_eq!(stats.writeback_busy_ns_max.load(Ordering::Relaxed), 60);
-    }
-}
-
-impl Inbox {
-    /// VA worker only, after every statement through `n` has been processed. This is not an RPC
-    /// acknowledgement: its target can still have pending walk/apply/settlement work.
-    pub(crate) fn note_statements_applied(&self, n: u64) {
-        self.statement_applied.fetch_max(n, Ordering::Release);
-    }
-
-    /// The VA loop's release transaction: settle before computing readiness or draining waiters.
-    /// A waiter release is a hint only; every later source admission rechecks the current state.
-    pub(crate) fn finish_gate_loop(
-        &self,
-        keys: Vec<VasKey>,
-        global: bool,
-        sequence: Option<u64>,
-        manager_busy: bool,
-        settled: Option<u64>,
-    ) -> (bool, Vec<u32>) {
-        let advanced = settled.is_some_and(|n| self.settle(n));
-        let busy = manager_busy || !self.all_settled();
-        self.set_walk_busy(busy);
-        self.set_walk_scope(keys.clone(), global, sequence);
-        if let Ok(mut statements) = self.statement_scope.lock() {
-            statements.release_applied(
-                self.statement_applied.load(Ordering::Acquire),
-                &keys,
-                global,
-            );
-        }
-        let mut ready = self.take_ready_walk_waiters();
-        if !busy {
-            ready.extend(self.take_walk_waiters());
-        }
-        (advanced, ready)
     }
 }
