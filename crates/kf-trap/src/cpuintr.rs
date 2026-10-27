@@ -241,6 +241,13 @@ impl CpuIntr {
         }
     }
 
+    /// Diagnostic message eligibility, without latching or changing any status.
+    /// The caller runs off the vCPU and uses the same MSI-X transport as real events.
+    #[must_use]
+    pub fn diagnostic_message(&self, _vector: u32) -> Raise {
+        Raise::None
+    }
+
     /// ★ Latch `vector` pending — a guest `LEAF_TRIGGER`, or a completion THIS device announces
     /// (a worker, on a host non-stall event). One body for both: the ISR cannot tell them apart.
     pub fn latch(&self, vector: u32) -> Raise {
