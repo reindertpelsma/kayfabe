@@ -916,6 +916,7 @@ pub type PlacedRow = (u64, u64, bool, kf_host::MapPerm);
 /// a question reaching past them is answered `Unknown`.
 #[derive(Debug, Default)]
 pub struct RowsLog {
+    writer: std::sync::Arc<AtomicU64>,
     handoff: std::sync::OnceLock<std::sync::Arc<RowHandoff>>,
     epoch: AtomicU64,
     log: Mutex<std::collections::VecDeque<(u64, u64, u64, std::time::Instant)>>,
@@ -5287,6 +5288,7 @@ impl RowHandoff {
 struct RowsWriteGuard<'a> {
     guard: Option<std::sync::RwLockWriteGuard<'a, std::collections::BTreeMap<u64, PlacedRow>>>,
     log: &'a RowsLog,
+    activity: Option<kf_host::latency::ActivityGuard>,
 }
 impl std::ops::Deref for RowsWriteGuard<'_> {
     type Target = std::collections::BTreeMap<u64, PlacedRow>;
@@ -5301,7 +5303,9 @@ impl std::ops::DerefMut for RowsWriteGuard<'_> {
 }
 impl Drop for RowsWriteGuard<'_> {
     fn drop(&mut self) {
+        self.log.writer.store(0, Ordering::Release);
         drop(self.guard.take());
+        drop(self.activity.take());
         if let Some(hub) = self.log.handoff.get().and_then(|h| h.0.get()) {
             hub.released();
         }
@@ -5311,15 +5315,20 @@ fn write_rows_releasing<'a>(
     rows: &'a PlacedRows,
     log: &'a RowsLog,
 ) -> std::sync::LockResult<RowsWriteGuard<'a>> {
-    match rows.write() {
-        Ok(guard) => Ok(RowsWriteGuard {
+    let wrap = |guard| {
+        log.writer
+            .store(kf_host::latency::thread_id(), Ordering::Release);
+        RowsWriteGuard {
             guard: Some(guard),
             log,
-        }),
-        Err(e) => Err(std::sync::PoisonError::new(RowsWriteGuard {
-            guard: Some(e.into_inner()),
-            log,
-        })),
+            activity: Some(kf_host::latency::activity(
+                kf_host::latency::Activity::HeldRows,
+            )),
+        }
+    };
+    match rows.write() {
+        Ok(guard) => Ok(wrap(guard)),
+        Err(e) => Err(std::sync::PoisonError::new(wrap(e.into_inner()))),
     }
 }
 #[cfg(test)]

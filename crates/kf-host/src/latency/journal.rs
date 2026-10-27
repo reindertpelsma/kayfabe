@@ -37,10 +37,21 @@ impl Default for Journal {
 }
 impl Journal {
     pub fn push(&self, words: [u64; 7]) {
-        let seq = self.next.fetch_add(1, Relaxed) + 1;
+        // Terminal before the odd/even version encoding can wrap. Writers still make one CAS
+        // attempt and never spin; racing pre-terminal writers cannot reach the u64 wrap point.
+        if self.next.load(Relaxed) >= u64::MAX / 2 {
+            self.lost.fetch_add(1, Relaxed);
+            return;
+        }
+        let raw = self.next.fetch_add(1, Relaxed);
+        if raw >= u64::MAX / 2 {
+            self.lost.fetch_add(1, Relaxed);
+            return;
+        }
+        let seq = raw + 1;
         let slot = &self.slots[seq as usize % SLOTS];
         let before = slot.version.load(Acquire);
-        if before % 2 != 0
+        if !before.is_multiple_of(2)
             || before / 2 >= seq
             || slot
                 .version
@@ -59,7 +70,7 @@ impl Journal {
         let mut out = Vec::with_capacity(SLOTS);
         for slot in &self.slots {
             let before = slot.version.load(Acquire);
-            if before == 0 || before % 2 != 0 {
+            if before == 0 || !before.is_multiple_of(2) {
                 continue;
             }
             let words = std::array::from_fn(|i| slot.words[i].load(Relaxed));

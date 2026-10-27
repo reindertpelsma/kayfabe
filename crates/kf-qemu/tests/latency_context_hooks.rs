@@ -5,7 +5,12 @@ const DEVICE: &str = include_str!("../src/device.rs");
 const RUNTIME: &str = include_str!("../../kf-host/src/latency/runtime.rs");
 #[test]
 fn row_writer_records_its_registered_thread_and_named_activity() {
-    let guard = MEM.split("fn write_rows_releasing").nth(1).unwrap();
+    let guard: String = MEM
+        .split("fn write_rows_releasing")
+        .nth(1)
+        .unwrap()
+        .split_whitespace()
+        .collect();
     assert!(guard.contains("writer.store(kf_host::latency::thread_id()"));
     assert!(guard.contains("Activity::HeldRows"));
 }
@@ -25,7 +30,7 @@ fn user_source_snapshots_keep_the_same_row_owner_metadata_across_revalidation() 
 fn normal_and_storm_irq_outcomes_have_distinct_recording_entries() {
     let storm = DEVICE.split("fn irq_storm_tick(").nth(1).unwrap();
     assert!(storm.contains("latency::notification_storm(mask, sent)"));
-    assert!(DEVICE.contains("latency::notification(mask, sent)"));
+    assert!(DEVICE.contains("latency::notification(mask, sent.is_ok())"));
 }
 #[test]
 fn packet_and_split_context_both_prioritize_named_blockers() {

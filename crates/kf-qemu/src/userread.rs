@@ -40,6 +40,7 @@ pub(crate) trait Store {
 
 #[derive(Debug)]
 pub(crate) struct Snapshot<'a> {
+    writer: Arc<std::sync::atomic::AtomicU64>,
     pub bytes: Vec<u8>,
     pub epoch: u64,
     rows: Weak<RwLock<std::collections::BTreeMap<u64, super::PlacedRow>>>,
@@ -76,7 +77,7 @@ impl Snapshot<'_> {
     /// separate prerequisites. This does not pin engine operands or complete work.
     pub(crate) fn admit<T>(&self, publish: impl FnOnce() -> T) -> Result<T, Refusal> {
         let rows = self.rows.upgrade().ok_or(Refusal::Changed)?;
-        let guard = try_read(&rows)?;
+        let guard = try_rows(&rows, &self.writer)?;
         if resolve(&guard, self.va, self.end, self.pieces)? != self.spans {
             return Err(Refusal::Changed);
         }
@@ -114,7 +115,7 @@ pub(crate) fn mapped<'a>(
         .checked_add(bytes)
         .filter(|end| *end < 1 << 40)
         .ok_or(Refusal::Bounds)?;
-    let guard = try_read(rows)?;
+    let guard = try_rows(rows, &log.writer)?;
     let epoch = log.epoch();
     let spans = resolve(&guard, va, end, RING_PIECES)?;
     let blocks = try_read(&ram.blocks)?;
@@ -175,6 +176,7 @@ pub(crate) fn mapped<'a>(
         bytes: Vec::new(),
         epoch,
         rows: Arc::downgrade(rows),
+        writer: log.writer.clone(),
         spans,
         va,
         end,
@@ -182,6 +184,20 @@ pub(crate) fn mapped<'a>(
         generation,
         pieces: RING_PIECES,
     }))
+}
+
+fn try_rows<'a, T>(
+    lock: &'a RwLock<T>,
+    writer: &std::sync::atomic::AtomicU64,
+) -> Result<RwLockReadGuard<'a, T>, Refusal> {
+    let result = try_read(lock);
+    if matches!(result, Err(Refusal::Busy)) {
+        kf_host::latency::contention(
+            kf_host::latency::Cause::Rows,
+            writer.load(Ordering::Acquire),
+        );
+    }
+    result
 }
 
 fn try_read<T>(lock: &RwLock<T>) -> Result<RwLockReadGuard<'_, T>, Refusal> {
@@ -249,7 +265,7 @@ pub(crate) fn snapshot<'a>(
         return Err(Refusal::Bounds);
     }
     let end = va.checked_add(bytes as u64).ok_or(Refusal::Bounds)?;
-    let first = try_read(rows)?;
+    let first = try_rows(rows, &log.writer)?;
     let epoch = log.epoch();
     let spans = resolve(&first, va, end, PIECES)?;
     drop(first);
@@ -260,7 +276,7 @@ pub(crate) fn snapshot<'a>(
     out.try_reserve_exact(bytes)
         .map_err(|_| Refusal::Allocation)?;
     out.resize(bytes, 0);
-    let rows_guard = try_read(rows)?;
+    let rows_guard = try_rows(rows, &log.writer)?;
     if log.epoch() != epoch {
         return Err(Refusal::Changed);
     }
@@ -346,6 +362,7 @@ pub(crate) fn snapshot<'a>(
         bytes: out,
         epoch,
         rows: Arc::downgrade(rows),
+        writer: log.writer.clone(),
         spans,
         va,
         end,

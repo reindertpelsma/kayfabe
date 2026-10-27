@@ -27,6 +27,8 @@ pub enum Cause {
     ScanBudget,
     /// PT metadata contention.
     PtLock,
+    /// Placement row writer contention.
+    Rows,
     /// Private storage contention.
     Storage,
     /// Act-thread ownership.
@@ -181,16 +183,17 @@ impl State {
         }
         self.finish(at);
     }
+    #[cfg(test)]
+    pub fn notify(&mut self, vector: u32, at: u64, success: bool) {
+        self.notify_source(vector, at, success, NotificationSource::Normal);
+    }
     pub fn notify_source(
         &mut self,
         vector: u32,
         at: u64,
         success: bool,
-        _source: NotificationSource,
+        source: NotificationSource,
     ) {
-        self.notify(vector, at, success);
-    }
-    pub fn notify(&mut self, vector: u32, at: u64, success: bool) {
         if !success {
             self.failed = self.failed.saturating_add(1);
             return;
@@ -200,6 +203,7 @@ impl State {
                 // This is a notification opportunity on a GPU-wide vector, not proof of
                 // which packet caused it. Preserve the first one, including early delivery.
                 s.raised = Some(at);
+                s.source = Some(source);
             }
         }
         self.finish(at);

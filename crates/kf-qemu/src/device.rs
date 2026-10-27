@@ -1910,6 +1910,10 @@ impl Device {
         self.deliver(raise);
     }
 
+    fn completion_enabled(&self, vector: u32) -> bool {
+        self.intr.diagnostic_message(vector) == kf_trap::cpuintr::Raise::Message
+    }
+
     /// Probe timer hook: one shared message, no latch, shadow write or status publication.
     fn irq_storm_tick(&self) -> bool {
         let Some(storm) = &self.irq_storm else {
@@ -1922,17 +1926,13 @@ impl Device {
             self.chans.engines.iter().filter_map(|e| e.vector),
             || {
                 let mask = if self.latency_active {
-                    kf_host::latency::notification_mask(|v| {
-                        let completion_enabled =
-                            self.intr.diagnostic_message(v) == kf_trap::cpuintr::Raise::Message;
-                        completion_enabled
-                    })
+                    kf_host::latency::notification_mask(|v| self.completion_enabled(v))
                 } else {
                     0
                 };
                 let sent = self.irq_lines[0].signal().is_ok();
                 if self.latency_active {
-                    kf_host::latency::notification(mask, sent);
+                    kf_host::latency::notification_storm(mask, sent);
                 }
                 if sent {
                     self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
@@ -3220,6 +3220,12 @@ impl Device {
                 self.chans.twin_freeing_refused.load(o)
             )
         };
+        let latency_summary = if self.latency_active {
+            kf_host::latency::summary()
+        } else {
+            "latency[off-or-other-device]".into()
+        };
+        let channel_summary = format!("{} {}", self.chans.mirror_stats.summary(), latency_summary);
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused birth_refused_cap={} worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}] {}]",
             self.chans.births.load(o),
@@ -3236,15 +3242,7 @@ impl Device {
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
             toks.join(" "),
-            format!(
-                "{} {}",
-                self.chans.mirror_stats.summary(),
-                if self.latency_active {
-                    kf_host::latency::summary()
-                } else {
-                    "latency[off-or-other-device]".into()
-                }
-            )
+            channel_summary
         );
         let ic = &self.irq_counts;
         let irq = format!(

@@ -1,4 +1,4 @@
-use super::core::{Cause, Gauge, Kind, SLOW_NS, Sample, Span, State, Wait};
+use super::core::{Cause, Gauge, Kind, NotificationSource, SLOW_NS, Sample, Span, State, Wait};
 use super::journal::Journal;
 use super::splits::{SplitScope, Splits};
 use std::cell::Cell;
@@ -54,6 +54,8 @@ pub enum Activity {
     WaitPt,
     /// PT metadata ownership.
     HeldPt,
+    /// Placement row writer ownership.
+    HeldRows,
     /// USER registry acquisition.
     UserRegistry,
     /// A failed slot acquisition.
@@ -78,6 +80,7 @@ impl Activity {
             Self::Act => (8, 0),
             Self::WaitPt => (9, 0),
             Self::HeldPt => (10, 0),
+            Self::HeldRows => (14, 0),
             Self::UserRegistry => (11, 0),
             Self::SlotBusy => (12, 0),
             Self::StorageBusy => (13, 0),
@@ -94,13 +97,14 @@ fn label(code: u64, detail: u64) -> String {
         4 => "epoll park (idle may be expected)".into(),
         5 => "USER pump".into(),
         6 => "Translated pump".into(),
-        7 => "VA walk/apply".into(),
+        7 => "VA loop visit (may include idle)".into(),
         8 => "act thread operation".into(),
         9 => "waiting on PT lock".into(),
         10 => "holding PT lock".into(),
         11 => "waiting on USER registry lock".into(),
         12 => "slot lock contended".into(),
         13 => "private storage lock contended".into(),
+        14 => "holding placement rows lock".into(),
         64 => format!(
             "RM ioctl {}",
             [
@@ -204,13 +208,18 @@ impl Recorder {
             }
             self.notice_gaps
                 .fetch_add(event.seq.saturating_sub(last + 1), Relaxed);
-            let [at, mask, success, ..] = event.words;
+            let [at, mask, success, source, ..] = event.words;
             if success == 0 {
                 st.failed = st.failed.saturating_add(1);
             } else {
                 for (i, v) in self.vectors.iter().enumerate() {
                     if mask & (1u64 << i) != 0 {
-                        st.notify(*v, at, true);
+                        let source = if source == 1 {
+                            NotificationSource::Storm
+                        } else {
+                            NotificationSource::Normal
+                        };
+                        st.notify_source(*v, at, true, source);
                     }
                 }
             }
@@ -247,9 +256,7 @@ impl Recorder {
                                 || w.role == Role::Act as u64)
                     })
                     .collect();
-                work.sort_by_key(|w| {
-                    std::cmp::Reverse(w.end.min(end).saturating_sub(w.start.max(s.observed)))
-                });
+                work.sort_by_key(|w| context_key(w, s.observed, end));
                 work.truncate(4);
                 s.work = work;
                 s.context_checked = true;
@@ -273,9 +280,7 @@ impl Recorder {
                                 || w.role == Role::Act as u64)
                     })
                     .collect();
-                work.sort_by_key(|w| {
-                    std::cmp::Reverse(w.end.min(end).saturating_sub(w.start.max(s.requested)))
-                });
+                work.sort_by_key(|w| context_key(w, s.requested, end));
                 work.truncate(4);
                 s.work = work;
                 s.context_checked = true;
@@ -347,9 +352,18 @@ pub fn thread_id() -> u64 {
 }
 /// Scope whose completion records an authored operation. No locks or allocation on drop.
 #[must_use]
+#[derive(Debug)]
 pub struct ActivityGuard {
-    data: Option<(u64, u64, u64, u64, (u64, u64, u64))>,
+    data: Option<ActiveScope>,
     _local: PhantomData<Rc<()>>,
+}
+#[derive(Debug, Clone, Copy)]
+struct ActiveScope {
+    id: u64,
+    code: u64,
+    detail: u64,
+    at: u64,
+    previous: (u64, u64, u64),
 }
 /// Record a worker/VA/act operation. Unregistered callers (including vCPUs) do nothing.
 pub fn activity(op: Activity) -> ActivityGuard {
@@ -366,7 +380,13 @@ pub fn activity(op: Activity) -> ActivityGuard {
         t.detail.store(detail, Relaxed);
         t.start.store(at, Relaxed);
         t.code.store(code, Release);
-        Some((id, code, detail, at, previous))
+        Some(ActiveScope {
+            id,
+            code,
+            detail,
+            at,
+            previous,
+        })
     });
     ActivityGuard {
         data,
@@ -375,7 +395,14 @@ pub fn activity(op: Activity) -> ActivityGuard {
 }
 impl Drop for ActivityGuard {
     fn drop(&mut self) {
-        let Some((id, code, detail, start, previous)) = self.data else {
+        let Some(ActiveScope {
+            id,
+            code,
+            detail,
+            at: start,
+            previous,
+        }) = self.data
+        else {
             return;
         };
         let Some(r) = recorder() else {
@@ -434,9 +461,16 @@ pub fn notification_mask(mut eligible: impl FnMut(u32) -> bool) -> u64 {
 /// Actual IRQ write outcome, safe on a vCPU: no mutex, allocation, formatting or packet scan.
 /// The physical line is 0; mask names the sampled eligible logical-vector set.
 pub fn notification(mask: u64, success: bool) {
+    notification_from(mask, success, false);
+}
+/// Actual diagnostic-storm IRQ outcome, distinguished from normal notification opportunities.
+pub fn notification_storm(mask: u64, success: bool) {
+    notification_from(mask, success, true);
+}
+fn notification_from(mask: u64, success: bool, storm: bool) {
     if let Some(r) = recorder() {
         r.notices
-            .push([r.now(), mask, u64::from(success), 0, 0, 0, 0]);
+            .push([r.now(), mask, u64::from(success), u64::from(storm), 0, 0, 0]);
     }
 }
 /// Per-native-ring demand context, bounded to eight most recent wait intervals.
@@ -583,10 +617,10 @@ impl Tracker {
 }
 impl Drop for Tracker {
     fn drop(&mut self) {
-        if self.stream != 0 {
-            if let Some(r) = recorder() {
-                r.update(|st| st.cancel(self.stream));
-            }
+        if self.stream != 0
+            && let Some(r) = recorder()
+        {
+            r.update(|st| st.cancel(self.stream));
         }
     }
 }
@@ -700,7 +734,7 @@ fn dump(why: &str) {
         eprintln!(
             "kf3: LATENCY SLOW id={} stream={} kind={:?} token={:#x} worker={} \
             observe_ns={} publish_ns={} marker_id={:?} marker_observed_ns={:?} \
-            marker_gpu_ns={:?} vector={:?} notification_ns={:?} irq_line=0 \
+            marker_gpu_ns={:?} vector={:?} notification_ns={:?} notification_source={:?} irq_line=0 \
             correlation=eligible-vector-opportunity stages_ns={:?} total_ns={total:?} \
             gpu_observation_lag_ns={:?} waits=[{waits}] worker_context=[{context}]",
             s.cookie,
@@ -715,6 +749,7 @@ fn dump(why: &str) {
             s.gpu,
             s.vector,
             s.raised,
+            s.source,
             s.stages(),
             s.observation_lag()
         );
@@ -788,11 +823,11 @@ fn dump(why: &str) {
 }
 /// One bounded shutdown dump, from a non-vCPU thread after work has stopped.
 pub fn dump_shutdown() {
-    if let Some(r) = recorder() {
-        if !r.shutdown.swap(true, Relaxed) {
-            r.update(|_| {});
-            dump("shutdown");
-        }
+    if let Some(r) = recorder()
+        && !r.shutdown.swap(true, Relaxed)
+    {
+        r.update(|_| {});
+        dump("shutdown");
     }
 }
 
@@ -843,7 +878,12 @@ pub fn split_canceled(ticket: u64) {
 }
 
 fn context_key(w: &Span, start: u64, end: u64) -> std::cmp::Reverse<(u8, u64)> {
-    std::cmp::Reverse((0, w.end.min(end).saturating_sub(w.start.max(start))))
+    let priority = match w.code {
+        64.. => 3,
+        8..=10 | 14 => 2,
+        _ => 0,
+    };
+    std::cmp::Reverse((priority, w.end.min(end).saturating_sub(w.start.max(start))))
 }
 #[cfg(test)]
 mod context_tests {
