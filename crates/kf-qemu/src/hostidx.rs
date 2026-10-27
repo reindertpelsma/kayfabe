@@ -39,6 +39,16 @@ impl HostIdx {
     }
 }
 
+/// Give back a consumed ring using its resolved guest identity. The callback only rings a token.
+/// Shared by the native serve path and its GPU-free behavioral harness.
+pub fn reowe(_guest: Option<u32>, _ring: impl FnOnce(u32)) {
+    // EXPECTED RED: replay the pre-168 dropped-ring branch with the actual token layer.
+}
+
+#[cfg(test)]
+#[path = "hostidx_model.rs"]
+mod model;
+
 #[cfg(test)]
 mod tests {
     use super::HostIdx;
