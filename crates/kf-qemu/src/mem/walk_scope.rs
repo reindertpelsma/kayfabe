@@ -42,6 +42,14 @@ impl Statements {
         }
     }
 
+    fn release_applied(&mut self, through: u64, active: &[VasKey], global: bool) {
+        if !global {
+            self.keys
+                .retain(|key, last| *last > through || active.contains(key));
+        }
+        // Global/overflow statement holds remain conservative until RPC settlement.
+    }
+
     pub(super) fn settle(&mut self, seq: u64) {
         self.keys.retain(|_, last| *last > seq);
         if self.global_through <= seq {
@@ -110,7 +118,6 @@ impl Inbox {
         } else if self.walk_busy.load(Ordering::Acquire) {
             return Reason::Global;
         }
-        drop(scope);
         let Ok(statements) = self.statement_scope.try_lock() else {
             return Reason::Global;
         };
@@ -122,6 +129,7 @@ impl Inbox {
         }
         other |= !statements.keys.is_empty();
         drop(statements);
+        drop(scope);
         // Same lock order as queue -> running transfer: there is no unaccounted gap.
         let Ok(queued) = self.splits.try_lock() else {
             return Reason::Global;
@@ -407,6 +415,12 @@ mod tests {
 }
 
 impl Inbox {
+    /// VA worker only, after every statement through `n` has been processed. This is not an RPC
+    /// acknowledgement: its target can still have pending walk/apply/settlement work.
+    pub(crate) fn note_statements_applied(&self, n: u64) {
+        self.statement_applied.fetch_max(n, Ordering::Release);
+    }
+
     /// The VA loop's release transaction: settle before computing readiness or draining waiters.
     /// A waiter release is a hint only; every later source admission rechecks the current state.
     pub(crate) fn finish_gate_loop(
@@ -420,7 +434,14 @@ impl Inbox {
         let advanced = settled.is_some_and(|n| self.settle(n));
         let busy = manager_busy || !self.all_settled();
         self.set_walk_busy(busy);
-        self.set_walk_scope(keys, global, sequence);
+        self.set_walk_scope(keys.clone(), global, sequence);
+        if let Ok(mut statements) = self.statement_scope.lock() {
+            statements.release_applied(
+                self.statement_applied.load(Ordering::Acquire),
+                &keys,
+                global,
+            );
+        }
         let mut ready = self.take_ready_walk_waiters();
         if !busy {
             ready.extend(self.take_walk_waiters());

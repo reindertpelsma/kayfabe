@@ -13,7 +13,10 @@ const A: VasKey = VasKey(0x100);
 const B: VasKey = VasKey(0x200);
 
 /// Reconstruct the native queue->running->ACK state, independently of its predicate.
-fn native(own: u8, other: u8) -> Inbox {
+fn native(own: u8, other: u8, statements: bool) -> Inbox {
+    if statements {
+        return native_statements(own, other);
+    }
     let inbox = Inbox::new().unwrap();
     for (phase, key, token) in [(own, B, 7), (other, A, 9)] {
         if phase == 1 || phase == 2 {
@@ -38,8 +41,41 @@ fn native(own: u8, other: u8) -> Inbox {
     inbox
 }
 
+fn native_statements(own: u8, other: u8) -> Inbox {
+    let inbox = Inbox::new().unwrap();
+    let statement = |key: VasKey| {
+        super::MemStatement::PageDir(kf_rm::rmrpc::PageDirStatement {
+            client: kf_arch::ids::HClient(0),
+            vaspace: kf_arch::ids::HObject(key.0 as u32),
+            pdb: kf_arch::ids::Pdb(0x1000_0000),
+            pdb_aperture: Some(kf_arch::Aperture::Vidmem),
+        })
+    };
+    for (phase, key) in [(own, B), (other, A)] {
+        if phase == 2 || phase == 3 {
+            inbox.push(statement(key));
+        }
+    }
+    let applied = inbox.take().len() as u64;
+    inbox.note_statements_applied(applied);
+    for (phase, key) in [(own, B), (other, A)] {
+        if phase == 1 {
+            inbox.push(statement(key));
+        }
+    }
+    let keys = [(own, B), (other, A)]
+        .into_iter()
+        .filter(|(phase, _)| *phase == 2)
+        .map(|(_, key)| key)
+        .collect();
+    let busy = own == 2 || other == 2;
+    inbox.finish_gate_loop(keys, false, None, busy, (!busy).then_some(applied));
+    inbox
+}
+
 #[derive(Clone, Debug)]
 struct Io {
+    statements: bool,
     own: u8,
     other: u8,
     source: usize,
@@ -59,7 +95,9 @@ struct Io {
 }
 impl Io {
     fn ready(&self) -> bool {
-        !native(self.own, self.other).source_gate(B, 7).held()
+        !native(self.own, self.other, self.statements)
+            .source_gate(B, 7)
+            .held()
     }
     fn id(&self, raw: u64) -> Option<Ge> {
         self.entries
@@ -166,6 +204,7 @@ impl Node {
         Self {
             relay,
             io: Io {
+                statements: false,
                 own: 0,
                 other: 0,
                 source: 0,
@@ -214,11 +253,16 @@ impl Node {
             e.live,
         )
             .hash(&mut h);
-        (e.migrated, self.flag, self.modes, self.credit).hash(&mut h);
+        (e.migrated, e.statements, self.flag, self.modes, self.credit).hash(&mut h);
         h.finish()
     }
     fn check(&mut self) {
         assert_eq!(self.io.violations, 0, "I8");
+        assert_eq!(
+            self.io.ready(),
+            self.io.own != 1 && self.io.own != 2,
+            "known per-target readiness is independent of foreign work and RPC settlement"
+        );
         assert!(!self.relay.dead, "unexpected refusal");
         self.modes |= match self.relay.life.mode() {
             Mode::Scan => 1,
@@ -355,9 +399,7 @@ fn fair_finish(mut n: Node) -> Node {
     panic!("fair suffix did not terminate: {n:?}");
 }
 
-#[test]
-fn exhaustive_native_scopes_interleave_every_relay_step_and_preserve_safety() {
-    let start = Node::new(false);
+fn explore(start: Node) {
     let mut seen = HashSet::from([start.key()]);
     let mut queue = VecDeque::from([start]);
     let mut terminals = 0;
@@ -386,6 +428,17 @@ fn exhaustive_native_scopes_interleave_every_relay_step_and_preserve_safety() {
         "ENS10 exhaustive states={} terminals={terminals}",
         seen.len()
     );
+}
+
+#[test]
+fn exhaustive_native_scopes_interleave_every_relay_step_and_preserve_safety() {
+    explore(Node::new(false));
+}
+#[test]
+fn exhaustive_applied_statement_scopes_resume_without_settling_foreign_rpc_work() {
+    let mut start = Node::new(false);
+    start.io.statements = true;
+    explore(start);
 }
 
 #[test]
@@ -419,8 +472,9 @@ fn seeded_native_scope_schedules_replay_migration_window_and_credit_wait() {
     assert_eq!(coverage, (7, true));
 }
 
-fn foreign_hold(lazy: bool) {
+fn foreign_hold(lazy: bool, statements: bool) {
     let mut n = Node::new(lazy);
+    n.io.statements = statements;
     n.io.own = 3;
     n.io.other = 2;
     for _ in 0..1024 {
@@ -447,11 +501,11 @@ fn foreign_hold(lazy: bool) {
 }
 #[test]
 fn disjoint_space_reads_publish_migrate_and_complete_before_the_foreign_walk_ends() {
-    foreign_hold(false);
+    foreign_hold(false, false);
 }
 #[test]
 fn disjoint_space_cached_put_and_credit_progress_do_not_wait_for_a_foreign_walk() {
-    foreign_hold(true);
+    foreign_hold(true, false);
 }
 
 fn harvested_during_hold(lazy: bool) {
@@ -500,4 +554,13 @@ fn host_finished_marker_and_get_are_observed_within_three_worker_steps_during_bo
 #[test]
 fn lazy_worker_observes_finished_work_within_three_steps_while_future_reads_stay_held() {
     harvested_during_hold(true);
+}
+
+#[test]
+fn applied_statement_does_not_hold_pointer_migration_behind_foreign_apply() {
+    foreign_hold(false, true);
+}
+#[test]
+fn applied_statement_does_not_hold_cached_put_or_credit_behind_foreign_apply() {
+    foreign_hold(true, true);
 }

@@ -2282,6 +2282,7 @@ pub struct Inbox {
     scoped_waiters: Mutex<std::collections::BTreeMap<u32, VasKey>>,
     walk_scope: Mutex<Option<walk_scope::Scope>>,
     statement_scope: Mutex<walk_scope::Statements>,
+    statement_applied: AtomicU64,
     walk_port: std::sync::OnceLock<std::sync::Arc<InvalidatePort>>,
     /// Restricted Windows resource requests, consumed only by the VA worker.
     pub user_va: crate::userva::Queue,
@@ -2344,6 +2345,7 @@ impl Inbox {
             scoped_waiters: Mutex::new(Default::default()),
             walk_scope: Mutex::new(None),
             statement_scope: Mutex::new(Default::default()),
+            statement_applied: AtomicU64::new(0),
             walk_port: std::sync::OnceLock::new(),
             user_va: Default::default(),
             cache_req: std::array::from_fn(|_| AtomicU64::new(0)),

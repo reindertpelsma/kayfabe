@@ -452,13 +452,6 @@ fn the_va_release_transaction_wakes_legacy_overflow_when_its_last_statement_sett
     assert!(!inbox.walk_busy());
 }
 
-// Test-only old-code adapter: the original Inbox had no per-target applied milestone.
-// The fix supplies the production method; this no-op is removed in that commit.
-trait AppliedMarker {
-    fn note_statements_applied(&self, _n: u64) {}
-}
-impl AppliedMarker for Inbox {}
-
 fn page_dir(key: VasKey) -> kf_rm::barpde::MemStatement {
     kf_rm::barpde::MemStatement::PageDir(kf_rm::rmrpc::PageDirStatement {
         client: kf_arch::ids::HClient(0),

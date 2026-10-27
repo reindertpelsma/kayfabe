@@ -2211,6 +2211,7 @@ impl Device {
                     );
                 }
             }
+            self.mem.inbox.note_statements_applied(taken);
             if let Some(req) = self.mem.port.armed_request()
                 && last_seq != Some(req.seq)
             {
