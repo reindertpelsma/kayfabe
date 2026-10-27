@@ -74,8 +74,25 @@ impl Reason {
 }
 
 impl Inbox {
-    /// EXPECTED RED: a named PDB split still holds the whole VM after target resolution.
-    pub(crate) fn mark_split_scopes_resolved(&self, _tickets: &[u64]) {}
+    /// Publish the complete mutation union before narrowing only the admitted named requests.
+    pub(crate) fn mark_split_scopes_resolved(&self, tickets: &[u64]) {
+        let Ok(scope) = self.walk_scope.lock() else {
+            return;
+        };
+        if scope.as_ref().is_none_or(|s| s.global) {
+            return;
+        }
+        let Ok(mut running) = self.split_tokens.lock() else {
+            return;
+        };
+        for ticket in tickets {
+            if let Some((_, target)) = running.get_mut(ticket)
+                && let SplitTarget::Pdb(Some(pdb)) = *target
+            {
+                *target = SplitTarget::ResolvedPdb(pdb);
+            }
+        }
+    }
     /// VA thread, before any synchronous apply: publish ALL pending/active mutation targets.
     pub(crate) fn set_walk_scope(&self, keys: Vec<VasKey>, global: bool, sequence: Option<u64>) {
         let global = global
@@ -142,7 +159,7 @@ impl Inbox {
         }
         other |= !statements.keys.is_empty();
         drop(statements);
-        drop(scope);
+        // Retain scope through split inspection: resolution and its mutation union are atomic.
         // Same lock order as queue -> running transfer: there is no unaccounted gap.
         let Ok(queued) = self.splits.try_lock() else {
             return Reason::Global;
@@ -162,6 +179,13 @@ impl Inbox {
                 SplitTarget::Space(k) if *k == key => return Reason::Split,
                 SplitTarget::Space(_) => other = true,
                 SplitTarget::Pdb(_) => return Reason::Global,
+                SplitTarget::ResolvedPdb(_) => {
+                    // Complete target union was checked above; missing scope stays conservative.
+                    if scope.is_none() {
+                        return Reason::Global;
+                    }
+                    other = true;
+                }
             }
         }
         if other {

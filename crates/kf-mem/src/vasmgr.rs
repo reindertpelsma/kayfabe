@@ -919,6 +919,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
     deferred_layout: BTreeSet<VasKey>,
+    layout_cursor: Option<VasKey>,
+    layout_errors: u8,
     /// Owner ruling 2026-10-09: complete over absent leaves (read at construction; tests set it).
     clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
@@ -957,6 +959,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             inflight: None,
             splits_done: Vec::new(),
             deferred_layout: BTreeSet::new(),
+            layout_cursor: None,
+            layout_errors: 0,
             clear_absent: clear_over_absent(),
             awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
@@ -1031,13 +1035,43 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// Requests waiting for the next walk.
     #[must_use]
-    /// EXPECTED RED: idle layout continuations are not scheduled yet.
+    /// One optional idle slice, rotating fairly over identities rather than requests.
     pub fn retry_deferred_layout(&mut self) -> bool {
-        false
+        use std::ops::Bound::{Excluded, Unbounded};
+        let next = self
+            .layout_cursor
+            .and_then(|last| {
+                self.deferred_layout
+                    .range((Excluded(last), Unbounded))
+                    .next()
+                    .copied()
+            })
+            .or_else(|| self.deferred_layout.first().copied());
+        let Some(key) = next else {
+            return false;
+        };
+        self.layout_cursor = Some(key);
+        self.deferred_layout.remove(&key);
+        if let Some(space) = self.table.spaces.get(&key) {
+            match space.target.retry_deferred_layout() {
+                Ok(true) => {
+                    self.deferred_layout.insert(key);
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    if self.layout_errors < 8 {
+                        self.layout_errors += 1;
+                        eprintln!("kf3: idle sparse layout {key:?} refused: {e}");
+                    }
+                }
+            }
+        }
+        !self.deferred_layout.is_empty()
     }
     /// Whether sparse layout has retained work.
+    #[must_use]
     pub fn has_deferred_layout(&self) -> bool {
-        false
+        !self.deferred_layout.is_empty()
     }
 
     pub fn pending(&self) -> usize {
@@ -1145,6 +1179,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// [`Self::on_walk_ready`] collect it (nothing queued is left to submit after it) and calls
     /// this again — it is bounded, and the VA thread polls, never blocks.
     pub fn abandon_life(&mut self) -> Abandoned {
+        self.deferred_layout.clear();
+        self.layout_cursor = None;
         let mut out = Abandoned {
             in_flight: self.inflight.is_some(),
             ..Abandoned::default()
@@ -1259,6 +1295,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// ★ Forget an object (its VA space is gone), returning its target so the caller can tear
     /// its mappings down through the target's own record. Its slot is released to the walker.
     pub fn remove(&mut self, key: VasKey) -> Option<T> {
+        self.deferred_layout.remove(&key);
         let t = self.table.remove(key);
         self.flush_released();
         t
@@ -1698,6 +1735,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             });
             let cost_before = kf_host::diag::snapshot();
             let a = apply_entry(&space.target, &e.runs, &cfg);
+            if space.target.sparse_twin() {
+                self.deferred_layout.insert(key);
+            }
             if let Some((before, cpu_before)) = ens3_before {
                 crate::gatelog::global().ens3_end(
                     key.0,

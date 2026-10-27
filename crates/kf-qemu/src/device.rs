@@ -611,6 +611,7 @@ impl Device {
         );
         let ram: &'static crate::mem::RamMap = Box::leak(Box::default());
         let inbox = std::sync::Arc::new(crate::mem::Inbox::new()?);
+        inbox.bind_layout_interrupt(rm.layout_interrupt_handle());
 
         let facts = Bar0Facts {
             architecture,
@@ -2309,9 +2310,14 @@ impl Device {
             self.mem.inbox.note_statements_applied(taken);
             // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
             // wait on the worker that asked.
-            for (ticket, target) in self.mem.inbox.take_split_requests() {
+            let drained_splits = self.mem.inbox.take_split_requests();
+            let admitted_splits: Vec<_> = drained_splits.iter().map(|(t, _)| *t).collect();
+            for (ticket, target) in drained_splits {
                 match target {
                     crate::mem::SplitTarget::Pdb(pdb) => m.queue_split(pdb, None, ticket, trigger),
+                    crate::mem::SplitTarget::ResolvedPdb(pdb) => {
+                        m.queue_split(Some(pdb), None, ticket, trigger)
+                    }
                     // ★ §U.2: a deferred TLB invalidate — the channel's own space; its gate is
                     // released by `finish_split` below, after the walk's commit.
                     crate::mem::SplitTarget::Space(key) => {
@@ -2332,6 +2338,7 @@ impl Device {
             self.mem
                 .inbox
                 .set_walk_scope(keys, global, armed.map(|r| r.seq));
+            self.mem.inbox.mark_split_scopes_resolved(&admitted_splits);
             // Wake independent ready rings before entering another target's synchronous apply.
             for tok in self.mem.inbox.take_ready_walk_waiters() {
                 if self.plane.ring_internal(tok) {
@@ -2582,6 +2589,14 @@ impl Device {
                 && !self.mem.inbox.walk_busy()
                 && self.mem.port.armed_request().is_none()
             {
+                if self.mem.inbox.allow_deferred_layout() {
+                    if m.retry_deferred_layout() {
+                        let _ = self.mem.inbox.wake.signal();
+                    }
+                } else if m.has_deferred_layout() {
+                    // A registration race retains its owed continuation; no timer is added.
+                    let _ = self.mem.inbox.wake.signal();
+                }
                 self.mem.inbox.user_va.serve(&m, self.rm);
                 if self.mem.inbox.user_va.has_work() {
                     let _ = self.mem.inbox.wake.signal();

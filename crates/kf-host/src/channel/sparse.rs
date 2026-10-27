@@ -154,6 +154,12 @@ impl HostRm {
         self.slice.renew();
     }
 
+    /// A newly queued split stops optional layout between RM verbs.
+    #[must_use]
+    pub fn layout_interrupt_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        self.slice.interrupt_handle()
+    }
+
     /// `(verbs, ns)` of reservation verbs in the busiest refresh so far (the running one included).
     #[must_use]
     pub fn layout_slice_peak(&self) -> (u32, u64) {
@@ -204,6 +210,18 @@ impl HostRm {
     pub fn retry_sparse(&self, space: VaSpace) -> Result<(), RmError> {
         self.with_sparse(space.space, |tree, ops| tree.retry(ops))
             .unwrap_or(Ok(()))
+    }
+
+    /// One idle slice; retries blocked by space pressure await the next guest event.
+    /// Only slice-limited work re-arms itself, avoiding an RM-refusal busy loop.
+    pub fn retry_sparse_background(&self, space: VaSpace) -> Result<bool, RmError> {
+        self.begin_layout_slice();
+        self.with_sparse(space.space, |tree, ops| {
+            let before = tree.counters().slice_deferred;
+            tree.retry(ops)?;
+            Ok(tree.counters().slice_deferred > before || self.slice.exhausted(true))
+        })
+        .unwrap_or(Ok(false))
     }
 
     /// Clear all sparse state before this empty host space becomes a spare for a

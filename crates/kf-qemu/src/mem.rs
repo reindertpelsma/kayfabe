@@ -1459,6 +1459,14 @@ impl GpuMirror {
 }
 
 impl MapTarget for GpuMirror {
+    fn retry_deferred_layout(&self) -> Result<bool, String> {
+        self.bv
+            .vas
+            .rm
+            .retry_sparse_background(self.bv.vas.space)
+            .map_err(|e| format!("{e:?}"))
+    }
+
     fn sparse_twin(&self) -> bool {
         self.bv.vas.sparse_twin()
     }
@@ -1832,6 +1840,13 @@ pub const PREWARM_SPARES: u64 = 3;
 pub type Mirrors = std::sync::Arc<Mutex<std::collections::HashMap<VasKey, Mirror>>>;
 
 impl MapTarget for Target {
+    fn retry_deferred_layout(&self) -> Result<bool, String> {
+        match self {
+            Target::Gpu(g) => g.retry_deferred_layout(),
+            _ => Ok(false),
+        }
+    }
+
     fn sparse_twin(&self) -> bool {
         matches!(self, Target::Gpu(g) if g.sparse_twin())
     }
@@ -2282,6 +2297,8 @@ pub type Manager = VaManager<GpuWalker, Target>;
 pub enum SplitTarget {
     /// A guest `MEM_OP` invalidate's root (`None` = `PDB_ALL`).
     Pdb(Option<u64>),
+    /// A named PDB whose complete mutation domain has been published by the manager.
+    ResolvedPdb(u64),
     /// ★ OWNER_RULINGS §U.2: the triggering channel's OWN space (a deferred TLB invalidate).
     Space(kf_mem::vasmgr::VasKey),
 }
@@ -2292,6 +2309,7 @@ pub enum SplitTarget {
 /// flight or pending). A held reply is delivered when they are equal.
 #[derive(Debug)]
 pub struct Inbox {
+    layout_stop: std::sync::OnceLock<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     pub(crate) row_handoff: std::sync::Arc<RowHandoff>,
     pub(crate) walk_stats: walk_scope::Stats,
     scoped_waiters: Mutex<std::collections::BTreeMap<u32, VasKey>>,
@@ -2356,6 +2374,7 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
+            layout_stop: Default::default(),
             row_handoff: Default::default(),
             walk_stats: walk_scope::Stats::default(),
             scoped_waiters: Mutex::new(Default::default()),
@@ -2525,6 +2544,38 @@ impl Inbox {
         self.bar1_physical.load(Ordering::Acquire)
     }
 
+    /// Bind the host's optional-layout interrupt without introducing a vCPU lock.
+    pub(crate) fn bind_layout_interrupt(
+        &self,
+        stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        let _ = self.layout_stop.set(stop);
+    }
+
+    fn interrupt_layout(&self) {
+        if let Some(stop) = self.layout_stop.get() {
+            stop.store(true, Ordering::Release);
+        }
+    }
+
+    /// Clear the interrupt while holding the same queue-to-running locks as admission.
+    /// A later request sets it under the queue guard, so idle admission cannot lose it.
+    pub(crate) fn allow_deferred_layout(&self) -> bool {
+        let Ok(queued) = self.splits.try_lock() else {
+            return false;
+        };
+        let Ok(running) = self.split_tokens.try_lock() else {
+            return false;
+        };
+        if !queued.is_empty() || !running.is_empty() {
+            return false;
+        }
+        if let Some(stop) = self.layout_stop.get() {
+            stop.store(false, Ordering::Release);
+        }
+        true
+    }
+
     /// ★ P6, a WORKER: channel `token` reached a `MEM_OP` invalidate of `pdb` and its prior work
     /// completed — ask the VA thread to walk + reconcile. Returns the ticket to poll. ⊘ Never waits.
     pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
@@ -2538,6 +2589,7 @@ impl Inbox {
         }
         if let Ok(mut q) = self.splits.lock() {
             q.push((t, token, SplitTarget::Pdb(pdb)));
+            self.interrupt_layout();
             kf_host::latency::split_request_at(
                 t,
                 token,
@@ -2576,6 +2628,7 @@ impl Inbox {
             q.try_reserve(1)
                 .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_ALLOCATION"))?;
             q.push((t, token, SplitTarget::Space(key)));
+            self.interrupt_layout();
             kf_host::latency::split_request_at(
                 t,
                 token,
@@ -2610,6 +2663,7 @@ impl Inbox {
         }
         if let Ok(mut q) = self.splits.lock() {
             q.push((t, token, SplitTarget::Space(key)));
+            self.interrupt_layout();
             kf_host::latency::split_request_at(
                 t,
                 token,
