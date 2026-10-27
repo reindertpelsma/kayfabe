@@ -68,3 +68,44 @@ MEASURED (2026-10-27, lease 57882297, `run4_regress/mutants.run`): hand mutants 
 
 - Windows applications, Heaven, the 600 s hold, `driver_status` and `opencl_icd` rows (the lease ended first), and the TDR root cause.
 - TU106 native Windows reference (lane WC1, machine 39235). The only native Windows Turing reference is TU116 (`docs/design/V3_TURING_DIE_TABLE.md` on `origin/codex/wc1-20261026`), so the Windows failures above are classified as kayfabe's only provisionally.
+
+
+## Iteration 2 (2026-10-27): PR split, shorter lease, Ampere control, lost ring
+
+### PRs (all base master; each with an EXPECTED RED commit before the fix)
+
+| PR | Content | State |
+|---|---|---|
+| #161 | `HUBCLIENT_(CE\|HSCE)` in the native Xid guard (SW5's two commits) and the payload mutants that named the old line | ready; stable, firmware, broker and aarch64 pass, the `gpu-vast` jobs fail on the Worker's UNAVAILABLE state |
+| #162 | Windows USER ring admits `TURING_CHANNEL_GPFIFO_A` (0xc46f) | ready; every check passes, `gpu-vast` included |
+| #163 | `WINVM_KF3_DISPLAY=off` (`kf3_device_props`) | draft |
+| #164 | `kf-disp` Turing NVC57E window semaphores (acquire not modelled) | draft, needs owner review |
+| #165 | `windows_lane.sh` and `WINVM_INSTALL_CACHE` | draft |
+| #168 | a worker that finds its Translated slot locked gives the ring back (lost wake) | draft, needs owner review |
+| #169 | completion probe: verdict, cause and token word | draft |
+
+### Shorter Windows lease: what the setup-cache route is, and what it is not
+
+CODE READ: `setup-cache-*` blobs (`docs/design/VAST_SETUP_CACHE_20261023.md`) are the Linux dependency cache (.debs, `cargo vendor`). A sealed Windows base image would be a different blob in `win-gpu-image-private-store`, with three obstacles: `win_vm.sh` never restores a VM from another VM's state (swtpm state, harness ssh key, Windows password are per VM), the store's write path is the `win-gpu-image` environment only, and the store README keeps the licence review open. I did not publish one. That is an owner decision.
+
+MEASURED (2026-10-27, lease 57908255, `iter2_ga106/winlane.log`): `windows_lane.sh` took a fresh box to a sealed Windows base image in 3407 s (box 219, guest run 9, host driver 264, bench tree 405, kf3 build 18, prerequisites 36, install 2456). The install was NOT faster: 41 min with 16 cores and `cache=unsafe`, against 32 min on lease 57882297 and 19 min on a 16-core box in BW11. INFERRED: the install is bound by one nested-virtualization thread, so cores and disk cache do not help; the only large saving left is a sealed image. Falsifier: an install on a bare-metal KVM host with the same knobs finishing in about 20 min.
+
+### Control: the same Windows flow on Ampere (GA106, RTX 3060)
+
+Host: Quebec CA, host 79466 (the same host as the TU106 box), Xeon E5-2698 v4, 38 vCPUs, offer 54502208, machine 13666, 0.107 USD/h, kayfabe head `385c9285` to `340c6b5a`.
+
+MEASURED (2026-10-27, lease 57908255, `iter2_ga106/hostref_before.txt`, `hostref_after.txt`): host reference green before and after: stock 575.51.03 then 595.91.07 open, BAR1 256 MiB, 0 Xid, roundtrip equal, 1 MiB used at the end.
+
+MEASURED (2026-10-27, lease 57908255, `iter2_ga106/ga106_o1_timeline.csv`, `ga106_o1_matrix.txt`): with the winprod flags, `display=on` and the completion probe, Windows reached Code 0, and then reset in a storm: 54 `nvlddmkm` 153 events 6 minutes after boot and 96 at 10.5 minutes (about 9 events a minute, one triple every 20 s), 116 RM unloads in 17 minutes. In the first minutes `cuda_occupancy`, `dxprobe_d3d11`, `cup2`, `cup3` and `cup8` (matmul byte exact) passed; `cuda_callback` and `dxprobe_d3d12` failed. TU106 showed the same storm (lease 57882297, 66 events in 8 minutes). So the storm is not Turing specific.
+
+MEASURED (2026-10-27, lease 57908255, `iter2_ga106/ga106_o1_overdue_block.txt`): the Ampere run printed the same `HOST-FENCE-OVERDUE` dump as TU106 (ring drained, fence word 1464 equal to the in-flight sequence 1464). H-CE2 (a Turing-specific lost LCE2 fence) is falsified.
+
+MEASURED (2026-10-27, lease 57908255, `iter2_ga106/ga106_h1_*`, `ga106_h2_*`): headless (`display=off`) and idle, the Ampere guest was quiet after one early triple (3 events in 8 minutes). Headless with the matrix running it went quiet in a different way: after 4 RM unloads the guest stopped answering ssh for more than eight minutes while the log kept filling with `NV2080_CTRL_CMD` 0x20801111 requests (572 in 10 minutes, answered "NV_OK, request echoed, contents ignored" by the `KF3_SW_RUNLIST_HOST_OWNED` path that awaits the owner's confirmation). The same control is asked about 1000 times in every storm run, so it is a lead, not a cause.
+
+### The lost ring (fixed on #168)
+
+MEASURED (2026-10-27, lease 57908255, `iter2_ga106/ga106_o2_overdue_block.txt`, `ga106_h1_overdue_block.txt`): with the new probe lines, the overdue dump reads `HOST-DONE-NOT-SEEN marked`, cause `WAKE-NOT-PUMPED` (the last wake 1001 ms ago, the channel's last pump 1002 ms ago, which read fence word 299 for head 300), token word `Idle`, and `chan[contended=1]`. CODE READ: `ChanPlane::serve` `try_lock`ed the slot and dropped the ring when another thread held it. With the ring given back (#168), MEASURED (2026-10-27, lease 57908255, `iter2_ga106/ga106_o3_*`): the contended counter reached 3 in 17 minutes and no `HOST-FENCE-OVERDUE` dump appeared, against one or more in every earlier run. The storm itself continued (116 unloads), and also with a console consumer pulling a frame a second (`ga106_o4_*`, 328 screendumps, 16 unloads in 3 minutes): a missing display consumer is not the cause either.
+
+### What is left, and the TU106 native reference
+
+The native TU106 reference (WC1, machine 39235) passed, so a green-host-reference failure on TU106 is kayfabe's, but it held no continuous workload and is not a stability reference. The storm is therefore classified as kayfabe's and generic (TU106 and GA106). Its cause is not found. Ruled out here: Turing-specific LCE2 fence (H-CE2), the dropped ring (still storms), a missing console consumer, the completion probe itself (storms without it, TU106 `w7`). Open leads, each INFERRED: the display-on desktop (idle headless is quiet), the ignored software-runlist control, and the unmodelled Turing flip semaphore (H-DISP; WC1's table lists GSP controls and classes only, no flip semaphores, so it cannot settle it). Next measurement: ETW or the guest's dxgkrnl scheduler events on the first reset of a boot, then bisect the production flag list on GA106 (cheap and fast) before spending another TU106 lease.
