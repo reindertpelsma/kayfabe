@@ -136,7 +136,7 @@ The launchers stop a guest by asking it to power down (ACPI), then waiting, and 
 
 ## Not documented yet
 
-- A recipe that starts the device without root, and the host permissions it needs.
+- A recipe that starts the device without root, and the host permissions it needs. One run as an ordinary user is recorded on the branch `claude/rootless-audit-20261016` (see [Security model](security.md)); the scripts described here still run as root.
 - libvirt, systemd units, container images and sandbox profiles. The design leaves sandboxing the (single) QEMU process to the deployer: see [Security model](security.md).
 - A complete reference for the `KF3_*` environment variables.
 - Several VMs on one GPU as a supported configuration.

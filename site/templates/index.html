@@ -12,202 +12,60 @@
     <h1>kayfabe</h1>
     <!-- src: {{ x.tagline_src }} -->
     <p class="tagline">{{ x.tagline }}</p>
-    <!-- src: {{ x.intro_src }} -->
-    <p class="lede">{{ x.intro | markdown(inline=true) | safe }}</p>
+    <!-- src: {{ x.lede_src }} -->
+    <p class="lede">{{ x.lede }}</p>
     <p class="actions">
-      <a class="button" href="#today-h">What works today</a>
-      <a class="button secondary" href="/docs/">Read the manual</a>
-      <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">Source on GitHub</a>
+      <a class="button" href="/docs/">Read the manual</a>
+      <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">kayfabe on GitHub</a>
     </p>
     <!-- src: {{ x.screenshot.src }} -->
     <figure class="shot">
       <img src="{{ get_url(path='screenshot-windows-desktop.jpg') | replace(from="https://kayfabe.dev", to="") }}" width="1600" height="692" decoding="async" alt="{{ x.screenshot.alt }}" />
       <figcaption>{{ x.screenshot.caption }}</figcaption>
     </figure>
+    <!-- src: {{ x.status_src }} -->
+    <p class="statusline">{{ x.status | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
   </div>
 </section>
 
-<section class="wrap status" aria-labelledby="status-h">
-  <!-- src: {{ x.status.src }} -->
-  <div class="callout warn">
-    <h2 id="status-h">{{ x.status.heading }}</h2>
-    <ul class="statuslist">
-      {% for i in x.status.items %}<li>{{ i | markdown(inline=true) | safe }}</li>{% endfor %}
-    </ul>
-    <p class="small">{{ x.status.more | markdown(inline=true) | safe }}</p>
-  </div>
-</section>
-
-<section class="wrap" aria-labelledby="pitch-h">
-  <h2 id="pitch-h">{{ x.pitch.heading }}</h2>
-  <ul class="cards pitch">
-    {% for p in x.pitch.items %}
-    <li>
-      <!-- src: {{ p.src }} -->
-      <h3>{{ p.title }}</h3>
-      <p>{{ p.text | markdown(inline=true) | safe }}</p>
-    </li>
-    {% endfor %}
-  </ul>
-  <!-- src: {{ x.pitch.note_src }} -->
-  <p class="small footnote">{{ x.pitch.note | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
-</section>
-
-<section class="wrap" aria-labelledby="who-h">
-  <h2 id="who-h">{{ x.audiences.heading }}</h2>
-  <p>{{ x.audiences.intro }}</p>
-  <ul class="cards who">
-    {% for c in x.audiences.cards %}
-    <li>
-      <!-- src: {{ c.src }} -->
-      <h3>{{ c.name }}</h3>
-      <dl>
-        <dt>Promise</dt><dd>{{ c.promise | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</dd>
-        <dt>Proof</dt><dd>{{ c.proof | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</dd>
-        <dt>Caveat</dt><dd>{{ c.caveat | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</dd>
-      </dl>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
-
-<section class="wrap" aria-labelledby="speed-h">
-  <h2 id="speed-h">{{ x.speed.heading }}</h2>
-  <!-- src: {{ x.speed.src }} -->
-  <p>{{ x.speed.intro }}</p>
-  <div class="table-scroll" role="region" aria-labelledby="speed-h" tabindex="0">
-    <table>
-      <thead>
-        <tr>{% for c in x.speed.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">run</span>{% endif %}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in x.speed.rows %}
-        <tr{% if row.highlight %} class="highlight"{% endif %}>
-          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell | markdown(inline=true) | safe }}</th>{% else %}<td>{{ cell | markdown(inline=true) | safe }}</td>{% endif %}{% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <!-- src: {{ x.speed.note_src }} -->
-  <p class="small">{{ x.speed.note | markdown(inline=true) | safe }}</p>
-  <!-- src: {{ x.speed.linux.src }} -->
-  <p>{{ x.speed.linux.intro }}</p>
-  <div class="table-scroll" role="region" aria-label="Linux guest CUDA results" tabindex="0">
-    <table class="narrow">
-      <thead>
-        <tr>{% for c in x.speed.linux.columns %}<th scope="col">{{ c }}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in x.speed.linux.rows %}
-        <tr>
-          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell }}</th>{% else %}<td>{{ cell }}</td>{% endif %}{% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <p class="small">{{ x.speed.linux.note }}</p>
-</section>
-
-<section class="wrap" aria-labelledby="compare-h">
-  <h2 id="compare-h">{{ x.compare.heading }}</h2>
-  <!-- src: {{ x.compare.src }} -->
-  <p>{{ x.compare.intro }}</p>
-  <div class="table-scroll" role="region" aria-labelledby="compare-h" tabindex="0">
-    <table>
-      <thead>
-        <tr>{% for c in x.compare.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">approach</span>{% endif %}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in x.compare.rows %}
-        <tr{% if row.highlight %} class="highlight"{% endif %}>
-          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell | markdown(inline=true) | safe }}</th>{% else %}<td>{{ cell | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</td>{% endif %}{% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="wrap" aria-labelledby="today-h">
-  <h2 id="today-h">{{ x.today.heading }}</h2>
-  <!-- src: {{ x.today.src }} -->
-  <p>{{ x.today.intro }}</p>
-  <div class="table-scroll" role="region" aria-labelledby="today-h" tabindex="0">
-    <table class="today">
-      <thead>
-        <tr>{% for c in x.today.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">status</span>{% endif %}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in x.today.rows %}
-        <tr>
-          <th scope="row">{% if row.status == "works" %}<span class="st st-works">Works today</span>{% elif row.status == "partly" %}<span class="st st-partly">Partly</span>{% else %}<span class="st st-no">Not yet</span>{% endif %}</th>
-          <td><!-- src: {{ row.src }} -->{{ row.what | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</td>
-          <td>{{ row.evidence | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <!-- src: {{ x.games.src }} -->
-  <p class="small footnote">{{ x.games.text }}</p>
-</section>
-
-<section class="wrap" aria-labelledby="path-h">
-  <h2 id="path-h">{{ x.path.heading }}</h2>
-  <!-- src: {{ x.path.src }} -->
-  <div class="path">
-    <figure>
-      <svg viewBox="0 0 380 590" role="img" aria-labelledby="path-t path-d" xmlns="http://www.w3.org/2000/svg">
-        <title id="path-t">Data path from a guest application to the GPU</title>
-        <desc id="path-d">Six steps from top to bottom. Inside the guest, which is treated as hostile: an application, then NVIDIA's stock driver. Inside one host QEMU process: the emulated NVIDIA GPU, a QEMU device, then kayfabe, which authors the host actions. Then the host's NVIDIA kernel driver, then the GPU.</desc>
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" class="arrowhead" />
-          </marker>
-        </defs>
-        <rect class="zone guest" x="6" y="6" width="368" height="172" rx="8" />
-        <text class="zone-label" x="20" y="28">Guest VM (treated as hostile)</text>
-        <rect class="node" x="30" y="42" width="320" height="46" rx="6" />
-        <text x="190" y="70" text-anchor="middle">Guest application</text>
-        <line class="edge" x1="190" y1="88" x2="190" y2="118" marker-end="url(#arrow)" />
-        <rect class="node" x="30" y="120" width="320" height="46" rx="6" />
-        <text x="190" y="148" text-anchor="middle">NVIDIA's stock driver, unmodified</text>
-
-        <line class="edge" x1="190" y1="178" x2="190" y2="214" marker-end="url(#arrow)" />
-
-        <rect class="zone host" x="6" y="216" width="368" height="172" rx="8" />
-        <text class="zone-label" x="20" y="238">Host: one QEMU process, kayfabe linked in</text>
-        <rect class="node" x="30" y="252" width="320" height="46" rx="6" />
-        <text x="190" y="280" text-anchor="middle">Emulated NVIDIA GPU (QEMU device)</text>
-        <line class="edge" x1="190" y1="298" x2="190" y2="328" marker-end="url(#arrow)" />
-        <rect class="node key" x="30" y="330" width="320" height="46" rx="6" />
-        <text x="190" y="358" text-anchor="middle">kayfabe: unprivileged host actions</text>
-
-        <line class="edge" x1="190" y1="388" x2="190" y2="424" marker-end="url(#arrow)" />
-        <rect class="node plain" x="30" y="426" width="320" height="46" rx="6" />
-        <text x="190" y="454" text-anchor="middle">Host NVIDIA kernel driver</text>
-        <line class="edge" x1="190" y1="472" x2="190" y2="508" marker-end="url(#arrow)" />
-        <rect class="node plain" x="30" y="510" width="320" height="46" rx="6" />
-        <text x="190" y="538" text-anchor="middle">GPU (the host keeps using it)</text>
-      </svg>
-    </figure>
+<section class="wrap" aria-labelledby="uses-h">
+  <h2 id="uses-h">{{ x.uses.heading }}</h2>
+  <div class="scenes">
+    {% for s in x.uses.items %}
     <div>
-      <ol class="steps">
-        {% for s in x.path.steps %}<li>{{ s }}</li>{% endfor %}
-      </ol>
-      <p>{{ x.path.note }}</p>
+      <!-- src: {{ s.src }} -->
+      <h3>{{ s.title }}</h3>
+      <p>{{ s.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
     </div>
+    {% endfor %}
   </div>
 </section>
 
-<section class="wrap" aria-labelledby="honest-h">
-  <h2 id="honest-h">{{ x.honest.heading }}</h2>
-  <!-- src: {{ x.honest.src }} -->
-  <ul>
-    {% for i in x.honest.items %}<li>{{ i | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>{% endfor %}
+<section class="wrap" aria-labelledby="diff-h">
+  <h2 id="diff-h">{{ x.different.heading }}</h2>
+  <!-- src: {{ x.different.src }} -->
+  <p>{{ x.different.intro }}</p>
+  <ul class="plain">
+    {% for i in x.different.items %}<li><!-- src: {{ i.src }} --><strong>{{ i.name }}</strong> {{ i.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>
+    {% endfor %}
   </ul>
+  <!-- src: {{ x.different.isolated_src }} -->
+  <p><strong>{{ x.different.isolated_heading }}.</strong> {{ x.different.isolated | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
+</section>
+
+<section class="wrap" aria-labelledby="where-h">
+  <h2 id="where-h">{{ x.where.heading }}</h2>
+  <!-- src: {{ x.where.src }} -->
+  <p>{{ x.where.intro }}</p>
+  {% for g in x.where.groups %}
+  <h3>{{ g.title }}</h3>
+  <ul class="plain">
+    {% for i in g.items %}<li><!-- src: {{ i.src }} -->{{ i.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+  <!-- src: {{ x.licence.src }} -->
+  <p class="small">{{ x.licence.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
 </section>
 
 <section class="wrap" aria-labelledby="start-h">
@@ -216,12 +74,7 @@
   <p>{{ x.start.text | markdown(inline=true) | safe }}</p>
   <div class="codeblock"><pre class="copyable"><code>{{ x.start.command }}</code></pre></div>
   <p>{{ x.start.after }}</p>
-  <ul>
-    <li><a href="{{ docs }}requirements.html">Requirements</a>: what the repository's evidence covers.</li>
-    <li><a href="{{ docs }}building.html">Building from source</a>: the exact steps the build scripts perform.</li>
-    <li><a href="{{ docs }}installing.html">Running the QEMU device</a>: there is no installer; how the device is provisioned and started today.</li>
-    <li><a href="{{ docs }}FAQ.html">FAQ</a> and <a href="{{ docs }}goals.html">Goals and plans</a>: the questions people ask first, and what is planned (without dates).</li>
-  </ul>
+  <p>Start with the <a href="{{ docs }}index.html">manual</a>, the <a href="{{ docs }}FAQ.html">FAQ</a> and <a href="{{ docs }}goals.html">goals and plans</a>. The <a href="{{ docs }}requirements.html">requirements</a> page says which cards and drivers have been tried.</p>
   <div role="search">
     <form action="{{ docs }}" method="get">
       <label for="hero-search">Search the documentation</label>
@@ -256,12 +109,7 @@
 <section class="wrap" aria-labelledby="community-h">
   <h2 id="community-h">{{ x.community.heading }}</h2>
   <!-- src: {{ x.community.src }} -->
-  <ul>
-    <li><a href="https://github.com/reindertpelsma/kayfabe">The repository</a>: source, history and the design documents.</li>
-    <li><a href="https://github.com/reindertpelsma/kayfabe/issues">Issues</a>: questions, bugs and documentation gaps.</li>
-    <li><a href="{{ docs }}credits.html">Credits and notices</a>: licences, acknowledgements and related projects.</li>
-    <li><a href="/security/">Reporting a suspected vulnerability</a>: privately, through GitHub.</li>
-  </ul>
+  <p>The code, the history and the design notes are in <a href="https://github.com/reindertpelsma/kayfabe">the repository</a>. Questions, bugs and gaps in the docs go to the <a href="https://github.com/reindertpelsma/kayfabe/issues">issue tracker</a>. Licences and acknowledgements are on <a href="{{ docs }}credits.html">Credits and notices</a>. To report a suspected vulnerability, see <a href="/security/">Security</a>; it goes through GitHub, privately.</p>
   <!-- src: {{ x.community.licence_src }} -->
   <p class="small">{{ x.community.licence }}</p>
 </section>

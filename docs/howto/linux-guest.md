@@ -14,7 +14,7 @@ All of these are the repository's claims, with the revision or box where it stat
 - **A desktop** with display planes (overlay, YUV) and 3 of 3 suspend/resume cycles. See [Display and the broker](display.md). <!-- src: README.md -->
 - **Driver versions:** see [Requirements](requirements.md).
 
-Not done: demand-paged managed memory (4 applications), a rootless end-to-end boot record, and any statement about two VMs sharing one GPU. <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
+Not done: demand-paged managed memory (4 applications), a rootless boot record on master (one exists on the branch `claude/rootless-audit-20261016`, see [Security model](security.md)), and any statement about sharing performance between two VMs on one GPU (two VMs have booted together; see the [FAQ](FAQ.md)). <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
 
 ## Prepare a guest image
 

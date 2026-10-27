@@ -6,7 +6,7 @@ This page lists only what the repository's evidence states. Where the repository
 
 ### Operating system and CPU
 
-- **Linux on x86-64 with KVM** (the host OS is Linux only).  The device is a QEMU device, and every recorded run used `/dev/kvm` with `-cpu host`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/host_preflight.sh, docs/design/THE_ARCHITECTURE_v3.md section 0 ("Host OS is Linux only") -->
+- **Linux on x86-64 with KVM** (the host OS is Linux only).  The device is a QEMU device (only QEMU is supported today; independence from one hypervisor is a goal, see [Goals and plans](goals.md)), and every recorded run used `/dev/kvm` with `-cpu host`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/host_preflight.sh, docs/design/THE_ARCHITECTURE_v3.md section 0 ("Host OS is Linux only") -->
 - The CPU needs hardware virtualisation (`vmx` or `svm`). <!-- src: scripts/bench/host_preflight.sh -->
 - Hosts that are themselves KVM guests (nested virtualisation) work, and most hardware results come from such rented hosts. A VM exit costs about 10 to 40 times as much on them as on bare metal. <!-- src: docs/STATUS_DETAIL.md section 4 and AGENTS.md "Bench traps" --> Results on non-nested hardware: the author's RTX 4070 host runs the Windows results in the README. <!-- src: README.md -->
 - Intel and AMD (EPYC 7452) hosts appear in the recorded results. <!-- src: docs/design/V3_APP_MATRIX.md, docs/STATUS_DETAIL.md -->
@@ -61,8 +61,8 @@ What has been run (the README's list; revisions and boxes are in the repository'
 
 - The design runs the host side from an unprivileged process using only resource-manager controls the host driver marks non-privileged. <!-- src: ARCHITECTURE.md, README.md -->
 - The provided launch scripts, however, run as root: they open `/dev/nvidia*`, create a tap network and take a lock. <!-- src: scripts/bench/display/interactive.sh -->
-- A recorded, end-to-end run without root is **not documented yet**.
-- **No host patches are required.** An optional patch to the host's `nvidia-uvm` exists as research; it is not part of the stock path. <!-- src: docs/STATUS_DETAIL.md section 0 --> Four of the 65 CUDA applications need unified-memory demand paging and fail without it. <!-- src: README.md -->
+- **One run without root is recorded**, on one host: a user whose only group was `kvm` (no capabilities) ran the 30-arm Linux suite 30 of 30, the GPU gates 9 of 9 and a Windows 11 guest running Unigine Heaven, with no VFIO rebind and no kernel module, driver or udev change [measured, kayfabe `0a746117`, RTX 4070, driver 595.91.07]. It relied on NVIDIA's default mode 0666 for `/dev/nvidia*`, and the user needed permission to open `/dev/kvm`. The record is on the branch `claude/rootless-audit-20261016` (`traces/rootless_audit_20261016/REPORT.txt`), not on master; a repeatable test on master is still to be added. See [Security model](security.md). <!-- src: branch claude/rootless-audit-20261016 commit 32d7319b2, traces/rootless_audit_20261016/REPORT.txt -->
+- **No host patches are required.** An optional patch to the host's `nvidia-uvm` exists as research; it is not part of the stock path. <!-- src: docs/STATUS_DETAIL.md section 0 --> Four of the 65 CUDA applications need unified-memory demand paging and fail without it. Optional enhancements (a guest helper module, patched guest or host drivers) are planned and never required. <!-- src: README.md; docs/design/V3_COOPERATIVE_TIERS.md section 1, docs/design/V3_HOST_PATCH_LIST.md section 1 -->
 
 ## Build host
 

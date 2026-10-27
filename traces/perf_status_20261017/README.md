@@ -1,5 +1,7 @@
 # Windows performance status, 2026-10-17 (evidence summary for the top-level README)
 
+**HISTORICAL: measured before lazy observe and the pointer lifecycle were merged to master (2026-10-17); labels such as production path and experimental build do not describe current master. Re-measurement: `traces/master_perf_20261028` when it lands.**
+
 **STATUS: RESEARCH, 2026-10-17.** A summary of runs that live on branches, not on master. Every number says where it came from.
 M = measured (a run on a named revision), I = inferred. Heaven = Unigine Heaven 4.0, Ultra, 1080p, Windows 11 guest, stock guest driver 580.88,
 host RTX 4070 (AD104), host driver 595.91.07. Heaven's own score for the run window (260 s), not a screenshot.

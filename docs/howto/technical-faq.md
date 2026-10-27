@@ -4,7 +4,7 @@ How kayfabe works and why it is built this way, at the level a user or deployer 
 
 ## What is kayfabe, mechanically?
 
-A QEMU device (`kf3-gpu`) that appears to the guest as an NVIDIA GPU. The guest's stock driver talks to it the way it talks to a real card. Kayfabe plays the part of the card's **GSP**, the on-GPU firmware processor that current NVIDIA drivers send their resource-manager commands to. It answers those commands itself, and has the real host GPU do the work behind them. One host process holds all of it: QEMU, with the kayfabe core linked in. <!-- src: ARCHITECTURE.md "The shape" -->
+A QEMU device (`kf3-gpu`) that appears to the guest as an NVIDIA GPU. The guest's stock driver talks to it the way it talks to a real card. Kayfabe plays the part of the card's **GSP**, the on-GPU firmware processor that current NVIDIA drivers send their resource-manager commands to. It answers those commands itself, and has the real host GPU do the work behind them. One host process holds all of it: QEMU, with the kayfabe core linked in. Only QEMU is supported today; the core is designed to be independent of the hypervisor, and that independence is a goal (see [Goals and plans](goals.md)). <!-- src: ARCHITECTURE.md "The shape" -->
 
 ## What does the guest actually execute on?
 
@@ -45,7 +45,7 @@ The generated parts come from NVIDIA's open-gpu-kernel-modules (MIT) and open-gp
 
 ## Do I need to patch the host or guest driver or kernel?
 
-No. Nothing is patched. An optional research patch to the host's `nvidia-uvm` exists to prove unified-memory demand paging; it is not part of the stock path. <!-- src: README.md, docs/STATUS_DETAIL.md section 0 -->
+No. Nothing is patched. An optional research patch to the host's `nvidia-uvm` exists to prove unified-memory demand paging; it is not part of the stock path. Optional enhancements (a helper module in the guest, patched guest or host drivers) are planned, and the stock path will not require them. <!-- src: README.md, docs/STATUS_DETAIL.md section 0 -->
 
 ## How does this differ from the alternatives?
 
