@@ -1,10 +1,13 @@
-//! SECURITY AUDIT 2026-10-21, finding SA-06 (docs/audits/2026-10-21-security-audit.md): EXPECTED RED.
+//! SECURITY AUDIT 2026-10-21, finding SA-06 (docs/audits/2026-10-21-security-audit.md).
+//! Imported as an EXPECTED RED test; it passes since the placement budget
+//! (`MAX_CPU_WINDOW_PLACEMENTS`) landed.
 //!
-//! Every live BAR1/BAR2 store view costs the VMM one file descriptor and about two VMAs (`HostRm::arm_cpu_view`
-//! opens a node per view). `CpuWindow::map` has no cap on live placements, so a guest kernel that maps
-//! alternating 4 KiB pages of a 256 MiB BAR1 window (65 536 placements) can exhaust `RLIMIT_NOFILE` and
-//! `vm.max_map_count` of the QEMU process (VNC, QMP and eventfd creation then fail). The expected behaviour
-//! is a documented cap with a refusal by name (S1-25, plan section 2.4).
+//! Every live BAR1/BAR2 store view costs the VMM one file descriptor and about two VMAs
+//! (`HostRm::arm_cpu_view` opens a node per view). Without a cap on live placements, a guest
+//! kernel that maps alternating 4 KiB pages of a 256 MiB BAR1 window (65 536 placements) can
+//! exhaust `RLIMIT_NOFILE` and `vm.max_map_count` of the QEMU process (VNC, QMP and eventfd
+//! creation then fail). The expected behaviour is a documented cap with a refusal by name
+//! (S1-25, plan section 2.4).
 use kf_host::MapPerm;
 use kf_mem::cpuwin::{CpuWindow, ViewOps};
 use kf_mem::ledger::{Desired, MapTarget};
@@ -55,6 +58,7 @@ fn live_cpu_window_views_are_capped() {
     }
     assert!(
         refused > 0,
-        "200000 live non-adjacent store views were accepted: that is 200000 host fds and about 400000 VMAs"
+        "200000 live non-adjacent store views were accepted: \
+         that is 200000 host fds and about 400000 VMAs"
     );
 }
