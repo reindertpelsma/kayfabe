@@ -1,0 +1,11 @@
+{
+  "red-valid.log": "a9624afdf12c177b54029a5bfd17d08ca815cb6c67eebade1aa4ba06af76a15b",
+  "cooldown-red.log": "0cb9cdb67a1ad057f1f9741e089490ad98b9fa63ac18d7dd42326ca20b39cd62",
+  "mutants/results.json": "c184c999adc7b05660a3d0f0858a63f70f3211d3d2f837756830c1207e3d4f93",
+  "cooldown-mutants/results.json": "86c80c06d3aaabc890a14e2df5a4826980d9335b05051aaf5baffb6a656a9211",
+  "hook-mutants/results.json": "273799d6a82234894f0604558a7790e058fa0b7ed052573890f813de993744da",
+  "full-final.log": "9ae43274820ee1175ff4e1200c321eb064631613cb7db2d9b37ea996a9125a08",
+  "clippy-final.jsonl": "d74cc8588ea8923a5da547966406dd90d7786a0a41fdb8818c8665e57d637033",
+  "clippy-final-gate.log": "f8ea6d6b4c6a817a29084e0037997a03e2e749cc507dead0d542e42bfe22c57c",
+  "claims-final.log": "95523983e5eeb5960eb5c8608d16add732b5503aa4c8517a280c9756deba5a77"
+}

@@ -1,0 +1,25 @@
+{
+  "initial_expected_red_commit": "3ec27345b",
+  "initial_red_tests": [
+    "sparse::tests::ens7_eight_gib_budget_matches_the_natural_tile_bound",
+    "sparse::tests::ens7_host_placement_hole_never_attempts_a_sparse_reservation",
+    "sparse::tests::ens7_hostile_framebuffer_cannot_raise_the_absolute_ceiling",
+    "sparse::tests::ens7_large_missing_prefix_warns_with_ranges_and_a_cooldown",
+    "sparse::tests::ens7_large_missing_suffix_stops_warning_after_retirement",
+    "sparse::tests::ens7_middle_framebuffer_scales_without_rounding_up",
+    "sparse::tests::ens7_missing_bytes_do_not_accumulate_duplicate_prefix_declines",
+    "sparse::tests::ens7_missing_bytes_retire_a_declined_suffix_exactly_once",
+    "sparse::tests::ens7_retry_honouring_a_tile_clears_its_missing_bytes",
+    "sparse::tests::ens7_rm_low_window_never_attempts_a_sparse_reservation",
+    "sparse::tests::ens7_small_framebuffer_retains_the_policy_floor",
+    "sparse::tests::ens7_twenty_thousand_tiles_are_bounded_for_small_framebuffer",
+    "sparse::tests::ens7_twenty_thousand_tiles_are_honoured_for_eight_gib"
+  ],
+  "cooldown_expected_red_commit": "6e068c0fc",
+  "cooldown_red_tests": [
+    "sparse::tests::ens7_retiring_capped_prefix_coverage_preserves_warning_rate_limit",
+    "sparse::tests::ens7_retiring_capped_suffix_coverage_preserves_warning_rate_limit"
+  ],
+  "compile_failures_counted": false,
+  "green_evidence": "final serialized Cargo log recorded in validation.json"
+}

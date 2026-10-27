@@ -1,0 +1,329 @@
+{
+  "run": "ENS7 CPU 2026-10-27",
+  "base": "21b17af213e0ff751797775a67624f82cc4de347",
+  "command": "CARGO_TARGET_DIR=/workspace/shared-target nice -n 19 cargo test --release -j2 -p kf-host -p kf-mem -p kf-qemu --locked -- --test-threads=1",
+  "exit_code": 0,
+  "targets": [
+    {
+      "target": "kf_host library",
+      "status": "ok",
+      "passed": 313,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "target": "kf_host Running tests/channel_birth_bound.rs",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_host Running tests/reserve_flags.rs",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem library",
+      "status": "ok",
+      "passed": 201,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "target": "kf_mem Running tests/audit_all_pdb_chunks.rs",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/breaker_ledger_cost.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/breaker_sparse_walks.rs",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "target": "kf_mem Running tests/ens3.rs",
+      "status": "ok",
+      "passed": 21,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/ens5_diagnostics.rs",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/ens5_sparse.rs",
+      "status": "ok",
+      "passed": 215,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "target": "kf_mem Running tests/gatelog.rs",
+      "status": "ok",
+      "passed": 69,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/secaudit_all_pdb_over_64_spaces.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/sparse_apply.rs",
+      "status": "ok",
+      "passed": 29,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/sparse_leaf.rs",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/store_is_a_bounds_check.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/vahist.rs",
+      "status": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/walk_format_vs_ogkm.rs",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_mem Running tests/walker_sparse_decode.rs",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu library",
+      "status": "ok",
+      "passed": 409,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "target": "kf_qemu Running tests/bar0_trace_gate.rs",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/channel_budget_lazy.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/copy_birth_policy.rs",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/doorbell_no_put_poll.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/ens3_hooks.rs",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/ens5_hooks.rs",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/ens6_hooks.rs",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/ens7_hooks.rs",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/gatelog_hooks.rs",
+      "status": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/gop_rom_knobs.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/gpu_uuid_property.rs",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/kf3_realize_discard.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/max_fps_property.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/mirror_refusal_log_bounded.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/timeslice.rs",
+      "status": "ok",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/timeslice_hooks.rs",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/timeslice_mirror.rs",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/tsgfacts.rs",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/vahist_hooks.rs",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/wire_mirror.rs",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_host",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_mem",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_qemu",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "totals": {
+    "passed": 1491,
+    "failed": 0,
+    "ignored": 14
+  },
+  "expected_red": {
+    "initial": 13,
+    "cooldown_edge": 2,
+    "compile_failures_counted": false
+  },
+  "mutants": {
+    "runtime": 20,
+    "source_composition": 4,
+    "minimum_killers": 2
+  },
+  "clippy": {
+    "existing_debt": 248,
+    "new": 0,
+    "resolved": 284
+  },
+  "claims": {
+    "new": 0
+  },
+  "hardware": "none; CPU-only task",
+  "default": "sparse twin OFF",
+  "mirror": "tsgmirror.rs untouched",
+  "cleanup": "one shared Cargo target retained; private mutation binaries archived"
+}

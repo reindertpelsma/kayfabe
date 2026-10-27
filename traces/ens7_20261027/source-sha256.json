@@ -1,0 +1,13 @@
+{
+  "crates/kf-host/src/channel.rs": "853cb4a45581ba10b22f8c5113f3ea80a9d8d6ab64b2e6c08fa457f103071a76",
+  "crates/kf-host/src/channel/sparse.rs": "1893eb36c7bb665949b02342ba3e2163ece39fb73cd6254000cb3b75a12b9791",
+  "crates/kf-host/src/lib.rs": "5eb016da093b9f81774af86977eb7a6ace76ce56d9b9c7896ef1d5d94b3813b7",
+  "crates/kf-host/src/sparse.rs": "4a3c2a38438b0db9f6a20c3e37f3950450903e63fc3f2f57e02faada776bf818",
+  "crates/kf-host/src/sparse/deficit.rs": "de7a25d4d038739b2fc37354b037dd38b66c9c43a2e64e43ff0ab5c5b03ba661",
+  "crates/kf-host/src/sparse/ens7_tests.rs": "b7e4cca789657cc8626e9c92a9b4f0cc5526470294a30aca431bbf091c2b55cd",
+  "crates/kf-host/src/sparse/policy.rs": "1eed0d2bc944d342db977de7678e72822fd7df88fd6292b73705bffdd1f523f9",
+  "crates/kf-host/src/sparse/tests.rs": "fb0efdc957fa1ef18f99d6ce7447a1509d121b99e0f9e288eb038a4df4c5d012",
+  "crates/kf-mem/tests/ens5_sparse.rs": "2dd49c32923c3269c34a417240473f7dfa7ff1b2126b99cc490587060d5b67f8",
+  "crates/kf-qemu/src/device.rs": "46a1373c0256e48b4fde4c4035daa2aedd37009d34fee833d41a31334502a4ae",
+  "crates/kf-qemu/tests/ens7_hooks.rs": "1fb267df203e56ac65d2a21507c5b3fb867b6a435a8d286ab45dc274616cac92"
+}

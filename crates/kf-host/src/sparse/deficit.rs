@@ -15,7 +15,11 @@ impl Deficit {
         }
         if self.capped {
             if !missing && lo <= super::super::channel::TWIN_VA_FLOOR && hi >= ceiling {
-                *self = Self::default();
+                let next_warning_ns = self.next_warning_ns;
+                *self = Self {
+                    next_warning_ns,
+                    ..Self::default()
+                };
             }
             return;
         }
