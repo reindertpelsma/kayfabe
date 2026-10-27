@@ -210,6 +210,20 @@ fn e6_queued_cleanup(n: u64) -> (Reservations, ens6::Metered, slice::Slice, u64)
     (t, m, slice, base)
 }
 
+fn e6_handles(m: &ens6::Metered, from: u64, n: u64) -> Vec<u32> {
+    let blocks = m.blocks.borrow();
+    (0..n)
+        .map(|i| {
+            let va = from + i * SPARSE_GRAIN;
+            *blocks
+                .iter()
+                .find(|(_, b)| b.0 == va && b.2)
+                .map(|(h, _)| h)
+                .expect("a sparse reservation")
+        })
+        .collect()
+}
+
 fn e6_drain(t: &mut Reservations, m: &ens6::Metered, slice: &slice::Slice) {
     for _ in 0..200 {
         ens6::refresh(t, m, slice, |t, ops| t.retry(ops).unwrap());
@@ -222,7 +236,9 @@ fn ens6_intent_that_returns_before_conversion_keeps_its_sparse_block() {
     ens6::refresh(&mut t, &m, &slice, |t, ops| {
         assert_eq!(t.admit(ops, base, 8 * SPARSE_GRAIN), Ok(true));
     });
+    let handles = e6_handles(&m, base, 8);
     e6_drain(&mut t, &m, &slice);
+    assert_eq!(e6_handles(&m, base, 8), handles, "the very same reservations");
     let mut want: Vec<u64> = (0..8).map(|i| base + i * SPARSE_GRAIN).collect();
     let mut have = m.sparse_tiles();
     want.sort_unstable();
@@ -417,7 +433,9 @@ fn ens6_a_wanted_block_in_the_middle_of_the_queue_stays_sparse() {
     ens6::refresh(&mut t, &m, &slice, |t, ops| {
         assert_eq!(t.admit(ops, base + 20 * SPARSE_GRAIN, 4 * SPARSE_GRAIN), Ok(true));
     });
+    let handles = e6_handles(&m, base + 20 * SPARSE_GRAIN, 4);
     e6_drain(&mut t, &m, &slice);
+    assert_eq!(e6_handles(&m, base + 20 * SPARSE_GRAIN, 4), handles);
     let mut have = m.sparse_tiles();
     have.sort_unstable();
     let want: Vec<u64> = (20..24).map(|i| base + i * SPARSE_GRAIN).collect();

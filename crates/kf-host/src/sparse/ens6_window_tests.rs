@@ -27,12 +27,14 @@ fn ens6_an_expired_window_is_asked_again_and_remembered_again() {
 
 #[test]
 fn ens6_window_eviction_drops_the_oldest_first() {
-    let (mut t, m, gap) = ens6::gapped();
-    m.refuse_when(|_, _, sparse| sparse);
+    let (mut t, _, gap) = ens6::gapped();
     for i in 0..100u64 {
-        t.tick = t.tick.max(t.backoff_until);
-        let _ = t.admit(&m, gap + i * 4 * SPARSE_GRAIN, SPARSE_GRAIN);
+        let lo = gap + i * 4 * SPARSE_GRAIN;
+        t.remember_refused(lo, lo + SPARSE_GRAIN);
+        assert!(t.refused.len() <= WINDOWS, "bounded after every insert");
     }
     assert!(!t.window_hit(gap), "the oldest window was evicted");
     assert!(t.window_hit(gap + 99 * 4 * SPARSE_GRAIN), "the newest is kept");
+    assert!(t.window_hit(gap + 36 * 4 * SPARSE_GRAIN), "the 64th newest is kept");
+    assert!(!t.window_hit(gap + 35 * 4 * SPARSE_GRAIN), "the 65th newest is gone");
 }
