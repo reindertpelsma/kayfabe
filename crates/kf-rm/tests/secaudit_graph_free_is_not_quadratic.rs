@@ -1,11 +1,14 @@
-//! SECURITY AUDIT 2026-10-21, finding SA-04 (docs/audits/2026-10-21-security-audit.md): EXPECTED RED.
+//! SECURITY AUDIT 2026-10-21, finding SA-04 (docs/audits/2026-10-21-security-audit.md).
+//! Imported as an EXPECTED RED test; it passes since the free paths are indexed.
 //!
-//! `RmGraph::free_subtree` (`crates/kf-rm/src/rmgraph.rs:1897-1923`) scans EVERY live handle of EVERY client, at
-//! least twice, for each non-root FREE. The stock guest RM frees objects one at a time, and the whole thing runs on
-//! the register drainer thread. N leaf frees over N+1 live handles cost O(N^2) map iterations, so an unprivileged
-//! guest process holding tens of thousands of objects (or guest root with a handle chain) stalls the drainer, which
-//! "may never block" (feedback: the drainer must never block).
-//! The expected behaviour is a children index: freeing a leaf costs O(subtree), not O(all live handles).
+//! Before the index, `RmGraph::free_subtree` scanned EVERY live handle of EVERY client, at
+//! least twice, for each non-root FREE. The stock guest RM frees objects one at a time, and
+//! the whole thing runs on the register drainer thread. N leaf frees over N+1 live handles
+//! cost O(N^2) map iterations, so an unprivileged guest process holding tens of thousands of
+//! objects (or guest root with a handle chain) stalls the drainer, which "may never block"
+//! (feedback: the drainer must never block).
+//! The expected behaviour is a children index: freeing a leaf costs O(subtree), not
+//! O(all live handles).
 use kf_abi::generated::classes as nv;
 use kf_arch::ClientKind;
 use kf_arch::ids::{ClassId, HClient, HObject};
@@ -79,7 +82,7 @@ fn freeing_many_leaf_objects_one_by_one_is_not_quadratic() {
 }
 
 // SA-04 release falsifier: leaf removal must not scan unrelated live handles.
-// The audit's 6000-object / 5 s oracle was measured in debug. These larger
+// The audit's 6000-object / 5 s oracle ran in debug. These larger
 // inventories preserve generous headroom for indexed removal in release.
 #[test]
 fn thirty_thousand_leaf_frees_fit_the_indexed_work_budget() {

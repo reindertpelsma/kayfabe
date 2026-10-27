@@ -4,7 +4,7 @@ MEASURED status: graph traversal and policy free paths implemented; broader SA-0
 is PARTIAL. Draft only. Whole kf-rm release suites: 765 passed /0 failed /0 ignored.
 Clippy all targets57 ->57 source-bound fingerprints, added0. No lint baseline,
 deny set or assertion loosened; a test return-type alias and collapsed if address
-new style diagnostics without changing behavior.
+new style diagnostics without changing behavior. (recorded in commit 1ac61c01d, 2026-10-22)
 
 INFERRED hypothesis before tests: parent/children and reverse-name indices remove
 unrelated-state scans while preserving alias lifetimes and retirement order.
@@ -16,10 +16,10 @@ under the prescribed release profile (3000 frees132.5ms;6000 frees667.6ms). Its5
 oracle was measured in debug by the audit and does not prove release red.
 bc359a2b0 supplies two release-scale assertion failures; b2e97a870 supplies six
 policy assertion failures. Four added lifetime controls pass on master as well
-as on the indexed implementation. No setup failure is counted as red.
+as on the indexed implementation. No setup failure is counted as red. (recorded in commit 1ac61c01d, 2026-10-22)
 
 MEASURED release timings (one run per listed inventory, dev box, nice19; no
-hardware benchmark or spread claim):
+hardware benchmark or spread claim): (recorded in commit 1ac61c01d, 2026-10-22)
 
 | Work | Inventory | Before | After |
 |---|---:|---:|---:|
@@ -43,7 +43,7 @@ MEASURED hand mutants, unique top-level failing tests (nested child stdout is
 not counted twice): master graph2; master ChannelPolicy2; master PageDirPolicy4;
 omitted parent index2; omitted overwritten-orphan candidate2; lost alias refs4.
 Restored graph3/3 and policy10/10; final whole suite above includes two additional
-cache-scope controls. Timing budgets have orders of magnitude of observed headroom.
+cache-scope controls. Timing budgets have orders of magnitude of observed headroom. (recorded in commit 1ac61c01d, 2026-10-22)
 
 CODE READ remaining scope: resolve_pending_dups still scans parked entries;
 free_subtree still scans the capped parked-dup table; cache_targets still scans
@@ -59,7 +59,7 @@ Both controls pass. A subtree-only rewrite would alter routing/lifetime on this
 accepted event order. INFERRED: further optimization needs an explicit dependency
 index over live resources, including alias-kept ghosts and late parents, with
 separate tests/proof; a handle-only child index is insufficient. Under the lane's
-production-behavior stop rule, that remaining optimization is deferred for review.
+production-behavior stop rule, that remaining optimization is deferred for review. (recorded in commit 1ac61c01d, 2026-10-22)
 
 INFERRED hardware obligations later: Linux/Windows process churn, GPU_DEVICE
 references, cross-client dup/free and actual host-resource retirement. These
