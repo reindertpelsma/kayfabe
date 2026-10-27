@@ -236,3 +236,59 @@ fn migration_to_lower_put_drops_old_cached_value_during_apply() {
     assert_eq!(w.relay.lazy.cached(), None);
     assert_eq!(w.relay.lazy.counts.inval_migration, 1);
 }
+
+/// ENS10 H2 falsifier: already-published fetch receipts reach guest GET before PUT is gated.
+#[test]
+fn ens10_published_fetch_writeback_does_not_wait_for_any_walk_to_finish() {
+    for lazy in [
+        kf_chan::user_lazy::LazyConfig::OFF,
+        kf_chan::user_lazy::LazyConfig::ON,
+    ] {
+        let mut cfg = Cfg::new(spec(vec![], &[]));
+        cfg.lazy = lazy;
+        let mut w = World::new(&cfg);
+        let generation = w.relay.generation;
+        w.relay.fetch.publish(Some((generation, 1))).unwrap();
+        w.env.popped = 1;
+        w.env.hw_get = 1;
+        w.env.walk_busy = true;
+        w.relay.claim();
+        for _ in 0..16 {
+            w.relay_step();
+            if w.relay.idle() {
+                break;
+            }
+        }
+        assert_eq!(w.env.guest_get[0], 1);
+        assert!(w.env.walk_busy);
+        assert!(w.env.log.is_empty(), "no new publication while held");
+        assert_eq!(w.env.viol, 0);
+    }
+}
+
+/// A real processed marker is harvestable even while future reads of the same space are held.
+#[test]
+fn ens10_processed_marker_is_observed_before_the_put_gate_with_lazy_on_and_off() {
+    for lazy in [
+        kf_chan::user_lazy::LazyConfig::OFF,
+        kf_chan::user_lazy::LazyConfig::ON,
+    ] {
+        let mut cfg = Cfg::new(spec(vec![], &[]));
+        cfg.lazy = lazy;
+        let mut w = World::new(&cfg);
+        let (count, _) = w.relay.marks.issue().unwrap();
+        w.env.markers_done = count;
+        w.env.walk_busy = true;
+        w.relay.claim();
+        for _ in 0..16 {
+            w.relay_step();
+            if w.relay.idle() {
+                break;
+            }
+        }
+        assert_eq!(w.relay.marks.seen(), count);
+        assert!(w.env.walk_busy);
+        assert!(w.env.log.is_empty());
+        assert_eq!(w.env.viol, 0);
+    }
+}

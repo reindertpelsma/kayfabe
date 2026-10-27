@@ -42,7 +42,6 @@ fn an_all_pdb_split_holds_every_potentially_affected_space() {
 }
 
 #[test]
-#[ignore = "OPEN FX1: per-space gate needs alias/scope and relay-semantics ruling"]
 fn a_queued_walk_of_a_does_not_hold_an_unrelated_ring_in_b() {
     let inbox = Inbox::new().unwrap();
     inbox.request_user_split(7, A).ok().unwrap();
@@ -54,7 +53,6 @@ fn a_queued_walk_of_a_does_not_hold_an_unrelated_ring_in_b() {
 }
 
 #[test]
-#[ignore = "OPEN FX1: running split bookkeeping currently loses its target space"]
 fn a_running_walk_of_a_does_not_hold_an_unrelated_ring_in_b() {
     let inbox = Inbox::new().unwrap();
     inbox.request_user_split(7, A).ok().unwrap();
@@ -67,7 +65,6 @@ fn a_running_walk_of_a_does_not_hold_an_unrelated_ring_in_b() {
 }
 
 #[test]
-#[ignore = "OPEN FX1: per-space completion must replace the global busy predicate"]
 fn completing_a_releases_a_while_an_independent_walk_of_b_remains_pending() {
     let inbox = Inbox::new().unwrap();
     let a = inbox.request_user_split(7, A).ok().unwrap();
@@ -79,7 +76,6 @@ fn completing_a_releases_a_while_an_independent_walk_of_b_remains_pending() {
 }
 
 #[test]
-#[ignore = "OPEN FX1: scoped statements need separate completion from global reply ordering"]
 fn a_scoped_retire_statement_does_not_hold_an_unrelated_ring() {
     let inbox = Inbox::new().unwrap();
     inbox.push(kf_rm::barpde::MemStatement::Retire {
