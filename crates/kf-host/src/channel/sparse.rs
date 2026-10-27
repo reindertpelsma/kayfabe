@@ -202,6 +202,9 @@ impl HostRm {
             slice_deferred: self.sparse_totals[19].load(Relaxed),
             speculative_skipped: self.sparse_totals[20].load(Relaxed),
             window_hits: self.sparse_totals[21].load(Relaxed),
+            current_unhonoured_bytes: 0,
+            missing_capped: false,
+            withheld_windows: 0,
         }
     }
 

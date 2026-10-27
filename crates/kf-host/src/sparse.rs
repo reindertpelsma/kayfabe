@@ -43,6 +43,9 @@ pub(crate) const BACKOFF_MAX: u64 = 64;
 /// Entries of the session-wide counter array ([`Stats::deltas`]).
 pub(crate) const SPARSE_TOTALS: usize = 22;
 
+#[path = "sparse/policy.rs"]
+pub mod policy;
+
 /// Only an explicit `1` enables the selective sparse path.
 #[must_use]
 pub fn enabled_from(value: Option<&str>) -> bool {
@@ -138,6 +141,12 @@ pub struct Stats {
     pub speculative_skipped: u64,
     /// Admissions answered by the remembered refused-window cache without an RM verb.
     pub window_hits: u64,
+    /// Current guest-sparse bytes lacking native sparse coverage.
+    pub current_unhonoured_bytes: u64,
+    /// Conservative upper bound after missing-range tracking fills.
+    pub missing_capped: bool,
+    /// Distinct permanent withheld windows encountered.
+    pub withheld_windows: u64,
 }
 
 impl Stats {
@@ -216,6 +225,12 @@ pub(crate) struct Reservations {
 }
 
 impl Reservations {
+    pub(crate) fn new_guest(guest: &[GuestVaRange], limit: usize) -> Self {
+        Self::new(guest, limit)
+    }
+    pub(crate) fn missing_warning(&mut self, _now_ns: u64) -> Option<String> {
+        None
+    }
     pub(crate) fn counters(&self) -> Stats {
         Stats {
             live_blocks: self.blocks.len() as u64,

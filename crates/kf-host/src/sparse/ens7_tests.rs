@@ -1,0 +1,162 @@
+// ENS7: policy, permanent exclusions, current missing coverage and warning limits.
+#[test]
+fn ens7_eight_gib_budget_matches_the_natural_tile_bound() {
+    let p = policy::Budget::from_framebuffer(8 << 30);
+    assert_eq!((p.per_space, p.per_vm), (65536, 131072));
+}
+#[test]
+fn ens7_small_framebuffer_retains_the_policy_floor() {
+    let p = policy::Budget::from_framebuffer(1);
+    assert_eq!((p.per_space, p.per_vm), (8192, 8192));
+}
+#[test]
+fn ens7_hostile_framebuffer_cannot_raise_the_absolute_ceiling() {
+    let p = policy::Budget::from_framebuffer(u64::MAX);
+    assert_eq!((p.per_space, p.per_vm), (65536, 131072));
+}
+#[test]
+fn ens7_middle_framebuffer_scales_without_rounding_up() {
+    let p = policy::Budget::from_framebuffer((2 << 30) + SPARSE_GRAIN - 1);
+    assert_eq!((p.per_space, p.per_vm), (32768, 32768));
+}
+fn ens7_guest() -> (Reservations, ens6::Metered) {
+    let rows = [GuestVaRange {
+        handle: 1,
+        lo: LO,
+        hi: LO + 4096 * NORMAL_GRAIN,
+    }];
+    (
+        Reservations::new_guest(&rows, 128),
+        ens6::Metered::with_roots(&rows),
+    )
+}
+fn ens7_withheld(va: u64) {
+    let (mut t, r) = ens7_guest();
+    assert_eq!(t.admit(&r, va, SPARSE_GRAIN), Ok(false));
+    assert_eq!(
+        r.verbs(),
+        0,
+        "never ask RM for a permanently excluded window"
+    );
+    assert_eq!(t.counters().admit_hard_err, 0);
+    assert_eq!(t.counters().withheld_windows, 1);
+    for i in 0..300u64 {
+        assert_eq!(t.admit(&r, va + i * SPARSE_GRAIN, SPARSE_GRAIN), Ok(false));
+        t.retry(&r).unwrap();
+    }
+    assert_eq!(r.verbs(), 0);
+    assert_eq!(
+        t.counters().withheld_windows,
+        1,
+        "count once per permanent window"
+    );
+}
+#[test]
+fn ens7_rm_low_window_never_attempts_a_sparse_reservation() {
+    ens7_withheld(0x1920_0000);
+}
+#[test]
+fn ens7_host_placement_hole_never_attempts_a_sparse_reservation() {
+    ens7_withheld(crate::channel::HOST_HOLE_LO);
+}
+fn ens7_missing(va: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    assert_eq!(t.admit(&r, va, SPARSE_GRAIN), Ok(false));
+    assert_eq!(t.counters().current_unhonoured_bytes, SPARSE_GRAIN);
+    assert_eq!(t.admit(&r, va, SPARSE_GRAIN), Ok(false));
+    assert_eq!(
+        t.counters().current_unhonoured_bytes,
+        SPARSE_GRAIN,
+        "unique current VA"
+    );
+    t.retire(&r, va, SPARSE_GRAIN / 2, false).unwrap();
+    assert_eq!(t.counters().current_unhonoured_bytes, SPARSE_GRAIN / 2);
+    t.retire(&r, va + SPARSE_GRAIN / 2, SPARSE_GRAIN / 2, false)
+        .unwrap();
+    assert_eq!(t.counters().current_unhonoured_bytes, 0);
+}
+#[test]
+fn ens7_missing_bytes_do_not_accumulate_duplicate_prefix_declines() {
+    ens7_missing(LO + NORMAL_GRAIN);
+}
+#[test]
+fn ens7_missing_bytes_retire_a_declined_suffix_exactly_once() {
+    ens7_missing(LO + 3 * NORMAL_GRAIN);
+}
+#[test]
+fn ens7_retry_honouring_a_tile_clears_its_missing_bytes() {
+    let (mut t, r) = (tree(100), Rm::new());
+    populate(&mut t, &r, LO, PAGE);
+    assert_eq!(t.admit(&r, LO, SPARSE_GRAIN), Ok(false));
+    assert_eq!(t.counters().current_unhonoured_bytes, SPARSE_GRAIN);
+    r.unmap(LO, PAGE);
+    t.mark(LO, PAGE, false);
+    t.retry(&r).unwrap();
+    assert_eq!(t.counters().current_unhonoured_bytes, 0);
+    assert!(block(&t, LO).sparse);
+}
+fn ens7_warning(va: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    assert_eq!(t.admit(&r, va, NORMAL_GRAIN), Ok(false));
+    let message = t.missing_warning(0).expect("a missing MiB is never silent");
+    assert!(message.contains("current_unhonoured_bytes="));
+    assert!(message.contains("ranges="));
+    assert!(!message.contains('\n'));
+    assert!(message.len() <= 512);
+    assert!(t.missing_warning(1).is_none(), "rate limited");
+    assert!(t.missing_warning(30_000_000_000).is_some());
+    t.retire(&r, va, NORMAL_GRAIN, false).unwrap();
+    assert!(t.missing_warning(60_000_000_000).is_none());
+}
+#[test]
+fn ens7_large_missing_prefix_warns_with_ranges_and_a_cooldown() {
+    ens7_warning(LO + NORMAL_GRAIN);
+}
+#[test]
+fn ens7_large_missing_suffix_stops_warning_after_retirement() {
+    ens7_warning(LO + 3 * NORMAL_GRAIN);
+}
+fn ens7_twenty_thousand(fb: u64, complete: bool) {
+    let p = policy::Budget::from_framebuffer(fb);
+    let rows = [GuestVaRange {
+        handle: 1,
+        lo: LO,
+        hi: LO + 20000 * SPARSE_GRAIN,
+    }];
+    let mut t = Reservations::new_guest(&rows, p.per_space);
+    let r = ens6::Metered::with_roots(&rows);
+    // Thousands of native reservations are deliberately spread across bounded refreshes.
+    let slice = slice::Slice::default();
+    let clock = || r.now();
+    let ops = slice::Sliced {
+        inner: &r,
+        slice: &slice,
+        clock: &clock,
+    };
+    let result = t.admit(&ops, LO, 20000 * SPARSE_GRAIN).unwrap();
+    for _ in 0..100 {
+        slice.renew();
+        t.retry(&ops).unwrap();
+    }
+    assert!(t.blocks.len() <= p.per_space);
+    let placed = r.sparse_tiles().len();
+    if complete {
+        assert_eq!(placed, 20000);
+        assert_eq!(t.counters().current_unhonoured_bytes, 0);
+    } else {
+        assert!(!result);
+        assert!(placed < 20000);
+        assert!(t.stats.admit_decline > 0);
+        assert!(t.counters().current_unhonoured_bytes > 0);
+    }
+}
+#[test]
+fn ens7_twenty_thousand_tiles_are_honoured_for_eight_gib() {
+    ens7_twenty_thousand(8 << 30, true);
+}
+#[test]
+fn ens7_twenty_thousand_tiles_are_bounded_for_small_framebuffer() {
+    ens7_twenty_thousand(128 << 20, false);
+}
