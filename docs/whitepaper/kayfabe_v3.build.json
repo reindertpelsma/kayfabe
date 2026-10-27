@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "source_commit": "1faac5a69c9d5587d2d1b098b005500d2eab97b8",
+  "inputs": [
+    {
+      "path": "docs/whitepaper/fig_v3_evidence_ladder.tex",
+      "git_blob": "183ad7ad0bfb4fe76712a4857bfe67febdb72bad",
+      "sha256": "04d620db3723954de7ab571130ddf21627d52aacef4ee3e146902e7e83cd6a6c"
+    },
+    {
+      "path": "docs/whitepaper/fig_v3_lifecycle.tex",
+      "git_blob": "5c1b860c83d51da6010c71f66030d03fd266e011",
+      "sha256": "e95836c24e4f6badc6bb0c07f5b4323a7e829d23ff6f770e12fdbb4321802905"
+    },
+    {
+      "path": "docs/whitepaper/fig_v3_mapping_path.tex",
+      "git_blob": "3c8ad63514b868b29b6d13112611a422bb78e42e",
+      "sha256": "6dd6a18d23bbbcc040c3b06b977f71099a85fa18ac3a39e9de3064b24935d565"
+    },
+    {
+      "path": "docs/whitepaper/fig_v3_stall.tex",
+      "git_blob": "27a6129e384138a7ff518e423b7a0b3e3f531024",
+      "sha256": "9f064e11b596ae1e55f68e90b8e070a896780b11876e3972b30333635498a09c"
+    },
+    {
+      "path": "docs/whitepaper/fig_v3_trust.tex",
+      "git_blob": "73ff878a4b8afee23d3d7612f4af8b1afdf2639b",
+      "sha256": "0fab47728a59f0b35a49e53f96e05ebe3a742554ecd2efad65e30cf2ef20dba4"
+    },
+    {
+      "path": "docs/whitepaper/kayfabe_v3.tex",
+      "git_blob": "75dafbe670571b4b4a8c0984b6788709bc55ebf7",
+      "sha256": "ca4e3fa7b29b8dfdb201294441633aeab68e1b0f8f8795de672c5924d2295594"
+    },
+    {
+      "path": "docs/whitepaper/preamble_v3.tex",
+      "git_blob": "4c8a41ff11172239a88f00a7dcc146693fb81cf7",
+      "sha256": "71f5b476ac76a32e13e1c7ce7f17a3096c2e4fb89310b33b7e1da52aa7eea58e"
+    },
+    {
+      "path": "docs/whitepaper/v3_architecture.tex",
+      "git_blob": "1b9b5b6c5a3ebaf0d17e34e981bdf02156ded1d0",
+      "sha256": "fe7439398c550c831c4a72e1fe3d66d57475bae003c73782fd1fb07126c1cb15"
+    },
+    {
+      "path": "docs/whitepaper/v3_citations.tex",
+      "git_blob": "a9a2a1dba0406ae04645d766d3b8b9b758074c43",
+      "sha256": "af73c128953cee0a6e4be45bf3ccc45b9c6e8b4ea0bacf33a575f8e0ff2d3a41"
+    },
+    {
+      "path": "docs/whitepaper/v3_distance_table.tex",
+      "git_blob": "58a9a6fcfbddb8a9fa084a3f5124e7ff8cd7a5f4",
+      "sha256": "f6a70f8f35b4ab9c5f90c4ca3a689bcb126ad4e5223c22f178942376730ce2d0"
+    },
+    {
+      "path": "docs/whitepaper/v3_evidence.tex",
+      "git_blob": "7ca73adea86372cae9f314299dfaa5db738b4552",
+      "sha256": "a0c11f05d81e0353589447b5b266c6eee3c1f7a89fffcbaf89a31916bc7d282f"
+    },
+    {
+      "path": "docs/whitepaper/v3_method_sources.tex",
+      "git_blob": "d1a2a233cae4c641cfb6ef21050a9a5e10b89683",
+      "sha256": "d6ca21b9c1b04e8fa097b13d696b3f2c8569851aaf4918f2501d601136a4f867"
+    },
+    {
+      "path": "docs/whitepaper/v3_primer.tex",
+      "git_blob": "96235d2389b9e70ecd6a5d509d32b69e1f514d54",
+      "sha256": "4b64039486a5440d366a0475321122c9831c25a8cfffeb421be6bdab918583f9"
+    },
+    {
+      "path": "docs/whitepaper/v3_questions.tex",
+      "git_blob": "9870f8347cb36d8b6fbc7d4bb6d0924b60eae8ad",
+      "sha256": "74baf97da186c7cf9beb794ce7f710e7bcec4ee00fa2ce4803e654bfb2973551"
+    },
+    {
+      "path": "docs/whitepaper/v3_rules_product.tex",
+      "git_blob": "7011fa349e8c7d6164b1e68dc401366808a7624a",
+      "sha256": "2dc9839ad2c034238f09a584dc7d6064f6b37394349c4b3e4e8973fd65e2f528"
+    },
+    {
+      "path": "docs/whitepaper/v3_uncomfortable.tex",
+      "git_blob": "85567fc54a620cdbc1128c15c38b4d7bb23fdd8e",
+      "sha256": "eadd8faa7eb048c2cc56af470297cb39a89952a19e5db2438ff69bdd72947737"
+    }
+  ],
+  "pdf_sha256": "10f9129cc41077830da8453eae9d93e88200b2772bf982ae4c788413957764eb",
+  "engine": "XeTeX 3.141592653-2.6-0.999997 (TeX Live 2025/Debian)",
+  "passes": 2
+}

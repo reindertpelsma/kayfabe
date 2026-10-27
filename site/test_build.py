@@ -12,6 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import claims_guard
+
 
 def builder():
     spec = importlib.util.spec_from_file_location(
@@ -532,3 +534,65 @@ class LandingRender(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class FrontpageClaims(unittest.TestCase):
+    # FALSIFIER: the frontpage copy or the README contains a phrase the evidence does not support,
+    # or a frontpage statement has no `src` comment, or the status band loses an honest item.
+    def landing_source(self):
+        return (Path(__file__).parent / "content/_index.md").read_text()
+
+    def test_frontpage_has_no_banned_claim(self):
+        text = self.landing_source() + (Path(__file__).parent / "templates/index.html").read_text()
+        self.assertEqual(claims_guard.find(text), [])
+
+    def test_readme_has_no_banned_claim(self):
+        self.assertEqual(claims_guard.find((ROOT / "README.md").read_text(), readme=True), [])
+
+    def test_guard_catches_each_banned_phrase(self):
+        for phrase in [
+            "near-native speed",
+            "it is secure",
+            "a clean-room design",
+            "anti-cheat compatible",
+            "multi-tenant ready",
+            "works with any NVIDIA GPU",
+            "seamless",
+        ]:
+            self.assertTrue(claims_guard.find(phrase, readme=True), phrase)
+
+    def test_every_frontpage_section_carries_a_source(self):
+        import tomllib
+
+        data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
+        self.assertTrue(data["tagline_src"].strip() and data["intro_src"].strip())
+        for name in ["status", "screenshot", "audiences", "speed", "compare", "today",
+                     "games", "path", "honest", "start", "community"]:
+            self.assertTrue(data[name].get("src", "").strip(), name)
+        for table in ("pitch", "audiences"):
+            for item in data[table].get("items", data[table].get("cards")):
+                self.assertTrue(item["src"].strip(), item)
+        for row in data["today"]["rows"]:
+            self.assertTrue(row["src"].strip(), row)
+        for text in self.landing_source().split("\n"):
+            if text.startswith(("src =", "note_src =", "licence_src =", "tagline_src =", "intro_src =")):
+                self.assertNotIn("--", text)
+
+    def test_status_band_says_what_it_must(self):
+        data = self.landing_source()
+        for text in [
+            "Research project, one maintainer",
+            "No installer yet",
+            "Windows is not stable",
+            "Sleep and wake fail",
+            "Not security audited",
+        ]:
+            self.assertIn(text, data)
+
+    def test_readme_opens_with_the_honest_status(self):
+        top = "\n".join((ROOT / "README.md").read_text().splitlines()[:15]).lower()
+        for text in ["research", "no installer", "sleep", "audit", "build"]:
+            self.assertIn(text, top)

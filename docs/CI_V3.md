@@ -148,3 +148,76 @@ the v3 boundary. The QEMU process-identity shell regression test also runs in CI
 Run `bash scripts/ci_gates.sh` for fast guards, or `--all` for the build/test/lint
 steps too. The runner extracts the actual workflow and enforces minimum step
 counts, so a shortened or malformed job cannot report a vacuous green.
+
+## Documentation freshness policy (2026-10-22)
+
+CODE READ: [`doc_freshness.py`](../scripts/ci/doc_freshness.py) extends C1's
+[`doc_status_check.py`](../scripts/ci/doc_status_check.py), introduced in PR #87.
+It checks active Markdown under `docs/`, root `ARCHITECTURE.md` and root Markdown
+README files. Each opens with a dated STATUS paragraph after an optional title:
+LIVE, SUPERSEDED, ANSWERED, DESIGN-ONLY or RESEARCH. SUPERSEDED metadata links an
+existing successor file in the same paragraph. Relative Markdown links, images,
+reference links and HTML destinations must resolve inside the checkout. Comments,
+fenced examples and inline code examples are excluded from link checking.
+Markdown fragments resolve against common heading IDs (including duplicates and
+setext headings) or explicit HTML anchors. External URLs and fragment semantics
+for non-Markdown assets are outside this check.
+
+CODE READ: a LIVE status older than `--max-age-days` (default 60 days) becomes
+STALE-SUSPECT when it also has a missing literal reference. The checker searches
+tracked source with `git grep`, reads crate package names from manifests, checks
+file paths, and enumerates local/remote-tracking branch refs. It recognizes KF
+family environment names, generic environment assignments and named environment
+variables, and long command-line flags. Source grep excludes documentation,
+archives, traces, third-party files, target directories and checker fixtures.
+Short source filenames may resolve by suffix within active source; explicit root
+paths must resolve at their stated location. Absolute filenames in code examples
+describe host paths and are omitted from repository-reference diagnostics and
+reports. Markdown destinations beginning with `/` retain repository-root link
+semantics and must resolve. Computed names, external tools and
+intentionally historical references need human review. A finding is a review
+signal; it does not establish that a document is semantically obsolete.
+
+CODE READ: `scripts/ci/doc-freshness-debt.json` records the initial legacy findings
+by path, kind, diagnostic text and SHA-256 of the entire document. Each stale
+reference has its own identity, so restoring one does not create new debt for
+another. An edited document loses
+its exemption and must pass all checks; removing one finding cannot buy a new
+finding elsewhere. An unchanged document also fails if a newly missing source or
+link target introduces a finding. The age calculation uses the current date;
+`--today YYYY-MM-DD` makes a review snapshot reproducible. The explicit `--record`
+operation is for reviewed migration debt and is never run in CI. Do not refresh
+this baseline to conceal new or edited-document failures. The claims and Clippy
+debt inventories are separate and remain unchanged by this workflow.
+
+CODE READ: [the documentation workflow](../.github/workflows/doc-freshness.yml)
+runs on documentation PRs, weekly and on manual dispatch. It publishes the full
+per-file report as `DOC_FRESHNESS.md` in the job summary and a downloadable
+artifact, including status, date, age, missing literal references, successor and
+proposed owner action. Non-Markdown files are inventoried as ASSET; archive files
+are inventoried as ARCHIVED. Neither receives a fabricated prose status. Report
+recommendations are inferences, never automatic document edits or archive moves.
+
+When an entire document no longer applies, move its contents to `archive/` and
+leave a one-line SUPERSEDED pointer at the original path. Link the preserved
+archive document, or the authoritative replacement when one exists. This keeps
+incoming file links working. Verify the pointer and relative paths during the
+move; freeze the archive after that transaction. Both `archive/` and the existing
+`docs/archive/` are read-only afterward and excluded from active-document checks.
+Partial corrections stay above the corrected text in the active parent document.
+An active supersession notice should name the original pointer stub rather than
+require a later edit to frozen archive text. Whole-document moves require the
+owner's classification decision; the checker does not authorize them.
+
+AGENTS-level rule. The owner approved the gate on 2026-10-27 ("good classification of old docs is
+important as agents otherwise use it when it has long been superseded"); AGENTS.md carries the short
+form (Doc hygiene). The published manual (`docs/howto/`, `docs/FAQ.md`) is inventoried as MANUAL and is
+not dated, because the site versions it per release tag. The longer proposal, kept for the archive-and-
+pointer policy, which is not yet adopted:
+
+> Every active Markdown document opens with a dated allowed STATUS. Review
+> source references before reaffirming LIVE. If the whole document no longer
+> applies, move it to archive/ and leave a dated SUPERSEDED link at its old path;
+> preserve history and incoming links. Archive contents are read-only after the
+> move and excluded from active checks. Changed documents must clear the
+> freshness ratchet; never re-record debt to bypass it.

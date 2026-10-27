@@ -1,0 +1,125 @@
+\section{How a guest's address-map edit becomes real GPU work}
+\label{sec:primer}
+
+A GPU virtual address means something only in a particular address space. Its page tables
+translate that address to backing memory and permissions. Kayfabe keeps the virtual names the
+guest expects, while the host driver builds the real GPU's tables. A \emph{host twin} is the
+host-side address space or channel created to correspond to a guest object; it is not a copy
+of the GPU.\src{architecture}\src{hostcode}
+
+\subsection{The update path, end to end}
+
+\doc The guest writes page-table entries into GPU memory or guest RAM. Those are ordinary
+memory stores through untrapped apertures: Kayfabe does not receive a callback for each edit.
+The guest later requests that translations be made current, through an invalidate register
+write or the appropriate memory-operation/control path. A register write into BAR0, the
+register window, traps into the VMM; command methods are handled by channel workers instead.
+The trap records demand and returns. It does not perform the mapping work.\src{architecture}
+\src{translated}\src{memcode}
+
+The \emph{walk} is a traversal of the guest's page tables to discover their current meanings.
+Kayfabe uses a GPU kernel to read tables already in GPU memory rather than repeatedly pulling
+them through a CPU view. It compares the discovered mappings with host placements previously
+confirmed successful. \emph{Apply} means asking the host driver to map and unmap those changed
+ranges, then invalidate its translation cache. A \emph{reservation} is a host address range
+whose ownership and geometry constrain where those mappings can be installed.
+\src{architecture}\src{diffcode}\src{applycode}
+
+An acknowledgement says the required mapping transition is settled. Dependent GPU commands
+must not use an old translation merely because an emulator returned early. A
+\emph{mapping barrier} is that ordering obligation; a \emph{split} divides a command stream
+so later work waits for the required refresh. An \emph{admission gate} withholds new software
+reads or submissions while their mapping dependency is unsettled. These terms describe
+software ordering, not a global pause of all GPU execution.\src{translated}\src{latency}
+
+\input{fig_v3_mapping_path}
+
+\doc A refused map can leave an address absent and therefore faulting. A refused unmap can
+leave old host backing reachable, which is a different risk. The project's rules permit
+acknowledging the former absence but do not generally permit pretending the latter retirement
+succeeded. The early-acknowledgement alternative is therefore a real design question: it would
+need fault/replay or another way to prevent stale access.\src{rulings}\src{applycode}
+
+\subsection{Who manages the resources?}
+
+\doc RM means \emph{resource manager}. The driver allocates objects for memory, address spaces
+and channels, then names them with handles. A handle is an object name, not a physical address
+or an access right by itself. On the guest side, the CPU driver speaks to firmware on the GPU
+System Processor, or GSP. Kayfabe plays that firmware-facing peer, including boot, message
+queues and replies, then independently asks the real host resource manager for resources.
+It does not run NVIDIA firmware inside the emulated device.\src{architecture}\src{gspcode}
+
+A page-directory base is the root used to find an address space's tables. The space can outlive
+that particular root; a recycled root address must not silently identify a new object as the
+old one. \emph{Mirror} means constructing host mappings from the guest's declared mappings,
+not handing hostile guest tables directly to the real GPU.\src{architecture}\src{memcode}
+
+\subsection{What a channel submits}
+
+A \emph{channel} is an ordered execution context for an engine. A copy engine moves or fills
+memory; graphics, compute and video engines perform other work. A timeslice group (TSG) groups
+related channels for scheduling. Preserving each stream's bytes does not by itself preserve
+its group or shared context.\src{kinds}\src{tsgcode}
+
+A channel's \emph{GPFIFO} is a ring of references to command buffers, called pushbuffers.
+A descriptor gives an address and length; the pointed-to buffer contains method packets and
+arguments for an engine object. Packets can span descriptors. A software relay that inspects
+commands must preserve packet state across those boundaries. A \emph{GP reference} is one
+such command-buffer descriptor, not the bytes of the commands.\src{relaydesign}\src{turncode}
+
+Each channel also has shared producer/consumer state, called USERD. The driver appends ring
+entries, publishes its write index, GP\_PUT, and rings a \emph{doorbell}: a register notification
+to inspect work. The GPU fetch unit advances GP\_GET as it reads entries. GET therefore means
+``fetched'', not ``finished''. Commands behind a dependency may remain unexecuted after their
+reference was fetched. A \emph{token} selects a channel route when a doorbell is rung; the
+write does not prove which guest process sent it.\src{eventloop}\src{trapcode}
+
+\subsection{Dependencies, completion and Windows recovery}
+
+A \emph{semaphore} is a memory value used for dependency ordering: one operation releases a
+value and another waits for it. A processed marker witnesses that execution crossed a chosen
+point. A \emph{non-stall interrupt} invites software to inspect completion state; it is not
+itself a per-packet completion receipt. Host notifications can be engine-wide.
+\src{eventloop}\src{kinds}\src{faq}
+
+\doc WDDM, the Windows Display Driver Model, schedules GPU tasks and handles recovery.
+Microsoft documents a default two-second preemption wait. On a detected timeout Windows
+attempts recovery; a recovered display can report that the driver stopped responding, while
+applications may need to recreate their device. Engine and adapter recovery have different
+scope. A reported 2.43-second host operation is not enough to prove which timeout occurred:
+the scheduler's request time and the affected task must be identified.\src{mskeys}
+\src{msrecovery}\src{walknarrow}
+
+An \emph{Xid} is a host NVIDIA error record; Windows adapter Code 43 is an adapter status;
+events 153 and 4101 are guest log observations used by the test records. They are different
+observation domains, not names for one causal defect. A test must correlate them by time and
+lifetime rather than treating one quiet counter as proof of health.\src{winmatrix}\src{faq}
+
+\subsection{Sparse memory is a third state}
+
+\doc A backed mapping points to real storage. A plain-invalid address faults. A sparse
+mapping intentionally has no backing while absorbing writes and returning zeros on reads.
+The selective sparse-mapping experiment tries to preserve that distinction; turning every
+unmapped address sparse would also swallow accesses that should fault. Its finite reservation
+budget and fallback can therefore affect compatibility as well as resource cost.
+\src{sparse}\src{budget}
+
+\doc UVM means unified virtual memory. Some managed-memory accesses need a page supplied on
+first touch and the access replayed. Mirroring mappings already present does not deliver that
+fault/replay service. This matters both for the remaining application failures and for the
+proposal to acknowledge a mapping barrier early.\src{uvmdesign}\src{status}
+
+\subsection{Three kinds of execution, three meanings of permission}
+
+\doc Kayfabe calls ordinary guest-user execution \emph{Passthrough channels}; this is not VFIO
+assignment of the whole GPU. Their host twins execute commands under GPU USER privilege in
+restricted host address spaces. \emph{Translated channels} serve guest-kernel work by rewriting
+addresses into an emulator-owned privileged space. \emph{Emulated channels} perform work that
+belongs entirely to the virtual device. Only the last kind completes wholly in software.
+\src{kinds}\src{architecture}
+
+GPU USER privilege limits commands on hardware. The host driver's non-privileged request
+interface limits which host operations Kayfabe may ask for. A Unix UID controls host process
+credentials. A source or benchmark that establishes one boundary does not establish the other
+two, and none is a substitute for fault-containment tests.\src{security}\src{physevidence}
+\input{fig_v3_trust}

@@ -1,4 +1,4 @@
-STATUS: LIVE-DESIGN, 2026-10-22 — owner trust-model correction; documentation only. Hosted identity, deployment and release execution remain unverified.
+STATUS: LIVE, 2026-10-22 — owner trust-model correction; documentation only. Hosted identity, deployment and release execution remain unverified.
 
 # Approved code, untrusted GPU tripwire, GitHub build provenance
 
