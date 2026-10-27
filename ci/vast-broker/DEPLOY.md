@@ -23,10 +23,14 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
 - **Pinned workflow.** `job_workflow_ref == workflow_ref` and it is exactly this repository's
   `gpu-vast.yml@refs/heads/master` (events `pull_request_target` and `push`) or
   `gpu-vast-sweep.yml@refs/heads/master` (event `workflow_dispatch`, sweep profile only).
-- **One run read.** `GET actions/runs/<id>` must match id, attempt, event and `in_progress`, name
+- **One exact attempt read.** `GET actions/runs/<id>/attempts/<attempt>` uses the signed
+  numeric run id and attempt. It must match id, attempt, event and `in_progress`, name
   this repository as both `repository` and `head_repository` (fork heads refuse: the safer
   choice), and have `triggering_actor.id == OWNER_GITHUB_ID`. That also covers an owner re-run
   of someone else's run.
+  There is no attempt-3 ceiling. Admission does not cache this read; the latest-run resource
+  can describe a previous attempt during a rerun. A 401 logs a fixed `github:run:<field>` code,
+  without the field value. See [rerun diagnosis](../../docs/howto/vast-rerun-auth.md).
 - **Tested commit.** The requested `tested_sha` must equal the run's `head_sha`. For `push` the
   OIDC `sha` must equal it too. MEASURED 2026-10-23 (read-only `gh api` on public
   `github/docs` `pull_request_target` runs, PR #46406): the

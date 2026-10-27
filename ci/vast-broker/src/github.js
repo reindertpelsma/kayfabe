@@ -73,7 +73,7 @@ export class Github {
   async run(id, missing = false, lifecycle = false) {
     return this.get('actions/runs/' + id, missing, lifecycle);
   }
-  // One run read answers the only question the Worker asks: did the owner trigger this run,
+  // One exact attempt read answers the only question the Worker asks: did the owner trigger it,
   // and which commit does it test? The OIDC sha of pull_request_target names the base commit
   // (MEASURED on public runs: run.head_sha is the PR head), so only other events bind it.
   async authorize(c, requested) {
@@ -86,21 +86,23 @@ export class Github {
       !allowedWorkflowRef(c, cfg, cfg.profile ?? 'check')
     )
       refuse('UNAUTHORIZED', 401, undefined, 'github:claims');
-    const r = await this.run(c.run_id);
-    if (
-      String(r.id) !== c.run_id ||
-      String(r.run_attempt) !== c.run_attempt ||
-      r.event !== c.event_name ||
-      r.status !== 'in_progress' ||
-      r.repository?.full_name !== cfg.repo ||
-      r.head_repository?.full_name !== cfg.repo ||
-      !hexSha(r.head_sha) ||
-      typeof r.head_branch !== 'string' ||
-      !r.head_branch ||
-      String(r.triggering_actor?.id) !== cfg.owner ||
-      (c.event_name !== 'pull_request_target' && c.sha !== r.head_sha)
-    )
-      refuse('UNAUTHORIZED', 401, undefined, 'github:run');
+    // The latest-run resource changes across reruns and can still describe a prior attempt.
+    // Bind the REST lookup to the signed attempt, then independently check every returned fact.
+    const r = await this.get('actions/runs/' + c.run_id + '/attempts/' + c.run_attempt);
+    const checks = [
+      ['id', String(r.id) === c.run_id],
+      ['run_attempt', String(r.run_attempt) === c.run_attempt],
+      ['event', r.event === c.event_name],
+      ['status', r.status === 'in_progress'],
+      ['repository', r.repository?.full_name === cfg.repo],
+      ['head_repository', r.head_repository?.full_name === cfg.repo],
+      ['head_sha', hexSha(r.head_sha)],
+      ['head_branch', typeof r.head_branch === 'string' && !!r.head_branch],
+      ['triggering_actor', String(r.triggering_actor?.id) === cfg.owner],
+      ['sha', c.event_name === 'pull_request_target' || c.sha === r.head_sha],
+    ];
+    for (const [field, valid] of checks)
+      if (!valid) refuse('UNAUTHORIZED', 401, undefined, 'github:run:' + field);
     if (requested !== undefined && requested !== r.head_sha) refuse('BINDING_MISMATCH', 409);
     return { sha: r.head_sha, branch: r.head_branch, run: c.run_id, attempt: c.run_attempt };
   }

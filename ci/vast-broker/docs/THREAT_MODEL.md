@@ -1,6 +1,6 @@
 # Vast CI broker threat model
 
-STATUS: LIVE, 2026-10-25. Purpose: so a reviewer (human or AI agent) does not report a design decision
+STATUS: LIVE, 2026-10-27. Purpose: so a reviewer (human or AI agent) does not report a design decision
 as a vulnerability. Labels: OWNER = stated by the owner on 2026-10-25; CODE READ = checked at
 `origin/master` 93091106d (`path:line`); MEASURED = observed live, with its date.
 
@@ -13,6 +13,8 @@ ledger; (d) the Vast account key never leaves the Worker.
 
 The box and its operator are untrusted. A box holds no durable secret except the static Cloudflare
 Access pair (B) and the broker URL, which contains the secret path prefix.
+
+CODE READ 2026-10-27 (`src/github.js`): admission reads `actions/runs/<id>/attempts/<attempt>` using the signed positive numeric identifiers. Every returned id, attempt, event, in-progress status, repository, head repository, head SHA, branch and owner triggering actor is still checked. The latest-run endpoint remains for lifecycle cleanup, not admission. There is no attempt>=3 policy ceiling. Refusal telemetry records only fixed field names, never values. Historical `github:run` logs do not identify the failing field; see [AUTH401 evidence](../../../traces/vast_auth401_20261018/README.md).
 
 CODE READ: OIDC subject, `ref == refs/heads/master`, repository ids and workflow:
 `src/index.js:44-56`, `src/policy.js:92-98` (the subject is an `environment:` subject; the
