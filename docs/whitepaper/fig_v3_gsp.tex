@@ -1,12 +1,14 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
 \node[concept] (a) {Guest CPU driver};
 \node[concept,right=of a] (b) {Kayfabe plays GSP};
 \node[concept,right=of b] (c) {Host driver + GPU};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {request / reply queue}
+\draw[flow] (a) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {request / reply
+  queue}
   (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {authored host verbs}
+\draw[flow] (b) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {authored host
+  verbs}
   (c);
 \end{tikzpicture}
 \caption{The firmware-facing protocol is emulated; no vendor firmware runs in the emulated device.}

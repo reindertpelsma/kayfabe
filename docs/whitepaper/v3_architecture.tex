@@ -32,6 +32,23 @@ oracle exercise different pieces of this claim.\src{security}\src{physevidence}}
 also cannot prove a safe mapping scope. Whole-path reachability and multiple-VM fault effects
 remain separate review obligations.\src{rulings}\src{security}}
 
+\subsection{Derive, never capture}
+
+\readcode The architecture prefers facts read from the host's own unprivileged interface,
+computed virtual-device state and rules generated from pinned open headers. A device identity
+is not permission to copy another die's answer. Request validation and field-level virtual
+support still apply when an answer comes from the host. Published measured exceptions belong
+to exact die/driver coverage, not an invisible default table.\src{architecture}\src{constants}
+
+\attack{Every guest-visible field has a source and a defined unsupported case; an unknown die
+never silently inherits a neighbour's observation.}
+{The constants strategy requires source tags, derivation oracles, wrong-answer mutations and
+same-die native acceptance. It explicitly separates the implemented baseline from table
+consumers on branches.\src{constants}\src{provenance}}
+{A source tag proves provenance only if its source actually supports the field. A boot that
+never exercises an optional feature cannot verify that feature, and agreement between a few
+dies is not a mechanism for a family rule.\src{constants}}
+
 \subsection{Seven axes, not one compatibility version}
 
 \readcode The design separates guest kernel, guest driver, host driver, GPU architecture,
@@ -57,6 +74,14 @@ Guest OS & driver protocol and scheduling & Windows registration / recovery path
 The counterexamples are proposed attacks, not claims that each has occurred at the baseline.
 A matrix that changes one axis at a time is evidence for those cells, not the full Cartesian
 product.\src{driverdesign}\src{constants}
+
+\attack{Guest and host ABI choices remain independent, and OS or VMM identity never grants
+extra memory authority.}
+{The driver matrix tests named host/guest cells; versioned decoder oracles check layouts.
+Portability beyond QEMU and x86-64 still needs real adapter evidence.\src{driverdesign}
+\src{requirements}}
+{A layout may change within a driver branch, and a cross-build cannot exercise mapping,
+interrupt or reset semantics. Passing one axis with the others fixed is not the full grid.}
 
 \subsection{Crate map and the frozen predecessor}
 
@@ -86,6 +111,13 @@ claim about every dependency edge.\src{architecture}
 part of that tree. Product \code{kf-*} crates do not depend on it. Unsafe code is confined to
 named adapter crates and \code{*_unsafe.rs} files. A crate inventory is a source-level fact;
 it says nothing about whether a feature has a production caller.\src{rules}\src{architecture}
+
+\attack{Product crates retain their dependency and unsafe boundaries; the frozen grader tree
+never becomes a hidden product dependency.}
+{Workspace manifests and CI boundary checks enforce structural restrictions. Reached-path
+oracles and real adapter tests address behaviour separately.\src{rules}\src{architecture}}
+{A legal dependency graph can still contain an unused implementation or a production-only
+blocking path. Source structure does not establish reachability or hardware correctness.}
 
 \subsection{Channel kinds and the meaning of completion}
 

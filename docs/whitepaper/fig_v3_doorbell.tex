@@ -1,11 +1,11 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
 \node[concept] (a) {Write descriptors};
 \node[concept,right=of a] (b) {Ring doorbell};
 \node[concept,right=of b] (c) {Worker sees demand};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {publish PUT} (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {token / wake} (c);
+\draw[flow] (a) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {publish PUT} (b);
+\draw[flow] (b) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {token / wake} (c);
 \end{tikzpicture}
 \caption{A notification follows publication; it does not transfer ownership of arbitrary bytes.}
 \label{fig:doorbell}

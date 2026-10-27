@@ -1,12 +1,14 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
 \node[concept] (a) {Guest group};
 \node[concept,right=of a] (b) {Mirrored host group};
 \node[concept,right=of b] (c) {Host twin channels};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {channel membership}
+\draw[flow] (a) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {channel
+  membership}
   (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {scheduler grouping}
+\draw[flow] (b) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {scheduler
+  grouping}
   (c);
 \end{tikzpicture}
 \caption{A timeslice group keeps related channels together at the host scheduling boundary.}

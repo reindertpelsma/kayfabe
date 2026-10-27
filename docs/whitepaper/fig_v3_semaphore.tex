@@ -1,11 +1,12 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
 \node[concept] (a) {Earlier GPU work};
 \node[concept,right=of a] (b) {Memory semaphore};
 \node[concept,right=of b] (c) {Dependent work};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {release value} (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {acquire satisfied}
+\draw[flow] (a) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {release value}
+  (b);
+\draw[flow] (b) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {acquire satisfied}
   (c);
 \end{tikzpicture}
 \caption{A dependency value is distinct from a CPU interrupt and from a fetch cursor.}

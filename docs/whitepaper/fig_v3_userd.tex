@@ -1,12 +1,13 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
 \node[concept] (a) {Producer PUT};
 \node[concept,right=of a] (b) {Ring entries};
 \node[concept,right=of b] (c) {Consumer GET};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {published boundary}
+\draw[flow] (a) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {published
+  boundary}
   (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {consumed boundary}
+\draw[flow] (b) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {consumed boundary}
   (c);
 \end{tikzpicture}
 \caption{USERD carries producer and consumer state; fetching is not finishing.}

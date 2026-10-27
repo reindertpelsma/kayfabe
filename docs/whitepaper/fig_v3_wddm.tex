@@ -1,12 +1,13 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
 \node[concept] (a) {Application / runtime};
 \node[concept,right=of a] (b) {Windows driver model};
 \node[concept,right=of b] (c) {GPU + completions};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {scheduled packets}
+\draw[flow] (a) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {scheduled packets}
   (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {driver submissions}
+\draw[flow] (b) -- node[above=8mm,align=center,font=\scriptsize,text width=25mm] {driver
+  submissions}
   (c);
 \end{tikzpicture}
 \caption{The Windows display-driver model adds scheduling and recovery around device work.}

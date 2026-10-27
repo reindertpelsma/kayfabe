@@ -1,14 +1,19 @@
-\begin{figure}[htbp]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[node distance=15mm]
-\node[concept] (a) {Scan};
-\node[concept,right=of a] (b) {Pointer};
-\node[concept,right=of b] (c) {Window then Scan};
-\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {clean registration
-  boundary} (b);
-\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {registration becomes
-  live} (c);
+\node[concept] (scan) {Scan\\inspect packets};
+\node[concept,right=of scan] (pointer) {Pointer\\forward references};
+\node[concept,below=22mm of pointer] (window) {Window\\inspect registration span};
+\draw[flow] (scan) -- node[above=8mm,align=center,font=\scriptsize,text width=30mm]
+  {software binding known; no registration} (pointer);
+\draw[flow] (pointer) -- node[right,align=left,font=\scriptsize,text width=35mm]
+  {registration becomes live} (window);
+\draw[flow] (window.west) -| node[below,pos=0.25,align=center,font=\scriptsize,
+  text width=37mm] {registration gone; binding retained} (pointer.south west);
+\draw[flow,dashed] (scan.south) |- node[below,pos=0.65,align=center,font=\scriptsize,
+  text width=35mm] {binding known with registration live} (window.west);
 \end{tikzpicture}
-\caption{Pointer forwards references; a registration window restores required inspection.}
+\caption{Simplified lifecycle. Window return needs the registration and packet-boundary rules;
+  root or ring changes retain separate lifetime checks.\src{lifecycle}}
 \label{fig:lifecycle}
 \end{figure}

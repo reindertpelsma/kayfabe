@@ -11,7 +11,7 @@ python3 docs/whitepaper/build_v3.py --check
 
 The two-pass XeLaTeX publication gate rejects TeX errors, missing glyphs and undefined references. It requires recorded repository inputs to match committed Git blobs and writes a source/PDF hash receipt. See [publication checks](BUILD_GATES.md), [immutable source index](sources_v3.json) and [PR snapshot](pr_snapshot_v3.json). A receipt is local build evidence, not a signed attestation.
 
-**STATUS: SUPERSEDED, 2026-10-27 — `kayfabe_architecture.tex` / `.pdf`.** The old paper is retained below as history, with this supersession also recorded inside its text. It describes the pre-v3 tree. Its old counts and open verdicts are not the status of v3.
+**STATUS: SUPERSEDED, 2026-10-27 — `kayfabe_architecture.tex` / `.pdf`.** The old paper is retained below as history, with this supersession also recorded inside its text. It describes the pre-v3 tree. Its old counts and open verdicts are not the status of v3. The rebuilt archive uses Roman front matter so two fresh TeX passes settle its references; the historical body is preserved.
 
 ## Historical paper
 
