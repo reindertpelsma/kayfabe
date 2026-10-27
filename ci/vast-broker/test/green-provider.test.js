@@ -125,7 +125,7 @@ for (const price of [0.4, 0.45])
     assert.equal((await row(h)).verdict, 'PROVIDER_FAULT');
   });
 
-for (const kind of ['pass', 'fault', 'budget', 'fail', 'unavailable'])
+for (const kind of ['pass', 'fault', 'budget', 'fail', 'unavailable', 'busy'])
   for (const variant of [1, 2])
     test('green BASE runner provider replacement ' + kind + variant, async () => {
       const { spawnSync } = await import('node:child_process');

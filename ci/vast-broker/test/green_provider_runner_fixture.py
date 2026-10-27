@@ -18,6 +18,9 @@ ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64}
 manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
 rents = 0
 calls = []
+clock = 0.0
+busy_replies = int(case[-1]) if case.startswith("busy") else 0
+m.time.monotonic = lambda: clock
 
 
 def status(verdict="UNAVAILABLE"):
@@ -48,11 +51,20 @@ def status(verdict="UNAVAILABLE"):
 
 
 def client(route, method="GET", body=None):
-    global rents
+    global rents, clock, busy_replies
     calls.append(route)
     code = 200
     if route.startswith("/availability"):
         data = scope["availability"]()
+    elif route == "/rent" and rents == 1 and busy_replies:
+        busy_replies -= 1
+        code = 409
+        data = {
+            "state": "BUSY",
+            "verdict": "UNAVAILABLE",
+            "log_tail_sanitised": "",
+            "bytes_dropped": 0,
+        }
     elif route == "/rent":
         rents += 1
         assert rents <= 2, "unbounded provider retry"
@@ -71,11 +83,13 @@ def client(route, method="GET", body=None):
     elif route.startswith("/status/"):
         verdict = "PROVIDER_FAULT"
         if rents == 2:
-            if case.startswith("pass"):
+            if case.startswith(("pass", "busy")):
                 verdict = "PASS"
             elif case.startswith("fail"):
                 verdict = "FAIL"
         data = status(verdict)
+        if case.startswith("busy") and rents == 1:
+            clock = 40 * 60
         if rents == 2 and case.startswith("unavailable"):
             data.update(state="NONE", verdict="UNAVAILABLE", result_at=None, suites=[])
     else:
