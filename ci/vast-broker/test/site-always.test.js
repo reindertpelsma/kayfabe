@@ -58,3 +58,39 @@ for (const paths of ['site/**', 'docs/**'])
         .length,
     );
   });
+for (const condition of [
+  "github.event_name != 'pull_request'",
+  "needs.policy.outputs.deploy == '1'",
+])
+  test('site deploy guard rejects removed condition ' + condition, () => {
+    assert.ok(check(site.replace(condition, 'true')).length);
+  });
+for (const head of ['a'.repeat(40), 'b'.repeat(40)])
+  test('site PR checkout uses its own head ' + head[0], async () => {
+    const { runInNewContext } = await import('node:vm');
+    const expression = block('build').match(/ref:\s*(?:>-\s*)?\$\{\{\s*([\s\S]*?)\s*\}\}/)?.[1];
+    assert.ok(expression);
+    const value = runInNewContext(
+      expression,
+      {
+        github: {
+          event_name: 'pull_request',
+          sha: 'f'.repeat(40),
+          event: { pull_request: { head: { sha: head } } },
+        },
+      },
+      { timeout: 1000 },
+    );
+    assert.equal(value, head);
+  });
+
+for (const sha of ['a'.repeat(40), 'b'.repeat(40)])
+  test('site master checkout pins the tested SHA ' + sha[0], async () => {
+    const { runInNewContext } = await import('node:vm');
+    const expression = block('build').match(/ref:\s*(?:>-\s*)?\$\{\{\s*([\s\S]*?)\s*\}\}/)?.[1];
+    assert.ok(expression);
+    const actual = runInNewContext(expression, { github: {
+      event_name: 'push', ref: 'refs/heads/master', sha, event: {},
+    } }, { timeout: 1000 });
+    assert.equal(actual, sha);
+  });
