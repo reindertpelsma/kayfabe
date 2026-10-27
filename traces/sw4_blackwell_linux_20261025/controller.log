@@ -1,0 +1,6 @@
+SW4_START utc=2026-10-24T23:54:43Z rev=714ec29d3fdca0a013d9d478755346b0f1af6fa7
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       175G  8.0G  167G   5% /
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running.
+
+SW4_EXIT rc=9 utc=2026-10-24T23:54:48Z
