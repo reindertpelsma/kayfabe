@@ -1,0 +1,6 @@
+{
+  "run": "v7-kvm-20261023",
+  "source": "provider-issued own-instance S3 log",
+  "raw_lines": 1432,
+  "excerpt": "[untrusted] [   60.159765] cloud-init[1469]: onstart: environment contract violated:\n[untrusted] [   60.161172] cloud-init[1469]:   KF_PROTOCOL: missing\n[untrusted] [   60.161565] cloud-init[1469]:   KF_BROKER_URL: missing\n[untrusted] [   60.162120] cloud-init[1469]:   KF_RUN_ID: missing\n[untrusted] [   60.162530] cloud-init[1469]:   KF_RUN_TOKEN: missing\n[untrusted] [   60.163091] cloud-init[1469]:   KF_NONCE: missing\n[untrusted] [   60.163520] cloud-init[1469]:   KF_SHA: missing\n[untrusted] [   60.163955] cloud-init[1469]:   KF_REPO: missing\n[untrusted] [   60.164974] cloud-init[1469]:   KF_RUNNER_NONCE: missing\n[untrusted] [   60.165926] cloud-init[1469]:   KF_SOFT_DEADLINE: missing\n[untrusted] [   60.166837] cloud-init[1469]:   KF_HEARTBEAT_SECONDS: missing\n[untrusted] [   60.167846] cloud-init[1469]:   KF_GRACE_FAIL: missing\n"
+}

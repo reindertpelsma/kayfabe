@@ -1,0 +1,9 @@
+{
+  "crates/kf-qemu/src/chan.rs": "363dd1f86f46c7f3e42c90fdefeb35c758c644f2ded3ba27bd9cf52b1f000bad",
+  "crates/kf-qemu/src/hostidx.rs": "dee921bb91712404ab4bf94e323aa963ebed4d35ae5407d0fe30b3997c9ec21a",
+  "crates/kf-qemu/src/hostidx_model.rs": "607bd1e79ce8cc4286ecc2f780ce6f4dc8810a962bf6440fc216af8b7c585c17",
+  "crates/kf-trap/src/token.rs": "dc1e97e827d20d78d05c151db9448ff8d821b9878bbcca4d87703bdbf924b2cd",
+  "crates/kf-trap/src/lib.rs": "273c4c322778bfa05f8dd8a1a9865c1bb04038ffba4152d79e66fc7eb4b3628a",
+  "crates/kf-core/src/plane.rs": "f94bb021863edf384a893e4201f850efd644d207253fd3bcd80bcaf17bd3a2b3",
+  "crates/kf-chan/src/worker.rs": "eb9d0f5be8d265227e3f6796bffaea64f23f7e2c1c8b27261ca367ed7c0f52ee"
+}

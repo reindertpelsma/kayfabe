@@ -25,6 +25,7 @@ pub mod gop;
 pub mod gpucopy;
 pub mod gpuuid;
 pub mod hostfacts;
+pub mod hostidx;
 pub mod latejoin;
 pub mod mem;
 pub mod memreset;

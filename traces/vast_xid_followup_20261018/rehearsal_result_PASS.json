@@ -1,0 +1,38 @@
+{
+  "verdict": "PASS",
+  "suites": [
+    {
+      "name": "receipt_native_controls",
+      "pass": 2,
+      "fail": 0,
+      "skip": 0
+    }
+  ],
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 3090",
+    "compute_cap": 860,
+    "driver_version": "580.159.04"
+  },
+  "diagnostics": [
+    {
+      "arm": "--defer-liveness",
+      "mode": "native",
+      "rc": 6,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-106627-27034  host=ubuntu  utc=2026-10-23T12:39:14Z\n[xid-watch] [redacted]mand: /usr/b\n[diagnostic preview: head and tail]\nng that reports\n[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.\n",
+      "sha256": "4d6cfbcac87fe8a42657e1976ed0e024e9ea986bef5145df274fc923e452c37e",
+      "source_bytes": 15529,
+      "dropped_bytes": 15311
+    },
+    {
+      "arm": "--missing-page-fault",
+      "mode": "native",
+      "rc": 6,
+      "admitted": true,
+      "text": "[xid-watch] tag=ci-arm-106627-9450  host=ubuntu  utc=2026-10-23T12:40:02Z\n[xid-watch] [redacted]mand: /usr/bi\n[diagnostic preview: head and tail]\nng that reports\n[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.\n",
+      "sha256": "86f154df6841c41f07a60ecd3985353132d4038853ce25441400d9fd57e7df41",
+      "source_bytes": 3505,
+      "dropped_bytes": 3287
+    }
+  ]
+}

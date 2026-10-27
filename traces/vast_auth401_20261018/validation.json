@@ -1,0 +1,39 @@
+{
+  "utc": "2026-10-27T14:12:54.590758+00:00",
+  "base_commit": "2b9fa6947bcf5570c30d7edb552760605f5639cb",
+  "expected_red_commit": "9934156f4",
+  "incident": {
+    "run_id": "40503100558",
+    "attempt": 3,
+    "refusal_utc": "2026-10-27T13:25:47.205Z",
+    "why": "github:run",
+    "historical_mismatching_field": "unknown; not logged"
+  },
+  "before": {
+    "tests": 30,
+    "pass": 4,
+    "fail": 26,
+    "skipped": 0
+  },
+  "after": {
+    "node": {
+      "tests": 2346,
+      "pass": 2346,
+      "fail": 0,
+      "skipped": 0
+    },
+    "workerd": {
+      "tests": 105,
+      "pass": 105,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "mutants": 14,
+  "minimum_named_killers": 2,
+  "bundle_sha256": "2828bf41ed2574b638a7b6fb535e16b6dba9467c997972917050aa58d0bb0460",
+  "live_deployment": "not performed; coordinator-owned",
+  "live_fix_verification": "not performed",
+  "hosted_ci": "pending publication",
+  "pr172": "held open; not modified or merged"
+}

@@ -1,0 +1,76 @@
+baseline green
+env-contract           accept-old-protocol            killed
+env-contract           optional-runner-nonce          killed
+env-contract           allow-http                     killed
+env-contract           values-in-errors               killed
+env-contract           no-token-run-match             killed
+env-file               file-world-readable            killed
+env-file               dir-world-readable             killed
+env-file               onstart-helper-mode            killed
+env-file               hold-hook-not-installed        killed
+sequence-idempotency   retry-renumbers                killed
+sequence-idempotency   sequence-gap                   killed
+sequence-idempotency   not-ready-dropped              killed
+sequence-idempotency   unauthorised-retried           killed
+token-scope            follow-redirects               killed
+token-scope            kill-follows-redirects         killed
+token-scope            hold-follows-redirects         killed
+token-scope            kill-token-on-argv             killed
+kill-command           kill-allows-http               killed
+kill-command           kill-any-status-ok             killed
+kill-command           kill-wrong-path                killed
+kill-command           kill-reason-unsanitised        killed
+kill-command           kill-reason-unbounded          killed
+kill-command           hold-wrong-method-body         killed
+heartbeat              heartbeat-disabled             killed
+heartbeat              heartbeat-ignores-interval     killed
+caps                   post-cap-off                   killed
+caps                   byte-cap-off                   killed
+caps                   line-cap-off                   killed
+caps                   chunk-unbounded                killed
+caps                   omitted-not-reported           killed
+result-schema          exit-code-ignored              killed
+result-schema          skips-allowed                  killed
+result-schema          old-gpu-allowed                killed
+result-schema          payload-binding-trusted        killed
+result-schema          duplicate-keys-allowed         killed
+result-schema          fail-without-failing-row       killed
+result-schema          unknown-hardware-invented      killed
+timeout                timeout-not-forced-fail        killed
+timeout                timeout-row-missing            killed
+timeout                deadline-not-enforced          killed
+timeout                timeout-never-detected         killed
+timeout                expired-deadline-still-runs    killed
+payload-absent         reason-dropped                 killed
+payload-absent         absent-check-removed           killed
+payload-absent         reasons-ignored                killed
+payload-env            token-leaks                    killed
+payload-env            endpoint-leaks                 killed
+payload-env            run-id-leaks                   killed
+payload-env            inputs-lost                    killed
+tool-install           always-install                 killed
+tool-install           never-install                  killed
+tool-install           install-failure-ignored        killed
+contract-failure       payload-runs-despite-bad-env   killed
+contract-failure       failure-not-posted             killed
+contract-failure       stale-result-trusted           killed
+hold-hook              no-once-guard                  killed
+hold-hook              any-login                      killed
+hold-hook              non-interactive                killed
+hold-hook              blocking-call                  killed
+hold-hook              failure-aborts-login           killed
+env-contract: 5 mutants, 5 distinct killers
+env-file: 4 mutants, 2 distinct killers
+sequence-idempotency: 4 mutants, 5 distinct killers
+token-scope: 4 mutants, 4 distinct killers
+kill-command: 6 mutants, 7 distinct killers
+heartbeat: 2 mutants, 2 distinct killers
+caps: 5 mutants, 4 distinct killers
+result-schema: 7 mutants, 9 distinct killers
+timeout: 5 mutants, 5 distinct killers
+payload-absent: 3 mutants, 3 distinct killers
+payload-env: 4 mutants, 3 distinct killers
+tool-install: 3 mutants, 2 distinct killers
+contract-failure: 3 mutants, 5 distinct killers
+hold-hook: 5 mutants, 4 distinct killers
+mutants: 60, killed: 60, problems: 0

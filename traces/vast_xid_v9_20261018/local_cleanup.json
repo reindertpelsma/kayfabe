@@ -1,0 +1,15 @@
+{
+  "run": "v9-cleanup-20261023",
+  "at": 1792761129.4129255,
+  "runtime_and_temporary_secrets_removed": true,
+  "cache_and_container_fixture_files_removed": true,
+  "own_docker_test_image_removed": true,
+  "ports_released": 5,
+  "new_firewall_rules": 0,
+  "host_locks_taken": 0,
+  "dev_cargo_targets_created": 0,
+  "independent_absence_receipt": "independent-absence.json",
+  "one_lease_guard_retained": true,
+  "node": "22.22.1",
+  "wrangler": "4.152.0"
+}

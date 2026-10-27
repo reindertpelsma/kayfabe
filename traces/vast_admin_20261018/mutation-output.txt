@@ -1,0 +1,24 @@
+M23 JWT signature verification bypass: 13 killing tests
+M24 truncated ledger accepted: 2 killing tests
+M01 internal origin bypass: 2 killing tests
+M02 public routing exposed: 4 killing tests
+M03 raw record disclosure: 2 killing tests
+M04 scalar whitelist bypass: 2 killing tests
+M05 oldest first: 3 killing tests
+M06 output cap removed: 2 killing tests
+M07 ambiguous selection accepted in DO: 2 killing tests
+M08 stop bypasses owner service: 8 killing tests
+M09 failed cleanup reported as success: 4 killing tests
+M10 owner authority omitted: 8 killing tests
+M11 deletion acknowledgement treated as absence: 2 killing tests
+M12 owner check bypass: 5 killing tests
+M13 issuer check omitted: 2 killing tests
+M14 audience check omitted: 2 killing tests
+M15 time validation weakened: 4 killing tests
+M16 empty audience not fail-closed: 2 killing tests
+M17 ambiguous selection accepted in UI: 2 killing tests
+M18 proxy paths swapped: 4 killing tests
+M19 duplicate stop proxy call: 2 killing tests
+M20 Stop all confirmation bypass: 3 killing tests
+M21 ended run gets Stop button: 2 killing tests
+M22 untrusted cells interpreted as HTML: 3 killing tests

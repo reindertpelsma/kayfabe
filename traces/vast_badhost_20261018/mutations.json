@@ -1,0 +1,219 @@
+{
+  "baseline": "PASS",
+  "mutants": [
+    {
+      "mutant": "classification-kvm",
+      "kills": 2,
+      "tests": [
+        "badhost classifies and retries host_xid kvm",
+        "badhost classifies and retries provision kvm"
+      ]
+    },
+    {
+      "mutant": "classification-initialization",
+      "kills": 2,
+      "tests": [
+        "badhost classifies and retries host_xid initialization",
+        "badhost classifies and retries provision initialization"
+      ]
+    },
+    {
+      "mutant": "classification-unusable",
+      "kills": 2,
+      "tests": [
+        "badhost classifies and retries host_xid unusable",
+        "badhost classifies and retries provision unusable"
+      ]
+    },
+    {
+      "mutant": "classification-not-ready",
+      "kills": 2,
+      "tests": [
+        "badhost classifies and retries host_xid not-ready",
+        "badhost classifies and retries provision not-ready"
+      ]
+    },
+    {
+      "mutant": "product-stage-admitted",
+      "kills": 2,
+      "tests": [
+        "badhost preserves non-provider or incomplete failure product-ran",
+        "badhost preserves non-provider or incomplete failure guest-ran"
+      ]
+    },
+    {
+      "mutant": "same-machine-condemns-host",
+      "kills": 2,
+      "tests": [
+        "workerd repeated one-machine fault cannot condemn a host 9000",
+        "workerd repeated one-machine fault cannot condemn a host 9001"
+      ]
+    },
+    {
+      "mutant": "host-learning-removed",
+      "kills": 2,
+      "tests": [
+        "badhost two distinct machines learn one durable host 1",
+        "badhost two distinct machines learn one durable host 2"
+      ]
+    },
+    {
+      "mutant": "machine-index-unbounded",
+      "kills": 2,
+      "tests": [
+        "workerd provider indexes stay bounded 1",
+        "workerd provider indexes stay bounded 2"
+      ]
+    },
+    {
+      "mutant": "host-index-unbounded",
+      "kills": 2,
+      "tests": [
+        "workerd host index stays bounded 1",
+        "workerd host index stays bounded 2"
+      ]
+    },
+    {
+      "mutant": "offer-host-index-ignored",
+      "kills": 2,
+      "tests": [
+        "badhost dynamic host denies cached offers 1",
+        "badhost dynamic host denies cached offers 2"
+      ]
+    },
+    {
+      "mutant": "offer-host-cap-ignored",
+      "kills": 2,
+      "tests": [
+        "badhost overflow refuses offers 1",
+        "badhost overflow refuses offers 2"
+      ]
+    },
+    {
+      "mutant": "offer-host-rejection-ignored",
+      "kills": 2,
+      "tests": [
+        "badhost dynamic host denies cached offers 1",
+        "badhost dynamic host denies cached offers 2"
+      ]
+    },
+    {
+      "mutant": "reserve-host-cap-ignored",
+      "kills": 2,
+      "tests": [
+        "workerd provider replacement rejects bad-host-cap1",
+        "workerd provider replacement rejects bad-host-cap2"
+      ]
+    },
+    {
+      "mutant": "reserve-host-index-ignored",
+      "kills": 2,
+      "tests": [
+        "workerd provider replacement rejects bad-host1",
+        "workerd provider replacement rejects bad-host2"
+      ]
+    },
+    {
+      "mutant": "reserve-static-host-ignored",
+      "kills": 2,
+      "tests": [
+        "workerd provider replacement rejects configured-host1",
+        "workerd provider replacement rejects configured-host2"
+      ]
+    },
+    {
+      "mutant": "reserve-same-host-admitted",
+      "kills": 2,
+      "tests": [
+        "workerd provider replacement rejects same-host1",
+        "workerd provider replacement rejects same-host2"
+      ]
+    },
+    {
+      "mutant": "reserve-unknown-host-admitted",
+      "kills": 2,
+      "tests": [
+        "workerd provider replacement rejects unknown-host1",
+        "workerd provider replacement rejects unknown-host2"
+      ]
+    },
+    {
+      "mutant": "reserve-unknown-prior-host-admitted",
+      "kills": 2,
+      "tests": [
+        "workerd provider replacement rejects unknown-prior-host1",
+        "workerd provider replacement rejects unknown-prior-host2"
+      ]
+    },
+    {
+      "mutant": "retry-other-host-filter-removed",
+      "kills": 2,
+      "tests": [
+        "badhost retry requires a different known host 1",
+        "badhost retry requires a different known host 2"
+      ]
+    },
+    {
+      "mutant": "static-host-seed-removed",
+      "kills": 2,
+      "tests": [
+        "badhost static seed excludes known failing host 1",
+        "badhost static seed excludes known failing host 2"
+      ]
+    },
+    {
+      "mutant": "runner-host-hidden",
+      "kills": 12,
+      "tests": [
+        "green BASE runner provider replacement pass1",
+        "green BASE runner provider replacement pass2",
+        "green BASE runner provider replacement fault1",
+        "green BASE runner provider replacement fault2",
+        "green BASE runner provider replacement budget1",
+        "green BASE runner provider replacement budget2",
+        "green BASE runner provider replacement fail1",
+        "green BASE runner provider replacement fail2",
+        "green BASE runner provider replacement unavailable1",
+        "green BASE runner provider replacement unavailable2",
+        "green BASE runner provider replacement busy1",
+        "green BASE runner provider replacement busy2"
+      ]
+    },
+    {
+      "mutant": "summary-notice-hidden",
+      "kills": 6,
+      "tests": [
+        "green BASE runner provider replacement fault1",
+        "green BASE runner provider replacement fault2",
+        "green BASE runner provider replacement budget1",
+        "green BASE runner provider replacement budget2",
+        "green BASE runner provider replacement unavailable1",
+        "green BASE runner provider replacement unavailable2"
+      ]
+    },
+    {
+      "mutant": "provider-status-description-hidden",
+      "kills": 2,
+      "tests": [
+        "provider exhaustion stays infrastructure error, not commit FAIL 0",
+        "provider exhaustion stays infrastructure error, not commit FAIL 1"
+      ]
+    },
+    {
+      "mutant": "host-proof-not-atomic",
+      "kills": 2,
+      "tests": [
+        "workerd provider fault writes roll back at bad-machine:",
+        "workerd provider fault writes roll back at bad-host:"
+      ]
+    },
+    {
+      "mutant": "retry-unknown-host-filter-removed",
+      "kills": 2,
+      "tests": [
+        "badhost retry rejects unknown-host offer 1",
+        "badhost retry rejects unknown-host offer 2"
+      ]
+    }
+  ]
+}

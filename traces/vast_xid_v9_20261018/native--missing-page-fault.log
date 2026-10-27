@@ -1,0 +1,44 @@
+[xid-watch] tag=ci-arm-106627-9450  host=ubuntu  utc=2026-10-23T12:40:02Z
+[xid-watch] [redacted]mand: /usr/bin/timeout --kill-after=5 180 /workspace/kf-ci-src/target/release/kayfabe-rm-ladder --missing-page-fault
+[xid-watch] host_dmesg_lines=902  (readable  the clean/unwatched ambiguity is closed)
+[xid-watch] host_gpu=NVIDIA GeForce RTX 3090, 580.159.04
+[xid-watch] xid_before=4
+[xid-watch] --- [redacted]mand output begins ---
+info  RMLADDER ARGV     = [--missing-page-fault]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00353
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release  the w379 host-FIFO `SEM_RELEASE`.  The Mode-2 CPU copy-engine emulator                      decodes `PushMethod: :SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_two_vas=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R3 missing page     = GPU 0, euid 0  fault a channel on a VA that was never mapped, with a BYSTANDER running in its own address space
+info  R3 the bar          = (a) CONTAINED: the bystander lands before AND after; (b) NAMED: the victim's error notifier fires with an exception type
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4  storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004  WROTE  the store instruction executed
+info  R3 bystander before = Landed
+ok    R3 control          = the bystander lands BEFORE the fault
+FAULT_MARK=victim_release va=0x0000000a11000000
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005 runlist=0 chid=5  storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000005  WROTE  the store instruction executed
+info  R3 victim           = Lost { saw: 3735880569 }
+info  R3 notifier         = fired=true status=0xffff except_type=0x1f engine=0x0001
+     R3 NAMED            = the driver wrote a robust-channel record. except_type 0x1f is what a host kernel log prints as `Xid 31`
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 runlist=0 chid=4  storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004  WROTE  the store instruction executed
+info  R3 bystander after  = Landed
+     R3 CONTAINED        = a channel in another address space kept landing across the fault
+RUNGCTL_missing_page=PASS
+RUNG_missing_page=PASS
+done  w379/w381 mapping-plane rungs only
+[xid-watch] --- [redacted]mand output ends (rc=0) ---
+[xid-watch] xid_after=5
+[xid-watch]  NEW HOST Xid ACROSS THE COMMAND  the run is VOID whatever it printed:
+    [ 2495.376043] NVRM: Xid (PCI:0000:00:07): 31, pid=107377, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[xid-watch]    An "Xid 31  FAULT_PDE" means the host MMU walked for an address that resolved
+[xid-watch]   to nothing  i.e. OUR placement, not the guest's methods. A rung that reports
+[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.

@@ -1,0 +1,16 @@
+name = "kayfabe-vast-admin"
+main = "worker.js"
+compatibility_date = "2026-10-23"
+workers_dev = true
+preview_urls = false
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "BrokerLedger"
+script_name = "kayfabe-vast-broker"
+
+[vars]
+# Fill these non-secret values only after configuring the owner's Access application.
+ACCESS_TEAM_DOMAIN = ""
+ACCESS_AUDIENCE = ""
+OWNER_EMAIL = ""

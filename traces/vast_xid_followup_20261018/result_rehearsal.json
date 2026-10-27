@@ -1,0 +1,37 @@
+{
+  "run": "v9-no-rental-result-rehearsal-20261023",
+  "rentals": 0,
+  "receipt_lease_id": 57367447,
+  "scenarios": [
+    {
+      "verdict": "PASS",
+      "local_diagnostic_records": 2,
+      "local_file_bytes": 1118,
+      "wire_fields": [
+        "hardware",
+        "nonce",
+        "runner_nonce",
+        "sha",
+        "suites",
+        "verdict"
+      ],
+      "worker_schema_unchanged": true,
+      "diagnostic_text_is_verdict_input": false
+    },
+    {
+      "verdict": "FAIL",
+      "local_diagnostic_records": 1,
+      "local_file_bytes": 2508,
+      "wire_fields": [
+        "hardware",
+        "nonce",
+        "runner_nonce",
+        "sha",
+        "suites",
+        "verdict"
+      ],
+      "worker_schema_unchanged": true,
+      "diagnostic_text_is_verdict_input": false
+    }
+  ]
+}

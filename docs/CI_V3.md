@@ -209,7 +209,11 @@ An active supersession notice should name the original pointer stub rather than
 require a later edit to frozen archive text. Whole-document moves require the
 owner's classification decision; the checker does not authorize them.
 
-Proposed AGENTS-level rule, pending owner approval (no AGENTS edit in DR1):
+AGENTS-level rule. The owner approved the gate on 2026-10-27 ("good classification of old docs is
+important as agents otherwise use it when it has long been superseded"); AGENTS.md carries the short
+form (Doc hygiene). The published manual (`docs/howto/`, `docs/FAQ.md`) is inventoried as MANUAL and is
+not dated, because the site versions it per release tag. The longer proposal, kept for the archive-and-
+pointer policy, which is not yet adopted:
 
 > Every active Markdown document opens with a dated allowed STATUS. Review
 > source references before reaffirming LIVE. If the whole document no longer

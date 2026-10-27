@@ -1,0 +1,9 @@
+KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=4
+stage name=provision rc=1 duration_ms=256818 result=FAIL reason=host_xid
+stage name=cuda_host result=NOT_RUN
+stage name=merge_bar result=NOT_RUN
+stage name=cuda_guest result=NOT_RUN
+suite name=host_xid pass=0 fail=1 skip=0
+first_fail stage=provision line=DRIVER_RC=8
+cause stage=provision log_tail=NVRM: RmInitAdapter failed! (0x62:0x56:2028) | rm_init_adapter failed | DRIVER_SWAP_DONE rc=8 (GPU unusable after the swap)
+KF_FINAL_SUMMARY_END

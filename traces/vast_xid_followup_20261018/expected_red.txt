@@ -1,0 +1,122 @@
+FEE.FEEEEFFE
+======================================================================
+ERROR: test_local_reader_accepts_bounded_guest_records (test_vast_payload_result_logs.ReporterResultLogs.test_local_reader_accepts_bounded_guest_records)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 143, in test_local_reader_accepts_bounded_guest_records
+    self.assertEqual(report.read_result_file(self.path), doc)
+                     ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/v3-wt/scripts/ci/vast_report.py", line 173, in read_result_file
+    raise ResultError(str(error)) from None
+vast_report.ResultError: shape
+
+======================================================================
+ERROR: test_local_reader_accepts_bounded_native_records (test_vast_payload_result_logs.ReporterResultLogs.test_local_reader_accepts_bounded_native_records)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 138, in test_local_reader_accepts_bounded_native_records
+    self.assertEqual(report.read_result_file(self.path), doc)
+                     ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/workspace/v3-wt/scripts/ci/vast_report.py", line 173, in read_result_file
+    raise ResultError(str(error)) from None
+vast_report.ResultError: shape
+
+======================================================================
+ERROR: test_clean_native_log_is_in_the_structured_file (test_vast_payload_result_logs.ResultLogs.test_clean_native_log_is_in_the_structured_file)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 63, in test_clean_native_log_is_in_the_structured_file
+    self.assertEqual(self.persisted("native proof")["diagnostics"][0]["text"], "native proof")
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 'diagnostics'
+
+======================================================================
+ERROR: test_failure_keeps_both_the_log_and_named_suite_row (test_vast_payload_result_logs.ResultLogs.test_failure_keeps_both_the_log_and_named_suite_row)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 93, in test_failure_keeps_both_the_log_and_named_suite_row
+    self.assertEqual(doc["diagnostics"][0]["text"], "EXACT_FAULT_RECORD")
+                     ~~~^^^^^^^^^^^^^^^
+KeyError: 'diagnostics'
+
+======================================================================
+ERROR: test_guest_log_is_in_the_structured_file (test_vast_payload_result_logs.ResultLogs.test_guest_log_is_in_the_structured_file)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 66, in test_guest_log_is_in_the_structured_file
+    item = self.persisted("guest serial and QEMU proof", mode="guest")["diagnostics"][0]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 'diagnostics'
+
+======================================================================
+ERROR: test_large_manifest_stays_bounded_and_keeps_the_late_fault (test_vast_payload_result_logs.ResultLogs.test_large_manifest_stays_bounded_and_keeps_the_late_fault)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 105, in test_large_manifest_stays_bounded_and_keeps_the_late_fault
+    self.assertEqual(len(doc["diagnostics"]), 128)
+                         ~~~^^^^^^^^^^^^^^^
+KeyError: 'diagnostics'
+
+======================================================================
+ERROR: test_source_hash_and_size_are_for_the_complete_original (test_vast_payload_result_logs.ResultLogs.test_source_hash_and_size_are_for_the_complete_original)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 72, in test_source_hash_and_size_are_for_the_complete_original
+    item = self.persisted(text, admitted=False)["diagnostics"][0]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 'diagnostics'
+
+======================================================================
+FAIL: test_diagnostic_text_never_changes_a_fail_verdict (test_vast_payload_result_logs.ReporterResultLogs.test_diagnostic_text_never_changes_a_fail_verdict)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 160, in test_diagnostic_text_never_changes_a_fail_verdict
+    self.assertEqual(result["suites"], doc["suites"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'name': 'result_invalid', 'pass': 0, 'fail': 1, 'skip': 0}] != [{'name': 'raw_suite', 'pass': 30, 'fail': 1, 'skip': 0}]
+
+First differing element 0:
+{'name': 'result_invalid', 'pass': 0, 'fail': 1, 'skip': 0}
+{'name': 'raw_suite', 'pass': 30, 'fail': 1, 'skip': 0}
+
+- [{'fail': 1, 'name': 'result_invalid', 'pass': 0, 'skip': 0}]
+?                        ^  ^ ^^^^^^^^
+
++ [{'fail': 1, 'name': 'raw_suite', 'pass': 30, 'skip': 0}]
+?                        ^^^  ^ ^           +
+
+
+======================================================================
+FAIL: test_wire_result_stays_exactly_the_worker_contract (test_vast_payload_result_logs.ReporterResultLogs.test_wire_result_stays_exactly_the_worker_contract)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 148, in test_wire_result_stays_exactly_the_worker_contract
+    self.assertEqual(result["verdict"], "PASS")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'FAIL' != 'PASS'
+- FAIL
++ PASS
+
+
+======================================================================
+FAIL: test_malformed_state_is_not_silently_ignored (test_vast_payload_result_logs.ResultLogs.test_malformed_state_is_not_silently_ignored) (item={'arm': '--defer-liveness', 'mode': 'native', 'rc': True, 'admitted': True, 'text': 'source evidence', 'sha256': '9c7c9338dc3e5d00303f4942fedceac6acba1d8ecf93149932d395407b5effdf', 'source_bytes': 15, 'dropped_bytes': 0})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 117, in test_malformed_state_is_not_silently_ignored
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_malformed_state_is_not_silently_ignored (test_vast_payload_result_logs.ResultLogs.test_malformed_state_is_not_silently_ignored) (item={'arm': '--defer-liveness', 'mode': 'native', 'rc': 0, 'admitted': True, 'text': 'source evidence', 'sha256': 'not-a-hash', 'source_bytes': 15, 'dropped_bytes': 0})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/v3-wt/scripts/ci/test_vast_payload_result_logs.py", line 117, in test_malformed_state_is_not_silently_ignored
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.055s
+
+FAILED (failures=4, errors=7)

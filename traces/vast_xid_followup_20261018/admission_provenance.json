@@ -1,0 +1,15 @@
+{
+  "run": "v9-no-rental-followup-20261023",
+  "previous_live_source": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+  "admission_functions_byte_identical": [
+    "xid_ok",
+    "watch_delta",
+    "guard_command",
+    "guest_command",
+    "stage_grade"
+  ],
+  "shared_guard_module_unchanged": true,
+  "shared_guard_sha256": "ae5947e488f1cc1fab4f16a80ff089c17de6f3973bea74d2bc9522fdee915d52",
+  "worker_changes": false,
+  "rentals": 0
+}

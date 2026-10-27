@@ -1,0 +1,33 @@
+{
+  "run": "v7-kvm-20261023",
+  "provider_create_response_latency_s": 0.391,
+  "create_response_to_first_report_s": 1954.956,
+  "intent_to_first_report_s": 1955.347,
+  "observed_provider_transitions": [
+    {
+      "elapsed_after_create_response_s": 0.666,
+      "actual_status": null,
+      "cur_state": "running",
+      "intended_status": "running"
+    },
+    {
+      "elapsed_after_create_response_s": 41.526,
+      "actual_status": "loading",
+      "cur_state": "running",
+      "intended_status": "running"
+    },
+    {
+      "elapsed_after_create_response_s": 206.045,
+      "actual_status": "created",
+      "cur_state": "running",
+      "intended_status": "running"
+    },
+    {
+      "elapsed_after_create_response_s": 904.048,
+      "actual_status": "running",
+      "cur_state": "running",
+      "intended_status": "running"
+    }
+  ],
+  "accepted_callbacks_to_date": 10
+}

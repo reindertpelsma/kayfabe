@@ -1,0 +1,15 @@
+{
+  "run": "v8-fresh-home-fix-gpu-free-20261023",
+  "tests": 321,
+  "failures": 0,
+  "errors": 0,
+  "cache_helper_home_mutants": 43,
+  "combined_noncanonical_mutants": 94,
+  "minimum_named_killers": 2,
+  "canonical_mutants": 60,
+  "canonical_killed": 60,
+  "runtime": "Ubuntu22.04 / GNU coreutils / Python3.10",
+  "live_home_fix_verified": false,
+  "expected_red_commit": "aeae96afb",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+}

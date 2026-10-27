@@ -1,0 +1,12 @@
+{
+  "run": "v7-kvm-20261023",
+  "verified_at": 1792725849.7911255,
+  "exact_id_absent": true,
+  "exact_label_absent": true,
+  "independent_reaper_stopped_after_absence": true,
+  "all_owned_listener_ports_released": true,
+  "source_ip_gate_removed": true,
+  "controller_children_stopped": true,
+  "temporary_secret_bindings_and_local_state_removed": true,
+  "own_untracked_worker_artifacts_removed": true
+}
