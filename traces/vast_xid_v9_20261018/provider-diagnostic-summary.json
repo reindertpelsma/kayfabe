@@ -1,0 +1,25 @@
+{
+  "run": "v9-provider-diagnostic-20261023",
+  "bytes": 73732,
+  "lines": 1172,
+  "dropped": 7443,
+  "patterns": {
+    "phase": [
+      "[untrusted] [    0.004805] On node 0, zone DMA: 1 pages in unavailable ranges",
+      "[untrusted] [    0.004824] On node 0, zone DMA: 96 pages in unavailable ranges",
+      "[untrusted] [    0.650961] DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations",
+      "[untrusted] [    0.651695] DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations",
+      "[untrusted] [    0.652704] DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations",
+      "[untrusted] [    1.052300] PCI-DMA: Using software bounce buffering for IO (SWIOTLB)",
+      "[untrusted] [    1.282996] ACPI: \\_SB_.LNKA: Enabled at IRQ 10",
+      "[untrusted] [    1.576932] platform eisa.0: EISA: Cannot allocate resource for mainboard",
+      "[untrusted] [    1.595672] platform eisa.0: EISA: Detected 0 cards"
+    ],
+    "error": [
+      "[untrusted] libvirt: QEMU Driver error : Domain not found: no domain with matching name 'C.57367447'",
+      "[untrusted] [    0.710891] ACPI: _OSC evaluation for CPUs failed, trying _PDC",
+      "[untrusted]          Starting GRUB failed boot detection...",
+      "[untrusted] [  OK  ] Finished GRUB failed boot detection."
+    ]
+  }
+}

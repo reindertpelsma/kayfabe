@@ -1,0 +1,158 @@
+{
+  "run": "v9-xid-kvm-20261023",
+  "sha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+  "lease_id": 57367447,
+  "rental_count": 1,
+  "vm": true,
+  "runtype": "ssh_direct",
+  "local_worker": true,
+  "local_test_identity": true,
+  "production_tiny_onstart": true,
+  "n": 1,
+  "spread": null,
+  "ga106_available": false,
+  "effective_hourly": 0.42284722222222226,
+  "compute_storage_hourly": 0.39333333333333337,
+  "transfer_reserve_usd": 0.08854166666666667,
+  "spend_cap_usd": 4,
+  "stop_usd": 3,
+  "created_at": 1792756643.0572903,
+  "first_report_s": 121.53270959854126,
+  "first_running_s": 124.90975332260132,
+  "running_poll_period_s": 20,
+  "cache_seconds": 36.455,
+  "cache_asset_bytes": 167141234,
+  "blob_lookup_statuses": [
+    200,
+    200
+  ],
+  "stages": [
+    {
+      "name": "provision",
+      "watcher_rc": 0,
+      "seconds": 1280.652
+    },
+    {
+      "name": "cuda_host",
+      "watcher_rc": 0,
+      "seconds": 13.493
+    },
+    {
+      "name": "merge_bar",
+      "watcher_rc": 6,
+      "seconds": 2033.184
+    },
+    {
+      "name": "cuda_guest",
+      "watcher_rc": 0,
+      "seconds": 416.59
+    }
+  ],
+  "runner": {
+    "state": "GRACE",
+    "verdict": "PASS",
+    "verified": 1
+  },
+  "metadata": {
+    "id": "57367447",
+    "sha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+    "pr": 7,
+    "profile": "check",
+    "die": "GA102",
+    "country": "US",
+    "compute_cap": 860,
+    "driver_version": "580.159.04",
+    "gpu_model": "NVIDIA GeForce RTX 3090",
+    "verdict": "PASS",
+    "state": "GRACE",
+    "selection_reason": "PREFERENCE",
+    "preferences_ignored": 0,
+    "suites": [
+      {
+        "name": "provision",
+        "pass": 1,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "cuda_host",
+        "pass": 4,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "kf_tests",
+        "pass": 3749,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "gates",
+        "pass": 9,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "kf3_build",
+        "pass": 1,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "raw_suite",
+        "pass": 30,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "thin_suite",
+        "pass": 30,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "birth_census",
+        "pass": 1,
+        "fail": 0,
+        "skip": 0
+      },
+      {
+        "name": "cuda_fat",
+        "pass": 4,
+        "fail": 0,
+        "skip": 0
+      }
+    ],
+    "log_cursor": 207,
+    "log_sha256": "22f535189a76971c220b06e5fd2da943243faaa626e308a05a5d2444c9aaacca",
+    "bytes_dropped": 47080,
+    "tail_bytes_dropped": 1036110,
+    "protocol_version": 4,
+    "worker_version": "v5",
+    "bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+    "started_at": 1792756643256,
+    "result_at": 1792760530536
+  },
+  "independent_reaper_armed_before_create": true,
+  "reaper_minutes": 150,
+  "real_cron_period_s": 60,
+  "real_cron_pairs": 64,
+  "exact_id_and_label_absent": true,
+  "absent_at": 1792760551.6402652,
+  "lifetime_upper_seconds": 3908.582974910736,
+  "estimated_cost_upper_usd": 0.5155905472587656,
+  "cost_is_invoice": false,
+  "diagnostic_frames_present": 54,
+  "diagnostics_run_budget_bytes": 1048576,
+  "diagnostics_success_budget_bytes": 983040,
+  "diagnostics_refusal_reserve_bytes": 65536,
+  "validated_log": {
+    "bytes": 1188762,
+    "dropped": 11664,
+    "runner_verified": 1
+  },
+  "manual_retention_repeated": false,
+  "ssh_snapshot_attempted": false,
+  "worker_deployed": false,
+  "production_renting_enabled": false
+}

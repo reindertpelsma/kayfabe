@@ -1,0 +1,40 @@
+{
+  "run": "v8-package-policy-mutants-20261023",
+  "cases": [
+    {
+      "mutant": "ci-installs-optional-stack",
+      "count": 3,
+      "killers": [
+        "test_vast_setup_packages.PackagePolicy.test_ci_does_not_install_unused_openssl_headers",
+        "test_vast_setup_packages.PackagePolicy.test_ci_omits_unused_compiler_tooling",
+        "test_vast_setup_packages.PackagePolicy.test_full_profile_adds_only_the_optional_stack"
+      ]
+    },
+    {
+      "mutant": "ci-required-tools-missing",
+      "count": 4,
+      "killers": [
+        "test_vast_setup_packages.PackagePolicy.test_ci_keeps_real_build_driver_and_initrd_dependencies",
+        "test_vast_setup_packages.PackagePolicy.test_each_plan_is_unique_and_plain_package_names",
+        "test_vast_setup_packages.PackagePolicy.test_full_profile_adds_only_the_optional_stack",
+        "test_vast_setup_packages.PackagePolicy.test_manual_full_profile_retains_optional_tools"
+      ]
+    },
+    {
+      "mutant": "full-profile-loses-tools",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_packages.PackagePolicy.test_full_profile_adds_only_the_optional_stack",
+        "test_vast_setup_packages.PackagePolicy.test_manual_full_profile_retains_optional_tools"
+      ]
+    },
+    {
+      "mutant": "bench-uses-full-stack",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_packages.PackagePolicy.test_bench_has_no_unused_optional_development_stack",
+        "test_vast_setup_packages.PackagePolicy.test_bench_keeps_nested_qemu_and_guest_image_tools"
+      ]
+    }
+  ]
+}

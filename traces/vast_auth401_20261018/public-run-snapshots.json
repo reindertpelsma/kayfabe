@@ -1,0 +1,48 @@
+[
+  {
+    "id": 40503100558,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "failure",
+    "run_attempt": 3,
+    "head_sha": "2b9fa6947bcf5570c30d7edb552760605f5639cb",
+    "head_branch": "master",
+    "created_at": "2026-10-27T12:21:21Z",
+    "updated_at": "2026-10-27T13:26:27Z",
+    "run_started_at": "2026-10-27T13:25:27Z",
+    "actor_id": 229738317,
+    "triggering_actor_id": 229738317,
+    "repository": "reindertpelsma/kayfabe",
+    "head_repository": "reindertpelsma/kayfabe",
+    "endpoint": "canonical",
+    "headers": {
+      "date": "Tue, 27 Oct 2026 13:59:34 GMT",
+      "cache-control": "public, max-age=60, s-maxage=60",
+      "etag": "W/\"0c9e1eede54ac68534b21ca7847cccac4b625c6a2d14d808c4c724ac07c4ed82\"",
+      "x-github-request-id": "A372:3FC34F:1AF3E3:26AF85:6AE0AE46"
+    }
+  },
+  {
+    "id": 40503100558,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "failure",
+    "run_attempt": 3,
+    "head_sha": "2b9fa6947bcf5570c30d7edb552760605f5639cb",
+    "head_branch": "master",
+    "created_at": "2026-10-27T13:25:29Z",
+    "updated_at": "2026-10-27T13:26:27Z",
+    "run_started_at": "2026-10-27T13:25:27Z",
+    "actor_id": 229738317,
+    "triggering_actor_id": 229738317,
+    "repository": "reindertpelsma/kayfabe",
+    "head_repository": "reindertpelsma/kayfabe",
+    "endpoint": "attempt3",
+    "headers": {
+      "date": "Tue, 27 Oct 2026 13:59:34 GMT",
+      "cache-control": "public, max-age=60, s-maxage=60",
+      "etag": "W/\"dc237bb76adfe2ac97dbf70cffb41385f0fd97aeb6744cc18e4cb1423fd45b3a\"",
+      "x-github-request-id": "A370:29DF89:187B70:23B44F:6AE0AE46"
+    }
+  }
+]

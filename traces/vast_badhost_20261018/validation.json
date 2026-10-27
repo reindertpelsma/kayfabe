@@ -1,0 +1,38 @@
+{
+  "utc": "2026-10-27T10:51:13.847359+00:00",
+  "base_pr167_head": "4b48823cdf5ee8114b9282e79f52095b58793c55",
+  "expected_red_commits": [
+    "dd7039c27",
+    "129ece72b",
+    "c28fcdde8"
+  ],
+  "local": {
+    "node": {
+      "tests": 2316,
+      "pass": 2316,
+      "fail": 0
+    },
+    "workerd": {
+      "tests": 103,
+      "pass": 103,
+      "fail": 0
+    }
+  },
+  "python_unmodified": {
+    "tests": 704,
+    "failures": 1,
+    "test": "test_outer_deadline_kills_a_stuck_transport",
+    "timeout_binary": "uutils coreutils 0.8.0"
+  },
+  "python_gnu_fixture": {
+    "tests": 704,
+    "failures": 0,
+    "duration_seconds": 99.354,
+    "change": "Only the test-generated wrapper uses GNU timeout; duration and assertions unchanged."
+  },
+  "mutants": 25,
+  "minimum_killers": 2,
+  "bundle_sha256": "8f44d1351d5ab2a9d87701ccaf952033ccf64f8960c19657e378bd59b9f3d90a",
+  "live_deployment": "not performed",
+  "hosted_ci": "pending"
+}

@@ -1,0 +1,136 @@
+{
+  "baseline": "PASS",
+  "mutants": [
+    {
+      "mutant": "latest-run-used-for-admission",
+      "kills": 2,
+      "tests": [
+        "workerd attempt 3 availability and rental ignore stale latest run",
+        "workerd attempt 4 availability and rental ignore stale latest run"
+      ]
+    },
+    {
+      "mutant": "attempt-3-ceiling",
+      "kills": 28,
+      "tests": [
+        "attempt 3 ignores latest prior attempt in_progress",
+        "attempt 3 ignores latest prior attempt completed",
+        "attempt 3 exact metadata binds id",
+        "attempt 3 exact metadata binds run_attempt",
+        "attempt 3 exact metadata binds event",
+        "attempt 3 exact metadata binds status",
+        "attempt 3 exact metadata binds repository",
+        "attempt 3 exact metadata binds head_repository",
+        "attempt 3 exact metadata binds head_sha",
+        "attempt 3 exact metadata binds head_branch",
+        "attempt 3 exact metadata binds triggering_actor",
+        "attempt 3 exact metadata binds sha",
+        "attempt 3 requested SHA still binds to attempt head",
+        "attempt 3 admission is not cached between API reads",
+        "attempt 4 ignores latest prior attempt in_progress",
+        "attempt 4 ignores latest prior attempt completed",
+        "attempt 4 exact metadata binds id",
+        "attempt 4 exact metadata binds run_attempt",
+        "attempt 4 exact metadata binds event",
+        "attempt 4 exact metadata binds status",
+        "attempt 4 exact metadata binds repository",
+        "attempt 4 exact metadata binds head_repository",
+        "attempt 4 exact metadata binds head_sha",
+        "attempt 4 exact metadata binds head_branch",
+        "attempt 4 exact metadata binds triggering_actor",
+        "attempt 4 exact metadata binds sha",
+        "attempt 4 requested SHA still binds to attempt head",
+        "attempt 4 admission is not cached between API reads"
+      ]
+    },
+    {
+      "mutant": "binding-removed-id",
+      "kills": 2,
+      "tests": ["attempt 3 exact metadata binds id", "attempt 4 exact metadata binds id"]
+    },
+    {
+      "mutant": "binding-removed-run_attempt",
+      "kills": 2,
+      "tests": [
+        "attempt 3 exact metadata binds run_attempt",
+        "attempt 4 exact metadata binds run_attempt"
+      ]
+    },
+    {
+      "mutant": "binding-removed-event",
+      "kills": 2,
+      "tests": ["attempt 3 exact metadata binds event", "attempt 4 exact metadata binds event"]
+    },
+    {
+      "mutant": "binding-removed-status",
+      "kills": 4,
+      "tests": [
+        "attempt 3 exact metadata binds status",
+        "attempt 3 admission is not cached between API reads",
+        "attempt 4 exact metadata binds status",
+        "attempt 4 admission is not cached between API reads"
+      ]
+    },
+    {
+      "mutant": "binding-removed-repository",
+      "kills": 2,
+      "tests": [
+        "attempt 3 exact metadata binds repository",
+        "attempt 4 exact metadata binds repository"
+      ]
+    },
+    {
+      "mutant": "binding-removed-head_repository",
+      "kills": 2,
+      "tests": [
+        "attempt 3 exact metadata binds head_repository",
+        "attempt 4 exact metadata binds head_repository"
+      ]
+    },
+    {
+      "mutant": "binding-removed-head_sha",
+      "kills": 2,
+      "tests": [
+        "attempt 3 exact metadata binds head_sha",
+        "attempt 4 exact metadata binds head_sha"
+      ]
+    },
+    {
+      "mutant": "binding-removed-head_branch",
+      "kills": 2,
+      "tests": [
+        "attempt 3 exact metadata binds head_branch",
+        "attempt 4 exact metadata binds head_branch"
+      ]
+    },
+    {
+      "mutant": "binding-removed-triggering_actor",
+      "kills": 2,
+      "tests": [
+        "attempt 3 exact metadata binds triggering_actor",
+        "attempt 4 exact metadata binds triggering_actor"
+      ]
+    },
+    {
+      "mutant": "binding-removed-sha",
+      "kills": 2,
+      "tests": ["attempt 3 exact metadata binds sha", "attempt 4 exact metadata binds sha"]
+    },
+    {
+      "mutant": "field-diagnostic-removed",
+      "kills": 2,
+      "tests": [
+        "run refusal logs only the fixed metadata field: run_attempt",
+        "run refusal logs only the fixed metadata field: status"
+      ]
+    },
+    {
+      "mutant": "metadata-value-logged",
+      "kills": 2,
+      "tests": [
+        "run refusal logs only the fixed metadata field: run_attempt",
+        "run refusal logs only the fixed metadata field: status"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "run": "v9-xid-kvm-20261023",
+  "thresholds": {
+    "reliability": 0.98,
+    "cores": 8,
+    "cpuGhz": 2,
+    "ramMb": 34360,
+    "downMbps": 200,
+    "upMbps": 50,
+    "diskMbps": 100,
+    "medianRatio": 0.5,
+    "price": 1,
+    "bandwidth_down_gb": 15,
+    "bandwidth_up_gb": 2,
+    "verified": 1
+  },
+  "rejected": {
+    "VERIFICATION": 15,
+    "DRIVER": 12,
+    "RELIABILITY": 16,
+    "CPU_RAM": 12,
+    "NETWORK": 2,
+    "DIE": 15,
+    "DISK_BW": 2,
+    "PERFORMANCE": 5,
+    "PRICE": 6
+  },
+  "verified_counts": [
+    {
+      "die": "AD102",
+      "total": 6,
+      "verified": 5
+    },
+    {
+      "die": "AD103",
+      "total": 1,
+      "verified": 0
+    },
+    {
+      "die": "CC_120",
+      "total": 3,
+      "verified": 2
+    },
+    {
+      "die": "CC_89",
+      "total": 2,
+      "verified": 2
+    },
+    {
+      "die": "GA102",
+      "total": 9,
+      "verified": 5
+    },
+    {
+      "die": "GA106",
+      "total": 3,
+      "verified": 1
+    },
+    {
+      "die": "GB202",
+      "total": 3,
+      "verified": 1
+    },
+    {
+      "die": "GB203",
+      "total": 2,
+      "verified": 1
+    },
+    {
+      "die": "TU106",
+      "total": 1,
+      "verified": 1
+    }
+  ],
+  "allowed_offers": [
+    {
+      "die": "GA102",
+      "gpu_name": "RTX_3090",
+      "compute_cap": 860,
+      "count": 3,
+      "effective_hourly": 0.42284722222222226,
+      "estimated_total": 1.2750972222222223,
+      "kvm": true
+    }
+  ]
+}

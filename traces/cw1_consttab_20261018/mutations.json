@@ -1,0 +1,92 @@
+[
+  {
+    "mutant": "die_scope",
+    "exit": 101,
+    "failed_tests": [
+      "consttab::tests::a_neighbour_dies_row_is_never_served",
+      "consttab::tests::byte_rows_and_the_8162_difference",
+      "named_gap_is_refused_without_neighbor_row",
+      "other_family_never_borrows_a_measured_row",
+      "zbc_host_state_keeps_exact_die_and_host_driver_tag"
+    ],
+    "kill_count": 5
+  },
+  {
+    "mutant": "rm_branch_scope",
+    "exit": 101,
+    "failed_tests": [
+      "consttab::tests::a_neighbour_dies_row_is_never_served",
+      "other_rm_branch_does_not_match"
+    ],
+    "kill_count": 2
+  },
+  {
+    "mutant": "unknown_die",
+    "exit": 101,
+    "failed_tests": [
+      "consttab::tests::mechanism_rows_do_not_answer_unnamed_dies",
+      "unknown_architecture_never_gets_wildcard",
+      "unknown_implementation_never_gets_wildcard"
+    ],
+    "kill_count": 3
+  },
+  {
+    "mutant": "calendar_date",
+    "exit": 101,
+    "failed_tests": [
+      "consttab::tests::a_measurement_is_never_a_wildcard_and_names_its_own_scope",
+      "invalid_day_is_rejected",
+      "invalid_month_is_rejected"
+    ],
+    "kill_count": 3
+  },
+  {
+    "mutant": "evidence_syntax",
+    "exit": 101,
+    "failed_tests": [
+      "absolute_evidence_path_is_rejected",
+      "empty_evidence_is_rejected",
+      "parent_traversal_evidence_is_rejected",
+      "whitespace_evidence_is_rejected"
+    ],
+    "kill_count": 4
+  },
+  {
+    "mutant": "evidence_exists",
+    "exit": 101,
+    "failed_tests": [
+      "evidence_checker_receives_only_repo_path_not_annotation",
+      "missing_evidence_is_rejected_by_validator"
+    ],
+    "kill_count": 2
+  },
+  {
+    "mutant": "request_match",
+    "exit": 101,
+    "failed_tests": [
+      "consttab::tests::byte_rows_and_the_8162_difference",
+      "consttab::tests::a_different_request_is_a_different_question",
+      "changed_request_size_is_refused",
+      "changed_request_is_refused_and_counted"
+    ],
+    "kill_count": 4
+  },
+  {
+    "mutant": "board_specific",
+    "exit": 101,
+    "failed_tests": [
+      "board_specific_keys_are_named_refusals",
+      "board_specific_refusal_does_not_depend_on_guest_branch"
+    ],
+    "kill_count": 2
+  },
+  {
+    "mutant": "header_schema",
+    "exit": 101,
+    "failed_tests": [
+      "header_column_names_are_exact",
+      "header_column_order_is_exact"
+    ],
+    "kill_count": 2
+  }
+]

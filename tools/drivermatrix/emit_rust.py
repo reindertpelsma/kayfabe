@@ -19,6 +19,11 @@ Regenerate after re-sweeping; the diff IS the review. `kf-abi`'s test
 """
 import argparse
 import collections
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "legal"))
+import notice  # noqa: E402  (the NVIDIA MIT notice the output must carry)
 
 
 def vkey(tag):
@@ -91,6 +96,11 @@ def main():
     o.append("// — DO NOT EDIT BY HAND. Regenerate: `tools/drivermatrix/regen.sh`.\n")
     o.append("//\n// Every value below was MEASURED by compiling ogkm at each tag (`tools/drivermatrix/dm.py`:\n")
     o.append("// struct layouts from gcc's DWARF, constants from the preprocessor + a compiled printf).\n")
+    # A blank line (not a bare `//`) keeps the notice a comment block of its own, apart from the
+    # paragraph above.
+    o.append("\n")
+    o.extend(line + "\n" for line in notice.comment_block("ogkm", "//"))
+    o.append("\n")
     o.append("#![allow(clippy::unreadable_literal)]\n\n")
     o.append("//! The driver matrix: consumed NVIDIA ABI facts, per measured ogkm tag.\n")
     o.append("//! See `crate::matrix` for the lookup rules and `docs/design/V3_DRIVER_MATRIX.md`.\n\n")

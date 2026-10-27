@@ -15,6 +15,23 @@
 # alongside its own"); the error surfaces far from the cause.
 set -euo pipefail
 die() { echo "provision_box: $*" >&2; exit 1; }
+# One package policy serves the cold path and the reviewed setup-cache builder.
+kf_packages() {
+  local profile=${1:?profile}
+  local required=(build-essential pkg-config git curl python3 kmod pciutils cpio zstd
+                  psmisc busybox-static openssh-client)
+  local optional=(clang lld libssl-dev)
+  local bench=(ninja-build meson python3-venv python3-pip python3-tomli libglib2.0-dev
+               libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage
+               qemu-system-x86 ovmf musl-tools libslirp-dev)
+  case "$profile" in
+    ci) printf '%s\n' "${required[@]}" ;;
+    full) printf '%s\n' "${required[@]}" "${optional[@]}" ;;
+    bench) printf '%s\n' "${bench[@]}" ;;
+    *) echo "unknown provisioning profile" >&2; return 2 ;;
+  esac
+}
+if [ "${1:-}" = --packages ]; then kf_packages "${2:-}"; exit; fi
 echo "PROVISION_START $(date -Is)"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -57,7 +74,11 @@ pick_apt_mirror() {
         /etc/apt/sources.list.d/*.list 2>/dev/null || true
   fi
 }
-pick_apt_mirror || exit 1
+if [ -n "${KF_APT_CACHE_ROOT:-}" ]; then
+  echo "apt uses the reviewed local package cache"
+else
+  pick_apt_mirror || exit 1
+fi
 
 # ⚠ A FRESH CLOUD BOX RUNS `unattended-upgrades` AT BOOT and it holds the dpkg lock.
 # Measured on vast instance 50013922, 2026-09-06: provisioning launched ~7 minutes after
@@ -179,10 +200,16 @@ fi
 # [checked 2026-09-27 on the extracted packages: `ldd` exits 1 on busybox-static's binary, 0 on
 # busybox's.]
 NEED=""
-for b in gcc pkg-config git curl clang lld python3 modprobe lspci cpio zstd fuser; do
+KF_PROVISION_PROFILE=${KF_PROVISION_PROFILE:-full}
+case "$KF_PROVISION_PROFILE" in ci|full) ;; *) die "unknown provisioning profile";; esac
+commands=(gcc g++ make pkg-config git curl python3 modprobe lspci cpio zstd fuser ssh scp ssh-keygen)
+[ "$KF_PROVISION_PROFILE" != full ] || commands+=(clang lld)
+for b in "${commands[@]}"; do
   command -v "$b" >/dev/null 2>&1 || NEED="$NEED $b"
 done
-[ -e /usr/include/openssl/ssl.h ] || NEED="$NEED libssl-dev"
+if [ "$KF_PROVISION_PROFILE" = full ] && [ ! -e /usr/include/openssl/ssl.h ]; then
+  NEED="$NEED libssl-dev"
+fi
 # ldd exits non-zero for a static binary ("not a dynamic executable")
 if ! command -v busybox >/dev/null 2>&1 || ldd "$(command -v busybox)" >/dev/null 2>&1; then
   NEED="$NEED busybox-static"
@@ -191,8 +218,10 @@ if [ -n "$NEED" ]; then
   echo "apt needed for:$NEED"
   wait_for_dpkg
   apt-get update -qq
-  apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3 \
-      kmod pciutils cpio zstd psmisc busybox-static
+  mapfile -t packages < <(kf_packages "$KF_PROVISION_PROFILE")
+  apt_flags=()
+  [ "$KF_PROVISION_PROFILE" != ci ] || apt_flags+=(--no-install-recommends)
+  apt-get install -y -qq "${apt_flags[@]}" "${packages[@]}"
 else
   echo "apt SKIPPED - every dependency already present"
 fi
@@ -242,7 +271,10 @@ echo "HEAD=$(git rev-parse --short HEAD) branch=$(git branch --show-current)"
 # look identical in the log.
 PIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
 [ -n "$PIN" ] || die "rust-toolchain.toml names no channel"
+echo "KF_SETUP_TIMING phase=rust_toolchain event=start utc=$(date +%s)"
 rustup toolchain install "$PIN" --profile minimal >/dev/null 2>&1 || die "could not install toolchain $PIN"
+echo "KF_SETUP_TIMING phase=rust_toolchain event=end utc=$(date +%s)"
+echo "KF_SETUP_TIMING phase=rust_targets event=start utc=$(date +%s)"
 for t in x86_64-unknown-linux-musl x86_64-unknown-uefi; do
   if rustup target list --installed --toolchain "$PIN" | grep -qx "$t"; then
     echo "$t already installed for $PIN"
@@ -250,15 +282,18 @@ for t in x86_64-unknown-linux-musl x86_64-unknown-uefi; do
     rustup target add --toolchain "$PIN" "$t" && echo "$t ADDED for $PIN" || die "rustup target add --toolchain $PIN $t failed"
   fi
 done
+echo "KF_SETUP_TIMING phase=rust_targets event=end utc=$(date +%s)"
 
 # ⊘ Do NOT pipe cargo into tail: `cargo build | tail` makes $? the status of TAIL, which
 #    always succeeds, so a FAILED build reports success. That exact bug produced a green
 #    provisioning run over a workspace that had not compiled (2026-09-06). Capture the
 #    status directly and read the log from a file.
+echo "KF_SETUP_TIMING phase=workspace_build event=start utc=$(date +%s)"
 set +e
 cargo build --workspace > /tmp/kayfabe-build.log 2>&1
 CARGO_RC=$?
 set -e
+echo "KF_SETUP_TIMING phase=workspace_build event=end utc=$(date +%s)"
 echo "CARGO_RC=$CARGO_RC"
 if [ "$CARGO_RC" -ne 0 ]; then
   echo "--- build errors ---"
