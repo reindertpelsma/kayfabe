@@ -16,7 +16,7 @@ import vast_report as reporter
 
 
 class ProviderFaults(unittest.TestCase):
-    def real_parent_receipt(self, rc, stopped=False):
+    def real_parent_receipt(self, rc, stopped=False, fragmented=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             binary = root / "bin"
@@ -33,7 +33,9 @@ class ProviderFaults(unittest.TestCase):
             marker = root / "xid-failed"
             provision = root / "provision_full.sh"
             provision.write_text(
-                "#!/bin/bash\ncat "
+                "#!/bin/bash\n"
+                + ("printf 'DRIVER_RC=8\\n'\nsleep 0.15\n" if fragmented else "")
+                + "cat "
                 + shlex.quote(str(fixture))
                 + "\n"
                 + ("touch " + shlex.quote(str(marker)) + "\n" if stopped else "")
@@ -70,6 +72,16 @@ class ProviderFaults(unittest.TestCase):
         rc, text = self.real_parent_receipt(1, stopped=True)
         self.assertEqual(rc, 1)
         self.assertNotIn("HOST Xid CLEAN", text)
+
+    def test_actual_parent_split_driver_receipt_one(self):
+        rc, text = self.real_parent_receipt(1, fragmented=True)
+        self.assertEqual(rc, 1)
+        self.assertEqual(payload.watch_delta(text, rc, failed_provider=True), [])
+
+    def test_actual_parent_split_driver_receipt_two(self):
+        rc, text = self.real_parent_receipt(2, fragmented=True)
+        self.assertEqual(rc, 2)
+        self.assertEqual(payload.watch_delta(text, rc, failed_provider=True), [])
 
     def test_actual_parent_keeps_explicit_xid_stop_two(self):
         rc, text = self.real_parent_receipt(2, stopped=True)
