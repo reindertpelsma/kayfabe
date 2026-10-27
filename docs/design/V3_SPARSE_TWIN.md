@@ -1,6 +1,9 @@
 # V3 selective sparse twin mappings (`KF3_SPARSE_TWIN`)
 
-**STATUS: LIVE (default OFF), 2026-10-26.** Implementation by lanes SPR1 (tasks 1-3) and SPR2 (harness fix, hardware
+**STATUS: LIVE (default OFF), 2026-10-27.** ENS6 (2026-10-27): a host RM `NoMemory` during sparse admission is now a counted closed
+fallback with a back-off (not a hard error), reservation work a refresh may start is bounded by a time slice, and per-verb RM
+timing is in the heartbeat: see `docs/design/V3_ENS6_RM_COST.md` (it corrects the *Fallbacks* and *Counters* text below where they differ).
+(2026-10-26 text follows.) Implementation by lanes SPR1 (tasks 1-3) and SPR2 (harness fix, hardware
 validation). Labels: CODE READ (source at the named revision), MEASURED (a named log or run), INFERRED (reasoning).
 Design inputs: `docs/design/V3_SPARSE_PTE.md` (the H6 fault), the twin-allocation design notes (sections A, B, D, E),
 and the owner contract of 2026-10-26 (see below). Evidence: `traces/sparse_spr1_20261018/` and `traces/sparse_spr2_20261026/`.
@@ -69,7 +72,11 @@ budget, one per declined admission (before the 2026-10-26 fix it also counted ev
 which gave 8.3 M on the first Windows campaign: CODE READ). `unhonoured_bytes`: sparse bytes left invalid at admission,
 summed per admission (a retried run is counted again). `retained_bytes`: sparse-to-invalid bytes kept sparse.
 `coarse_maps`: plain maps placed in a coarse block because refinement was declined, one per map call; they are not
-refused. Bounds: 8192 tree blocks per space, 32768 per session, 128 log lines.
+refused. Bounds: 8192 tree blocks per space, 32768 per session, 128 log lines. ENS6 adds `rm_declined` (host RM `NoMemory` turned into
+the counted fallback), `backoff_skips` (layout work skipped during a refusal back-off), `slice_deferred` (work left for a later
+refresh by the time slice), `speculative_skipped` (plain-map refinement skipped above the high-water mark, no RM verb),
+`window_hits` (admissions answered by the refused-window cache), `layout_refresh_peak_{us,verbs}` (busiest refresh), and the
+`rmverbs[...]` table (per RM verb class: calls/total us/max us).
 
 ## Flag
 

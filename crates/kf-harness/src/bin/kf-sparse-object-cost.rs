@@ -249,8 +249,63 @@ fn churn(args: &[String]) -> Result<(), String> {
     watchdog_after
 }
 
+/// ENS6 roots arm: the cost of the space-creation reservations (`GUEST_VA_RANGES`, up to
+/// 127 TiB) that every twin space makes before the guest runs. 7330 and 7350 both show one
+/// single RM call of ~191 ms on the VA thread in their first slow apply; this measures it.
+fn roots(args: &[String]) -> Result<(), String> {
+    if args.len() != 2 {
+        return Err("usage: --run-roots <fresh-output-dir> <watchdog>".into());
+    }
+    let out = PathBuf::from(&args[0]);
+    let watchdog = PathBuf::from(&args[1]);
+    guard(&out)?;
+    probe(&watchdog, &out, "before")?;
+    let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
+    let flags = kf_host::channel::guest_reserve_flags(false);
+    let mut samples: Vec<(&str, usize, u128)> = Vec::new();
+    let mut note = Vec::new();
+    for round in 0..5usize {
+        let start = Instant::now();
+        let space = rm
+            .alloc_vaspace_bare()
+            .map_err(|e| format!("space: {e:?}"))?;
+        samples.push(("space_create", round, start.elapsed().as_nanos()));
+        let mut handles = Vec::new();
+        for (k, &(lo, hi)) in kf_host::channel::GUEST_VA_RANGES.iter().enumerate() {
+            let start = Instant::now();
+            let r = rm.reserve_va_flags(space.space, lo, hi - lo, flags);
+            samples.push((if k == 0 { "root_low" } else { "root_high" }, round, start.elapsed().as_nanos()));
+            match r {
+                Ok(h) => handles.push(h),
+                Err(e) => note.push(format!("round {round} root {k} [{lo:#x},{hi:#x}): {e:?}")),
+            }
+        }
+        for h in handles {
+            let start = Instant::now();
+            let _ = rm.free(h);
+            samples.push(("root_free", round, start.elapsed().as_nanos()));
+        }
+        let start = Instant::now();
+        rm.free_vaspace(space);
+        samples.push(("space_free", round, start.elapsed().as_nanos()));
+        probe(&watchdog, &out, "during")?;
+    }
+    let mut csv = std::fs::File::create(out.join("samples.csv")).map_err(|e| e.to_string())?;
+    writeln!(csv, "op,index,wall_ns").map_err(|e| e.to_string())?;
+    for (op, i, ns) in samples {
+        writeln!(csv, "{op},{i},{ns}").map_err(|e| e.to_string())?;
+    }
+    println!("ENS6_RM_ROOTS refusals={note:?}");
+    probe(&watchdog, &out, "after")
+}
+
 fn main() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--run-roots") {
+        return roots(&args[1..]);
+    }
     if args.first().map(String::as_str) == Some("--run-churn") {
         return churn(&args[1..]);
     }

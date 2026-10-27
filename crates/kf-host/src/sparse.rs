@@ -23,7 +23,7 @@ const PAGE: u64 = 4096;
 /// Refused sparse windows remembered per space.
 const WINDOWS: usize = 64;
 /// Retry ticks a refused window stays remembered.
-const WINDOW_TTL: u64 = 4096;
+const WINDOW_TTL: u64 = 256;
 /// Empty adjacent pairs one recycle merges at most (3 RM verbs each).
 const MAX_PAIRS: usize = 256;
 /// Blocks kept free for explicit sparse admission: speculative plain-map refinement (which

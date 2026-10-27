@@ -25,6 +25,8 @@ mod ens6 {
         pub blocks: RefCell<BTreeMap<u32, (u64, u64, bool)>>,
         next: Cell<u32>,
         pub clock: Cell<u64>,
+        /// Virtual cost of one verb.
+        pub verb_ns: Cell<u64>,
         pub reserves: Cell<u64>,
         pub releases: Cell<u64>,
         pub refusals: Cell<u64>,
@@ -36,6 +38,7 @@ mod ens6 {
                 blocks: RefCell::new(BTreeMap::new()),
                 next: Cell::new(rows.iter().map(|r| r.handle).max().unwrap_or(0) + 1),
                 clock: Cell::new(0),
+                verb_ns: Cell::new(VERB_NS),
                 reserves: Cell::new(0),
                 releases: Cell::new(0),
                 refusals: Cell::new(0),
@@ -66,7 +69,7 @@ mod ens6 {
     }
     impl Ops for Metered {
         fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError> {
-            self.clock.set(self.clock.get() + VERB_NS);
+            self.clock.set(self.clock.get() + self.verb_ns.get());
             self.reserves.set(self.reserves.get() + 1);
             if (self.refuse.borrow())(lo, len, sparse)
                 || self
@@ -84,7 +87,7 @@ mod ens6 {
             Ok(h)
         }
         fn release(&self, h: u32) -> Result<(), RmError> {
-            self.clock.set(self.clock.get() + VERB_NS);
+            self.clock.set(self.clock.get() + self.verb_ns.get());
             self.releases.set(self.releases.get() + 1);
             self.blocks.borrow_mut().remove(&h).expect("own handle");
             Ok(())

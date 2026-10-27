@@ -442,4 +442,13 @@ mod tests {
         );
         assert_eq!(control_verb(0x2080_0101), Verb::Control);
     }
+
+    #[test]
+    fn the_session_maximum_survives_a_later_faster_call() {
+        rm_verb(Verb::AllocOther, || {
+            std::thread::sleep(std::time::Duration::from_millis(3));
+        });
+        rm_verb(Verb::AllocOther, || ());
+        assert!(verb_totals()[Verb::AllocOther as usize].max_ns >= 3_000_000);
+    }
 }

@@ -71,6 +71,8 @@ run_arm() { # NAME ARGS... (the binary is the first of ARGS)
     [[ -n $(idle_ms) ]] || { log "ABORT desktop compositor silent after $name"; exit 8; }
 }
 
+# the space-creation roots (up to 127 TiB each) first: the ~191 ms single call of the boot apply
+run_arm "roots" "$CHURN" --run-roots
 for n in 1000 8000 32000 128000; do
     for kind in sparse normal; do
         # the alloc binary takes: --run-native N KIND DIR WATCHDOG (DIR and WATCHDOG appended)
