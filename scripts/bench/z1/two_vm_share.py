@@ -12,9 +12,12 @@ import time
 from host_guard import Refused, preflight, qemus
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "scripts/bench"))
+import native_xid_guard as xid_guard
 
 
 def run_case(manifest, image, output, label, pair, tool, owned):
+    baseline = xid_guard.xid_lines(xid_guard.kernel_snapshot())
     jobs = []
     start = int(time.time()) + 20
     try:
@@ -68,6 +71,13 @@ def run_case(manifest, image, output, label, pair, tool, owned):
                 time.sleep(0.05)
             if child.poll() is not None:
                 raise Refused("guest exited before both slots could be launched")
+        deadline = time.monotonic() + 190
+        while any(child.poll() is None for child, _, _, _ in jobs):
+            xid_guard.check_unchanged(xid_guard.kernel_snapshot(), baseline)
+            if time.monotonic() >= deadline:
+                raise Refused("owned guest exceeded the unchanged 180-second oracle")
+            time.sleep(0.2)
+        xid_guard.check_unchanged(xid_guard.kernel_snapshot(), baseline)
         results = []
         for child, log, bench, resources in jobs:
             rc = child.wait(timeout=190)
@@ -98,6 +108,15 @@ def run_case(manifest, image, output, label, pair, tool, owned):
                 if not match:
                     raise Refused("matmul throughput row missing")
                 row["gflops_med"] = float(match[1])
+                origin = re.search(
+                    r"BENCH_CLOCK_ORIGIN mono_ms=([0-9.]+) real_ms=([0-9.]+)", serial
+                )
+                window = re.search(r"B1024_WINDOW_MONO_MS=([0-9.]+)\.\.([0-9.]+)", serial)
+                if not origin or not window:
+                    raise Refused("matrix execution window missing")
+                offset = float(origin[2]) - float(origin[1])
+                row["matrix_begin_ms"] = float(window[1]) + offset
+                row["matrix_end_ms"] = float(window[2]) + offset
                 for key in ("BEGIN", "END"):
                     values = re.findall(r"^Z1_WORK_" + key + r" epoch=([0-9]+)", serial, re.M)
                     if len(values) != 1:
@@ -106,16 +125,20 @@ def run_case(manifest, image, output, label, pair, tool, owned):
             results.append(row)
         if pair and tool:
             overlap = min(row["end"] for row in results) - max(row["begin"] for row in results)
-            if overlap <= 0:
-                raise Refused("the two CUDA execution windows did not overlap")
+            matrix_overlap = min(row["matrix_end_ms"] for row in results) - max(
+                row["matrix_begin_ms"] for row in results
+            )
+            if overlap <= 0 or matrix_overlap <= 0:
+                raise Refused("the two matrix execution windows did not overlap")
         else:
-            overlap = None
+            overlap = matrix_overlap = None
         return {
             "label": label,
             "pair": pair,
             "tool": tool,
             "results": results,
             "work_overlap_s": overlap,
+            "matrix_overlap_ms": matrix_overlap,
         }
     finally:
         for child, log, _, _ in jobs:
