@@ -7732,9 +7732,9 @@ impl ChanPlane {
     /// lands as `BUSY_RUNG` and the worker acts again or republishes it). Counted.
     fn owe_ring(&self, ht: u32) -> bool {
         self.contended.fetch_add(1, Ordering::Relaxed);
-        if let Some(idx) = self.host_idx.get(ht) {
+        crate::hostidx::reowe(self.host_idx.get(ht), |idx| {
             let _ = self.plane.ring_internal(idx);
-        }
+        });
         false
     }
 
