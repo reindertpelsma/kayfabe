@@ -89,7 +89,7 @@ unless the cited result says otherwise. The master column is the ancestry result
 | GA102 | thin production | MEASURED Mb: 30/30; lease 57723513, same-box native reference | at `714ec29d3` | no | [A1] |
 | GA102 | thin mirror | CLAIMED C: Round-two header claimed30/30; kept as claimed | at `6564dd597` | no | audit only |
 | GA102 | ladder/apps | CLAIMED C: 3080Ti ladder 4/4 plus gfx; apps untested | at `68fb3768` | yes | audit only |
-| GA102 | W-driver | MEASURED Mb: BLOCKED: sealed install, bind1200s ceiling, zeroRPCs | at `98b599bb` | no | [A15],[A16],[A20] |
+| GA102 | W-driver | MEASURED Mb: BLOCKED: sealed install, bind readiness inconclusive, zero RPCs | at `98b599bb` | no | [A15],[A16],[A20] |
 | GA102 | W-apps | UNTESTED: No workload verdict | n/a | n/a | audit only |
 | GA102 | Disp-L | CLAIMED C: PARTIAL: displayless Vast description; no display proof | unrecorded | unknown | audit only |
 | GA102 | Disp-W | UNTESTED: No result | n/a | n/a | audit only |
@@ -253,6 +253,7 @@ rule; n=1, different boots, idle-native scope and non-reproduction remain visibl
 - CODE READ (2026-10-27 archival audit; TU106 W-apps): Boot-specific dirty source identity is bounded by README; branch head49b4844c0 is not the tested tree.
 - CODE READ (2026-10-27 archival audit; TU106 Native Windows): Revision is collector source, not kayfabe; no kayfabe verdict.
 - CODE READ (2026-10-27 archival audit; GA102 thin mirror): Unpublished local round-two data is outside this branch-evidence import.
+- CODE READ (2026-10-27 archival audit; GA102 W-driver): Input calls this a1200s readiness ceiling. Stored stage receipt records3600s with1200s export reserve; keep these budget roles separate.
 - CODE READ (2026-10-27 archival audit; GA102 Native CUDA): A later different-lease CUDA 4/4 log is included as A17, not substituted for the missing path.
 - CODE READ (2026-10-27 archival audit; GA104 W-driver): Both A4000 run-marker sets name6c6bb92b; the native gates are clean at the same revision.
 - CODE READ (2026-10-27 archival audit; GA104 Native Windows): Native capture revision is unrecorded in supplied matrix.

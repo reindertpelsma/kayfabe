@@ -440,7 +440,7 @@
       "die": "GA102",
       "surface": "W-driver",
       "label": "MEASURED Mb",
-      "status": "BLOCKED: sealed install, bind1200s ceiling, zeroRPCs",
+      "status": "BLOCKED: sealed install, bind readiness inconclusive, zero RPCs",
       "revision": "98b599bb",
       "on_master": false,
       "evidence": [
@@ -448,7 +448,7 @@
         "A16",
         "A20"
       ],
-      "note": ""
+      "note": "Input calls this a1200s readiness ceiling. Stored stage receipt records3600s with1200s export reserve; keep these budget roles separate."
     },
     {
       "family": "Ampere",
