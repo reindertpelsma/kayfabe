@@ -1,4 +1,5 @@
 """Exercise the actual fast launcher with inert QEMU and device fixtures."""
+
 import os
 from pathlib import Path
 import subprocess
@@ -19,10 +20,8 @@ class LaunchSafety(unittest.TestCase):
             guest.mkdir()
             for asset in ("vmlinuz", "initrd.cpio.gz"):
                 (guest / asset).touch()
-            (binary / "pkill").write_text(
-                '#!/bin/sh\nprintf "%s\\n" "$*" >> "$KILL_LOG"\n'
-            )
-            (binary / "nvidia-smi").write_text('#!/bin/sh\necho 0\n')
+            (binary / "pkill").write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$KILL_LOG"\n')
+            (binary / "nvidia-smi").write_text("#!/bin/sh\necho 0\n")
             qemu = binary / "qemu"
             qemu.write_text(
                 '#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV_LOG"\n'
@@ -45,7 +44,10 @@ class LaunchSafety(unittest.TestCase):
             )
             result = subprocess.run(
                 ["bash", str(RUNNER), "fixture", "20"],
-                env=env, capture_output=True, text=True, check=False,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             kills = (root / "kills").read_text() if (root / "kills").exists() else ""

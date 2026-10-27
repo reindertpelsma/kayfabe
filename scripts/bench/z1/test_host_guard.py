@@ -1,4 +1,5 @@
 """Host resource and privilege refusals must stay in place in this experiment."""
+
 import unittest
 
 from host_guard import Refused, check_memory, check_privilege, check_qemus
