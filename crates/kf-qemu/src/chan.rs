@@ -7750,7 +7750,8 @@ impl ChanPlane {
         let Some(slot) = self.slot(ht) else {
             return false;
         };
-        // ★ The token's BUSY state is the exclusion; this lock must never be contended.
+        // BUSY excludes other workers; act/probe threads may still hold the slot mutex.
+        // A failed try_lock must preserve the ring that brought this worker here.
         let Ok(mut g) = slot.try_lock() else {
             return self.owe_ring(ht);
         };
