@@ -202,9 +202,10 @@ class LandingAndDocsIndex(unittest.TestCase):
             "NVIDIA vGPU",
             "API forwarding",
             "Apache-2.0 OR GPL-2.0-or-later",
-            "not a place to get code you have to trust",
         ]:
             self.assertIn(text, self.landing)
+        for banned in ["loads nothing from", "other hosts", "code you have to trust"]:
+            self.assertNotIn(banned, self.landing)
         self.assertEqual(self.landing.count("<h1"), 1)
         self.assertIn("<svg", self.landing)
         self.assertRegex(self.landing, r'<img[^>]+alt="[^"]+"')
@@ -232,6 +233,7 @@ class LandingAndDocsIndex(unittest.TestCase):
         )
         self.assertIn('rel="prev"', page)
         self.assertIn('class="skip-link"', page)
+        self.assertIn(">View and edit source on GitHub</a>", page)
         faq = (book / "FAQ.html").read_text()
         self.assertIn("/edit/master/docs/FAQ.md", faq)
         self.assertIn('class="kf-label kf-measured"', (book / "windows-guest.html").read_text())

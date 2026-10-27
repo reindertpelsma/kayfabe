@@ -98,10 +98,12 @@ does not change those policies.
 
 ## Look and feel
 
+The site loads nothing from other hosts (maintainer note, enforced by `test_output.py`; it is deliberately not stated
+in the published copy).
 No frameworks, no web fonts, no external requests: system fonts, one small stylesheet (`static/style.css`) for the Zola
 pages, `book-theme/kayfabe.css` layered on mdBook's CSS for the manual, and two optional scripts (a copy button on the
 landing's command, and the version dropdown). Both follow `prefers-color-scheme` and `prefers-reduced-motion`. After
-each mdBook render `build.py` adds a skip link, breadcrumbs, an "Edit this page on GitHub" link (master branch, the
+each mdBook render `build.py` adds a skip link, breadcrumbs, an "View and edit source on GitHub" link (master branch, the
 page's source path), previous/next links and marks the manual's `[measured]`, `[inferred]` and `not documented yet`
 text so gaps stay visible. Landing copy lives in `content/_index.md` front matter; each `src` field is written into the
 page as an HTML comment, so every statement keeps its source. New claims need a source in the README or the manual.
