@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% block title %}{{ section.extra.page_title }}{% endblock %}
+{% block description %}{{ section.description }}{% endblock %}
 {% block content %}
 {%- set x = section.extra -%}
 {%- set kf = load_data(path="data/site.json", required=false) -%}
@@ -13,16 +15,15 @@
     <!-- src: {{ x.intro_src }} -->
     <p class="lede">{{ x.intro | markdown(inline=true) | safe }}</p>
     <p class="actions">
-      <a class="button" href="/docs/">Read the documentation</a>
+      <a class="button" href="#today-h">What works today</a>
+      <a class="button secondary" href="/docs/">Read the manual</a>
       <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">Source on GitHub</a>
     </p>
-    <div role="search">
-      <form action="{{ docs }}" method="get">
-        <label for="hero-search">Search the documentation</label>
-        <input id="hero-search" name="search" type="search" />
-        <button>Search</button>
-      </form>
-    </div>
+    <!-- src: {{ x.screenshot.src }} -->
+    <figure class="shot">
+      <img src="{{ get_url(path='screenshot-windows-desktop.jpg') | replace(from="https://kayfabe.dev", to="") }}" width="1600" height="692" decoding="async" alt="{{ x.screenshot.alt }}" />
+      <figcaption>{{ x.screenshot.caption }}</figcaption>
+    </figure>
   </div>
 </section>
 
@@ -30,25 +31,127 @@
   <!-- src: {{ x.status.src }} -->
   <div class="callout warn">
     <h2 id="status-h">{{ x.status.heading }}</h2>
-    <p><strong>{{ x.status.lead }}</strong></p>
-    <p>{{ x.status.more }}</p>
-    <p class="small">{{ x.status.dated }}
-      <a href="https://github.com/reindertpelsma/kayfabe#readme">See the README for the current status.</a>
-      The manual's <a href="{{ docs }}index.html">introduction</a> repeats it.</p>
+    <ul class="statuslist">
+      {% for i in x.status.items %}<li>{{ i | markdown(inline=true) | safe }}</li>{% endfor %}
+    </ul>
+    <p class="small">{{ x.status.more | markdown(inline=true) | safe }}</p>
   </div>
 </section>
 
-<section class="wrap" aria-labelledby="props-h">
-  <h2 id="props-h">What it is built around</h2>
-  <ul class="cards">
-    {% for p in x.properties %}
+<section class="wrap" aria-labelledby="pitch-h">
+  <h2 id="pitch-h">{{ x.pitch.heading }}</h2>
+  <ul class="cards pitch">
+    {% for p in x.pitch.items %}
     <li>
       <!-- src: {{ p.src }} -->
       <h3>{{ p.title }}</h3>
-      <p>{{ p.text }}</p>
+      <p>{{ p.text | markdown(inline=true) | safe }}</p>
     </li>
     {% endfor %}
   </ul>
+  <!-- src: {{ x.pitch.note_src }} -->
+  <p class="small footnote">{{ x.pitch.note | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
+</section>
+
+<section class="wrap" aria-labelledby="who-h">
+  <h2 id="who-h">{{ x.audiences.heading }}</h2>
+  <p>{{ x.audiences.intro }}</p>
+  <ul class="cards who">
+    {% for c in x.audiences.cards %}
+    <li>
+      <!-- src: {{ c.src }} -->
+      <h3>{{ c.name }}</h3>
+      <dl>
+        <dt>Promise</dt><dd>{{ c.promise | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</dd>
+        <dt>Proof</dt><dd>{{ c.proof | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</dd>
+        <dt>Caveat</dt><dd>{{ c.caveat | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</dd>
+      </dl>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="wrap" aria-labelledby="speed-h">
+  <h2 id="speed-h">{{ x.speed.heading }}</h2>
+  <!-- src: {{ x.speed.src }} -->
+  <p>{{ x.speed.intro }}</p>
+  <div class="table-scroll" role="region" aria-labelledby="speed-h" tabindex="0">
+    <table>
+      <thead>
+        <tr>{% for c in x.speed.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">run</span>{% endif %}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in x.speed.rows %}
+        <tr{% if row.highlight %} class="highlight"{% endif %}>
+          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell | markdown(inline=true) | safe }}</th>{% else %}<td>{{ cell | markdown(inline=true) | safe }}</td>{% endif %}{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <!-- src: {{ x.speed.note_src }} -->
+  <p class="small">{{ x.speed.note | markdown(inline=true) | safe }}</p>
+  <!-- src: {{ x.speed.linux.src }} -->
+  <p>{{ x.speed.linux.intro }}</p>
+  <div class="table-scroll" role="region" aria-label="Linux guest CUDA results" tabindex="0">
+    <table class="narrow">
+      <thead>
+        <tr>{% for c in x.speed.linux.columns %}<th scope="col">{{ c }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in x.speed.linux.rows %}
+        <tr>
+          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell }}</th>{% else %}<td>{{ cell }}</td>{% endif %}{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small">{{ x.speed.linux.note }}</p>
+</section>
+
+<section class="wrap" aria-labelledby="compare-h">
+  <h2 id="compare-h">{{ x.compare.heading }}</h2>
+  <!-- src: {{ x.compare.src }} -->
+  <p>{{ x.compare.intro }}</p>
+  <div class="table-scroll" role="region" aria-labelledby="compare-h" tabindex="0">
+    <table>
+      <thead>
+        <tr>{% for c in x.compare.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">approach</span>{% endif %}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in x.compare.rows %}
+        <tr{% if row.highlight %} class="highlight"{% endif %}>
+          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell | markdown(inline=true) | safe }}</th>{% else %}<td>{{ cell | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</td>{% endif %}{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="wrap" aria-labelledby="today-h">
+  <h2 id="today-h">{{ x.today.heading }}</h2>
+  <!-- src: {{ x.today.src }} -->
+  <p>{{ x.today.intro }}</p>
+  <div class="table-scroll" role="region" aria-labelledby="today-h" tabindex="0">
+    <table class="today">
+      <thead>
+        <tr>{% for c in x.today.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">status</span>{% endif %}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in x.today.rows %}
+        <tr>
+          <th scope="row">{% if row.status == "works" %}<span class="st st-works">Works today</span>{% elif row.status == "partly" %}<span class="st st-partly">Partly</span>{% else %}<span class="st st-no">Not yet</span>{% endif %}</th>
+          <td><!-- src: {{ row.src }} -->{{ row.what | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</td>
+          <td>{{ row.evidence | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <!-- src: {{ x.games.src }} -->
+  <p class="small footnote">{{ x.games.text }}</p>
 </section>
 
 <section class="wrap" aria-labelledby="path-h">
@@ -99,40 +202,11 @@
   </div>
 </section>
 
-<section class="wrap" aria-labelledby="compare-h">
-  <h2 id="compare-h">{{ x.compare.heading }}</h2>
-  <!-- src: {{ x.compare.src }} -->
-  <div class="table-scroll" role="region" aria-labelledby="compare-h" tabindex="0">
-    <table>
-      <thead>
-        <tr>{% for c in x.compare.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">approach</span>{% endif %}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in x.compare.rows %}
-        <tr{% if row.highlight %} class="highlight"{% endif %}>
-          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell | markdown(inline=true) | safe }}</th>{% else %}<td>{{ cell | markdown(inline=true) | safe }}</td>{% endif %}{% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="wrap" aria-labelledby="shot-h">
-  <h2 id="shot-h">What it looks like</h2>
-  <!-- src: {{ x.screenshot.src }} -->
-  <figure class="shot">
-    <img src="{{ get_url(path='screenshot-windows-desktop.jpg') | replace(from="https://kayfabe.dev", to="") }}" width="1600" height="692" loading="lazy" decoding="async" alt="{{ x.screenshot.alt }}" />
-    <figcaption>{{ x.screenshot.caption }}</figcaption>
-  </figure>
-</section>
-
-<section class="wrap" aria-labelledby="today-h">
-  <h2 id="today-h">{{ x.today.heading }}</h2>
-  <!-- src: {{ x.today.src }} -->
-  <p>{{ x.today.intro }}</p>
+<section class="wrap" aria-labelledby="honest-h">
+  <h2 id="honest-h">{{ x.honest.heading }}</h2>
+  <!-- src: {{ x.honest.src }} -->
   <ul>
-    {% for item in x.today.items %}<li>{{ item | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>{% endfor %}
+    {% for i in x.honest.items %}<li>{{ i | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>{% endfor %}
   </ul>
 </section>
 
@@ -141,15 +215,25 @@
   <!-- src: {{ x.start.src }} -->
   <p>{{ x.start.text | markdown(inline=true) | safe }}</p>
   <div class="codeblock"><pre class="copyable"><code>{{ x.start.command }}</code></pre></div>
+  <p>{{ x.start.after }}</p>
   <ul>
     <li><a href="{{ docs }}requirements.html">Requirements</a>: what the repository's evidence covers.</li>
     <li><a href="{{ docs }}building.html">Building from source</a>: the exact steps the build scripts perform.</li>
     <li><a href="{{ docs }}installing.html">Running the QEMU device</a>: there is no installer; how the device is provisioned and started today.</li>
+    <li><a href="{{ docs }}FAQ.html">FAQ</a> and <a href="{{ docs }}goals.html">Goals and plans</a>: the questions people ask first, and what is planned (without dates).</li>
   </ul>
+  <div role="search">
+    <form action="{{ docs }}" method="get">
+      <label for="hero-search">Search the documentation</label>
+      <input id="hero-search" name="search" type="search" />
+      <button>Search</button>
+    </form>
+  </div>
 </section>
 
 <section class="wrap" aria-labelledby="download-h">
   <h2 id="download-h">Download</h2>
+  <!-- src: README.md "Trying it" (no installer, no public binary); the build report supplies any published release -->
   {% if kf and kf.release %}
   {% set r = kf.release %}
   <!-- Shown only because the build was given a published GitHub release with assets. -->
@@ -178,5 +262,7 @@
     <li><a href="{{ docs }}credits.html">Credits and notices</a>: licences, acknowledgements and related projects.</li>
     <li><a href="/security/">Reporting a suspected vulnerability</a>: privately, through GitHub.</li>
   </ul>
+  <!-- src: {{ x.community.licence_src }} -->
+  <p class="small">{{ x.community.licence }}</p>
 </section>
 {% endblock %}
