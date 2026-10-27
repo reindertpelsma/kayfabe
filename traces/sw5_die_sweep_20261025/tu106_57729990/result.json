@@ -1,0 +1,95 @@
+{
+  "lease_id": 57729990,
+  "die": "TU106",
+  "os": "Linux",
+  "host_driver": "595.91.07",
+  "host_module": "open",
+  "guest_driver": "UNRUN (planned595.91.07 open)",
+  "production_revision_planned": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "qemu_binary": "UNBUILT/UNRUN",
+  "native_rm_binding": {
+    "architecture": 352,
+    "die": "TU106",
+    "driver": "595.91.07",
+    "implementation": 6,
+    "pci": "0x1F0610DE",
+    "product_name": "NVIDIA GeForce RTX 2060 SUPER",
+    "revision": 161
+  },
+  "native": {
+    "gates_pass": 9,
+    "gates_fail": 0,
+    "gate10": "PASS",
+    "gate_user_births": 12,
+    "bare_aggregate_pass": 6,
+    "bare_aggregate_fail": 24,
+    "bare_aggregate_crash": 0,
+    "underlying_defer_rung": "PASS; raw command rc0",
+    "defer_wrapper_rc": 6,
+    "blocked_remaining_arms": 23,
+    "qualification": "REFUSED by frozen native Xid policy"
+  },
+  "guest": {
+    "status": "EXCLUDED/UNRUN",
+    "arms_run": 0,
+    "kayfabe_failure_attribution": false
+  },
+  "flags_planned": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1",
+    "KF3_FB_MB": "4096"
+  },
+  "host_bar1_mib": 256,
+  "bar1_resized": false,
+  "xids": {
+    "initial": 0,
+    "final": 4,
+    "codes": [
+      31,
+      31,
+      31,
+      31
+    ],
+    "client": "HUBCLIENT_HSCE0",
+    "unadmitted": 4,
+    "guest_xids": 0
+  },
+  "verdict": "EXCLUDED",
+  "reason": "Native guard requires HUBCLIENT_CE[0-9]+; four HSCE0 records were refused. No policy change or retry.",
+  "cost": {
+    "id": 57729990,
+    "elapsed_seconds": 971.403606,
+    "runtime_estimate_usd": 0.029681776849999997,
+    "transfer_liability_usd": 0.05078125,
+    "nonruntime_margin_usd": 0.5,
+    "retained_usd": 0.58046302685,
+    "settled_invoice": false
+  },
+  "capture": {
+    "sha256": "24b65c0ecb2c394444c6bb80339bc6a3be68900bcdb78653f00bf2c621a2ceb6",
+    "bytes": 108044,
+    "files": 55,
+    "verified_utc": "2026-10-25T22:43:47.484480+00:00"
+  },
+  "teardown": {
+    "created_utc": "2026-10-25T22:27:38.292154+00:00",
+    "api_absent_utc": "2026-10-25T22:43:49.695760+00:00",
+    "watch_armed_utc": "2026-10-25T22:27:38.176692+00:00",
+    "fixed_deadline_utc": "2026-10-26T00:27:38.176692+00:00",
+    "capture_verified_before_destroy": true,
+    "watch_cancelled_after_absence": true,
+    "watch_pid_gone": true
+  },
+  "capture_limit": "Extensionless XID_STOP marker omitted by inherited capture extension filter; original KF_XID_REFUSED, blocked-arm logs and full kernel were retained.",
+  "n_native": 1,
+  "n_guest": 0,
+  "mirror_6564dd597": {
+    "status": "UNRUN",
+    "source_revision": "6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4",
+    "fast_arms_run": 0,
+    "mirror_groups": null,
+    "mirror_ctx_unknown": null,
+    "host_xid_delta": null,
+    "reason": "Native qualification refused"
+  }
+}

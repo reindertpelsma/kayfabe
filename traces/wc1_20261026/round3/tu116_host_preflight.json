@@ -1,0 +1,76 @@
+{
+  "run": "WC1-round3-TU116-target-57825549",
+  "date": "2026-10-26",
+  "target_die": "TU116",
+  "actual_native_windows_die_identity": "unobserved; Windows never started",
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "pci_device": "0x21c4",
+  "machine": 54666,
+  "lease": 57825549,
+  "selection": "preferred21141 absent immediately before create; explicit54666fallback used",
+  "created_utc": "2026-10-26T14:15:05.562480+00:00",
+  "linux_driver": "580.95.05",
+  "windows_driver": null,
+  "kfwc_source_planned": "541033eaf",
+  "windows_started": false,
+  "kfwc_executed": false,
+  "kayfabe_executed": false,
+  "host_before": {
+    "utc": "2026-10-26T14:26:39.650493+00:00",
+    "probe_green": true,
+    "cuda_probe_scope": "driver API initialization/device/context only; no kernel or copy workload",
+    "device_count": 1,
+    "xid_count": 0,
+    "kvm_device": true
+  },
+  "host_after_preflight": {
+    "utc": "2026-10-26T14:29:59.469717+00:00",
+    "probe_green": true,
+    "post_windows_reference": false,
+    "xid_count": 0
+  },
+  "passthrough_preflight": {
+    "utc": "2026-10-26T14:28:01.890378+00:00",
+    "acpi_dmar": false,
+    "acpi_ivrs": false,
+    "virtio_iommu_device": false,
+    "iommu_options": [],
+    "kernel_support": {
+      "CONFIG_IOMMU_SUPPORT": "CONFIG_IOMMU_SUPPORT=y",
+      "CONFIG_INTEL_IOMMU": "CONFIG_INTEL_IOMMU=y",
+      "CONFIG_AMD_IOMMU": "CONFIG_AMD_IOMMU=y",
+      "CONFIG_VIRTIO_IOMMU": "CONFIG_VIRTIO_IOMMU=y",
+      "CONFIG_INTEL_IOMMU_DEFAULT_ON": "CONFIG_INTEL_IOMMU_DEFAULT_ON=y"
+    },
+    "iommu_groups": 0
+  },
+  "status": "UNATTRIBUTED: required native-Windows/host-reference protocol unavailable on this VM; no guest result",
+  "safe_stop": "No unsafe no-IOMMU mode, binding/kernel/firmware change or Windows VM execution",
+  "private_host_evidence": {
+    "hashes_ok": true,
+    "files": [
+      {
+        "file": "host_after_preflight.json",
+        "sha256": "c69cf06bcaeb0615c370c1c70ca30b41311332efe4b231a05faf5371303589cc",
+        "bytes": 704
+      },
+      {
+        "file": "host_before.json",
+        "sha256": "bb0e37725ce0c6a75a2850ebf2f19b45240f3cf9453106f46ebcc19c587f8a52",
+        "bytes": 948
+      },
+      {
+        "file": "iommu_diagnostic.json",
+        "sha256": "57cae317c36def0c8b80fdafe730eca7114224434726cca75b099a24f9cb6a74",
+        "bytes": 468
+      }
+    ]
+  },
+  "teardown": {
+    "id": 57825549,
+    "absent": true,
+    "utc": "2026-10-26T14:31:47.046366+00:00"
+  },
+  "pre_ssh_retry_used": false,
+  "post_ssh_limit": "No additional TU116 rental admitted under the pre-SSH-only retry rule"
+}

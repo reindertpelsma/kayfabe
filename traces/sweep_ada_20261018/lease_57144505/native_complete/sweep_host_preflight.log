@@ -1,0 +1,15 @@
+=== kayfabe host preflight 2026-10-22T02:26:07+00:00 on ubuntu ===
+  ✔ /dev/kvm present
+  ✔ CPU virt extensions present
+  ✔ GPU: NVIDIA GeForce RTX 4090  driver: 595.91.07
+  ✔ /dev/nvidiactl present
+  ✔ /dev/nvidia0 present
+  ✔ /dev/nvidia-uvm present
+  ✔ disk free 157G
+  ✔ RAM 98G
+  ✔ cores 30
+  ✔ apt mirror 435995 B/s
+  ✔ https egress works
+=== PREFLIGHT DONE ===
+VERDICT=SOUND
+EXIT=0

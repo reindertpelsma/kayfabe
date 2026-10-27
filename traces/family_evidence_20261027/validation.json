@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-27",
+  "base_master": "e54bab5550f09d740d222d667ad497dc8c640ebe",
+  "imported_files": 277,
+  "imported_bytes": 672533,
+  "source_branches_with_imports": 10,
+  "redacted_files": 59,
+  "format_normalized_files": 23,
+  "annotated_files": 1,
+  "all_source_and_import_hashes_match": true,
+  "all_numeric_json_fields_preserved": true,
+  "json_files_parsed_in_added_scope": 86,
+  "coverage_cells": 152,
+  "dies": 20,
+  "revision_ancestry_checks": 68,
+  "reference_links_checked": 64,
+  "sensitive_pattern_hits": {
+    "private_path": 0,
+    "private_address": 0,
+    "private_key": 0,
+    "github_credential": 0,
+    "credential_field": 0,
+    "gpu_uuid": 0,
+    "firmware_hex_body": 0
+  },
+  "whitespace_clear": true,
+  "added_code_files": 0,
+  "added_binaries_images_or_firmware_bodies": 0,
+  "gpu_or_rental_actions_in_l0": 0,
+  "product_tests_rerun": 0,
+  "limits": "Archival import only; original claims/inferences and host-verification markers retained. No GB202 attribution verdict."
+}

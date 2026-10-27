@@ -1,0 +1,16 @@
+{
+  "utc": "2026-10-24T20:10:18.748818+00:00",
+  "own_id": 57556167,
+  "profile": "on",
+  "run": "on_fix",
+  "source": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+  "binary": "[PRIVATE_PATH]",
+  "binary_sha256": "05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448",
+  "harness_sha256": "b8a72bf4468179539ebfe397a5a5a7256010bf3793cdd2065df9d8c2d6826fa1",
+  "rpc_observer_sha256": "be45a303b43ca56a205b016d876a8c0c2f2d57686c4b66e58ffc3c2c887600e0",
+  "cell_attempt": 1,
+  "latest_start_utc": "2026-10-24T21:46:25.843768+00:00",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

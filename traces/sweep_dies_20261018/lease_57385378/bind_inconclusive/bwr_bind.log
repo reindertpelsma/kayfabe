@@ -1,0 +1,12 @@
+
+BIND_START source=98b599bbfc31784bcbed6b42545562094ea6eeb0 2026-10-23T16:13:52+00:00 (bind only, no enable; not a measured init arm)
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=[PRIVATE_PATH]
+Signing Unsigned original image
+Signature verification OK
+[2026-10-23T16:13:53Z] KF_GOP_SIGNED [PRIVATE_PATH] sha256=2af3800759838f1cd67fd968a1af979d986ca78566ca69960e685b63def17e53 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+READINESS_STAGE seconds=3600.0
+[2026-10-23T16:13:53Z] detached: tag=bw580_bind, log logs/bw580_bind_run.log (stdout logs/bw580_bind_run.out)
+KF_SSH_UP
+{"pid": 101409, "exe": "[PRIVATE_PATH]", "sha256": "52db5101cac76574e1c59e63362489327678abb1af3cc805ec7a9bba1cbc4744", "kf3_device": "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=[PRIVATE_PATH],id=kf0,guest-driver=580.65.06"}
+READINESS_INCONCLUSIVE single-attempt command timed out; not retried
+BIND_EXIT rc=75 2026-10-23T16:40:09+00:00

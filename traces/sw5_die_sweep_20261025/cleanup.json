@@ -1,0 +1,19 @@
+{
+  "utc": "2026-10-25T23:11:59.510796+00:00",
+  "owned_ids": [
+    57723513,
+    57726516,
+    57729990,
+    57731910
+  ],
+  "all_api_absent": true,
+  "watchdogs_gone": true,
+  "own_local_cargo_targets_created": false,
+  "leases_used": 4,
+  "provider_retries_used": 0,
+  "identity_refusals": 0,
+  "credit_usd": 31.95717215326033,
+  "reserve_usd": 8,
+  "local_or_trusted_host_gpu_lock_acquired": false,
+  "rental_harness_locks_scope": "owned leased VMs; all four deleted"
+}

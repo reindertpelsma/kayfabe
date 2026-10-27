@@ -1,0 +1,12 @@
+{
+  "lease": 57556167,
+  "private_manifest_name": "vm_logs/on_fix_b1_qemu.log",
+  "counts": {
+    "USER_RING_ROUTE_DECLINED family=Blackwell": 1,
+    "BORN USER private-read-only-ring": 0,
+    "USERD relay": 17
+  },
+  "route_lines": [
+    "kf3: USER_RING_ROUTE_DECLINED family=Blackwell class=0xca6f: USER_RING_FAMILY_WRITES_NO_USERD \u2014 Windows user-work takes the USERD-relay route (as KF3_WIN_USER_RING_RELAY=0), USER twin unchanged (logged once)"
+  ]
+}

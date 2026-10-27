@@ -1,0 +1,1830 @@
+{
+  "date": "2026-10-27",
+  "base_master": "e54bab5550f09d740d222d667ad497dc8c640ebe",
+  "source_audit_sha256": "8302a569c97bded5ed234c4c1a6c4f4c23a0b120ced394d392eec751260917c4",
+  "label_policy": "Input M/Mb/C/I classes retained; no automatic promotion; unknown exact trees remain unknown.",
+  "cells": [
+    {
+      "family": "Turing",
+      "die": "TU102",
+      "surface": "guest surfaces",
+      "label": "UNTESTED",
+      "status": "Thin, ladder/apps, Windows and display untested",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU102",
+      "surface": "Native",
+      "label": "MEASURED M",
+      "status": "Tier-2 host probe only; no family qualification",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "T0"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "ladder/apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU104",
+      "surface": "Native",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "thin 180s",
+      "label": "MEASURED Mb",
+      "status": "PARTIAL 29/30; copy arm exceeds the original oracle",
+      "revision": "67339dc0a",
+      "on_master": false,
+      "evidence": [
+        "T1"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "thin 300s",
+      "label": "MEASURED Mb",
+      "status": "30/30 at expanded 300s; copy arm 187s; dirty build",
+      "revision": "67339dc0a",
+      "on_master": false,
+      "evidence": [
+        "T2",
+        "T10"
+      ],
+      "note": "Source README identifies e3c4483a0 plus test additions; exact dirty tree is not a clean commit."
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "ladder/apps",
+      "label": "MEASURED Mb",
+      "status": "ladder 4/4 with guest-driver=580.159.04; apps untested",
+      "revision": "67339dc0a",
+      "on_master": false,
+      "evidence": [
+        "T3"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "W-driver",
+      "label": "MEASURED Mb",
+      "status": "Code 0, 20 winprod flags and display=on; dirty branch build",
+      "revision": "67339dc0a",
+      "on_master": false,
+      "evidence": [
+        "T4",
+        "T10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "W-apps",
+      "label": "MEASURED Mb",
+      "status": "FAIL n=2 boots: early probes then TDR storm / desktop-up storm",
+      "revision": "e3c4483a0",
+      "on_master": false,
+      "evidence": [
+        "T5",
+        "T6",
+        "T7",
+        "T10"
+      ],
+      "note": "Boot-specific dirty source identity is bounded by README; branch head49b4844c0 is not the tested tree."
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No Linux display result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "Disp-W",
+      "label": "INFERRED I",
+      "status": "PARTIAL: realize with draft164; flips stall; acquire unmodelled",
+      "revision": "e3c4483a0",
+      "on_master": false,
+      "evidence": [
+        "T10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "Native Linux",
+      "label": "MEASURED Mb",
+      "status": "gates 9/9 + gate 10, bare 30/30, ladder4; approved HSCE controls",
+      "revision": "67339dc0a",
+      "on_master": false,
+      "evidence": [
+        "T8",
+        "T9",
+        "T10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU106",
+      "surface": "Native Windows",
+      "label": "MEASURED Mb",
+      "status": "Code 0 and D3D 60 frames; no continuous load hold",
+      "revision": "541033eaf",
+      "on_master": false,
+      "evidence": [
+        "W1"
+      ],
+      "note": "Revision is collector source, not kayfabe; no kayfabe verdict."
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "thin",
+      "label": "MEASURED M",
+      "status": "30/30 historical bar",
+      "revision": "1915bd71",
+      "on_master": true,
+      "evidence": [
+        "T11"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "ladder/apps",
+      "label": "MEASURED M",
+      "status": "ladder 4/4; apps untested",
+      "revision": "1915bd71",
+      "on_master": true,
+      "evidence": [
+        "T11"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No kayfabe result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No kayfabe result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No kayfabe result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No kayfabe result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "Native Linux",
+      "label": "MEASURED M",
+      "status": "bare 30/30 and gates 9/9; predates display/relay changes",
+      "revision": "1915bd71",
+      "on_master": true,
+      "evidence": [
+        "T11"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU116",
+      "surface": "Native Windows",
+      "label": "MEASURED Mb",
+      "status": "Capture completed; no kayfabe verdict",
+      "revision": "541033eaf",
+      "on_master": false,
+      "evidence": [
+        "W2"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "ladder/apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Turing",
+      "die": "TU117",
+      "surface": "Native",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "thin production",
+      "label": "MEASURED Mb",
+      "status": "30/30; lease 57723513, same-box native reference",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "A1"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "thin mirror",
+      "label": "CLAIMED C",
+      "status": "Round-two header claimed30/30; kept as claimed",
+      "revision": "6564dd597",
+      "on_master": false,
+      "evidence": [],
+      "note": "Unpublished local round-two data is outside this branch-evidence import."
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "ladder/apps",
+      "label": "CLAIMED C",
+      "status": "3080Ti ladder 4/4 plus gfx; apps untested",
+      "revision": "68fb3768",
+      "on_master": true,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "W-driver",
+      "label": "MEASURED Mb",
+      "status": "BLOCKED: sealed install, bind1200s ceiling, zeroRPCs",
+      "revision": "6e3fd3fd6",
+      "on_master": false,
+      "evidence": [
+        "A15",
+        "A16"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No workload verdict",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "Disp-L",
+      "label": "CLAIMED C",
+      "status": "PARTIAL: displayless Vast description; no display proof",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "Native Linux",
+      "label": "MEASURED Mb",
+      "status": "Same-box gates 9/9 + gate 10 and bare 30/30 at SW5 production",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "A1"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "Native CUDA",
+      "label": "MEASURED M (report)",
+      "status": "Audit says4/4 at lease 57209908; cited native_complete path absent",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": "A later different-lease CUDA 4/4 log is included as A17, not substituted for the missing path."
+    },
+    {
+      "family": "Ampere",
+      "die": "GA102",
+      "surface": "Native Windows",
+      "label": "UNTESTED",
+      "status": "No native Windows reference in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "ladder/apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA103",
+      "surface": "Native",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "thin historical",
+      "label": "MEASURED M",
+      "status": "3060Ti30/30, floor swept",
+      "revision": "25edb757",
+      "on_master": true,
+      "evidence": [
+        "A4"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "thin production",
+      "label": "MEASURED M",
+      "status": "30/30; lease 57568731, RM-bound GA104",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "A2"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "ladder/apps",
+      "label": "MEASURED M",
+      "status": "cup3/cup8; apps34/65 on3070, pre-fix and unrepeated",
+      "revision": "738c90e5",
+      "on_master": true,
+      "evidence": [
+        "A5"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "W-driver",
+      "label": "MEASURED M",
+      "status": "PARTIAL A4000 boot; two UNCLEAN-kill stops",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": "Input groups the October14 revisions; exact A4000 per-arm revision is not resolved here.",
+      "revision_group_from_report": "3d31acc6"
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "Native Linux",
+      "label": "MEASURED M",
+      "status": "SW3 same-box gates 9/9 + gate 10 and bare 30/30",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "A2"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA104",
+      "surface": "Native Windows",
+      "label": "MEASURED M",
+      "status": "596.51 capture only; no load hold",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": "Native capture revision is unrecorded in supplied matrix."
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "thin historical",
+      "label": "MEASURED M",
+      "status": "30/30 historical Linux bar",
+      "revision": "c0ef7b75",
+      "on_master": true,
+      "evidence": [
+        "A7"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "thin historical",
+      "label": "MEASURED M",
+      "status": "30/30 historical Linux bar",
+      "revision": "afb552ea",
+      "on_master": true,
+      "evidence": [
+        "A8"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "thin production",
+      "label": "MEASURED Mb",
+      "status": "30/30; lease 57726516",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "A3"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "ladder/apps",
+      "label": "MEASURED M",
+      "status": "60/65 at4c48ca0c; README61/65 is a separate claim",
+      "revision": "4c48ca0c",
+      "on_master": true,
+      "evidence": [
+        "A6"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "W-driver",
+      "label": "MEASURED Mb",
+      "status": "Code 0 in TUR1 Ampere control",
+      "revision": "385c9285",
+      "on_master": false,
+      "evidence": [
+        "A11",
+        "T10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "W-apps",
+      "label": "MEASURED Mb",
+      "status": "FAIL: TDR storm;54 events at 6 min,116 unloads at 17 min",
+      "revision": "340c6b5a",
+      "on_master": false,
+      "evidence": [
+        "A12",
+        "A13",
+        "A14",
+        "T10"
+      ],
+      "note": "Storm persists after lost-ring fix; do not treat absence of overdue dumps as stability."
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "Disp-L",
+      "label": "CLAIMED C",
+      "status": "Input says owner-host display PASS; die/revision not substantiated",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No standalone display qualification",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "Native Linux",
+      "label": "MEASURED Mb",
+      "status": "Green before/after TUR1 Ampere run; scoped roundtrip",
+      "revision": "340c6b5a",
+      "on_master": false,
+      "evidence": [
+        "A9",
+        "A10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA106",
+      "surface": "Native Windows",
+      "label": "MEASURED M (report)",
+      "status": "Seven builds captured; no load hold",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "ladder/apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ampere",
+      "die": "GA107",
+      "surface": "Native",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "thin",
+      "label": "MEASURED Mb",
+      "status": "30/30; lease 57144505",
+      "revision": "7f6f7e7a7",
+      "on_master": false,
+      "evidence": [
+        "D1",
+        "D2"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "ladder/apps",
+      "label": "MEASURED Mb",
+      "status": "Native CUDA 4/4; guest apps untested",
+      "revision": "7f6f7e7a7",
+      "on_master": false,
+      "evidence": [
+        "D3"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "W-driver",
+      "label": "MEASURED M",
+      "status": "Code 0,1920x1080,DWM; historical window result",
+      "revision": "7f6f7e7a7",
+      "on_master": false,
+      "evidence": [
+        "D4"
+      ],
+      "note": "Windows-specific source is stated in D4; Linux revision does not imply Windows tree equality."
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "W-apps",
+      "label": "CLAIMED C",
+      "status": "600s desktop hold / apps13/112; lease 57193877 summary",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "D5"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "Disp-W",
+      "label": "CLAIMED C",
+      "status": "PARTIAL desktop/DWM evidence; no broad display qualification",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "D4",
+        "D5"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD102",
+      "surface": "Native",
+      "label": "MEASURED Mb",
+      "status": "Host30/30 and CUDA 4/4; no native Windows",
+      "revision": "7f6f7e7a7",
+      "on_master": false,
+      "evidence": [
+        "D1",
+        "D3"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD103",
+      "surface": "thin/ladder/apps",
+      "label": "UNTESTED",
+      "status": "No Linux guest run; SW5 had no eligible offer",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD103",
+      "surface": "W-driver",
+      "label": "MEASURED M",
+      "status": "Historical boot and gates 9/9",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "D6"
+      ],
+      "note": "Per-arm October14 revision must be read from D6; no current-code claim.",
+      "revision_group_from_report": "b0de7572"
+    },
+    {
+      "family": "Ada",
+      "die": "AD103",
+      "surface": "W-apps",
+      "label": "CLAIMED C",
+      "status": "PARTIAL per source README; no workload stability bar",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD103",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD103",
+      "surface": "Disp-W",
+      "label": "CLAIMED C",
+      "status": "PARTIAL historical description",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD103",
+      "surface": "Native",
+      "label": "MEASURED M",
+      "status": "Historical gates 9/9 + gate 10; no new L0 test",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "D6"
+      ],
+      "note": "",
+      "revision_group_from_report": "b0de7572"
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "thin",
+      "label": "MEASURED M",
+      "status": "30/30; vast53568615",
+      "revision": "fc2dadc4",
+      "on_master": true,
+      "evidence": [
+        "D8"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "family bar",
+      "label": "MEASURED M",
+      "status": "AD104 historical bar named in reachability audit",
+      "revision": "f442980e",
+      "on_master": true,
+      "evidence": [
+        "D8"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "ladder/apps",
+      "label": "MEASURED M",
+      "status": "ladder 4/4 historical; full owner app-set is claimed",
+      "revision": "fc2dadc4",
+      "on_master": true,
+      "evidence": [
+        "D8"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "W-driver",
+      "label": "CLAIMED C",
+      "status": "Owner-host PASS; exact Windows revision not supplied",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "W-apps",
+      "label": "CLAIMED C",
+      "status": "Owner-host PASS with performance/Enscape caveats; no blanket pass",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "Disp-L",
+      "label": "CLAIMED C",
+      "status": "Owner-host PASS; exact build not supplied",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "Disp-W",
+      "label": "CLAIMED C",
+      "status": "Owner-host PASS; exact build not supplied",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD104",
+      "surface": "Native",
+      "label": "MEASURED M",
+      "status": "Historical bare 30/30; same-owner-GPU VFIO is the cited reference",
+      "revision": "fc2dadc4",
+      "on_master": true,
+      "evidence": [
+        "D8"
+      ],
+      "note": "Only the supplied owner-host account claims VFIO; this import adds no VFIO run."
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "thin historical",
+      "label": "MEASURED M",
+      "status": "30/30; vast52660152",
+      "revision": "1d6bb323",
+      "on_master": true,
+      "evidence": [
+        "D9"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "thin production",
+      "label": "MEASURED Mb",
+      "status": "30/30; lease 57731910",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "D10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "thin mirror",
+      "label": "CLAIMED C",
+      "status": "Round-two header claims30/30; kept as claimed",
+      "revision": "6564dd597",
+      "on_master": false,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "ladder/apps",
+      "label": "MEASURED M",
+      "status": "Ladder in v3_adasys; apps untested",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "D11"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "W-driver",
+      "label": "MEASURED M",
+      "status": "Historical Code 0",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "D7"
+      ],
+      "note": "Per-arm revision must be read from D7; October14 revision group is retained.",
+      "revision_group_from_report": "6c6bb92b"
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "W-apps",
+      "label": "CLAIMED C",
+      "status": "PARTIAL per README",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "Disp-W",
+      "label": "CLAIMED C",
+      "status": "PARTIAL historical description",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD106",
+      "surface": "Native",
+      "label": "MEASURED Mb",
+      "status": "gates 9/9 + gate 10 and bare 30/30 on same SW5 box",
+      "revision": "714ec29d3",
+      "on_master": false,
+      "evidence": [
+        "D10"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "ladder/apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Ada",
+      "die": "AD107",
+      "surface": "Native",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No Linux guest/display run in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "ladder",
+      "label": "UNTESTED",
+      "status": "No Linux guest/display run in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No Linux guest/display run in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No Linux guest/display run in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "W-driver/apps BW6",
+      "label": "MEASURED Mb",
+      "status": "FAIL n=1: Code 0 then0x141 and fatal0x113 about15s later",
+      "revision": "007ba1eb0",
+      "on_master": false,
+      "evidence": [
+        "B1"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "W-driver/apps BW11",
+      "label": "MEASURED Mb",
+      "status": "INCONCLUSIVE; different-machine rebuilt-parent run did not reproduce",
+      "revision": "007ba1eb0",
+      "on_master": false,
+      "evidence": [
+        "B11"
+      ],
+      "note": "Branch summary and private capture hashes only; raw run logs remain private."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "Native Linux BW6",
+      "label": "MEASURED Mb",
+      "status": "Same-lease/boot before:9+10,bare 29/29,CUDA 4/4,GR; after green audit",
+      "revision": "6e3fd3fd6",
+      "on_master": false,
+      "evidence": [
+        "B2",
+        "B3",
+        "B4",
+        "B5",
+        "B6"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB202",
+      "surface": "Native Windows BW7",
+      "label": "MEASURED Mb",
+      "status": "Same physical machine, different lease/boot: Code 0,602s,no dumps",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "B7",
+        "B8",
+        "B9",
+        "B10"
+      ],
+      "note": "Windows580.88. No kayfabe source revision applies to native Windows."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "thin",
+      "label": "MEASURED M",
+      "status": "30/30; gates 9/9; vast52730218",
+      "revision": "256ec854",
+      "on_master": true,
+      "evidence": [
+        "B12"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "ladder",
+      "label": "MEASURED M",
+      "status": "Historical ladder PASS",
+      "revision": "256ec854",
+      "on_master": true,
+      "evidence": [
+        "B12"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result; display chain unmerged in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result; display chain unmerged in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result; display chain unmerged in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result; display chain unmerged in supplied audit",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "Native Linux",
+      "label": "MEASURED M",
+      "status": "bare 30/30 historical",
+      "revision": "54158daa",
+      "on_master": true,
+      "evidence": [
+        "B12"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB203",
+      "surface": "Native Windows",
+      "label": "CLAIMED C",
+      "status": "Capture failed on provider fault; no native qualification",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "thin",
+      "label": "MEASURED M",
+      "status": "30/30 historical bar",
+      "revision": "d40dafbf",
+      "on_master": true,
+      "evidence": [
+        "D8"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "ladder",
+      "label": "MEASURED M",
+      "status": "Historical4/4",
+      "revision": "d40dafbf",
+      "on_master": true,
+      "evidence": [
+        "D8"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "Linux reload",
+      "label": "MEASURED Mb",
+      "status": "Unload/reload PASS from BW4",
+      "revision": "cb80cbd29",
+      "on_master": false,
+      "evidence": [
+        "B16"
+      ],
+      "note": "Adjacent binary_sha256.txt pins cb80cbd2; this is a different build from the Windows fix revision."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "W-driver",
+      "label": "MEASURED Mb",
+      "status": "Code 0 and601s idle hold with unmerged fix; no apps",
+      "revision": "007ba1eb0",
+      "on_master": false,
+      "evidence": [
+        "B13",
+        "B14",
+        "B15"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "Apps not exercised by the601s idle hold",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No display qualification",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "Disp-W",
+      "label": "MEASURED Mb",
+      "status": "PARTIAL:0x193/0x1A8/0x1B8 display dumps still appear",
+      "revision": "007ba1eb0",
+      "on_master": false,
+      "evidence": [
+        "B14"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "Native Linux",
+      "label": "MEASURED Mb",
+      "status": "gates 9/9 + gate 10,bare 29/29,CUDA 4/4 on BW5 box",
+      "revision": "6e3fd3fd6",
+      "on_master": false,
+      "evidence": [
+        "B13",
+        "B15"
+      ],
+      "note": "Native baseline6e3fd3fd6; separate GR fixture618f04318; guest fix007ba1eb0."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB205",
+      "surface": "Native Windows",
+      "label": "CLAIMED C",
+      "status": "Input: Code 0 10/10,disable/enable x3; native hold archived",
+      "revision": null,
+      "on_master": null,
+      "evidence": [
+        "B17"
+      ],
+      "note": "Original C label retained; no attribution decision is adopted."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "thin",
+      "label": "MEASURED M",
+      "status": "30/30 at older host580.159.04 revision",
+      "revision": "202c612e",
+      "on_master": false,
+      "evidence": [
+        "B18"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "later GR fixture",
+      "label": "CLAIMED C",
+      "status": "14/15; ce_completion_wakes_worker_fds failed; draft97",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": "Revision not specified in input; this is not a replacement30-arm bar."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "ladder",
+      "label": "CLAIMED C",
+      "status": "Native CUDA 4/4 claimed; guest ladder untested",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "W-driver/apps",
+      "label": "CLAIMED C",
+      "status": "FAIL Code 43; later Code 0 then Xid32 pair/0x116",
+      "revision": "cb80cbd29",
+      "on_master": false,
+      "evidence": [],
+      "note": "GB205 fixes were not run on this die in the supplied audit."
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB206",
+      "surface": "Native Windows",
+      "label": "MEASURED Mb",
+      "status": "Native capture, idle only; no workload hold",
+      "revision": "541033eaf",
+      "on_master": false,
+      "evidence": [
+        "W3"
+      ],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "thin",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "ladder/apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "W-driver",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "W-apps",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "Disp-L",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "Disp-W",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "family": "Blackwell",
+      "die": "GB207",
+      "surface": "Native",
+      "label": "UNTESTED",
+      "status": "No result in supplied audit; no revision recorded",
+      "revision": null,
+      "on_master": null,
+      "evidence": [],
+      "note": ""
+    }
+  ]
+}

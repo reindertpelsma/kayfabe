@@ -1,0 +1,19 @@
+{
+  "lease_id": 57565048,
+  "verdict": "NATIVE_HOLD_PASS",
+  "samples": 11,
+  "first_sample_utc": "2026-10-24T21:22:27.8766073Z",
+  "last_sample_utc": "2026-10-24T21:32:29.9007899Z",
+  "elapsed_from_script_start_seconds": 602.9497983,
+  "first_to_last_sample_seconds": 602.024182,
+  "driver": "32.0.15.8088",
+  "device": "RTX5090 / advertised GB202",
+  "boot": "2026-10-24T21:15:17.6390550Z",
+  "all_Code0": true,
+  "System_1001": 0,
+  "System_6008": 0,
+  "System_4101": 0,
+  "nvlddmkm_Display_errors": 0,
+  "source_lock_unchanged": true,
+  "owner_rule_interpretation": "INFERRED under owner rule: matching GB202 native reference passes, so attribute BW6 failure to kayfabe. No root cause established."
+}

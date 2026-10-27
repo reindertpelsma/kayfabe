@@ -1,0 +1,8 @@
+REF_OS {"caption":"Microsoft Windows 11 Enterprise LTSC Evaluation","version":"10.0.26100","build":"26100","boot":"2026-10-24T21:15:17.6403810Z","utc":"2026-10-24T21:34:14.9509737Z"}
+REF_DRIVER_PACKAGE_SHA256 90C49F925B41EE062E02CC8094A16B6D057ABFDE4E85235A76D63FFE267F63A9
+Exception calling "Parse" with "1" argument(s): "String was not recognized as a valid DateTime."
+At C:\kf\ref_compare.ps1:14 char:2
++  $begin=([DateTime]::Parse($hold[0].utc)).AddMinutes(-5)
++  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : FormatException

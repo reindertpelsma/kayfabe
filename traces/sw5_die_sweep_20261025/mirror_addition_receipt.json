@@ -1,0 +1,39 @@
+{
+  "recorded_utc": "2026-10-25T23:21:39.744671+00:00",
+  "instruction": "SW5_MIRROR.txt",
+  "instruction_sha256": "eec3bf8713aed7c677a2349ae9bece611301be552275a0366703fc54f6d5e80e",
+  "instruction_written_utc": "2026-10-25T23:17:53.647189+00:00",
+  "source_revision": "6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4",
+  "source_branch": "origin/claude/cand6d-mirror-20261024",
+  "source_branch_head_verified": "6564dd5977bbcd6aa947359b55b4aa3d9a5e92f4",
+  "reference_qemu_sha256": "82a806eeacbfc3df5f42e1575fd4b242d7fda7d3f4781f8fe0f708398c0a658a",
+  "reference_hash_matches_manifest": true,
+  "reference_binary_executed_by_SW5": false,
+  "mirror_default": "ON when KF3_TSG_MIRROR is unset; only value0 disables it",
+  "expected_linux_counters": {
+    "groups": 0,
+    "ctx_unknown": 0
+  },
+  "measured_linux_counters": null,
+  "last_lease_api_absent_utc": "2026-10-25T23:11:32.877751+00:00",
+  "leases_used_before_addition": 4,
+  "lease_limit": 4,
+  "additional_leases_created": 0,
+  "additional_spend_usd": 0,
+  "retained_prior_usd": 2.9364908879229628,
+  "remaining_to_stop_usd": 1.0635091120770372,
+  "status": "UNRUN; post-teardown addition, four-lease limit exhausted",
+  "fresh_box_requirement": "Native9/9+gate10 and bare30 plus production fast30 must pass on each newly allocated box; old native results cannot qualify a different box.",
+  "steps_for_a_future_authorized_lease": [
+    "Preregister die, source, store flags, budget and falsifiers; arm precreate watchdog before create and establish settled SSH identity.",
+    "Complete native binding/gates/bare and production714ec29d3 fast30 on that exact box; a native refusal excludes mirror.",
+    "Build exact source6564dd597 in its own checkout and Cargo target; install under kf3-bins/6564dd59 and record actual binary SHA256, or transfer the reference binary only after verifying its manifest SHA256.",
+    "With KF3_TSG_MIRROR unset/defaultON, run KF_DEVICE=kf3 KF_FROM_HOST=1 fast_suite once, fixed180s, no timeout or Xid-policy changes.",
+    "Capture full scorecard, per-arm mirror status fragments, groups/ctx_unknown and host-Xid sequence; absent counters stay unverified. Native pass plus mirror failure is a kayfabe finding.",
+    "Pull and SHA256-verify text captures before exact-ID destroy; verify API absence before cancelling the pinned watchdog."
+  ],
+  "hypothesis": "After same-box native and production qualification, mirror6564dd597 also passes fast30/30 while Linux legacy mirror groups=0 and ctx_unknown=0.",
+  "falsifier": "Any failed/crashed/unrun arm, missing/mismatching mirror counters, unexpected Xid, wrong source/hash, exhausted budget or deadline; no second attempt after a real refusal.",
+  "minimum_new_three_lease_nonruntime_margin_usd": 1.5,
+  "fits_remaining_stop_under_existing_guard": false
+}

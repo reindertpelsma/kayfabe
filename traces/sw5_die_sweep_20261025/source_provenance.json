@@ -1,0 +1,37 @@
+{
+  "utc": "2026-10-25T21:21:21.559920+00:00",
+  "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "production_hashes": {
+    "crates/kayfabe-rm-ladder/src/main.rs": "f6d4c7c9099320cb901caf0606656a47a4337a38f26c075c08f2e1e6d6f8f3c8",
+    "scripts/fastguest/fast_suite.sh": "c34de7371f0ac514a5aa3871135ef801ff56c94dc3f45de91602215189410616",
+    "scripts/fastguest/run_fast_guest.sh": "4f5ba247be7be1b917dfe0d7dc9def29e9d8341fc8c8fd3a1878e452362cc74d",
+    "scripts/fastguest/build_fast_guest.sh": "f22be95092beaf10cc8cf42235456041f43b715f017e1afafd19c06914078d97",
+    "scripts/bench/build_kf3.sh": "4b31b855460729a1d426fa25ceabf1141a6b9e040b9aa00daaf6cf16dadd1597",
+    "scripts/bench/v3_gates.sh": "2e5f525c219c042d0b76192da134d6db15f4327c4aed44839ffd09490a7c0bcb"
+  },
+  "retained_sw3_instrument_overlay": {
+    "scripts/ci/vast_payload.py": {
+      "sha256": "c23fb1e6220adea03c5f0ea07e271fd3ede4e44981fae4b70b5fed7dec5473b3",
+      "bytes": 27260
+    },
+    "scripts/ci/vast_report.py": {
+      "sha256": "c9e3cfa8a15d93cd5ab25606eb9d61b4d223a752c01255a0a4b522859d6467b7",
+      "bytes": 29699
+    },
+    "scripts/ci/vast_payload_hooks.sh": {
+      "sha256": "139bcbd623c7a42a3a57e9a3dc19b9ff6e2d92fa05654445021e40a34f8fa961",
+      "bytes": 2190
+    },
+    "scripts/ci/vast_setup.py": {
+      "sha256": "77efc63c1168dd8bf427d50d6f92af856339fe81cb457c7c8bb73ed5a8c44fc0",
+      "bytes": 12479
+    },
+    "scripts/bench/native_xid_guard.py": {
+      "sha256": "ae5947e488f1cc1fab4f16a80ff089c17de6f3973bea74d2bc9522fdee915d52",
+      "bytes": 28736
+    }
+  },
+  "overlay_changes": "none; retained separately from production source",
+  "operator_base": "retained SW4 lifecycle, lane path substitutions; merged SW3 die binder",
+  "no_local_cargo_build": true
+}
