@@ -45,6 +45,9 @@
 #   KF_GUEST_USER (kf)             the account `desktop-prep` configures for autologon
 # WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
 # monitor; `run` only, default on (2026-10-27).
+# WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
+# disk with that QEMU cache mode; unset keeps QEMU's default, and `run` never reads it. It is a
+# disk-write cache mode of THIS VM's disk, not an image cache: nothing is shared between VMs.
 # DIAGNOSTIC, default off (2026-10-09): WINVM_TRACE=1 [WINVM_GSP_OBSERVER=1] with KF3_BAR0_READ_TRACE=1
 # records each boot with the VFIO reference's tracer (docs/design/V3_BAR0_TRACE_MODE.md).
 #
@@ -647,7 +650,7 @@ guest_shutdown_and_wait() {  # TIMEOUT_S
 install_boot_qa() {
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
-       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
+       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
        -device virtio-blk-pci,drive=sys,bootindex=1
        -drive "file=$WIN_ISO,if=none,id=cd0,media=cdrom,readonly=on" -device ide-cd,drive=cd0,bus=ide.0,bootindex=0
        -drive "file=$VIRTIO_ISO,if=none,id=cd1,media=cdrom,readonly=on" -device ide-cd,drive=cd1,bus=ide.1
@@ -670,7 +673,7 @@ install_boot() {
 check_boot() {
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
-       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
+       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
        -device virtio-blk-pci,drive=sys,bootindex=0
        -serial "file:$VM/logs/installcheck_b1_serial.log")
   rm -f "$VM/run/stop-requested"
@@ -1035,7 +1038,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
-    ""|-h|--help|help) sed -n '3,59p' "$0" | sed 's/^# \{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,62p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac
 }
