@@ -13,524 +13,6 @@ struct Job<H> {
     wake: Box<dyn FnOnce() + Send>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use kf_abi::grbind::{Kind, Request};
-    use kf_host::{
-        Channel,
-        grbind::{Host, execute},
-    };
-    #[derive(Default)]
-    struct Fake {
-        binds: Vec<Request>,
-        status: Option<u32>,
-    }
-    impl Host for Fake {
-        fn properties(&mut self, _: u32) -> Result<(u64, u64), u32> {
-            Ok((4096, 256))
-        }
-        fn bind(&mut self, request: Request) -> Result<(), u32> {
-            self.binds.push(request);
-            self.status.map_or(Ok(()), Err)
-        }
-    }
-    fn request(gfxp: bool) -> Request {
-        let mut buffers = [0; 9];
-        buffers[0] = 0x10000;
-        Request {
-            client: 11,
-            channel: 21,
-            kind: if gfxp {
-                Kind::Preemption {
-                    flags: 2,
-                    gfxp: 1,
-                    cilp: 0,
-                    buffers,
-                }
-            } else {
-                Kind::Zcull {
-                    va: 0x10000,
-                    mode: 2,
-                }
-            },
-        }
-    }
-    fn channel() -> Channel {
-        Channel {
-            tsg: 71,
-            chan: 81,
-            token: 91,
-            born_user: None,
-        }
-    }
-    fn work(gfxp: bool) -> Work<Mutex<Fake>> {
-        Box::new(move |host| {
-            Some(execute(
-                &mut *host.lock().unwrap(),
-                request(gfxp),
-                61,
-                channel(),
-                |v, n| v == 0x10000 && n == 4096,
-            ))
-        })
-    }
-    #[test]
-    fn queued_gfxp_action_binds_before_publishing_completion() {
-        let q = Queue::new(true);
-        let host = Mutex::new(Fake::default());
-        let reply = Reply::default();
-        q.enqueue(work(true), reply.clone(), || {}).unwrap();
-        assert!(reply.lock().unwrap().is_none());
-        assert!(host.lock().unwrap().binds.is_empty());
-        q.serve(&host);
-        assert_eq!(*reply.lock().unwrap(), Some(Ok(4096)));
-        assert_eq!(host.lock().unwrap().binds[0].channel, 81);
-        assert_eq!(q.served.load(Ordering::Relaxed), 1);
-        assert_eq!(q.refused.load(Ordering::Relaxed), 0);
-        assert_eq!(q.bytes.load(Ordering::Relaxed), 4096);
-    }
-    #[test]
-    fn queued_zcull_action_retains_va_and_credits_only_real_success() {
-        let q = Queue::new(true);
-        let host = Mutex::new(Fake::default());
-        let reply = Reply::default();
-        q.enqueue(work(false), reply.clone(), || {}).unwrap();
-        q.serve(&host);
-        assert_eq!(*reply.lock().unwrap(), Some(Ok(4096)));
-        assert_eq!(host.lock().unwrap().binds[0].kind, request(false).kind);
-        assert_eq!(q.served.load(Ordering::Relaxed), 1);
-        assert_eq!(q.bytes.load(Ordering::Relaxed), 4096);
-        assert!(!q.has_work());
-    }
-    #[test]
-    fn busy_lifetime_guard_retains_job_without_reply_or_native_bind() {
-        let q = Queue::new(true);
-        let host = Mutex::new(Fake::default());
-        let ready = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let check = ready.clone();
-        let mut bind = work(true);
-        let reply = Reply::default();
-        q.enqueue(
-            Box::new(move |h| {
-                if check.load(Ordering::Acquire) {
-                    bind(h)
-                } else {
-                    None
-                }
-            }),
-            reply.clone(),
-            || {},
-        )
-        .unwrap();
-        q.serve(&host);
-        assert!(reply.lock().unwrap().is_none());
-        assert!(host.lock().unwrap().binds.is_empty());
-        assert!(q.has_work());
-        ready.store(true, Ordering::Release);
-        q.serve(&host);
-        assert_eq!(*reply.lock().unwrap(), Some(Ok(4096)));
-    }
-    #[test]
-    fn pending_busy_action_does_not_open_the_suffix_or_wake_a_completion() {
-        let q = Queue::new(true);
-        let reply = Reply::default();
-        let wakes = Arc::new(AtomicUsize::new(0));
-        let count = wakes.clone();
-        q.enqueue(Box::new(|_: &()| None), reply.clone(), move || {
-            count.fetch_add(1, Ordering::Relaxed);
-        })
-        .unwrap();
-        q.serve(&());
-        q.serve(&());
-        assert_eq!(wakes.load(Ordering::Relaxed), 0);
-        assert!(reply.lock().unwrap().is_none());
-        q.cancel_all();
-    }
-    #[test]
-    fn native_refusal_is_not_a_served_bind_or_credited_bytes() {
-        for status in [0x1a, 0x40] {
-            let q = Queue::new(true);
-            let host = Mutex::new(Fake {
-                status: Some(status),
-                ..Fake::default()
-            });
-            let reply = Reply::default();
-            q.enqueue(work(true), reply.clone(), || {}).unwrap();
-            q.serve(&host);
-            assert_eq!(*reply.lock().unwrap(), Some(Err(status)));
-            assert_eq!(q.served.load(Ordering::Relaxed), 0);
-            assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
-            assert_eq!(q.refused.load(Ordering::Relaxed), 1);
-        }
-    }
-    #[test]
-    fn wake_observes_result_and_released_request_lifetime() {
-        let q = Queue::new(true);
-        let host = Mutex::new(Fake::default());
-        let owner = Arc::new(());
-        let weak = Arc::downgrade(&owner);
-        let mut bind = work(false);
-        let reply = Reply::default();
-        let check = reply.clone();
-        q.enqueue(
-            Box::new(move |h| {
-                let _keep = &owner;
-                bind(h)
-            }),
-            reply,
-            move || {
-                assert_eq!(*check.lock().unwrap(), Some(Ok(4096)));
-                assert!(weak.upgrade().is_none());
-            },
-        )
-        .unwrap();
-        q.serve(&host);
-    }
-    #[test]
-    fn reset_cancels_pending_native_work_and_releases_held_metadata() {
-        let q = Queue::new(true);
-        let owner = Arc::new(());
-        let weak = Arc::downgrade(&owner);
-        let reply = Reply::default();
-        q.enqueue(
-            Box::new(move |_: &()| {
-                let _keep = &owner;
-                panic!("canceled job ran")
-            }),
-            reply.clone(),
-            || {},
-        )
-        .unwrap();
-        q.cancel_all();
-        assert_eq!(*reply.lock().unwrap(), Some(Err(0x40)));
-        assert!(weak.upgrade().is_none());
-        assert!(!q.has_work());
-        assert_eq!(q.refused.load(Ordering::Relaxed), 1);
-        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
-    }
-    #[test]
-    fn off_and_explicit_zero_leave_the_host_event_sequence_unchanged() {
-        for value in [None, Some("0"), Some("true"), Some("2")] {
-            let q = Queue::new(flag_on(value));
-            let reply = Reply::default();
-            assert_eq!(
-                q.enqueue(
-                    Box::new(|_: &()| panic!("off performed a host action")),
-                    reply.clone(),
-                    || panic!("off woke completion")
-                ),
-                Err(0x56)
-            );
-            q.serve(&());
-            assert!(reply.lock().unwrap().is_none());
-            assert_eq!(q.summary(), "");
-            assert!(!q.has_work());
-        }
-        assert!(flag_on(Some("1")));
-    }
-    #[test]
-    fn queue_bound_counts_a_busy_action_without_releasing_its_credit() {
-        let q = Queue::new(true);
-        for _ in 0..MAX {
-            q.enqueue(Box::new(|_: &()| None), Reply::default(), || {})
-                .unwrap();
-        }
-        q.serve(&());
-        assert_eq!(
-            q.enqueue(Box::new(|_: &()| None), Reply::default(), || {}),
-            Err(0x51)
-        );
-        q.cancel_all();
-        assert!(!q.has_work());
-    }
-    #[test]
-    fn writable_complete_span_preserves_all_adjacent_placement_rows() {
-        let rows = crate::mem::PlacedRows::default();
-        for at in [0x10000, 0x11000] {
-            rows.write()
-                .unwrap()
-                .insert(at, (4096, at, false, kf_host::MapPerm::READ_WRITE));
-        }
-        let before = rows.read().unwrap().clone();
-        assert!(writable(&rows, 0x10000, 8192));
-        assert!(writable(&rows, 0x10800, 4096));
-        assert_eq!(*rows.read().unwrap(), before);
-        rows.write().unwrap().remove(&0x11000);
-        assert!(!writable(&rows, 0x10000, 8192));
-    }
-    #[test]
-    fn a_read_only_tail_or_missing_middle_is_not_a_writable_buffer() {
-        let rows = crate::mem::PlacedRows::default();
-        let ro = kf_host::MapPerm {
-            read_only: true,
-            ..kf_host::MapPerm::READ_WRITE
-        };
-        rows.write()
-            .unwrap()
-            .insert(0x10000, (4096, 0, false, kf_host::MapPerm::READ_WRITE));
-        rows.write()
-            .unwrap()
-            .insert(0x11000, (4096, 4096, false, ro));
-        assert!(!writable(&rows, 0x10000, 8192));
-        assert!(!writable(&rows, u64::MAX - 10, 4096));
-        assert!(!writable(&rows, 0x10000, 0));
-        rows.write().unwrap().remove(&0x10000);
-        assert!(!writable(&rows, 0x10000, 8192));
-    }
-    #[test]
-    fn same_numeric_handle_in_a_foreign_client_is_not_the_target() {
-        let r = request(true);
-        assert!(eligible(r, (11, 21), None, 1, true));
-        assert!(eligible(r, (11, 22), Some(21), 1, true));
-        assert!(!eligible(r, (12, 21), None, 1, true));
-        assert!(!eligible(r, (11, 22), None, 1, true));
-        assert!(!eligible(r, (11, 21), None, 1, false));
-    }
-    #[test]
-    fn zcull_scope_rejects_freed_wrong_engine_and_foreign_contexts() {
-        let r = request(false);
-        assert!(!eligible(r, (11, 21), None, 9, true));
-        assert!(!eligible(r, (11, 21), None, 1, false));
-        assert!(!eligible(r, (12, 21), Some(21), 1, true));
-        assert!(!eligible(r, (11, 22), Some(23), 1, true));
-    }
-    #[test]
-    fn disabling_gr_binds_does_not_call_a_queued_host_or_credit_results() {
-        let q = Queue::new(false);
-        let reply = Reply::default();
-        let host = Mutex::new(Fake::default());
-        assert_eq!(
-            q.enqueue(work(true), reply, || panic!("disabled wake")),
-            Err(0x56)
-        );
-        q.serve(&host);
-        assert!(host.lock().unwrap().binds.is_empty());
-        assert_eq!(q.served.load(Ordering::Relaxed), 0);
-        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
-    }
-    #[test]
-    fn bind_exclusion_extends_without_locks_and_blocks_other_context_steering() {
-        let regions = Arc::new(crate::userva::Regions::default());
-        let claim = regions.steer(0x10000, 4096).unwrap();
-        claim.extend(0x10800, 4096).unwrap();
-        assert!(regions.steer(0x11000, 2048).is_err());
-        claim.extend(0x20000, 4096).unwrap();
-        assert!(regions.steer(0x20000, 4096).is_err());
-        drop(claim);
-        assert!(regions.steer(0x10000, 4096).is_ok());
-        assert!(regions.steer(0x20000, 4096).is_ok());
-    }
-    #[test]
-    fn extending_one_bind_cannot_steal_another_active_handover_span() {
-        let regions = Arc::new(crate::userva::Regions::default());
-        let first = regions.steer(0x10000, 4096).unwrap();
-        let other = regions.steer(0x20000, 4096).unwrap();
-        assert!(first.extend(0x20000, 4096).is_err());
-        assert!(first.extend(u64::MAX - 1, 4096).is_err());
-        drop(other);
-        first.extend(0x20000, 4096).unwrap();
-        assert!(regions.steer(0x20000, 4096).is_err());
-    }
-    #[test]
-    fn sysmem_read_only_context_buffer_is_rejected_without_rewriting_rows() {
-        let rows = crate::mem::PlacedRows::default();
-        let ro = kf_host::MapPerm {
-            read_only: true,
-            ..kf_host::MapPerm::READ_WRITE
-        };
-        rows.write()
-            .unwrap()
-            .insert(0x10000, (4096, 8192, true, ro));
-        let before = rows.read().unwrap().clone();
-        assert!(!writable(&rows, 0x10000, 4096));
-        assert_eq!(*rows.read().unwrap(), before);
-    }
-    #[test]
-    fn refused_zcull_never_credits_success_or_bound_bytes() {
-        let q = Queue::new(true);
-        let host = Mutex::new(Fake {
-            status: Some(0x1f),
-            ..Fake::default()
-        });
-        let reply = Reply::default();
-        q.enqueue(work(false), reply.clone(), || {}).unwrap();
-        q.serve(&host);
-        assert_eq!(*reply.lock().unwrap(), Some(Err(0x1f)));
-        assert_eq!(q.served.load(Ordering::Relaxed), 0);
-        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
-        assert_eq!(q.refused.load(Ordering::Relaxed), 1);
-    }
-    #[test]
-    fn cancel_wake_sees_refusal_and_released_target_metadata() {
-        let q = Queue::new(true);
-        let owner = Arc::new(());
-        let weak = Arc::downgrade(&owner);
-        let reply = Reply::default();
-        let completed = reply.clone();
-        q.enqueue(
-            Box::new(move |_: &()| {
-                let _keep = &owner;
-                None
-            }),
-            reply,
-            move || {
-                assert_eq!(*completed.lock().unwrap(), Some(Err(0x40)));
-                assert!(weak.upgrade().is_none());
-            },
-        )
-        .unwrap();
-        q.cancel_all();
-    }
-    #[test]
-    fn a_running_callback_still_owns_admission_credit() {
-        let q = Arc::new(Queue::new(true));
-        let weak = Arc::downgrade(&q);
-        q.enqueue(
-            Box::new(move |_: &()| {
-                assert_eq!(
-                    weak.upgrade()
-                        .unwrap()
-                        .enqueue(Box::new(|_| None), Reply::default(), || {}),
-                    Err(0x51)
-                );
-                None
-            }),
-            Reply::default(),
-            || {},
-        )
-        .unwrap();
-        for _ in 1..MAX {
-            q.enqueue(Box::new(|_| None), Reply::default(), || {})
-                .unwrap();
-        }
-        q.serve(&());
-        q.cancel_all();
-        assert!(!q.has_work());
-    }
-    fn closed_work(gfxp: bool, event: u8) -> Work<Mutex<Fake>> {
-        let original = Arc::new(());
-        let now = if event == 16 {
-            Arc::new(())
-        } else {
-            original.clone()
-        };
-        let mut native = channel();
-        if event == 32 {
-            native.chan += 1;
-        }
-        Box::new(move |host| {
-            let live = same_live(
-                &original,
-                channel(),
-                Life {
-                    allocation: &now,
-                    channel: Some(native),
-                    canceled: event == 1,
-                    retired: event == 2,
-                    free_attempted: event == 4,
-                    dead: event == 8,
-                },
-            );
-            Some(if live {
-                execute(
-                    &mut *host.lock().unwrap(),
-                    request(gfxp),
-                    61,
-                    channel(),
-                    |_, _| true,
-                )
-            } else {
-                Err(0x40)
-            })
-        })
-    }
-    #[test]
-    fn a_deferred_gfxp_request_cannot_bind_after_free_or_numeric_handle_reuse() {
-        for event in [1, 2, 4, 8, 16, 32] {
-            let q = Queue::new(true);
-            let host = Mutex::new(Fake::default());
-            let reply = Reply::default();
-            q.enqueue(closed_work(true, event), reply.clone(), || {})
-                .unwrap();
-            q.serve(&host);
-            assert_eq!(*reply.lock().unwrap(), Some(Err(0x40)));
-            assert!(host.lock().unwrap().binds.is_empty());
-            assert!(!q.has_work());
-        }
-    }
-    #[test]
-    fn a_held_direct_zcull_reply_observes_a_stale_target_refusal_without_host_io() {
-        for event in [1, 2, 4, 8, 16, 32] {
-            let q = Queue::new(true);
-            let host = Mutex::new(Fake::default());
-            let reply = Reply::default();
-            let completed = reply.clone();
-            let d = kf_gsp::Deferred::new();
-            let done = d.clone();
-            q.enqueue(closed_work(false, event), reply, move || {
-                done.resolve(completed.lock().unwrap().unwrap().err().unwrap_or(0));
-            })
-            .unwrap();
-            q.serve(&host);
-            assert_eq!(d.outcome(), Some(0x40));
-            assert!(host.lock().unwrap().binds.is_empty());
-        }
-    }
-    #[test]
-    fn only_literal_one_enables_the_initial_experimental_head() {
-        assert!(!flag_on(None));
-        assert!(!flag_on(Some("")));
-        assert!(!flag_on(Some(" 1")));
-        assert!(!flag_on(Some("2")));
-        assert!(flag_on(Some("1")));
-        assert!(!flag_on(Some("0")));
-    }
-    #[test]
-    fn extending_into_a_partial_foreign_claim_never_releases_its_exclusion() {
-        let regions = Arc::new(crate::userva::Regions::default());
-        let bind = regions.steer(0x10000, 4096).unwrap();
-        let other = regions.steer(0x20000, 4096).unwrap();
-        assert!(bind.extend(0x1f800, 4096).is_err());
-        drop(bind);
-        assert!(regions.steer(0x20000, 4096).is_err());
-        drop(other);
-        assert!(regions.steer(0x20000, 4096).is_ok());
-    }
-    #[test]
-    fn tsg_preemption_must_resolve_canonically_instead_of_picking_the_trigger() {
-        let r = request(true);
-        assert!(!prefer_trigger(r, (11, 22), Some(21), 1, true));
-        assert!(prefer_trigger(r, (11, 21), Some(31), 1, true));
-    }
-    #[test]
-    fn tsg_zcull_cannot_infer_a_share_from_its_triggering_stream() {
-        let r = request(false);
-        assert!(!prefer_trigger(r, (11, 22), Some(21), 1, true));
-        assert!(prefer_trigger(r, (11, 21), Some(31), 1, true));
-    }
-    #[test]
-    fn preemption_target_selection_refuses_two_members_but_accepts_one() {
-        let r = request(true);
-        let members = [(11, 22), (11, 23)];
-        let matches = members
-            .into_iter()
-            .filter(|key| eligible(r, *key, Some(21), 1, true));
-        assert_eq!(unique(matches), Err(0x56));
-        assert_eq!(unique([(11, 22)]), Ok(Some((11, 22))));
-        assert_eq!(unique::<(u32, u32)>([]), Ok(None));
-    }
-    #[test]
-    fn zcull_target_selection_never_collapses_distinct_members_into_a_share() {
-        let r = request(false);
-        let members = [(11, 22), (11, 23)];
-        let matches = members
-            .into_iter()
-            .filter(|key| eligible(r, *key, Some(21), 1, true));
-        assert_eq!(unique(matches), Err(0x56));
-        assert_eq!(unique([(11, 23)]), Ok(Some((11, 23))));
-    }
-}
 const MAX: usize = 256;
 
 pub(crate) fn flag_on(value: Option<&str>) -> bool {
@@ -731,7 +213,7 @@ pub(crate) fn prefer_trigger(
     engine: u32,
     active: bool,
 ) -> bool {
-    eligible(request, key, tsg, engine, active)
+    eligible(request, key, tsg, engine, active) && request.channel == key.1
 }
 
 /// Resolve at most two canonical matches; never guess a member of an ambiguous TSG.
@@ -742,5 +224,540 @@ pub(crate) fn unique<T>(candidates: impl IntoIterator<Item = T>) -> Result<Optio
         Err(0x56)
     } else {
         Ok(first)
+    }
+}
+
+/// Preserve non-USER fallback while resolving the USER member of a canonical scope.
+pub(crate) fn user_target<T>(
+    candidates: impl IntoIterator<Item = (bool, T)>,
+) -> Result<Option<T>, u32> {
+    unique(
+        candidates
+            .into_iter()
+            .filter(|(user, _)| *user)
+            .map(|(_, target)| target),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kf_abi::grbind::{Kind, Request};
+    use kf_host::{
+        Channel,
+        grbind::{Host, execute},
+    };
+    #[derive(Default)]
+    struct Fake {
+        binds: Vec<Request>,
+        status: Option<u32>,
+    }
+    impl Host for Fake {
+        fn properties(&mut self, _: u32) -> Result<(u64, u64), u32> {
+            Ok((4096, 256))
+        }
+        fn bind(&mut self, request: Request) -> Result<(), u32> {
+            self.binds.push(request);
+            self.status.map_or(Ok(()), Err)
+        }
+    }
+    fn request(gfxp: bool) -> Request {
+        let mut buffers = [0; 9];
+        buffers[0] = 0x10000;
+        Request {
+            client: 11,
+            channel: 21,
+            kind: if gfxp {
+                Kind::Preemption {
+                    flags: 2,
+                    gfxp: 1,
+                    cilp: 0,
+                    buffers,
+                }
+            } else {
+                Kind::Zcull {
+                    va: 0x10000,
+                    mode: 2,
+                }
+            },
+        }
+    }
+    fn channel() -> Channel {
+        Channel {
+            tsg: 71,
+            chan: 81,
+            token: 91,
+            born_user: None,
+        }
+    }
+    fn work(gfxp: bool) -> Work<Mutex<Fake>> {
+        Box::new(move |host| {
+            Some(execute(
+                &mut *host.lock().unwrap(),
+                request(gfxp),
+                61,
+                channel(),
+                |v, n| v == 0x10000 && n == 4096,
+            ))
+        })
+    }
+    #[test]
+    fn queued_gfxp_action_binds_before_publishing_completion() {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake::default());
+        let reply = Reply::default();
+        q.enqueue(work(true), reply.clone(), || {}).unwrap();
+        assert!(reply.lock().unwrap().is_none());
+        assert!(host.lock().unwrap().binds.is_empty());
+        q.serve(&host);
+        assert_eq!(*reply.lock().unwrap(), Some(Ok(4096)));
+        assert_eq!(host.lock().unwrap().binds[0].channel, 81);
+        assert_eq!(q.served.load(Ordering::Relaxed), 1);
+        assert_eq!(q.refused.load(Ordering::Relaxed), 0);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 4096);
+        assert_eq!(q.summary(), " gr_binds[served=1 refused=0 bytes=4096]");
+    }
+    #[test]
+    fn queued_zcull_action_retains_va_and_credits_only_real_success() {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake::default());
+        let reply = Reply::default();
+        q.enqueue(work(false), reply.clone(), || {}).unwrap();
+        q.serve(&host);
+        assert_eq!(*reply.lock().unwrap(), Some(Ok(4096)));
+        assert_eq!(host.lock().unwrap().binds[0].kind, request(false).kind);
+        assert_eq!(q.served.load(Ordering::Relaxed), 1);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 4096);
+        assert!(!q.has_work());
+        assert_eq!(q.summary(), " gr_binds[served=1 refused=0 bytes=4096]");
+    }
+    #[test]
+    fn busy_lifetime_guard_retains_job_without_reply_or_native_bind() {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake::default());
+        let ready = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let check = ready.clone();
+        let mut bind = work(true);
+        let reply = Reply::default();
+        q.enqueue(
+            Box::new(move |h| {
+                if check.load(Ordering::Acquire) {
+                    bind(h)
+                } else {
+                    None
+                }
+            }),
+            reply.clone(),
+            || {},
+        )
+        .unwrap();
+        q.serve(&host);
+        assert!(reply.lock().unwrap().is_none());
+        assert!(host.lock().unwrap().binds.is_empty());
+        assert!(q.has_work());
+        ready.store(true, Ordering::Release);
+        q.serve(&host);
+        assert_eq!(*reply.lock().unwrap(), Some(Ok(4096)));
+    }
+    #[test]
+    fn pending_busy_action_does_not_open_the_suffix_or_wake_a_completion() {
+        let q = Queue::new(true);
+        let reply = Reply::default();
+        let wakes = Arc::new(AtomicUsize::new(0));
+        let count = wakes.clone();
+        q.enqueue(Box::new(|_: &()| None), reply.clone(), move || {
+            count.fetch_add(1, Ordering::Relaxed);
+        })
+        .unwrap();
+        q.serve(&());
+        q.serve(&());
+        assert_eq!(wakes.load(Ordering::Relaxed), 0);
+        assert!(reply.lock().unwrap().is_none());
+        q.cancel_all();
+    }
+    #[test]
+    fn native_refusal_is_not_a_served_bind_or_credited_bytes() {
+        for status in [0x1a, 0x40] {
+            let q = Queue::new(true);
+            let host = Mutex::new(Fake {
+                status: Some(status),
+                ..Fake::default()
+            });
+            let reply = Reply::default();
+            q.enqueue(work(true), reply.clone(), || {}).unwrap();
+            q.serve(&host);
+            assert_eq!(*reply.lock().unwrap(), Some(Err(status)));
+            assert_eq!(q.served.load(Ordering::Relaxed), 0);
+            assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
+            assert_eq!(q.refused.load(Ordering::Relaxed), 1);
+            assert_eq!(q.summary(), " gr_binds[served=0 refused=1 bytes=0]");
+        }
+    }
+    #[test]
+    fn wake_observes_result_and_released_request_lifetime() {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake::default());
+        let owner = Arc::new(());
+        let weak = Arc::downgrade(&owner);
+        let mut bind = work(false);
+        let reply = Reply::default();
+        let check = reply.clone();
+        q.enqueue(
+            Box::new(move |h| {
+                let _keep = &owner;
+                bind(h)
+            }),
+            reply,
+            move || {
+                assert_eq!(*check.lock().unwrap(), Some(Ok(4096)));
+                assert!(weak.upgrade().is_none());
+            },
+        )
+        .unwrap();
+        q.serve(&host);
+    }
+    #[test]
+    fn reset_cancels_pending_native_work_and_releases_held_metadata() {
+        let q = Queue::new(true);
+        let owner = Arc::new(());
+        let weak = Arc::downgrade(&owner);
+        let reply = Reply::default();
+        q.enqueue(
+            Box::new(move |_: &()| {
+                let _keep = &owner;
+                panic!("canceled job ran")
+            }),
+            reply.clone(),
+            || {},
+        )
+        .unwrap();
+        q.cancel_all();
+        assert_eq!(*reply.lock().unwrap(), Some(Err(0x40)));
+        assert!(weak.upgrade().is_none());
+        assert!(!q.has_work());
+        assert_eq!(q.refused.load(Ordering::Relaxed), 1);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
+    }
+    #[test]
+    fn off_and_explicit_zero_leave_the_host_event_sequence_unchanged() {
+        for value in [None, Some("0"), Some("true"), Some("2")] {
+            let q = Queue::new(flag_on(value));
+            let reply = Reply::default();
+            assert_eq!(
+                q.enqueue(
+                    Box::new(|_: &()| panic!("off performed a host action")),
+                    reply.clone(),
+                    || panic!("off woke completion")
+                ),
+                Err(0x56)
+            );
+            q.serve(&());
+            assert!(reply.lock().unwrap().is_none());
+            assert_eq!(q.summary(), "");
+            assert!(!q.has_work());
+        }
+        assert!(flag_on(Some("1")));
+    }
+    #[test]
+    fn queue_bound_counts_a_busy_action_without_releasing_its_credit() {
+        let q = Queue::new(true);
+        for _ in 0..MAX {
+            q.enqueue(Box::new(|_: &()| None), Reply::default(), || {})
+                .unwrap();
+        }
+        q.serve(&());
+        assert_eq!(
+            q.enqueue(Box::new(|_: &()| None), Reply::default(), || {}),
+            Err(0x51)
+        );
+        q.cancel_all();
+        assert!(!q.has_work());
+    }
+    #[test]
+    fn writable_complete_span_preserves_all_adjacent_placement_rows() {
+        let rows = crate::mem::PlacedRows::default();
+        for at in [0x10000, 0x11000] {
+            rows.write()
+                .unwrap()
+                .insert(at, (4096, at, false, kf_host::MapPerm::READ_WRITE));
+        }
+        let before = rows.read().unwrap().clone();
+        assert!(writable(&rows, 0x10000, 8192));
+        assert!(writable(&rows, 0x10800, 4096));
+        assert_eq!(*rows.read().unwrap(), before);
+        rows.write().unwrap().remove(&0x11000);
+        assert!(!writable(&rows, 0x10000, 8192));
+    }
+    #[test]
+    fn a_read_only_tail_or_missing_middle_is_not_a_writable_buffer() {
+        let rows = crate::mem::PlacedRows::default();
+        let ro = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (4096, 0, false, kf_host::MapPerm::READ_WRITE));
+        rows.write()
+            .unwrap()
+            .insert(0x11000, (4096, 4096, false, ro));
+        assert!(!writable(&rows, 0x10000, 8192));
+        assert!(!writable(&rows, u64::MAX - 10, 4096));
+        assert!(!writable(&rows, 0x10000, 0));
+        rows.write().unwrap().remove(&0x10000);
+        assert!(!writable(&rows, 0x10000, 8192));
+    }
+    #[test]
+    fn same_numeric_handle_in_a_foreign_client_is_not_the_target() {
+        let r = request(true);
+        assert!(eligible(r, (11, 21), None, 1, true));
+        assert!(eligible(r, (11, 22), Some(21), 1, true));
+        assert!(!eligible(r, (12, 21), None, 1, true));
+        assert!(!eligible(r, (11, 22), None, 1, true));
+        assert!(!eligible(r, (11, 21), None, 1, false));
+    }
+    #[test]
+    fn zcull_scope_rejects_freed_wrong_engine_and_foreign_contexts() {
+        let r = request(false);
+        assert!(!eligible(r, (11, 21), None, 9, true));
+        assert!(!eligible(r, (11, 21), None, 1, false));
+        assert!(!eligible(r, (12, 21), Some(21), 1, true));
+        assert!(!eligible(r, (11, 22), Some(23), 1, true));
+    }
+    #[test]
+    fn disabling_gr_binds_does_not_call_a_queued_host_or_credit_results() {
+        let q = Queue::new(false);
+        let reply = Reply::default();
+        let host = Mutex::new(Fake::default());
+        assert_eq!(
+            q.enqueue(work(true), reply, || panic!("disabled wake")),
+            Err(0x56)
+        );
+        q.serve(&host);
+        assert!(host.lock().unwrap().binds.is_empty());
+        assert_eq!(q.served.load(Ordering::Relaxed), 0);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
+    }
+    #[test]
+    fn bind_exclusion_extends_without_locks_and_blocks_other_context_steering() {
+        let regions = Arc::new(crate::userva::Regions::default());
+        let claim = regions.steer(0x10000, 4096).unwrap();
+        claim.extend(0x10800, 4096).unwrap();
+        assert!(regions.steer(0x11000, 2048).is_err());
+        claim.extend(0x20000, 4096).unwrap();
+        assert!(regions.steer(0x20000, 4096).is_err());
+        drop(claim);
+        assert!(regions.steer(0x10000, 4096).is_ok());
+        assert!(regions.steer(0x20000, 4096).is_ok());
+    }
+    #[test]
+    fn extending_one_bind_cannot_steal_another_active_handover_span() {
+        let regions = Arc::new(crate::userva::Regions::default());
+        let first = regions.steer(0x10000, 4096).unwrap();
+        let other = regions.steer(0x20000, 4096).unwrap();
+        assert!(first.extend(0x20000, 4096).is_err());
+        assert!(first.extend(u64::MAX - 1, 4096).is_err());
+        drop(other);
+        first.extend(0x20000, 4096).unwrap();
+        assert!(regions.steer(0x20000, 4096).is_err());
+    }
+    #[test]
+    fn sysmem_read_only_context_buffer_is_rejected_without_rewriting_rows() {
+        let rows = crate::mem::PlacedRows::default();
+        let ro = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (4096, 8192, true, ro));
+        let before = rows.read().unwrap().clone();
+        assert!(!writable(&rows, 0x10000, 4096));
+        assert_eq!(*rows.read().unwrap(), before);
+    }
+    #[test]
+    fn refused_zcull_never_credits_success_or_bound_bytes() {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake {
+            status: Some(0x1f),
+            ..Fake::default()
+        });
+        let reply = Reply::default();
+        q.enqueue(work(false), reply.clone(), || {}).unwrap();
+        q.serve(&host);
+        assert_eq!(*reply.lock().unwrap(), Some(Err(0x1f)));
+        assert_eq!(q.served.load(Ordering::Relaxed), 0);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
+        assert_eq!(q.refused.load(Ordering::Relaxed), 1);
+        assert_eq!(q.summary(), " gr_binds[served=0 refused=1 bytes=0]");
+    }
+    #[test]
+    fn cancel_wake_sees_refusal_and_released_target_metadata() {
+        let q = Queue::new(true);
+        let owner = Arc::new(());
+        let weak = Arc::downgrade(&owner);
+        let reply = Reply::default();
+        let completed = reply.clone();
+        q.enqueue(
+            Box::new(move |_: &()| {
+                let _keep = &owner;
+                None
+            }),
+            reply,
+            move || {
+                assert_eq!(*completed.lock().unwrap(), Some(Err(0x40)));
+                assert!(weak.upgrade().is_none());
+            },
+        )
+        .unwrap();
+        q.cancel_all();
+    }
+    #[test]
+    fn a_running_callback_still_owns_admission_credit() {
+        let q = Arc::new(Queue::new(true));
+        let weak = Arc::downgrade(&q);
+        q.enqueue(
+            Box::new(move |_: &()| {
+                assert_eq!(
+                    weak.upgrade()
+                        .unwrap()
+                        .enqueue(Box::new(|_| None), Reply::default(), || {}),
+                    Err(0x51)
+                );
+                None
+            }),
+            Reply::default(),
+            || {},
+        )
+        .unwrap();
+        for _ in 1..MAX {
+            q.enqueue(Box::new(|_| None), Reply::default(), || {})
+                .unwrap();
+        }
+        q.serve(&());
+        q.cancel_all();
+        assert!(!q.has_work());
+    }
+    fn closed_work(gfxp: bool, event: u8) -> Work<Mutex<Fake>> {
+        let original = Arc::new(());
+        let now = if event == 16 {
+            Arc::new(())
+        } else {
+            original.clone()
+        };
+        let mut native = channel();
+        if event == 32 {
+            native.chan += 1;
+        }
+        Box::new(move |host| {
+            let live = same_live(
+                &original,
+                channel(),
+                Life {
+                    allocation: &now,
+                    channel: Some(native),
+                    canceled: event == 1,
+                    retired: event == 2,
+                    free_attempted: event == 4,
+                    dead: event == 8,
+                },
+            );
+            Some(if live {
+                execute(
+                    &mut *host.lock().unwrap(),
+                    request(gfxp),
+                    61,
+                    channel(),
+                    |_, _| true,
+                )
+            } else {
+                Err(0x40)
+            })
+        })
+    }
+    #[test]
+    fn a_deferred_gfxp_request_cannot_bind_after_free_or_numeric_handle_reuse() {
+        for event in [1, 2, 4, 8, 16, 32] {
+            let q = Queue::new(true);
+            let host = Mutex::new(Fake::default());
+            let reply = Reply::default();
+            q.enqueue(closed_work(true, event), reply.clone(), || {})
+                .unwrap();
+            q.serve(&host);
+            assert_eq!(*reply.lock().unwrap(), Some(Err(0x40)));
+            assert!(host.lock().unwrap().binds.is_empty());
+            assert!(!q.has_work());
+        }
+    }
+    #[test]
+    fn a_held_direct_zcull_reply_observes_a_stale_target_refusal_without_host_io() {
+        for event in [1, 2, 4, 8, 16, 32] {
+            let q = Queue::new(true);
+            let host = Mutex::new(Fake::default());
+            let reply = Reply::default();
+            let completed = reply.clone();
+            let d = kf_gsp::Deferred::new();
+            let done = d.clone();
+            q.enqueue(closed_work(false, event), reply, move || {
+                done.resolve(completed.lock().unwrap().unwrap().err().unwrap_or(0));
+            })
+            .unwrap();
+            q.serve(&host);
+            assert_eq!(d.outcome(), Some(0x40));
+            assert!(host.lock().unwrap().binds.is_empty());
+        }
+    }
+    #[test]
+    fn only_literal_one_enables_the_initial_experimental_head() {
+        assert!(!flag_on(None));
+        assert!(!flag_on(Some("")));
+        assert!(!flag_on(Some(" 1")));
+        assert!(!flag_on(Some("2")));
+        assert!(flag_on(Some("1")));
+        assert!(!flag_on(Some("0")));
+    }
+    #[test]
+    fn extending_into_a_partial_foreign_claim_never_releases_its_exclusion() {
+        let regions = Arc::new(crate::userva::Regions::default());
+        let bind = regions.steer(0x10000, 4096).unwrap();
+        let other = regions.steer(0x20000, 4096).unwrap();
+        assert!(bind.extend(0x1f800, 4096).is_err());
+        drop(bind);
+        assert!(regions.steer(0x20000, 4096).is_err());
+        drop(other);
+        assert!(regions.steer(0x20000, 4096).is_ok());
+    }
+    #[test]
+    fn tsg_preemption_must_resolve_canonically_instead_of_picking_the_trigger() {
+        let r = request(true);
+        assert!(!prefer_trigger(r, (11, 22), Some(21), 1, true));
+        assert!(prefer_trigger(r, (11, 21), Some(31), 1, true));
+    }
+    #[test]
+    fn tsg_zcull_cannot_infer_a_share_from_its_triggering_stream() {
+        let r = request(false);
+        assert!(!prefer_trigger(r, (11, 22), Some(21), 1, true));
+        assert!(prefer_trigger(r, (11, 21), Some(31), 1, true));
+    }
+    #[test]
+    fn preemption_target_selection_refuses_two_members_but_accepts_one() {
+        let r = request(true);
+        let members = [(11, 22), (11, 23)];
+        let matches = members
+            .into_iter()
+            .filter(|key| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(unique(matches), Err(0x56));
+        assert_eq!(unique([(11, 22)]), Ok(Some((11, 22))));
+        assert_eq!(unique::<(u32, u32)>([]), Ok(None));
+    }
+    #[test]
+    fn zcull_target_selection_never_collapses_distinct_members_into_a_share() {
+        let r = request(false);
+        let members = [(11, 22), (11, 23)];
+        let matches = members
+            .into_iter()
+            .filter(|key| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(unique(matches), Err(0x56));
+        assert_eq!(unique([(11, 23)]), Ok(Some((11, 23))));
     }
 }

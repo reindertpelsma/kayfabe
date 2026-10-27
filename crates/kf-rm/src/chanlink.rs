@@ -1638,6 +1638,13 @@ impl ChannelPolicy {
             return None;
         };
         if self.gr_binds && matches!(h.cmd, 0x20801208 | 0x20801209 | 0x20801211) {
+            if kf_abi::rpc_params_are_serialized(h.rmapi_rpc_flags) {
+                return Some(Self::refusal(
+                    NV_ERR_NOT_SUPPORTED,
+                    "serialized GR bind parameters are unsupported",
+                    cmd,
+                ));
+            }
             if !self
                 .abi
                 .capabilities()

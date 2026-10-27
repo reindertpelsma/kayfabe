@@ -5,7 +5,7 @@ use kf_abi::grbind::{self as abi, Kind, Request};
 
 /// Ordinary host effects. Tests use an independent recording fake.
 pub trait Host {
-    /// Native minimum size/alignment for a generated engine identifier.
+    /// Native minimum size/alignment for a public SDK engine selector.
     fn properties(&mut self, engine: u32) -> Result<(u64, u64), u32>;
     /// An authored request whose handles have been replaced with owned handles.
     fn bind(&mut self, request: Request) -> Result<(), u32>;

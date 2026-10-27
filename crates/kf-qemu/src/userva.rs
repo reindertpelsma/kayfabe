@@ -709,6 +709,27 @@ mod tests {
         assert!(r.steer(u64::MAX - 3, 8).is_err());
         assert!(r.steer(BASE, 0).is_err());
     }
+    #[test]
+    fn private_bind_exclusion_rejects_an_existing_private_slot() {
+        let r = Arc::new(Regions::default());
+        r.claim(BASE).unwrap();
+        let claim = r.steer(BASE - 8192, 4096).unwrap();
+        assert!(claim.extend(BASE, 4096).is_err());
+        drop(claim);
+        assert!(r.check(BASE, 4096).is_err());
+        r.release(BASE).unwrap();
+        assert!(r.steer(BASE, 4096).is_ok());
+    }
+    #[test]
+    fn private_bind_exclusion_rejects_partial_overlap_and_preserves_the_slot() {
+        let r = Arc::new(Regions::default());
+        r.claim(BASE).unwrap();
+        let claim = r.steer(BASE - 8192, 4096).unwrap();
+        assert!(claim.extend(BASE + BYTES - 2048, 4096).is_err());
+        drop(claim);
+        assert!(r.check(BASE + BYTES - 2048, 4096).is_err());
+        assert_eq!(r.ranges(), [(BASE, BASE + BYTES)]);
+    }
     #[derive(Default)]
     struct Fake {
         failures: std::cell::RefCell<Vec<&'static str>>,

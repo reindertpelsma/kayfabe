@@ -3002,10 +3002,18 @@ impl ChanPlane {
                 std::sync::TryLockError::WouldBlock => BindAdmission::Busy,
                 _ => BindAdmission::Refused(queue.reject(0x40)),
             })?;
-            crate::grbinds::unique(pt.iter().filter_map(|(key, t)| {
-                crate::grbinds::eligible(request, *key, t.tsg, t.engine, t.user_ring)
-                    .then(|| (*key, t.allocation.clone(), t.chan, t.tsg, t.engine))
-            }))
+            crate::grbinds::user_target(
+                pt.iter()
+                    .filter(|(key, t)| {
+                        crate::grbinds::eligible(request, **key, t.tsg, t.engine, true)
+                    })
+                    .map(|(key, t)| {
+                        (
+                            t.user_ring,
+                            (*key, t.allocation.clone(), t.chan, t.tsg, t.engine),
+                        )
+                    }),
+            )
         }
         .map_err(|st| BindAdmission::Refused(queue.reject(st)))?;
         let Some((key, allocation, channel, tsg, engine)) = hit else {
