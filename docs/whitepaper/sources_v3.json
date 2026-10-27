@@ -719,7 +719,7 @@
       "pr_number": 140,
       "url": "https://github.com/reindertpelsma/kayfabe/pull/140",
       "head_at_snapshot": "edfd0271f38111b6ba32b14d7fd6cf78d8deaeb9",
-      "captured_utc": "2026-10-27T21:53:29.756540+00:00",
+      "captured_utc": "2026-10-27T21:59:59.518305+00:00",
       "note": "Proposal page is mutable; frozen metadata is in pr_snapshot_v3.json."
     },
     {
@@ -728,7 +728,7 @@
       "pr_number": 146,
       "url": "https://github.com/reindertpelsma/kayfabe/pull/146",
       "head_at_snapshot": "3e52e0161c24547bf2e68d90e79b07c26a30df6d",
-      "captured_utc": "2026-10-27T21:53:29.756540+00:00",
+      "captured_utc": "2026-10-27T21:59:59.518305+00:00",
       "note": "Proposal page is mutable; frozen metadata is in pr_snapshot_v3.json."
     },
     {
@@ -737,7 +737,7 @@
       "pr_number": 169,
       "url": "https://github.com/reindertpelsma/kayfabe/pull/169",
       "head_at_snapshot": "6adec88f9a5f0b847084fbcc8f3d0365b49faa0a",
-      "captured_utc": "2026-10-27T21:53:29.756540+00:00",
+      "captured_utc": "2026-10-27T21:59:59.518305+00:00",
       "note": "Proposal page is mutable; frozen metadata is in pr_snapshot_v3.json."
     }
   ]

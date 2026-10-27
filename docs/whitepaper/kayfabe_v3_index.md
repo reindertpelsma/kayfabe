@@ -40,7 +40,7 @@ Paths count the endpoint diff under `crates/`, `qemu/` and `cuda/`. Commit count
 
 ## Open PR snapshot
 
-Captured **2026-10-27T21:53:29.756540+00:00**: **87 open PRs**; 6 target `next`, 26 target `master`, 55 target other branches. The latter feature stacks predate the October 27 routing policy. A known parent is an exact branch-name match in the captured all-PR catalogue, including merged parents. Unknown does not imply independent. `next` and `master` are treated as long-lived targets. This document’s own PR head is necessarily the pre-publication head at capture.
+Captured **2026-10-27T21:59:59.518305+00:00**: **87 open PRs**; 6 target `next`, 26 target `master`, 55 target other branches. The latter feature stacks predate the October 27 routing policy. A known parent is an exact branch-name match in the captured all-PR catalogue, including merged parents. Unknown does not imply independent. `next` and `master` are treated as long-lived targets. This document’s own PR head is necessarily the pre-publication head at capture.
 
 | PR | Title | Base | Head branch / full SHA | Draft | Known parent PR(s) |
 |---|---|---|---|---|---|

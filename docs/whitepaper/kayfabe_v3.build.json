@@ -1,26 +1,11 @@
 {
   "schema": 1,
-  "source_commit": "bd37f1a4e2310faf3d3ca4b52371daad779d126a",
+  "source_commit": "c30f160128dad4379447f17917655cd5faa6cf65",
   "inputs": [
     {
-      "path": "docs/whitepaper/fig_v3_channel.tex",
-      "git_blob": "1e6717106e9b330e8a90eff1b3d92f64676c746e",
-      "sha256": "ced7897d583f6f2ca5d429318373307ff5288c1b43412dcfb27b3eed0f293bc2"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_doorbell.tex",
-      "git_blob": "f87831c9eea7583fe15dcf3356a09cfd9b9fddb4",
-      "sha256": "5800d49c688983d43cc3369017876c8db4680b484676e88ff84a63039d45725d"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_gpfifo.tex",
-      "git_blob": "b344605fba54bdb8057c679f36e939b9325c121f",
-      "sha256": "71afde0970da2312c30d59cddb155c734bf6038b188681aeac2ec8ec4bcb37ff"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_gsp.tex",
-      "git_blob": "ce38644203c440430e43d165232e9dd2fb486e85",
-      "sha256": "6cbd2b2baadd49761c8a7b4c9df2f3b58a563e2f31de480e2d98a4f4e579b5f1"
+      "path": "docs/whitepaper/fig_v3_evidence_ladder.tex",
+      "git_blob": "183ad7ad0bfb4fe76712a4857bfe67febdb72bad",
+      "sha256": "04d620db3723954de7ab571130ddf21627d52aacef4ee3e146902e7e83cd6a6c"
     },
     {
       "path": "docs/whitepaper/fig_v3_lifecycle.tex",
@@ -28,117 +13,77 @@
       "sha256": "e95836c24e4f6badc6bb0c07f5b4323a7e829d23ff6f770e12fdbb4321802905"
     },
     {
-      "path": "docs/whitepaper/fig_v3_planes.tex",
-      "git_blob": "a64c4a98863ef797eb2db569f7278eedaa20661f",
-      "sha256": "abf278a38bb202741735a3578c5932fcd0844160efef37da2c05deec051bacc9"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_rm.tex",
-      "git_blob": "7d077b003aafd1753a783ec6261ad8d42cee0bfc",
-      "sha256": "a0c7fab05d18b31f9e1322a4d21e6686b83cc997d539e2d69e76e585f0133a53"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_semaphore.tex",
-      "git_blob": "d91020743673349347d6d6d411b928137ce3dfa4",
-      "sha256": "66be862d2847974dde91e5a66db09cc62eb485f2fd29694018225cf2e543170a"
+      "path": "docs/whitepaper/fig_v3_mapping_path.tex",
+      "git_blob": "3c8ad63514b868b29b6d13112611a422bb78e42e",
+      "sha256": "6dd6a18d23bbbcc040c3b06b977f71099a85fa18ac3a39e9de3064b24935d565"
     },
     {
       "path": "docs/whitepaper/fig_v3_stall.tex",
-      "git_blob": "e8e8dcdd457d6a2fbd3ce121df5e3622d9a24c4f",
-      "sha256": "e16886b1cf2ad0a32f0dbbedcbebbbc65f23a001a41aa304273b2514a9ad73a9"
+      "git_blob": "27a6129e384138a7ff518e423b7a0b3e3f531024",
+      "sha256": "9f064e11b596ae1e55f68e90b8e070a896780b11876e3972b30333635498a09c"
     },
     {
-      "path": "docs/whitepaper/fig_v3_tsg.tex",
-      "git_blob": "8d488e44de3fa5aaa160b2b606164b6f6b3af4a1",
-      "sha256": "fce95312846d17cfd80462a23dd6659aecb8859cc345c8c258d94ab2b3f70f85"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_userd.tex",
-      "git_blob": "968d113461191dbd17e38c1b480fa28dde0b43af",
-      "sha256": "18ee7c2b85133de062b7699bebd89865efb18e6bdc555378119eb795e38eba14"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_uvm.tex",
-      "git_blob": "37fe966edf9a6bd2c387c1387ecff6fdee469728",
-      "sha256": "131684f32ba1d4829f42ca133f1cad6e0fcb43043bc655a57f0925ad8b4a0252"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_va.tex",
-      "git_blob": "7618b627f8fe2c90f248cb9aa76f4bbf63b6650e",
-      "sha256": "34895177a1d0243490cd8384e6c12e97a713cdc39bcc5ea3945b53fe8102e5fd"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_watchdog.tex",
-      "git_blob": "3cd1d18ea99706f7abe3d8b569e9302b9e647a19",
-      "sha256": "4530963c9ff6dcf88411cba3859ba5ddfde6fc9a9ce79e1f6e3c388777c769d3"
-    },
-    {
-      "path": "docs/whitepaper/fig_v3_wddm.tex",
-      "git_blob": "57db2f7e4a65c265a1880e17837d1e29dd8acee5",
-      "sha256": "0a946cdbc3de0dbf37f5ca5b54014720a0c080efb89ebefb086225d39c61492e"
+      "path": "docs/whitepaper/fig_v3_trust.tex",
+      "git_blob": "73ff878a4b8afee23d3d7612f4af8b1afdf2639b",
+      "sha256": "0fab47728a59f0b35a49e53f96e05ebe3a742554ecd2efad65e30cf2ef20dba4"
     },
     {
       "path": "docs/whitepaper/kayfabe_v3.tex",
-      "git_blob": "5a944668a19232465ed4741c21740ed5572ef9a8",
-      "sha256": "2b52a64c61614c1244449f9e1c85c86533a058af067fd31853ca8874f45fec6e"
+      "git_blob": "a70866a6b5dd6a48de4c5ddd8cc4571096856a7d",
+      "sha256": "cf912bae8bfe29bd0fbb5b4eb8c905928d47ac8c063145d8a558c4490cb65659"
     },
     {
       "path": "docs/whitepaper/preamble_v3.tex",
-      "git_blob": "0e6d106d34ee98138e98f9453c99eb331289e96c",
-      "sha256": "0a30d52f06fe81dcdc5d414a6f6f6cd8244038d0480eccd2169a74e37c921252"
+      "git_blob": "4c8a41ff11172239a88f00a7dcc146693fb81cf7",
+      "sha256": "71f5b476ac76a32e13e1c7ce7f17a3096c2e4fb89310b33b7e1da52aa7eea58e"
     },
     {
       "path": "docs/whitepaper/v3_architecture.tex",
-      "git_blob": "092ef8e0dee04025b4c51f823b7cc442be411ee3",
-      "sha256": "e31714aab72b38c8a03e10367060e57c4a0ed3968b658db46aa6802480dc48ab"
+      "git_blob": "1b9b5b6c5a3ebaf0d17e34e981bdf02156ded1d0",
+      "sha256": "fe7439398c550c831c4a72e1fe3d66d57475bae003c73782fd1fb07126c1cb15"
+    },
+    {
+      "path": "docs/whitepaper/v3_citations.tex",
+      "git_blob": "a9a2a1dba0406ae04645d766d3b8b9b758074c43",
+      "sha256": "af73c128953cee0a6e4be45bf3ccc45b9c6e8b4ea0bacf33a575f8e0ff2d3a41"
+    },
+    {
+      "path": "docs/whitepaper/v3_distance_table.tex",
+      "git_blob": "58a9a6fcfbddb8a9fa084a3f5124e7ff8cd7a5f4",
+      "sha256": "f6a70f8f35b4ab9c5f90c4ca3a689bcb126ad4e5223c22f178942376730ce2d0"
     },
     {
       "path": "docs/whitepaper/v3_evidence.tex",
-      "git_blob": "a7438b308fe618b29083d084e4bda5228bfad9f7",
-      "sha256": "66aed20599cc8cb950b736b4471b7a1c5be174c8002098314195a49ecc09bc70"
-    },
-    {
-      "path": "docs/whitepaper/v3_gap_index.tex",
-      "git_blob": "8a160b48a1315d0f97a81db686d4912b9b5a7d76",
-      "sha256": "5ba1da593b21f2cc861aedc14966319dfa828d26d3658cd75397ed1a7b441fbf"
+      "git_blob": "7ca73adea86372cae9f314299dfaa5db738b4552",
+      "sha256": "a0c11f05d81e0353589447b5b266c6eee3c1f7a89fffcbaf89a31916bc7d282f"
     },
     {
       "path": "docs/whitepaper/v3_method_sources.tex",
-      "git_blob": "a4168a443d4ac3f9d1dbbb4fcb1e862e0aba5e85",
-      "sha256": "c877c3f4040a74baddaef72d53c27e2110ad593bff1d07b1505ed4c556890af2"
-    },
-    {
-      "path": "docs/whitepaper/v3_pr_inventory.tex",
-      "git_blob": "f47c485d5095b747b70ac6a2f81a48425472eb28",
-      "sha256": "ff8d1750c55e34f549fff6eb11127107a972bf065059cbe506615dd37bb386fd"
+      "git_blob": "d1a2a233cae4c641cfb6ef21050a9a5e10b89683",
+      "sha256": "d6ca21b9c1b04e8fa097b13d696b3f2c8569851aaf4918f2501d601136a4f867"
     },
     {
       "path": "docs/whitepaper/v3_primer.tex",
-      "git_blob": "59242ca597c3b700480a5acb1ab0885e8ef260ce",
-      "sha256": "3338d51c942414fd07491154472083b053d28aca15ce86d59ddd57ee628de416"
+      "git_blob": "96235d2389b9e70ecd6a5d509d32b69e1f514d54",
+      "sha256": "4b64039486a5440d366a0475321122c9831c25a8cfffeb421be6bdab918583f9"
     },
     {
       "path": "docs/whitepaper/v3_questions.tex",
-      "git_blob": "22bafc32d79d84feacf93bbb29776400b07d3c1d",
-      "sha256": "95239a2b8af2a37136687c9893426d3b2239c34f6b8843af36f0275985c61cdb"
+      "git_blob": "9870f8347cb36d8b6fbc7d4bb6d0924b60eae8ad",
+      "sha256": "74baf97da186c7cf9beb794ce7f710e7bcec4ee00fa2ce4803e654bfb2973551"
     },
     {
       "path": "docs/whitepaper/v3_rules_product.tex",
-      "git_blob": "69abb0f9d4f609b2f7e154be76dec9ec579b2c11",
-      "sha256": "b75e0ba1722d07d0400fd1dfa6846eee4d0de08550cac01b2c6209c4f61469f0"
-    },
-    {
-      "path": "docs/whitepaper/v3_sources.tex",
-      "git_blob": "3fd0b457ca2665acd4a0c0080d8cb9ea6323f8f4",
-      "sha256": "26d2efdd571dd048b2f278a097a799c2eb0671bf09e761f0d6c04678f89ee53d"
+      "git_blob": "7011fa349e8c7d6164b1e68dc401366808a7624a",
+      "sha256": "2dc9839ad2c034238f09a584dc7d6064f6b37394349c4b3e4e8973fd65e2f528"
     },
     {
       "path": "docs/whitepaper/v3_uncomfortable.tex",
-      "git_blob": "031840c036af6addba111d0c4d434259ec40ee5f",
-      "sha256": "addb0fa883b8cec3a214ebdd064e92e1e998476fafa7ca266aede33593aa1e60"
+      "git_blob": "85567fc54a620cdbc1128c15c38b4d7bb23fdd8e",
+      "sha256": "eadd8faa7eb048c2cc56af470297cb39a89952a19e5db2438ff69bdd72947737"
     }
   ],
-  "pdf_sha256": "258143eff946a61ce1814a546db1b24931940462ca774a719f6ad5073e406deb",
+  "pdf_sha256": "aeed91adb398416b658f0d0a316a98682bffb2db350621e4fe507cd2ee543992",
   "engine": "XeTeX 3.141592653-2.6-0.999997 (TeX Live 2025/Debian)",
   "passes": 2
 }
