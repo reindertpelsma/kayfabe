@@ -99,6 +99,22 @@ class Acceptance(unittest.TestCase):
     def test_inconsistent_opengl_frame_count_is_rejected(self):
         self.bad("opengl", "frames", 10, "FRAME_COUNT")
 
+    def test_unplanned_arm_cannot_be_silently_ignored(self):
+        rows = complete()
+        extra = result()
+        extra["arm"] = "D"
+        rows.append(extra)
+        with self.assertRaises(ValueError):
+            stamp.summarize(rows)
+
+    def test_unplanned_api_cannot_be_silently_ignored(self):
+        rows = complete()
+        extra = result()
+        extra["api"] = "vulkan"
+        rows.append(extra)
+        with self.assertRaises(ValueError):
+            stamp.summarize(rows)
+
     def test_master_medians_use_middle_values(self):
         summary = stamp.summarize(complete())
         self.assertEqual(summary["A/direct3d11"]["median_fps"], 300)
