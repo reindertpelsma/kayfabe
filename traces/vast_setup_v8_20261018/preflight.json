@@ -1,0 +1,12 @@
+{
+  "run": "v8-gpu-free-20261023",
+  "tests": 282,
+  "failures": 0,
+  "errors": 0,
+  "offline_install_s": 14.33,
+  "local_index_s": 0.04,
+  "offline_vendor_metadata": true,
+  "claims_new": 0,
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "live_rental_started": false
+}

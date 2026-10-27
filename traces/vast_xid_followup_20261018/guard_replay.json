@@ -1,0 +1,16 @@
+{
+  "run": "v9-no-rental-replay-20261023",
+  "lease_id": 57367447,
+  "positive_native_arms": 2,
+  "combined_faults": 5,
+  "combined_admitted": true,
+  "negative_refused": [
+    "wrong_channel",
+    "wrong_va",
+    "wrong_type",
+    "non_ce_client",
+    "extra_record"
+  ],
+  "fixture_hashes_match": true,
+  "rentals": 0
+}

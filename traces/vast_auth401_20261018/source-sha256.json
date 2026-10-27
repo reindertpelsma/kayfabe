@@ -1,0 +1,9 @@
+{
+  "ci/vast-broker/src/github.js": "fd51ae5c5b47e789b1312de5c6ead5c4d8789936d331bf801c2f150ae9f12bf9",
+  "ci/vast-broker/test/auth-attempt.test.js": "c32fb8041963bb057fa82b4e092bbe401d926c5136c2f660706a65c7e98b9740",
+  "ci/vast-broker/test/refusal-log.test.js": "e8423858e12d6d8306d39c1a99a532a0cba8ffb9c4fe57e9032d0fd86237e8e5",
+  "ci/vast-broker/test/helpers.js": "b86a8178f3b730b963d31da6d408820d8cc0c65ae5c8a508474595b89a062313",
+  "ci/vast-broker/workerd/auth-attempt.test.js": "f0b228fdf249649ffb706a49aa1640c441ae9cc0764cc54fe2374a89ee3c21af",
+  "ci/vast-broker/deployment.json": "b49c4ece66fd94c964bd3132b490e142ef8755e2c553c163878244d2fd2fc499",
+  "ci/vast-broker/wrangler.toml": "4be99ef0c3e89c89d8b116d34a0d6dc7541e2bbba1a90eb8d503e22e5795a83a"
+}

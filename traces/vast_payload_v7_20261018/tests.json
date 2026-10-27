@@ -1,0 +1,13 @@
+{
+  "run": "v7-payload-tests-20261023",
+  "payload_tests": 79,
+  "payload_fail": 0,
+  "initial_missing_adapter_errors": 55,
+  "stage_attribution_expected_red_failures": 2,
+  "finished_prefix_expected_red_failures": 2,
+  "canonical_pr104_tests": 72,
+  "canonical_fail": 0,
+  "black": "pass; line length 100",
+  "shellcheck": "pass",
+  "payload_owned_max_columns": 100
+}

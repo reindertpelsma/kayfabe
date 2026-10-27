@@ -1,0 +1,97 @@
+{
+  "run": "v8-cloudinit-proof-kvm-20261023",
+  "profile": "check",
+  "offers": [
+    {
+      "die": "AD102",
+      "gpu_name": "RTX_4090",
+      "compute_cap": 890,
+      "count": 1,
+      "effective_hourly": 0.5600355902777778,
+      "estimated_total": 1.689277141203704,
+      "kvm": true
+    }
+  ],
+  "verified_counts": [
+    {
+      "die": "AD102",
+      "total": 13,
+      "verified": 9
+    },
+    {
+      "die": "AD103",
+      "total": 2,
+      "verified": 1
+    },
+    {
+      "die": "AD106",
+      "total": 2,
+      "verified": 2
+    },
+    {
+      "die": "CC_120",
+      "total": 4,
+      "verified": 3
+    },
+    {
+      "die": "CC_86",
+      "total": 1,
+      "verified": 0
+    },
+    {
+      "die": "CC_89",
+      "total": 2,
+      "verified": 2
+    },
+    {
+      "die": "GA102",
+      "total": 7,
+      "verified": 3
+    },
+    {
+      "die": "GA106",
+      "total": 2,
+      "verified": 0
+    },
+    {
+      "die": "GB202",
+      "total": 7,
+      "verified": 4
+    },
+    {
+      "die": "GB203",
+      "total": 1,
+      "verified": 1
+    },
+    {
+      "die": "GB206",
+      "total": 2,
+      "verified": 1
+    }
+  ],
+  "rejected": {
+    "VERIFICATION": 20,
+    "PERFORMANCE": 7,
+    "DRIVER": 23,
+    "CPU_RAM": 11,
+    "NETWORK": 2,
+    "DIE": 24,
+    "RELIABILITY": 20,
+    "DISK_BW": 1,
+    "PRICE": 10
+  },
+  "thresholds": {
+    "reliability": 0.98,
+    "cores": 8,
+    "cpuGhz": 2,
+    "ramMb": 34360,
+    "downMbps": 200,
+    "upMbps": 50,
+    "diskMbps": 100,
+    "medianRatio": 0.5,
+    "price": 1,
+    "bandwidth_down_gb": 15,
+    "bandwidth_up_gb": 2,
+    "verified": 1
+  }
+}

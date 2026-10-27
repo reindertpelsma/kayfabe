@@ -1,0 +1,32 @@
+{
+  "run": "v8-cache-build-20261023",
+  "packages": 259,
+  "deb_bytes": 159395796,
+  "mirror": "mirrors.edge.kernel.org",
+  "probes": [
+    {
+      "host": "archive.ubuntu.com",
+      "status": 206,
+      "bytes": 8388608,
+      "seconds": 0.151085,
+      "curl_rc": 0
+    },
+    {
+      "host": "azure.archive.ubuntu.com",
+      "status": 0,
+      "bytes": 0,
+      "seconds": 10.001446,
+      "curl_rc": 28
+    },
+    {
+      "host": "mirrors.edge.kernel.org",
+      "status": 206,
+      "bytes": 8388608,
+      "seconds": 0.134668,
+      "curl_rc": 0
+    }
+  ],
+  "prefetch_workers": 6,
+  "prefetch_seconds": 6.536126375198364,
+  "builder_seconds": 269.796035528183
+}

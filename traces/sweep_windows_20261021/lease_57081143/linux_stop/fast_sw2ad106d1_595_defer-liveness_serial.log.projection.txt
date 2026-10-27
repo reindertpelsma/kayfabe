@@ -1,0 +1,73 @@
+FASTGUEST: up 8.65s
+FASTGUEST: switch_root prepared in 2.6s
+FASTGUEST: up 11.31s
+FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+FASTGUEST: insmod ecc.ko ok
+FASTGUEST: insmod nvidia.ko ok
+FASTGUEST: insmod nvidia-uvm.ko ok
+FASTGUEST: insmod wmi.ko ok
+FASTGUEST: insmod video.ko ok
+FASTGUEST: insmod nvidia-modeset.ko ok
+FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1
+FASTGUEST: ready 11.69s
+FASTGUEST: arms --defer-liveness --probe-launch-dma  deadline 166s (budget 180s, 11s already spent booting)
+info  DL defer-liveness  = GPU 0, euid 0 — does a PTE written with NVOS46_FLAGS_DEFER_TLB_INVALIDATION become live with NO invalidate on any transport?
+DEFER_SCOPE=leaf-PTE, small-page table, GA10x MMU regime, ONE board, VIRT_READ, one copy engine — ⊘ NOT a statement about big/huge pages, about page-directory entries, about writes, or about any other MMU generation
+FAULT_MARK=defer_liveness_prime arm=PLAIN(rig-control) va=0x0000006000010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #4 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Live retire=RETIRED
+info  DL test notifier   = fired=false status=0x0000 except_type=0x0
+FAULT_MARK=defer_liveness_prime arm=DEFER(the-question) va=0x0000006200010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #5 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #6 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #7 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #8 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Dead { saw: 3735880329 } retire=NOT-RETIRED(sem still 0)
+info  DL test notifier   = fired=true status=0xffff except_type=0x1f
+info  DL rescue          = the deferred copy was DEAD; issuing the invalidate now and retrying on the third channel, to say WHICH red this is
+ok    DL rescue invalidate = issued, rmStatus=0x0000
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #9 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #10 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+info  DL rescue copy     = Live retire=RETIRED
+FAULT_MARK=defer_liveness_prime arm=DEFER+INVALIDATE(known-positive) va=0x0000006400010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #11 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+info  DL prime copy      = Dead { saw: 3735880329 }
+info  DL prime notifier  = fired=true status=0xffff except_type=0x1f engine=0x0001
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #12 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00000005 runlist=0 chid=5 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #13 host_token=0x00000005 ★★★ WROTE — the store instruction executed
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #14 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  DL test copy       = Live retire=RETIRED
+info  DL test notifier   = fired=false status=0x0000 except_type=0x0
+═══ DL SUMMARY ═══
+info  DL PLAIN(rig-control)               prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006000010000") copy=LIVE rescue=None
+info  DL DEFER(the-question)              prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006200010000") copy=DEAD rescue=Some("LIVE")
+info  DL DEFER+INVALIDATE(known-positive) prime_faulted=Some(true) except=Some("0x1f") chan_survived=true pde_before_map=PDE_COVERS pte=PTE_UNMEASURED(rmStatus=0x007e) placed=Some("0x0000006400010000") copy=LIVE rescue=None
+DEFER_PRIME_FAULTS=3/3
+DEFER_RIGCTL=PASS
+DEFER_NEGCTL=PASS
+DEFER_LIVENESS=B
+RUNGCTL_defer_liveness=PASS
+RUNG_defer_liveness=PASS
+FASTGUEST: client rc=0 at 25.40s
+FASTGUEST: DONE

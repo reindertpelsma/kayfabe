@@ -1,0 +1,10 @@
+{
+  "run": "v8-kvm-20261023",
+  "sha": "ff29c4a83a1bd359352263e135573c8167c298b6",
+  "lease_limit": 1,
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "reaper_minutes": 150,
+  "hypothesis": "Verified private cache removes the dominant host dependency delay and unattended provider environment loading permits first reporting. Interactive SSH changes GRACE to MANUAL and real cron retains the exact result beyond its original grace deadline.",
+  "falsifier": "cache restore plus provision_full to READY exceeds about 900 seconds; missing required dependency; no unattended first report; MANUAL expires at the saved original grace deadline; any runner-bound result field changes."
+}

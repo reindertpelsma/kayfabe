@@ -1,0 +1,103 @@
+{
+  "upstream_revision": "12f86ae38a367b02f80d87e73d7daefa45efbe87",
+  "files": [
+    {
+      "path": "scripts/bench/native_xid_guard.py",
+      "upstream_sha256": "2e7a0c25dd07442bfe0b20519c1493ecc760fb4a0dfdb39d07d72c4711fcd490",
+      "bytes": 27755,
+      "import_sha256": "2e7a0c25dd07442bfe0b20519c1493ecc760fb4a0dfdb39d07d72c4711fcd490",
+      "normalization": "none"
+    },
+    {
+      "path": "scripts/bench/tests/test_native_xid_guard.py",
+      "upstream_sha256": "ef74a07e06f407fea7487fb26e94762ef375ed3294cd6db50247236793acaa33",
+      "bytes": 4754,
+      "import_sha256": "ef74a07e06f407fea7487fb26e94762ef375ed3294cd6db50247236793acaa33",
+      "normalization": "none"
+    },
+    {
+      "path": "scripts/bench/tests/test_native_xid_route_round2.py",
+      "upstream_sha256": "d4dc40cf22e04832710ef892ca72a9b3d23680280be0abe8b67d3fc2518adce2",
+      "bytes": 3649,
+      "import_sha256": "d4dc40cf22e04832710ef892ca72a9b3d23680280be0abe8b67d3fc2518adce2",
+      "normalization": "none"
+    },
+    {
+      "path": "scripts/bench/tests/test_guest_xid_guard.py",
+      "upstream_sha256": "3daa68f897b474c41e6ff02c8edcba012230760bd5e6b26a12925fc283692f94",
+      "bytes": 14370,
+      "import_sha256": "3daa68f897b474c41e6ff02c8edcba012230760bd5e6b26a12925fc283692f94",
+      "normalization": "none"
+    },
+    {
+      "path": "scripts/bench/tests/test_owner_copy_family_rule.py",
+      "upstream_sha256": "149f752fab836271bd088a09f99f0ce9ff4cccf07e173a254d854f352f921ca9",
+      "bytes": 3854,
+      "import_sha256": "149f752fab836271bd088a09f99f0ce9ff4cccf07e173a254d854f352f921ca9",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/native/native_expected_xids.log",
+      "upstream_sha256": "b123de969370556697ff21620621d83fe2c32592e099c5036f072b6f0189d275",
+      "bytes": 1292,
+      "import_sha256": "b123de969370556697ff21620621d83fe2c32592e099c5036f072b6f0189d275",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/native/sweep1ce11cf4_ad106_native595_defer-liveness.log",
+      "upstream_sha256": "e05f1d386d2b5867c68b7f9976ef4de49fdc33fb5355da7d9e20bd83ad5e5e5a",
+      "bytes": 14217,
+      "import_sha256": "e05f1d386d2b5867c68b7f9976ef4de49fdc33fb5355da7d9e20bd83ad5e5e5a",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57064037/native/sweep1ce11cf4_ad106_native595_missing-page-fault.log",
+      "upstream_sha256": "cce6a13db0640ab2458dbd15082dbf575e3f808fe35bb8d215a18473d57718a3",
+      "bytes": 2461,
+      "import_sha256": "cce6a13db0640ab2458dbd15082dbf575e3f808fe35bb8d215a18473d57718a3",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/native/native_xid_baseline.json",
+      "upstream_sha256": "a1d5a99ed23044f9b4bee58bb79802ff74e5ddae0bc87bce1a47abd17fc51e7d",
+      "bytes": 1433,
+      "import_sha256": "a1d5a99ed23044f9b4bee58bb79802ff74e5ddae0bc87bce1a47abd17fc51e7d",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/native/sweep74aa78ab_ad106_native595_defer-liveness.log",
+      "upstream_sha256": "93fdb2c5d873c61903eade428257a69195b909c1d9e77e4a2620672f878c5974",
+      "bytes": 14217,
+      "import_sha256": "93fdb2c5d873c61903eade428257a69195b909c1d9e77e4a2620672f878c5974",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/native/sweep74aa78ab_ad106_native595_missing-page-fault.log",
+      "upstream_sha256": "cce6a13db0640ab2458dbd15082dbf575e3f808fe35bb8d215a18473d57718a3",
+      "bytes": 2461,
+      "import_sha256": "cce6a13db0640ab2458dbd15082dbf575e3f808fe35bb8d215a18473d57718a3",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/linux_stop/kernel_xids.log",
+      "upstream_sha256": "47d1984bdfd22bdb68e3085f2afab8c7621609d2a0a0c8d11a045b7ef30a571b",
+      "bytes": 2577,
+      "import_sha256": "47d1984bdfd22bdb68e3085f2afab8c7621609d2a0a0c8d11a045b7ef30a571b",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/linux_stop/fast_sw2ad106d1_595_defer-liveness_serial.log.projection.txt",
+      "upstream_sha256": "7b8ddfe816d84d33340041cda6fabcfd157267b04c00b7d1f3f9022f84067042",
+      "bytes": 7227,
+      "import_sha256": "7b8ddfe816d84d33340041cda6fabcfd157267b04c00b7d1f3f9022f84067042",
+      "normalization": "none"
+    },
+    {
+      "path": "traces/sweep_windows_20261021/lease_57081143/linux_stop/fast_sw2ad106d1_595_defer-liveness_qemu.log.projection.txt",
+      "upstream_sha256": "99ad4a0bacd4f5e06de6ce7b4b2b43d8d92e05eb020087d40f51eea823539a93",
+      "bytes": 2011,
+      "import_sha256": "99ad4a0bacd4f5e06de6ce7b4b2b43d8d92e05eb020087d40f51eea823539a93",
+      "normalization": "none"
+    }
+  ]
+}

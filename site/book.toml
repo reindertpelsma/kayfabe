@@ -1,0 +1,20 @@
+[book]
+title = "kayfabe documentation"
+language = "en"
+src = "src"
+
+[build]
+create-missing = false
+
+[output.html]
+theme = "theme"
+git-repository-url = "https://github.com/reindertpelsma/kayfabe"
+no-section-label = true
+additional-js = ["theme/versions.js"]
+additional-css = ["theme/kayfabe.css"]
+default-theme = "light"
+preferred-dark-theme = "coal"
+copy-fonts = false
+
+[output.html.playground]
+runnable = false
