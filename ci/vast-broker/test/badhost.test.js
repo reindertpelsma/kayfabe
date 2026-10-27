@@ -39,10 +39,10 @@ for (const reason of ['host_xid', 'provision'])
       let text = summary.replaceAll('host_xid', reason);
       if (branch === 'initialization') text = text.replace('GPU unusable', 'GPU unavailable');
       if (branch === 'unusable')
-        text = text.replaceAll(/RmInitAdapter|rm_init_adapter/g, 'adapter');
+        text = text.replace('line=DRIVER_RC=8', 'line=GPU unusable').replace(/^cause .*\n/m, '');
       if (branch === 'not-ready')
         text = text
-          .replace('line=DRIVER_RC=8', 'line=NOT_READY GPU unusable')
+          .replace('line=DRIVER_RC=8', 'line=NOT_READY No devices were found')
           .replace(/^cause .*\n/m, '');
       if (branch === 'kvm')
         text = text.replace('line=DRIVER_RC=8', 'line=no /dev/kvm').replace(/^cause .*\n/m, '');
@@ -104,7 +104,18 @@ for (const variant of [1, 2]) {
   test('badhost retry requires a different known host ' + variant, async () => {
     const h = await fixture();
     h.cloud.extraOffers = [h.cloud.extraOffers[0]];
-    if (variant === 2) delete h.cloud.extraOffers[0].host_id;
+    if (variant === 2) h.cloud.extraOffers[0].machine_id = 100004;
+    assert.equal((await report(h, '', 'provider_kvm_missing', 'PROVIDER_FAULT')).status, 200);
+    const response = await h.call();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).verdict, 'PROVIDER_FAULT');
+    assert.equal(h.cloud.created.length, 1);
+  });
+  test('badhost retry rejects unknown-host offer ' + variant, async () => {
+    const h = await fixture();
+    h.cloud.extraOffers = [h.cloud.extraOffers[0]];
+    if (variant === 1) h.cloud.extraOffers[0].host_id = null;
+    else delete h.cloud.extraOffers[0].host_id;
     assert.equal((await report(h, '', 'provider_kvm_missing', 'PROVIDER_FAULT')).status, 200);
     const response = await h.call();
     assert.equal(response.status, 200);
@@ -146,8 +157,10 @@ for (const change of [
         'cuda_guest result=NOT_RUN',
         'cuda_guest rc=1 duration_ms=1 result=FAIL reason=host_xid',
       );
-    if (change === 'no-driver-proof') text = text.replace('DRIVER_RC=8', 'DRIVER_RC=0');
-    if (change === 'wrong-driver-code') text = text.replace('DRIVER_RC=8', 'DRIVER_RC=3');
+    if (change === 'no-driver-proof')
+      text = text.replace('DRIVER_RC=8', 'DRIVER_RC=0').replace('GPU unusable', 'GPU unavailable');
+    if (change === 'wrong-driver-code')
+      text = text.replace('DRIVER_RC=8', 'DRIVER_RC=3').replace('GPU unusable', 'GPU unavailable');
     if (change === 'no-fault-proof') text = text.replace(/^cause .*\n/m, '');
     if (change === 'truncated') text = text.replace('KF_FINAL_SUMMARY_END', '');
     if (change === 'truncated-prefix') text = text.replace('KF_FINAL_SUMMARY_BEGIN', 'incomplete');
