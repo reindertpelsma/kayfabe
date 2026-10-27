@@ -469,10 +469,19 @@ def run_bounded(command, soft_deadline_ms, output, progress_files):
     positions = {}
     pending = {}
     failure = False
+    provider_text = ""
+    provider_seen = False
+    provider_command = (
+        len(command) == 6
+        and command[0] == "bash"
+        and Path(command[1]).name == "host_xid_watch.sh"
+        and command[3:5] == ["--", "bash"]
+        and Path(command[5]).name == "provision_full.sh"
+    )
     child = None
 
     def forward(path):
-        nonlocal failure
+        nonlocal failure, provider_text, provider_seen
         try:
             with open(path, "rb") as log:
                 log.seek(positions.get(str(path), 0))
@@ -484,6 +493,16 @@ def run_bounded(command, soft_deadline_ms, output, progress_files):
             return
         decoded = data.decode("utf-8", errors="replace")
         print(decoded, end="", flush=True)
+        if provider_command:
+            provider_text = (provider_text + decoded)[-65536:]
+            # provision_full exits after driver status 8, but diagnostics and the
+            # watcher receipt can arrive in later chunks. Classification is final
+            # only after stage_grade checks the complete receipt and fault text.
+            provider_seen = (
+                provider_seen
+                or provider_fault(provider_text) is not None
+                or re.search(r"^DRIVER_RC=8$", provider_text, re.M) is not None
+            )
         value = pending.get(str(path), "") + decoded
         lines = value.split("\n")
         pending[str(path)] = lines.pop()[-65536:]
@@ -501,7 +520,10 @@ def run_bounded(command, soft_deadline_ms, output, progress_files):
                 if STOP or int(time.time() * 1000) >= soft_deadline_ms:
                     _stop(child)
                     return 124
-                if failure or (
+                # A known failed provider provision must finish its watcher receipt.
+                # Deadline, stop, and explicit Xid failure still stop immediately;
+                # stage_grade still requires complete, clean watcher evidence.
+                if (failure and not provider_seen) or (
                     os.environ.get("KF_PAYLOAD_XID_FAILED")
                     and Path(os.environ["KF_PAYLOAD_XID_FAILED"]).exists()
                 ):
