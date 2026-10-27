@@ -19,8 +19,8 @@ Yes, that is the point of the design. The host driver stays loaded on the card a
 
 ### Why not VFIO passthrough?
 
-With VFIO one VM owns the whole GPU and the host does not keep it (README comparison). Kayfabe lets the host and the guest use the GPU together. What you give up is hardware-enforced isolation by an IOMMU: kayfabe's boundary is the GPU's own memory management unit plus kayfabe's checks, and it has not been audited (see the IOMMU answer below and *Is it safe to run untrusted guests?*). VFIO is also the native reference the README measures kayfabe against.
-<!-- src: README.md comparison table and Unigine Heaven table; this file, IOMMU answer; docs/howto/security.md -->
+With VFIO one VM owns the whole GPU and the host does not keep it (README comparison). Kayfabe lets the host and the guest use the GPU together. What you give up is hardware-enforced isolation by an IOMMU: kayfabe's boundary is the GPU's own memory management unit plus kayfabe's checks, and it has not been audited (see the IOMMU answer below and *Is it safe to run untrusted guests?*). VFIO is also the native reference the README measures kayfabe against. Whether VFIO is safe for untrusted guests is itself contested: Microsoft's Discrete Device Assignment documentation says "You should only use Discrete Device Assignment where the tenants of the VMs are trusted", and Xen's `SUPPORT.md` says it is "generally not safe to use this feature to expose a physical device to completely untrusted guests".
+<!-- src: README.md comparison table; docs/PRODUCT_POSITIONING.md section 2 (verbatim Microsoft DDA and Xen SUPPORT.md quotes); this file, IOMMU answer; docs/howto/security.md -->
 
 ### Why not virtio-gpu (Venus, virgl or a native context)?
 
