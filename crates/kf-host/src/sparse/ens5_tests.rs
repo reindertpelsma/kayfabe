@@ -162,11 +162,13 @@ fn ens5_unmap_at_far_edge_reenables_sparse_admission() {
 fn ens5_hard_error_cached(failure: usize) {
     let (mut t, r) = (tree(100), Rm::new());
     r.fail.set(failure);
-    assert!(t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN).is_err());
+    // ENS6: the RM refusal is a counted closed fallback (not a hard error), still cached.
+    assert_eq!(t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN), Ok(false));
     let calls = r.calls.get();
     assert_eq!(t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN), Ok(false));
     assert_eq!(r.calls.get(), calls);
-    assert_eq!(t.stats.admit_hard_err, 1);
+    assert_eq!(t.stats.admit_hard_err, 0);
+    assert_eq!(t.stats.rm_declined, 1);
     assert_eq!(t.stats.negative_hits, 1);
 }
 #[test]
@@ -310,7 +312,7 @@ fn ens5_unaccepted_error_not_published(failure: usize) {
     let (mut t, r) = (tree(100), Rm::new());
     let va = LO + NORMAL_GRAIN;
     r.fail.set(failure);
-    assert!(t.admit(&r, va, SPARSE_GRAIN).is_err());
+    assert_eq!(t.admit(&r, va, SPARSE_GRAIN), Ok(false));
     // An unrelated later mapping/removal cannot accept the refused run on its behalf.
     t.mark(LO + 3 * NORMAL_GRAIN, PAGE, false);
     t.retry(&r).unwrap();

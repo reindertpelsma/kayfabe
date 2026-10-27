@@ -168,39 +168,36 @@ mod ens6 {
 }
 
 #[test]
-fn ens6_speculative_refine_above_the_reserve_issues_no_rm_verb() {
+fn ens6_speculative_refine_above_the_reserve_with_nothing_to_recycle_issues_no_rm_verb() {
     let (mut t, m, coarse) = ens6::tree(1000, 990);
+    for i in 0..990u64 {
+        t.mark(LO + i * NORMAL_GRAIN, PAGE, true); // live demand: nothing is recyclable
+    }
     let before = t.blocks.len();
-    assert!(
-        before + 2 + speculative_reserve(1000) > 1000,
-        "setup is above the mark"
-    );
-    let pieces = t
-        .prepare_map(&m, 99, coarse + 7 * NORMAL_GRAIN, PAGE, true)
-        .unwrap();
+    assert!(before + 2 + speculative_reserve(1000) > 1000, "setup is above the mark");
+    let pieces = t.prepare_map(&m, 99, coarse + 7 * NORMAL_GRAIN, PAGE, true).unwrap();
     assert_eq!(pieces.len(), 1);
     assert_eq!(t.stats.coarse_maps, 1);
     assert_eq!(t.stats.speculative_skipped, 1);
-    assert_eq!(
-        m.verbs(),
-        0,
-        "a speculative refinement above the mark must not touch RM"
-    );
+    assert_eq!(m.verbs(), 0, "a speculative refinement above the mark must not touch RM");
     assert_eq!(t.blocks.len(), before);
 }
 
 #[test]
-fn ens6_a_thousand_plain_maps_at_the_cap_cost_no_layout_verbs() {
+fn ens6_a_thousand_plain_maps_at_the_cap_with_a_refusing_rm_cost_one_probe() {
     let (mut t, m, coarse) = ens6::tree(1000, 990);
-    // 7330: RM refused the merged 4 MiB reservation, so every map churned and failed.
+    // 7330: RM refused the merged 4 MiB reservation, so every map churned and failed (5 verbs
+    // and a refusal per map, ~120 000 refusals). One refusal must silence the rest.
     m.refuse_when(|_, len, sparse| !sparse && len == 2 * NORMAL_GRAIN);
     for i in 0..1000u64 {
-        let va = coarse + (i * 3 + 1) * NORMAL_GRAIN;
+        let va = coarse + ((i * 3 + 1) % 2000) * NORMAL_GRAIN;
         t.prepare_map(&m, 99, va, PAGE, true).unwrap();
     }
-    assert_eq!(t.stats.coarse_maps, 1000);
-    assert_eq!(m.verbs(), 0, "no release/reserve ping-pong for plain maps");
-    assert_eq!(t.stats.refused, 0);
+    // The first few maps still fit under the cap and are refined; then one merge is refused.
+    assert!(t.stats.coarse_maps >= 990, "{}", t.stats.coarse_maps);
+    assert_eq!(t.stats.refused, 1, "asked once, then backing off");
+    assert!(m.verbs() <= 40, "one probe, not a ping-pong: {} verbs", m.verbs());
+    assert!(!t.poisoned);
 }
 
 #[test]

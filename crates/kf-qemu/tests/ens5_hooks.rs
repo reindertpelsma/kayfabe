@@ -55,7 +55,9 @@ fn authored_native_mapping_uses_the_tested_rollback_helper() {
 #[test]
 fn actual_sparse_callbacks_use_the_placement_exclusion_helper() {
     assert!(compact(GATE).contains("Some(with_placement(&self.placement_gate,||{"));
-    assert!(GATE.contains("f(&mut tree, &SpaceOps { rm: self, space })"));
+    // ENS6: the callback runs on the slice-charging wrapper around the real host verbs.
+    assert!(GATE.contains("SpaceOps { rm: self, space }"));
+    assert!(GATE.contains("f(&mut tree, &ops)"));
 }
 #[test]
 fn placement_guard_surrounds_the_native_callback() {

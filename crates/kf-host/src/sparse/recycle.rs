@@ -30,12 +30,28 @@ impl Reservations {
             self.pair(key);
         }
     }
-    // At most4 pairs (12 RM verbs without repair), even when the guest filled every slot.
-    // Both objects are empty/normal; faults stay faults while the placement lock excludes
-    // unrelated allocations. An RM failure restores both owners or poisons placement.
-    pub(super) fn recycle(&mut self, ops: &dyn Ops, spare: usize) -> Result<(), RmError> {
-        for _ in 0..4 {
-            if self.blocks.len().saturating_add(spare) <= self.limit {
+    // Only when the tree cannot take `spare` more blocks, and then in ONE batch: it frees
+    // `spare` plus `recycle_headroom` slots (hysteresis), so the next admissions do not recycle
+    // again. Each merge is 3 RM verbs (release a, release b, reserve both). Bounded by
+    // `MAX_PAIRS`, the time slice and the refusal back-off; both objects are empty/normal, so
+    // faults stay faults while the placement lock excludes unrelated allocations. An RM failure
+    // restores both owners (or poisons placement); a `NoMemory` refusal is a counted fallback
+    // that backs off, not an error.
+    pub(super) fn recycle(
+        &mut self,
+        ops: &dyn Ops,
+        spare: usize,
+        demand: bool,
+    ) -> Result<(), RmError> {
+        if self.blocks.len().saturating_add(spare) <= self.limit {
+            return Ok(());
+        }
+        let target = spare.saturating_add(recycle_headroom(self.limit));
+        for _ in 0..MAX_PAIRS {
+            if self.blocks.len().saturating_add(target) <= self.limit {
+                break;
+            }
+            if self.mergeable.is_empty() || !self.layout_ok(ops, demand) {
                 break;
             }
             let Some(key) = self.mergeable.pop_first() else {
@@ -80,6 +96,7 @@ impl Reservations {
             };
             match result {
                 Ok(handle) => {
+                    self.note_success();
                     self.stats.made = self.stats.made.saturating_add(1);
                     for old in &originals {
                         self.blocks.remove(&old.lo);
@@ -117,6 +134,10 @@ impl Reservations {
                     }
                     self.cache.touch(lo, hi);
                     self.reindex(lo, hi);
+                    if e == RmError::NoMemory && !self.poisoned {
+                        self.note_refusal();
+                        return Ok(());
+                    }
                     return Err(e);
                 }
             }

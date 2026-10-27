@@ -68,6 +68,8 @@ pub(super) struct Negative {
     blocks: usize,
     pub(super) overflow: bool,
     pub(super) retry: bool,
+    /// Retry tick from which a decision taken on a host RM refusal is asked again (0 = none).
+    due: u64,
 }
 #[derive(Debug, Default)]
 pub(super) struct Cache {
@@ -88,19 +90,20 @@ impl Cache {
         }
         self.changes.push_back((self.epoch, lo, hi));
     }
-    pub(super) fn valid(&self, n: Negative, blocks: usize) -> bool {
+    pub(super) fn valid(&self, n: Negative, blocks: usize, tick: u64) -> bool {
         n.blocks == blocks
+            && (n.due == 0 || tick < n.due)
             && self.changes.front().is_none_or(|c| n.epoch >= c.0 - 1)
             && !self
                 .changes
                 .iter()
                 .any(|&(epoch, lo, hi)| epoch > n.epoch && lo < n.hi && n.lo < hi)
     }
-    pub(super) fn get(&self, key: (u64, u64), blocks: usize) -> Option<Negative> {
+    pub(super) fn get(&self, key: (u64, u64), blocks: usize, tick: u64) -> Option<Negative> {
         self.entries
             .get(&key)
             .copied()
-            .filter(|&n| self.valid(n, blocks))
+            .filter(|&n| self.valid(n, blocks, tick))
     }
     pub(super) fn insert(
         &mut self,
@@ -110,6 +113,7 @@ impl Cache {
         blocks: usize,
         overflow: bool,
         retry: bool,
+        due: u64,
     ) -> bool {
         let evicted = self.entries.len() >= NEGATIVES && !self.entries.contains_key(&key);
         if evicted {
@@ -124,6 +128,7 @@ impl Cache {
                 blocks,
                 overflow,
                 retry,
+                due,
             },
         );
         evicted
@@ -131,6 +136,12 @@ impl Cache {
     pub(super) fn accept(&mut self, key: (u64, u64)) {
         if let Some(n) = self.entries.get_mut(&key) {
             n.retry = true;
+        }
+    }
+    /// Force the next admission of `key` to re-run, keeping the remembered intent.
+    pub(super) fn expire(&mut self, key: (u64, u64)) {
+        if let Some(n) = self.entries.get_mut(&key) {
+            n.blocks = usize::MAX;
         }
     }
     pub(super) fn capacity_changed(&mut self) {
@@ -159,10 +170,19 @@ impl Cache {
                     n.blocks,
                     n.overflow,
                     n.retry,
+                    n.due,
                 );
             }
             if hi < end {
-                self.insert((hi, end - hi), n.lo, n.hi, n.blocks, n.overflow, n.retry);
+                self.insert(
+                    (hi, end - hi),
+                    n.lo,
+                    n.hi,
+                    n.blocks,
+                    n.overflow,
+                    n.retry,
+                    n.due,
+                );
             }
         }
         self.touch(lo, hi);

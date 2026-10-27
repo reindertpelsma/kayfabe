@@ -266,7 +266,10 @@ fn normal_object_exhaustion_never_places_a_backing_in_a_coarse_block() {
 fn restore(failure: usize) {
     let (mut t, r) = (tree(100), Rm::new());
     r.fail.set(failure);
-    assert!(t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN).is_err());
+    // ENS6: a host RM NoMemory is a counted closed fallback, not a hard error.
+    assert_eq!(t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN), Ok(false));
+    assert_eq!(t.stats.admit_hard_err, 0);
+    assert_eq!(t.stats.rm_declined, 1);
     assert!(!t.poisoned);
     assert_eq!(t.stats.refused, 1);
     for va in (LO..HI).step_by(SPARSE_GRAIN as usize) {
@@ -360,7 +363,9 @@ fn switch_is_default_off_and_requires_exact_one() {
 fn late_admission_refusal(failure: usize) {
     let (mut t, r) = (tree(100), Rm::new());
     r.fail.set(failure);
-    assert!(t.admit(&r, LO, 2 * SPARSE_GRAIN).is_err());
+    // ENS6: a host RM NoMemory is a counted closed fallback, not a hard error.
+    assert_eq!(t.admit(&r, LO, 2 * SPARSE_GRAIN), Ok(false));
+    assert_eq!(t.stats.admit_hard_err, 0);
     assert!(!t.poisoned);
     for p in (LO..LO + 2 * SPARSE_GRAIN).step_by(PAGE as usize) {
         assert_eq!(
@@ -844,7 +849,10 @@ fn a_sparse_run_over_a_block_lost_to_a_failed_repair_makes_no_host_call() {
     let _ = t.route_map(&r, RANGE, LO + 3 * NORMAL_GRAIN, PAGE, true);
     r.fail_from.set(0);
     let calls = r.calls.get();
-    assert!(t.admit(&r, LO + 3 * NORMAL_GRAIN, SPARSE_GRAIN).is_err());
+    // ENS6: the refusal that lost the block also started a back-off, which answers first
+    // with the closed fallback; either way no host call is made.
+    let answer = t.admit(&r, LO + 3 * NORMAL_GRAIN, SPARSE_GRAIN);
+    assert!(answer.is_err() || answer == Ok(false), "{answer:?}");
     assert_eq!(r.calls.get(), calls);
 }
 #[test]

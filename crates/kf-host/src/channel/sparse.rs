@@ -64,7 +64,16 @@ impl HostRm {
             }
             let mut tree = layout.lock().map_err(|_| RmError::NoMemory)?;
             let before = tree.stats;
-            let result = f(&mut tree, &SpaceOps { rm: self, space });
+            // Every reservation verb of this call is charged to the refresh's slice, and
+            // optional layout work stops starting when it is spent (ENS6).
+            let base = SpaceOps { rm: self, space };
+            let clock = crate::sparse::slice::mono_ns;
+            let ops = crate::sparse::slice::Sliced {
+                inner: &base,
+                slice: &self.slice,
+                clock: &clock,
+            };
+            let result = f(&mut tree, &ops);
             let after = tree.counters();
             for (counter, delta) in self.sparse_totals.iter().zip(after.deltas(before)) {
                 let _ = counter.try_update(Relaxed, Relaxed, |n| Some(n.saturating_add(delta)));
@@ -76,6 +85,17 @@ impl HostRm {
             }
             result
         }))
+    }
+
+    /// A new refresh begins (the VA thread, `begin_refresh`): the layout time slice is renewed.
+    pub fn begin_layout_slice(&self) {
+        self.slice.renew();
+    }
+
+    /// `(verbs, ns)` of reservation verbs in the busiest refresh so far (the running one included).
+    #[must_use]
+    pub fn layout_slice_peak(&self) -> (u32, u64) {
+        self.slice.peak()
     }
 
     pub(super) fn initial_sparse_roots(

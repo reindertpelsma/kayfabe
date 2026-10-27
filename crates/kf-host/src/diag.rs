@@ -2,7 +2,11 @@
 
 use std::cell::Cell;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Instant;
+
+/// Session-wide verb counters: calls, wall ns, maximum single call ns.
+static GLOBAL: [[AtomicU64; 3]; VERBS] = [const { [const { AtomicU64::new(0) }; 3] }; VERBS];
 
 thread_local! {
     static COUNTERS: Cell<Snapshot> = Cell::new(Snapshot::default());
@@ -73,9 +77,16 @@ pub struct Snapshot {
 }
 
 /// Session-wide verb totals, read with relaxed atomics only (safe for the heartbeat).
+/// `work`/`last_ns` are not tracked session-wide and read 0.
 #[must_use]
 pub fn verb_totals() -> [Cost; VERBS] {
-    [Cost::default(); VERBS]
+    let mut out = [Cost::default(); VERBS];
+    for (cost, atoms) in out.iter_mut().zip(&GLOBAL) {
+        cost.calls = atoms[0].load(Relaxed);
+        cost.ns = atoms[1].load(Relaxed);
+        cost.max_ns = atoms[2].load(Relaxed);
+    }
+    out
 }
 
 /// Explicit opt-in, sampled once.
@@ -98,6 +109,11 @@ impl Snapshot {
     /// Saturating interval counters; last/max remain thread-level gauges.
     pub fn since(mut self, before: Self) -> Self {
         for (now, old) in self.costs.iter_mut().zip(before.costs) {
+            now.calls = now.calls.saturating_sub(old.calls);
+            now.ns = now.ns.saturating_sub(old.ns);
+            now.work = now.work.saturating_sub(old.work);
+        }
+        for (now, old) in self.verbs.iter_mut().zip(before.verbs) {
             now.calls = now.calls.saturating_sub(old.calls);
             now.ns = now.ns.saturating_sub(old.ns);
             now.work = now.work.saturating_sub(old.work);
@@ -168,14 +184,22 @@ pub fn admission(ns: u64) {
 
 /// The verb class of an object allocation of `class`.
 #[must_use]
-pub(crate) fn alloc_verb(_class: u32) -> Verb {
-    Verb::AllocOther
+pub(crate) fn alloc_verb(class: u32) -> Verb {
+    if class == crate::channel::NV50_MEMORY_VIRTUAL {
+        Verb::ReserveVa
+    } else {
+        Verb::AllocOther
+    }
 }
 
 /// The verb class of a control `cmd`.
 #[must_use]
-pub(crate) fn control_verb(_cmd: u32) -> Verb {
-    Verb::Control
+pub(crate) fn control_verb(cmd: u32) -> Verb {
+    if cmd == crate::channel::NV2080_CTRL_CMD_DMA_INVALIDATE_TLB {
+        Verb::Invalidate
+    } else {
+        Verb::Control
+    }
 }
 
 /// Time precisely the supplied ioctl as `verb`; result and errors pass through unchanged.
@@ -183,8 +207,37 @@ pub(crate) fn rm_verb<T>(verb: Verb, f: impl FnOnce() -> T) -> T {
     rm_verb_with(true, verb, f)
 }
 
-fn rm_verb_with<T>(_active: bool, _verb: Verb, f: impl FnOnce() -> T) -> T {
-    rm_with(true, false, f)
+fn rm_verb_with<T>(active: bool, verb: Verb, f: impl FnOnce() -> T) -> T {
+    if !active {
+        return f();
+    }
+    let start = Instant::now();
+    let out = f();
+    let ns = u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    let phase = if verb == Verb::Invalidate {
+        Phase::Invalidate
+    } else {
+        Phase::Rm
+    };
+    record(phase, ns, 0);
+    record_verb(verb, ns);
+    out
+}
+
+fn record_verb(verb: Verb, ns: u64) {
+    COUNTERS.with(|cell| {
+        let mut s = cell.get();
+        let c = &mut s.verbs[verb as usize];
+        c.calls = c.calls.saturating_add(1);
+        c.ns = c.ns.saturating_add(ns);
+        c.last_ns = ns;
+        c.max_ns = c.max_ns.max(ns);
+        cell.set(s);
+    });
+    let atoms = &GLOBAL[verb as usize];
+    atoms[0].fetch_add(1, Relaxed);
+    atoms[1].fetch_add(ns, Relaxed);
+    atoms[2].fetch_max(ns, Relaxed);
 }
 
 /// Time precisely the supplied ioctl; result and errors pass through unchanged.

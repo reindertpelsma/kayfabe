@@ -47,7 +47,10 @@ mod cost {
         let mut i = 0;
         while t.blocks.len() + 2 <= blocks {
             let va = BASE + (2 * i + 1) * NORMAL_GRAIN;
-            t.route_map(&rm, 9, va, PAGE, true).expect("plain map");
+            // ENS6: `route_map(refine)` stops refining at the high-water mark by design, so
+            // the fixture fills the tree through the demand path (`normal`) and marks the map.
+            t.normal(&rm, va, PAGE).expect("refine");
+            t.mark(va, PAGE, true);
             i += 1;
         }
         t.limit = t.blocks.len(); // exactly at the cap

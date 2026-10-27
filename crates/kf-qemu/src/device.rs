@@ -2859,6 +2859,41 @@ impl Device {
                 slow.by_cost,
                 kf_mem::recent::summary(),
             );
+        // ENS6: host RM time by verb class, session-wide: calls/total us/max single call us.
+        let timing = {
+            let v = kf_host::diag::verb_totals();
+            let f = |i: usize| (v[i].calls, v[i].ns / 1000, v[i].max_ns / 1000);
+            let (re, ao, fr, ma, um, co, iv, ot) = (f(0), f(1), f(2), f(3), f(4), f(5), f(6), f(7));
+            timing
+                + &format!(
+                    " rmverbs[reserve={}/{}/{} alloc_other={}/{}/{} free={}/{}/{} map={}/{}/{} \
+                     unmap={}/{}/{} control={}/{}/{} invalidate={}/{}/{} other={}/{}/{}]",
+                    re.0,
+                    re.1,
+                    re.2,
+                    ao.0,
+                    ao.1,
+                    ao.2,
+                    fr.0,
+                    fr.1,
+                    fr.2,
+                    ma.0,
+                    ma.1,
+                    ma.2,
+                    um.0,
+                    um.1,
+                    um.2,
+                    co.0,
+                    co.1,
+                    co.2,
+                    iv.0,
+                    iv.1,
+                    iv.2,
+                    ot.0,
+                    ot.1,
+                    ot.2,
+                )
+        };
         let sparse = if self.rm.sparse_twin() {
             let s = self.rm.sparse_totals();
             let kf_host::sparse::Census {
@@ -2871,7 +2906,9 @@ impl Device {
                  refused={} overflow={} coarse_maps={} admit_calls={} admit_hard_err={} \
                  admit_decline={} admit_ns_total={} admit_ns_max={} negative_hits={} \
                  negative_evicted={} occupancy_capped={} peak_blocks={} \
-                 live_blocks={} admit_blocks={}]",
+                 live_blocks={} admit_blocks={} rm_declined={} backoff_skips={} \
+                 slice_deferred={} speculative_skipped={} window_hits={} \
+                 layout_refresh_peak_us={} layout_refresh_peak_verbs={}]",
                 va.sparse_placed,
                 va.sparse_retired,
                 va.sparse_unhonoured_bytes,
@@ -2892,6 +2929,13 @@ impl Device {
                 s.peak_blocks,
                 s.live_blocks,
                 s.admit_blocks,
+                s.rm_declined,
+                s.backoff_skips,
+                s.slice_deferred,
+                s.speculative_skipped,
+                s.window_hits,
+                self.rm.layout_slice_peak().1 / 1000,
+                self.rm.layout_slice_peak().0,
             );
             counters
                 + &format!(

@@ -22,8 +22,9 @@ fn apply_cost_is_finished_after_apply_and_before_vahist_printing() {
 }
 #[test]
 fn rm_ioctl_and_invalidate_category_are_both_measured() {
-    assert!(HOST.contains("diag::rm(false, ||"));
-    assert!(HOST.contains("cmd == NV2080_CTRL_CMD_DMA_INVALIDATE_TLB"));
+    assert!(HOST.contains("diag::rm_verb("));
+    assert!(HOST.contains("diag::rm_verb(diag::control_verb(cmd)"));
+    assert!(DIAG.contains("cmd == crate::channel::NV2080_CTRL_CMD_DMA_INVALIDATE_TLB"));
 }
 #[test]
 fn sparse_reservation_alloc_free_map_and_unmap_reach_timed_ioctls() {
@@ -38,11 +39,11 @@ fn sparse_reservation_alloc_free_map_and_unmap_reach_timed_ioctls() {
             body.split(".map_err(|e| ioctl_error(&e))?")
                 .next()
                 .unwrap()
-                .contains("diag::rm("),
+                .contains("diag::rm_verb("),
             "{name}"
         );
     }
-    assert!(HOST.contains("cmd == NV2080_CTRL_CMD_DMA_INVALIDATE_TLB"));
+    assert!(DIAG.contains("cmd == crate::channel::NV2080_CTRL_CMD_DMA_INVALIDATE_TLB"));
 }
 #[test]
 fn sparse_admission_clone_and_restore_scan_have_separate_costs() {

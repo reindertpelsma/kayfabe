@@ -1695,6 +1695,8 @@ impl MapTarget for GpuMirror {
     }
     fn begin_refresh(&self) {
         self.bv.begin_refresh();
+        // ENS6: a new refresh gets a fresh layout time slice before any sparse work starts.
+        self.bv.vas.rm.begin_layout_slice();
         if let Err(e) = self.bv.vas.rm.retry_sparse(self.bv.vas.space) {
             kf_mem::recent::note(
                 kf_mem::recent::Kind::SparseRetry,

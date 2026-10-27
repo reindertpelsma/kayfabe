@@ -20,6 +20,12 @@ pub const SPARSE_GRAIN: u64 = 64 << 10;
 /// Hard per-space bound on reservation objects.
 pub const BLOCK_LIMIT: usize = 8192;
 const PAGE: u64 = 4096;
+/// Refused sparse windows remembered per space.
+const WINDOWS: usize = 64;
+/// Retry ticks a refused window stays remembered.
+const WINDOW_TTL: u64 = 4096;
+/// Empty adjacent pairs one recycle merges at most (3 RM verbs each).
+const MAX_PAIRS: usize = 256;
 /// Blocks kept free for explicit sparse admission: speculative plain-map refinement (which
 /// only prepares a later carve) stops this far below the limit, and costs no RM verb there.
 pub(crate) const fn speculative_reserve(limit: usize) -> usize {
@@ -60,9 +66,9 @@ pub(crate) fn poison_refuses(poisoned: bool, routing: bool) -> bool {
 pub(crate) trait Ops {
     fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError>;
     fn release(&self, handle: u32) -> Result<(), RmError>;
-    /// Whether this refresh may START more optional layout work (the time slice,
-    /// [`slice::Slice`]). Restoring a half-done replacement never asks: it must finish.
-    fn budget_left(&self) -> bool {
+    /// Whether this refresh may START more layout work of this kind (the time slice,
+    /// [`slice::Slice`]; `demand` is an explicit sparse admission, else optional work). Restoring a half-done replacement never asks: it must finish.
+    fn budget_left(&self, _demand: bool) -> bool {
         true
     }
 }
@@ -194,6 +200,18 @@ pub(crate) struct Reservations {
     retry_dirty: BTreeSet<u64>,
     mergeable: BTreeSet<u64>,
     ceiling: u64,
+    /// Retry calls so far: the clock of the refusal back-off and of the refused windows.
+    tick: u64,
+    backoff_until: u64,
+    backoff_step: u64,
+    /// Sparse tiles host RM refused, `lo -> (hi, tick)`: not asked again (bounded).
+    refused: BTreeMap<u64, (u64, u64)>,
+    /// Sparse blocks with neither intent nor live pages, waiting to become normal again.
+    cleanup: BTreeSet<u64>,
+    /// Set when the time slice or a back-off (not the object budget) stopped this call.
+    deferred: bool,
+    /// Set when host RM refused a reservation during this call.
+    rm_refused: bool,
 }
 
 impl Reservations {
@@ -234,6 +252,13 @@ impl Reservations {
             retry_dirty: BTreeSet::new(),
             mergeable: BTreeSet::new(),
             ceiling: guest.iter().map(|g| g.hi).max().unwrap_or(0),
+            tick: 0,
+            backoff_until: 0,
+            backoff_step: 0,
+            refused: BTreeMap::new(),
+            cleanup: BTreeSet::new(),
+            deferred: false,
+            rm_refused: false,
         };
         tree.reindex(0, u64::MAX);
         tree
@@ -262,6 +287,87 @@ impl Reservations {
             return Err(RmError::NoMemory);
         }
         Ok(())
+    }
+
+    /// Whether layout RM work of this kind may start now. A running refusal back-off or a
+    /// spent time slice defers it (`deferred`): nothing is lost, the caller keeps what it has
+    /// and a later refresh continues.
+    fn layout_ok(&mut self, ops: &dyn Ops, demand: bool) -> bool {
+        if self.tick < self.backoff_until {
+            self.stats.backoff_skips = self.stats.backoff_skips.saturating_add(1);
+            self.deferred = true;
+            return false;
+        }
+        if !ops.budget_left(demand) {
+            self.stats.slice_deferred = self.stats.slice_deferred.saturating_add(1);
+            self.deferred = true;
+            return false;
+        }
+        true
+    }
+
+    /// Host RM said `NoMemory` to a reservation: a counted closed fallback, and layout RM work
+    /// is silenced for a doubling number of ticks so a refusing RM is not asked per walk.
+    fn note_refusal(&mut self) {
+        self.stats.rm_declined = self.stats.rm_declined.saturating_add(1);
+        self.rm_refused = true;
+        self.backoff_step = if self.backoff_step == 0 {
+            BACKOFF_FIRST
+        } else {
+            self.backoff_step.saturating_mul(2).min(BACKOFF_MAX)
+        };
+        self.backoff_until = self.tick.saturating_add(self.backoff_step);
+    }
+
+    fn note_success(&mut self) {
+        if self.tick >= self.backoff_until {
+            self.backoff_step = 0;
+        }
+    }
+
+    fn window_hit(&self, tile: u64) -> bool {
+        self.refused
+            .range(..=tile)
+            .next_back()
+            .is_some_and(|(_, &(hi, at))| tile < hi && self.tick.saturating_sub(at) < WINDOW_TTL)
+    }
+
+    fn remember_refused(&mut self, lo: u64, hi: u64) {
+        let (mut lo, mut hi) = (lo, hi);
+        if let Some((&plo, &(phi, _))) = self.refused.range(..=lo).next_back()
+            && phi >= lo
+        {
+            self.refused.remove(&plo);
+            lo = plo;
+            hi = hi.max(phi);
+        }
+        self.refused.insert(lo, (hi, self.tick));
+        while self.refused.len() > WINDOWS {
+            self.refused.pop_first();
+        }
+    }
+
+    /// Whether `normal` has any coarse reservation to split in `[va, end)`.
+    fn needs_split(&self, va: u64, end: u64) -> bool {
+        let mut cur = va;
+        while cur < end {
+            if let Some(key) = self.key(cur) {
+                let Some(b) = self.blocks.get(&key) else {
+                    return false;
+                };
+                if b.hi - b.lo > NORMAL_GRAIN && !b.sparse {
+                    return true;
+                }
+                cur = b.hi.min(end);
+            } else {
+                cur = self
+                    .blocks
+                    .range(cur..)
+                    .next()
+                    .map_or(end, |(&lo, _)| lo.min(end));
+            }
+        }
+        false
     }
 
     fn key(&self, va: u64) -> Option<u64> {
@@ -359,6 +465,10 @@ impl Reservations {
                 }
                 Err(e) => {
                     self.stats.refused = self.stats.refused.saturating_add(1);
+                    if e == RmError::NoMemory {
+                        self.note_refusal();
+                        self.declined = true;
+                    }
                     for child in &made {
                         if ops.release(child.handle).is_err() {
                             self.poisoned = true;
@@ -379,6 +489,7 @@ impl Reservations {
                 }
             }
         }
+        self.note_success();
         self.blocks.remove(&key);
         self.retry_dirty.remove(&key);
         self.mergeable.remove(&key);
@@ -394,8 +505,22 @@ impl Reservations {
     }
 
     pub(crate) fn normal(&mut self, ops: &dyn Ops, va: u64, len: u64) -> Result<(), RmError> {
+        self.normal_with(ops, va, len, true)
+    }
+
+    fn normal_with(
+        &mut self,
+        ops: &dyn Ops,
+        va: u64,
+        len: u64,
+        demand: bool,
+    ) -> Result<(), RmError> {
         let end = Self::end(va, len)?;
-        self.recycle(ops, 2)?;
+        // Nothing to split: no recycling, no budget check, no RM verb.
+        if !self.needs_split(va, end) {
+            return Ok(());
+        }
+        self.recycle(ops, 2, demand)?;
         self.budget(((end - 1) / NORMAL_GRAIN - va / NORMAL_GRAIN + 1) as usize)?;
         let mut cur = va;
         while cur < end {
@@ -405,6 +530,9 @@ impl Reservations {
                 if b.hi - b.lo > NORMAL_GRAIN && !b.sparse {
                     let lo = (cur / NORMAL_GRAIN * NORMAL_GRAIN).max(b.lo);
                     let hi = lo.saturating_add(NORMAL_GRAIN).min(b.hi);
+                    if !self.layout_ok(ops, demand) {
+                        return Err(RmError::NoMemory);
+                    }
                     self.replace(ops, key, lo, hi, false)?;
                     cur = hi.min(end);
                 } else {
@@ -432,6 +560,9 @@ impl Reservations {
             return Ok(false);
         }
         if !Self::wanted(b, va, va + SPARSE_GRAIN) {
+            return Ok(false);
+        }
+        if !self.layout_ok(ops, true) {
             return Ok(false);
         }
         self.replace(ops, key, va, va + SPARSE_GRAIN, true)?;
@@ -469,12 +600,14 @@ impl Reservations {
             return Err(RmError::NoMemory);
         }
         let accepted_before = self.cache.entries.get(&(va, len)).is_some_and(|n| n.retry);
-        if let Some(n) = self.cache.get((va, len), self.blocks.len()) {
+        if let Some(n) = self.cache.get((va, len), self.blocks.len(), self.tick) {
             self.stats.negative_hits = self.stats.negative_hits.saturating_add(1);
             self.cache.accept((va, len));
             return self.declined(len, n.overflow);
         }
         self.declined = false;
+        self.deferred = false;
+        self.rm_refused = false;
         let lo = self.key(va).unwrap_or(va);
         let hi = self
             .key(end - 1)
@@ -485,7 +618,7 @@ impl Reservations {
             self.remember(va, len, lo, hi, true, true);
             return self.declined(len, true);
         }
-        self.recycle(ops, 4)?;
+        self.recycle(ops, 4, true)?;
         let lo = self.key(va).unwrap_or(va);
         let hi = self
             .key(end - 1)
@@ -555,6 +688,10 @@ impl Reservations {
                 overflow,
                 accepted_before || result.is_ok() || overflow,
             );
+            if self.deferred {
+                // The slice or a back-off stopped it, not the geometry: a later refresh resumes.
+                self.cache.expire((va, len));
+            }
             if result.is_ok() || overflow {
                 return self.declined(len, overflow);
             }
@@ -565,10 +702,19 @@ impl Reservations {
     }
 
     fn remember(&mut self, va: u64, len: u64, lo: u64, hi: u64, overflow: bool, retry: bool) {
-        if self
-            .cache
-            .insert((va, len), lo, hi, self.blocks.len(), overflow, retry)
-        {
+        if self.cache.insert(
+            (va, len),
+            lo,
+            hi,
+            self.blocks.len(),
+            overflow,
+            retry,
+            if self.rm_refused {
+                self.backoff_until
+            } else {
+                0
+            },
+        ) {
             self.stats.negative_evicted = self.stats.negative_evicted.saturating_add(1);
         }
     }
@@ -578,7 +724,9 @@ impl Reservations {
         self.budget(((end - 1) / SPARSE_GRAIN - va / SPARSE_GRAIN + 1) as usize)?;
         // Empty normal geometry is prepared before any intent is recorded. A failure
         // therefore leaves no partly accepted intent for the GPU diff to forget.
-        self.normal(ops, va, len)?;
+        if let Err(e) = self.normal_with(ops, va, len, true) {
+            return if self.deferred { Ok(false) } else { Err(e) };
+        }
         let mut all = true;
         let mut cur = va;
         while cur < end {
@@ -597,15 +745,33 @@ impl Reservations {
                 }
                 self.reindex(cur, stop);
                 all &= self.sparsify(ops, tile)?;
+                if self.deferred {
+                    return Ok(false);
+                }
             } else if cur == tile && stop == tile_end {
+                if self.window_hit(tile) {
+                    self.stats.window_hits = self.stats.window_hits.saturating_add(1);
+                    all = false;
+                    cur = stop;
+                    continue;
+                }
+                if !self.layout_ok(ops, true) {
+                    return Ok(false);
+                }
                 self.budget(self.blocks.len().saturating_add(1))?;
                 let handle = match ops.reserve(tile, SPARSE_GRAIN, true) {
                     Ok(h) => h,
                     Err(e) => {
                         self.stats.refused = self.stats.refused.saturating_add(1);
+                        if e == RmError::NoMemory {
+                            self.note_refusal();
+                            self.remember_refused(tile, tile_end);
+                            self.declined = true;
+                        }
                         return Err(e);
                     }
                 };
+                self.note_success();
                 self.stats.made = self.stats.made.saturating_add(1);
                 self.blocks.insert(
                     tile,
@@ -650,13 +816,14 @@ impl Reservations {
                 continue;
             }
             if !Self::occupied(b) && b.wanted.iter().all(|&v| v == 0) {
-                let (lo, hi) = (b.lo, b.hi);
-                self.replace(ops, key, lo, hi, false)?;
+                // Becoming normal again is optional work: queued, done within the slice.
+                self.cleanup.insert(key);
             } else {
                 retained = retained.saturating_add(b.hi.min(end).saturating_sub(b.lo.max(va)));
             }
         }
         self.stats.retained_bytes = self.stats.retained_bytes.saturating_add(retained);
+        self.convert_cleanup(ops)?;
         self.reindex(va, end);
         Ok(retained)
     }
@@ -685,16 +852,55 @@ impl Reservations {
         self.reindex(va, end);
     }
 
+    /// Turn queued intent-free, unoccupied sparse blocks back into normal reservations, as far
+    /// as the optional slice allows; the rest waits for the next refresh.
+    fn convert_cleanup(&mut self, ops: &dyn Ops) -> Result<(), RmError> {
+        while let Some(&key) = self.cleanup.first() {
+            let Some(b) = self.blocks.get(&key) else {
+                self.cleanup.remove(&key);
+                continue;
+            };
+            if !b.sparse || Self::occupied(b) || b.wanted.iter().any(|&v| v != 0) {
+                self.cleanup.remove(&key);
+                continue;
+            }
+            let (lo, hi) = (b.lo, b.hi);
+            if !self.layout_ok(ops, false) {
+                break;
+            }
+            self.cleanup.remove(&key);
+            match self.replace(ops, key, lo, hi, false) {
+                Ok(()) => {}
+                Err(RmError::NoMemory) => {
+                    self.cleanup.insert(key);
+                    break;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn retry(&mut self, ops: &dyn Ops) -> Result<(), RmError> {
+        self.tick = self.tick.saturating_add(1);
+        self.deferred = false;
+        self.convert_cleanup(ops)?;
         let changed: Vec<_> = self
             .cache
             .entries
             .iter()
-            .filter(|(_, n)| n.retry && !self.cache.valid(**n, self.blocks.len()))
+            .filter(|(_, n)| n.retry && !self.cache.valid(**n, self.blocks.len(), self.tick))
             .map(|(&key, _)| key)
             .collect();
         for (va, len) in changed {
+            if !ops.budget_left(true) {
+                self.stats.slice_deferred = self.stats.slice_deferred.saturating_add(1);
+                return Ok(());
+            }
             self.admit(ops, va, len)?;
+        }
+        if !ops.budget_left(true) {
+            return Ok(());
         }
         let dirty = std::mem::take(&mut self.retry_dirty);
         let tiles: Vec<_> = dirty
@@ -708,11 +914,21 @@ impl Reservations {
                     .filter(|&p| p + SPARSE_GRAIN <= b.hi && Self::wanted(b, p, p + SPARSE_GRAIN))
             })
             .collect();
-        for tile in tiles {
+        let mut tiles = tiles.into_iter();
+        while let Some(tile) = tiles.next() {
+            if !ops.budget_left(true) {
+                self.stats.slice_deferred = self.stats.slice_deferred.saturating_add(1);
+                for t in std::iter::once(tile).chain(tiles) {
+                    if let Some(k) = self.key(t) {
+                        self.retry_dirty.insert(k);
+                    }
+                }
+                break;
+            }
             let cached = self.cache.entries.iter().any(|(&(va, len), n)| {
                 va <= tile
                     && tile + SPARSE_GRAIN <= va.saturating_add(len)
-                    && self.cache.valid(*n, self.blocks.len())
+                    && self.cache.valid(*n, self.blocks.len(), self.tick)
             });
             if !cached {
                 self.admit(ops, tile, SPARSE_GRAIN)?;
@@ -768,11 +984,33 @@ impl Reservations {
         refine: bool,
     ) -> Result<Vec<(u32, u64, u64)>, RmError> {
         // Arguments the twin-OFF path also refuses (below the floor, wrapping, unaligned).
-        Self::end(va, len)?;
+        let end = Self::end(va, len)?;
         // Refinement only prepares a later sparse carve. A decline (budget, a populated coarse
         // block, an RM refusal) never refuses the map: it goes in the coarse block exactly as
-        // with the twin OFF, and is counted.
-        if !refine || self.poisoned || self.normal(ops, va, len).is_err() {
+        // with the twin OFF, and is counted. Above the high-water mark, with no empty pair to
+        // recycle, the refinement is skipped without any RM verb (ENS6): what is left is for
+        // explicit sparse admission. With pairs to recycle it recycles in a batch, under the
+        // slice and the refusal back-off.
+        self.declined = false;
+        self.deferred = false;
+        let coarse = if !refine || self.poisoned {
+            true
+        } else if !self.needs_split(va, end) {
+            false
+        } else if self.mergeable.is_empty()
+            && self
+                .blocks
+                .len()
+                .saturating_add(2)
+                .saturating_add(speculative_reserve(self.limit))
+                > self.limit
+        {
+            self.stats.speculative_skipped = self.stats.speculative_skipped.saturating_add(1);
+            true
+        } else {
+            self.normal_with(ops, va, len, false).is_err()
+        };
+        if coarse {
             self.stats.coarse_maps = self.stats.coarse_maps.saturating_add(1);
         }
         self.pieces(range, va, len)
@@ -823,6 +1061,10 @@ impl Reservations {
         }
         self.cache = Cache::default();
         self.retry_dirty.clear();
+        self.refused.clear();
+        self.cleanup.clear();
+        self.backoff_until = 0;
+        self.backoff_step = 0;
         for block in self.blocks.values_mut() {
             block.wanted = [0; 8];
         }
