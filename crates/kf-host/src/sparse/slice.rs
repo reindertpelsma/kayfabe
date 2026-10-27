@@ -22,7 +22,8 @@
 //! preempted; repair and space-retirement cleanup can exceed it. The peak sums charged verbs,
 //! including reset/retirement work between refresh renewals, rather than measuring all apply work.
 use super::{Ops, RmError};
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 
 /// Wall time of reservation verbs one refresh may start before demand work stops.
 pub const SLICE_NS: u64 = 100_000_000;
@@ -36,6 +37,7 @@ pub const SPECULATIVE_VERBS: u32 = SLICE_VERBS / 2;
 /// The per-refresh layout allowance.
 #[derive(Debug, Default)]
 pub struct Slice {
+    interrupt: Arc<AtomicBool>,
     verbs: AtomicU32,
     ns: AtomicU64,
     peak_verbs: AtomicU32,
@@ -60,6 +62,9 @@ impl Slice {
     /// Whether work of this kind must not START now.
     #[must_use]
     pub fn exhausted(&self, demand: bool) -> bool {
+        if in_split() || self.interrupt.load(Relaxed) {
+            return true;
+        }
         let (verbs, ns) = self.spent();
         if demand {
             verbs >= SLICE_VERBS || ns >= SLICE_NS
@@ -126,19 +131,37 @@ pub(crate) fn mono_ns() -> u64 {
     .unwrap_or(u64::MAX)
 }
 
-/// EXPECTED RED: split-critical layout policy is not implemented yet.
-pub struct CriticalGuard;
-/// EXPECTED RED: optional layout still runs during splits.
-pub fn critical_scope(_active: bool) -> CriticalGuard {
-    CriticalGuard
+thread_local! {
+    static CRITICAL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+/// A thread-local split apply scope; it cannot cross threads.
+pub struct CriticalGuard {
+    previous: bool,
+    _local: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl Drop for CriticalGuard {
+    fn drop(&mut self) {
+        CRITICAL.set(self.previous);
+    }
+}
+/// Stop optional reservation changes while applying any split in this batch.
+pub fn critical_scope(active: bool) -> CriticalGuard {
+    let previous = CRITICAL.get();
+    CRITICAL.set(previous || active);
+    CriticalGuard {
+        previous,
+        _local: std::marker::PhantomData,
+    }
 }
 /// Whether layout is on a split's critical path.
+#[must_use]
 pub fn in_split() -> bool {
-    false
+    CRITICAL.get()
 }
 impl Slice {
-    /// EXPECTED RED: the request interrupt is not connected to budget checks yet.
-    pub fn interrupt_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
-        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+    /// An arriving split interrupts optional work between verbs; repairs still finish.
+    #[must_use]
+    pub fn interrupt_handle(&self) -> Arc<AtomicBool> {
+        self.interrupt.clone()
     }
 }

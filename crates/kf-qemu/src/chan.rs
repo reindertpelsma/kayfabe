@@ -3000,6 +3000,7 @@ impl ChanPlane {
                 let _ = wake.signal();
             }
         }));
+        inbox.row_handoff.bind(handoff.clone());
         Ok(ChanPlane {
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),

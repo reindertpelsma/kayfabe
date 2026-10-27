@@ -1602,6 +1602,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let Some(mut batch) = self.inflight.take() else {
             return out;
         };
+        // A mixed batch must not run optional geometry before any split receipt is released.
+        let _split_critical = kf_host::sparse::slice::critical_scope(
+            batch
+                .wants
+                .iter()
+                .any(|(w, _, _)| matches!(w, Want::Split { .. })),
+        );
         self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
         let tm = &mut self.stats.timing;
         tm.walks = tm.walks.saturating_add(1);

@@ -11,7 +11,7 @@ use state::{Cache, Live};
 #[path = "sparse/recycle.rs"]
 mod recycle;
 #[path = "sparse/slice.rs"]
-pub(crate) mod slice;
+pub mod slice;
 
 /// Normal reservation grain.
 pub const NORMAL_GRAIN: u64 = 2 << 20;
@@ -380,7 +380,7 @@ impl Reservations {
             self.deferred = true;
             return false;
         }
-        if !ops.budget_left(demand) {
+        if slice::in_split() || !ops.budget_left(demand) {
             self.stats.slice_deferred = self.stats.slice_deferred.saturating_add(1);
             self.deferred = true;
             return false;
@@ -1185,8 +1185,22 @@ impl Reservations {
             .filter(|b| b.sparse)
             .map(|b| (b.lo, b.hi))
             .collect();
+        // Empty namespace retirement is mandatory, including after a split interrupts layout.
+        // The supplied Ops still accounts for verbs; only optional-start admission is bypassed.
+        struct Cleanup<'a>(&'a dyn Ops);
+        impl Ops for Cleanup<'_> {
+            fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError> {
+                self.0.reserve(lo, len, sparse)
+            }
+            fn release(&self, handle: u32) -> Result<(), RmError> {
+                self.0.release(handle)
+            }
+            fn budget_left(&self, _: bool) -> bool {
+                true
+            }
+        }
         for (lo, hi) in sparse {
-            self.replace(ops, lo, lo, hi, false)?;
+            self.replace(&Cleanup(ops), lo, lo, hi, false)?;
         }
         Ok(())
     }

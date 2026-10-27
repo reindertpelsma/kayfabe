@@ -916,6 +916,7 @@ pub type PlacedRow = (u64, u64, bool, kf_host::MapPerm);
 /// a question reaching past them is answered `Unknown`.
 #[derive(Debug, Default)]
 pub struct RowsLog {
+    handoff: std::sync::OnceLock<std::sync::Arc<RowHandoff>>,
     epoch: AtomicU64,
     log: Mutex<std::collections::VecDeque<(u64, u64, u64, std::time::Instant)>>,
 }
@@ -924,9 +925,12 @@ pub struct RowsLog {
 const ROWS_LOG_MAX: usize = 4096;
 
 impl RowsLog {
-    /// EXPECTED RED: row-writer scope has no handoff callback yet.
     #[cfg(test)]
-    fn bind_handoff(&self, _hub: std::sync::Arc<crate::ptlock::HandoffHub>) {}
+    fn bind_handoff(&self, hub: std::sync::Arc<crate::ptlock::HandoffHub>) {
+        let handoff = std::sync::Arc::new(RowHandoff::default());
+        let _ = handoff.0.set(hub);
+        let _ = self.handoff.set(handoff);
+    }
 
     /// A change to the rows over `[lo, hi)` — call with the rows' write lock HELD.
     pub fn commit(&self, lo: u64, hi: u64) {
@@ -1353,7 +1357,7 @@ impl GpuMirror {
     /// through a mapping that is gone, and the rows never claim more than the host holds.
     fn rows_follow_ledger(&self, va: u64, end: u64) {
         let owned = self.bv.own_view(va, end).owned;
-        let Ok(mut rows) = self.rows.write() else {
+        let Ok(mut rows) = write_rows_releasing(&self.rows, &self.log) else {
             return;
         };
         let mut cur = va;
@@ -1492,7 +1496,7 @@ impl MapTarget for GpuMirror {
         let m = m?;
         // ★ P6b ruling (a): only a mapping WE placed is a row a reader may resolve through.
         if m == Mapped::Placed
-            && let Ok(mut r) = self.rows.write()
+            && let Ok(mut r) = write_rows_releasing(&self.rows, &self.log)
         {
             r.insert(d.va, (d.len, d.off, d.ram, d.perm));
             self.log.commit(d.va, d.va.saturating_add(d.len));
@@ -1527,7 +1531,7 @@ impl MapTarget for GpuMirror {
         self.calls
             .batched_runs
             .fetch_add(rows.len() as u64, Ordering::Relaxed);
-        if let Ok(mut r) = self.rows.write() {
+        if let Ok(mut r) = write_rows_releasing(&self.rows, &self.log) {
             for d in rows {
                 r.insert(d.va, (d.len, d.off, d.ram, d.perm));
                 self.log.commit(d.va, d.va.saturating_add(d.len));
@@ -1578,7 +1582,7 @@ impl MapTarget for GpuMirror {
         // own buffer) or one the channel plane handed to host RM (a steered falcon context). A
         // host unmap there would name host RM's mapping, which is not ours to remove (`[measured
         // vvid vid11]` refused `Other(87)`, leaving the space unsettled): answered with no host call.
-        let row = match self.rows.write() {
+        let row = match write_rows_releasing(&self.rows, &self.log) {
             Ok(mut r) => match r.remove(&va) {
                 Some(row) => {
                     self.log.commit(va, va.saturating_add(row.0));
@@ -1601,7 +1605,7 @@ impl MapTarget for GpuMirror {
             .fetch_add(ns_since(t), Ordering::Relaxed);
         if r.is_err() {
             // ★ Review fix 2026-10-10 (finding 4): the row is back for the part still ours.
-            if let Ok(mut rows) = self.rows.write() {
+            if let Ok(mut rows) = write_rows_releasing(&self.rows, &self.log) {
                 rows.insert(va, row);
                 self.log.commit(va, va.saturating_add(row.0));
             }
@@ -1653,7 +1657,7 @@ impl MapTarget for GpuMirror {
         self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
         self.calls.ranges.fetch_add(1, Ordering::Relaxed);
         if r.is_err() {
-            if let Ok(mut rows) = self.rows.write() {
+            if let Ok(mut rows) = write_rows_releasing(&self.rows, &self.log) {
                 if !cut.original.is_empty() {
                     self.log.commit(va, end);
                 }
@@ -1679,6 +1683,9 @@ impl MapTarget for GpuMirror {
         r
     }
     fn end_refresh(&self) -> Result<(), String> {
+        if kf_host::sparse::slice::in_split() {
+            return Ok(());
+        }
         self.bv
             .vas
             .rm
@@ -1701,6 +1708,9 @@ impl MapTarget for GpuMirror {
         self.bv.begin_refresh();
         // ENS6: a new refresh gets a fresh layout time slice before any sparse work starts.
         self.bv.vas.rm.begin_layout_slice();
+        if kf_host::sparse::slice::in_split() {
+            return;
+        }
         if let Err(e) = self.bv.vas.rm.retry_sparse(self.bv.vas.space) {
             kf_mem::recent::note(
                 kf_mem::recent::Kind::SparseRetry,
@@ -2282,6 +2292,7 @@ pub enum SplitTarget {
 /// flight or pending). A held reply is delivered when they are equal.
 #[derive(Debug)]
 pub struct Inbox {
+    pub(crate) row_handoff: std::sync::Arc<RowHandoff>,
     pub(crate) walk_stats: walk_scope::Stats,
     scoped_waiters: Mutex<std::collections::BTreeMap<u32, VasKey>>,
     walk_scope: Mutex<Option<walk_scope::Scope>>,
@@ -2345,6 +2356,7 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
+            row_handoff: Default::default(),
             walk_stats: walk_scope::Stats::default(),
             scoped_waiters: Mutex::new(Default::default()),
             walk_scope: Mutex::new(None),
@@ -3256,6 +3268,7 @@ fn record_twin(
         mirror.log.clone(),
         mirror.kernel_vas.clone(),
     );
+    let _ = log.handoff.set(plane.inbox.row_handoff.clone());
     let ledger = std::sync::Arc::new(new_ledger(HostVas {
         rm,
         space,
@@ -5201,14 +5214,59 @@ pub(crate) mod walk_scope;
 #[path = "mem/walk_relay_model.rs"]
 mod walk_relay_model;
 
-#[cfg(test)]
+/// Bound once when the channel plane installs the real relay handoff hub.
+#[derive(Default)]
+pub(crate) struct RowHandoff(std::sync::OnceLock<std::sync::Arc<crate::ptlock::HandoffHub>>);
+impl std::fmt::Debug for RowHandoff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RowHandoff")
+            .field("bound", &self.0.get().is_some())
+            .finish()
+    }
+}
+impl RowHandoff {
+    pub(crate) fn bind(&self, hub: std::sync::Arc<crate::ptlock::HandoffHub>) {
+        let _ = self.0.set(hub);
+    }
+}
+#[derive(Debug)]
+struct RowsWriteGuard<'a> {
+    guard: Option<std::sync::RwLockWriteGuard<'a, std::collections::BTreeMap<u64, PlacedRow>>>,
+    log: &'a RowsLog,
+}
+impl std::ops::Deref for RowsWriteGuard<'_> {
+    type Target = std::collections::BTreeMap<u64, PlacedRow>;
+    fn deref(&self) -> &Self::Target {
+        self.guard.as_ref().expect("live row guard")
+    }
+}
+impl std::ops::DerefMut for RowsWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.guard.as_mut().expect("live row guard")
+    }
+}
+impl Drop for RowsWriteGuard<'_> {
+    fn drop(&mut self) {
+        drop(self.guard.take());
+        if let Some(hub) = self.log.handoff.get().and_then(|h| h.0.get()) {
+            hub.released();
+        }
+    }
+}
 fn write_rows_releasing<'a>(
     rows: &'a PlacedRows,
-    _log: &RowsLog,
-) -> std::sync::LockResult<
-    std::sync::RwLockWriteGuard<'a, std::collections::BTreeMap<u64, PlacedRow>>,
-> {
-    rows.write()
+    log: &'a RowsLog,
+) -> std::sync::LockResult<RowsWriteGuard<'a>> {
+    match rows.write() {
+        Ok(guard) => Ok(RowsWriteGuard {
+            guard: Some(guard),
+            log,
+        }),
+        Err(e) => Err(std::sync::PoisonError::new(RowsWriteGuard {
+            guard: Some(e.into_inner()),
+            log,
+        })),
+    }
 }
 #[cfg(test)]
 #[path = "rows_handoff_tests.rs"]
