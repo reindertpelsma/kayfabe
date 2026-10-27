@@ -8,9 +8,9 @@
     "passed": 2
   },
   "green": {
-    "tests": 32,
-    "failed": 0,
-    "passed": 32
+    "tests": 34,
+    "passed": 34,
+    "failed": 0
   },
   "mutations": [
     {
@@ -154,14 +154,27 @@
       "old": "statistics.median(fps)",
       "new": "statistics.mean(fps)",
       "killers": [
-        "test_candidate_reset_prevents_both_headline_medians",
-        "test_duplicate_candidate_boot_is_not_a_fourth_sample",
-        "test_duplicate_master_boot_is_not_a_fourth_sample",
-        "test_master_reset_prevents_both_headline_medians",
-        "test_two_control_boots_cannot_make_a_complete_headline",
-        "test_two_master_boots_cannot_make_a_complete_headline"
+        "test_candidate_medians_use_middle_values",
+        "test_master_medians_use_middle_values"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "unplanned_rows_ignored",
+      "old": "if any(r.get(\"arm\") not in REVISIONS or r.get(\"api\") not in APIS for r in rows):",
+      "new": "if False:",
+      "killers": [
+        "test_unplanned_api_cannot_be_silently_ignored",
+        "test_unplanned_arm_cannot_be_silently_ignored"
       ],
       "exit_code": 1
     }
-  ]
+  ],
+  "extra_red": {
+    "commit": "59a61da07930952cd046900d8d0ec4e817a94090",
+    "tests": 34,
+    "passed": 32,
+    "failed": 2
+  },
+  "bytecode_cache": "Owned cache removed; all mutation subprocesses use python3 -B"
 }

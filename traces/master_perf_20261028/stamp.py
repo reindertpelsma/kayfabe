@@ -48,6 +48,8 @@ def validate(row):
 
 
 def summarize(rows):
+    if any(r.get("arm") not in REVISIONS or r.get("api") not in APIS for r in rows):
+        raise ValueError("unplanned arm or API in result records")
     cells = {}
     for arm in REVISIONS:
         for api in APIS:
