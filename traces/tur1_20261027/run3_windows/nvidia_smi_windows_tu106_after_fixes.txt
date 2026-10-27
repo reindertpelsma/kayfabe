@@ -1,0 +1,164 @@
+=== nvidia-smi
+Tue Oct 27 01:47:26 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 2060 ...  WDDM  |   00000000:00:05.0  On |                  N/A |
+| N/A    0C  N/A             N/A  /  N/A  |      36MiB /   6144MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1496    C+G   C:\Windows\System32\LogonUI.exe       N/A      |
++-----------------------------------------------------------------------------------------+
+
+=== nvidia-smi -q (selected)
+
+Driver Version                            : 580.88
+CUDA Version                              : 13.0
+    Product Name                          : NVIDIA GeForce RTX 2060 SUPER
+    Product Architecture                  : Turing
+    Display Mode                          : Requested functionality has been deprecated
+    Display Attached                      : Yes
+    Display Active                        : Enabled
+    VBIOS Version                         : 90.06.44.00.79
+    GSP Firmware Version                  : 580.88
+        Bus Id                            : 00000000:00:05.0
+    Performance State                     : N/A
+        Total                             : 6144 MiB
+        Used                              : 49 MiB
+        Total                             : 128 MiB
+        Used                              : 100 MiB
+        Total                             : N/A
+        Used                              : N/A
+    Retired Pages
+
+
+
+=== dxdiag-ish: video controller
+
+
+Name                   : NVIDIA GeForce RTX 2060 SUPER
+DriverVersion          : 32.0.15.8088
+Status                 : OK
+ConfigManagerErrorCode : 0
+AdapterRAM             : 4293918720
+
+
+
+
+=== recent System events (nvlddmkm / display / TDR)
+
+
+TimeCreated  : 10/27/2026 1:47:06 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:47:06 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:47:04 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:46:41 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:46:41 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:46:39 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:46:14 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:46:14 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:46:12 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:45:49 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:45:49 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:45:47 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:45:20 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:45:20 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:45:18 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:44:20 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:44:19 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:44:17 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:43:34 AM
+Id           : 172
+ProviderName : Microsoft-Windows-Kernel-Power
+M            : Connectivity state in standby: Disconnected, Reason: NIC compliance
+
+TimeCreated  : 10/27/2026 1:43:34 AM
+Id           : 41
+ProviderName : Microsoft-Windows-Kernel-Power
+M            : The system has rebooted without cleanly shutting down first. This error could be 
+               caused if the system stopped responding, crashed, or lost power unexpectedly.
+
+
+
+
