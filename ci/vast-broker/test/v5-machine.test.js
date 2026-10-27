@@ -23,7 +23,7 @@ for (const restart of [false, true])
     await h.service.sweep();
     const denied = await h.storage.get('bad-machine:100001');
     assert.equal(denied?.reason, 'KVM_DOMAIN_NOT_FOUND');
-    assert.equal((await h.storage.get('record:123-1')).closed, 'BOOT_TIMEOUT');
+    assert.equal((await h.storage.get('record:123-1')).closed, 'PROVIDER_FAULT');
     h.restart();
     h.time.value += 60000;
     const r = await h.call('/availability?profile=check', { method: 'GET' });
