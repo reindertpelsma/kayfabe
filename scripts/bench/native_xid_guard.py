@@ -3,7 +3,9 @@
 """Owner-approved native negative-control proof and frozen later-Xid guard.
 
 OWNER-APPROVED 2026-10-22: deliberately provoked copy-engine faults require
-EXACT source channel + EXACT VA + EXACT fault/access type and HUBCLIENT_CE[0-9]+.
+EXACT source channel + EXACT VA + EXACT fault/access type and a copy-engine client.
+SW5-R2 2026-10-26 also admits Turing's HUBCLIENT_HSCE[0-9]+ spelling wherever
+HUBCLIENT_CE[0-9]+ was admitted; every other proof condition is unchanged.
 CE instance equality is not required. Extra/non-source/non-CE records still refuse.
 The separate native GR control retains its exact ESC shape; later history is frozen.
 No per-die client table. Bench only; no global Xid31 exemption. Marker addresses and
@@ -26,7 +28,9 @@ COPY_ENGINE_CLIENT = "HUBCLIENT_CE*"
 
 
 def copy_engine_client(name):
-    return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None
+    # Public OGKM: src/nvidia/src/kernel/gpu/fifo/arch/turing/kernel_fifo_tu102.c,
+    # kfifoGetClientIdString_TU102 maps NV_PFAULT_CLIENT_HUB_HSCE0..9.
+    return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None
 
 
 class GuardRefused(ValueError):
