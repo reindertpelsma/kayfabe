@@ -244,3 +244,170 @@ fn ens5_receipt_counters_include_cached_declines_and_hard_errors() {
     assert_eq!(t.stats.admit_hard_err, 0);
     assert!(t.stats.admit_ns_total >= t.stats.admit_ns_max);
 }
+#[test]
+fn ens5_occupied_decline_copies_only_the_affected_original_block() {
+    let (mut t, va) = ens5_saturated(8191);
+    t.mark(va, PAGE, true);
+    assert_eq!(
+        t.admit(&Ens5Ops, va + NORMAL_GRAIN, SPARSE_GRAIN),
+        Ok(false)
+    );
+    assert_eq!(t.stats.admit_blocks, 1);
+}
+#[test]
+fn ens5_budget_decline_copies_only_the_affected_original_block() {
+    let (mut t, va) = ens5_saturated(8191);
+    assert_eq!(
+        t.admit(&Ens5Ops, va + NORMAL_GRAIN, SPARSE_GRAIN),
+        Ok(false)
+    );
+    assert_eq!(t.stats.admit_blocks, 1);
+}
+#[test]
+fn ens5_partial_leaf_admission_cannot_grow_negative_cache_without_bound() {
+    let mut t = Reservations::new(
+        &[GuestVaRange {
+            handle: 1,
+            lo: LO,
+            hi: LO + (1 << 30),
+        }],
+        8192,
+    );
+    t.mark(LO, PAGE, true);
+    for i in 1..=264 {
+        assert_eq!(t.admit(&Ens5Ops, LO + i * SPARSE_GRAIN, PAGE), Ok(false));
+    }
+    assert_eq!(t.cache.entries.len(), 256);
+    assert_eq!(t.stats.negative_evicted, 8);
+}
+fn ens5_recycle_repair(fail: usize) {
+    let (mut t, r) = wide(12);
+    for i in 0..4u64 {
+        let va = LO + (4 + 3 * i) * NORMAL_GRAIN;
+        t.route_map(&r, RANGE, va, PAGE, true).unwrap();
+        r.backed(va, PAGE);
+        r.unmap(va, PAGE);
+        t.mark(va, PAGE, false);
+    }
+    t.limit = t.blocks.len();
+    r.fail.set(r.calls.get() + fail);
+    let _ = t.route_map(&r, RANGE, LO + 60 * NORMAL_GRAIN, PAGE, true);
+    // Normal reservation coverage must be fully restored after a transient refusal.
+    for i in 0..64 {
+        let p = LO + i * NORMAL_GRAIN;
+        assert!(r.blocks.borrow().values().any(|&(a, b, _)| a <= p && p < b));
+    }
+}
+#[test]
+fn ens5_empty_normal_merge_refusal_restores_both_original_reservations() {
+    ens5_recycle_repair(1);
+}
+#[test]
+fn ens5_a_later_recycling_refusal_restores_all_prior_normal_coverage() {
+    ens5_recycle_repair(2);
+}
+fn ens5_unaccepted_error_not_published(failure: usize) {
+    let (mut t, r) = (tree(100), Rm::new());
+    let va = LO + NORMAL_GRAIN;
+    r.fail.set(failure);
+    assert!(t.admit(&r, va, SPARSE_GRAIN).is_err());
+    // An unrelated later mapping/removal cannot accept the refused run on its behalf.
+    t.mark(LO + 3 * NORMAL_GRAIN, PAGE, false);
+    t.retry(&r).unwrap();
+    assert_eq!(r.state(va), None);
+}
+#[test]
+fn ens5_unaccepted_failed_sparse_is_not_published_by_a_peer_map() {
+    ens5_unaccepted_error_not_published(1);
+}
+#[test]
+fn ens5_failed_suffix_is_not_published_by_an_unrelated_retry() {
+    ens5_unaccepted_error_not_published(2);
+}
+#[test]
+fn ens5_new_population_invalidates_only_its_occupied_block_decision() {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN).unwrap();
+    t.mark(LO + PAGE, PAGE, true);
+    t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN).unwrap();
+    assert_eq!(t.stats.negative_hits, 0);
+    assert_eq!(t.stats.admit_blocks, 2);
+}
+#[test]
+fn ens5_partial_unmap_invalidates_its_still_occupied_block_decision() {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, 2 * PAGE, true);
+    t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN).unwrap();
+    t.mark(LO, PAGE, false);
+    t.admit(&r, LO + NORMAL_GRAIN, SPARSE_GRAIN).unwrap();
+    assert_eq!(t.stats.negative_hits, 0);
+    assert_eq!(t.stats.admit_blocks, 2);
+}
+fn ens5_evicted_intent_retries(va: u64) {
+    let (mut t, r) = wide(1000);
+    populate(&mut t, &r, va, PAGE);
+    assert_eq!(t.admit(&r, va, SPARSE_GRAIN), Ok(false));
+    for i in 1..=264 {
+        let _ = t.admit(&r, LO + 32 * NORMAL_GRAIN + i * 2 * PAGE, PAGE);
+    }
+    assert!(!t.cache.entries.contains_key(&(va, SPARSE_GRAIN)));
+    r.unmap(va, PAGE);
+    t.mark(va, PAGE, false);
+    t.retry(&r).unwrap();
+    assert_eq!(
+        r.state(va),
+        Some(0),
+        "bitmap intent survives negative-cache eviction"
+    );
+}
+#[test]
+fn ens5_evicted_vidmem_intent_retries_when_its_normal_block_empties() {
+    ens5_evicted_intent_retries(LO);
+}
+#[test]
+fn ens5_evicted_dma_intent_retries_when_its_other_normal_block_empties() {
+    ens5_evicted_intent_retries(LO + 2 * NORMAL_GRAIN);
+}
+fn ens5_pending_normal_not_recycled(offset: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    let va = LO + offset;
+    assert_eq!(t.admit(&r, va, 4 * PAGE), Ok(false));
+    assert!(Reservations::wanted(block(&t, va), va, va + 4 * PAGE));
+    t.limit = t.blocks.len();
+    t.route_map(&r, 99, LO + 4 * NORMAL_GRAIN, PAGE, true)
+        .unwrap();
+    assert!(
+        Reservations::wanted(block(&t, va), va, va + 4 * PAGE),
+        "recycling never discards another accepted run's partial intent"
+    );
+}
+#[test]
+fn ens5_recycling_does_not_discard_a_partial_sparse_prefix() {
+    ens5_pending_normal_not_recycled(0);
+}
+#[test]
+fn ens5_recycling_does_not_discard_a_partial_sparse_suffix() {
+    ens5_pending_normal_not_recycled(4 * PAGE);
+}
+
+#[test]
+fn ens5_heartbeat_counts_copied_admission_blocks() {
+    let after = Stats {
+        admit_blocks: 512,
+        ..Stats::default()
+    };
+    assert_eq!(after.deltas(Stats::default())[16], 512);
+}
+#[test]
+fn ens5_heartbeat_adds_only_new_admission_copy_work() {
+    let before = Stats {
+        admit_blocks: 100,
+        ..Stats::default()
+    };
+    let after = Stats {
+        admit_blocks: 103,
+        ..Stats::default()
+    };
+    assert_eq!(after.deltas(before)[16], 3);
+}

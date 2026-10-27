@@ -93,6 +93,50 @@ pub struct Stats {
     pub occupancy_capped: u64,
     /// Live object high-water in this space, including initial roots.
     pub peak_blocks: u64,
+    /// Current tree blocks, including initial roots.
+    pub live_blocks: u64,
+}
+
+impl Stats {
+    pub(crate) fn deltas(self, before: Self) -> [u64; 17] {
+        let after = self;
+        [
+            after.made.saturating_sub(before.made),
+            after.freed.saturating_sub(before.freed),
+            after.refused.saturating_sub(before.refused),
+            after.overflow.saturating_sub(before.overflow),
+            after
+                .unhonoured_bytes
+                .saturating_sub(before.unhonoured_bytes),
+            after.retained_bytes.saturating_sub(before.retained_bytes),
+            after.coarse_maps.saturating_sub(before.coarse_maps),
+            after.admit_calls.saturating_sub(before.admit_calls),
+            after.admit_hard_err.saturating_sub(before.admit_hard_err),
+            after.admit_decline.saturating_sub(before.admit_decline),
+            after.admit_ns_total.saturating_sub(before.admit_ns_total),
+            0,
+            after.negative_hits.saturating_sub(before.negative_hits),
+            after
+                .negative_evicted
+                .saturating_sub(before.negative_evicted),
+            after
+                .occupancy_capped
+                .saturating_sub(before.occupancy_capped),
+            0,
+            0,
+        ]
+    }
+}
+
+/// Bounded, nonblocking heartbeat census: native space id, current blocks, lifetime peak.
+#[derive(Debug)]
+pub struct Census {
+    /// At most128 busiest spaces.
+    pub rows: Vec<(u32, u64, u64)>,
+    /// Active tree count before output truncation.
+    pub total: usize,
+    /// Contended rows (or a contended registry), omitted rather than waited on.
+    pub skipped: usize,
 }
 
 #[derive(Debug)]
