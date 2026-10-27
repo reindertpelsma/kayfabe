@@ -918,6 +918,7 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
+    deferred_layout: BTreeSet<VasKey>,
     /// Owner ruling 2026-10-09: complete over absent leaves (read at construction; tests set it).
     clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
@@ -955,6 +956,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
+            deferred_layout: BTreeSet::new(),
             clear_absent: clear_over_absent(),
             awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
@@ -1029,6 +1031,15 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// Requests waiting for the next walk.
     #[must_use]
+    /// EXPECTED RED: idle layout continuations are not scheduled yet.
+    pub fn retry_deferred_layout(&mut self) -> bool {
+        false
+    }
+    /// Whether sparse layout has retained work.
+    pub fn has_deferred_layout(&self) -> bool {
+        false
+    }
+
     pub fn pending(&self) -> usize {
         self.pending.len()
     }

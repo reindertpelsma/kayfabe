@@ -191,6 +191,13 @@ pub enum Settle {
 /// ⊘ Every verb is one WE author (§9): a guest value never reaches a host flag word here —
 /// `defer` is ours, the backing is decided by `Desired::ram`.
 pub trait MapTarget {
+    /// One idle-turn sparse-layout continuation; true means another slice is owed.
+    /// # Errors
+    /// A host reservation refusal, retaining fail-closed coverage.
+    fn retry_deferred_layout(&self) -> Result<bool, String> {
+        Ok(false)
+    }
+
     /// Selective sparse reservations are enabled for this target. Default OFF.
     fn sparse_twin(&self) -> bool {
         false
