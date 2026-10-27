@@ -293,6 +293,11 @@ echo "=== FAST GUEST $TAG — ${elapsed}s of a ${BUDGET}s budget, qemu rc=$rc ==
 grep -a 'FASTGUEST:' "$SER" 2>/dev/null | sed 's/^/    /'
 
 # ★ 124 is `timeout`'s own code. ⊘ Reported as a CRASH and not as "slow": that is the whole rule.
+# A rootless observer refusal is a stop, even when the guest printed DONE.
+if grep -aq '^ROOTLESS_REFUSED:' "$BENCH/fast_${TAG}_qemu.log"; then
+    echo "FAST_VERDICT=REFUSED (rootless process audit refused)"
+    exit 3
+fi
 if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
     echo "FAST_VERDICT=CRASH (budget ${BUDGET}s exceeded — a timeout IS a crash)"
     echo "⊘ the serial log's last lines are where it stopped:"
@@ -302,6 +307,10 @@ fi
 # ⊘⊘ **A ZERO-BYTE SERIAL LOG IS ITS OWN STATE, NOT A VERDICT.** `[measured w812]` a run shot
 # by a concurrent invocation leaves an empty, freshly-timestamped log, and every signal says
 # the evidence is there. Distinguish it BY NAME from a guest that booted and died.
+if [ "$rc" -ne 0 ]; then
+    echo "FAST_VERDICT=FAIL (qemu rc=$rc, regardless of the guest DONE marker)"
+    exit 1
+fi
 if [ ! -s "$SER" ]; then
     echo "FAST_VERDICT=CRASH (the serial log is EMPTY — QEMU wrote nothing at all)"
     echo "⊘ This is NOT 'the guest died before reporting': nothing was ever written. The"

@@ -65,3 +65,12 @@ a host-fault claim from an unreadable journal. A real refusal stops the experime
 Keep raw logs private. Publish projected scoreboards, hashes, process/capability
 summaries, matrix execution-window overlap, throughput distributions and cleanup.
 No fairness, isolation, hostile-kernel latency or Windows result follows from Z1.
+
+Z1 closeout: the 2026-10-28 qualification stopped on a process-audit permission
+refusal and an unadmitted host Xid before a complete negative-control proof.
+The full rootless suite and two-VM experiment are unproven. No hardware retry was
+made after that refusal. A subsequent GPU-free regression demonstrates that the old
+fast grader could score DONE/client=0 as PASS despite wrapper exit 2, and continue
+into another arm after a rootless audit refusal. The launcher now preserves REFUSED,
+rejects every nonzero QEMU exit and stops the suite before another launch.
+The fd permission problem itself is not bypassed or fixed by this change.
