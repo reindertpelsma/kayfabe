@@ -1,0 +1,293 @@
+/* kayfabe manual: layered on mdBook's own CSS. System fonts, no downloads. */
+
+:root {
+  --kf-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --content-max-width: 760px;
+  --kf-focus: #0a58ad;
+}
+html {
+  font-family: var(--kf-font);
+}
+body {
+  line-height: 1.6;
+}
+
+/* Palette: light, and the dark one that mdBook's "Auto" picks from the OS setting (coal). */
+.light,
+html:not(.js) {
+  --fg: #1b1f24;
+  --links: #0a58ad;
+  --sidebar-bg: #f5f7f9;
+  --sidebar-fg: #1b1f24;
+  --sidebar-active: #0a58ad;
+  --sidebar-non-existant: #5c6670;
+  --inline-code-color: #5a2a00;
+  --quote-bg: #fff8e1;
+  --quote-border: #8a5a00;
+  --table-header-bg: #e8edf2;
+  --table-alternate-bg: #f6f8fa;
+  --table-border-color: #d0d7de;
+  --icons: #4a5560;
+  --kf-focus: #0a58ad;
+}
+.coal {
+  --bg: #111418;
+  --fg: #e6e8ea;
+  --links: #7ab8ff;
+  --sidebar-bg: #181d23;
+  --sidebar-fg: #d6dadf;
+  --sidebar-active: #7ab8ff;
+  --sidebar-non-existant: #8c96a0;
+  --inline-code-color: #ffcf99;
+  --quote-bg: #2b2410;
+  --quote-border: #d9a441;
+  --table-header-bg: #232a32;
+  --table-alternate-bg: #151a1f;
+  --table-border-color: #2b323a;
+  --icons: #a3acb5;
+}
+
+/* Evidence-label colours: light by default, dark under every dark mdBook theme. */
+:root {
+  --kf-measured-bg: #e3f3e9;
+  --kf-measured-fg: #124d2a;
+  --kf-inferred-bg: #ece8f8;
+  --kf-inferred-fg: #3f2f85;
+  --kf-gap-bg: #fff1c2;
+  --kf-gap-fg: #5c3b00;
+  --kf-muted: #4a5560;
+  --kf-line: #d0d7de;
+}
+.coal,
+.navy,
+.ayu {
+  --kf-focus: #7ab8ff;
+  --kf-measured-bg: #12301f;
+  --kf-measured-fg: #9ee0b5;
+  --kf-inferred-bg: #25203f;
+  --kf-inferred-fg: #c9bdf5;
+  --kf-gap-bg: #3a2e0c;
+  --kf-gap-fg: #ffd98a;
+  --kf-muted: #a3acb5;
+  --kf-line: #2b323a;
+}
+
+/* Focus is always visible. */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+summary:focus-visible,
+label:focus-visible {
+  outline: 3px solid var(--kf-focus);
+  outline-offset: 2px;
+}
+
+/* Skip link and top bar. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+  color: var(--links);
+  border: 2px solid var(--kf-focus);
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+.kf-topbar {
+  /* mdBook pulls .page up by the menu-bar height; keep the bar in view. */
+  margin-top: var(--menu-bar-height);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.2rem;
+  padding: 0.6rem 0;
+  font-size: 1.5rem;
+  border-bottom: 1px solid var(--kf-line);
+}
+.kf-topbar a {
+  color: var(--links);
+}
+.kf-brand {
+  font-weight: 700;
+  font-size: 1.8rem;
+  color: var(--fg) !important;
+  text-decoration: none;
+}
+.kf-spacer {
+  flex: 1;
+}
+.kf-topbar select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--icons);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+}
+
+/* Reading column. */
+.content main {
+  line-height: 1.6;
+}
+.content p,
+.content ul,
+.content ol {
+  line-height: 1.6;
+}
+.content h1 {
+  margin-block-start: 0.6em;
+}
+.content a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.content a.header {
+  text-decoration: none;
+}
+.content a.header::after {
+  content: " #";
+  opacity: 0;
+  color: var(--kf-muted, var(--icons));
+  font-weight: 400;
+}
+.content a.header:hover::after,
+.content a.header:focus-visible::after {
+  opacity: 1;
+}
+.content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1.2em 0;
+}
+.content table td,
+.content table th {
+  padding: 0.4rem 1rem;
+  vertical-align: top;
+  text-align: left;
+}
+
+/* Code blocks: bordered, scrollable, copy button always reachable by keyboard and touch. */
+pre {
+  border: 1px solid var(--table-border-color);
+  border-radius: 6px;
+}
+pre > code {
+  overflow-x: auto;
+  line-height: 1.5;
+}
+pre > .buttons {
+  visibility: visible;
+  opacity: 0.85;
+}
+pre > .buttons button {
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+}
+
+/* Callouts. */
+blockquote {
+  border-inline-start: 4px solid var(--quote-border);
+  background: var(--quote-bg);
+  padding: 0.4rem 1.2rem;
+  margin: 1.2em 0;
+}
+.kf-label,
+.kf-gap {
+  padding: 0.05em 0.35em;
+  border-radius: 4px;
+  font-size: 0.92em;
+  border: 1px solid currentColor;
+}
+.kf-measured {
+  background: var(--kf-measured-bg);
+  color: var(--kf-measured-fg);
+}
+.kf-inferred {
+  background: var(--kf-inferred-bg);
+  color: var(--kf-inferred-fg);
+}
+.kf-gap {
+  background: var(--kf-gap-bg);
+  color: var(--kf-gap-fg);
+  border-style: dashed;
+  font-weight: 600;
+}
+.kf-verified {
+  border-top: 1px solid var(--table-border-color);
+  padding-top: 0.8rem;
+  color: var(--kf-muted, var(--fg));
+  font-size: 0.95em;
+}
+
+/* Breadcrumbs, edit link, previous and next. */
+.kf-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  font-size: 1.4rem;
+  color: var(--kf-muted, var(--fg));
+}
+.kf-crumbs li + li::before {
+  content: "/";
+  margin: 0 0.5em;
+}
+.kf-edit {
+  font-size: 1.4rem;
+  color: var(--kf-muted, var(--fg));
+  margin-top: 2.5rem;
+}
+.kf-pager {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+}
+.kf-pager a {
+  flex: 1 1 14rem;
+  display: block;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--table-border-color);
+  border-radius: 6px;
+  color: var(--links);
+  text-decoration: none !important;
+}
+.kf-pager a:hover {
+  border-color: var(--links);
+}
+.kf-pager a[rel="next"] {
+  text-align: right;
+}
+.kf-pager span {
+  display: block;
+  font-size: 1.2rem;
+  color: var(--kf-muted, var(--fg));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media print {
+  .kf-topbar,
+  .kf-pager,
+  .kf-edit,
+  .skip-link {
+    display: none;
+  }
+}

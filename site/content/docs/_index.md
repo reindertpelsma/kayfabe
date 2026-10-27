@@ -1,5 +1,4 @@
 +++
 title = "Documentation"
+template = "docs_index.html"
 +++
-
-[Read the user manual](/docs/).

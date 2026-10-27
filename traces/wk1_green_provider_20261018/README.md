@@ -29,11 +29,29 @@ provider/runner/workerd checks are checked separately; hosted full-suite results
 
 No deployment, Worker setting edit or direct provider API call.
 
-MEASURED 2026-10-27 on this branch before publication:2257 Node tests,67 real-workerd tests,
+MEASURED 2026-10-27 at original PR159 rev8cbd2a7e8:2257 Node tests,67 real-workerd tests,
 208 existing payload tests and9 new provider Python tests pass. All89 existing payload
 mutants and27 provider mutants have at least2 independent killing tests (minimum2).
 Evidence: [provider mutants](mutations.jsonl), [existing payload mutants](payload-mutations.json).
-The final source bundle is7d6cbb536b550db511b7b4fde13d7acc575747dfdd05c31fd1822ee4beda5e86.
+The source bundle at rev8cbd2a7e8 is7d6cbb536b550db511b7b4fde13d7acc575747dfdd05c31fd1822ee4beda5e86.
 The EXPECTED RED rev87a21c204 additionally demonstrates4 failures: rejected actual-contract
 spend retained the offer price, and a replacement ending without a result lost its provider
 classification. Actual product failures on a replacement remain FAIL.
+
+MEASURED 2026-10-27 at fix rev44842eff5: all33 provider mutations have at least2
+independent killing tests; current evidence is [mutations.jsonl](mutations.jsonl).
+The owner incident fixture is [provider-57890737.txt](../../ci/vast-broker/test/fixtures/provider-57890737.txt).
+Its NOT_READY/GPU-unusable/RmInitAdapter failure no longer needs a separate NVIDIA_SMI_RC line.
+The new real-workerd incident round trips exercise exact-id cleanup, machine exclusion,
+fresh host/nonce, stale-capability rejection, one replacement, two dollar receipts/one daily
+attempt, and admission at256 bad-machine rows followed by refusal above256.
+The UTC-day and incomplete-marker controls are in green-attempt-budget.test.js.
+
+CODE READ at fix rev44842eff5: the replacement keeps its original configured profile dollar
+cap and deadline, and the first-admission185-minute BUSY guard does not apply to replacement.
+Fresh ordinary attempts still use that guard. No timeout or poll interval changed.
+
+MEASURED at commit 26729a736, incorporating master 7eec1e79e: 2277 Node tests, 75 real-workerd tests and 11 provider Python tests pass.
+The combined source bundle is2c789c616ea87534c5ee41fa9ddc825606c90ae0215d34d08864d922fbbc7acc.
+The repaired canonical byte-reserve mutation passed its baseline and both named killers;
+full hosted box-script CI is still pending for this update.
