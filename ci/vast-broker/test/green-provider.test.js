@@ -6,8 +6,8 @@ import { configuration } from '../src/policy.js';
 
 // FALSIFIER: a provider fault already gets one fresh-machine retry, preserving total time/money.
 const row = (h) => h.storage.get('record:123-1');
-async function fixture() {
-  const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '40' });
+async function fixture(bindings = {}) {
+  const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '40', ...bindings });
   h.cloud.contracts = [900, 901, 902];
   assert.equal((await h.call()).status, 200);
   const original = await row(h);
@@ -114,7 +114,7 @@ for (const kind of ['boot', 'report'])
   });
 for (const price of [0.4, 0.45])
   test('green replacement cannot enlarge run allowance ' + price, async () => {
-    const { h } = await fixture();
+    const { h } = await fixture({ DAILY_SPEND_USD: '0.7' });
     await fault(h, 'boot');
     h.cloud.extraOffers[0].price = price;
     h.time.value += 60001;
@@ -143,7 +143,7 @@ for (const kind of ['pass', 'fault', 'budget', 'fail', 'unavailable', 'busy'])
 
 for (const price of [0.4, 0.45])
   test('green actual replacement contract retains allowance ' + price, async () => {
-    const { h } = await fixture();
+    const { h } = await fixture({ DAILY_SPEND_USD: '0.7' });
     assert.equal((await fault(h)).status, 200);
     const fetcher = h.cloud.fetch;
     h.cloud.fetch = async (url, init = {}) => {
@@ -190,3 +190,14 @@ for (const kind of ['daily-usd', 'rolling-usd', 'credit-reserve', 'daily-count']
       assert.equal((await response.json()).reason, 'BUDGET:' + kind);
       assert.equal(h.cloud.created.length, 1);
     });
+
+for (const price of [0.21, 0.25])
+  test('green replacement can use a higher quote within configured caps ' + price, async () => {
+    const { h } = await fixture();
+    assert.equal((await fault(h)).status, 200);
+    h.cloud.extraOffers[0].price = price;
+    const response = await h.call();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).id, '901');
+    assert.equal(h.cloud.created.length, 2);
+  });
