@@ -58,39 +58,15 @@ impl HostRm {
             return None;
         }
         let layout = self.sparse_spaces.lock().ok()?.get(&space)?.clone();
-        Some((|| {
-            let _placement = self.placement_gate.write().map_err(|_| RmError::NoMemory)?;
+        Some(with_placement(&self.placement_gate, || {
             if crate::sparse::poison_refuses(self.layout_poisoned.load(Acquire), routing) {
                 return Err(RmError::NoMemory);
             }
             let mut tree = layout.lock().map_err(|_| RmError::NoMemory)?;
             let before = tree.stats;
             let result = f(&mut tree, &SpaceOps { rm: self, space });
-            let after = tree.stats;
-            for (counter, delta) in self.sparse_totals.iter().zip([
-                after.made.saturating_sub(before.made),
-                after.freed.saturating_sub(before.freed),
-                after.refused.saturating_sub(before.refused),
-                after.overflow.saturating_sub(before.overflow),
-                after
-                    .unhonoured_bytes
-                    .saturating_sub(before.unhonoured_bytes),
-                after.retained_bytes.saturating_sub(before.retained_bytes),
-                after.coarse_maps.saturating_sub(before.coarse_maps),
-                after.admit_calls.saturating_sub(before.admit_calls),
-                after.admit_hard_err.saturating_sub(before.admit_hard_err),
-                after.admit_decline.saturating_sub(before.admit_decline),
-                after.admit_ns_total.saturating_sub(before.admit_ns_total),
-                0,
-                after.negative_hits.saturating_sub(before.negative_hits),
-                after
-                    .negative_evicted
-                    .saturating_sub(before.negative_evicted),
-                after
-                    .occupancy_capped
-                    .saturating_sub(before.occupancy_capped),
-                0,
-            ]) {
+            let after = tree.counters();
+            for (counter, delta) in self.sparse_totals.iter().zip(after.deltas(before)) {
                 let _ = counter.try_update(Relaxed, Relaxed, |n| Some(n.saturating_add(delta)));
             }
             self.sparse_totals[11].fetch_max(after.admit_ns_max, Relaxed);
@@ -99,7 +75,7 @@ impl HostRm {
                 eprintln!("kf-host: sparse layout repair failed; further RM placements refused");
             }
             result
-        })())
+        }))
     }
 
     pub(super) fn initial_sparse_roots(
@@ -142,7 +118,7 @@ impl HostRm {
         .unwrap_or(Ok(0))
     }
 
-    /// Retry unhonoured intent only at the next refresh, after a normal block empties.
+    /// Retry unhonoured intent after a normal block empties, including before final invalidate.
     pub fn retry_sparse(&self, space: VaSpace) -> Result<(), RmError> {
         self.with_sparse(space.space, |tree, ops| tree.retry(ops))
             .unwrap_or(Ok(()))
@@ -174,6 +150,7 @@ impl HostRm {
             retained_bytes: self.sparse_totals[5].load(Relaxed),
             coarse_maps: self.sparse_totals[6].load(Relaxed),
             admit_calls: self.sparse_totals[7].load(Relaxed),
+            admit_blocks: self.sparse_totals[16].load(Relaxed),
             admit_hard_err: self.sparse_totals[8].load(Relaxed),
             admit_decline: self.sparse_totals[9].load(Relaxed),
             admit_ns_total: self.sparse_totals[10].load(Relaxed),
@@ -182,6 +159,7 @@ impl HostRm {
             negative_evicted: self.sparse_totals[13].load(Relaxed),
             occupancy_capped: self.sparse_totals[14].load(Relaxed),
             peak_blocks: self.sparse_totals[15].load(Relaxed),
+            live_blocks: self.sparse_object_count.load(Relaxed) as u64,
         }
     }
 
@@ -192,11 +170,46 @@ impl HostRm {
             return None;
         }
         let tree = self.sparse_spaces.lock().ok()?.get(&space.space)?.clone();
-        let mut stats = tree.lock().ok()?.stats;
+        let mut stats = tree.lock().ok()?.counters();
         stats.overflow = stats
             .overflow
             .saturating_add(self.sparse_global_overflow.load(Relaxed));
         Some(stats)
+    }
+
+    /// Top128 current spaces by live blocks. No RM call; contended rows are counted, not waited on.
+    #[must_use]
+    pub fn sparse_census(&self) -> crate::sparse::Census {
+        let Ok(spaces) = self.sparse_spaces.try_lock() else {
+            return crate::sparse::Census {
+                rows: vec![],
+                total: 0,
+                skipped: 1,
+            };
+        };
+        let mut rows = std::collections::BinaryHeap::new();
+        let mut skipped = 0usize;
+        for (&space, tree) in spaces.iter() {
+            let Ok(tree) = tree.try_lock() else {
+                skipped = skipped.saturating_add(1);
+                continue;
+            };
+            let s = tree.counters();
+            rows.push(std::cmp::Reverse((s.live_blocks, space, s.peak_blocks)));
+            if rows.len() > 128 {
+                rows.pop();
+            }
+        }
+        let mut rows: Vec<_> = rows
+            .into_iter()
+            .map(|std::cmp::Reverse((live, space, peak))| (space, live, peak))
+            .collect();
+        rows.sort_unstable_by_key(|r| std::cmp::Reverse(r.1));
+        crate::sparse::Census {
+            rows,
+            total: spaces.len(),
+            skipped,
+        }
     }
 
     pub(super) fn log_sparse(&self, space: u32, stats: Stats) {

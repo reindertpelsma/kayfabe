@@ -3120,6 +3120,7 @@ mod tests {
         host_calls: AtomicU64,
         freed: std::sync::Mutex<Vec<u32>>,
         invalidate_gate: std::sync::Mutex<Option<InvalidateGate>>,
+        invalidate_refuse: std::sync::atomic::AtomicBool,
     }
 
     impl NullHost {
@@ -3130,6 +3131,7 @@ mod tests {
                 host_calls: AtomicU64::new(0),
                 freed: std::sync::Mutex::new(Vec::new()),
                 invalidate_gate: std::sync::Mutex::new(None),
+                invalidate_refuse: std::sync::atomic::AtomicBool::new(false),
             }
         }
         fn call(&self) {
@@ -3144,7 +3146,11 @@ mod tests {
                 entered.send(()).unwrap();
                 go.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
             }
-            Ok(())
+            if self.invalidate_refuse.load(Relaxed) {
+                Err("invalidate refused".into())
+            } else {
+                Ok(())
+            }
         }
         fn map_row(&self, _: &Desired, _: bool) -> Result<Mapped, String> {
             self.call();
@@ -3229,6 +3235,9 @@ mod tests {
     /// An invalidate may finish only the resources retired before it began. Host calls in this
     /// test are blocked by channels, never sleeps; the other worker remains free to retire.
     fn retire_during_invalidate(batch: bool) {
+        retire_during_invalidate_inner(batch, false);
+    }
+    fn retire_during_invalidate_inner(batch: bool, refuse: bool) {
         let host = NullHost::new(u64::MAX);
         let bv = BatchedVas::with_low_reserve(&host, true);
         let (a, b, len) = (0x2_0000_0000u64, 0x2_0002_0000u64, 0x1_0000u64);
@@ -3250,6 +3259,7 @@ mod tests {
         let (entered, wait_entered) = std::sync::mpsc::channel();
         let (go, wait_go) = std::sync::mpsc::channel();
         *host.invalidate_gate.lock().unwrap() = Some((entered, wait_go));
+        host.invalidate_refuse.store(refuse, Relaxed);
         std::thread::scope(|scope| {
             let invalidating = scope.spawn(|| bv.invalidate());
             wait_entered
@@ -3267,8 +3277,18 @@ mod tests {
                 "completion still pending"
             );
             go.send(()).unwrap();
-            invalidating.join().unwrap().unwrap();
+            let result = invalidating.join().unwrap();
+            assert_eq!(result.is_err(), refuse);
         });
+        if refuse {
+            assert!(host.freed.lock().unwrap().is_empty());
+            assert!(bv.pending_invalidate());
+            host.invalidate_refuse.store(false, Relaxed);
+            bv.invalidate().unwrap();
+            assert_eq!(bv.leftovers(), 0);
+            assert_eq!(host.freed.lock().unwrap().len(), if batch { 4 } else { 2 });
+            return;
+        }
         assert!(!bv.micro_covers(a, a + len));
         assert!(
             bv.micro_covers(b, b + len),
@@ -3289,6 +3309,15 @@ mod tests {
     #[test]
     fn a_micro_retired_during_invalidate_waits_for_the_next_completion() {
         retire_during_invalidate(false);
+    }
+
+    #[test]
+    fn ens5_refused_invalidate_keeps_concurrently_retired_batch_objects_pinned() {
+        retire_during_invalidate_inner(true, true);
+    }
+    #[test]
+    fn ens5_refused_invalidate_keeps_concurrent_micro_reservations_pinned() {
+        retire_during_invalidate_inner(false, true);
     }
 
     /// The timing tests below measure latencies of threads running concurrently: they take this lock

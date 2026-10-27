@@ -2861,11 +2861,17 @@ impl Device {
             );
         let sparse = if self.rm.sparse_twin() {
             let s = self.rm.sparse_totals();
-            format!(
+            let kf_host::sparse::Census {
+                rows: census,
+                total: census_total,
+                skipped: census_skipped,
+            } = self.rm.sparse_census();
+            let counters = format!(
                 " sparse[placed={} retired={} unhonoured={} retained={} made={} freed={} \
                  refused={} overflow={} coarse_maps={} admit_calls={} admit_hard_err={} \
                  admit_decline={} admit_ns_total={} admit_ns_max={} negative_hits={} \
-                 negative_evicted={} occupancy_capped={} peak_blocks={}]",
+                 negative_evicted={} occupancy_capped={} peak_blocks={} \
+                 live_blocks={} admit_blocks={}]",
                 va.sparse_placed,
                 va.sparse_retired,
                 va.sparse_unhonoured_bytes,
@@ -2884,7 +2890,14 @@ impl Device {
                 s.negative_evicted,
                 s.occupancy_capped,
                 s.peak_blocks,
-            )
+                s.live_blocks,
+                s.admit_blocks,
+            );
+            counters
+                + &format!(
+                    " sparse_space_blocks={census:?} census_total={census_total} \
+                census_skipped={census_skipped}"
+                )
         } else {
             String::new()
         };

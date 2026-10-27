@@ -129,7 +129,7 @@ fn record(phase: Phase, ns: u64, work: u64) {
 }
 
 /// Admission timing reuses the caller's existing clock; cheap counters are always on.
-pub(crate) fn admission(ns: u64) {
+pub fn admission(ns: u64) {
     record(Phase::Admission, ns, 0);
 }
 

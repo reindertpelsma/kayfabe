@@ -734,6 +734,7 @@ fn ens5_admission_budget_probe_avoids_clone_and_restore_without_rm_calls() {
             )
         })
         .collect();
+    t.ceiling = LO + BLOCK_LIMIT as u64 * NORMAL_GRAIN;
     let before = crate::diag::snapshot();
     assert_eq!(
         t.admit(&r, LO, (BLOCK_LIMIT as u64 + 1) * SPARSE_GRAIN),

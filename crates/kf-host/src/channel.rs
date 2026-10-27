@@ -418,6 +418,12 @@ pub(crate) fn map_pieces<V: DmaVerbs + ?Sized>(
     map_piece_list(v, &pieces, row, rollback_flags)
 }
 
+// Only explicit RM refusals prove that the failed verb installed no mapping.
+// Cancellation, transport/decode failure and misplaced-map cleanup stay uncertain.
+fn map_refusal_is_atomic(error: RmError) -> bool {
+    matches!(error, RmError::NoMemory | RmError::InsufficientPermissions)
+}
+
 struct MapFailure {
     error: RmError,
     rolled_back: bool,
@@ -446,7 +452,9 @@ fn map_tree<V: DmaVerbs + ?Sized>(
         Ok(va) => Ok(va),
         Err(e) => {
             // Uncertain rollback retains occupancy; freeing a possibly live page is forbidden.
-            let _ = (e.rolled_back, undo);
+            if e.rolled_back {
+                tree.restore_map(undo);
+            }
             Err(e.error)
         }
     }
@@ -463,7 +471,7 @@ fn map_piece_list_checked<V: DmaVerbs + ?Sized>(
             .map_one(*h, MapPiece { len: *len, ..row })
             .map_err(|error| MapFailure {
                 error,
-                rolled_back: true,
+                rolled_back: map_refusal_is_atomic(error),
             });
     }
     // Checked once, so no piece offset below can overflow (`piece.va - at < len`).
@@ -479,7 +487,7 @@ fn map_piece_list_checked<V: DmaVerbs + ?Sized>(
             ..row
         };
         if let Err(e) = v.map_one(h, piece) {
-            let mut rolled_back = true;
+            let mut rolled_back = map_refusal_is_atomic(e);
             for &(h0, va0, _) in pieces[..i].iter().rev() {
                 if let Err(r) = v.unmap_one(h0, va0, 0, rollback_flags) {
                     rolled_back = false;
@@ -4116,5 +4124,6 @@ mod tsg_mirror_tests {
 }
 
 #[cfg(test)]
-#[path = "channel/ens5_tests.rs"]
-mod ens5_mapping_tests;
+mod ens5_mapping_tests {
+    include!("channel/ens5_tests.rs");
+}

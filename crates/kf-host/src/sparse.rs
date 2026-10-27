@@ -60,7 +60,8 @@ struct Block {
 pub struct Stats {
     /// Reservation objects created after initial space creation (cumulative).
     pub made: u64,
-    /// Reservation objects released (cumulative); `made - freed` is the live count.
+    /// Geometry releases (cumulative). Initial roots and final teardown make session
+    /// made-minus-freed insufficient for live usage; use the live_blocks gauge.
     pub freed: u64,
     /// Host RM verb refusals (a reserve or release that RM, or the session cap, refused).
     pub refused: u64,
@@ -77,6 +78,8 @@ pub struct Stats {
     pub coarse_maps: u64,
     /// Default-on admission calls, including cached closed fallback.
     pub admit_calls: u64,
+    /// Original blocks copied by local undo (never unrelated tree nodes).
+    pub admit_blocks: u64,
     /// Genuine hard admission errors (validation/RM/repair), not occupied/budget fallback.
     pub admit_hard_err: u64,
     /// Closed admission results.
@@ -123,7 +126,7 @@ impl Stats {
                 .occupancy_capped
                 .saturating_sub(before.occupancy_capped),
             0,
-            0,
+            after.admit_blocks.saturating_sub(before.admit_blocks),
         ]
     }
 }
@@ -154,6 +157,13 @@ pub(crate) struct Reservations {
 }
 
 impl Reservations {
+    pub(crate) fn counters(&self) -> Stats {
+        Stats {
+            live_blocks: self.blocks.len() as u64,
+            peak_blocks: self.stats.peak_blocks.max(self.blocks.len() as u64),
+            ..self.stats
+        }
+    }
     pub(crate) fn new(guest: &[GuestVaRange], limit: usize) -> Self {
         let mut tree = Self {
             blocks: guest
@@ -418,6 +428,7 @@ impl Reservations {
         if end > self.ceiling {
             return Err(RmError::NoMemory);
         }
+        let accepted_before = self.cache.entries.get(&(va, len)).is_some_and(|n| n.retry);
         if let Some(n) = self.cache.get((va, len), self.blocks.len()) {
             self.stats.negative_hits = self.stats.negative_hits.saturating_add(1);
             self.cache.accept((va, len));
@@ -443,12 +454,19 @@ impl Reservations {
         // Undo only the intersecting original blocks. All replacement children are within
         // their parents, so error cleanup cannot scan unrelated existing blocks.
         let snapshot: BTreeMap<_, _> = {
-            let _clone = crate::diag::Scope::start(crate::diag::Phase::Clone, 0);
-            self.blocks
+            let mut clone = crate::diag::Scope::start(crate::diag::Phase::Clone, 0);
+            let saved: BTreeMap<_, _> = self
+                .blocks
                 .range(lo..end)
                 .map(|(&k, b)| (k, b.clone()))
-                .collect()
+                .collect();
+            clone.add_work(saved.len() as u64);
+            saved
         };
+        self.stats.admit_blocks = self
+            .stats
+            .admit_blocks
+            .saturating_add(snapshot.len() as u64);
         let result = self.admit_inner(ops, va, len);
         if result.is_err() {
             let fresh: Vec<_> = self
@@ -489,7 +507,14 @@ impl Reservations {
         }
         if result != Ok(true) {
             let overflow = self.declined;
-            self.remember(va, len, lo, hi, overflow, result.is_ok() || overflow);
+            self.remember(
+                va,
+                len,
+                lo,
+                hi,
+                overflow,
+                accepted_before || result.is_ok() || overflow,
+            );
             if result.is_ok() || overflow {
                 return self.declined(len, overflow);
             }
@@ -680,6 +705,7 @@ impl Reservations {
 
     /// Route a plain (backed) map: refine the geometry around it, then name the host
     /// reservation handle of every piece. Occupancy is recorded before the host call.
+    #[cfg(test)]
     pub(crate) fn route_map(
         &mut self,
         ops: &dyn Ops,

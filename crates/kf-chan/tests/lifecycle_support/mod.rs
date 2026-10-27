@@ -230,6 +230,10 @@ pub enum Ev {
 }
 
 pub trait Env {
+    /// VA apply pending; default keeps the historical scenarios unchanged.
+    fn walk_busy(&self) -> bool {
+        false
+    }
     fn src_entries(&self) -> u32;
     fn gp_put(&mut self) -> u32;
     /// One dword of the current source ring's slot (`hi` = the high dword).
@@ -323,6 +327,9 @@ pub struct TurnIo {
 }
 
 impl<E: Env> Io for EnvIo<'_, E> {
+    fn walk_busy(&mut self) -> bool {
+        self.env.walk_busy()
+    }
     fn hw_words(&mut self) -> Turn<(u32, u32)> {
         let get = self.env.hw_get();
         let reference = self.env.hw_reference();

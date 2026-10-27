@@ -1,0 +1,36 @@
+{
+  "source": "owner-supplied Opus extracted heartbeats; these are SESSION totals",
+  "per_workload_per_space": "unavailable from retained local extracts; no host access authorized",
+  "workloads_unavailable": [
+    "SPECviewperf15.x: all nine viewsets",
+    "Heaven",
+    "Steel"
+  ],
+  "aggregate_extracts": [
+    {
+      "extract": "slow7201.txt",
+      "samples": 208,
+      "max_session_made_minus_freed": 37445,
+      "scope": "censored session aggregate; not a per-space or per-workload high-water"
+    },
+    {
+      "extract": "slow7202.txt",
+      "samples": 23,
+      "max_session_made_minus_freed": 40758,
+      "scope": "censored session aggregate; not a per-space or per-workload high-water"
+    },
+    {
+      "extract": "slow7203.txt",
+      "samples": 22,
+      "max_session_made_minus_freed": 35710,
+      "scope": "censored session aggregate; not a per-space or per-workload high-water"
+    },
+    {
+      "extract": "slow7204.txt",
+      "samples": 0,
+      "max_session_made_minus_freed": null,
+      "scope": "censored session aggregate; not a per-space or per-workload high-water"
+    }
+  ],
+  "workload_labels": "take viewset labels and boundaries from the capture manifest; no catalog inferred here"
+}

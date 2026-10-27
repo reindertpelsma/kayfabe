@@ -76,7 +76,7 @@ pub struct Slow {
     pub last_cost: &'static str,
 }
 impl Slow {
-    /// Return the first slow apply's largest measured timer label exactly once.
+    /// Return the first slow apply's largest pipeline timer label exactly once.
     pub fn observe(&mut self, apply: u64, costs: [u64; 4]) -> Option<&'static str> {
         self.apply_ns_max = self.apply_ns_max.max(apply);
         if apply < 200_000_000 {

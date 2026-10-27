@@ -1,0 +1,146 @@
+{
+  "run": "ENS5 CPU 2026-10-26/27",
+  "baseline": "TS1 0dbdefd99113c075b1d66c081d82490aa69922d7",
+  "before": {
+    "admissions": [
+      {
+        "blocks": 2,
+        "occupied": false,
+        "ns": 16822,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": false,
+        "ns": 145971824,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 2,
+        "occupied": true,
+        "ns": 13866,
+        "result": "Err(NoMemory)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": true,
+        "ns": 347168414,
+        "result": "Err(NoMemory)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": false,
+        "ns": 149233035,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": true,
+        "ns": 149137626,
+        "result": "Err(NoMemory)"
+      }
+    ],
+    "mixed_apply_ns": [
+      27113148942
+    ]
+  },
+  "after_initial_fix": {
+    "admissions": [
+      {
+        "blocks": 2,
+        "occupied": false,
+        "ns": 3276,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": false,
+        "ns": 2244,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 2,
+        "occupied": true,
+        "ns": 1633,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": true,
+        "ns": 1843,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": false,
+        "ns": 2715,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": true,
+        "ns": 2295,
+        "result": "Ok(false)"
+      }
+    ],
+    "mixed_apply_ns": [
+      1207556
+    ]
+  },
+  "bounds": {
+    "single_admission_ns": 5000000,
+    "mixed_4000maps_100binds_ns": 100000000
+  },
+  "scope": "CPU bookkeeping and fake RM only; no native RM/GPU/Windows timing",
+  "fixture_note": "new saturated fixture pins unrelated normal blocks as live demand to exclude empty-normal recycling",
+  "log_hashes": {
+    "host-red.log": "a6f1ebc90d830e1ab73dad88d66c3c721a4c05bcf4e5e30dee15099d479c46ce",
+    "host-cache.log": "b364c3c796e16cfe9e5b05eb98c3601b335e66590b90d8c35b7011513c1ed554",
+    "host-current/baseline.log": "a5718f62e37437766ad7f58b0a76bb0341992ec94a9c1906e14fd3ff9f1b4afa"
+  },
+  "after_current_source": {
+    "admissions": [
+      {
+        "blocks": 2,
+        "occupied": false,
+        "ns": 2184,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": false,
+        "ns": 3176,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 2,
+        "occupied": true,
+        "ns": 1623,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": true,
+        "ns": 2364,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": false,
+        "ns": 3166,
+        "result": "Ok(false)"
+      },
+      {
+        "blocks": 8191,
+        "occupied": true,
+        "ns": 2786,
+        "result": "Ok(false)"
+      }
+    ],
+    "mixed_apply_ns": [
+      2266063
+    ],
+    "host_harness_passed": 151,
+    "host_harness_ignored": 3
+  }
+}

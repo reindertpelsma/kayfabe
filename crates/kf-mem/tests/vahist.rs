@@ -667,3 +667,55 @@ fn the_mode_parser_and_the_lookup_only_recorder() {
         "no line"
     );
 }
+
+#[test]
+fn ens5_auto_history_keeps_first_and_latest_spaces_after_the_print_cap() {
+    let r = Recorder::new();
+    for i in 0..40u64 {
+        let key = (0xc1d0_2000 + i) << 32 | 0xff00_0850;
+        r.note_space(key, i, false);
+        r.record_apply(
+            key,
+            i,
+            &[run(false, 0x1000, 0x1000)],
+            &[ACK_FAILED],
+            true,
+            0,
+        );
+        let _ = r.auto_dump(key, &format!("capture-{i}"));
+    }
+    let saved = r.recent_auto();
+    assert_eq!(
+        saved.iter().filter(|s| s.contains(" VAHIST AUTO ")).count(),
+        16
+    );
+    assert!(saved.iter().any(|s| s.contains("why=capture-0 ")));
+    assert!(saved.iter().any(|s| s.contains("why=capture-39 ")));
+    assert!(saved.iter().all(|s| s.len() <= LINE_MAX));
+}
+
+#[test]
+fn ens5_repeated_space_refusals_keep_a_late_phase_without_printing_it_again() {
+    let r = Recorder::new();
+    r.note_space(K08, 1, false);
+    for i in 1..=40u64 {
+        r.record_apply(
+            K08,
+            i,
+            &[run(false, i * 0x1000, 0x1000)],
+            &[ACK_FAILED],
+            true,
+            0,
+        );
+        let printed = r.auto_dump(K08, &format!("phase-{i}"));
+        assert_eq!(printed.is_empty(), i != 1);
+    }
+    let saved = r.recent_auto();
+    assert_eq!(
+        saved.iter().filter(|s| s.contains(" VAHIST AUTO ")).count(),
+        16
+    );
+    assert!(saved.iter().any(|s| s.contains("why=phase-1 ")));
+    assert!(saved.iter().any(|s| s.contains("why=phase-40 ")));
+    assert!(saved.iter().any(|s| s.contains("walk#40 ")));
+}

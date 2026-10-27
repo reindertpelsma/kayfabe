@@ -1674,6 +1674,13 @@ impl MapTarget for GpuMirror {
             .fetch_add(ns_since(t), Ordering::Relaxed);
         r
     }
+    fn end_refresh(&self) -> Result<(), String> {
+        self.bv
+            .vas
+            .rm
+            .retry_sparse(self.bv.vas.space)
+            .map_err(|e| format!("{e:?}"))
+    }
     fn invalidate(&self) -> Result<(), String> {
         self.bv.invalidate()
     }
@@ -1935,6 +1942,13 @@ impl MapTarget for Target {
             Target::Window(w) => w.own_view(va, end),
             Target::Bar1(b) => b.win.own_view(va, end),
             Target::Gpu(g) => g.own_view(va, end),
+        }
+    }
+    fn end_refresh(&self) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.end_refresh(),
+            Target::Bar1(b) => b.win.end_refresh(),
+            Target::Gpu(g) => g.end_refresh(),
         }
     }
     // ★ Review item 4: forwarded EXPLICITLY (the default renews nothing).

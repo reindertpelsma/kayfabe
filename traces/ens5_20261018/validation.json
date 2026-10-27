@@ -1,0 +1,103 @@
+{
+  "run": "ENS5 CPU 2026-10-26/27",
+  "status": "PARTIAL: current targeted checks and gates pass; final full Cargo rerun pending disk capacity",
+  "base": "0dbdefd99113c075b1d66c081d82490aa69922d7",
+  "breaker_merge": "81abb80db",
+  "expected_red": {
+    "host": [
+      [
+        0,
+        9,
+        0
+      ]
+    ],
+    "memory_ack": [
+      [
+        0,
+        2,
+        0
+      ]
+    ],
+    "diagnostics": [
+      [
+        0,
+        10,
+        0
+      ]
+    ],
+    "native_map": [
+      [
+        2,
+        2,
+        0
+      ]
+    ],
+    "same_apply": [
+      [
+        22,
+        3,
+        0
+      ]
+    ],
+    "uncertain_native_map": [
+      [
+        0,
+        2,
+        0
+      ]
+    ],
+    "heartbeat_admission_work": [
+      [
+        54,
+        2,
+        0
+      ]
+    ]
+  },
+  "same_apply_note": "two intended failures plus a subsequently corrected fixture ceiling",
+  "mutants": {
+    "behavior": 32,
+    "source_composition": 3,
+    "minimum_killers": 2
+  },
+  "relay_reuse": {
+    "passed": 10,
+    "exhaustive_states": [
+      1455,
+      252393,
+      569663
+    ],
+    "seeds": "1..256, replayed"
+  },
+  "native_cost_arm": "compiled, never run",
+  "hardware": "no host/VM/GPU/lock access",
+  "budget": "8192 per-space,32768 session unchanged",
+  "full_suite": "parallel attempt stopped on ledger wall-time ratio; serialized run pending; bound not changed",
+  "highwater": "per-workload/per-space missing locally; session event deltas cannot substitute",
+  "clippy": {
+    "host_memory_qemu_all_targets": "existing=248 new=0",
+    "native_cost_benchmark": "existing=196 new=0"
+  },
+  "claims": "new=0",
+  "current_vahist": {
+    "passed": 19,
+    "source": "actual vahist.rs and recent.rs; existing mem dependencies; standalone stripped test binary"
+  },
+  "current_reservation_native_source": {
+    "passed": 151,
+    "ignored": 3,
+    "failed": 0,
+    "standalone": "actual reservation/state/recycle and native-map/placement helper source, existing host dependencies"
+  },
+  "current_qemu_source_guards": {
+    "ens3_hooks": 10,
+    "ens5_hooks": 8
+  },
+  "full_cargo_previous_attempt": {
+    "host_lib_passed": 215,
+    "host_lib_ignored": 3,
+    "memory_lib_passed": 201,
+    "memory_lib_ignored": 3,
+    "result": "stopped at wall-time ledger map-ratio under concurrent load; three quiet serial exact reruns pass; final serialized whole suite pending"
+  }
+}

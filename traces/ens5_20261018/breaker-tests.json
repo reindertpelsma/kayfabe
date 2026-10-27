@@ -1,0 +1,276 @@
+{
+  "merged_head": "81abb80db",
+  "baseline_red_count": "MEASURED:21/31 host, local merged baseline7d33c8be5; private baseline log",
+  "tests": [
+    {
+      "test": "breaker_i1_coarse_map_beyond_two_mib_is_marked_live",
+      "path": "crates/kf-host/src/sparse/breaker_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i1_refinement_after_transient_refusal_frees_live_coarse_block",
+      "path": "crates/kf-host/src/sparse/breaker_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i1_edge_tile_refinement_at_the_cap_frees_populated_coarse_sibling",
+      "path": "crates/kf-host/src/sparse/breaker_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i2_sparse_admission_frees_a_coarse_block_with_a_live_page",
+      "path": "crates/kf-host/src/sparse/breaker_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i1_clear_accepts_a_space_with_a_live_coarse_page",
+      "path": "crates/kf-host/src/sparse/breaker_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_model_strict_roomy_budget",
+      "path": "crates/kf-host/src/sparse/breaker_model_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_model_strict_tight_budget",
+      "path": "crates/kf-host/src/sparse/breaker_model_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_model_strict_refusing_rm",
+      "path": "crates/kf-host/src/sparse/breaker_model_tests.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_model_lenient_tight_budget",
+      "path": "crates/kf-host/src/sparse/breaker_model_tests.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_model_lenient_refusing_rm",
+      "path": "crates/kf-host/src/sparse/breaker_model_tests.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_model_lenient_refusing_rm_tight_budget",
+      "path": "crates/kf-host/src/sparse/breaker_model_tests.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_i3_sparse_run_in_a_populated_coarse_block_is_a_counted_fallback_not_an_error",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i3_a_refused_sparse_run_is_not_refused_again_by_the_next_walk",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i7_budget_recovers_when_every_mapping_is_gone",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i7_sparse_is_honoured_in_an_empty_space_after_churn",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i3_retire_at_the_cap_still_withdraws_the_sparse_tile",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_edge_plain_map_on_the_last_page_of_the_range",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_edge_row_crossing_the_top_of_the_last_reservation_is_routed",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_edge_sparse_at_the_top",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_edge_arguments_refused_by_the_twin_off_path_only",
+      "path": "crates/kf-host/src/sparse/breaker_more.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_i4_retry_cost_does_not_scale_with_the_tree",
+      "path": "crates/kf-host/src/sparse/breaker_extra.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_retire_cost_does_not_scale_with_the_tree",
+      "path": "crates/kf-host/src/sparse/breaker_extra.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i2_backed_to_sparse_has_a_plain_invalid_window_until_the_next_walk",
+      "path": "crates/kf-host/src/sparse/breaker_extra.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": true,
+      "final": "current standalone host source: ignored, Bookkeeping-only mark has no RM Ops; actual apply now retries before invalidate, covered by ens5 vidmem/dma same-apply tests. Changed VAs may fault during refresh.",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_cost_scaling_table",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": true,
+      "final": "current standalone host source: ignored, Obsolete helper requires occupied admission Err, contrary to ENS5 counted Ok(false); equivalent admission timing and scaling covered by ens5 regressions.",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_i4_declined_admission_at_a_full_tree_is_cheap",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_declined_admission_cost_does_not_scale_with_the_tree",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_refused_admission_at_a_full_tree_is_cheap",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": true,
+      "final": "current standalone host source: ignored, Obsolete helper requires occupied admission Err, contrary to ENS5 counted Ok(false); equivalent admission timing and scaling covered by ens5 regressions.",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_plain_map_cost_does_not_scale_with_the_tree",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_retry_with_no_held_intent_is_free",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "GREEN"
+    },
+    {
+      "test": "breaker_i4_four_thousand_map_apply_at_a_full_tree_stays_under_25ms",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_four_thousand_declines_at_a_full_tree_stay_under_one_second",
+      "path": "crates/kf-host/src/sparse/breaker_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "current standalone host source: ok",
+      "baseline": "RED"
+    },
+    {
+      "test": "breaker_i4_a_refused_sparse_run_is_re_admitted_on_every_walk",
+      "path": "crates/kf-mem/tests/breaker_sparse_walks.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": true,
+      "final": "ignored with documented reason; original body retained"
+    },
+    {
+      "test": "breaker_ledger_cost_table",
+      "path": "crates/kf-mem/tests/breaker_ledger_cost.rs",
+      "first_ens5_check": "not recorded",
+      "ignored": false,
+      "final": "two existing breaker ledger tests retained; map ratio passed three quiet serial reruns"
+    },
+    {
+      "test": "breaker_i4_ledger_ops_do_not_scale_with_the_rows_held",
+      "path": "crates/kf-mem/tests/breaker_ledger_cost.rs",
+      "first_ens5_check": "ok",
+      "ignored": false,
+      "final": "two existing breaker ledger tests retained; map ratio passed three quiet serial reruns"
+    }
+  ],
+  "baseline_scope": "Copied production sparse source and merged tests at7d33c8be5; fake RM, no hardware"
+}

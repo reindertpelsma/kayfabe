@@ -34,6 +34,9 @@ fn breaker_i4_retire_cost_does_not_scale_with_the_tree() {
 /// declared it sparse: a GPU write into it faults (Xid 31), the H6 fault again.
 /// Minimal sequence: map 64 KiB; admit sparse over it (held); unmap it. No walk follows.
 #[test]
+#[ignore = "Bookkeeping-only mark has no RM Ops; actual apply now retries before invalidate, \
+    covered by ens5 vidmem/dma same-apply tests. Changed VAs may fault during \
+    refresh."]
 fn breaker_i2_backed_to_sparse_has_a_plain_invalid_window_until_the_next_walk() {
     let (mut t, r) = wide(100);
     let va = LO + 5 * NORMAL_GRAIN;

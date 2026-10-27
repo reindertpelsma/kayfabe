@@ -1,0 +1,465 @@
+{
+  "reservation_native_placement": [
+    {
+      "mutant": "baseline",
+      "module": "sparse",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "no-whole-block-occupancy",
+      "module": "sparse",
+      "count": 8,
+      "killed_by": [
+        "sparse::tests::breaker_i1_clear_accepts_a_space_with_a_live_coarse_page",
+        "sparse::tests::breaker_i1_coarse_map_beyond_two_mib_is_marked_live",
+        "sparse::tests::breaker_i1_edge_tile_refinement_at_the_cap_frees_populated_coarse_sibling",
+        "sparse::tests::breaker_i1_refinement_after_transient_refusal_frees_live_coarse_block",
+        "sparse::tests::ens5_live_mapping_at_far_edge_prevents_coarse_release",
+        "sparse::tests::ens5_live_mapping_beyond_first_two_mib_prevents_coarse_release",
+        "sparse::tests::ens5_occupancy_cap_pins_the_block_until_a_whole_block_unmap",
+        "sparse::tests::ens5_unmap_at_far_edge_reenables_sparse_admission"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "occupancy-always-empty",
+      "module": "sparse",
+      "count": 25,
+      "killed_by": [
+        "channel::ens5_mapping_tests::ens5_failed_first_piece_keeps_a_prior_live_second_piece_pinned",
+        "channel::ens5_mapping_tests::ens5_failed_native_rollback_keeps_every_possibly_live_piece_pinned",
+        "channel::ens5_mapping_tests::ens5_failed_replacement_restores_prior_live_occupancy",
+        "channel::ens5_mapping_tests::ens5_rollback_refusal_of_a_later_piece_also_keeps_native_pages_pinned",
+        "sparse::tests::breaker_i1_clear_accepts_a_space_with_a_live_coarse_page",
+        "sparse::tests::breaker_i1_coarse_map_beyond_two_mib_is_marked_live",
+        "sparse::tests::breaker_i1_edge_tile_refinement_at_the_cap_frees_populated_coarse_sibling",
+        "sparse::tests::breaker_i1_refinement_after_transient_refusal_frees_live_coarse_block",
+        "sparse::tests::breaker_i3_a_refused_sparse_run_is_not_refused_again_by_the_next_walk",
+        "sparse::tests::breaker_i3_sparse_run_in_a_populated_coarse_block_is_a_counted_fallback_not_an_error",
+        "sparse::tests::ens5_emptying_its_block_invalidates_negative_cache",
+        "sparse::tests::ens5_evicted_dma_intent_retries_when_its_other_normal_block_empties",
+        "sparse::tests::ens5_evicted_vidmem_intent_retries_when_its_normal_block_empties",
+        "sparse::tests::ens5_full_cancel_never_retries_a_retired_negative_intent",
+        "sparse::tests::ens5_live_mapping_at_far_edge_prevents_coarse_release",
+        "sparse::tests::ens5_live_mapping_beyond_first_two_mib_prevents_coarse_release",
+        "sparse::tests::ens5_negative_cache_is_bounded_under_unique_guest_requests",
+        "sparse::tests::ens5_occupancy_cap_pins_the_block_until_a_whole_block_unmap",
+        "sparse::tests::ens5_occupied_coarse_first_page_is_counted_closed_fallback",
+        "sparse::tests::ens5_occupied_coarse_second_page_is_counted_closed_fallback",
+        "sparse::tests::ens5_partial_cancel_keeps_only_uncancelled_far_sparse_intent",
+        "sparse::tests::ens5_partial_leaf_admission_cannot_grow_negative_cache_without_bound",
+        "sparse::tests::ens5_receipt_counters_include_cached_declines_and_hard_errors",
+        "sparse::tests::ens5_unchanged_occupied_admission_uses_negative_cache",
+        "sparse::tests::ens5_unmap_at_far_edge_reenables_sparse_admission"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "occupied-coarse-is-hard-error",
+      "module": "sparse",
+      "count": 19,
+      "killed_by": [
+        "sparse::tests::breaker_i3_a_refused_sparse_run_is_not_refused_again_by_the_next_walk",
+        "sparse::tests::breaker_i3_sparse_run_in_a_populated_coarse_block_is_a_counted_fallback_not_an_error",
+        "sparse::tests::ens5_emptying_its_block_invalidates_negative_cache",
+        "sparse::tests::ens5_full_cancel_never_retries_a_retired_negative_intent",
+        "sparse::tests::ens5_live_mapping_at_far_edge_prevents_coarse_release",
+        "sparse::tests::ens5_live_mapping_beyond_first_two_mib_prevents_coarse_release",
+        "sparse::tests::ens5_negative_cache_is_bounded_under_unique_guest_requests",
+        "sparse::tests::ens5_new_population_invalidates_only_its_occupied_block_decision",
+        "sparse::tests::ens5_occupancy_cap_pins_the_block_until_a_whole_block_unmap",
+        "sparse::tests::ens5_occupied_coarse_first_page_is_counted_closed_fallback",
+        "sparse::tests::ens5_occupied_coarse_second_page_is_counted_closed_fallback",
+        "sparse::tests::ens5_occupied_decline_copies_only_the_affected_original_block",
+        "sparse::tests::ens5_partial_cancel_keeps_only_uncancelled_far_sparse_intent",
+        "sparse::tests::ens5_partial_leaf_admission_cannot_grow_negative_cache_without_bound",
+        "sparse::tests::ens5_partial_unmap_invalidates_its_still_occupied_block_decision",
+        "sparse::tests::ens5_receipt_counters_include_cached_declines_and_hard_errors",
+        "sparse::tests::ens5_unchanged_occupied_admission_uses_negative_cache",
+        "sparse::tests::ens5_unmap_at_far_edge_reenables_sparse_admission",
+        "sparse::tests::ens5_unrelated_block_change_preserves_negative_cache"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-decline-counter",
+      "module": "sparse",
+      "count": 4,
+      "killed_by": [
+        "sparse::tests::ens5_live_mapping_at_far_edge_prevents_coarse_release",
+        "sparse::tests::ens5_live_mapping_beyond_first_two_mib_prevents_coarse_release",
+        "sparse::tests::ens5_occupied_coarse_first_page_is_counted_closed_fallback",
+        "sparse::tests::ens5_occupied_coarse_second_page_is_counted_closed_fallback"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-unhonoured-bytes",
+      "module": "sparse",
+      "count": 4,
+      "killed_by": [
+        "sparse::tests::ens5_live_mapping_at_far_edge_prevents_coarse_release",
+        "sparse::tests::ens5_live_mapping_beyond_first_two_mib_prevents_coarse_release",
+        "sparse::tests::ens5_occupied_coarse_first_page_is_counted_closed_fallback",
+        "sparse::tests::ens5_occupied_coarse_second_page_is_counted_closed_fallback"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "clone-unrelated-tree",
+      "module": "sparse",
+      "count": 4,
+      "killed_by": [
+        "sparse::tests::ens5_budget_decline_copies_only_the_affected_original_block",
+        "sparse::tests::ens5_decline_cost_does_not_scale_with_unrelated_blocks",
+        "sparse::tests::ens5_occupied_cost_does_not_scale_with_unrelated_blocks",
+        "sparse::tests::ens5_occupied_decline_copies_only_the_affected_original_block"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "skip-negative-cache",
+      "module": "state",
+      "count": 4,
+      "killed_by": [
+        "sparse::tests::ens5_failed_admit_is_not_reissued_without_block_change",
+        "sparse::tests::ens5_failed_split_suffix_is_not_reissued_without_block_change",
+        "sparse::tests::ens5_unchanged_occupied_admission_uses_negative_cache",
+        "sparse::tests::ens5_unrelated_block_change_preserves_negative_cache"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "ignore-block-change",
+      "module": "state",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_new_population_invalidates_only_its_occupied_block_decision",
+        "sparse::tests::ens5_partial_unmap_invalidates_its_still_occupied_block_decision"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "uncapped-negative-cache",
+      "module": "state",
+      "count": 4,
+      "killed_by": [
+        "sparse::tests::ens5_evicted_dma_intent_retries_when_its_other_normal_block_empties",
+        "sparse::tests::ens5_evicted_vidmem_intent_retries_when_its_normal_block_empties",
+        "sparse::tests::ens5_negative_cache_is_bounded_under_unique_guest_requests",
+        "sparse::tests::ens5_partial_leaf_admission_cannot_grow_negative_cache_without_bound"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "failed-run-becomes-intent",
+      "module": "sparse",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_failed_suffix_is_not_published_by_an_unrelated_retry",
+        "sparse::tests::ens5_unaccepted_failed_sparse_is_not_published_by_a_peer_map"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "forget-accepted-intent",
+      "module": "state",
+      "count": 3,
+      "killed_by": [
+        "sparse::tests::ens5_emptying_its_block_invalidates_negative_cache",
+        "sparse::tests::ens5_partial_cancel_keeps_only_uncancelled_far_sparse_intent",
+        "sparse::tests::ens5_unmap_at_far_edge_reenables_sparse_admission"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "retry-ignores-negative-acceptance",
+      "module": "sparse",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_failed_suffix_is_not_published_by_an_unrelated_retry",
+        "sparse::tests::ens5_unaccepted_failed_sparse_is_not_published_by_a_peer_map"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "retire-forgets-negative-cancel",
+      "module": "state",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_full_cancel_never_retries_a_retired_negative_intent",
+        "sparse::tests::ens5_partial_cancel_keeps_only_uncancelled_far_sparse_intent"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-dirty-retry-after-unmap",
+      "module": "sparse",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_evicted_dma_intent_retries_when_its_other_normal_block_empties",
+        "sparse::tests::ens5_evicted_vidmem_intent_retries_when_its_normal_block_empties"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-empty-normal-recycling",
+      "module": "recycle",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::breaker_i7_budget_recovers_when_every_mapping_is_gone",
+        "sparse::tests::breaker_i7_sparse_is_honoured_in_an_empty_space_after_churn"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "recycle-live-normal-block",
+      "module": "recycle",
+      "count": 9,
+      "killed_by": [
+        "sparse::tests::breaker_i1_edge_tile_refinement_at_the_cap_frees_populated_coarse_sibling",
+        "sparse::tests::ens5_budget_decline_copies_only_the_affected_original_block",
+        "sparse::tests::ens5_decline_cost_does_not_scale_with_unrelated_blocks",
+        "sparse::tests::ens5_four_thousand_maps_and_hundred_saturated_binds_finish_within_100ms",
+        "sparse::tests::ens5_occupied_cost_does_not_scale_with_unrelated_blocks",
+        "sparse::tests::ens5_occupied_decline_copies_only_the_affected_original_block",
+        "sparse::tests::ens5_saturated_decline_is_below_five_ms",
+        "sparse::tests::ens5_saturated_occupied_failure_is_below_five_ms",
+        "sparse::tests::ens5_unrelated_block_change_preserves_negative_cache"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "recycle-wanted-normal-block",
+      "module": "recycle",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_recycling_does_not_discard_a_partial_sparse_prefix",
+        "sparse::tests::ens5_recycling_does_not_discard_a_partial_sparse_suffix"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-recycle-repair",
+      "module": "recycle",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_a_later_recycling_refusal_restores_all_prior_normal_coverage",
+        "sparse::tests::ens5_empty_normal_merge_refusal_restores_both_original_reservations"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "no-occupancy-undo",
+      "module": "channel",
+      "count": 2,
+      "killed_by": [
+        "channel::ens5_mapping_tests::ens5_failed_first_native_map_does_not_pin_an_empty_reservation",
+        "channel::ens5_mapping_tests::ens5_failed_native_suffix_with_successful_rollback_does_not_pin_a_reservation"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "undo-uncertain-rollback",
+      "module": "channel",
+      "count": 2,
+      "killed_by": [
+        "channel::ens5_mapping_tests::ens5_failed_native_rollback_keeps_every_possibly_live_piece_pinned",
+        "channel::ens5_mapping_tests::ens5_rollback_refusal_of_a_later_piece_also_keeps_native_pages_pinned"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "discard-prior-live-occupancy",
+      "module": "sparse",
+      "count": 2,
+      "killed_by": [
+        "channel::ens5_mapping_tests::ens5_failed_first_piece_keeps_a_prior_live_second_piece_pinned",
+        "channel::ens5_mapping_tests::ens5_failed_replacement_restores_prior_live_occupancy"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "drop-placement-before-native-work",
+      "module": "channel",
+      "count": 2,
+      "killed_by": [
+        "channel::ens5_mapping_tests::ens5_native_refusal_releases_the_placement_boundary_after_repair",
+        "channel::ens5_mapping_tests::ens5_va_act_and_completion_actors_obey_the_production_placement_boundary"
+      ],
+      "exit": 101
+    }
+  ],
+  "bounded_diagnostics": [
+    {
+      "mutant": "baseline",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "early-log-cap-only",
+      "count": 3,
+      "killed_by": [
+        "a_full_ring_preserves_early_refusals_and_the_latest_failure",
+        "a_later_boot_phase_cannot_be_hidden_by_early_refusals",
+        "first_four_and_last_twelve_survive_a_filled_log"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "lose-first-refusals",
+      "count": 2,
+      "killed_by": [
+        "a_full_ring_preserves_early_refusals_and_the_latest_failure",
+        "first_four_and_last_twelve_survive_a_filled_log"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "forget-apply-peak",
+      "count": 2,
+      "killed_by": [
+        "apply_max_includes_fast_and_slow_values",
+        "the_last_fast_apply_does_not_erase_a_slow_peak"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "exclude-exact-threshold",
+      "count": 3,
+      "killed_by": [
+        "exact_threshold_after_fast_work_still_counts_and_snapshots",
+        "changing_the_dominant_timer_does_not_repeat_the_one_shot",
+        "threshold_is_inclusive_at_200ms"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "repeat-slow-snapshot",
+      "count": 2,
+      "killed_by": [
+        "changing_the_dominant_timer_does_not_repeat_the_one_shot",
+        "slow_apply_snapshot_is_once_while_counter_keeps_increasing"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "forget-slow-count",
+      "count": 9,
+      "killed_by": [
+        "a_slow_sparse_admit_produces_a_named_first_snapshot",
+        "changing_the_dominant_timer_does_not_repeat_the_one_shot",
+        "exact_threshold_after_fast_work_still_counts_and_snapshots",
+        "largest_timer_label_is_host_rm",
+        "slow_apply_snapshot_is_once_while_counter_keeps_increasing",
+        "largest_timer_label_is_invalidate",
+        "largest_timer_label_is_walk",
+        "the_last_fast_apply_does_not_erase_a_slow_peak",
+        "threshold_is_inclusive_at_200ms"
+      ],
+      "exit": 101
+    }
+  ],
+  "memory_apply": [
+    {
+      "mutant": "baseline",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "omit-same-apply-reconsideration",
+      "count": 2,
+      "killed_by": [
+        "checks::ens5_dma_to_sparse_is_reconsidered_in_the_same_apply",
+        "checks::ens5_vidmem_to_sparse_is_reconsidered_in_the_same_apply"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "decline-is-failed-ack",
+      "count": 2,
+      "killed_by": [
+        "checks::ens5_failed_occupied_admission_does_not_reemit_each_refresh",
+        "checks::ens5_failed_occupied_suffix_does_not_reemit_each_refresh"
+      ],
+      "exit": 101
+    }
+  ],
+  "source_composition": [
+    {
+      "mutant": "baseline",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "omit-real-gpu-reconsideration",
+      "count": 2,
+      "killed_by": [
+        "actual_gpu_end_refresh_retries_accepted_sparse_intent",
+        "gpu_retry_is_wired_at_both_refresh_boundaries"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "drop-enum-forwarding",
+      "count": 2,
+      "killed_by": [
+        "every_target_variant_keeps_its_end_hook",
+        "wrapping_target_forwards_the_same_apply_hook"
+      ],
+      "exit": 101
+    },
+    {
+      "mutant": "omit-real-placement-boundary",
+      "count": 2,
+      "killed_by": [
+        "actual_sparse_callbacks_use_the_placement_exclusion_helper",
+        "placement_guard_surrounds_the_native_callback"
+      ],
+      "exit": 101
+    }
+  ],
+  "uncertain_native_receipts": [
+    {
+      "mutant": "baseline",
+      "module": "sparse",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "assume-uncertain-failed-piece-is-absent",
+      "module": "channel",
+      "count": 2,
+      "killed_by": [
+        "channel::ens5_mapping_tests::ens5_uncertain_cancel_keeps_the_possibly_installed_native_map_pinned",
+        "channel::ens5_mapping_tests::ens5_uncertain_transport_after_a_partial_map_keeps_the_failed_piece_pinned"
+      ],
+      "exit": 101
+    }
+  ],
+  "heartbeat_admission_work": [
+    {
+      "mutant": "baseline",
+      "module": "sparse",
+      "count": 0,
+      "killed_by": [],
+      "exit": 0
+    },
+    {
+      "mutant": "drop-heartbeat-admission-work",
+      "module": "sparse",
+      "count": 2,
+      "killed_by": [
+        "sparse::tests::ens5_heartbeat_adds_only_new_admission_copy_work",
+        "sparse::tests::ens5_heartbeat_counts_copied_admission_blocks"
+      ],
+      "exit": 101
+    }
+  ]
+}

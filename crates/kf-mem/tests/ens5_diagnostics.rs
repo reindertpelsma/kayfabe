@@ -72,3 +72,26 @@ fn largest_timer_label_is_invalidate() {
         Some("invalidate")
     );
 }
+#[test]
+fn a_full_ring_preserves_early_refusals_and_the_latest_failure() {
+    let mut rows = vec![];
+    for i in 0..10000 {
+        retain(&mut rows, i);
+    }
+    assert_eq!(&rows[..4], &[0, 1, 2, 3]);
+    assert_eq!(rows.last(), Some(&9999));
+}
+#[test]
+fn exact_threshold_after_fast_work_still_counts_and_snapshots() {
+    let mut s = Slow::default();
+    s.observe(1, [0; 4]);
+    assert_eq!(s.observe(200_000_000, [0, 0, 0, 5]), Some("invalidate"));
+    assert_eq!(s.slow, 1);
+}
+#[test]
+fn changing_the_dominant_timer_does_not_repeat_the_one_shot() {
+    let mut s = Slow::default();
+    assert!(s.observe(200_000_000, [5, 0, 0, 0]).is_some());
+    assert_eq!(s.observe(300_000_000, [0, 8, 0, 0]), None);
+    assert_eq!(s.slow, 2);
+}

@@ -3,6 +3,7 @@ const VA: &str = include_str!("../../kf-mem/src/vasmgr.rs");
 const PUMP: &str = include_str!("../src/userpump.rs");
 const HOST: &str = include_str!("../../kf-host/src/lib.rs");
 const SPARSE: &str = include_str!("../../kf-host/src/sparse.rs");
+const DIAG: &str = include_str!("../../kf-host/src/diag.rs");
 const CHAN: &str = include_str!("../src/chan.rs");
 
 #[test]
@@ -45,15 +46,17 @@ fn sparse_reservation_alloc_free_map_and_unmap_reach_timed_ioctls() {
 }
 #[test]
 fn sparse_admission_clone_and_restore_scan_have_separate_costs() {
-    for phase in ["Phase::Admission", "Phase::Clone", "Phase::Restore"] {
+    assert!(SPARSE.contains("crate::diag::admission(ns)"));
+    assert!(DIAG.contains("record(Phase::Admission, ns, 0)"));
+    for phase in ["Phase::Clone", "Phase::Restore"] {
         assert!(SPARSE.contains(phase), "{phase}");
     }
 }
 #[test]
 fn cost_work_counts_actual_clone_blocks_and_restore_page_visits() {
-    assert!(SPARSE.contains("Phase::Clone, self.blocks.len() as u64"));
+    assert!(SPARSE.contains("clone.add_work(saved.len() as u64)"));
     assert!(SPARSE.contains("Phase::Restore"));
-    assert!(SPARSE.contains("diag_scan_pages"));
+    assert!(SPARSE.contains("scan.add_work(1)"));
 }
 #[test]
 fn real_private_put_and_existing_hw_words_feed_snapshot() {

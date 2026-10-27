@@ -134,7 +134,10 @@ impl Cache {
         }
     }
     pub(super) fn capacity_changed(&mut self) {
-        self.entries.retain(|_, n| !n.overflow);
+        for n in self.entries.values_mut().filter(|n| n.overflow) {
+            // Invalidate the cached decision, not the accepted pending intent.
+            n.blocks = usize::MAX;
+        }
     }
     pub(super) fn retire(&mut self, lo: u64, hi: u64) {
         let overlap: Vec<_> = self

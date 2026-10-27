@@ -1125,6 +1125,11 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.codes[i] = KFWR_ACK_HELD;
         }
     }
+    if let Err(why) = target.end_refresh() {
+        out.refused = out.refused.saturating_add(1);
+        out.invalidate_refused = true;
+        out.first_refusal.get_or_insert(why);
+    }
     if target.pending_invalidate()
         || out
             .mapped
