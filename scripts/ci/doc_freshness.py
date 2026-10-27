@@ -253,8 +253,15 @@ def dead_references(root: Path, path: Path, text: str, index: tuple) -> list[str
     return sorted(refs)
 
 
+def is_manual(name: str) -> bool:
+    """The published user manual: versioned by the site per release tag, not a dated record."""
+    return name.startswith("docs/howto/") or name == "docs/FAQ.md"
+
+
 def recommendation(row: dict) -> str:
     name = Path(row["path"]).name
+    if row["status"] == "MANUAL":
+        return "Published manual page; the site build versions it. Keep it matching the code."
     if row["status"] == "ARCHIVED":
         return "Keep archive read-only; no classification change."
     if row["status"] == "ASSET":
@@ -282,7 +289,13 @@ def recommendation(row: dict) -> str:
 
 def scan(root: Path, today: date, max_age: int) -> dict:
     paths = inventory(root)
-    active = [p for p in paths if p.suffix == ".md" and "archive" not in p.relative_to(root).parts]
+    active = [
+        p
+        for p in paths
+        if p.suffix == ".md"
+        and "archive" not in p.relative_to(root).parts
+        and not is_manual(p.relative_to(root).as_posix())
+    ]
     if not active:
         raise ValueError("no active Markdown documents found")
     index = source_index(root)
@@ -303,6 +316,8 @@ def scan(root: Path, today: date, max_age: int) -> dict:
             row["status"] = "ARCHIVED"
         elif path.suffix != ".md":
             row["status"] = "ASSET"
+        elif is_manual(name):
+            row["status"] = "MANUAL"
         else:
             text = path.read_text(encoding="utf-8")
             opening = status.opening_status(text)

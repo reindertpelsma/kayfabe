@@ -62,7 +62,7 @@ class FreshnessTests(unittest.TestCase):
         self.assertIn("missing-status", self.kinds())
 
     def test_nested_markdown_requires_status(self):
-        self.write("docs/howto/guide.md", "# Guide\n")
+        self.write("docs/reference/nested/guide.md", "# Guide\n")
         self.assertIn("missing-status", self.kinds())
 
     def test_architecture_requires_status(self):
@@ -402,6 +402,15 @@ class FreshnessTests(unittest.TestCase):
             row for row in self.run_check()["documents"] if row["path"].endswith("data.json")
         )
         self.assertEqual(row["status"], "ASSET")
+
+    def test_published_manual_pages_are_inventoried_not_dated(self):
+        self.write("docs/howto/page.md", "# Page\n\n[faq](FAQ.md)\n")
+        self.write("docs/FAQ.md", "# FAQ\n\n[page](page.md)\n")
+        result = self.run_check()
+        rows = {row["path"]: row for row in result["documents"]}
+        self.assertEqual(rows["docs/howto/page.md"]["status"], "MANUAL")
+        self.assertEqual(rows["docs/FAQ.md"]["status"], "MANUAL")
+        self.assertEqual(result["new"], 0)
 
     def test_evidence_log_status_word_is_not_document_metadata(self):
         self.write("docs/reference/run.log", "STATUS: invalid evidence output\n")

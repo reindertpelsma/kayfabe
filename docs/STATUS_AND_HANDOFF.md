@@ -1,5 +1,8 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+**STATUS: LIVE, 2026-10-22.** The newest UPDATE below is the resume point; the sections after
+it are dated checkpoints, kept as history.
+
 ## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 
 [CODE READ: 2026-10-21 provider docs] BLOCKED: the documented Vast VM/onstart

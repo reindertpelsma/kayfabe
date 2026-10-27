@@ -1,6 +1,6 @@
 # Translated-slot contention must preserve its consumed ring
 
-**STATUS: GPU-FREE VALIDATED, 2026-10-27.** ENS8 strengthens PR168 on top of its original head `899b0b5ba60884993c1e5a2970eea25ea311ea07`; no host run or PR retarget is performed here.
+**STATUS: RESEARCH, 2026-10-27.** GPU-free validated. ENS8 strengthens PR168 on top of its original head `899b0b5ba60884993c1e5a2970eea25ea311ea07`; no host run or PR retarget is performed here.
 
 ## Defect and exact witness
 
