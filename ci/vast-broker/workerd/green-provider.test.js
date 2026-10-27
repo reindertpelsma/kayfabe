@@ -51,6 +51,7 @@ async function fixture(t) {
     price: 0.2,
     ttl: 7200000,
     machineId: 100001,
+    hostId: 100,
     id: '900',
     nonce: 'b'.repeat(32),
     runnerNonce: 'f'.repeat(64),
@@ -87,6 +88,7 @@ async function fixture(t) {
     closed: null,
     verdict: null,
     machineId: 100002,
+    hostId: 200,
     providerRetries: 1,
     retryCostUsd: 0.2 / 3600,
     originalStarted: previous.started,
@@ -116,6 +118,12 @@ for (const count of [2, 4])
   });
 for (const kind of [
   'same-machine',
+  'same-host',
+  'unknown-host',
+  'unknown-prior-host',
+  'configured-host',
+  'bad-host',
+  'bad-host-cap',
   'deadline',
   'allowance',
   'unclean',
@@ -128,6 +136,22 @@ for (const kind of [
     test('workerd provider replacement rejects ' + kind + variant, async (t) => {
       const { call, record, previous } = await fixture(t);
       if (kind === 'same-machine') record.machineId = previous.machineId;
+      if (kind === 'same-host') record.hostId = previous.hostId;
+      if (kind === 'unknown-host') record.hostId = variant === 1 ? null : undefined;
+      if (kind === 'unknown-prior-host') {
+        previous.hostId = variant === 1 ? null : undefined;
+        await call('/seed', [['record:123-1', previous]]);
+      }
+      if (kind === 'bad-host')
+        await call('/seed', [['bad-host:' + record.hostId, { reason: 'PROVIDER_FAULT' }]]);
+      if (kind === 'bad-host-cap')
+        await call(
+          '/seed',
+          Array.from({ length: 256 + variant }, (_, i) => [
+            'bad-host:' + (1000 + i),
+            { reason: 'PROVIDER_FAULT' },
+          ]),
+        );
       if (kind === 'deadline') record.hardDeadline += variant;
       if (kind === 'allowance') record.runBudgetUsd += variant;
       if (kind === 'unclean') {
@@ -144,6 +168,7 @@ for (const kind of [
         retryNonce: kind === 'nonce' ? 'd'.repeat(32) : previous.nonce,
         ...(kind === 'cost' ? { cost: 1 + variant / 10 } : {}),
         ...(kind === 'cap' ? { config: variant === 1 ? { daily: 0.01 } : { rolling: 0.01 } } : {}),
+        ...(kind === 'configured-host' ? { config: { badHosts: [record.hostId] } } : {}),
       });
       assert.notEqual(response.status, 200);
       assert.deepEqual(await call('/snapshot'), before);
@@ -160,4 +185,122 @@ for (const variant of [1, 2])
     assert.equal(response.status, 200, JSON.stringify(response.data));
     const admin = await call('/admin/list');
     assert.equal(admin.data.budget.profiles.check.count_today, 1);
+  });
+
+for (const count of [2, 4])
+  test('workerd concurrent distinct provider faults learn a host ' + count, async (t) => {
+    const { call } = await fixture(t);
+    const replies = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        call('/provider-fault', { record: { machineId: 800 + i, hostId: 9000 } }),
+      ),
+    );
+    assert.ok(replies.every((r) => r.status === 200));
+    const rows = (await call('/snapshot')).data;
+    const host = rows.find(([key]) => key === 'bad-host:9000')?.[1];
+    assert.equal(host.reason, 'PROVIDER_FAULT');
+    assert.equal(new Set(host.machines).size, 2);
+    for (const machine of host.machines)
+      assert.equal(rows.find(([key]) => key === 'bad-machine:' + machine)[1].hostId, 9000);
+  });
+
+for (const hostId of [9000, 9001])
+  test('workerd repeated one-machine fault cannot condemn a host ' + hostId, async (t) => {
+    const { call } = await fixture(t);
+    for (let i = 0; i < 3; i++)
+      assert.equal(
+        (await call('/provider-fault', { record: { machineId: 800, hostId } })).status,
+        200,
+      );
+    assert.equal(
+      (await call('/snapshot')).data.some(([key]) => key.startsWith('bad-host:')),
+      false,
+    );
+  });
+
+for (const variant of [1, 2]) {
+  test('workerd provider indexes stay bounded ' + variant, async (t) => {
+    const { call } = await fixture(t);
+    await call(
+      '/seed',
+      Array.from({ length: 257 + variant }, (_, i) => [
+        'bad-machine:' + (1000 + i),
+        { reason: 'PROVIDER_FAULT', hostId: 9000 },
+      ]),
+    );
+    assert.equal(
+      (
+        await call('/provider-fault', {
+          record: { machineId: 800, hostId: 9000 },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await call('/snapshot')).data.filter(([k]) => k.startsWith('bad-machine:')).length,
+      257 + variant,
+    );
+  });
+  test('workerd host index stays bounded ' + variant, async (t) => {
+    const { call } = await fixture(t);
+    await call('/seed', [
+      ['bad-machine:800', { reason: 'PROVIDER_FAULT', hostId: 9000 + variant }],
+      ...Array.from({ length: 257 + variant }, (_, i) => [
+        'bad-host:' + (1000 + i),
+        { reason: 'PROVIDER_FAULT' },
+      ]),
+    ]);
+    assert.equal(
+      (
+        await call('/provider-fault', {
+          record: { machineId: 801, hostId: 9000 + variant },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await call('/snapshot')).data.filter(([k]) => k.startsWith('bad-host:')).length,
+      257 + variant,
+    );
+  });
+  test(
+    'workerd one provider fault cannot combine unrelated host evidence ' + variant,
+    async (t) => {
+      const { call } = await fixture(t);
+      await call('/seed', [
+        [
+          'bad-machine:800',
+          {
+            reason: variant === 1 ? 'MANUAL' : 'PROVIDER_FAULT',
+            hostId: variant === 1 ? 9000 : 9001,
+          },
+        ],
+      ]);
+      assert.equal(
+        (
+          await call('/provider-fault', {
+            record: { machineId: 801, hostId: 9000 },
+          })
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await call('/snapshot')).data.some(([k]) => k.startsWith('bad-host:')),
+        false,
+      );
+    },
+  );
+}
+
+for (const failAt of ['bad-machine:', 'bad-host:'])
+  test('workerd provider fault writes roll back at ' + failAt, async (t) => {
+    const { call } = await fixture(t);
+    await call('/seed', [['bad-machine:800', { reason: 'PROVIDER_FAULT', hostId: 9000 }]]);
+    const before = await call('/snapshot');
+    const response = await call('/provider-fault', {
+      record: { machineId: 801, hostId: 9000 },
+      failAt,
+    });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await call('/snapshot'), before);
   });

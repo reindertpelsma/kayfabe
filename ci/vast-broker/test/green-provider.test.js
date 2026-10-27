@@ -8,11 +8,11 @@ import { configuration } from '../src/policy.js';
 const row = (h) => h.storage.get('record:123-1');
 async function fixture(bindings = {}, offerPatch = {}) {
   const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '40', ...bindings });
-  Object.assign(h.cloud.offer, offerPatch);
+  Object.assign(h.cloud.offer, { host_id: 100 }, offerPatch);
   h.cloud.contracts = [900, 901, 902];
   assert.equal((await h.call()).status, 200);
   const original = await row(h);
-  h.cloud.extraOffers = [{ ...h.cloud.offer, id: 6, machine_id: 100002, price: 0.1 }];
+  h.cloud.extraOffers = [{ ...h.cloud.offer, id: 6, machine_id: 100002, host_id: 200, price: 0.1 }];
   return { h, original };
 }
 async function fault(h, kind = 'report') {
@@ -227,6 +227,7 @@ for (const kind of ['report', 'boot'])
 for (const host of [200, 201])
   test('green provider replacement prefers a different eligible host ' + host, async () => {
     const { h } = await fixture({}, { host_id: 100 });
+    h.cloud.extraOffers[0].host_id = 100;
     h.cloud.extraOffers.push({
       ...h.cloud.extraOffers[0],
       id: 7,
@@ -242,6 +243,7 @@ for (const host of [200, 201])
 for (const invalid of [{ verified: false }, { price: 2 }])
   test('green other-host preference retains eligibility ' + JSON.stringify(invalid), async () => {
     const { h } = await fixture({}, { host_id: 100 });
+    h.cloud.extraOffers[0].host_id = 100;
     h.cloud.extraOffers.push({
       ...h.cloud.extraOffers[0],
       id: 7,
@@ -252,5 +254,6 @@ for (const invalid of [{ verified: false }, { price: 2 }])
     assert.equal((await fault(h)).status, 200);
     const response = await h.call();
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).machine_id, 100002);
+    assert.equal((await response.json()).verdict, 'PROVIDER_FAULT');
+    assert.equal(h.cloud.created.length, 1);
   });

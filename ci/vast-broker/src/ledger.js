@@ -22,6 +22,34 @@ export class Ledger {
   put(key, value) {
     return this.storage.put(key, value);
   }
+  async markProviderFault(record, reason, now) {
+    if (!Number.isSafeInteger(record.machineId) || record.machineId <= 0) return;
+    await this.storage.transaction(async (storage) => {
+      const machines = await storage.list({ prefix: 'bad-machine:', limit: 257 });
+      const key = 'bad-machine:' + record.machineId;
+      const host = Number.isSafeInteger(record.hostId) && record.hostId > 0;
+      // Retain at most the refusal sentinel (257); admission refuses above 256.
+      if (!machines.has(key) && machines.size >= 257) return;
+      await storage.put(key, { reason, at: now, ...(host ? { hostId: record.hostId } : {}) });
+      if (!host) return;
+      const other = [...machines].find(
+        ([k, r]) =>
+          k !== key &&
+          /^bad-machine:[1-9][0-9]*$/.test(k) &&
+          r?.hostId === record.hostId &&
+          ['PROVIDER_FAULT', 'KVM_DOMAIN_NOT_FOUND'].includes(r.reason),
+      );
+      if (!other) return;
+      const hosts = await storage.list({ prefix: 'bad-host:', limit: 257 });
+      const hostKey = 'bad-host:' + record.hostId;
+      if (!hosts.has(hostKey) && hosts.size >= 257) return;
+      await storage.put(hostKey, {
+        reason: 'PROVIDER_FAULT',
+        at: now,
+        machines: [Number(other[0].slice('bad-machine:'.length)), record.machineId],
+      });
+    });
+  }
   async save(record) {
     await this.put('record:' + record.key, record);
     if (record.id) await this.put('id:' + record.id, record.key);
@@ -113,6 +141,11 @@ export class Ledger {
           record.providerRetries !== 1 ||
           record.nonce === prior.nonce ||
           record.machineId === prior.machineId ||
+          !Number.isSafeInteger(prior.hostId) ||
+          prior.hostId <= 0 ||
+          !Number.isSafeInteger(record.hostId) ||
+          record.hostId <= 0 ||
+          record.hostId === prior.hostId ||
           !['run', 'attempt', 'sha', 'branch', 'profile', 'runnerNonce'].every(
             (key) => record[key] === prior[key],
           ) ||
@@ -161,8 +194,12 @@ export class Ledger {
       )
         refuse('BUSY', 409);
       const bad = await storage.list({ prefix: 'bad-machine:', limit: 257 });
+      const badHosts = await storage.list({ prefix: 'bad-host:', limit: 257 });
       if (
         bad.size > 256 ||
+        badHosts.size > 256 ||
+        badHosts.has('bad-host:' + record.hostId) ||
+        cfg.badHosts.includes(record.hostId) ||
         bad.has('bad-machine:' + record.machineId) ||
         cfg.badMachines.includes(record.machineId) ||
         open.some((o) => Number.isSafeInteger(o.machineId) && o.machineId === record.machineId)

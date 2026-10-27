@@ -50,6 +50,27 @@ export class AdmissionFixture {
     if (path === '/snapshot') {
       return Response.json([...(await this.ctx.storage.list())]);
     }
+    if (path === '/provider-fault') {
+      const { record, reason = 'PROVIDER_FAULT', now = Date.now(), failAt } = await request.json();
+      const failing = (storage) => ({
+        list: (...args) => storage.list(...args),
+        put: async (key, value) => {
+          await storage.put(key, value);
+          if (key.startsWith(failAt)) throw Error('injected provider fault write');
+        },
+        transaction: (action) => storage.transaction((txn) => action(failing(txn))),
+      });
+      try {
+        await new Ledger(failAt ? failing(this.ctx.storage) : this.ctx.storage).markProviderFault(
+          record,
+          reason,
+          now,
+        );
+        return Response.json({ state: 'RECORDED' });
+      } catch {
+        return Response.json({ state: 'ERROR' }, { status: 503 });
+      }
+    }
     if (path === '/reserve') {
       const { record, config, cost = 0.1, credit = 20, failAt, retryNonce } = await request.json();
       const failing = (storage) => ({

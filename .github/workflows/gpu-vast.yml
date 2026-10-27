@@ -214,6 +214,9 @@ jobs:
             result=failure
           fi
           description="GPU broker $state"
+          if [[ "$state" = PROVIDER_FAULT && "$BROKER_VERDICT" = PROVIDER_FAULT ]]; then
+            description="GPU provider fault; no kayfabe verdict"
+          fi
           temporary=$(mktemp)
           jq -n --arg state "$result" --arg description "$description" \
             --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
