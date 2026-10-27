@@ -11,7 +11,7 @@ RUNNER = REPO / "scripts/fastguest/run_fast_guest.sh"
 
 
 class LaunchSafety(unittest.TestCase):
-    def launch(self, name):
+    def launch(self, name, qemu_rc=0, expected_rc=0, refusal=""):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             binary = root / "bin"
@@ -26,6 +26,7 @@ class LaunchSafety(unittest.TestCase):
             qemu.write_text(
                 '#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV_LOG"\n'
                 'printf "FASTGUEST: client rc=0\\nFASTGUEST: DONE\\n" > "$SERIAL"\n'
+                'printf "%s\\n" "$FAKE_REFUSAL"\nexit "$FAKE_QEMU_RC"\n'
             )
             for script in binary.iterdir():
                 script.chmod(0o755)
@@ -37,6 +38,8 @@ class LaunchSafety(unittest.TestCase):
                 QEMU_BIN=str(qemu),
                 KF_LOCK=str(root / "private.lock"),
                 KF_VM_NAME=name,
+                FAKE_QEMU_RC=str(qemu_rc),
+                FAKE_REFUSAL=refusal,
                 KF3_FB_MB="4096",
                 KILL_LOG=str(root / "kills"),
                 ARGV_LOG=str(root / "argv"),
@@ -49,7 +52,7 @@ class LaunchSafety(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.returncode, expected_rc, result.stdout + result.stderr)
             kills = (root / "kills").read_text() if (root / "kills").exists() else ""
             return kills, (root / "argv").read_text().splitlines()
 
@@ -68,6 +71,28 @@ class LaunchSafety(unittest.TestCase):
     def test_vm_b_has_its_own_name(self):
         _, argv = self.launch("kf-z1-vm-b")
         self.assertEqual(argv[argv.index("-name") + 1], "kf-z1-vm-b")
+
+    def test_nonzero_exit_cannot_pass_even_with_done_marker(self):
+        self.launch("exit-one", qemu_rc=1, expected_rc=1)
+
+    def test_second_nonzero_exit_cannot_pass_with_successful_client(self):
+        self.launch("exit-two", qemu_rc=2, expected_rc=1)
+
+    def test_rootless_refusal_stays_a_refusal_with_nonzero_exit(self):
+        self.launch(
+            "refused-one",
+            qemu_rc=2,
+            expected_rc=3,
+            refusal="ROOTLESS_REFUSED: cannot inspect owned process",
+        )
+
+    def test_rootless_refusal_cannot_be_hidden_by_zero_exit(self):
+        self.launch(
+            "refused-two",
+            qemu_rc=0,
+            expected_rc=3,
+            refusal="ROOTLESS_REFUSED: privilege proof unavailable",
+        )
 
 
 if __name__ == "__main__":
