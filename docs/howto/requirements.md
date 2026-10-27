@@ -39,7 +39,8 @@ What has been run (the README's list; revisions and boxes are in the repository'
 | Ampere GA106 (RTX 3060) | yes; the usual bench GPU | not documented yet |
 | Ampere GA104 | yes (exact cell: kayfabe `714ec29d3`, 595.91.07) | "only has the GPU" per the README; display not documented yet |
 | Turing TU116 | yes | not documented yet |
-| Blackwell GB205 | yes | not documented yet |
+| Blackwell GB205 | yes | an idle ten-minute run passed once, with two fixes that are not merged yet; no apps run; without the fixes the driver crashes the guest <!-- src: branch claude/blackwell-fixes-20261024, one run (n=1) --> |
+| Blackwell GB202 | not documented yet | **open:** one run crashed within seconds, not yet explained; a run on another machine did not repeat it <!-- src: branches codex/bw6b-20261024 and claude/bw11-20261026 --> |
 | Blackwell GB206 | passed at earlier revisions | **open: Code 43** |
 
 <!-- src: README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0; traces/sw3_die_sweep_20261024/README.md -->
