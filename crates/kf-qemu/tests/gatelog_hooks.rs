@@ -131,6 +131,9 @@ fn the_xid_dump_shares_vahists_trigger_and_the_shutdown_dump_follows_the_loop() 
     // the shutdown dump sits right after the closing brace of the `while !self.stop` loop
     let tail = [
         "            }\n        }\n",
+        "        if self.latency_active {\n",
+        "            kf_host::latency::dump_shutdown();\n",
+        "        }\n",
         "        // \u{2298} DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): ",
         "the walk-gate log's summary at",
     ]
