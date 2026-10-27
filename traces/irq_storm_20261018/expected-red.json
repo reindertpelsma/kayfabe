@@ -1,0 +1,49 @@
+[
+  {
+    "commit": "be7165393fd1be1f0197352c6128f671f71d31d4",
+    "passed": 1,
+    "failed": 27,
+    "failing_tests": [
+      "irqstorm::tests::a_deadline_past_the_clock_domain_fails_without_a_message",
+      "irqstorm::tests::a_longer_period_is_not_shortened_and_a_delayed_tick_does_not_catch_up",
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_gr_trap_writes",
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_ce_trap_writes",
+      "irqstorm::tests::an_empty_enabled_tree_gets_only_a_spurious_message_and_no_status",
+      "irqstorm::tests::before_top_arming_no_message_is_emitted",
+      "irqstorm::tests::before_leaf_arming_no_message_is_emitted",
+      "irqstorm::tests::explicit_all_accepts_a_valid_interval_without_becoming_guest_controlled",
+      "irqstorm::tests::competing_ticks_for_gr_share_a_single_global_rate_limit",
+      "irqstorm::tests::competing_ticks_for_ce_share_a_single_global_rate_limit",
+      "irqstorm::tests::guest_w1c_is_never_undone_and_unrelated_real_status_is_preserved",
+      "irqstorm::tests::hostile_vector_ids_cannot_index_the_tree_or_steal_real_status",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second",
+      "irqstorm::tests::no_host_completion_consumption_history_is_claimed_by_the_pacer",
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::one_ms_period_cannot_spin_on_one_timestamp",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors",
+      "irqstorm::tests::out_of_range_or_malformed_periods_are_rejected",
+      "irqstorm::tests::owed_never_silently_falls_back_to_all",
+      "irqstorm::tests::reset_gate_blocks_messages_and_reopening_does_not_invent_status",
+      "irqstorm::tests::saturated_clock_cannot_mint_unlimited_credits",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz",
+      "irqstorm::tests::top_masks_skip_vectors_even_with_a_real_pending_leaf",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification",
+      "irqstorm::tests::unknown_modes_are_rejected",
+      "irqstorm::tests::valid_host_periods_select_all_and_keep_the_exact_period"
+    ],
+    "raw_log_sha256": "a8ae056ca0e2280dae71bc8ad5526f2c9ff4c192ca742115702f5279c91add10"
+  },
+  {
+    "commit": "efe42f8fdfad4c20d3f438e7683030a8022a568d",
+    "passed": 36,
+    "failed": 4,
+    "failing_tests": [
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::an_in_progress_ce_message_excludes_another_timer_sender",
+      "irqstorm::tests::an_in_progress_gr_message_excludes_another_timer_sender"
+    ],
+    "raw_log_sha256": "2688eff555eeda8eccc2431a7139fadef0da77b6e60ecb589233be708ad7ff8e"
+  }
+]

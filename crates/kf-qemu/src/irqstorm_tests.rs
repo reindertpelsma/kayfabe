@@ -84,6 +84,10 @@ fn only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors() {
         s.summary(),
         " irq_storm[mode=all period_ms=1 storm_raises=1 storm_skipped_masked=0]"
     );
+    assert_eq!(
+        timer_interval(false, Some(&s)),
+        Some(std::time::Duration::from_millis(1))
+    );
 }
 #[test]
 fn nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport() {
@@ -105,12 +109,22 @@ fn nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport() {
         s.summary(),
         " irq_storm[mode=all period_ms=7 storm_raises=1 storm_skipped_masked=0]"
     );
+    assert_eq!(
+        timer_interval(false, Some(&s)),
+        Some(std::time::Duration::from_millis(7))
+    );
 }
 #[test]
 fn before_leaf_arming_no_message_is_emitted() {
     let s = storm(1);
     let t = tree(&[]);
-    s.tick(|| 0, &Gate::default(), &t, [0, 1], || panic!("unarmed"));
+    s.tick(
+        || 0,
+        &Gate::default(),
+        &t,
+        [0, 0, 1, 1],
+        || panic!("unarmed"),
+    );
     assert_eq!(s.raises.load(Ordering::Relaxed), 0);
     assert_eq!(s.skipped_masked.load(Ordering::Relaxed), 2);
 }
@@ -127,6 +141,10 @@ fn before_top_arming_no_message_is_emitted() {
         || panic!("top disabled"),
     );
     assert_eq!(s.skipped_masked.load(Ordering::Relaxed), 2);
+    assert_eq!(
+        s.summary(),
+        " irq_storm[mode=all period_ms=1 storm_raises=0 storm_skipped_masked=2]"
+    );
 }
 #[test]
 fn leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm() {
@@ -548,4 +566,44 @@ fn storm_timer_shares_the_probe_thread_without_enabling_channel_probes() {
         timer_interval(true, Some(&s)),
         Some(std::time::Duration::from_millis(100))
     );
+}
+
+fn wide_family(family: kf_chip::Family, v: u32) {
+    let s = storm(1);
+    let t = CpuIntr::new(family, 0xbb0000).unwrap();
+    t.write(Reg::TopEnSet, 0xff);
+    t.write(Reg::LeafEnSet((v / 32) as usize), 1 << (v % 32));
+    let before = image(&t);
+    s.tick(|| 0, &Gate::default(), &t, [u32::MAX, 512, v], || true);
+    assert_eq!(s.raises.load(Ordering::Relaxed), 1);
+    assert_eq!(image(&t), before);
+}
+#[test]
+fn hopper_completion_vectors_use_the_full_family_tree() {
+    wide_family(kf_chip::Family::Hopper, 400);
+}
+#[test]
+fn blackwell_completion_vectors_use_the_full_family_tree() {
+    wide_family(kf_chip::Family::Blackwell, 511);
+}
+fn inspection_bound(v: u32) {
+    let s = storm(1);
+    let t = tree(&[v]);
+    let inspected = AtomicUsize::new(0);
+    let input = std::iter::repeat_with(|| {
+        let n = inspected.fetch_add(1, Ordering::Relaxed);
+        assert!(n < 512, "unbounded candidate inspection");
+        v
+    });
+    s.tick(|| 0, &Gate::default(), &t, input, || true);
+    assert_eq!(inspected.load(Ordering::Relaxed), 512);
+    assert_eq!(s.raises.load(Ordering::Relaxed), 1);
+}
+#[test]
+fn repeated_gr_aliases_cannot_create_an_unbounded_scan() {
+    inspection_bound(0);
+}
+#[test]
+fn repeated_ce_aliases_cannot_create_an_unbounded_scan() {
+    inspection_bound(70);
 }

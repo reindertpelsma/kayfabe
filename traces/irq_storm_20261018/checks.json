@@ -1,0 +1,38 @@
+{
+  "base": "64c50ad472d4402a5bd7e7a3b07a628254a6565a",
+  "date": "2026-10-27",
+  "source_sha256": {
+    "crates/kf-qemu/src/device.rs": "beb738275e434379740528ca9597d66cd88b9bbd08873b3db2adb19797a8c351",
+    "crates/kf-qemu/src/ffi_unsafe.rs": "bb2ea1c281b1965fc280701512b6c3783d0ea79b501a60a16c1cdf6c042580d2",
+    "crates/kf-qemu/src/irqstorm.rs": "5c00ae56507ef08d745fddb671a40b70be6f8c3fd1cc0dccbcf7e4b2e848f3fd",
+    "crates/kf-qemu/src/irqstorm_tests.rs": "a371b906d0827f6ba5b7b40df65bc0e8a0b18f6881229852c78e7de15227a8ac",
+    "crates/kf-qemu/src/lib.rs": "d51eaa63d67c302f382501d50d1d62de5c3174513afdd0048a168f1c961d4709",
+    "crates/kf-trap/src/cpuintr.rs": "5983f7d0003a18595c27f8bf00ad875287bd9b54491248436e9542bbe90712f3"
+  },
+  "static": {
+    "crates/kf-trap/src/cpuintr.rs::write": {
+      "unchanged": true,
+      "sha256": "bd8348c10b9feb075521ef3c650b62dca1e9cd68fb656510201c32545247966d"
+    },
+    "crates/kf-qemu/src/device.rs::worker_loop": {
+      "unchanged": true,
+      "sha256": "991db9adc76cca71ec6aef698d1d7a0d5eda31052f3c80f08df582491ffadfb7"
+    }
+  },
+  "rustfmt": "pass; six changed Rust files; edition 2024; skip_children=true",
+  "added_line_hygiene_issues": 0,
+  "diff_check": "pass",
+  "clippy": {
+    "command": "nice -n 19 cargo clippy --release -j2 --target-dir <own-target> -p kf-trap -p kf-qemu --all-targets --message-format=json",
+    "exit_code": 0,
+    "warning_messages": 424,
+    "changed_line_warnings": 0,
+    "debt_new": 0
+  },
+  "claims": {
+    "command": "python3 scripts/ci/debt.py claims",
+    "new": 0
+  },
+  "no_hardware": true,
+  "no_new_unsafe": true
+}

@@ -1,0 +1,174 @@
+{
+  "base": "64c50ad472d4402a5bd7e7a3b07a628254a6565a",
+  "date": "2026-10-27",
+  "command": "nice -n 19 cargo test --release -j2 --target-dir <own-target> -p kf-trap -p kf-qemu",
+  "passed": 743,
+  "failed": 0,
+  "ignored": 4,
+  "irqstorm_tests": 44,
+  "suites": [
+    {
+      "suite": "unittests src/lib.rs",
+      "passed": 471,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "suite": "tests/bar0_trace_gate.rs",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/channel_budget_lazy.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/copy_birth_policy.rs",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/doorbell_no_put_poll.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/ens3_hooks.rs",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/ens5_hooks.rs",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/ens6_hooks.rs",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/ens7_hooks.rs",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/gatelog_hooks.rs",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/gop_rom_knobs.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/gpu_uuid_property.rs",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/kf3_realize_discard.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/max_fps_property.rs",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/mirror_refusal_log_bounded.rs",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/timeslice.rs",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/timeslice_hooks.rs",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/timeslice_mirror.rs",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/tsgfacts.rs",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/vahist_hooks.rs",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/wire_mirror.rs",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "unittests src/lib.rs",
+      "passed": 86,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/doorbell_contract.rs",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/hw_boundary_vs_ogkm.rs",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "tests/memory_map.rs",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Doc-tests kf_qemu",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "suite": "Doc-tests kf_trap",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "raw_log_sha256": "92a785bb7b0fc0efb977d1bd5b80420a292122a4496d08bee17473d2912368a2"
+}

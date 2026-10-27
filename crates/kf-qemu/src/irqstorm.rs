@@ -1,5 +1,5 @@
-//! Default-off, status-preserving completion message diagnostic. Worker tick only.
-use std::sync::atomic::{AtomicU64, Ordering};
+//! Default-off, status-preserving completion message diagnostic. Probe timer only.
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Config {
@@ -32,14 +32,23 @@ impl Config {
 }
 pub(crate) struct Storm {
     period_ns: u64,
+    emitting: AtomicBool,
     next_ns: AtomicU64,
     raises: AtomicU64,
     skipped_masked: AtomicU64,
+}
+// Single non-spinning emission owner, never acquired by a trap handler.
+struct Emission<'a>(&'a AtomicBool);
+impl Drop for Emission<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 impl Storm {
     pub(crate) fn new(config: Config) -> Self {
         Self {
             period_ns: u64::from(config.period_ms) * 1_000_000,
+            emitting: AtomicBool::new(false),
             next_ns: AtomicU64::new(0),
             raises: AtomicU64::new(0),
             skipped_masked: AtomicU64::new(0),
@@ -54,6 +63,14 @@ impl Storm {
         send: impl FnOnce() -> bool,
     ) {
         let Some(_pass) = gate.enter() else { return };
+        if self
+            .emitting
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        let _emission = Emission(&self.emitting);
         let now_ns = clock();
         let Some(next) = now_ns.checked_add(self.period_ns) else {
             return;
@@ -88,7 +105,13 @@ impl Storm {
                 kf_trap::cpuintr::Raise::OutOfRange => {}
             }
         }
-        if eligible && send() {
+        let sent = eligible && send();
+        // Rebase after the actual write/inspection, not its reservation: a descheduled
+        // sender cannot create a catch-up burst when it resumes. No overlap is allowed.
+        let finished = clock().max(now_ns);
+        self.next_ns
+            .store(finished.saturating_add(self.period_ns), Ordering::Release);
+        if sent {
             self.raises.fetch_add(1, Ordering::Relaxed);
         }
     }

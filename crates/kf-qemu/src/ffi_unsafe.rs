@@ -229,7 +229,7 @@ pub unsafe extern "C" fn kf3_realize(
                     return -1;
                 }
             }
-            // ★ v3-initrace: the completion probe (`KF3_COMPLETION_PROBE`, default off).
+            // Existing optional timer for the completion probe and/or IRQ storm (default off).
             if d.probe_timer_enabled()
                 && std::thread::Builder::new()
                     .name("kf3-probe".into())

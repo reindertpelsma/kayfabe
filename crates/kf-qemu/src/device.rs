@@ -294,7 +294,7 @@ pub struct Device {
     irq_lines: Vec<Notifier>,
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
-    /// Optional host-configured completion re-notification; worker ticks only.
+    /// Optional host-configured completion re-notification; probe timer only.
     irq_storm: Option<crate::irqstorm::Storm>,
     pub(crate) stop: AtomicBool,
     /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
@@ -1772,9 +1772,9 @@ impl Device {
         }
     }
 
-    /// ★ v3-initrace: the completion probe's own thread (`KF3_COMPLETION_PROBE`, default off) —
-    /// every 100 ms ask the channel plane for overdue Translated channels, and print the device's
-    /// interrupt state beside any dump: the guest's CPU interrupt tree (pending/enabled per leaf,
+    /// Existing optional diagnostic timer: IRQ storm and/or completion probe (both default off).
+    /// With `KF3_COMPLETION_PROBE`, every 100 ms ask for overdue Translated channels and print
+    /// device interrupt state beside any dump: the guest CPU tree (pending/enabled per leaf,
     /// top enable), MSI-X messages sent/held, the host non-stall events seen/raised per engine,
     /// the tokens with a fence in flight, and the workers' counters. ⊘ Never a vCPU, never the
     /// drainer, never a lock a vCPU takes; a sleep here delays nothing but this probe.
