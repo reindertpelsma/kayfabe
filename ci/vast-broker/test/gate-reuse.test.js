@@ -27,10 +27,12 @@ const cases = [
   'api-error',
   'release-valid',
   'release-forged',
+  'release-forged-id',
+  'release-forged-login',
   'release-lost-parent',
   'release-tree',
 ];
-for (const variant of ['merge', 'associated-pr'])
+for (const variant of ['merge', 'associated-pr', 'fast-forward'])
   for (const name of cases)
     test('reuse ' + variant + ' ' + name, () => {
       const p = spawnSync(

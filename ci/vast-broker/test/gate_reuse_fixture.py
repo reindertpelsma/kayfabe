@@ -1,5 +1,10 @@
 import importlib.util
 import json
+import contextlib
+import html
+import io
+import os
+import tempfile
 from pathlib import Path
 import sys
 
@@ -15,6 +20,8 @@ def load(name):
 
 case, variant = sys.argv[1:]
 sha, parent, old, tree = (c * 40 for c in "abcd")
+if variant == "fast-forward":
+    parent = sha
 repo = "reindertpelsma/kayfabe"
 url = "https://github.com/" + repo + "/actions/runs/123"
 status = {
@@ -131,10 +138,16 @@ if case.startswith("release"):
     }
     if case == "release-forged":
         child["statuses"][0]["creator"] = {"id": 1, "login": "other"}
+    if case == "release-forged-id":
+        child["statuses"][0]["creator"] = {"id": 1, "login": "github-actions[bot]"}
+    if case == "release-forged-login":
+        child["statuses"][0]["creator"] = {"id": 41898282, "login": "other"}
     if case == "release-lost-parent":
         status["state"] = "failure"
     if case == "release-tree":
         data["/commits/" + parent]["commit"]["tree"]["sha"] = old
+    if variant == "fast-forward":
+        data["/commits/" + parent + "/statuses?per_page=100"].insert(0, child["statuses"][0])
     expected = case == "release-valid"
     assert module.verify(sha, child, lambda _: run, get=get) == expected
 else:
@@ -149,3 +162,22 @@ else:
             assert line in rendered, line
         for value in [parent, tree, url, "creator", "CI", "same tree"]:
             assert value in rendered
+
+if case == "valid":
+    module.api = lambda *_: (_ for _ in ()).throw(AssertionError("replay contacted API"))
+    module.original_logs = module.api
+    with tempfile.NamedTemporaryFile(mode="w+") as summary:
+        os.environ.update(
+            {
+                "GITHUB_REPOSITORY": repo,
+                "REUSE_PROOF": json.dumps(proof),
+                "GITHUB_STEP_SUMMARY": summary.name,
+            }
+        )
+        sys.argv = ["gate_reuse.py", "replay"]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            module.main()
+        summary.seek(0)
+        assert module.render(proof) in output.getvalue()
+        assert html.escape(module.render(proof)) in summary.read()
