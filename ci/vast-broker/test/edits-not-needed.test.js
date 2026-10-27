@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // Final review W2 (2026-10-23): the Worker no longer decides skips. FALSIFIER: the runner or the
 // report job turns a Worker-sent NOT_NEEDED (or MANUAL / NEEDS_APPROVAL) with PASS green without
-// a GPU result. Only the two agreeing workflow path decisions may post NOT_NEEDED success.
+// a GPU result. Only the successful trusted workflow path decision may post NOT_NEEDED success.
 const job = (yaml, id) => yaml.split('  ' + id + ':\n')[1].split(/\n  [\w-]+:\n/)[0];
 async function report(env) {
   const yaml = await readFile(
@@ -41,8 +41,6 @@ async function report(env) {
         PENDING_RESULT: 'success',
         POLICY_RESULT: 'success',
         POLICY_RUN: '1',
-        POLICY_CHECK_RESULT: 'success',
-        POLICY_CHECK_RUN: '1',
         GPU_RESULT: 'success',
         BROKER_VERDICT: 'PASS',
         BROKER_VERIFIED: '1',
@@ -71,7 +69,6 @@ for (const state of ['GRACE', 'NONE'])
 test('W2: the workflow path policy alone may still post NOT_NEEDED success', async () => {
   const r = await report({
     POLICY_RUN: '0',
-    POLICY_CHECK_RUN: '0',
     GPU_RESULT: 'skipped',
     BROKER_STATE: '',
     BROKER_VERDICT: '',

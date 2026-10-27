@@ -193,7 +193,7 @@ test('final status job runs even on skipped or failed broker', async () => {
   const block = t.split('  report:\n')[1];
   assert.ok(block);
   assert.ok(block.includes('if: ${{ always() }}'));
-  assert.match(block, /needs: \[pending, policy, policy-check, gpu\]/);
+  assert.match(block, /needs: \[pending, policy, gpu\]/);
 });
 for (const id of ['pending', 'report'])
   test('missing status writer job fails the guard ' + id, async () => {

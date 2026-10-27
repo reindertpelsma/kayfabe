@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 // FALSIFIER: policy downloads selected/PR code, needs undeclared modules, or prints credentials.
-for (const job of ['policy', 'policy-check'])
+for (const job of ['policy'])
   for (const eventName of ['workflow_dispatch', 'unknown'])
     test(
       'round actual policy bootstrap runs only BASE modules ' + job + ' ' + eventName,
@@ -32,9 +32,23 @@ file=url[len(base):]
 assert file in {'trigger-policy.mjs','package.json','defaults.json','src/defaults.js',
                'src/policy.js','src/github.js','src/workflow-authority.js'}
 assert '-L' not in args and '--location' not in args
+assert args[args.index('--proto')+1]=='=https'
+assert args[args.index('--max-time')+1]=='20'
+assert args[args.index('--max-filesize')+1]=='131072'
 shutil.copyfile(Path(os.environ['SOURCE_ROOT'])/file,args[args.index('-o')+1])
 `;
           await writeFile(join(d, 'curl'), curl, { mode: 0o700 });
+          await writeFile(
+            join(d, 'node'),
+            `#!/usr/bin/env python3
+import os,sys
+assert 'UNTRUSTED_POLICY_SENTINEL' not in os.environ
+assert 'NODE_OPTIONS' not in os.environ
+binary=${JSON.stringify(process.execPath)}
+os.execv(binary,[binary,*sys.argv[1:]])
+`,
+            { mode: 0o700 },
+          );
           await writeFile(join(d, 'event'), '{}');
           const r = spawnSync(
             'bash',
@@ -48,6 +62,8 @@ shutil.copyfile(Path(os.environ['SOURCE_ROOT'])/file,args[args.index('-o')+1])
                 PATH: d + ':' + process.env.PATH,
                 SOURCE_ROOT: new URL('../', import.meta.url).pathname,
                 GH_TOKEN: 'mock-policy-read-token',
+                UNTRUSTED_POLICY_SENTINEL: 'must-not-reach-node',
+                NODE_OPTIONS: '--invalid-sentinel',
                 GITHUB_SHA: 'd'.repeat(40),
                 TARGET_SHA: 'e'.repeat(40),
                 GITHUB_EVENT_NAME: eventName,
