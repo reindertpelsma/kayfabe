@@ -1,0 +1,71 @@
+{
+  "run": "WC1-round3e-offline-host-window-20261027",
+  "authority": "Explicit ROUND3e owner direction",
+  "reason": "Round3d preparation DONE by300s; Windows Boot Manager only observed by900s;1200s deadline refused",
+  "evidence": "traces/wc1_20261026/round3d/attempt.json",
+  "profile": "wc1-round3e-host79466",
+  "host": 79466,
+  "approved_window_seconds": 3000,
+  "default_window_seconds": 1200,
+  "windows_matching_seconds": 120,
+  "host_scope": "Owned metadata, budget and live provider host_id must all equal79466",
+  "existing_first_reach_preserved": true,
+  "existing_window_change_refused": true,
+  "expected_red_commit": "4c4de4146",
+  "before": {
+    "total": 19,
+    "passed": 4,
+    "failed": 2,
+    "errors": 13
+  },
+  "after": {
+    "total": 19,
+    "passed": 19
+  },
+  "checkpoint_regression": {
+    "total": 4,
+    "passed": 4
+  },
+  "mutants": {
+    "extend_all_default_hosts": {
+      "killers": 2,
+      "total": 19
+    },
+    "remove_host_and_profile_scope": {
+      "killers": 4,
+      "total": 19
+    },
+    "main_still_uses1200": {
+      "killers": 2,
+      "total": 19
+    },
+    "advance_still_uses1200": {
+      "killers": 6,
+      "total": 19
+    },
+    "disable_deadline": {
+      "killers": 4,
+      "total": 19
+    },
+    "shorten_proof119": {
+      "killers": 2,
+      "total": 19
+    },
+    "ignore_key_mismatches": {
+      "killers": 2,
+      "total": 19
+    },
+    "permit_existing_window_change": {
+      "killers": 2,
+      "total": 19
+    },
+    "approved_profile_still1200": {
+      "killers": 6,
+      "total": 19
+    }
+  },
+  "before_sha256": "00ceb97a69fdb82a81381130a9b67d75cef0b40696058821e0762c25cc3031c7",
+  "after_sha256": "f2845607e77e5e0ad0e23ef74331f7dec317eecd7ea9e7b15f8fce6d0bf0fc08",
+  "capture_source": "541033eaf",
+  "capture_binaries_changed": false
+}

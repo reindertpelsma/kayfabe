@@ -1,0 +1,50 @@
+--- admission-before.py
++++ admission-host-window.py
+@@ -34,6 +34,16 @@
+     return result[-1] if result else None,windows
+ 
++def identity_window(owned,budget,row):
++    profile=budget.get('identity_profile')
++    if profile is None:return 1200
++    if (profile!='wc1-round3e-host79466' or owned.get('host')!=79466
++            or budget.get('host')!=79466 or row.get('host_id')!=79466):
++        raise ValueError('REFUSED unapproved host identity window')
++    return 3000
++
+ def advance(state,now,latest,scanned,windows):
+-    if now>=state['first_mono']+1200:raise ValueError('REFUSED native identity deadline')
++    window=state.get('identity_window_seconds',1200)
++    if window not in (1200,3000):raise ValueError('REFUSED invalid identity window')
++    if now>=state['first_mono']+window:raise ValueError('REFUSED native identity deadline')
+     matched=latest is not None and latest==scanned==windows
+     if matched:
+@@ -59,4 +69,5 @@
+     if not 0<bound<=1.40 or float(row['dph_total'])>bound:
+         raise ValueError('REFUSED contractual rate bound')
++    window=identity_window(owned,budget,row)
+     mapping=(row.get('ports') or {}).get('22/tcp') or []
+     if not row.get('public_ipaddr') or not mapping:
+@@ -65,4 +76,6 @@
+     assert ipaddress.ip_address(host).is_global and 0<port<65536
+     state_path=root/'pin-state.json';state=json.loads(state_path.read_text()) if state_path.exists() else {}
++    if state and state.get('identity_window_seconds',1200)!=window:
++        raise ValueError('REFUSED identity window changed')
+     if state and (state['host'],state['port'])!=(host,port):raise ValueError('REFUSED endpoint changed')
+     started=time.monotonic();utc=datetime.datetime.now(datetime.timezone.utc).isoformat()
+@@ -70,7 +83,7 @@
+     keys=[l.split()[2] for l in scan.stdout.splitlines() if l and not l.startswith('#') and len(l.split())==3 and l.split()[1]=='ssh-ed25519']
+     key=keys[0] if len(keys)==1 else None
+-    if not state and key:state={'first_mono':started,'first_utc':utc,'host':host,'port':port}
++    if not state and key:state={'first_mono':started,'first_utc':utc,'host':host,'port':port,'identity_window_seconds':window}
+     if not state:print(json.dumps({'state':'scan-wait','status':row.get('actual_status')}));return
+-    if time.monotonic()>=state['first_mono']+1200:raise ValueError('REFUSED native identity deadline')
++    if time.monotonic()>=state['first_mono']+window:raise ValueError('REFUSED native identity deadline')
+     state_path.write_text(json.dumps(state,indent=2)+'\n')
+     try:
+@@ -86,5 +99,5 @@
+     admitted,stable=advance(state,time.monotonic(),latest,scanned,windows)
+     state_path.write_text(json.dumps(state,indent=2)+'\n')
+-    receipt={'utc':utc,'id':iid,'state':'admitted' if admitted else 'match' if latest==scanned==windows and latest else 'waiting','latest':latest,'scanned':scanned,'windows':windows,'stable_seconds':stable,'consecutive':state['consecutive'],'elapsed_from_first_reachable':time.monotonic()-state['first_mono'],'console_sha256':hashlib.sha256(console_result.stdout.encode()).hexdigest()}
++    receipt={'identity_window_seconds':window,'utc':utc,'id':iid,'state':'admitted' if admitted else 'match' if latest==scanned==windows and latest else 'waiting','latest':latest,'scanned':scanned,'windows':windows,'stable_seconds':stable,'consecutive':state['consecutive'],'elapsed_from_first_reachable':time.monotonic()-state['first_mono'],'console_sha256':hashlib.sha256(console_result.stdout.encode()).hexdigest()}
+     with (root/'pin-history.jsonl').open('a') as f:f.write(json.dumps(receipt)+'\n')
+     print(json.dumps(receipt))
