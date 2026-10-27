@@ -89,7 +89,7 @@ impl<H> Queue<H> {
                 None => {
                     // Admission credit includes this parked job, so it cannot overflow MAX.
                     if let Ok(mut q) = self.jobs.lock() {
-                        q.push_back(job);
+                        q.push_front(job);
                     }
                 }
             }
@@ -231,12 +231,24 @@ pub(crate) fn unique<T>(candidates: impl IntoIterator<Item = T>) -> Result<Optio
 pub(crate) fn user_target<T>(
     candidates: impl IntoIterator<Item = (bool, T)>,
 ) -> Result<Option<T>, u32> {
-    unique(
-        candidates
-            .into_iter()
-            .filter(|(user, _)| *user)
-            .map(|(_, target)| target),
-    )
+    let mut targets = [None, None];
+    let mut have_user = false;
+    for (user, target) in candidates {
+        have_user |= user;
+        if targets[0].is_none() {
+            targets[0] = Some(target);
+        } else if targets[1].is_none() {
+            targets[1] = Some(target);
+        }
+        if have_user && targets[1].is_some() {
+            return unique(targets.into_iter().flatten());
+        }
+    }
+    if have_user {
+        unique(targets.into_iter().flatten())
+    } else {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]
