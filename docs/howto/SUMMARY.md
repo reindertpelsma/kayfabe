@@ -19,4 +19,5 @@
 - [Troubleshooting](troubleshooting.md)
 - [Security model](security.md)
 - [Technical FAQ](technical-faq.md)
+- [Goals and plans](goals.md)
 - [Credits and notices](credits.md)
