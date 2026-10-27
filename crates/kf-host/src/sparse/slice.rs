@@ -11,10 +11,16 @@
 //!   refresh has spent [`SLICE_NS`] or [`SLICE_VERBS`].
 //! * **Optional work** (plain-map refinement, recycling, converting retired sparse blocks) stops
 //!   at half of that, so it can never starve demand work of the same refresh.
-//! * Work that has started is finished or rolled back (a half-done replacement must restore its
-//!   original reservation), so a refresh overshoots by at most one replacement and its restore.
+//! * A replacement stops starting children when demand time is spent; it must still release
+//!   created children and restore the original. Repair is mandatory and can overrun the slice.
+//! * Admission error cleanup checks the optional allowance between complete reservations.
+//!   Retained reservations stay covered and their conversion resumes through the cleanup queue.
 //! * What is not started waits for the next refresh (`retry`), keeping partial progress; an
 //!   already sparse VA never loses coverage in between.
+//!
+//! This bounds admission work starts, not total apply/gate wall time. RM calls cannot be
+//! preempted; repair and space-retirement cleanup can exceed it. The peak sums charged verbs,
+//! including reset/retirement work between refresh renewals, rather than measuring all apply work.
 use super::{Ops, RmError};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
 

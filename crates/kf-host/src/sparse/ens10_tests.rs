@@ -49,6 +49,8 @@ fn ens10_refusal_tail(count: u64, refuse_at: u64) {
         "deferred cleanup is retained"
     );
     assert!(t.blocks.values().all(|b| b.wanted.iter().all(|&v| v == 0)));
+    // Withdraw the request to isolate deferred cleanup from automatic re-admission.
+    t.cache = Cache::default();
     t.tick = t.backoff_until;
     ens6::refresh(&mut t, &m, &slice, |t, ops| t.retry(ops).unwrap());
     assert!(m.sparse_tiles().is_empty(), "cleanup resumes after backoff");

@@ -525,7 +525,17 @@ impl Reservations {
         self.stats.freed = self.stats.freed.saturating_add(1);
         let mut made = Vec::new();
         for &(a, b, kind) in &parts {
-            match ops.reserve(a, b - a, kind) {
+            // A slow release/child may have spent the slice. Restore the original instead
+            // of starting further children. Repair below remains mandatory after release.
+            let slice_deferred = !ops.budget_left(true);
+            let attempt = if !slice_deferred {
+                ops.reserve(a, b - a, kind)
+            } else {
+                self.deferred = true;
+                self.stats.slice_deferred = self.stats.slice_deferred.saturating_add(1);
+                Err(RmError::NoMemory)
+            };
+            match attempt {
                 Ok(handle) => {
                     self.stats.made = self.stats.made.saturating_add(1);
                     let mut child = Block {
@@ -546,10 +556,12 @@ impl Reservations {
                     made.push(child);
                 }
                 Err(e) => {
-                    self.stats.refused = self.stats.refused.saturating_add(1);
-                    if e == RmError::NoMemory {
-                        self.note_refusal();
-                        self.declined = true;
+                    if !slice_deferred {
+                        self.stats.refused = self.stats.refused.saturating_add(1);
+                        if e == RmError::NoMemory {
+                            self.note_refusal();
+                            self.declined = true;
+                        }
                     }
                     for child in &made {
                         if ops.release(child.handle).is_err() {
@@ -648,8 +660,11 @@ impl Reservations {
         if !self.layout_ok(ops, true) {
             return Ok(false);
         }
-        self.replace(ops, key, va, va + SPARSE_GRAIN, true)?;
-        Ok(true)
+        match self.replace(ops, key, va, va + SPARSE_GRAIN, true) {
+            Ok(()) => Ok(true),
+            Err(_) if self.deferred => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 
     pub(crate) fn admit(&mut self, ops: &dyn Ops, va: u64, len: u64) -> Result<bool, RmError> {
@@ -745,8 +760,11 @@ impl Reservations {
                 .map(|b| (b.lo, b.hi))
                 .collect();
             for (a, b) in fresh {
-                if self.replace(ops, a, a, b, false).is_err() {
+                // These are complete reservations, not a half-done replacement. Their
+                // optional conversion can wait; never run an RM cleanup tail past a slice.
+                if !ops.budget_left(false) || self.replace(ops, a, a, b, false).is_err() {
                     self.stats.retained_bytes = self.stats.retained_bytes.saturating_add(b - a);
+                    self.cleanup.insert(a);
                 }
             }
             let mut scan = crate::diag::Scope::start(crate::diag::Phase::Restore, 0);
