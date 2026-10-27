@@ -1,9 +1,14 @@
 \section{Architecture v3: where authority and progress live}
 \label{sec:architecture}
 
+The implementation baseline is the cover revision. CODE statements below name implementation
+paths; DOC statements describe requirements or published designs. The test descriptions name
+what could exercise an invariant. Unless a dated result is given in Section~\ref{sec:results},
+their pass state at this baseline is UNVERIFIED: no product test was run for this edition.
+
 \subsection{Planes and traps}
 
-\readcode The product is the \code{kf-*} tree linked into the VMM process. A BAR0 write
+\doc The product is the \code{kf-*} tree linked into the VMM process. A BAR0 write
 records demand through bounded token and ring state. Workers service channel demand; a
 register drainer services privileged register operations. BAR1 and BAR2 memory accesses do not
 trap. There is no separate isolate process or product IPC plane. Confinement applies to the
@@ -15,11 +20,10 @@ reachable trap path. Hardware trap timing checks a separate latency property.\sr
 {A nonblocking-looking call can acquire a lock held by slow host work. A mock host that never
 blocks cannot demonstrate the production lock discipline. The old paper records that failure
 mode; the restriction must be checked transitively.\src{old}}
-\input{fig_v3_planes}
 
 \subsection{Hostile input and authored operations}
 
-\readcode Guest root and guest userspace are untrusted. Host memory operations are constructed
+\doc Guest root and guest userspace are untrusted. Host memory operations are constructed
 from admitted ownership, extent, permission and kind information; guest control messages are
 not replayed to the host. Host GPU facts come from unprivileged queries or generated open
 interfaces. This is the intended authority boundary, with the host driver and GPU trusted.
@@ -34,7 +38,7 @@ remain separate review obligations.\src{rulings}\src{security}}
 
 \subsection{Derive, never capture}
 
-\readcode The architecture prefers facts read from the host's own unprivileged interface,
+\doc The architecture prefers facts read from the host's own unprivileged interface,
 computed virtual-device state and rules generated from pinned open headers. A device identity
 is not permission to copy another die's answer. Request validation and field-level virtual
 support still apply when an answer comes from the host. Published measured exceptions belong
@@ -51,7 +55,7 @@ dies is not a mechanism for a family rule.\src{constants}}
 
 \subsection{Seven axes, not one compatibility version}
 
-\readcode The design separates guest kernel, guest driver, host driver, GPU architecture,
+\doc The design separates guest kernel, guest driver, host driver, GPU architecture,
 GPU die, VMM and guest OS. An architecture supplies family mechanisms; a die supplies actual
 inventory and capability facts. The guest ABI controls decoding; the host ABI controls authored
 calls. The VMM supplies memory, interrupts and lifecycle events. These are distinct axes even
@@ -85,7 +89,7 @@ interrupt or reset semantics. Passing one axis with the others fixed is not the 
 
 \subsection{Crate map and the frozen predecessor}
 
-\readcode The following is a functional map from \code{ARCHITECTURE.md}, not a generated
+\doc The following is a functional map from \code{ARCHITECTURE.md}, not a generated
 claim about every dependency edge.\src{architecture}
 \begin{center}\small
 \begin{tabularx}{\textwidth}{@{}p{42mm}X@{}}
@@ -107,7 +111,7 @@ claim about every dependency edge.\src{architecture}
 \end{tabularx}
 \end{center}
 
-\readcode The older \code{kayfabe-*} crates remain frozen; the raw-client grader depends on
+\doc The older \code{kayfabe-*} crates remain frozen; the raw-client grader depends on
 part of that tree. Product \code{kf-*} crates do not depend on it. Unsafe code is confined to
 named adapter crates and \code{*_unsafe.rs} files. A crate inventory is a source-level fact;
 it says nothing about whether a feature has a production caller.\src{rules}\src{architecture}
@@ -121,7 +125,7 @@ blocking path. Source structure does not establish reachability or hardware corr
 
 \subsection{Channel kinds and the meaning of completion}
 
-\readcode Passthrough creates a host twin for user work and lets the real engine execute its
+\doc Passthrough creates a host twin for user work and lets the real engine execute its
 commands. Translated channels rewrite kernel copy work into an owned address window and submit
 it to the real engine. Emulated channels execute only work whose meaning belongs entirely to
 the VMM. The three kinds differ in authority and completion, not simply speed.\src{kinds}
@@ -135,7 +139,7 @@ validate the output and completion path, not merely the process exit.\src{status
 
 \subsection{Memory store and VA manager}
 
-\readcode Guest video memory is one host allocation with offsets corresponding to guest
+\doc Guest video memory is one host allocation with offsets corresponding to guest
 framebuffer offsets. Guest system memory comes from the VMM's shared backing. A GPU walk
 reads guest tables and diffs them against confirmed host placements. Host maps/unmaps apply
 the changes, invalidate, and acknowledge runs. A refused map remains a difference.
@@ -153,7 +157,8 @@ Whole-space scanning is not equivalent to remapping every unchanged leaf.\src{la
 
 \subsection{Mirrored scheduling groups}
 
-\readcode A host TSG mirrors a guest TSG, and twin lifetime follows the trusted object model.
+\readcode Host group/member construction preserves a guest TSG grouping, and twin lifetime follows
+the trusted object model.
 The late-joiner design documents why a newly added channel cannot silently miss earlier
 scheduling state. Address-space mirroring and TSG mirroring are separate concerns: preserving
 one does not prove the other.\src{tsgcode}\src{latejoin}\src{kinds}
@@ -167,10 +172,13 @@ and reset generations can make a correct group lookup refer to the wrong life.\s
 
 \subsection{User-ring lifecycle: Scan, Pointer and Window}
 
-\readcode Windows user-work can require software intervention around registration and ring
+\doc A registration is a guest request that arms a later software action in its
+command stream; that action can move the ring source. Windows user-work can therefore require
+software intervention around registration and ring
 migration. In Scan mode the worker inspects command packets. Pointer mode forwards admitted
 GP references without reading the pushbuffer. Window mode restores scanning across the
-registration boundary. The clean anchor must have been observed before the registration reply;
+registration boundary. An anchor is an observed producer position selected as that boundary.
+The clean anchor must have been observed before the registration reply;
 a later convenient cursor cannot retroactively establish that boundary.\src{lifecycle}
 
 \attack{Doorbell-covered entries appear once, in order and bit-exact; Pointer reads no
@@ -218,8 +226,8 @@ without a lost physical event.\src{faq}\src{latency}}
 
 \subsection{Display and the broker}
 
-\readcode An emulated display engine accepts the stock driver's display protocol; a separate
-broker presents owned frame copies and handles input. The owner requires guest flips to
+\doc An emulated display engine accepts the stock driver's display protocol; a separate
+broker presents owned frame copies and handles input. The display contract requires guest flips to
 complete according to guest semantics while copies select the newest frame independently.
 The broker owns cursor composition, including inversion. Its absence or silence must not
 freeze guest display progress.\src{architecture}\src{display}\src{rulings}

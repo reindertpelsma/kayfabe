@@ -1,6 +1,8 @@
 # Whitepapers
 
-**STATUS: RESEARCH, 2026-10-27 — the v3 successor is [kayfabe_v3.pdf](kayfabe_v3.pdf).** It is pinned to `origin/next` at `12c4008705f17033a803e56d4d479bf1275cdb94`, with separately identified experimental sources. This writing task ran no GPU or VM. The paper contains a primer, architecture invariants and test limits, a failure case study, an open-PR inventory and 44 outside-reader questions. Start with its attack rules; its uncomfortable section is the longest.
+**STATUS: RESEARCH, 2026-10-27 — the v3 successor is [kayfabe_v3.pdf](kayfabe_v3.pdf).** It is pinned to `origin/next` at `12c4008705f17033a803e56d4d479bf1275cdb94`, with separately identified experimental sources. This writing task ran no GPU or VM. The cold-reader revision states the Windows stall hypothesis before the internals, restores the Windows positives and performance denominators, and separates reported results from unverified analysis. It contains five mechanism diagrams and 36 standalone questions. Host-plus-guest throughput and host responsiveness remain unmeasured; coexistence has screenshot evidence only.
+
+The [companion index](kayfabe_v3_index.md) carries the full source list, 101 historical gap topics and the end-of-revision snapshot of 87 open PRs, including bases and known stack parents. These are frozen metadata and historical topics, not current acceptance results. [Result distances](result_distances_v3.json) expose how far each retained hardware runtime is from the pin; none was rerun on hardware for this edition.
 
 Build the successor from committed sources:
 

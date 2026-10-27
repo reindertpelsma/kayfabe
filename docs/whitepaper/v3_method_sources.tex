@@ -1,29 +1,20 @@
 \section{Method and reproducible commands}
 
-This edition used source reads, Git ancestry checks, the claims ratchet, publication-gate tests
-and XeLaTeX. It ran no Cargo or Clippy command, VM, real-GPU gate, provider operation or remote
-host experiment. Every hardware result is carried from the named repository record. The
-experimental source index is deliberately separate from the implementation baseline.
+This edition used source reads, Git comparisons, publication checks and XeLaTeX. It ran no
+Cargo or Clippy command, VM, real-GPU gate, provider operation or remote-host experiment.
+Every hardware result is carried from a dated source. Publication checks here do not turn
+those records into measurements of the cover revision.
 
-\subsection{Reconstruct the source snapshot}
+\subsection{Sources and code distance}
 
-\begin{verbatim}
-git fetch origin next master
-git worktree add -b codex/whitepaper-v3-20261027 \
-  ../kayfabe-paper origin/next
-cd ../kayfabe-paper
-git rev-parse HEAD
-git log --first-parent --oneline origin/master
-# The implementation pin must equal the cover, not a later moving ref:
-git show 12c4008705f17033a803e56d4d479bf1275cdb94:AGENTS.md
-# Experimental code is inspected without changing the baseline:
-git show 2196a9ad1:docs/design/ENS11_SPLIT_LATENCY_20261027.md
-\end{verbatim}
+\code{sources_v3.json} records repository revisions, paths and Git blobs, plus the three
+external primary sources checked on the publication date. Numeric citations link directly
+to those sources. The full mapping, historical evidence names, PR metadata and gap topics are
+in the \href{\repobase/blob/codex/whitepaper-v3-20261027/docs/whitepaper/kayfabe_v3_index.md}
+{companion index, \code{kayfabe_v3_index.md}}. That branch link moves with publication;
+the source revisions recorded inside it do not. External pages can change after checking.
 
-The worktree command documents how this writing branch was created; it is not a suggestion to
-reuse an existing branch name. \code{sources_v3.json} records immutable paths and Git blobs.
-It can be checked without building the product:
-
+The following reconstructs repository-source identity and the result-distance calculation:
 \begin{verbatim}
 python3 - <<'PY'
 import json, subprocess
@@ -34,22 +25,35 @@ for row in json.loads(p.read_text())['sources']:
     blob = subprocess.check_output(['git', 'rev-parse', ref], text=True)
     assert blob.strip() == row['blob'], ref
 PY
+# PIN is the cover revision; RESULT is a runtime from the results table.
+git diff --name-only RESULT PIN -- crates qemu cuda
+git rev-list --left-right --count PIN...RESULT
 \end{verbatim}
 
-\subsection{Reconstruct the PR inventory}
+Changed paths include additions, removals and modifications. Commit counts cover the whole
+Git graph, not only the three product directories. Zero result-only commits means ancestor;
+it is not a passing-test status. A divergent result has commits absent from the pin.
+\code{result_distances_v3.json} preserves full runtime hashes and rerun status. No result in
+that file was rerun on hardware for this edition.
+
+\subsection{PR snapshot and historical gap index}
 
 \begin{verbatim}
 gh pr list --state open --limit 200 \
-  --json number,title,headRefOid,baseRefName,isDraft,url
-# For a specific snapshot head:
-git merge-base --is-ancestor <head> \
-  12c4008705f17033a803e56d4d479bf1275cdb94
+  --json number,title,headRefName,headRefOid,baseRefName,isDraft,url
+gh pr list --state all --limit 250 \
+  --json number,headRefName,baseRefName,state,url
 \end{verbatim}
 
-The live query will differ after publication. \code{pr_snapshot_v3.json} preserves the captured
-numbers, immutable heads, draft state and the paper's proposed falsifiers. It does not archive
-mutable PR bodies or claim that the proposals were tested here. The inventory is a catalogue
-of research and integration debt, not a merge recommendation.
+The snapshot was refreshed after the revision work. It freezes each open PR's number, base,
+head, draft state and known parent PR: a parent is identified by an exact base-branch to
+PR-head-branch match, including merged parents. A branch base without such a match remains
+unknown. A recorded parent is metadata, not proof that the full dependency was reviewed.
+Live heads, draft states and bases will change after capture.
+
+The companion also preserves 101 historical gap topics. They include closed and superseded
+rows; the count is not a current defect count. Application gaps, capability gaps and postponed
+features are identified separately there. No template inventory occupies the main argument.
 
 \subsection{Build and verify the publication}
 
@@ -64,19 +68,16 @@ pdfinfo docs/whitepaper/kayfabe_v3.pdf
 pdftotext -layout docs/whitepaper/kayfabe_v3.pdf -
 \end{verbatim}
 
-\readcode The v3 target runs XeLaTeX exactly twice with halt-on-error and an input recorder.
-The final log must have no TeX error, missing glyph, undefined reference or unresolved citation.
-Repository inputs must match committed Git blobs before export. A JSON receipt binds the
-input paths and hashes, source commit, compiler version and output digest. A later PDF-only
-commit leaves the input blobs unchanged; the receipt remains checkable. This is a local
-publication check, not a signed proof of a trusted compiler or host.
+\readcode The v3 target runs XeLaTeX twice with halt-on-error and an input recorder. It checks
+for TeX errors, missing glyphs and undefined references. Recorded repository inputs must match
+committed blobs. A JSON receipt binds input hashes, source commit, compiler and output digest.
+A later PDF-only commit leaves the input blobs unchanged. This is a local publication check,
+not a signed attestation of a trusted compiler or host.
 
-\subsection{How a hardware result should be reproduced}
+\subsection{Reproducing hardware evidence is separate work}
 
-These are repository entry points, listed as a method rather than commands run for this paper.
-Use an authorised, exclusively leased machine and record its real configuration first.
-The gate and thin-suite commands come from the contributor verification rules.\src{rules}
-
+The following are repository entry points, not commands run for this paper. They require an
+authorised, exclusively leased test machine and configuration capture.\src{rules}
 \begin{verbatim}
 bash scripts/bench/v3_gates.sh
 KF_DEVICE=kf3 bash scripts/fastguest/fast_suite.sh <tag> 180
@@ -86,98 +87,59 @@ bash scripts/bench/perf_compare.sh <rev> \
   --baseline <rev-or-result-dir> --lanes bare,fast --reps 3
 \end{verbatim}
 
-\readcode The performance harness documents its own baseline binary, common guest client,
-quantisation, noise observations and summary commands. A table must preserve revision, die,
-host/guest drivers, nested status, placement, workload settings, flags, sample unit, all failed
-runs and the control's spread. A new edition should rerun the chosen cell or retain its dated
-status; changing the source pin does not update the hardware receipt.\src{linuxperf}
+\doc The performance method requires source revision, actual die, drivers, nested status,
+placement, settings, flags, sample unit, failed runs and the control's spread. Changing a paper's
+source pin does not update a hardware receipt.\src{linuxperf}
 
-For the stall case, preregister whether the outcome is application completion, no recovery,
-latency or a particular causal stage. Preserve both the default-timeout arm and any longer
-observation arm. A missing native GPU clock, incomplete packet association, capped diagnostic
-ring or missing guest event must remain a missing observation. Never silently remove it from
-the denominator. These requirements follow the instrument limits in the experimental note.
-\src{latency}
+For the stall case, preregister completion, recovery and latency outcomes separately. Keep
+default-watchdog and longer-observation arms. Missing scheduler preemption timestamps,
+packet association, native GPU clocks or guest events remain missing observations. A capped
+trace ring cannot silently shrink a failure denominator.\src{latency}\src{msrecovery}
 
-\section{Glossary of terms and historical names}
+\section{Glossary and historical names}
 
-\begin{description}[style=nextline,itemsep=0.4em]
-\item[ABI] Application binary interface: layouts and calling conventions. Host and guest
-  interfaces are selected independently.
-\item[BAR0 / BAR1 / BAR2] PCI address windows. In this design BAR0 writes publish register
-  demand; the other apertures expose memory without per-access trapping.
-\item[CE / GR] Copy engine / graphics-compute engine vocabulary used in source records.
-\item[DMA] Direct memory access by the device. DMA progress is not automatically a CPU event.
-\item[Doorbell] A notification to inspect already published work; the token selects a route.
-\item[GPFIFO / pushbuffer] A ring of command references / the method packets they point to.
-\item[GET / PUT] Consumer fetch progress / producer publication boundary. GET is not a general
-  execution-completion fence.
-\item[IOVA / GPA] Device-visible I/O virtual address / guest physical address. A virtual IOMMU
-  can make these differ.
-\item[IRQ / MSI / DPC] Interrupt request / message-signalled interrupt / Windows deferred
-  interrupt work. A host notification, physical line signal and guest handler are separate events.
-\item[MEM\_OP / split] A memory-operation method / a software ordering boundary that waits
-  for the required mapping refresh before later work proceeds.
-\item[MMU / PTE / PDE / PDB] Memory management unit / page-table entry / page-directory entry /
-  page-directory base. A VA-space object can outlive a particular root.
-\item[Non-stall interrupt] An asynchronous engine notification; the observer checks its own
-  completion value rather than treating the interrupt as a per-packet receipt.
-\item[RM / GSP] Resource manager / GPU System Processor. Kayfabe models the guest-facing
-  firmware peer and separately uses the real host resource manager.
-\item[TSG] Timeslice group: related channel scheduling membership.
-\item[USER / USERD] GPU user privilege / channel producer-consumer state memory. USER does
-  not describe the host launcher's Unix UID.
-\item[UVM] Unified virtual memory. Fault delivery and replay are separate from mirroring
-  already present mappings.
+\begin{description}[style=nextline,itemsep=0.25em]
+\item[ABI] Application binary interface: layouts and calling conventions.
+\item[BAR] PCI address window. Only BAR0 writes trap in this design.
+\item[CE / GR] Copy engine / graphics-compute engine in the source records.
+\item[GPFIFO / GP / pushbuffer] Ring of command references / one reference / command bytes.
+\item[GET / PUT] Fetch cursor / publication cursor; fetching does not establish execution.
+\item[IOVA / GPA] Device-visible I/O virtual address / guest physical address.
+\item[IRQ / MSI / DPC] Interrupt request / message-signalled interrupt / deferred Windows work.
+\item[MEM\_OP / split] Memory-operation command / ordering boundary for a required map refresh.
+\item[PTE / PDE / PDB] Page-table entry / page-directory entry / page-directory base.
+\item[RM / GSP] Resource manager / GPU System Processor.
+\item[TSG / USERD] Timeslice group / channel producer-consumer state memory.
+\item[USER] GPU channel privilege; distinct from host request permission and Unix credentials.
+\item[UVM] Unified virtual memory, including fault delivery and replay.
 \item[WDDM / TDR] Windows Display Driver Model / timeout detection and recovery.
-\item[Xid / event 153 / Code 43] Host NVIDIA error record / guest driver event used by the
-  campaign / Windows adapter status. These are different observation domains, not synonyms
-  for one root cause.
+\item[ogkm] NVIDIA's open GPU kernel modules, used as pinned reference sources.
 \end{description}
 
-\subsection{Names encountered in historical files}
+\subsection{Decoding old file names}
 
-These labels are decoding aids only. The main argument uses functions and revisions instead
-of asking the reader to remember campaign names.
-
-\begin{description}[style=nextline,itemsep=0.4em]
-\item[v3 / pre-v3] Current \code{kf-*} product tree / frozen \code{kayfabe-*} predecessor and
-  grader dependency closure.\src{architecture}
-\item[M / B-prime / baton] Names for relay-handoff alternatives and mixed-workload progress
-  experiments. The baseline README cites M's \code{89fc8a222} result. No broad Windows
-  comparison of every alternative is asserted here.\src{readme}\src{alternativerelay}
-\item[ENS5 / ENS6 / ENS7] Local sparse-admission undo; RM churn and soft slices; framebuffer-scaled
-  sparse budgets. Their source index points to an experimental revision, not the baseline.
-  \src{admission}\src{rmcost}\src{budget}
-\item[ENS8 / ENS10 / ENS11] Consumed-ring wake tests; host-target scope narrowing;
-  split-latency/optional-work continuation integration. CPU validation and hardware acceptance
-  remain distinct.\src{owed}\src{walknarrow}\src{latency}
-\item[T-space] Kayfabe's privileged translated-work address space. A guest USER channel
-  must not inherit its whole-memory window.\src{rulings}
-\item[Candidate numbers, lane names and short boot labels] Coordination names, not product
-  versions or evidence grades. An exact source SHA and run record are required to interpret them.
-\item[ogkm] NVIDIA's open GPU kernel modules, used as pinned reference sources. A version tag
-  is part of a layout citation; paths and meanings cannot silently move across tags.\src{credits}
+These are lookup aids for historical sources, not extra concepts required by the argument.
+\begin{description}[style=nextline,itemsep=0.25em]
+\item[v3 / pre-v3] Current \code{kf-*} product / frozen \code{kayfabe-*} predecessor.
+\item[M / B-prime / baton] Alternative relay-handoff designs.\src{alternativerelay}
+\item[ENS5 / ENS6 / ENS7] Sparse-admission undo / host-call churn and slices /
+framebuffer-scaled sparse budgets.\src{admission}\src{rmcost}\src{budget}
+\item[ENS8 / ENS10 / ENS11] Consumed-ring wakes / mapping scope / split-latency continuation.
+\src{owed}\src{walknarrow}\src{latency}
+\item[T-space] Address space reserved for privileged rewritten work.\src{rulings}
+\item[Boot labels and candidate numbers] Harness identifiers, not release versions or grades.
+The companion records the few identifiers needed to find the unverified analysis.
 \end{description}
 
-\input{v3_sources}
+\section{Change record}
 
-\section{What changed from the predecessor}
+The predecessor describes the earlier multi-process architecture and remains superseded.
+The first v3 edition replaced that model, pinned the source, introduced explicit limitations
+and added the committed-input publication gate.\src{old}\src{architecture}
 
-\readcode The old text describes the earlier multi-process/isolate architecture and records
-corrections through its September restamp. It remains an archive. This edition starts from the
-single-process v3 product, a GPU-driven page-table diff, the current channel kinds and the
-Windows user-ring lifecycle. It does not carry forward old line counts, mutation percentages,
-performance floors or claims that a feature has never run.\src{old}\src{architecture}
-
-The audience is broader: each driver-internal concept is introduced before the architecture.
-The uncomfortable section separates the older wake defects from the later sparse experiment,
-records where a proposed bound was false, and carries a complete open-PR snapshot instead of
-implying experiments have landed. The outside-reader questions state setup, requested
-observation and the decision it changes. The publication gate records committed inputs and
-checks the finished log, because producing a plausible PDF is not evidence that TeX succeeded.
-
-The source pin is explicit and immutable. Experimental sources have a second revision and
-reported observations retain their missing raw-trace limitation. This is the successor's
-method, not a claim that the old measurements were all wrong or that the new explanation
-cannot fail in the same way.
+This cold-reader revision states the stall hypothesis before the internals, distinguishes
+CODE from DOC and REPORTED from UNVERIFIED, restores positive Windows results and native
+performance denominators, and makes host-plus-guest performance an explicit missing result.
+It replaces generic concept boxes with four mechanism diagrams plus the lifecycle diagram.
+The full inventories move to the companion; 36 questions now state their own experimental
+setup and decision. Neither this revision nor its Git-distance table qualifies new hardware.

@@ -16,15 +16,23 @@
 \newcommand{\baseline}{12c4008705f17033a803e56d4d479bf1275cdb94}
 \newcommand{\repobase}{https://github.com/reindertpelsma/kayfabe}
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
-\newcommand{\src}[1]{\,\hyperref[e:#1]{\textsf{[#1]}}}
-\newcommand{\readcode}{\textbf{CODE READ.} }
-\newcommand{\measured}{\textbf{MEASURED (reported).} }
+\newcommand{\sourceentry}[3]{%
+  \expandafter\def\csname source-number:#1\endcsname{#2}%
+  \expandafter\def\csname source-url:#1\endcsname{#3}}
+\newcommand{\reposource}[4]{\sourceentry{#1}{#2}{\repobase/blob/#3/#4}}
+\newcommand{\src}[1]{\,\textsuperscript{\href{\csname source-url:#1\endcsname}
+  {[\csname source-number:#1\endcsname]}}}
+\newcommand{\readcode}{\textbf{CODE.} }
+\newcommand{\doc}{\textbf{DOC.} }
+\newcommand{\measured}{\textbf{MEASURED.} }
+\newcommand{\reported}{\textbf{REPORTED.} }
+\newcommand{\unmeasured}{\textbf{UNMEASURED.} }
 \newcommand{\inferred}{\textbf{INFERRED.} }
 \newcommand{\unverified}{\textbf{UNVERIFIED.} }
 \newcommand{\evidence}[4]{\item\label{e:#1}\textbf{#1}: #4\\
   Revision \code{#2}.\\\href{\repobase/blob/#2/#3}{\nolinkurl{#3}}}
 \newcommand{\attack}[3]{\textbf{Invariant:} #1\par
-  \textbf{Test:} #2\par\textbf{What the test could miss:} #3\par}
+  \textbf{Tests and scope:} #2\par\textbf{What the test could miss:} #3\par}
 \newcounter{question}
 \newcommand{\question}[4]{\refstepcounter{question}
   \subsection*{Q\thequestion. #1}\textbf{Setup:} #2\par

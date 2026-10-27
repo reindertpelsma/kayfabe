@@ -1,5 +1,6 @@
 \documentclass[11pt]{article}
 \input{preamble_v3}
+\input{v3_citations}
 \begin{document}
 \begin{titlepage}
 \centering
@@ -17,14 +18,23 @@ not a new hardware qualification. The implementation baseline is immutable:
 That was \code{origin/next} when writing began. Experimental results and code outside that
 baseline carry separate revisions. A moving branch name never upgrades their status.
 
-The central tension is simple: preserving a stock driver's ordering may require host-side
-mapping work whose latency the driver's watchdog cannot tolerate. This paper explains the
-boundary and gives the reader experiments that could show the explanation is wrong.
+The guest driver edits its GPU address map in memory that Kayfabe does not intercept. At a
+translation barrier, Kayfabe re-reads that map and installs the corresponding host mappings
+before dependent work proceeds. The INFERRED hypothesis is that this delays completion until
+Windows attempts recovery, potentially losing applications' graphics state. Microsoft's
+default scheduler preemption wait is two seconds; it is not a universal two-second deadline
+from submission.\src{architecture}\src{mskeys}\src{msrecovery}
+
+The source records contain working Windows and Linux workloads. They do not qualify the
+pinned baseline on hardware. The later long-wait analysis is UNVERIFIED because its raw trace
+is not in the repository. Host-plus-guest throughput is UNMEASURED; the coexistence claim has
+only screenshot evidence.\src{readme}\src{walknarrow}
 
 \textbf{Reading route:} begin with the rules, use the primer for unfamiliar terms, then read
-Section~\ref{sec:uncomfortable}, the longest section. Section~\ref{sec:questions} asks questions
-that can be answered without access to this repository. Sources are indexed in
-Appendix~\ref{sec:evidence}. All diagrams are conceptual TikZ drawings, not measured timelines.
+Section~\ref{sec:uncomfortable}, the limitations and failure case.
+Section~\ref{sec:questions} asks questions that can be answered without access to this
+repository. Numeric citations link to sources; the companion index holds the full source
+and PR lists. All diagrams are conceptual TikZ drawings, not measured timelines.
 \end{minipage}
 \vfill
 Kayfabe project \quad / \quad publication snapshot 2026-10-27

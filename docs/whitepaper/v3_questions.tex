@@ -1,339 +1,332 @@
 \clearpage
-\section{Questions for a reader without the tree}
+\section{Thirty-six standalone attack questions}
 \label{sec:questions}
 
-Each setup below specifies a proposed experiment or restates the preceding architecture.
-Observations are requests, not results. An answer can be a public specification, a counterexample
-or a controlled experiment; no private trace or insider branch name is needed to understand
-the fork. The source keys in the preceding sections establish the motivating evidence.
+Each setup describes the system needed for the experiment. These are questions for public
+interface knowledge or a self-contained reproducer, not instructions to inspect a private
+trace or a repository-specific state machine. Proposed observations are not claimed results.
 
-\question{Must every mapping barrier scan the whole space?}
-{A stock driver changes a small range in a large GPU VA space, then submits a mapping barrier. The
-  emulator has confirmed host placements but no trusted changed-range announcement.}
-{Identify an open-interface certificate that proves which table paths could change, or a
-  counterexample where any bounded local check misses a relevant update.}
-{A valid certificate justifies an incremental walk. Without it, the whole-space scan remains a
-  correctness cost and optimisation must target apply work or precomputation.}
+\question{Must a small edit require a whole-space scan?}
+{An emulator cannot intercept stores to guest GPU page tables. After a translation barrier it must
+discover changes before dependent commands run, although only a small range may have changed.}
+{Identify a public changed-range certificate or bounded validation rule, then try a root or
+subtree change outside its claimed scope.}
+{A certificate that survives that counterexample permits incremental work. Otherwise the
+whole-space scan remains part of this design's correctness cost.}
+\label{q:whole}
 
-\question{Can unchanged ranges stay live through an own-space refresh?}
-{One host address space has running work on range A while the guest remaps disjoint range B. The
-  intended outcome for B during transition is old backing, new backing or fault.}
-{Give a bounded validation protocol that lets A publish safely despite root changes, aliasing and an
-  overflowing change log.}
-{This decides whether per-target holds can become per-range admission or must remain conservative.}
+\question{Which acknowledgement makes old backing reusable?}
+{GPU work may still refer to a VA while software removes that host mapping, invalidates
+translation caches and wants to reuse its physical backing.}
+{State the public host-driver ordering guarantee, or run a counter test that observes an old
+access after the proposed retirement event.}
+{A weaker guarantee requires a separate execution/lifetime fence; a sufficient one can simplify
+retirement without relying on elapsed time.}
+\label{q:retirement}
 
-\question{Which event proves that old backing is no longer used?}
-{An emulator unmaps a host VA, asks the host driver to invalidate and wants to free the old memory
-  object while earlier GPU work may still exist.}
-{State the documented ordering guarantee or a counterexample where access continues after the
-  acknowledgement the emulator treats as retirement.}
-{A weaker guarantee requires a separate lifetime fence; a stronger one can simplify deferred frees.}
+\question{Does a longer observation window show late work or replacement work?}
+{A fixed Windows graphics workload is run with default recovery settings and a longer diagnostic
+window. Host submissions and guest recovery each carry a lifetime identity.}
+{Determine whether the original operation eventually completes, is canceled, or is replaced by new
+work after recovery. Locate the scheduler preemption request too.}
+{Only identified original completion supports a lateness explanation. Replacement or missing
+identity keeps the lost-completion explanation open.}
+\label{q:watchdog}
 
-\question{Is the shared kernel copy stream the wrong granularity?}
-{A guest kernel uses one copy channel for work requested by several applications. Each mapping split
-  serialises later work on that channel.}
-{Distinguish a driver-required shared order from an implementation-created dependency using
-  per-request completion identities and separate target spaces.}
-{An inherent shared order calls for cheaper splits; an artificial one calls for changing grouping or
-  admission while preserving the stock protocol.}
+\question{Can live sparse reservations be combined without a hole?}
+{Two adjacent GPU VA reservations intentionally absorb unbacked accesses. Software wants one
+larger reservation without changing any currently accessible address or pausing execution.}
+{Find a public atomic replacement operation, or demonstrate a transition that avoids
+release-before-reserve faults under concurrent accesses.}
+{A valid primitive permits live geometry compression. Without it, empty-reservation recycling does
+not justify merging active sparse coverage.}
+\label{q:coalesce}
 
-\question{Does a raised watchdog reveal lateness or mask another failure?}
-{The same fixed workload is run with default watchdog settings and a longer diagnostic window. A
-  host publication, a processed marker and guest completion are independently observed.}
-{Show whether the same outstanding work eventually completes, with matching life identity, rather
-  than being canceled and replaced during recovery.}
-{Only the first outcome supports late execution. A replacement or ambiguous identity reopens the
-  missing-completion explanation.}
+\question{What bounds a single host-driver call?}
+{A software budget can stop starting operations, but cannot interrupt an already running native
+memory-reservation, map or invalidate call.}
+{Measure per-call tails under idle and loaded conditions and identify any public bound,
+cancellation mechanism or asynchronous alternative.}
+{A usable bound enables deadline reasoning. Otherwise dependent work must tolerate an unbounded
+tail or the dependency must be moved ahead of the guest-visible barrier.}
+\label{q:nativecall}
 
-\question{What clock would separate execution from observation delay?}
-{A host records when it publishes work and when a CPU first reads its completed marker. The
-  observing worker may block in a host driver call.}
-{Find a usable GPU timestamp or independent witness whose ordering can be related to the host clock
-  without adding a correctness poll.}
-{This decides whether publication-to-marker time can be decomposed or must remain an ambiguous sum.}
+\question{What must a lock holder promise before a worker parks?}
+{A worker consumes a notification, fails a try-lock, and prepares to sleep while work remains. The
+holder may release before, during or after waiter registration.}
+{Provide a register/recheck/release protocol and enumerate all three orderings, including
+retirement and reuse of the protected object.}
+{A missed final wake changes the handoff protocol. A correct protocol permits sleep without using
+a periodic timer as the actual source of progress.}
+\label{q:wake}
 
-\question{Can an interrupt be correlated with a packet at all?}
-{Host notifications are engine-wide and may arrive before the CPU samples a marker. Several channels
-  and VMs can request the same kind of notification.}
-{Specify the minimal identity and ordering observations needed to distinguish a covering signal from
-  an unrelated one under coalescing and masking.}
-{Without that proof the diagnostic must report incomplete correlation rather than a fabricated
-  marker-to-interrupt latency.}
+\question{What separates GPU clients running at different Unix UIDs?}
+{Two VMM processes have distinct unprivileged Unix identities, each holding a host GPU driver
+client and USER-privilege channels in separate VA spaces.}
+{Document or test which cross-client operations remain possible without explicit resource sharing,
+including direct naming and resource duplication.}
+{This determines what the credential policy actually closes and which operations still need
+application-level ownership checks or a stricter deployment boundary.}
+\label{q:uid}
 
-\question{Can a finite sparse budget preserve the guest contract?}
-{A guest asks for more sparse reservations than the emulator can afford. A closed fallback leaves
-  missing coverage invalid and counts it.}
-{Identify a stock-driver-visible refusal point that is recoverable, or show a workload that requires
-  sparse semantics after that point and cannot recover.}
-{This chooses between a supported bounded mode, larger representation changes and explicitly
-  unsupported workloads; a silent budget increase alone does not answer it.}
+\question{How much of a nested result belongs to nesting?}
+{The same GPU workload can run natively, in a guest on a physical host, or in a guest whose host
+is itself a VM. Submission count, placement and driver versions can be held fixed.}
+{Measure exit counts, per-exit time, computation time and output in all three configurations while
+recording clock state and host load.}
+{The decomposition tells which overhead is an emulator mechanism and which ratio cannot be
+transferred from a rented nested host to a physical desktop.}
+\label{q:nested}
 
-\question{Can sparse geometry be coalesced without a hole?}
-{Two adjacent sparse reservations are live and unchanged. Replacing them with a larger object would
-  reduce resource cost, but release-before-reserve can temporarily fault them.}
-{Find a host operation with atomic replacement semantics, or prove a transition sequence that
-  preserves every unchanged address without pausing the GPU.}
-{A valid primitive enables compression. Otherwise active sparse geometry cannot be reclaimed like
-  empty ordinary reservations.}
+\question{Which oracle distinguishes correct GPU execution from a plausible PASS?}
+{A harness receives an application exit code, output bytes and an activity signal. A process can
+exit zero without checking a failed GPU synchronisation.}
+{Inject separately a missing launch, wrong output, forced GPU error and CPU fallback; determine
+which independent observation rejects each while accepting the native control.}
+{This selects the evidence needed for the workload claim, rather than assuming either an activity
+counter or output equality alone proves the intended execution path.}
+\label{q:proof}
 
-\question{What bounds a single native call?}
-{Software stops starting optional work after a slice budget, but one native driver operation can
-  outlive that budget and repairs cannot be abandoned.}
-{Measure the per-operation tail on loaded and idle hosts and identify any documented cancellation or
-  asynchronous completion interface.}
-{A real bound enables deadline reasoning. No bound means the product must tolerate the latency or
-  move the dependency ahead of the guest-visible barrier.}
+\question{What can a rented-machine GPU gate establish?}
+{A provider operator can inspect approved source and possesses one run-scoped reporting
+capability. It can fabricate logs and a correctly bound structured result.}
+{Separate errors a normal run can expose from claims requiring an observer or builder outside that
+operator's control.}
+{The answer defines the useful regression tripwire and prevents it from being treated as release
+provenance or an execution attestation.}
+\label{q:rental}
 
-\question{Can optional geometry starve safely?}
-{Mandatory mapping splits continue indefinitely, leaving no idle opportunity for deferred sparse
-  refinement. Existing accepted backing must stay owned.}
-{Determine whether a guest can continue correctly with the counted deficit forever or requires a
-  progress guarantee for the optional work.}
-{This decides whether idle-only continuation is a complete mode or needs explicit fair admission.}
+\question{What happens to the host desktop when a guest fails?}
+{A host display session and a guest use one physical GPU. The host retains a live rendering
+context and reference data while the guest faults, hangs work or triggers recovery.}
+{Measure host frame latency, output integrity, context survival and recovery; compare the same
+disturbance generated by an ordinary native host client.}
+{A host-wide failure restricts sharing claims even if guest addresses are isolated. Containment
+supports only the exercised fault classes and measured service bounds.}
+\label{q:host}
 
-\question{What can coalescing remove from a serial requester?}
-{One channel requests a fresh walk only after the previous request completes; other channels
-  sometimes request the same target concurrently.}
-{Separate saved concurrent tickets from the irreducible serial request count and measure both.}
-{This prevents a batching optimisation from being credited with a fix it cannot provide and directs
-  effort to the remaining per-request work.}
+\question{Could a mapping barrier acknowledge before host apply?}
+{A guest edits GPU page tables, asks for an invalidate, and expects subsequent work to see the
+edit. The emulator still has an old host mapping and no universal fault/replay service.}
+{Construct either a safe early-ack protocol or a stale-access counterexample, distinguishing an
+absent mapping that faults from a still-valid old mapping that returns wrong data.}
+{This decides whether blocking apply is inherent in the current authority model, or whether a
+separately proven fault/retry or versioning mechanism could remove it.}
+\label{q:early}
 
-\question{Is native ring relocation a simpler stock path?}
-{A stock Windows driver asks to move a running user channel's ring. The emulator can either mediate
-  from birth or use an authored native relocation with proven ordering.}
-{Demonstrate cursor continuity, old-ring retirement and a replacement-only completion marker through
-  a move while work is already in flight.}
-{Success could retire part of the mediation machinery; failure preserves the need for a restricted
-  software relay or a clearly separate cooperation tier.}
+\question{How should driver-release maintenance cost be measured?}
+{An emulator serves an unmodified guest driver while independently selecting host-driver ABIs and
+die capabilities. New releases can change layouts, requests and behaviour.}
+{For a sequence of public driver releases, record changed interfaces, implementation and test
+effort, unavailable hardware cells and remaining hand-maintained answers.}
+{The resulting ledger can price a supported release window and proactive measurements; a
+compatibility matrix alone cannot estimate that maintenance burden.}
+\label{q:releasecost}
 
-\question{What makes a registration anchor trustworthy?}
-{A registration reply changes how later command entries must be inspected. The relay has observed
-  PUT at several earlier points and may cache it.}
-{Give an ordering proof or counterexample establishing which observed boundary precedes the reply
-  under concurrent guest publication and ring migration.}
-{The answer determines how much must be scanned and whether the chosen clean anchor is valid.}
+\question{Which software agreements apply to this deployment?}
+{A source-built emulator runs a vendor driver on GeForce-class hardware, possibly on rented
+infrastructure or as a commercial service; its own source has separate licence exceptions.}
+{Obtain qualified review of the actual driver agreement, platform/hosting/datacentre terms,
+technical restrictions and combined-binary distribution permissions for that arrangement.}
+{The review determines release and deployment scope. Neither a working VM nor absence of a vendor
+vGPU component answers the contractual questions.}
+\label{q:eula}
 
-\question{Can pointer mode remain independent of command bytes?}
-{The GPU executes user commands under USER privilege in a restricted VA space. Software still
-  validates each descriptor but Pointer mode promises to read no pushbuffer.}
-{Find a software action reachable through uninspected command bytes that escapes that authority
-  boundary, or prove why the hardware boundary suffices for ordinary commands.}
-{A counterexample narrows Pointer eligibility; a sound boundary avoids copying commands solely
-  because a guest can mutate its own memory.}
+\question{What is the worst barrier cost the guest can cause?}
+{One translation barrier triggers a table traversal plus host maps, reservation changes, repair
+and invalidation. A guest can choose a fragmented layout within finite object caps.}
+{Bound or measure each non-overlapping stage as a function of visited tables and native
+operations, then identify every host or guest client waiting behind the operation.}
+{This decides whether workload caps imply a useful latency/service bound or merely finite memory
+use with a potentially unacceptable shared delay.}
+\label{q:worst}
 
-\question{What is the smallest useful ring for lazy observation?}
-{The relay intentionally writes GET back later than hardware progress. A producer can stop when its
-  small ring appears full.}
-{Construct the worst ordering of publication, observation, credit checks and processed-marker wake
-  for a ring only a few entries long.}
-{This decides whether the effective observation interval is a proven bound or a benchmark-shaped
-  heuristic that needs a different rule.}
+\question{Could isolated hardware translation remove the software walk?}
+{Instead of reconstructing host GPU tables, imagine a host interface that accepts a guest
+translation root in a hardware-isolated context. The guest can mutate or recycle it.}
+{Identify a public interface and prove ownership, privilege, revocation and concurrent-update
+semantics, including all privileged addressing paths.}
+{A usable interface changes the architecture. A root-validation check without ongoing isolation is
+not enough to replace mirroring safely.}
+\label{q:adopt}
 
-\question{What must a holder promise before a waiter parks?}
-{A worker fails a try-lock while an earlier doorbell edge has already been consumed. The lock holder
-  may release just before or just after waiter registration.}
-{Supply a bounded register-recheck-release protocol whose final wake cannot disappear under either
-  ordering, including reset and object reuse.}
-{A counterexample changes the handoff protocol; repeated successful stress runs alone do not remove
-  the missing interleaving.}
+\question{What can a walk promise while tables change concurrently?}
+{A GPU traversal reads a directory, then the guest replaces or recycles a lower table before the
+traversal reaches it. Unchanged addresses are supposed to remain usable.}
+{Give a protocol and counterexamples for allowed old/new/fault outcomes, root generation reuse,
+partial reads and a changed subtree shared by two roots.}
+{This determines whether live walking needs validation, versioning or a stronger contract;
+treating every transient decode failure as a stable malformed mapping is insufficient.}
+\label{q:race}
 
-\question{Can a progress oracle avoid sharing the implementation's mistake?}
-{Both an implementation and a reference model represent a wake obligation, and both may have been
-  written from the same informal story.}
-{Derive an independent conservation law, such as owner-or-queue-or-published-bit, that can reject a
-  terminal pending state without copying the implementation transitions.}
-{This selects a stronger model oracle and reduces correlated false green results.}
+\question{How much coupling is inside the shared host driver?}
+{Two clients use independent GPU VA spaces but issue memory-management calls through one host
+driver. One client repeatedly creates difficult reservation layouts.}
+{Measure the other client's call latency and host-display latency, distinguishing per-client
+queues from any driver-wide serialisation and GPU execution contention.}
+{This determines whether per-space emulator gates isolate useful latency or leave a shared native
+bottleneck requiring admission or deployment limits.}
+\label{q:global}
 
-\question{Is finite fair-suffix liveness the right contract?}
-{An explicit-state test explores adversarial prefixes and then gives every live actor fair turns
-  after finite lock holds.}
-{Identify a realistic host execution excluded by those assumptions that the product still promises
-  to survive.}
-{The answer changes either the model scheduler or the claimed product progress guarantee; an
-  unexplored frontier must remain inconclusive.}
+\question{Which limits give a VM a useful service guarantee?}
+{A guest has a fixed video-memory allocation but shares GPU scheduling, encoder capacity and
+host-driver request service with a live host workload.}
+{Vary allocations, scheduling requests and request rate independently; measure the victim's worst
+service gap and whether releasing the load restores service without a reset.}
+{This separates memory isolation from fairness and identifies the quota or admission contract
+required for a stated responsiveness target.}
+\label{q:quota}
 
-\question{How much cross-client authority survives one UID per VM?}
-{Separate VMM processes hold driver clients on one physical GPU. Each runs with a distinct
-  unprivileged UID and a restricted channel address space.}
-{Document or test remaining operations that can name another client's resources without its explicit
-  cooperation.}
-{This decides whether the deployment policy closes the relevant boundary or only one path.}
+\question{What state must a GPU VM snapshot or migration contain?}
+{A VM is stopped with GPU work in flight, host-owned memory objects and queued completions. It may
+resume in another process or on a different compatible GPU.}
+{Specify which state can be drained, reconstructed or transferred and how old completions, host
+identities and vendor-driver state are prevented from crossing lifetimes.}
+{This identifies a supportable snapshot/migration mode or makes its exclusion explicit, rather
+than assuming CPU-memory snapshot semantics cover the device.}
+\label{q:snapshot}
 
-\question{What is the right live victim for a GPU fault test?}
-{One guest deliberately faults while another has an existing context, queued work and data that must
-  remain correct across the event.}
-{Observe victim completion, content, latency, reset scope and later reuse, with a matched native
-  process control.}
-{A global failure restricts sharing claims; survival supports only the exercised fault class.}
+\question{Can unaffected ranges submit through a refresh?}
+{One host VA space runs work on range A while the guest changes disjoint range B. A global gate
+currently withholds all new submissions into that space.}
+{Provide a bounded range-dependency certificate that survives root changes, aliases, publication
+races and a full change-history buffer.}
+{It permits narrower admission if sound; otherwise the implementation must keep conservative holds
+and reduce the work behind them.}
+\label{q:range}
 
-\question{Which resource needs a quota first?}
-{Address spaces isolate normal memory accesses, but tenants share scheduling, encoder capacity, host
-  driver calls and memory apertures.}
-{Find the cheapest unprivileged workload that prevents a live peer from making useful progress and
-  measure recovery after it stops.}
-{This prioritises admission and fairness controls by observed impact rather than by ease of
-  counting.}
+\question{What preserves a running command ring across relocation?}
+{A stock driver requests a new GPU command-reference ring while commands from the old ring are in
+flight. Software wants native relocation rather than relaying every command.}
+{Demonstrate cursor continuity, ownership of both ring memories, retirement of the old source and
+a completion produced only by the replacement ring.}
+{This selects between a supported native move, software mediation from birth and a separate
+cooperation tier without relying on an idle cursor as completion proof.}
+\label{q:relocate}
 
-\question{Can engine-wide interrupt noise become material denial of service?}
-{Every VM registered on an engine can receive spurious notifications caused by another tenant.
-  Correctness requires retaining real completion debt.}
-{Measure victim CPU and completion latency under an interrupt-heavy neighbour, then test pacing that
-  never erases pending work.}
-{This decides whether the accepted noise needs a bounded-service policy before wider sharing.}
+\question{Which clock separates GPU completion from CPU observation?}
+{Software timestamps a submission and its first read of a completed GPU-written marker. The
+observing worker may spend time in a native driver call.}
+{Find an independent GPU-time witness and clock relation, or a second observer that distinguishes
+execution delay from delayed sampling without adding a correctness poll.}
+{This determines which latency component can be reported and which must remain an ambiguous
+submission-to-observation sum.}
+\label{q:clock}
 
-\question{Is a per-die table fundamentally avoidable?}
-{The guest asks for a capability absent from open derivation and unprivileged host queries. Several
-  measured dies agree, but no mechanism explains the agreement.}
-{Provide a public derivation or a new die that distinguishes a family rule from coincidental
-  agreement.}
-{A derivation deletes a table; otherwise exact-die measurement and a tested fallback remain
-  necessary.}
+\question{How can a notification be tied to one operation?}
+{Several channels and clients share engine-wide completion notifications. A CPU may see an
+interrupt before it samples its own completion marker.}
+{Specify the minimum identity, masking/coalescing state and ordering evidence needed to establish
+that a notification covered the particular operation.}
+{This chooses between a valid delivery-latency sample and an explicitly incomplete correlation; an
+unrelated interrupt must not manufacture a completed record.}
+\label{q:interrupt}
 
-\question{What should an unmeasured die refuse?}
-{A virtual device can advertise fewer optional display features while keeping the guest driver
-  unmodified.}
-{Identify the smallest capability surface that completes a realistic application and recovery suite
-  on the die, with wrong-answer mutations proving each required feature matters.}
-{This defines a working fallback mode instead of equating refusal-first with usable compatibility.}
+\question{What happens when a finite sparse budget is exhausted?}
+{A guest intentionally maps unbacked zero/absorbing GPU pages. The host has a finite reservation
+budget and leaves additional requested coverage invalid on exhaustion.}
+{Identify a recoverable driver-visible refusal point, or a workload that requires those semantics
+after that point and cannot recover from an invalid mapping.}
+{This defines whether the bounded mode is compatible, needs a new representation or must exclude
+that workload; counting the deficit alone does not choose among them.}
+\label{q:sparse}
 
-\question{How should the two driver axes be sampled?}
-{Host and guest driver versions are independent, while interfaces may change inside a release
-  branch. Exhaustive combinations are expensive.}
-{Choose a public-interface change criterion that selects discriminating cells and test whether it
-  predicts actual failures better than major-version sampling.}
-{This changes the supported matrix and which cells need hardware rather than a decoder-only check.}
+\question{Which identity survives root replacement and reset?}
+{A guest VA-space object can replace its page-directory root, reuse an old root address and reset
+a channel while host mappings or completions remain outstanding.}
+{Give an identity/epoch scheme and adversarial sequence that distinguishes same object, new root
+and new lifetime, including delayed callbacks.}
+{This determines when a cached mapping, source or completion can be reused and when old
+obligations must be retired or canceled.}
+\label{q:root}
 
-\question{Does a successful query imply the advertised virtual feature?}
-{A physical host reports a display capability that the emulated display only partly implements.}
-{Mutate each advertised field and compare guest behaviour and output against an independently
-  derived virtual support model.}
-{This decides whether runtime delegation can replace a table or must be filtered field by field.}
+\question{Which layer fails on resume?}
+{A guest resumes from S3 with the emulated GPU state retained, but platform timers and the
+operating system also need to recover.}
+{Compare matched plain-VMM and device-enabled guests, then require post-wake content-checked GPU
+work and locate the first differing state or wait.}
+{A platform-only failure changes the harness diagnosis; a device-specific failure remains a device
+lifecycle defect even if its firmware-facing state machine is running.}
+\label{q:resume}
 
-\question{How should a device reboot differ from a driver reset?}
-{A new guest OS life must not see stale video memory from the previous life; an in-guest driver
-  recovery belongs to the same trust boundary.}
-{Show that the VMM reset origin and type distinguish every reachable lifecycle event, including a
-  reboot arriving during another reset.}
-{A missing distinction requires a conservative scrub path or a better VMM lifecycle contract.}
+\question{What distinguishes an ARM port from a cross-build?}
+{Logic code builds for arm64, while the host adapter must register shared GPU memory, handle
+different page sizes and deliver interrupts and resets.}
+{Execute the required memory and lifecycle primitives on a VM-capable ARM host and identify which
+ordering or fault-resumption semantics differ from the x86 adapter.}
+{This determines whether an adapter capability is missing or whether ordinary porting work is
+sufficient. Compilation alone does not choose between them.}
+\label{q:arm}
 
-\question{What proves repeated unload and reload?}
-{A cold boot works, but a guest repeatedly unloads its driver, reopens it and starts new work
-  without restarting QEMU.}
-{Track queue identity, object ownership, host resources, content and completion over many lives and
-  compare a kill-during-work control.}
-{This decides whether a lifecycle is supported or merely modelled, and which resources need stronger
-  generation identities.}
+\question{What must a second VMM adapter guarantee?}
+{A GPU device core needs bounded traps, shared-memory views, notification and distinct
+reset/lifetime events. It currently runs inside one VMM process.}
+{Express those guarantees using another public VMM/device protocol, then identify any operation
+whose latency or semantics cannot satisfy the same contract.}
+{This prices real hypervisor independence and exposes requirements hidden by the first adapter,
+without requiring the reader to know its internal traits.}
+\label{q:vmm}
 
-\question{Why does one OS resume while another does not?}
-{The firmware-facing protocol can retain state through S3, but Windows also has timer and platform
-  dependencies outside the emulated GPU.}
-{Use matched plain-QEMU and device-enabled controls, guest stack evidence and post-wake GPU work to
-  locate the first divergent layer.}
-{A platform-only failure changes the harness diagnosis; a device-specific failure remains a product
-  blocker despite a healthy firmware state machine.}
+\question{How should simultaneous host/guest use be graded?}
+{A screenshot shows a host desktop and a guest both using one GPU. The host can also run a
+repeatable render or compute workload with an independent output check.}
+{Measure each alone and together, preserving clocks, settings and content; report throughput and
+tail frame/completion gaps for both sides over repeated boots.}
+{This replaces visual coexistence with a bounded shared-use claim and shows whether the advertised
+benefit costs unacceptable host responsiveness.}
+\label{q:coexist}
 
-\question{What makes arm64 a new architecture test?}
-{The logic crates can build for another CPU, but the VMM memory adapter must implement mapping, page
-  sizes, DMA visibility and reset semantics.}
-{Identify the first required shell operation whose semantics differ, then execute it on a VM-capable
-  ARM host with a real GPU.}
-{This decides whether portability needs a new adapter capability or only implementation work;
-  cross-compilation alone cannot settle it.}
+\question{Which driver/version cells are most discriminating?}
+{Host and guest driver versions are independent. Public releases can change structures inside a
+branch and add fallback requests only on error paths.}
+{Select cells using actual public interface changes and test that selection against normal and
+refusal-driven paths, rather than only major-version labels.}
+{This determines the supported window and where a decoder oracle is insufficient without a real
+workload and recovery test.}
+\label{q:versions}
 
-\question{What is the minimal second-VMM contract?}
-{The core wants memory views, bounded traps, interrupts and lifecycle events independent of QEMU.}
-{Implement a small second adapter and name every place it cannot express the required ordering or
-  ownership without changing the core.}
-{This tests architectural independence and prices a vfio-user or other frontend without claiming
-  that an abstract trait is already portable behaviour.}
+\question{What is a usable mode for an unmeasured die?}
+{An emulated GPU can withhold optional capabilities when their exact-die provenance is
+unavailable, while keeping the guest driver unmodified.}
+{Identify a minimal public capability surface, exercise useful applications and recovery, and use
+wrong-answer mutations to show which advertised fields actually matter.}
+{This defines a working reduced mode rather than treating a named refusal or a boot as a complete
+compatibility result.}
+\label{q:fallback}
 
-\question{What additional evidence would make multi-GPU real?}
-{A guest can enumerate and use two distinct GPUs in thin tests, but applications may request peer
-  access, shared managed memory or a display on a chosen device.}
-{Run content-checked concurrent application work with explicit peer refusal, device selection and
-  independent reset accounting.}
-{This separates basic enumeration from a supported multi-GPU product and identifies which
-  cross-device features must stay refused.}
+\question{Which failures of a viewer may affect a guest?}
+{A guest submits display flips while a separate viewer receives copied frames. The viewer can
+stall, restart, flood requests or retain its last frame slot indefinitely.}
+{Specify and test which guest completions must continue, which frames may be dropped, and the
+bounded ownership of buffers across reconnect and reset.}
+{This separates guest display semantics from transport quality and determines where a viewer
+failure may legitimately cause degraded output rather than a guest hang.}
+\label{q:display}
 
-\question{Can display completion be independent of the viewer?}
-{A guest keeps flipping while the broker is silent, restarts, or never releases a frame slot. The
-  viewer must not control guest liveness.}
-{Check monotonic guest completion and bounded frame debt through silence, reconnect and flood
-  without using a timeout to manufacture a GPU completion.}
-{This decides whether frame transport and guest display timing are properly separated.}
+\question{Which independent invariant would expose a shared test-model error?}
+{An event-driven queue implementation and its reference model were written from one informal
+progress story. Both could forget the same transition.}
+{Derive a conservation rule from externally visible submissions, cancellations and effects; plant
+a dropped final obligation and show the oracle rejects it.}
+{This tests oracle independence through a concrete counterexample, instead of assuming separate
+code or multiple reviewers imply separate reasoning.}
+\label{q:oracle}
 
-\question{Which visual oracle catches a colour error?}
-{A pipeline applies matrices and lookup tables with driver-specific widths, rounding and mirroring,
-  while a screenshot can look plausible.}
-{Use boundary values and native pixel comparisons that distinguish sign, scale, interpolation and
-  table capacity, including the control that previously froze.}
-{This chooses behaviour-level tests instead of treating accepted method packets as correct output.}
+\question{Which repetitions estimate the user-visible failure?}
+{Iterations in one boot are stable, but boot state, host placement and concurrent load can change.
+Timeouts and failed boots have no final throughput sample.}
+{Separate within-boot, between-boot and between-host spread while retaining failures and missing
+samples in the denominator.}
+{This chooses an acceptance sample unit and prevents a favourable conditional median from
+representing a configuration that users cannot reliably reach.}
+\label{q:sampling}
 
-\question{What ratio survives a nested host?}
-{A guest under nested KVM pays both an exit cost and emulator work. A same-box host control omits
-  one of those layers.}
-{Measure exit count, per-exit latency, batch shape, placement and content on matched nested and
-  physical hosts without changing driver or workload at the same time.}
-{This separates a host-environment penalty from a product bottleneck and prevents extrapolating one
-  ratio to a different deployment.}
-
-\question{Which sample unit estimates the failure we care about?}
-{Many iterations in one boot agree while boot state, host allocation and concurrent applications can
-  vary.}
-{Separate within-boot, between-boot and between-machine spread, retaining timeouts and failed boots
-  in the denominator.}
-{This chooses repetitions for a release criterion; a fast median must not discard the unstable lives
-  a user would actually encounter.}
-
-\question{Does an application PASS mean completed GPU work?}
-{An application exits zero and may print success even when a sync status or numerical result was not
-  checked.}
-{Plant a missing launch, wrong result and forced GPU error and show that the independent harness
-  rejects all three while accepting the valid native control.}
-{This determines which application receipts can grade product correctness rather than startup.}
-
-\question{What can an untrusted GPU gate prove?}
-{A rented operator receives approved source and a run-scoped reporting capability, but can fabricate
-  output and a structured verdict.}
-{State which regression signal remains useful under this trust model and which release claims
-  require an independent trusted builder or observer.}
-{This keeps the gate a tripwire and prevents it from becoming an accidental provenance authority.}
-
-\question{Can exact-tree batching miss an interaction?}
-{Several topics each passed a relevant parent revision. They are then merged into one batch against
-  a moving integration branch.}
-{Test the final tree, preserve its embedded revision and compare changed input closures to the
-  receipts being carried forward.}
-{This decides which earlier results remain applicable and when a fresh hardware run is necessary.}
-
-\question{How can a mutation campaign prove it exercised its universe?}
-{A test runner can time out, omit targets, use stale artifacts or fail before executing the intended
-  mutation.}
-{Plant known failures, count reached targets and require an unmutated green baseline plus
-  independent failing assertions rather than compiler errors.}
-{This changes the interpretation of a kill percentage and prevents an empty or broken campaign from
-  looking stronger than a real one.}
-
-\question{What should an agent reviewer be unable to assume?}
-{An implementation, its tests and a research summary may repeat one author's untested premise.}
-{Require the reviewer to reconstruct one invariant from the opposite boundary and name the
-  observation that would falsify the shared story.}
-{This changes review assignments and evidence requirements when apparent independent agreement is
-  only repetition.}
-
-\question{Which release artefact is actually distributable?}
-{The source offers licence alternatives with file-level exceptions, and the combined VMM links
-  components under different terms.}
-{Obtain a reviewed source-to-binary licence inventory and verify that each redistributed component
-  has the required permission and notice.}
-{This decides packaging and release gates. The question asks for legal review, not a technical test
-  result standing in for permission.}
-
-\question{What would make this paper obsolete in the useful way?}
-{A pinned architecture argument separates measured results from hypotheses, but development
-  continues after publication.}
-{Choose one open fork, preregister the discriminator and publish both outcome and instrument
-  reachability at an exact revision.}
-{A result that closes or changes the fork should update the parent claim visibly. A new fast number
-  without a causal discriminator should not rewrite the explanation.}
+\question{What does a GPU USER-privilege test actually prove?}
+{A host client can create channels with a hardware privilege level, but a guest also names objects
+and supplies addresses through a software decoder.}
+{Test physical and virtual operands on each relevant engine and trace the trusted allocation fact
+authorising privileged work, independently of guest handles and Unix UID.}
+{This establishes the scope of the hardware boundary and the remaining software authority checks;
+one accepted ordinary request cannot prove all three permissions.}
+\label{q:privilege}
 

@@ -1,84 +1,114 @@
-\section{How to attack this paper}
+\section{The story before the internals}
 \label{sec:attack}
 
-Four labels constrain the argument. \textbf{MEASURED} means a named run or recorded observation,
-with a source revision and its scope. Here it always means \emph{reported in the cited record}:
-this writing task used no GPU, VM or rental. \textbf{CODE READ} means a statement checked in a
-source file or a repository document; reading a reported result does not reproduce it.
-\textbf{INFERRED} means an explanation or consequence, not an observation.
-\textbf{UNVERIFIED} marks a question or unsupported extension; it licenses no factual assertion.
-An experimental proposal below is a proposed test, not a claim that its outcome occurred.
-These distinctions follow the repository's contributor rules.\src{rules}
+Kayfabe asks whether a virtual machine can run NVIDIA's ordinary driver while the host keeps
+its own NVIDIA driver and GPU. It presents a pretend GPU to the guest, then asks the real host
+driver to do the work. The implementation is research, with no audited security boundary or
+stable installation interface. Windows needs documented registry settings, but no driver
+binary patch.\src{readme}\src{faq}\src{windows}
 
-A source key in square brackets links to an immutable repository path in the evidence index.
-Unless a different revision is printed there, it means the baseline on the cover. A paragraph's
-key scopes that paragraph; it does not turn a neighbouring inference into a measurement.
-Where the primary host trace is unavailable, the text says the record is a secondary report.
-Numbers in such a report retain that limitation even when they are precise.
+\textbf{What already works.} A dated Windows matrix completed seven of nine workload rows:
+four graphics-benchmark configurations, two other graphics configurations and Minecraft.
+One browser-video row failed and one idle row was not run. Linux records include correct
+large computations close to the host's speed, and slow workloads that issue many small jobs.
+These results belong to older revisions; \emph{no hardware result presented here tests the
+paper's pinned baseline}. Section~\ref{sec:results} gives their scope and code distance.
+\src{winmatrix}\src{readme}
 
-\readcode The claims ratchet is \code{python3 scripts/ci/debt.py claims}. Contributors require
-\code{new=0} before publishing changed documentation and may not enrol new debt to make it pass.
-It is an attribution check, not a verifier of a causal explanation. In particular, its scanner
-covers Markdown and Rust, rather than this paper's TeX prose. The source index and editorial
-review therefore carry the TeX attribution obligation. A green ratchet alone does not certify
-this paper.\src{debt}\src{rules}
+\textbf{The failure this paper tries to explain.} A Windows guest can run individual programs,
+yet pause or reset its graphics driver under mixed application use. Windows has a watchdog,
+called timeout detection and recovery (TDR). Its default scheduler preemption wait is
+\textbf{two seconds}. If a task cannot finish or yield in that interval, recovery may reset
+graphics state; applications can lose their graphics device. This is not a rule that every
+submission must reset exactly two seconds after it was queued.\src{mskeys}\src{msrecovery}
 
-\readcode The predecessor records corrections to its own claims, including a runtime-init
-probe mistaken for a successful language-model workload, an object-graph hypothesis refuted by
-an already available passing control, and a mutation configuration that the tool never read.
-These are historical process examples, not assertions that those implementation defects remain
-in v3.\src{old}
+\textbf{The proposed explanation, INFERRED.} The guest driver edits the GPU's address map in
+memory the emulator does not intercept. To make an edit effective on the real GPU, Kayfabe
+must read that map and ask the host driver to install corresponding mappings. If this takes
+too long and dependent work waits behind it, Windows can see late progress and initiate
+recovery. That chain is plausible; it is not established as the cause of every reset.
+\src{architecture}\src{walknarrow}
 
-\textbf{A useful objection names a discriminating observation.} For a claim about a wake, ask
-which waiter registered, which holder released, and whether the observer could see the event.
-For a claim about memory, ask who owns the backing, when the host acknowledged the change and
-what a failed acknowledgement leaves pending. For a speed claim, ask which revision, workload,
-placement, sample unit and control produced it. A count of output tokens cannot establish text
-correctness; an idle fault counter cannot prove that the workload reached the GPU.
-These are methodological requirements motivated by the predecessor's correction record.\src{old}
+\textbf{The evidence gap, UNVERIFIED.} An analysis note gives a 2.43-second mapping update
+beside a 2.529-second completion gap. The analysis and raw trace are not in the repository.
+Those durations motivate a test, not a measured alignment with the watchdog. The decisive
+experiment must identify the same job, locate the scheduler's preemption request, and separate
+waiting before submission from execution and notification delay.\src{walknarrow}\src{latency}
 
-\section{The problem and the product}
+\textbf{The headline limitation, UNMEASURED.} Simultaneous host and guest GPU use is shown by
+the README screenshot, not by a throughput or host-latency experiment. The paper has no
+measurement of how a busy or faulting guest affects the host's desktop. That is an explicit
+open question, not an implication of a fast isolated benchmark.\src{readme}\src{faq}
 
-\readcode Kayfabe presents an emulated NVIDIA PCI device to a guest running NVIDIA's unmodified
-driver. The host's NVIDIA driver stays loaded. The VMM process acts as a host driver client,
-using authored unprivileged operations to make the real GPU perform work. The intended benefit
-is simultaneous host use and guest compatibility without installing a custom forwarding driver
-inside the guest. This is a research implementation with no stable installation interface or
-public binary release.\src{readme}\src{architecture}\src{faq}
+\subsection{How to attack the argument}
 
-\readcode ``Unprivileged'' describes the host interface the design uses. It is not an
-end-to-end rootless certification: the public guides say the launch scripts run as root and a
-complete rootless run is not documented. ``Stock'' means no driver or kernel binary patch.
-Windows still requires documented registry configuration; an unmodified binary is not a
-zero-configuration guest.\src{security}\src{faq}\src{windows}
+This edition distinguishes six kinds of statement:
 
-\subsection{Comparisons at the width the repository supports}
+\begin{description}[itemsep=0.35em]
+\item[MEASURED] Executed for this edition, with the command and artifact identified. Here this
+  covers publication checks only: no GPU, VM or rental was used.
+\item[REPORTED] A repository record gives a result at a named revision. An available table or
+  trace can be checked by the reader; it was not rerun here. Missing raw data stays explicit.
+\item[CODE] An implementation statement tied to source, not a promise in a design document.
+\item[DOC] A documented requirement, design or status statement; implementation and acceptance
+  may still be incomplete.
+\item[INFERRED] An explanation with an observation that could disprove it.
+\item[UNVERIFIED] A claimed result without inspectable supporting analysis, or an extension
+  beyond the tested evidence. It cannot support an acceptance claim.
+\end{description}
 
-\readcode VFIO passthrough gives one guest the physical device; the host gives it up. Kayfabe
-instead relies on host-authored mappings and the GPU MMU. NVIDIA vGPU is a different vendor
-stack and licensing arrangement. The repository's positioning distinguishes API forwarding,
-including the sister project nvkvm-pv, which uses a custom guest module, from emulating the
-device for a stock guest driver. It offers no detailed Venus, virgl or native-context
-performance comparison, and neither does this paper.\src{faq}
+Numeric citations link to the source. Full paths, revisions, evidence qualifications and the
+current PR snapshot are in the linked companion index, not vocabulary the reader must learn.
+The code baseline remains \code{12c4008705f17033a803e56d4d479bf1275cdb94}; later experimental
+code is always identified separately.\src{rules}
 
-\readcode The public credits describe Caraxes, an MIT fork of Leandro, as a synthetic NVIDIA
-GPU over vfio-user that plays the firmware role, shadows guest page tables and uses host
-channels while keeping the host NVIDIA driver. They describe Open-IOV's goal and host-module
-approach, but explicitly do not establish whether its host keeps using the GPU. These are
-repository-attributed descriptions, not an independent audit of either project. The credits identify
-  nvproxy as a source of capability
-allowlists, not as a claim that it implements this stock-device architecture. No claim about
-relative speed, security or unpublished implementation details follows.\src{credits}
+\doc The claims ratchet, \code{python3 scripts/ci/debt.py claims}, requires \code{new=0} for
+changed documentation. It checks attribution in Markdown and Rust, not the truth of a causal
+claim and not this TeX prose. A clean result does not certify the paper. Source review and the
+six labels carry that obligation.\src{debt}\src{rules}
 
-\subsection{What the product argument does not establish}
+A useful challenge supplies a counterexample, a public contract or a discriminating experiment.
+For a wake, identify who must wake whom. For a mapping, identify who owns the old bytes and
+which acknowledgement permits reuse. For speed, specify the workload, sample unit and control.
+The predecessor records both a probe mistaken for a real workload and a reference model that
+shared its implementation's mistake. Those incidents justify checking the instruments too.
+\src{old}
 
-\readcode A hostile-guest model is a design target, not an independent security audit. Multiple
-VMs on one GPU, shared-fault containment and resource fairness need evidence of their own.
-A passing Linux thin guest is not a passing Windows desktop; a passing die does not stand for
-an entire family; a fast isolated renderer does not establish multi-application stability.
-The public FAQ explicitly separates these cases.\src{security}\src{faq}
+\section{The product claim and its limits}
 
-\inferred The compatibility surface is a moving dependency on the guest driver's observable
-expectations. This is valuable when it works and costly when a seemingly unimportant ordering
-or missing response sends the driver down a different path. The seven compatibility axes and
-the failure case below are ways to make that cost inspectable, not a promise to eliminate it.
+\doc The guest sees an emulated NVIDIA device. Kayfabe builds host requests itself instead of
+replaying guest requests. The host driver remains loaded, and its ordinary client interface
+provides memory and execution resources. Three different permissions matter: the host driver's
+non-privileged request interface; the GPU channel's USER execution privilege; and the Unix UID
+of the VMM process. None implies the other two. A complete rootless launch is not documented;
+the supplied launch scripts use root.\src{architecture}\src{security}\src{faq}
+
+\subsection{Other approaches, without invented comparisons}
+
+\doc VFIO passthrough assigns the physical GPU to one guest, so the host gives it up.
+NVIDIA vGPU uses a vendor virtualisation stack and its own licensing. API forwarding translates
+guest driver calls; the sister project nvkvm-pv uses a custom guest module. Kayfabe instead
+emulates a device so the guest can use a stock NVIDIA driver. The repository has no detailed
+performance comparison with virtio-gpu, Venus or virgl, and this paper supplies none.
+\src{faq}\src{credits}
+
+\doc The credits describe Caraxes as an MIT fork of Leandro, using a synthetic NVIDIA device
+over vfio-user, a protocol between the VMM and an external device process. It plays the
+firmware role and mirrors guest mappings while retaining the host driver. Open-IOV is a
+separate host-module approach; whether its host keeps using the card is not established by
+the cited description. The credits identify gVisor's nvproxy as a source of capability lists,
+not as evidence of the same stock-device architecture.\src{credits}
+
+\subsection{What would make the title a measured claim?}
+
+\unmeasured A screenshot shows coexistence; it does not grade responsiveness. A convincing
+shared-use result needs a host workload with retained state, measured alone and under guest
+load, including guest faults and recovery. Multiple VMs sharing one GPU and resource fairness
+need different tests again. The security model is a design, not an independent audit.
+\src{readme}\src{security}
+
+\doc Compatibility, deployment permission and distributability are separate questions.
+The repository's source licence does not grant rights to NVIDIA's driver or Windows. The
+legal questions in Section~\ref{sec:questions} include the applicable driver agreement,
+commercial hosting, datacentre restrictions and any relevant technical restrictions.
+No benchmark result answers them.\src{credits}\src{nvidialicense}
