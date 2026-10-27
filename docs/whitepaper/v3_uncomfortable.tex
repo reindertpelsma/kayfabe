@@ -139,7 +139,10 @@ missing coverage and incomplete timestamps rather than dropping those samples.
 
 \readcode A sparse guest page is not the same as an invalid unmapped address. The selective
 sparse-twin experiment exists to reproduce that distinction using host reservation objects.
-It stays default OFF. A native micro-oracle can show that the sparse state changes a fault
+It stays default OFF. Here sparse means an intentionally unbacked mapping whose reads return zero
+  and whose writes
+are absorbed; plain invalid is a different state that faults. A native micro-oracle can show
+that the sparse state changes a fault
 outcome without proving a long-lived Windows desktop remains correct.\src{sparse}\src{sparsepr}
 
 \readcode The newer policy scales finite per-space and per-session object budgets from the
@@ -231,6 +234,14 @@ introduces no 64-attempt budget. The new mapping work targets a different depend
 convenient retry count would not prove that a lock holder hands progress back correctly.
 The contention test's finite fair suffix is an assumption about scheduling, not a product
 polling interval.\src{latency}\src{owed}
+
+\readcode A separate retry-set relay proposal at \code{c452ca7cb} makes every loop iteration
+inspect outstanding state and keeps unsourced obligations spinning rather than waiting for a
+holder notification. It also experiments with returning ring-slot credit at software read
+progress instead of hardware fetch progress. Its design note records changed or unresolved
+model expectations and no hardware run at that checkpoint. Simpler loop structure is an
+argument to test, not evidence that either credit semantics or Windows behaviour is better.
+\src{alternativerelay}
 
 \unverified This paper found no public repository record sufficient to attribute a current
 coordinator preference between every historical relay alternative. It therefore invents no

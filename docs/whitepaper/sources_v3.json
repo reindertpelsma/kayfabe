@@ -422,6 +422,13 @@
       "description": "Three-run rates, ranges and text-equality records"
     },
     {
+      "key": "alternativerelay",
+      "revision": "c452ca7cb412852a3e6ca68d18e94f92ac625599",
+      "path": "docs/design/V3_RELAY_SIMPLE_20261020.md",
+      "blob": "9a1e48178688e11c3d42da885b1a5c165f864b38",
+      "description": "Retry-set relay proposal, semantic changes and unrun hardware obligations"
+    },
+    {
       "key": "admission",
       "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
       "path": "docs/design/V3_ENS5_SPARSE_ADMISSION.md",
