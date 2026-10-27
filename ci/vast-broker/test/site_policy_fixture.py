@@ -1,5 +1,9 @@
 import importlib.util
 import json
+import contextlib
+import io
+import os
+import tempfile
 from pathlib import Path
 import sys
 
@@ -46,7 +50,7 @@ if case in {"site", "docs", "workflow", "removed", "renamed-out", "renamed-in"}:
     if case == "removed":
         files[0]["status"] = "removed"
     expected, deploy = True, variant != "pr"
-if case in {"odd", "unknown-status", "count", "missing", "sha", "truncated"}:
+if case in {"odd", "unknown-status", "count", "missing", "sha", "truncated", "too-many-files"}:
     expected, known = True, False
 if case == "odd":
     files[0]["filename"] = "src/odd\\name"
@@ -60,8 +64,8 @@ if case == "missing":
 if case == "sha":
     pr["head"]["sha"] = before
     event["after"] = before
-if case == "truncated":
-    pr["changed_files"] = 3001
+if case in {"truncated", "too-many-files"}:
+    pr["changed_files"] = 3001 if case == "truncated" else 10000
     files[:] = [{"filename": "src/f" + str(i), "status": "modified"} for i in range(300)]
 if case == "prefix-only":
     files[0]["filename"] = "website/source.md"
@@ -73,13 +77,19 @@ if case in {"schedule", "release", "workflow_dispatch"}:
     expected, deploy = True, True
 
 
+calls_read = []
+
+
 def get(path):
+    calls_read.append(path)
     return json.loads(json.dumps(data[path]))
 
 
 if not case.startswith("status-") and not case.startswith("reuse-"):
     result = m.decide(event, name, ref, sha, get)
     assert (result["run"], result["deploy"], result["known"]) == (expected, deploy, known), result
+    if variant == "pr" and case in {"truncated", "too-many-files"}:
+        assert not any("/files?" in path for path in calls_read), calls_read
 elif case.startswith("reuse-"):
     data.update(
         {
@@ -124,6 +134,9 @@ elif case.startswith("reuse-"):
             },
         }
     )
+    if variant == "pr":
+        data["/commits/" + sha]["parents"] = []
+        data["/commits/" + sha + "/pulls?per_page=100"] = [{"head": {"sha": before}}]
     if case == "reuse-tree":
         data["/commits/" + before]["commit"]["tree"]["sha"] = "f" * 40
     status = data["/commits/" + before + "/statuses?per_page=100"][0]
@@ -135,6 +148,14 @@ elif case.startswith("reuse-"):
         data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"][0][
             "conclusion"
         ] = "failure"
+    if case == "reuse-ci-pending":
+        data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"][0][
+            "status"
+        ] = "queued"
+    if case == "reuse-ci-app":
+        data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"][0]["app"]["id"] = 1
+    if case == "reuse-run-sha":
+        data["/actions/runs/123"]["head_sha"] = sha
     if case == "reuse-run":
         data["/actions/runs/123"]["conclusion"] = "failure"
     event_name, reference = "push", "refs/heads/master"
@@ -164,6 +185,15 @@ else:
             {"name": "deploy", "conclusion": "skipped"},
         ],
     }
+    jobs["jobs"][0]["check_run_url"] = "https://api.github.com/repos/" + repo + "/check-runs/10"
+    data["/check-runs/10"] = {
+        "head_sha": sha,
+        "conclusion": "success",
+        "app": {"id": 15368, "slug": "github-actions"},
+    }
+    data["/check-runs/10/annotations?per_page=100"] = [
+        {"title": "Site push range", "message": "before=" + before + " after=" + sha}
+    ]
     if variant == "push" and case != "status-fork":
         run["event"] = "push"
         run["head_branch"] = "master"
@@ -193,23 +223,83 @@ else:
         pr["head"]["sha"] = before
         if variant == "push":
             run["event"] = "workflow_dispatch"
-    if case == "status-pr-start":
+    if case == "status-bad-annotation":
+        files[0]["filename"] = "src/a.rs"
+        run["event"], run["head_branch"] = "push", "master"
+        jobs["jobs"][1]["conclusion"] = "skipped"
+        if variant == "pr":
+            data["/check-runs/10"]["app"]["id"] = 1
+        else:
+            data["/check-runs/10"]["head_sha"] = before
+    if case == "status-late-start":
+        data["/commits/" + sha + "/statuses?per_page=100"] = [
+            {
+                "context": "site",
+                "state": "success" if variant == "pr" else "error",
+                "creator": {"login": "github-actions[bot]", "id": 41898282},
+            }
+        ]
+    if case in {"status-pr-start", "status-late-start"}:
         source, payload = "pull_request_target", event
     else:
         source, payload = "workflow_run", {"action": "completed", "workflow_run": {"id": 123}}
+    if case == "status-late-run":
+        payload["action"] = "in_progress"
     calls = []
     m.report_status(payload, source, "456", get, lambda path, body: calls.append((path, body)))
-    if case in {"status-foreign", "status-wrong-path", "status-stale"}:
+    if case == "status-late-start":
+        assert calls == [], calls
+    elif case in {"status-foreign", "status-wrong-path", "status-stale"}:
         assert not any(body["state"] == "success" for _, body in calls), calls
     else:
         final = calls[-1][1]
         expected_state = (
             "pending"
             if case == "status-pr-start"
-            else ("error" if case in {"status-no-build", "status-failure"} else "success")
+            else (
+                "error"
+                if case in {"status-no-build", "status-failure", "status-bad-annotation"}
+                else "success"
+            )
         )
         assert final["state"] == expected_state, calls
         assert all(path == "/statuses/" + sha for path, _ in calls)
         assert final["context"] == "site"
         if case == "status-untouched":
             assert final["description"] == "not needed: site and docs untouched"
+
+if case in {"untouched", "site", "missing"}:
+    original_decide = m.decide
+    m.decide = lambda event, name, ref, sha: original_decide(event, name, ref, sha, get)
+    with tempfile.TemporaryDirectory(prefix="wk2-site-cli-") as directory:
+        event_path, output_path = Path(directory) / "event.json", Path(directory) / "output"
+        event_path.write_text(json.dumps(event))
+        os.environ.update(
+            {
+                "GITHUB_REPOSITORY": repo,
+                "GITHUB_EVENT_PATH": str(event_path),
+                "GITHUB_EVENT_NAME": name,
+                "GITHUB_REF": ref,
+                "GITHUB_SHA": sha,
+                "GITHUB_OUTPUT": str(output_path),
+            }
+        )
+        sys.argv = ["site_policy.py", "policy"]
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            if variant == "push" and case == "missing":
+                try:
+                    m.main()
+                    raise AssertionError("uncertain push authorized deployment")
+                except ValueError:
+                    pass
+            else:
+                m.main()
+        outputs = dict(line.split("=", 1) for line in output_path.read_text().splitlines())
+        assert outputs["run"] == str(int(expected))
+        assert outputs["deploy"] == str(int(deploy))
+        assert outputs["known"] == str(int(known))
+        if variant == "push":
+            assert "title=Site push range::before=" + before + " after=" + sha in stdout.getvalue()
+        else:
+            assert "::notice" not in stdout.getvalue()

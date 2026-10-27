@@ -107,3 +107,7 @@ each mdBook render `build.py` adds a skip link, breadcrumbs, an "View and edit s
 page's source path), previous/next links and marks the manual's `[measured]`, `[inferred]` and `not documented yet`
 text so gaps stay visible. Landing copy lives in `content/_index.md` front matter; each `src` field is written into the
 page as an HTML comment, so every statement keeps its source. New claims need a source in the README or the manual.
+
+## Proposed always-reported Site status
+
+CODE READ 2026-10-27 (`.github/workflows/site.yml`, `site-status.yml`, `ci/vast-broker/site_policy.py`): PRs always get the custom `site` status. A read-only API decision skips an unrelated change; needed/uncertain changes build the exact PR head. The separate API-only reporter supports fork PRs without giving their code a status-writing token. Master deployment requires confirmed Site/docs/workflow changes, while existing publication events keep master tooling. See [status behavior](../docs/howto/site-status.md).

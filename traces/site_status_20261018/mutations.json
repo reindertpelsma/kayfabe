@@ -1,0 +1,208 @@
+{
+  "baseline": "PASS",
+  "mutants": [
+    {
+      "mutant": "ignore-site",
+      "kills": 6,
+      "tests": [
+        "site policy pr site",
+        "site policy pr renamed-out",
+        "site policy pr renamed-in",
+        "site policy push site",
+        "site policy push renamed-out",
+        "site policy push renamed-in"
+      ]
+    },
+    {
+      "mutant": "ignore-docs",
+      "kills": 8,
+      "tests": [
+        "site policy pr docs",
+        "site policy pr removed",
+        "site policy pr status-no-build",
+        "site policy pr status-pr-start",
+        "site policy push docs",
+        "site policy push removed",
+        "site policy push status-no-build",
+        "site policy push status-pr-start"
+      ]
+    },
+    {
+      "mutant": "ignore-workflow",
+      "kills": 2,
+      "tests": ["site policy pr workflow", "site policy push workflow"]
+    },
+    {
+      "mutant": "ignore-renamed-source",
+      "kills": 2,
+      "tests": ["site policy pr renamed-out", "site policy push renamed-out"]
+    },
+    {
+      "mutant": "uncertain-paths-skip",
+      "kills": 14,
+      "tests": [
+        "site policy pr odd",
+        "site policy pr unknown-status",
+        "site policy pr count",
+        "site policy pr missing",
+        "site policy pr sha",
+        "site policy pr truncated",
+        "site policy pr too-many-files",
+        "site policy push odd",
+        "site policy push unknown-status",
+        "site policy push count",
+        "site policy push missing",
+        "site policy push sha",
+        "site policy push truncated",
+        "site policy push too-many-files"
+      ]
+    },
+    {
+      "mutant": "uncertain-push-deploys",
+      "kills": 14,
+      "tests": [
+        "site policy pr odd",
+        "site policy pr unknown-status",
+        "site policy pr count",
+        "site policy pr missing",
+        "site policy pr sha",
+        "site policy pr truncated",
+        "site policy pr too-many-files",
+        "site policy push odd",
+        "site policy push unknown-status",
+        "site policy push count",
+        "site policy push missing",
+        "site policy push sha",
+        "site policy push truncated",
+        "site policy push too-many-files"
+      ]
+    },
+    {
+      "mutant": "pr-deploys",
+      "kills": 6,
+      "tests": [
+        "site policy pr site",
+        "site policy pr docs",
+        "site policy pr workflow",
+        "site policy pr removed",
+        "site policy pr renamed-out",
+        "site policy pr renamed-in"
+      ]
+    },
+    {
+      "mutant": "publication-skips",
+      "kills": 8,
+      "tests": [
+        "site policy pr tag",
+        "site policy pr schedule",
+        "site policy pr release",
+        "site policy pr workflow_dispatch",
+        "site policy push tag",
+        "site policy push schedule",
+        "site policy push release",
+        "site policy push workflow_dispatch"
+      ]
+    },
+    {
+      "mutant": "pr-count-unbounded",
+      "kills": 2,
+      "tests": ["site policy pr truncated", "site policy pr too-many-files"]
+    },
+    {
+      "mutant": "push-files-truncated",
+      "kills": 2,
+      "tests": ["site policy push truncated", "site policy push too-many-files"]
+    },
+    {
+      "mutant": "site-tree-mismatch",
+      "kills": 2,
+      "tests": ["site policy pr reuse-tree", "site policy push reuse-tree"]
+    },
+    {
+      "mutant": "site-foreign-status",
+      "kills": 2,
+      "tests": ["site policy pr reuse-creator", "site policy push reuse-creator"]
+    },
+    {
+      "mutant": "site-pending-status",
+      "kills": 2,
+      "tests": ["site policy pr reuse-pending", "site policy push reuse-pending"]
+    },
+    {
+      "mutant": "site-failed-ci",
+      "kills": 2,
+      "tests": ["site policy pr reuse-ci", "site policy push reuse-ci"]
+    },
+    {
+      "mutant": "site-pending-ci",
+      "kills": 2,
+      "tests": ["site policy pr reuse-ci-pending", "site policy push reuse-ci-pending"]
+    },
+    {
+      "mutant": "site-forged-ci",
+      "kills": 2,
+      "tests": ["site policy pr reuse-ci-app", "site policy push reuse-ci-app"]
+    },
+    {
+      "mutant": "site-wrong-run-sha",
+      "kills": 2,
+      "tests": ["site policy pr reuse-run-sha", "site policy push reuse-run-sha"]
+    },
+    {
+      "mutant": "site-failed-run",
+      "kills": 2,
+      "tests": ["site policy pr reuse-run", "site policy push reuse-run"]
+    },
+    {
+      "mutant": "site-tag-reuse",
+      "kills": 2,
+      "tests": ["site policy pr reuse-tag", "site policy push reuse-tag"]
+    },
+    {
+      "mutant": "site-pr-reuse",
+      "kills": 2,
+      "tests": ["site policy pr reuse-pr", "site policy push reuse-pr"]
+    },
+    {
+      "mutant": "site-foreign-source",
+      "kills": 2,
+      "tests": ["site policy pr status-foreign", "site policy push status-foreign"]
+    },
+    {
+      "mutant": "site-other-workflow",
+      "kills": 2,
+      "tests": ["site policy pr status-wrong-path", "site policy push status-wrong-path"]
+    },
+    {
+      "mutant": "late-start-clears-final",
+      "kills": 2,
+      "tests": ["site policy pr status-late-start", "site policy push status-late-start"]
+    },
+    {
+      "mutant": "late-running-clears-final",
+      "kills": 2,
+      "tests": ["site policy pr status-late-run", "site policy push status-late-run"]
+    },
+    {
+      "mutant": "site-skipped-needed-build",
+      "kills": 2,
+      "tests": ["site policy pr status-no-build", "site policy push status-no-build"]
+    },
+    {
+      "mutant": "tag-tooling-executes",
+      "kills": 2,
+      "tests": [
+        "site bootstrap pins reviewed tooling push refs/tags/v1",
+        "site bootstrap pins reviewed tooling release refs/tags/v1"
+      ]
+    },
+    {
+      "mutant": "status-guard-accepts-source",
+      "kills": 2,
+      "tests": [
+        "site status writer cannot execute another source evil.py",
+        "site status writer cannot execute another source runner.py"
+      ]
+    }
+  ]
+}

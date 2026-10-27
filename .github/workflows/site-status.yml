@@ -1,0 +1,35 @@
+name: Site status
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_run:
+    workflows: [Site]
+    types: [in_progress, completed]
+permissions: {}
+concurrency:
+  group: >-
+    site-status-${{ github.event.pull_request.head.sha || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+jobs:
+  status:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+      statuses: write
+    steps:
+      - name: Report Site metadata without running PR code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com/reindertpelsma/kayfabe
+          curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+            -o "$temporary/site_policy.py" \
+            "$source_origin/$GITHUB_SHA/ci/vast-broker/site_policy.py"
+          python3 -I "$temporary/site_policy.py" status

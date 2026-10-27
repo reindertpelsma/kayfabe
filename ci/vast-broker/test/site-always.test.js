@@ -89,8 +89,17 @@ for (const sha of ['a'.repeat(40), 'b'.repeat(40)])
     const { runInNewContext } = await import('node:vm');
     const expression = block('build').match(/ref:\s*(?:>-\s*)?\$\{\{\s*([\s\S]*?)\s*\}\}/)?.[1];
     assert.ok(expression);
-    const actual = runInNewContext(expression, { github: {
-      event_name: 'push', ref: 'refs/heads/master', sha, event: {},
-    } }, { timeout: 1000 });
+    const actual = runInNewContext(
+      expression,
+      {
+        github: {
+          event_name: 'push',
+          ref: 'refs/heads/master',
+          sha,
+          event: {},
+        },
+      },
+      { timeout: 1000 },
+    );
     assert.equal(actual, sha);
   });
