@@ -30,6 +30,14 @@ for (const variant of ['pr', 'push'])
     'status-fork',
     'status-stale',
     'status-pr-start',
+    'reuse-valid',
+    'reuse-tree',
+    'reuse-creator',
+    'reuse-pending',
+    'reuse-ci',
+    'reuse-run',
+    'reuse-pr',
+    'reuse-tag',
   ])
     test('site policy ' + variant + ' ' + name, () => {
       const run = spawnSync(

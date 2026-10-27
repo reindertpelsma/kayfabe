@@ -80,6 +80,70 @@ def get(path):
 if not case.startswith("status-") and not case.startswith("reuse-"):
     result = m.decide(event, name, ref, sha, get)
     assert (result["run"], result["deploy"], result["known"]) == (expected, deploy, known), result
+elif case.startswith("reuse-"):
+    data.update(
+        {
+            "/commits/"
+            + sha: {"sha": sha, "commit": {"tree": {"sha": tree}}, "parents": [{"sha": before}]},
+            "/commits/" + before: {"sha": before, "commit": {"tree": {"sha": tree}}},
+            "/commits/" + sha + "/pulls?per_page=100": [],
+            "/commits/"
+            + before
+            + "/statuses?per_page=100": [
+                {
+                    "context": "site",
+                    "state": "success",
+                    "creator": {"login": "github-actions[bot]", "id": 41898282},
+                    "description": "site build passed",
+                    "target_url": "https://github.com/" + repo + "/actions/runs/123",
+                }
+            ],
+            "/commits/"
+            + before
+            + "/check-runs?per_page=100": {
+                "total_count": 1,
+                "check_runs": [
+                    {
+                        "name": "CI",
+                        "head_sha": before,
+                        "status": "completed",
+                        "conclusion": "success",
+                        "app": {"slug": "github-actions", "id": 15368},
+                    }
+                ],
+            },
+            "/actions/runs/123": {
+                "id": 123,
+                "head_sha": before,
+                "path": ".github/workflows/site.yml",
+                "event": "pull_request",
+                "head_branch": "next",
+                "status": "completed",
+                "conclusion": "success",
+                "repository": {"full_name": repo},
+            },
+        }
+    )
+    if case == "reuse-tree":
+        data["/commits/" + before]["commit"]["tree"]["sha"] = "f" * 40
+    status = data["/commits/" + before + "/statuses?per_page=100"][0]
+    if case == "reuse-creator":
+        status["creator"]["id"] = 1
+    if case == "reuse-pending":
+        status["state"] = "pending"
+    if case == "reuse-ci":
+        data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"][0][
+            "conclusion"
+        ] = "failure"
+    if case == "reuse-run":
+        data["/actions/runs/123"]["conclusion"] = "failure"
+    event_name, reference = "push", "refs/heads/master"
+    if case == "reuse-pr":
+        event_name = "pull_request"
+    if case == "reuse-tag":
+        reference = "refs/tags/v1"
+    proof = m.find_reuse(sha, event_name, reference, get)
+    assert bool(proof) == (case == "reuse-valid"), proof
 else:
     run = {
         "id": 123,
@@ -100,6 +164,9 @@ else:
             {"name": "deploy", "conclusion": "skipped"},
         ],
     }
+    if variant == "push" and case != "status-fork":
+        run["event"] = "push"
+        run["head_branch"] = "master"
     data.update(
         {
             "/actions/runs/123": run,
@@ -124,6 +191,8 @@ else:
         pr["head"]["repo"]["full_name"] = "fork/repo"
     if case == "status-stale":
         pr["head"]["sha"] = before
+        if variant == "push":
+            run["event"] = "workflow_dispatch"
     if case == "status-pr-start":
         source, payload = "pull_request_target", event
     else:
