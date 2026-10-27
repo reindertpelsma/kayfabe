@@ -1,0 +1,14 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=15mm]
+\node[concept] (a) {Scan};
+\node[concept,right=of a] (b) {Pointer};
+\node[concept,right=of b] (c) {Window then Scan};
+\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {clean registration
+  boundary} (b);
+\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {registration becomes
+  live} (c);
+\end{tikzpicture}
+\caption{Pointer forwards references; a registration window restores required inspection.}
+\label{fig:lifecycle}
+\end{figure}

@@ -1,0 +1,44 @@
+\documentclass[11pt]{article}
+\input{preamble_v3}
+\begin{document}
+\begin{titlepage}
+\centering
+\vspace*{20mm}
+{\Huge\sffamily Kayfabe v3\par}
+\vspace{8mm}
+{\LARGE An architecture to argue with\par}
+\vspace{14mm}
+Stock NVIDIA guest drivers, an emulated device, and a GPU the host keeps using.
+\vspace{12mm}
+\begin{minipage}{0.88\textwidth}
+\textbf{STATUS: RESEARCH, 2026-10-27.} This is a source audit and a research argument,
+not a new hardware qualification. The implementation baseline is immutable:
+\begin{center}\code{12c4008705f17033a803e56d4d479bf1275cdb94}\end{center}
+That was \code{origin/next} when writing began. Experimental results and code outside that
+baseline carry separate revisions. A moving branch name never upgrades their status.
+
+The central tension is simple: preserving a stock driver's ordering may require host-side
+mapping work whose latency the driver's watchdog cannot tolerate. This paper explains the
+boundary and gives the reader experiments that could show the explanation is wrong.
+
+\textbf{Reading route:} begin with the rules, use the primer for unfamiliar terms, then read
+Section~\ref{sec:uncomfortable}, the longest section. Section~\ref{sec:questions} asks questions
+that can be answered without access to this repository. Sources are indexed in
+Appendix~\ref{sec:evidence}. All diagrams are conceptual TikZ drawings, not measured timelines.
+\end{minipage}
+\vfill
+Kayfabe project \quad / \quad publication snapshot 2026-10-27
+\end{titlepage}
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+\input{v3_rules_product}
+\input{v3_primer}
+\input{v3_architecture}
+\input{v3_evidence}
+\input{v3_uncomfortable}
+\input{v3_questions}
+\appendix
+\input{v3_method_sources}
+\end{document}

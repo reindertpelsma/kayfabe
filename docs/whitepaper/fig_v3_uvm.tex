@@ -1,0 +1,13 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=15mm]
+\node[concept] (a) {CPU / GPU access};
+\node[concept,right=of a] (b) {Fault and replay path};
+\node[concept,right=of b] (c) {Retry access};
+\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {missing managed page}
+  (b);
+\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {supply backing} (c);
+\end{tikzpicture}
+\caption{Demand paging requires a fault path, beyond copying already present mappings.}
+\label{fig:uvm}
+\end{figure}

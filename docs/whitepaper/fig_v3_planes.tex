@@ -1,0 +1,14 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=15mm]
+\node[concept] (a) {BAR0 write trap};
+\node[concept,right=of a] (b) {Workers / VA manager};
+\node[concept,right=of b] (c) {Host RM / real GPU};
+\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {bounded publication}
+  (b);
+\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {authored operations}
+  (c);
+\end{tikzpicture}
+\caption{The vCPU records demand; host work belongs to other threads.}
+\label{fig:planes}
+\end{figure}

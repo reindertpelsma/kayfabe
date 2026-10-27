@@ -1,0 +1,13 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=15mm]
+\node[concept] (a) {GPFIFO slot};
+\node[concept,right=of a] (b) {Pushbuffer};
+\node[concept,right=of b] (c) {GPU engine};
+\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {address + length} (b);
+\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {methods / arguments}
+  (c);
+\end{tikzpicture}
+\caption{A command ring contains references to command buffers; it is not the command bytes.}
+\label{fig:gpfifo}
+\end{figure}

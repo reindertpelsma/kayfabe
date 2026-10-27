@@ -1,0 +1,119 @@
+\section{A primer for a programmer who knows GPUs}
+\label{sec:primer}
+
+The vocabulary here is deliberately limited to what the architecture needs. These are
+operational descriptions from this repository's architecture, channel design and guest guides,
+not a complete specification of NVIDIA hardware.\src{architecture}\src{kinds}\src{windows}
+
+\subsection{Resource manager: names, ownership and operations}
+
+\readcode RM means \emph{resource manager}. A client requests memory objects, address spaces,
+channel groups and channels, then refers to them by handles. Kayfabe models the guest-side
+object relationships and separately authors host-side requests. A guest handle must never
+become host authority just because both are integers. The host RM remains trusted to enforce
+its own memory and channel rules.\src{architecture}\src{rmcode}\src{security}
+\input{fig_v3_rm}
+
+\subsection{GPU System Processor: the peer the guest expects}
+
+\readcode GSP means \emph{GPU System Processor}; its resource-manager firmware is a peer of
+the CPU-side driver. The guest submits framed requests in message queues and expects replies
+and notifications. Kayfabe plays that peer, including boot and queue state, rather than running
+vendor firmware in the emulated device. An RPC is a remote-procedure-call message; accepting a
+request frame and executing its meaning are separate obligations.\src{gspcode}\src{architecture}
+\input{fig_v3_gsp}
+
+\subsection{Channels: streams that target engines}
+
+\readcode A channel is a submission context with ordered work and state. A copy engine moves
+or fills memory; graphics, compute and video engines do different work. A channel's kernel
+privilege and address space determine what it can reach. The word ``user'' here describes GPU
+execution privilege, not whether the host launcher happened to be root. Kayfabe distinguishes
+user work, translated kernel work and work emulated entirely by the VMM.\src{kinds}\src{security}
+\input{fig_v3_channel}
+
+\subsection{Timeslice groups: preserve the grouping, not just each stream}
+
+\readcode TSG means \emph{timeslice group}, a scheduling group of channels. Kayfabe's declared
+mapping is one host TSG for each guest TSG. Creating every host channel independently could
+preserve individual command bytes while changing the grouping the driver expects. Scheduling
+metadata and channel membership therefore belong in the model as well as commands.\src{kinds}
+\src{architecture}\src{tsgcode}
+\input{fig_v3_tsg}
+
+\subsection{Unified virtual memory: presence is not fault delivery}
+
+\readcode UVM means \emph{unified virtual memory}. Managed allocations may need a page supplied
+when an access first occurs, then the access replayed. Mirroring mappings that already exist
+solves a different problem. The repository's remaining Linux application failures involve
+this demand-paging path; an optional host-side research route is distinct from the stock
+product path.\src{status}\src{uvmdesign}\src{faq}
+\input{fig_v3_uvm}
+
+\subsection{VA spaces and page-directory roots}
+
+\readcode A virtual-address (VA) space gives virtual addresses a meaning. A page-directory
+base, or PDB, names the root used for a particular GPU's page tables. The space is an object;
+the root is an attribute that can change or be absent. Kayfabe mirrors the guest's mappings
+with its own host requests. It does not tell the host GPU to adopt hostile guest page tables.
+That distinction makes acknowledgement and root lifetime central.\src{architecture}\src{memcode}
+\input{fig_v3_va}
+
+\subsection{GPFIFO and pushbuffers: two levels of indirection}
+
+\readcode GPFIFO is the GPU's command-reference ring. A ring entry identifies a pushbuffer,
+which contains method packets and arguments. A method is a command to a bound engine object;
+parsing it requires packet state across entries. Passing an entry's pointer to hardware and
+copying or interpreting the pointed-to bytes are therefore different operations. A parser
+that assumes every entry starts at a packet boundary can be wrong even when every pointer is
+in bounds.\src{relaydesign}\src{lifecycle}\src{turncode}
+\input{fig_v3_gpfifo}
+
+\subsection{USERD, PUT and GET: seeing a cursor is not seeing a result}
+
+\readcode USERD is memory holding channel producer/consumer state. PUT advertises work;
+GET records fetching progress. Kayfabe also uses a processed reference marker when it needs
+proof that commands crossed a particular point. The event-loop investigation found that GET
+could move beyond an entry while execution behind a dependency had not occurred. It cannot
+serve as a general execution-completion fence.\src{eventloop}\src{lifecycle}
+\input{fig_v3_userd}
+
+\subsection{Doorbells: notification after publication}
+
+\readcode A doorbell is a register write telling the consumer to inspect published work.
+A token selects an admitted channel route. Guest userspace can write tokens; the trap cannot
+infer a trustworthy process identity from that write. The contract requires discovery of work
+covered by a doorbell, including races with a servicing worker. It does not allow a timer poll
+to stand in for a missing wake.\src{architecture}\src{rules}\src{trapcode}
+\input{fig_v3_doorbell}
+
+\subsection{Semaphores and processed markers}
+
+\readcode A semaphore is a memory location used to express a dependency: earlier work
+releases a value and later work acquires it. A non-stall interrupt is an asynchronous
+notification that invites software to check its own completion state. A SYNC\_WAIT barrier
+constrains when later command bytes may be consumed. These are related mechanisms, not
+interchangeable proofs. The relay's processed-reference marker exists because a fetch cursor
+was too weak a witness.\src{eventloop}\src{kinds}\src{faq}
+\input{fig_v3_semaphore}
+
+\subsection{Windows Display Driver Model}
+
+\readcode WDDM means \emph{Windows Display Driver Model}. For this argument, the important
+part is that Windows schedules GPU work, observes completions and can initiate recovery.
+A Windows scheduling packet is not automatically identical to one private host-ring
+publication. Establishing that correspondence is an instrumentation problem, not a naming
+convention. Stock Windows and Linux drivers can exercise different device protocols.\src{windows}
+\src{latency}\src{faq}
+\input{fig_v3_wddm}
+
+\subsection{Timeout detection and recovery}
+
+\readcode TDR means \emph{timeout detection and recovery}: Windows can decide that GPU
+progress took too long and recover the driver. A changed diagnostic timeout can distinguish
+late work from work that never completes; it does not make the production ordering acceptable.
+The project forbids treating a changed timeout as a product fix. A completion observed after
+recovery also needs a lifetime identity before it can be attributed to the original work.
+\src{rules}\src{walknarrow}\src{latency}
+\input{fig_v3_watchdog}
+\clearpage

@@ -1,0 +1,14 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=15mm]
+\node[concept] (a) {Virtual address};
+\node[concept,right=of a] (b) {Guest backing};
+\node[concept,right=of b] (c) {Same VA in host twin};
+\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {guest page tables}
+  (b);
+\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {authored host map}
+  (c);
+\end{tikzpicture}
+\caption{Mirroring preserves virtual names while the host owns the actual page tables.}
+\label{fig:va}
+\end{figure}

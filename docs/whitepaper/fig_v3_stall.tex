@@ -1,0 +1,14 @@
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[node distance=15mm]
+\node[concept] (a) {Kernel copy work};
+\node[concept,right=of a] (b) {Walk + host apply};
+\node[concept,right=of b] (c) {Completion observed};
+\draw[flow] (a) -- node[above,align=center,font=\scriptsize,text width=25mm] {mapping split
+  required} (b);
+\draw[flow] (b) -- node[above,align=center,font=\scriptsize,text width=25mm] {result releases work}
+  (c);
+\end{tikzpicture}
+\caption{A serial dependency can resemble a missing interrupt; clocks and packet identity decide.}
+\label{fig:stall}
+\end{figure}
