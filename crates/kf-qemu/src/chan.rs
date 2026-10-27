@@ -8045,6 +8045,16 @@ impl ChanPlane {
             };
             let mirror = g.mirror.clone();
             let cursors = g.chan.host_cursors();
+            let verdict = {
+                let mut marked = false;
+                self.completions
+                    .for_each_inflight(|t| marked |= t == g.guest_idx);
+                kf_chan::wakeverdict::wake_verdict(
+                    cursors.map_or(0, |c| c.2),
+                    infl.first().map(|f| f.seq),
+                    marked,
+                )
+            };
             let (fwd, subs, walks) = g.chan.counts();
             let mut lines = vec![format!(
                 "kf3: PROBE-DUMP t={:.6} tok={:#x} host={ht:#x} {why}: key={:?} forwarded={fwd} submissions={subs} walks={walks} serves={} guest USERD GP_PUT={put_now:?} GP_GET={get_now:?} (authored {:?}) put_moved={} our ring GP_GET/GP_PUT/fence={cursors:?} dead={:?} scheduled={} stopped={} disabled={}",
@@ -8064,6 +8074,7 @@ impl ChanPlane {
                 g.stopped,
                 g.disabled
             )];
+            lines.push(format!("kf3: PROBE-DUMP   verdict: {verdict}"));
             for f in &infl {
                 lines.push(format!(
                     "kf3: PROBE-DUMP   in-flight fence seq={} gp_get={:?} submitted {}ms ago releases={:?}",
