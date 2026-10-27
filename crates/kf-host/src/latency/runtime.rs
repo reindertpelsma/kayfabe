@@ -548,7 +548,9 @@ impl Tracker {
         if self.stream == 0 {
             return;
         }
-        let owner = last_contention().map_or(0, |(_, owner)| owner);
+        let owner = last_contention()
+            .filter(|(last, _)| Some(*last) == cause)
+            .map_or(0, |(_, owner)| owner);
         if self.wait.map(|(c, _, o)| (c, o)) != cause.map(|c| (c, owner)) {
             self.close_wait(at);
             self.wait = cause.map(|c| (c, at, owner));
