@@ -3117,7 +3117,9 @@ impl ChanPlane {
                             // EXPERIMENT KF3_GSS_NATIVE: an act that says nothing is quiet (its own
                             // counters and once-lines speak; no per-RPC print).
                             if !line.is_empty() {
-                                eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                                kf_gsp::guest_log!(
+                                    "kf3: act {what}: {line} ({us} us, off the GSP lock)"
+                                );
                             }
                             d.resolve(0);
                         }
@@ -3125,7 +3127,9 @@ impl ChanPlane {
                         Err((ACT_REQUEUED, _)) => continue,
                         Err((status, why)) => {
                             self.acts_refused.fetch_add(1, Ordering::Relaxed);
-                            eprintln!("kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)");
+                            kf_gsp::guest_log!(
+                                "kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)"
+                            );
                             d.resolve(status);
                         }
                     }
@@ -7086,9 +7090,10 @@ impl ChanPlane {
                 }
             }
             match mirror.kernel_vas.try_kernel() {
-                Ok(true) => eprintln!(
+                Ok(true) => kf_gsp::guest_log!(
                     "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
-                    a.client, a.handle
+                    a.client,
+                    a.handle
                 ),
                 Ok(false) => {}
                 Err(e) => {
@@ -7621,7 +7626,7 @@ impl ChanPlane {
         if let Some(Ok(t)) = self.tspace.get() {
             t.give_ring(ring_va, released);
         }
-        eprintln!(
+        kf_gsp::guest_log!(
             "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} {}",
             g.guest_idx,
             g.key,

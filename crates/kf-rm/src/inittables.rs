@@ -1569,7 +1569,7 @@ impl InitTablePolicy {
 /// 34 arms whose `Err(_)` was silent. `[measured GB203 bw1]` `INTERNAL_GET_DEVICE_INFO_TABLE`
 /// refused in a loop with nothing in the log but the guest's `NV_ERR_NOT_SUPPORTED`.
 fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
-    eprintln!("W349REFUSE cmd={cmd:#010x} why=encoder {why:?}");
+    kf_gsp::guest_log!("W349REFUSE cmd={cmd:#010x} why=encoder {why:?}");
     refuse()
 }
 
@@ -1701,16 +1701,17 @@ impl InitTablePolicy {
         let at = req.params_at;
         let gsz = guest.size();
         if req.params_size as usize != gsz || cmd.payload.len() < at + gsz {
-            eprintln!(
+            kf_gsp::guest_log!(
                 "W349REFUSE cmd={:#010x} why=size-at-version asked={} measured={gsz} guest_driver={v}",
-                req.cmd, req.params_size
+                req.cmd,
+                req.params_size
             );
             return refuse();
         }
         let up = match kf_abi::matrix::transcode(&guest, &bench, &cmd.payload[at..at + gsz], &[]) {
             Ok((b, _)) => b,
             Err(e) => {
-                eprintln!(
+                kf_gsp::guest_log!(
                     "W349REFUSE cmd={:#010x} why=transcode-up struct={ct} guest_driver={v}: {e}",
                     req.cmd
                 );
@@ -1753,7 +1754,7 @@ impl InitTablePolicy {
         let (down, dropped) = match carried {
             Ok(x) => x,
             Err(e) => {
-                eprintln!(
+                kf_gsp::guest_log!(
                     "W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}",
                     req.cmd
                 );
@@ -1761,7 +1762,7 @@ impl InitTablePolicy {
             }
         };
         if !dropped.is_empty() {
-            eprintln!(
+            kf_gsp::guest_log!(
                 "kf-rm: {ct} carried to driver {v}: fields the guest's version does not have were dropped: {dropped:?}"
             );
         }
@@ -1896,7 +1897,7 @@ impl CommandPolicy for InitTablePolicy {
         if req.cmd & kf_abi::capability::RM_GSS_LEGACY_MASK != 0
             && WantedTable::from_cmd(req.cmd).is_none()
         {
-            eprintln!(
+            kf_gsp::guest_log!(
                 "W343GSSCENSUS cmd={:#010x} params_size={} params_at={} payload_len={}",
                 req.cmd,
                 req.params_size,
@@ -1957,7 +1958,7 @@ impl CommandPolicy for InitTablePolicy {
             if cmd.payload.len() >= req.params_at + ps {
                 let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
                 if kf_abi::gssreplay::answer(&self.host.gss_replay, req.cmd, &mut params) {
-                    eprintln!(
+                    kf_gsp::guest_log!(
                         "kf3: GSS {:#010x} answered from the host's realize-time reply",
                         req.cmd
                     );
@@ -2002,7 +2003,10 @@ impl CommandPolicy for InitTablePolicy {
                         });
                     }
                     Err(why) => {
-                        eprintln!("kf3: video caps {:#010x} not answered: {why:?}", req.cmd)
+                        kf_gsp::guest_log!(
+                            "kf3: video caps {:#010x} not answered: {why:?}",
+                            req.cmd
+                        )
                     }
                 }
             }
@@ -2023,9 +2027,11 @@ impl CommandPolicy for InitTablePolicy {
                 return Some(
                     match kf_abi::fifoctl::answer(&layout, &self.host.fifo_latency, &mut params) {
                         Ok(row) => {
-                            eprintln!(
+                            kf_gsp::guest_log!(
                                 "kf3: FIFO_GET_LATENCY_BUFFER_SIZE engine {:#x}: gp={:#x} pb={:#x} (the host's answer)",
-                                row.engine_id, row.gp_entries, row.pb_entries
+                                row.engine_id,
+                                row.gp_entries,
+                                row.pb_entries
                             );
                             let st = self.driver.rm_control_wire().status_off;
                             if let Some(w) = body.get_mut(st..st + 4) {
@@ -2039,7 +2045,7 @@ impl CommandPolicy for InitTablePolicy {
                             }
                         }
                         Err(why) => {
-                            eprintln!(
+                            kf_gsp::guest_log!(
                                 "kf3: FIFO_GET_LATENCY_BUFFER_SIZE REFUSED (INVALID_ARGUMENT): {why:?}"
                             );
                             Reply {
@@ -2065,9 +2071,10 @@ impl CommandPolicy for InitTablePolicy {
         // guessing which site was firing. A row exists ⇒ someone MEANT to serve it ⇒ a
         // refusal is a fact worth a line.
         if kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
-            eprintln!(
+            kf_gsp::guest_log!(
                 "W349REFUSE cmd={:#010x} why=finn-serialized rmapi_rpc_flags={:#x}",
-                req.cmd, req.rmapi_rpc_flags
+                req.cmd,
+                req.rmapi_rpc_flags
             );
             return refuse();
         }
@@ -2084,7 +2091,7 @@ impl CommandPolicy for InitTablePolicy {
             if let Some(carry) = transcode_reviewed(want) {
                 return self.respond_transcoded(cmd, &req, ct, carry);
             }
-            eprintln!(
+            kf_gsp::guest_log!(
                 "W349REFUSE cmd={:#010x} why=unported-at-version struct={ct} guest_driver={} \
                  measured_size={guest_size} encoder_size={}",
                 req.cmd,
@@ -2101,7 +2108,7 @@ impl CommandPolicy for InitTablePolicy {
             // ★ The guest's driver version is part of the statement: a size disagreement at a
             // non-bench version is a per-version GAP (an encoder written for 580.159.04's
             // layout), `V3_DRIVER_MATRIX.md` §7 — not a malformed guest.
-            eprintln!(
+            kf_gsp::guest_log!(
                 "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={} guest_driver={}",
                 req.cmd,
                 req.params_size,
@@ -2794,7 +2801,7 @@ impl CommandPolicy for InitTablePolicy {
                 ) {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!(
+                        kf_gsp::guest_log!(
                             "W349REFUSE-LIST cmd={:#010x} requested_indices={}",
                             req.cmd,
                             info_index_list(
@@ -2869,7 +2876,7 @@ impl CommandPolicy for InitTablePolicy {
                 ) {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!(
+                        kf_gsp::guest_log!(
                             "W349REFUSE-LIST cmd={:#010x} requested_indices={}",
                             req.cmd,
                             info_index_list(
@@ -3199,7 +3206,7 @@ impl CommandPolicy for InitTablePolicy {
         // ⇒ It now asks [`kf_abi::gsslegacy::carries_cache_argument`], **the same
         // predicate its test asks**, so the runtime and the gate cannot disagree again.
         if is_gss_legacy(req.cmd) && !kf_abi::gsslegacy::carries_cache_argument(req.cmd) {
-            eprintln!(
+            kf_gsp::guest_log!(
                 "W349REFUSE cmd={:#010x} why=gss-legacy-without-cache-argument",
                 req.cmd
             );
