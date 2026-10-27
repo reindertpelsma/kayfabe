@@ -2,6 +2,13 @@
 import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
+// One leg's estimated provider spend; previous legs remain separate durable cost receipts.
+export function rentalCost(record, at) {
+  return (
+    ((record.computeStoragePrice ?? record.price) * (at - record.started)) / 3600000 +
+    (record.bandwidthCost ?? 0)
+  );
+}
 export class Ledger {
   constructor(storage) {
     this.storage = storage;
@@ -84,15 +91,55 @@ export class Ledger {
   // All ledger admission checks and the intent writes share ONE transaction. The
   // service's preflight reads/queue are only early refusals, never this lock.
   // No provider operation belongs here: storage may retry the callback.
-  async reserve(record, { cfg, now, cost, credit }) {
+  async reserve(record, { cfg, now, cost, credit, retryNonce }) {
     await this.storage.transaction(async (storage) => {
       const ledger = new Ledger(storage);
       const previous = await ledger.get('cost:' + record.key);
-      if (previous)
+      if (retryNonce !== undefined) {
+        const prior = await ledger.granted(record.key),
+          spent = prior ? rentalCost(prior, prior.ended) : NaN;
+        if (
+          !previous ||
+          !prior ||
+          prior.nonce !== retryNonce ||
+          prior.verdict !== 'PROVIDER_FAULT' ||
+          prior.closed !== 'PROVIDER_FAULT' ||
+          !Number.isFinite(prior.ended) ||
+          !prior.id ||
+          (prior.providerRetries ?? 0) !== 0 ||
+          record.providerRetries !== 1 ||
+          record.nonce === prior.nonce ||
+          record.machineId === prior.machineId ||
+          !['run', 'attempt', 'sha', 'branch', 'profile', 'runnerNonce'].every(
+            (key) => record[key] === prior[key],
+          ) ||
+          record.hardDeadline !== prior.hardDeadline ||
+          record.softDeadline !== prior.softDeadline ||
+          record.originalStarted !== prior.started ||
+          record.started < prior.ended ||
+          record.runBudgetUsd !== prior.runBudgetUsd ||
+          !Number.isFinite(spent) ||
+          spent < 0 ||
+          record.retryCostUsd !== spent ||
+          !Number.isFinite(prior.runBudgetUsd) ||
+          spent + cost > prior.runBudgetUsd ||
+          prior.hardDeadline <= now + cfg.softMargin ||
+          previous.ended !== prior.ended ||
+          (await ledger.get('cost:' + record.key + ':provider:0'))
+        )
+          refuse('NOT_ELIGIBLE', 409);
+        // Preserve real spend/count before replacing this run's current receipt. Every proof,
+        // cap check, archive and intent is one transaction; a racing replacement loses here.
+        await ledger.put('cost:' + record.key + ':provider:0', { ...previous, created: true });
+        await storage.delete('cost:' + record.key);
+        await storage.delete('ended:' + record.key);
+        if ((await ledger.get('id:' + prior.id)) === record.key)
+          await storage.delete('id:' + prior.id);
+      } else if (previous)
         budgetRefuse('cost-key', { started_at: previous.started, ended_at: previous.ended });
       const cached = await ledger.get('sha:' + record.sha),
         force = Number(record.attempt ?? record.key.split('-').at(-1)) > 1;
-      if (cached && (!force || now - cached.started < cfg.gap))
+      if (retryNonce === undefined && cached && (!force || now - cached.started < cfg.gap))
         budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now - cached.started) });
       const open = await ledger.openRecords(),
         branch = open.filter((o) => o.branch === record.branch && o.sha !== record.sha);

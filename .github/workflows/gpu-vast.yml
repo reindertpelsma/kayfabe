@@ -194,7 +194,7 @@ jobs:
               state=$BROKER_STATE ;;
             UNAVAILABLE_BUDGET|RENTING_DISABLED|UNAUTHORIZED|BAD_REQUEST|NOT_FOUND)
               state=$BROKER_STATE ;;
-            OWNERSHIP_MISMATCH|RATE_LIMIT)
+            OWNERSHIP_MISMATCH|RATE_LIMIT|PROVIDER_FAULT)
               state=$BROKER_STATE ;;
           esac
           result=error

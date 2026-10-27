@@ -227,7 +227,7 @@ def read_result_file(path):
         }
         if type(doc) is not dict or not {"verdict", "suites"} <= set(doc) <= allowed:
             raise ValueError("shape")
-        if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE"):
+        if doc["verdict"] not in ("PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"):
             raise ValueError("verdict")
         if "host_reference" in doc and doc["host_reference"] not in (
             "GREEN",
@@ -473,7 +473,9 @@ class Reporter:
         limits = self.limits
         posts = min(limits.tail_posts, limits.max_posts // 2) if reserve else 0
         requests = min(limits.tail_requests, limits.max_requests // 4) if reserve else 0
-        size = min(limits.tail_posts * (limits.chunk + 256), limits.max_bytes // 4) if reserve else 0
+        size = (
+            min(limits.tail_posts * (limits.chunk + 256), limits.max_bytes // 4) if reserve else 0
+        )
         return (
             self.posts + posts >= limits.max_posts
             or self.bytes + body_size + size > limits.max_bytes
@@ -683,7 +685,11 @@ def make_reporter(env, args):
     heartbeat = env.get("KF_HEARTBEAT_SECONDS", "")
     seconds = int(heartbeat) if heartbeat.isdigit() and int(heartbeat) > 0 else 600
     return Reporter(
-        env["KF_BROKER_URL"], env["KF_RUN_ID"], env["KF_RUN_TOKEN"], seconds, make_limits(args),
+        env["KF_BROKER_URL"],
+        env["KF_RUN_ID"],
+        env["KF_RUN_TOKEN"],
+        seconds,
+        make_limits(args),
         transport=HttpsTransport(env["KF_RUN_TOKEN"], access=env),
     )
 

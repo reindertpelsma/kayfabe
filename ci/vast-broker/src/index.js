@@ -30,7 +30,7 @@ import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
 // prettier-ignore
-import {Ledger} from './ledger.js';
+import {Ledger,rentalCost} from './ledger.js';
 // prettier-ignore
 import {onstart} from './onstart.js';
 // prettier-ignore
@@ -143,6 +143,7 @@ export function createService({
     dph_total: r.dphTotal ?? null,
     host_driver_version: r.hostDriverVersion ?? 'unknown',
     host_reference: r.result?.host_reference ?? 'MISSING',
+    provider_retries: r.providerRetries ?? 0,
     sha: r.sha,
     state: phase(r),
     verdict:
@@ -150,12 +151,13 @@ export function createService({
     cleanup_pending: r.ended === null,
     result_at: r.resultAt ?? null,
     ended_at: r.ended,
-    started_at: r.started,
+    started_at: r.originalStarted ?? r.started,
     deadline_at: Number.isFinite(nextDeadline(r)) ? nextDeadline(r) : r.started,
     gpu_model: r.hardware?.gpu_name ?? r.gpu ?? 'unknown',
     cost_estimate_usd:
       ((r.computeStoragePrice ?? r.price) * ((r.ended ?? now()) - r.started)) / 3600000 +
-      (r.bandwidthCost ?? 0),
+      (r.bandwidthCost ?? 0) +
+      (r.retryCostUsd ?? 0),
     log_cursor: r.logChunks ?? 0,
     log_tail_sanitised: r.log || '',
     bytes_dropped: r.fullBytesDropped ?? r.bytesDropped ?? 0,
@@ -269,6 +271,16 @@ export function createService({
     if (computeStorage !== record.computeStoragePrice || bandwidth !== record.bandwidthCost) {
       const ttl = record.billingTtl ?? record.ttl + cfg.cronPeriod;
       const total = (computeStorage * ttl) / 3600000 + bandwidth;
+      if (record.providerRetries === 1 && record.retryCostUsd + total > record.runBudgetUsd) {
+        record.computeStoragePrice = computeStorage;
+        record.bandwidthCost = bandwidth;
+        await close(record, vast, 'CONTRACT_BUDGET', 'PROVIDER_FAULT');
+        budgetRefuse('run-usd', {
+          cost_usd: total,
+          prior_usd: record.retryCostUsd,
+          run_cap_usd: record.runBudgetUsd,
+        });
+      }
       try {
         const credit = await vast.credit();
         await ledger.budgets(cfg, now(), total, record.key, { credit });
@@ -313,7 +325,7 @@ export function createService({
     if (reason) {
       if (
         reason === 'BOOT_TIMEOUT' &&
-        record.providerState === 'created' &&
+        ['created', 'running'].includes(record.providerState) &&
         record.bootFailure?.confirmed &&
         now() - record.bootFailure.last <= cfg.cronPeriod * 2 &&
         Number.isSafeInteger(record.machineId)
@@ -325,7 +337,17 @@ export function createService({
         await workerLine(record, 'host excluded after frozen KVM boot signature', cfg);
       }
       await workerLine(record, 'destroy reason=' + reason, cfg);
-      await close(record, vast, reason, reason === 'BOOT_TIMEOUT' ? 'UNAVAILABLE' : 'FAIL');
+      const providerFault =
+        reason === 'BOOT_TIMEOUT' &&
+        ['created', 'running'].includes(record.providerState) &&
+        record.bootFailure?.confirmed &&
+        now() - record.bootFailure.last <= cfg.cronPeriod * 2;
+      await close(
+        record,
+        vast,
+        providerFault ? 'PROVIDER_FAULT' : reason,
+        providerFault ? 'PROVIDER_FAULT' : reason === 'BOOT_TIMEOUT' ? 'UNAVAILABLE' : 'FAIL',
+      );
       return;
     }
     let instance;
@@ -360,7 +382,10 @@ export function createService({
       record.providerState = providerState;
       await workerLine(record, 'provider=' + providerState + ' phase=' + record.phase, cfg);
     }
-    if (instance.actual_status === 'created' && record.firstReportAt === undefined) {
+    if (
+      ['created', 'running'].includes(instance.actual_status) &&
+      record.firstReportAt === undefined
+    ) {
       // Provider diagnostics never decide test PASS and never postpone cleanup.
       try {
         const log = await vast.bootLog(record),
@@ -531,6 +556,11 @@ export function createService({
         r.resultDeadline = r.resultAt + r.grace;
         r.phase = 'GRACE';
         r.liveCheckedAt = null;
+        if (r.verdict === 'PROVIDER_FAULT') {
+          await ledger.put('bad-machine:' + r.machineId, { reason: 'PROVIDER_FAULT', at: now() });
+          await workerLine(r, 'provider fault; destroy before replacement', cfg);
+          await close(r, vast, 'PROVIDER_FAULT', 'PROVIDER_FAULT');
+        }
       } else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)
         await close(r, vast, 'LIMIT');
       return json({
@@ -742,26 +772,43 @@ export function createService({
       refuse('BAD_REQUEST', 400);
     const target = await github.authorize(c, rentRequest.tested_sha);
     const prior = await ledger.granted(key);
+    let retrySource;
     if (prior) {
       if (prior.runnerNonce !== rentRequest.runner_nonce) refuse('BINDING_MISMATCH', 409);
       await recover(prior, vast);
-      if (prior.id && prior.ended === null)
-        await checkContract(prior, await vast.inspect(prior), vast, cfg);
-      return json(expose(prior, key));
+      if (prior.verdict === 'PROVIDER_FAULT' && prior.closed && prior.ended === null)
+        await cleanup(prior, vast);
+      if (
+        prior.verdict === 'PROVIDER_FAULT' &&
+        prior.closed === 'PROVIDER_FAULT' &&
+        prior.ended !== null &&
+        prior.id &&
+        (prior.providerRetries ?? 0) === 0 &&
+        Number.isFinite(prior.runBudgetUsd) &&
+        now() < prior.softDeadline
+      ) {
+        retrySource = prior;
+        cfg.hard = prior.hardDeadline - now();
+        cfg.boot = Math.min(cfg.boot, cfg.hard);
+      } else {
+        if (prior.id && prior.ended === null)
+          await checkContract(prior, await vast.inspect(prior), vast, cfg);
+        return json(expose(prior, key));
+      }
     }
     // Review R1: one attempt per run key, also after retention removed the record. Guaranteed:
     // while the spend row exists the key is refused. The row is pruned once its run ended more
     // than 30 days ago (ledger.budgets), so after that a token minted for the same run attempt
     // (owner only; GitHub allows a run up to 35 days) could rent again. Not guaranteed beyond.
     const previousCost = await ledger.get('cost:' + key);
-    if (previousCost)
+    if (previousCost && !retrySource)
       budgetRefuse('cost-key', { started_at: previousCost.started, ended_at: previousCost.ended });
     // Review B2: the commit gap before the cap, so a repeated commit is refused at once instead
     // of waiting BUSY, and before the supersede, so it closes nobody.
     const cached = await ledger.get('sha:' + target.sha),
       force = Number(c.run_attempt) > 1; // An owner re-run; the SHA gap below still applies.
     // A fresh runner nonce may not inherit another run's result.
-    if (cached && (!force || now() - cached.started < cfg.gap))
+    if (!retrySource && cached && (!force || now() - cached.started < cfg.gap))
       budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now() - cached.started) });
     // Review B1: a run whose remaining budget cannot hold the hard limit plus the margin is not
     // admitted (it would time out with a paid box) and supersedes nothing.
@@ -786,13 +833,16 @@ export function createService({
       refuse('BUSY', 409);
     if (!validSecret(env.RUN_TOKEN_SECRET) || !validSecret(env.OWNER_STOP_TOKEN)) refuse();
     await github.boxProtocol(target.sha);
-    const chosen = await offers.select(
-        await offers.evaluate(vast, cfg, ledger, profile),
-        cfg,
-        ledger,
-        profile,
-        rentRequest.preferences,
-      ),
+    const market = retrySource ? new OfferBook(now) : offers;
+    const evaluation = await market.evaluate(vast, cfg, ledger, profile);
+    if (retrySource) {
+      const remaining = retrySource.runBudgetUsd - rentalCost(retrySource, retrySource.ended);
+      evaluation.allowed = evaluation.allowed.filter(
+        (offer) => offer.machine_id !== retrySource.machineId && offer.pricing.total <= remaining,
+      );
+      if (!evaluation.allowed.length) return json(expose(retrySource, key));
+    }
+    const chosen = await offers.select(evaluation, cfg, ledger, profile, rentRequest.preferences),
       offer = chosen.offer,
       cost = offer.pricing.total,
       credit = await vast.credit();
@@ -865,11 +915,36 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
+    r.runBudgetUsd = retrySource?.runBudgetUsd ?? cost;
+    r.providerRetries = retrySource ? 1 : 0;
+    if (retrySource) {
+      r.originalStarted = retrySource.started;
+      r.hardDeadline = retrySource.hardDeadline;
+      r.softDeadline = retrySource.softDeadline;
+      r.bootDeadline = Math.min(r.bootDeadline, r.softDeadline);
+      r.ttl = r.hardDeadline - r.started;
+      r.billingTtl = r.ttl + cfg.cronPeriod;
+      r.reportExpiry = Math.floor(r.hardDeadline / 1000);
+      r.retryCostUsd = rentalCost(retrySource, retrySource.ended);
+      r.nonce = (await sha256Hex(retrySource.nonce + n + ':provider:1')).slice(0, 32);
+      // Keep one authenticated log chain and the run-wide byte/report limits across legs.
+      for (const field of [
+        'log',
+        'logChunks',
+        'logHash',
+        'fullBytes',
+        'fullBytesDropped',
+        'bytesDropped',
+        'reportBytes',
+        'reportCount',
+      ])
+        if (retrySource[field] !== undefined) r[field] = retrySource[field];
+    }
     const runToken = await tokens.issue(r),
       script = onstart(target.sha, cfg.repo);
     r.scriptHash = await sha256Hex(script);
     try {
-      await ledger.reserve(r, { cfg, now: now(), cost, credit });
+      await ledger.reserve(r, { cfg, now: now(), cost, credit, retryNonce: retrySource?.nonce });
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')
         e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };
@@ -894,7 +969,7 @@ export function createService({
         KF_BROKER_URL: cfg.audience + '/' + env.BROKER_PATH_PREFIX,
         KF_RUN_ID: key,
         KF_RUN_TOKEN: runToken,
-        KF_NONCE: n,
+        KF_NONCE: r.nonce,
         KF_SHA: r.sha,
         KF_REPO: cfg.repo,
         KF_RUNNER_NONCE: r.runnerNonce,

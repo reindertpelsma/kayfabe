@@ -32,8 +32,9 @@ STATES = {
     "OWNERSHIP_MISMATCH",
     "RATE_LIMIT",
     "RATE_LIMITED",
+    "PROVIDER_FAULT",
 }
-VERDICTS = {"PASS", "FAIL", "UNAVAILABLE"}
+VERDICTS = {"PASS", "FAIL", "UNAVAILABLE", "PROVIDER_FAULT"}
 ZERO = "0" * 64
 # Review B1: the runner's budget is 200 minutes (Runner.until). A run needs the hard limit
 # (defaults.json hardMinutes) plus the Worker's admission margin (admissionMarginMinutes);
@@ -530,6 +531,7 @@ OPTIONAL_STATUS_KEYS = {
     "dph_total",
     "host_driver_version",
     "host_reference",
+    "provider_retries",
 }
 ERROR_KEYS = {"state", "verdict", "log_tail_sanitised", "bytes_dropped"}
 
@@ -548,6 +550,7 @@ BUDGET_REASONS = frozenset(
         "ledger-full",
         "invalid-cost",
         "credit-unavailable",
+        "run-usd",
     )
 )
 BUDGET_FIELDS = frozenset(
@@ -563,6 +566,8 @@ BUDGET_FIELDS = frozenset(
         "count_cap",
         "reserve_usd",
         "credit_required_usd",
+        "run_cap_usd",
+        "prior_usd",
         "gap_ms",
         "elapsed_ms",
         "started_at",
@@ -659,6 +664,8 @@ def validate_status(data, ctx, manifest, http_status):
     if not isinstance(host_driver, str) or not re.fullmatch(
         r"unknown|\d{3}\.\d{1,3}(?:\.\d{1,2})?", host_driver
     ):
+        raise Invalid()
+    if not integer(data.get("provider_retries", 0), 0, 1):
         raise Invalid()
     if data.get("host_reference", "MISSING") not in {"GREEN", "NOT_GREEN", "MISSING"}:
         raise Invalid()
@@ -1017,7 +1024,7 @@ class Runner:
 
     def execute(self):
         result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
-        terminal = final = admitted = False
+        terminal = final = admitted = provider_retry = False
         try:
             profile = self.ctx.get("profile", "check")
             code, availability = self.retry_read("/availability?profile=" + profile)
@@ -1126,14 +1133,36 @@ class Runner:
                         self.diagnostic = line
                     self.show(data["log_tail_sanitised"])
                     result["state"] = data["state"]
+                    if provider_retry and self.metadata.get("verdict") == "PROVIDER_FAULT":
+                        result = {
+                            "state": "PROVIDER_FAULT",
+                            "verdict": "PROVIDER_FAULT",
+                            "verified": 0,
+                        }
                     break
                 admitted = True
                 self.metadata = data
-                if not self.rental_shown and data["id"] is not None:
+                if self.rental_shown != data["id"] and data["id"] is not None:
                     self.emit(rental_line(data) + "\n")
-                    self.rental_shown = True
+                    self.rental_shown = data["id"]
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
+                if data["verdict"] == "PROVIDER_FAULT" or (
+                    provider_retry and data["state"] == "NONE" and data["verdict"] == "UNAVAILABLE"
+                ):
+                    if not provider_retry and data.get("provider_retries", 0) == 0:
+                        provider_retry = True
+                        self.emit("runner: provider fault; requesting one bounded replacement\n")
+                        code, data = self.retry_read("/rent", "POST", request)
+                        continue
+                    self.emit("runner: provider fault; no usable replacement completed\n")
+                    terminal = True
+                    result = {
+                        "state": "PROVIDER_FAULT",
+                        "verdict": "PROVIDER_FAULT",
+                        "verified": int(data["result_at"] is not None),
+                    }
+                    break
                 if final:
                     if self.cursor != data["log_cursor"] or self.hash != data["log_sha256"]:
                         raise Invalid()

@@ -23,6 +23,25 @@ class EvidenceError(Exception):
         super().__init__(name)
 
 
+class ProviderFault(EvidenceError):
+    """A rented host is unusable before kayfabe tests; never a product FAIL."""
+
+
+def require_provider_kvm(path):
+    if not path.exists():
+        raise ProviderFault("provider_kvm_missing")
+
+
+def provider_fault(text):
+    if (
+        re.search(r"^DRIVER_RC=8$", text, re.M)
+        and re.search(r"^NOT_READY driver_rc=8\b", text, re.M)
+        and re.search(r"^NVIDIA_SMI_RC=(?:[1-9][0-9]*)$", text, re.M)
+    ):
+        return "provider_gpu_unavailable"
+    return None
+
+
 def row(name, passed=0, failed=0, skipped=0):
     return {"name": name, "pass": passed, "fail": failed, "skip": skipped}
 
@@ -343,7 +362,11 @@ def final_summary(result, records):
     stage_rows, suite_rows, fail_rows = summary_lines(result, records)
     budget = SUMMARY_LIMIT - len(begin) - len(SUMMARY_END) - 2 - 64
     keep = {}
-    failed = {i for i, record in enumerate(records) if record.get("result") in ("FAIL", "TIMEOUT")}
+    failed = {
+        i
+        for i, record in enumerate(records)
+        if record.get("result") in ("FAIL", "TIMEOUT", "PROVIDER_FAULT")
+    }
     priority = (
         [("stage", i, s) for i, s in enumerate(stage_rows) if i in failed]
         + [("fail", i, s) for i, s in enumerate(fail_rows)]
@@ -590,9 +613,10 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             failure = "timeout" if rc == 124 else error.name
             result["suites"].append(row(failure, failed=1))
             append_arm_failure(result)
-            result["verdict"] = "FAIL"
+            verdict = "PROVIDER_FAULT" if isinstance(error, ProviderFault) else "FAIL"
+            result["verdict"] = verdict
             persist_result(destination, result)
-            record.update(result="TIMEOUT" if rc == 124 else "FAIL", reason=failure)
+            record.update(result="TIMEOUT" if rc == 124 else verdict, reason=failure)
             files = [*stage["progress"], stage["output"], *stage.get("detail", [])]
             record["first_fail"] = first_failing_line(files)
             record["failed_tests"], record["failed_total"] = failed_tests(files)
@@ -790,7 +814,13 @@ def watched(command, root, name):
 
 def stage_grade(root, tag, log, grade, rc):
     if rc not in (0, 6):
-        return grade(rc)
+        try:
+            return grade(rc)
+        except ProviderFault:
+            # Provider recovery must never bypass the unmatched-Xid safety stop.
+            if watch_delta(bounded_text(log), rc):
+                raise EvidenceError("host_xid") from None
+            raise
     text = bounded_text(log)
     try:
         delta = [xid_record_key(line) for line in watch_delta(text, rc)]
@@ -837,8 +867,9 @@ def main():
         subprocess.run(["df", "-h", "/"], check=True)
         free = shutil.disk_usage("/").free
         print("KF_PREFLIGHT_FREE_BYTES=" + str(free), flush=True)
-        if free < 60000000000 or not Path("/dev/kvm").exists():
+        if free < 60000000000:
             raise EvidenceError("preflight")
+        require_provider_kvm(Path("/dev/kvm"))
         if int(time.time() * 1000) >= soft:
             raise EvidenceError("timeout")
         branch = prepare_checkout(root, sha)
@@ -891,8 +922,12 @@ def main():
             )
 
         def provision_grade(rc):
+            log = bounded_text("/root/prov/prov.log")
+            fault = provider_fault(log)
+            if fault:
+                raise ProviderFault(fault)
             result["hardware"] = hardware()
-            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)
+            rows = provision_rows(log, rc)
             tags = {
                 s
                 for s in (root / "tools/drivermatrix/tags.txt").read_text().splitlines()
@@ -975,6 +1010,8 @@ def main():
         )
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
+        if isinstance(error, ProviderFault):
+            result["verdict"] = "PROVIDER_FAULT"
         result["suites"].extend(error.rows)
         result["suites"].append(row(error.name, failed=1))
         persist_result(destination, result)
