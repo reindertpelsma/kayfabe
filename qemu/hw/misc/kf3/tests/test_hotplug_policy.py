@@ -28,7 +28,9 @@ STUBS = r'''
 #include <stdlib.h>
 #include <string.h>
 typedef struct { bool hotpluggable; unsigned long categories[1]; const char *desc; } DeviceClass;
-typedef struct { void (*realize)(void); void (*exit)(void); unsigned vendor_id,device_id,class_id; } PCIDeviceClass;
+typedef struct {
+    void (*realize)(void); void (*exit)(void); unsigned vendor_id,device_id,class_id;
+} PCIDeviceClass;
 typedef struct { struct { void (*hold)(void); void (*exit)(void); } phases; } ResettableClass;
 typedef struct { DeviceClass dc; PCIDeviceClass pci; ResettableClass reset; } ObjectClass;
 #define DEVICE_CLASS(k) (&(k)->dc)
@@ -66,9 +68,11 @@ class HotplugPolicy(unittest.TestCase):
             binary = path / 'probe'
             source.write_text(STUBS + initializer() + MAIN)
             subprocess.run(['nice','-n','19','cc','-std=c11','-Wall','-Wextra','-Werror',
-                            '-Wno-unused-parameter',str(source),'-o',str(binary)],check=True,capture_output=True)
+                            '-Wno-unused-parameter',str(source),'-o',str(binary)],
+                           check=True,capture_output=True)
             result = subprocess.run([str(binary),arm],capture_output=True)
-            self.assertEqual(result.returncode,0,f'{arm}: unsafe hotplug policy, exit {result.returncode}')
+            self.assertEqual(result.returncode,0,
+                             f'{arm}: unsafe hotplug policy, exit {result.returncode}')
 
     def test_actual_class_initializer_disables_hotplug(self):
         self.probe('class')
