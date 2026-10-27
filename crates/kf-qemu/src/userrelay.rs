@@ -413,6 +413,17 @@ impl Drop for NeverBorn {
     }
 }
 
+/// The GPFIFO channel classes the Windows USER ring relay admits: `AMPERE_CHANNEL_GPFIFO_A` (GA10x, Ada,
+/// Hopper's second list entry) and, since 2026-10-27, `TURING_CHANNEL_GPFIFO_A` (`0xc46f`), whose
+/// GPFIFO entries, `USERD` `GP_GET`/`GP_PUT` and doorbell token are the same Volta-and-later layout.
+/// Hopper (`0xc86f`) and Blackwell (`0xc96f`, `0xca6f`) classes are declined.
+const TURING_CHANNEL_GPFIFO_A: u32 = 0xc46f;
+
+#[must_use]
+fn user_ring_class_admitted(class: u32) -> bool {
+    class == kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A || class == TURING_CHANNEL_GPFIFO_A
+}
+
 struct Birth {
     a: ChannelAlloc,
     mirror: Mirror,
@@ -450,7 +461,7 @@ impl Birth {
         // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
         // CPU access additionally retains exact Pt allocation identity.
         let source = (|| {
-            if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+            if !user_ring_class_admitted(a.class)
                 || a.entries < 2
                 || !a.entries.is_power_of_two()
                 || a.entries > (1 << 20)

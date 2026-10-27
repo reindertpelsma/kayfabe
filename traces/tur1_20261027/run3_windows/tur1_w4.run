@@ -1,0 +1,49 @@
+WRUN_START 2026-10-27T00:41:23+00:00
+10
+KF_GOP_EXPORT target=x86_64-unknown-uefi bytes=9216 out=/workspace/winvm/secureboot/kf-gop.67339dc0-dirty.efi
+Signing Unsigned original image
+Signature verification OK
+[2026-10-27T00:41:23Z] KF_GOP_SIGNED /workspace/winvm/secureboot/kf-gop.67339dc0-dirty.signed.efi sha256=5b81202e5bfe30b8a7edee1151c72b5ac30a3279a4c3587aa91846ae7de03e48 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+SIGN_RC=0
+[2026-10-27T00:41:23Z] detached: tag=tur1_w4, log logs/tur1_w4_run.log (stdout logs/tur1_w4_run.out)
+RUN_RC=0 2026-10-27T00:41:23+00:00
+QEMU_DEAD 2026-10-27T00:41:23+00:00
+STAGE2_START 2026-10-27T00:42:30+00:00
+SSH_UP 2026-10-27T00:42:43+00:00
+{"Name":"Microsoft Basic Display Adapter","DriverVersion":"10.0.26100.1","ConfigManagerErrorCode":43,"PNPDeviceID":"PCI\\VEN_10DE\u0026DEV_1F06\u0026SUBSYS_652019DA\u0026REV_A1\\3\u002611583659\u00260\u002628"}
+NV_INSTALL_START 2026-10-27T00:42:56+00:00
+[2026-10-27T00:42:56Z] START nv-extract
+[2026-10-27T00:43:41Z] NV_EXTRACTED /workspace/winvm/cache/nv580.88/Display.Driver (2.6G)
+[2026-10-27T00:43:41Z] EXIT nv-extract rc=0
+[2026-10-27T00:44:05Z] START nv-copy
+[2026-10-27T00:45:21Z] EXIT nv-copy rc=0
+  [2026-10-27T00:45:28Z] START gsp-on
+  GSP_ON device PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=Error problem=CM_PROB_FAILED_POST_START inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+  GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+  GSP_ON disable: Microsoft PnP Utility
+  GSP_ON disable: 
+  GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON disable: Device disabled successfully.
+  GSP_ON disable: 
+  GSP_ON add-driver: Microsoft PnP Utility
+  GSP_ON add-driver: 
+  GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+  GSP_ON add-driver: Driver package added successfully.
+  GSP_ON add-driver: Published Name:         oem7.inf
+  GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON add-driver: 
+  GSP_ON add-driver: Total driver packages:  1
+  GSP_ON add-driver: Added driver packages:  1
+  GSP_ON add-driver rc=0
+  GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+  GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+  GSP_ON enable: Microsoft PnP Utility
+  GSP_ON enable: 
+  GSP_ON enable: Enabling device:          PCI\VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1\3&11583659&0&28
+  GSP_ON enable: Device enabled successfully.
+  GSP_ON enable: 
+  GSP_ON after enable: name='NVIDIA GeForce RTX 2060 SUPER' status=Error problem=CM_PROB_FAILED_POST_START problemstatus=0
+  [2026-10-27T00:49:11Z] EXIT gsp-on rc=0
+NV_INSTALL_RC=0 2026-10-27T00:49:11+00:00
+WRUN_STAGE1_DONE 2026-10-27T00:49:11+00:00
