@@ -38,6 +38,20 @@ def descendant(pid, anchor, anchor_start):
         pid = record[0]
 
 
+def child_phase(context, published):
+    if "rc" in published:
+        return "complete"
+    live = guard.process_identity(context["pid"])
+    if live is None:
+        # The unprivileged Popen owner has reaped the child but has not yet
+        # atomically published its exit. Pending never advances an Xid receipt.
+        return None
+    if live[1] != context["starttime"]:
+        raise guard.GuardRefused("owned QEMU PID was reused")
+    guard.verify_guest_identity(context)
+    return "running"
+
+
 def main():
     manifest_path, receipt_path, process_dir, ack_dir, *command = sys.argv[1:]
     manifest = json.loads(Path(manifest_path).read_text())
@@ -75,11 +89,10 @@ def main():
                     record = candidate
             journal = snapshot()
             if context:
-                snapshot = Path(process_dir) / f"qemu-{context['pid']}.json"
-                latest = json.loads(snapshot.read_text())
-                finished = "rc" in latest
-                if not finished:
-                    guard.verify_guest_identity(context)
+                process_receipt = Path(process_dir) / f"qemu-{context['pid']}.json"
+                latest = json.loads(process_receipt.read_text())
+                phase = child_phase(context, latest)
+                finished = phase == "complete"
                 argv = record["argv"]
                 serials = [
                     arg.split("path=", 1)[1]

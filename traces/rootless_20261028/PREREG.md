@@ -33,3 +33,14 @@ read includes that exact cursor and all later kernel entries, using the same
 refuses. The existing source/PID/channel/VA/type/CE matching oracle is unchanged.
 The unsupported nvidia-smi inventory field stopped setup before builds or GPU use;
 that receipt is retained, and BAR1 is read using nvidia-smi -q -d MEMORY instead.
+
+Before the first guest: native gates9+10, bare30, rootless native gates9+10, and
+the native cup3/matmul oracle passed at product base858ca1e8 (operator15cc4214).
+The observer then stopped on a Python local-name error BEFORE launching its suite;
+no QEMU was spawned and no identity/fault rule refused. Preserve that receipt.
+An EXPECTED RED regression covers startup and normal reap/publication ordering;
+PID reuse and changed live executable still refuse. Operator-only correction follows.
+Native calibration of 40 matmul iterations lasted 0.238 s. The final overlap
+experiment uses 4000 iterations, fixed BEFORE any CUDA guest, to observe sustained
+concurrent loops. Re-run the native oracle with those same final parameters first.
+The per-VM 180-second oracle and all fault rules are unchanged.

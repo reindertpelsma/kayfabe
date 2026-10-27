@@ -1,6 +1,6 @@
 {
   "source": "58638e9737badf46d28ec813d52768106d792170",
-  "gpu_free_tests": 26,
+  "gpu_free_tests": 33,
   "existing_xid_oracle_tests": 109,
   "expected_red": [
     {
@@ -17,6 +17,12 @@
       "commit": "7d4fac21d",
       "errors": 1,
       "reason": "kernel_scope module not implemented"
+    },
+    {
+      "commit": "6bde6f665",
+      "tests": 7,
+      "errors": 7,
+      "reason": "startup shadowing and missing lifecycle helper"
     }
   ],
   "mutants": {
@@ -28,7 +34,11 @@
     "extra_groups_accepted": 2,
     "cursor_loss_accepted": 2,
     "boot_change_accepted": 2,
-    "nonkernel_accepted": 2
+    "nonkernel_accepted": 2,
+    "startup_scope_shadowed": 2,
+    "pending_exit_accepted": 2,
+    "pending_exit_refused": 2,
+    "reused_pid_accepted": 2
   },
   "claims_new": 0,
   "hardware": "UNRUN at preparation"
