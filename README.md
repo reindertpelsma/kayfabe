@@ -1,5 +1,7 @@
 # kayfabe
 
+**STATUS: RESEARCH, 2026-10-21.** The scope is spelled out under "Status" below.
+
 **One NVIDIA card. Your Linux desktop keeps it. The VM gets NVIDIA's real driver.**
 
 Kayfabe shares an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it. It is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest loads NVIDIA's real, unmodified driver (Windows or Linux);
