@@ -12,8 +12,8 @@
   "json_files_parsed_in_added_scope": 86,
   "coverage_cells": 152,
   "dies": 20,
-  "revision_ancestry_checks": 68,
-  "reference_links_checked": 64,
+  "revision_ancestry_checks": 70,
+  "reference_links_checked": 67,
   "sensitive_pattern_hits": {
     "private_path": 0,
     "private_address": 0,

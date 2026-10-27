@@ -38,7 +38,7 @@ build; its GB205 lease57503040 result was found on the BW5 evidence branch named
 the supplied audit. Both identities remain separate. Large logs and executable
 operator files were excluded rather than copied wholesale.
 
-CODE READ (2026-10-27; [revision checks](revisions.json)): each of 34 revisions has
+CODE READ (2026-10-27; [revision checks](revisions.json)): each of 35 revisions has
 an independent ancestry result against the pinned master and next tips. This is
 source reachability, not new hardware validation. The 20-die [matrix](matrix.json)
 records unknown and dirty tree identities explicitly.

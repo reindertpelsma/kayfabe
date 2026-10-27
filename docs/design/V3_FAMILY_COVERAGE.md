@@ -89,7 +89,7 @@ unless the cited result says otherwise. The master column is the ancestry result
 | GA102 | thin production | MEASURED Mb: 30/30; lease 57723513, same-box native reference | at `714ec29d3` | no | [A1] |
 | GA102 | thin mirror | CLAIMED C: Round-two header claimed30/30; kept as claimed | at `6564dd597` | no | audit only |
 | GA102 | ladder/apps | CLAIMED C: 3080Ti ladder 4/4 plus gfx; apps untested | at `68fb3768` | yes | audit only |
-| GA102 | W-driver | MEASURED Mb: BLOCKED: sealed install, bind1200s ceiling, zeroRPCs | at `6e3fd3fd6` | no | [A15],[A16] |
+| GA102 | W-driver | MEASURED Mb: BLOCKED: sealed install, bind1200s ceiling, zeroRPCs | at `98b599bb` | no | [A15],[A16],[A20] |
 | GA102 | W-apps | UNTESTED: No workload verdict | n/a | n/a | audit only |
 | GA102 | Disp-L | CLAIMED C: PARTIAL: displayless Vast description; no display proof | unrecorded | unknown | audit only |
 | GA102 | Disp-W | UNTESTED: No result | n/a | n/a | audit only |
@@ -106,7 +106,7 @@ unless the cited result says otherwise. The master column is the ancestry result
 | GA104 | thin historical | MEASURED M: 3060Ti30/30, floor swept | at `25edb757` | yes | [A4] |
 | GA104 | thin production | MEASURED M: 30/30; lease 57568731, RM-bound GA104 | at `714ec29d3` | no | [A2] |
 | GA104 | ladder/apps | MEASURED M: cup3/cup8; apps34/65 on3070, pre-fix and unrepeated | at `738c90e5` | yes | [A5] |
-| GA104 | W-driver | MEASURED M: PARTIAL A4000 boot; two UNCLEAN-kill stops | unrecorded | unknown | audit only |
+| GA104 | W-driver | MEASURED M: PARTIAL A4000 boot; two UNCLEAN-kill stops | at `6c6bb92b` | no | [A18],[A19] |
 | GA104 | W-apps | UNTESTED: No result in supplied audit | n/a | n/a | audit only |
 | GA104 | Disp-L | UNTESTED: No result in supplied audit | n/a | n/a | audit only |
 | GA104 | Disp-W | UNTESTED: No result in supplied audit | n/a | n/a | audit only |
@@ -142,11 +142,11 @@ unless the cited result says otherwise. The master column is the ancestry result
 | AD102 | Disp-W | CLAIMED C: PARTIAL desktop/DWM evidence; no broad display qualification | unrecorded | unknown | [D4],[D5] |
 | AD102 | Native | MEASURED Mb: Host30/30 and CUDA 4/4; no native Windows | at `7f6f7e7a7` | no | [D1],[D3] |
 | AD103 | thin/ladder/apps | UNTESTED: No Linux guest run; SW5 had no eligible offer | n/a | n/a | audit only |
-| AD103 | W-driver | MEASURED M: Historical boot and gates 9/9 | unrecorded | unknown | [D6] |
+| AD103 | W-driver | MEASURED M: Historical boot and gates 9/9 | at `3d31acc6` | no | [D6] |
 | AD103 | W-apps | CLAIMED C: PARTIAL per source README; no workload stability bar | unrecorded | unknown | audit only |
 | AD103 | Disp-L | UNTESTED: No result | n/a | n/a | audit only |
 | AD103 | Disp-W | CLAIMED C: PARTIAL historical description | unrecorded | unknown | audit only |
-| AD103 | Native | MEASURED M: Historical gates 9/9 + gate 10; no new L0 test | unrecorded | unknown | [D6] |
+| AD103 | Native | MEASURED M: Historical gates 9/9 + gate 10; no new L0 test | at `3d31acc6` | no | [D6] |
 | AD104 | thin | MEASURED M: 30/30; vast53568615 | at `fc2dadc4` | yes | [D8] |
 | AD104 | family bar | MEASURED M: AD104 historical bar named in reachability audit | at `f442980e` | yes | [D8] |
 | AD104 | ladder/apps | MEASURED M: ladder 4/4 historical; full owner app-set is claimed | at `fc2dadc4` | yes | [D8] |
@@ -158,8 +158,8 @@ unless the cited result says otherwise. The master column is the ancestry result
 | AD106 | thin historical | MEASURED M: 30/30; vast52660152 | at `1d6bb323` | yes | [D9] |
 | AD106 | thin production | MEASURED Mb: 30/30; lease 57731910 | at `714ec29d3` | no | [D10] |
 | AD106 | thin mirror | CLAIMED C: Round-two header claims30/30; kept as claimed | at `6564dd597` | no | audit only |
-| AD106 | ladder/apps | MEASURED M: Ladder in v3_adasys; apps untested | unrecorded | unknown | [D11] |
-| AD106 | W-driver | MEASURED M: Historical Code 0 | unrecorded | unknown | [D7] |
+| AD106 | ladder/apps | MEASURED M (report): Unverified ladder claim: named directory has host-memory/gates, no ladder output found | unrecorded | unknown | [D11] |
+| AD106 | W-driver | MEASURED M: Historical Code 0 | at `b0de7572` | no | [D7] |
 | AD106 | W-apps | CLAIMED C: PARTIAL per README | unrecorded | unknown | audit only |
 | AD106 | Disp-L | UNTESTED: No result | n/a | n/a | audit only |
 | AD106 | Disp-W | CLAIMED C: PARTIAL historical description | unrecorded | unknown | audit only |
@@ -254,13 +254,14 @@ rule; n=1, different boots, idle-native scope and non-reproduction remain visibl
 - CODE READ (2026-10-27 archival audit; TU106 Native Windows): Revision is collector source, not kayfabe; no kayfabe verdict.
 - CODE READ (2026-10-27 archival audit; GA102 thin mirror): Unpublished local round-two data is outside this branch-evidence import.
 - CODE READ (2026-10-27 archival audit; GA102 Native CUDA): A later different-lease CUDA 4/4 log is included as A17, not substituted for the missing path.
-- CODE READ (2026-10-27 archival audit; GA104 W-driver): Input groups the October14 revisions; exact A4000 per-arm revision is not resolved here.
+- CODE READ (2026-10-27 archival audit; GA104 W-driver): Both A4000 run-marker sets name6c6bb92b; the native gates are clean at the same revision.
 - CODE READ (2026-10-27 archival audit; GA104 Native Windows): Native capture revision is unrecorded in supplied matrix.
 - CODE READ (2026-10-27 archival audit; GA106 W-apps): Storm persists after lost-ring fix; do not treat absence of overdue dumps as stability.
 - CODE READ (2026-10-27 archival audit; AD102 W-driver): Windows-specific source is stated in D4; Linux revision does not imply Windows tree equality.
-- CODE READ (2026-10-27 archival audit; AD103 W-driver): Per-arm October14 revision must be read from D6; no current-code claim.
+- CODE READ (2026-10-27 archival audit; AD103 W-driver): Run markers and native-gate header name3d31acc6; no current-code claim.
 - CODE READ (2026-10-27 archival audit; AD104 Native): Only the supplied owner-host account claims VFIO; this import adds no VFIO run.
-- CODE READ (2026-10-27 archival audit; AD106 W-driver): Per-arm revision must be read from D7; October14 revision group is retained.
+- CODE READ (2026-10-27 archival audit; AD106 ladder/apps): Input M label retained; the named directory supports host-memory/gate work, not the claimed ladder.
+- CODE READ (2026-10-27 archival audit; AD106 W-driver): Run markers and native-gate header nameb0de7572; no current-code claim.
 - CODE READ (2026-10-27 archival audit; GB202 W-driver/apps BW11): Branch summary and private capture hashes only; raw run logs remain private.
 - CODE READ (2026-10-27 archival audit; GB202 Native Windows BW7): Windows580.88. No kayfabe source revision applies to native Windows.
 - CODE READ (2026-10-27 archival audit; GB205 Linux reload): Adjacent binary_sha256.txt pins cb80cbd2; this is a different build from the Windows fix revision.
@@ -274,8 +275,8 @@ rule; n=1, different boots, idle-native scope and non-reproduction remain visibl
   Its original MEASURED/M label is retained as reported, with an explicit missing-path limit.
   [A17] is a different-lease native CUDA log and is not a substitute for that missing record.
 - CODE READ (2026-10-27 audit): October14 A4000/AD103/AD106 rows are linked to their existing
-  result directories. The supplied revision group is202c612e/3d31acc6/b0de7572/6c6bb92b;
-  this page does not guess which dirty or clean per-arm tree applies to an unpinned cell.
+  result directories. Run markers pin A4000 to6c6bb92b, AD103 to3d31acc6 and AD106 tob0de7572;
+  the Linux gate headers record the same clean revisions. Other unpinned cells stay unknown.
 - CLAIMED C (2026-10-27 input audit): SW5 mirror6564dd597 PASS claims for GA102 and AD106
   remain claimed here. Their round-two small data was local and unpublished at L0 start;
   the imported SW5 branch contains only its original production round and the late-addition
@@ -330,6 +331,7 @@ each revision below. The tested build and the evidence branch head are distinct 
 | `38fd948fd` | no | no |
 | `b85d02bae` | no | no |
 | `48b027267` | no | no |
+| `98b599bb` | no | no |
 
 ## Import provenance
 
@@ -379,6 +381,9 @@ the Windows storm and GB202 attribution decisions.
 [A15]: ../../traces/sweep_dies_20261018/lease_57385378/bind_inconclusive/arms/bw580_bind/summary.json
 [A16]: ../../traces/sweep_dies_20261018/lease_57385378/bind_inconclusive/bwr_bind_readiness_stage.json
 [A17]: ../../traces/sweep_dies_20261018/lease_57385378/native_complete/sweep_cuda_host.log
+[A18]: ../../traces/die_sweep_20261014/ga104_a4000/run_marker_flags.txt
+[A19]: ../../traces/die_sweep_20261014/ga104_a4000_display_off_stdvga/run_marker_flags.txt
+[A20]: ../../traces/sweep_dies_20261018/lease_57385378/bind_inconclusive/bwr_bind.log
 [D1]: ../../traces/sweep_ada_20261018/lease_57144505/linux_complete/RESULT.md
 [D2]: ../../traces/sweep_ada_20261018/lease_57144505/linux_complete/sweep_linux_guest595.log
 [D3]: ../../traces/sweep_ada_20261018/lease_57144505/linux_complete/sweep_cuda_host.log

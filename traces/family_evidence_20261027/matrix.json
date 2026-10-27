@@ -441,11 +441,12 @@
       "surface": "W-driver",
       "label": "MEASURED Mb",
       "status": "BLOCKED: sealed install, bind1200s ceiling, zeroRPCs",
-      "revision": "6e3fd3fd6",
+      "revision": "98b599bb",
       "on_master": false,
       "evidence": [
         "A15",
-        "A16"
+        "A16",
+        "A20"
       ],
       "note": ""
     },
@@ -639,11 +640,13 @@
       "surface": "W-driver",
       "label": "MEASURED M",
       "status": "PARTIAL A4000 boot; two UNCLEAN-kill stops",
-      "revision": null,
-      "on_master": null,
-      "evidence": [],
-      "note": "Input groups the October14 revisions; exact A4000 per-arm revision is not resolved here.",
-      "revision_group_from_report": "3d31acc6"
+      "revision": "6c6bb92b",
+      "on_master": false,
+      "evidence": [
+        "A18",
+        "A19"
+      ],
+      "note": "Both A4000 run-marker sets name6c6bb92b; the native gates are clean at the same revision."
     },
     {
       "family": "Ampere",
@@ -1017,13 +1020,12 @@
       "surface": "W-driver",
       "label": "MEASURED M",
       "status": "Historical boot and gates 9/9",
-      "revision": null,
-      "on_master": null,
+      "revision": "3d31acc6",
+      "on_master": false,
       "evidence": [
         "D6"
       ],
-      "note": "Per-arm October14 revision must be read from D6; no current-code claim.",
-      "revision_group_from_report": "b0de7572"
+      "note": "Run markers and native-gate header name3d31acc6; no current-code claim."
     },
     {
       "family": "Ada",
@@ -1064,13 +1066,12 @@
       "surface": "Native",
       "label": "MEASURED M",
       "status": "Historical gates 9/9 + gate 10; no new L0 test",
-      "revision": null,
-      "on_master": null,
+      "revision": "3d31acc6",
+      "on_master": false,
       "evidence": [
         "D6"
       ],
-      "note": "",
-      "revision_group_from_report": "b0de7572"
+      "note": ""
     },
     {
       "family": "Ada",
@@ -1209,14 +1210,14 @@
       "family": "Ada",
       "die": "AD106",
       "surface": "ladder/apps",
-      "label": "MEASURED M",
-      "status": "Ladder in v3_adasys; apps untested",
+      "label": "MEASURED M (report)",
+      "status": "Unverified ladder claim: named directory has host-memory/gates, no ladder output found",
       "revision": null,
       "on_master": null,
       "evidence": [
         "D11"
       ],
-      "note": ""
+      "note": "Input M label retained; the named directory supports host-memory/gate work, not the claimed ladder."
     },
     {
       "family": "Ada",
@@ -1224,13 +1225,12 @@
       "surface": "W-driver",
       "label": "MEASURED M",
       "status": "Historical Code 0",
-      "revision": null,
-      "on_master": null,
+      "revision": "b0de7572",
+      "on_master": false,
       "evidence": [
         "D7"
       ],
-      "note": "Per-arm revision must be read from D7; October14 revision group is retained.",
-      "revision_group_from_report": "6c6bb92b"
+      "note": "Run markers and native-gate header nameb0de7572; no current-code claim."
     },
     {
       "family": "Ada",
