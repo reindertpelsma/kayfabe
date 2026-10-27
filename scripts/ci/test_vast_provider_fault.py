@@ -13,6 +13,72 @@ import vast_report as reporter
 
 
 class ProviderFaults(unittest.TestCase):
+    def clean_failed_stage(self, rc):
+        from test_vast_payload import watch
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "result.json"
+            watcher = Path(directory) / "watch.log"
+            watcher.write_text(watch(rc=rc))
+
+            def grade(status):
+                self.assertEqual(status, rc)
+                name = payload.provider_fault(self.real_case())
+                if name:
+                    raise payload.ProviderFault(name)
+                raise payload.EvidenceError("provision")
+
+            stage = {
+                "name": "provision",
+                "command": [],
+                "output": target,
+                "progress": [],
+                "grade": lambda status: payload.stage_grade(None, None, watcher, grade, status),
+            }
+            result = {"verdict": "FAIL", "suites": [], "hardware": dict(reporter.UNKNOWN_HW)}
+            with redirect_stdout(io.StringIO()):
+                payload.execute_stages([stage], 10, result, target, runner=lambda *args: rc)
+            self.assertEqual(result["verdict"], "PROVIDER_FAULT")
+            self.assertEqual(result["suites"][0]["name"], "provider_gpu_unavailable")
+
+    def test_clean_failed_provision_wrapper_one(self):
+        self.clean_failed_stage(1)
+
+    def test_clean_failed_provision_wrapper_two(self):
+        self.clean_failed_stage(2)
+
+    def mismatched_watch(self, command_rc, wrapper_rc):
+        from test_vast_payload import watch
+
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "watch.log"
+            log.write_text(watch(rc=command_rc))
+
+            def grade(rc):
+                raise payload.ProviderFault("provider_gpu_unavailable")
+
+            with self.assertRaises(payload.EvidenceError) as caught:
+                payload.stage_grade(None, None, log, grade, wrapper_rc)
+            self.assertNotIsInstance(caught.exception, payload.ProviderFault)
+
+    def test_wrong_wrapper_exit_one(self):
+        self.mismatched_watch(1, 2)
+
+    def test_wrong_wrapper_exit_two(self):
+        self.mismatched_watch(2, 1)
+
+    def test_failed_command_is_not_product_pass_one(self):
+        from test_vast_payload import watch
+
+        with self.assertRaises(payload.EvidenceError):
+            payload.watch_delta(watch(rc=1), 1)
+
+    def test_failed_command_is_not_product_pass_two(self):
+        from test_vast_payload import watch
+
+        with self.assertRaises(payload.EvidenceError):
+            payload.watch_delta(watch(rc=2), 2)
+
     def real_case(self):
         return (
             Path(__file__).resolve().parents[2]
@@ -135,7 +201,27 @@ class ProviderFaults(unittest.TestCase):
 
         self.check_xid_guard(watch(XID, 0, 1, rc=1))
 
-    def check_xid_guard(self, text):
+    def test_provider_watch_lost_baseline_stops(self):
+        from test_vast_payload import watch
+
+        self.check_xid_guard(watch(before=2, after=1, rc=1))
+
+    def test_provider_watch_changed_counts_stops(self):
+        from test_vast_payload import watch
+
+        self.check_xid_guard(watch(before=1, after=2, rc=2), 2)
+
+    def test_provider_watch_unwatched_exit_stops(self):
+        from test_vast_payload import watch
+
+        self.check_xid_guard(watch(rc=7), 7)
+
+    def test_provider_watch_timeout_exit_stops(self):
+        from test_vast_payload import watch
+
+        self.check_xid_guard(watch(rc=124), 124)
+
+    def check_xid_guard(self, text, rc=1):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "watch.log"
             log.write_text(text)
@@ -144,7 +230,7 @@ class ProviderFaults(unittest.TestCase):
                 raise payload.ProviderFault("provider_gpu_unavailable")
 
             with self.assertRaises(payload.EvidenceError) as caught:
-                payload.stage_grade(Path(directory), "test", log, grade, 1)
+                payload.stage_grade(Path(directory), "test", log, grade, rc)
             self.assertNotIsInstance(caught.exception, payload.ProviderFault)
 
     def test_local_result_parser_accepts_explicit_provider_fault(self):
