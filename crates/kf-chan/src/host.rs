@@ -823,6 +823,7 @@ impl HostRing {
         rm: &kf_host::HostRm,
         release: Option<(crate::tspace_unsafe::WindowAddr, u32)>,
     ) -> Result<Result<u32, Busy>, String> {
+        self.latency.observe();
         let seq = self.seq.wrapping_add(1);
         let mut words = Vec::new();
         if let Some((at, payload)) = release {

@@ -1808,9 +1808,10 @@ impl Device {
             kf_host::latency::register_thread(kf_host::latency::Role::Probe);
         }
         let overdue = crate::chan::completion_probe_ms().map(std::time::Duration::from_millis);
-        let Some(interval) =
-            crate::irqstorm::timer_interval(overdue.is_some(), self.irq_storm.as_ref())
-        else {
+        let Some(interval) = crate::irqstorm::timer_interval(
+            overdue.is_some() || self.latency_active,
+            self.irq_storm.as_ref(),
+        ) else {
             return;
         };
         if let Some(ms) = crate::chan::completion_probe_ms() {
@@ -1821,6 +1822,9 @@ impl Device {
         let mut next_probe = std::time::Instant::now();
         while !self.stop.load(Ordering::Acquire) {
             self.irq_storm_tick();
+            if self.latency_active {
+                kf_host::latency::poll();
+            }
             if let Some(overdue) = overdue
                 && std::time::Instant::now() >= next_probe
             {
@@ -1841,7 +1845,7 @@ impl Device {
     #[must_use]
     pub fn probe_timer_enabled(&self) -> bool {
         crate::irqstorm::timer_interval(
-            crate::chan::completion_probe_ms().is_some(),
+            crate::chan::completion_probe_ms().is_some() || self.latency_active,
             self.irq_storm.as_ref(),
         )
         .is_some()
@@ -1916,7 +1920,19 @@ impl Device {
             &self.intr,
             self.chans.engines.iter().filter_map(|e| e.vector),
             || {
+                let mask = if self.latency_active {
+                    kf_host::latency::notification_mask(|v| {
+                        let completion_enabled =
+                            self.intr.diagnostic_message(v) == kf_trap::cpuintr::Raise::Message;
+                        completion_enabled
+                    })
+                } else {
+                    0
+                };
                 let sent = self.irq_lines[0].signal().is_ok();
+                if self.latency_active {
+                    kf_host::latency::notification(mask, sent);
+                }
                 if sent {
                     self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
                 }
@@ -2291,22 +2307,25 @@ impl Device {
                 }
             }
             self.mem.inbox.note_statements_applied(taken);
+            // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
+            // wait on the worker that asked.
+            for (ticket, target) in self.mem.inbox.take_split_requests() {
+                match target {
+                    crate::mem::SplitTarget::Pdb(pdb) => m.queue_split(pdb, None, ticket, trigger),
+                    // ★ §U.2: a deferred TLB invalidate — the channel's own space; its gate is
+                    // released by `finish_split` below, after the walk's commit.
+                    crate::mem::SplitTarget::Space(key) => {
+                        m.queue_split(None, Some(key), ticket, trigger)
+                    }
+                }
+            }
             if let Some(req) = self.mem.port.armed_request()
                 && last_seq != Some(req.seq)
             {
                 last_seq = Some(req.seq);
                 m.on_invalidate(req, trigger);
             }
-            // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
-            // wait on the worker that asked.
-            for (ticket, target) in self.mem.inbox.take_split_requests() {
-                match target {
-                    crate::mem::SplitTarget::Pdb(pdb) => m.on_split(pdb, ticket, trigger),
-                    // ★ §U.2: a deferred TLB invalidate — the channel's own space; its gate is
-                    // released by `finish_split` below, after the walk's commit.
-                    crate::mem::SplitTarget::Space(key) => m.on_split_space(key, ticket, trigger),
-                }
-            }
+            m.start_queued_splits(trigger);
             // Publish resolved mutation domains BEFORE synchronous host apply can take time.
             let armed = self.mem.port.armed_request();
             let (keys, global) = m.walk_gate_scope(armed);

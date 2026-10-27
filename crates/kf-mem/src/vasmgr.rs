@@ -1288,27 +1288,25 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// ★ P6: a Translated channel reached a `MEM_OP` TLB invalidate naming `pdb` (`None` =
     /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
     /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
-    /// EXPECTED RED batch-admission scaffold: old immediate submission.
-    #[cfg(test)]
+    /// Admit a split into the current pending snapshot without starting a walk.
+    /// Drain all caller requests before `start_queued_splits`; arrivals during an
+    /// in-flight batch remain pending for a later submission.
     pub fn queue_split(
         &mut self,
         pdb: Option<u64>,
         key: Option<VasKey>,
         ticket: u64,
-        trigger: &Trigger,
+        _trigger: &Trigger,
     ) {
-        if let Some(key) = key {
-            self.on_split_space(key, ticket, trigger);
-        } else {
-            self.on_split(pdb, ticket, trigger);
-        }
+        self.stats.splits = self.stats.splits.saturating_add(1);
+        self.pending.push(Want::Split { pdb, ticket, key });
     }
-    /// EXPECTED RED: callers cannot batch old immediate submission.
-    #[cfg(test)]
+    /// Submit the complete pending snapshot once, deduplicating targets in `pump`.
     pub fn start_queued_splits(&mut self, trigger: &Trigger) {
         self.pump(trigger);
     }
 
+    /// Immediate single-request adapter, retained for existing callers.
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
         if crate::maplog::on() {
             eprintln!(
@@ -1352,6 +1350,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.splits = self.stats.splits.saturating_add(1);
         self.pending.push(w);
         self.pump(trigger);
+    }
+
+    fn finish_split_ticket(&mut self, ticket: u64, result: Result<(), String>) {
+        kf_host::latency::split_ready(ticket, result.is_ok());
+        self.splits_done.push((ticket, result));
     }
 
     /// ★ P6: the splits finished since the last call, `(ticket, outcome)`.
@@ -1419,7 +1422,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 if pdb.is_some() {
                     self.stats.split_missed = self.stats.split_missed.saturating_add(1);
                 }
-                self.splits_done.push((ticket, Ok(())));
+                self.finish_split_ticket(ticket, Ok(()));
                 continue;
             }
             if let Want::Invalidate(r, _) = w
@@ -1491,11 +1494,23 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             return;
         }
         let t0 = std::time::Instant::now();
+        let split_started_at = kf_host::latency::now();
         let r = self.walker.submit(&entries);
         let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.stats.submit_ns_max = self.stats.submit_ns_max.max(ns);
         match r {
             Ok(()) => {
+                for (want, keys, _) in &batch.wants {
+                    if let Want::Split { ticket, .. } = want {
+                        kf_host::latency::split_start_at(
+                            *ticket,
+                            batch.id,
+                            keys.first().map_or(0, |k| k.0),
+                            keys.len(),
+                            split_started_at,
+                        );
+                    }
+                }
                 self.stats.walks_submitted = self.stats.walks_submitted.saturating_add(1);
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
@@ -1539,7 +1554,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Want::Invalidate(..) => {
                     self.stats.unreconciled = self.stats.unreconciled.saturating_add(1)
                 }
-                Want::Split { ticket, .. } => self.splits_done.push((*ticket, Err(why.clone()))),
+                Want::Split { ticket, .. } => self.finish_split_ticket(*ticket, Err(why.clone())),
                 Want::Root(_) => {}
             }
         }
@@ -1573,7 +1588,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                             out.unreconciled.push(r.seq);
                         }
                         if let Want::Split { ticket, .. } = w {
-                            self.splits_done.push((*ticket, Err(format!("walk: {e}"))));
+                            self.finish_split_ticket(*ticket, Err(format!("walk: {e}")));
                         }
                     }
                 }
@@ -1684,6 +1699,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let apply_ns = ns_since(t_apply);
             let cost = kf_host::diag::snapshot().since(cost_before);
+            for (want, keys, _) in &batch.wants {
+                if let Want::Split { ticket, .. } = want
+                    && keys.contains(&key)
+                {
+                    kf_host::latency::split_applied(
+                        *ticket,
+                        key.0,
+                        e.runs.len() as u64,
+                        cost.verbs.map(|v| v.calls),
+                        [a.mapped as u64, a.unmapped as u64],
+                    );
+                }
+            }
             let first_slow = self.stats.timing.slow.observe(
                 apply_ns,
                 [
@@ -2004,9 +2032,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 });
                 let again = again || keys.iter().any(|k| rewalk.contains(k));
                 match (hard, bad) {
-                    (Some(k), _) => self
-                        .splits_done
-                        .push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
+                    (Some(k), _) => self.finish_split_ticket(
+                        *ticket,
+                        Err(format!("split {pdb:x?}: {k:?} did not apply")),
+                    ),
                     (None, _) if again => requeue.push((*w, *at)),
                     (None, Some(k)) => {
                         self.stats.splits_unsettled = self.stats.splits_unsettled.saturating_add(1);
@@ -2019,9 +2048,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                                 "kf-mem: split {pdb:x?} (ticket {ticket}) completed over UNSETTLED {k:?} — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them"
                             );
                         }
-                        self.splits_done.push((*ticket, Ok(())));
+                        self.finish_split_ticket(*ticket, Ok(()));
                     }
-                    (None, None) => self.splits_done.push((*ticket, Ok(()))),
+                    (None, None) => self.finish_split_ticket(*ticket, Ok(())),
                 }
                 continue;
             }

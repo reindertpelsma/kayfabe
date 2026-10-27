@@ -1,5 +1,6 @@
 use super::core::{Cause, Gauge, Kind, SLOW_NS, Sample, Span, State, Wait};
 use super::journal::Journal;
+use super::splits::{SplitScope, Splits};
 use std::cell::Cell;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -226,7 +227,9 @@ impl Recorder {
         self.drain(&mut st);
         let at = self.now();
         st.expire(at);
-        if st.slow.iter().any(|s| !s.context_checked) {
+        if st.slow.iter().any(|s| !s.context_checked)
+            || st.splits.slow.iter().any(|s| !s.context_checked)
+        {
             let spans = self.spans(at);
             for s in &mut st.slow {
                 if s.context_checked {
@@ -252,13 +255,40 @@ impl Recorder {
                 s.context_checked = true;
             }
         }
+        if st.splits.slow.iter().any(|s| !s.context_checked) {
+            let spans = self.spans(at);
+            for s in &mut st.splits.slow {
+                if s.context_checked {
+                    continue;
+                }
+                let end = s.taken.or(s.released).unwrap_or(at);
+                let mut work: Vec<_> = spans
+                    .iter()
+                    .copied()
+                    .filter(|w| {
+                        w.end >= s.requested
+                            && w.start <= end
+                            && (w.thread == s.worker
+                                || w.role == Role::Va as u64
+                                || w.role == Role::Act as u64)
+                    })
+                    .collect();
+                work.sort_by_key(|w| {
+                    std::cmp::Reverse(w.end.min(end).saturating_sub(w.start.max(s.requested)))
+                });
+                work.truncate(4);
+                s.work = work;
+                s.context_checked = true;
+            }
+        }
         self.next_due.store(
             st.pending
                 .iter()
                 .filter(|s| !s.saved)
                 .map(|s| s.observed.saturating_add(SLOW_NS + 1))
                 .min()
-                .unwrap_or(u64::MAX),
+                .unwrap_or(u64::MAX)
+                .min(st.splits.next_due()),
             Release,
         );
     }
@@ -586,6 +616,20 @@ pub fn summary() -> String {
     let Ok(st) = r.state.try_lock() else {
         return "latency[snapshot-contended]".into();
     };
+    let split = format!(
+        "split[count/max_us] queue_walk={} walk_ready={} ready_release={} \
+        release_resume={} total={} pending={} slow={} overflow={} missing={} canceled={}",
+        gauge(st.splits.gauges[0]),
+        gauge(st.splits.gauges[1]),
+        gauge(st.splits.gauges[2]),
+        gauge(st.splits.gauges[3]),
+        gauge(st.splits.gauges[4]),
+        st.splits.pending.len(),
+        st.splits.slow.len(),
+        st.splits.overflow,
+        st.splits.missing,
+        st.splits.canceled
+    );
     let at = r.now();
     let utc = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -596,7 +640,7 @@ pub fn summary() -> String {
         observation_lag_gpu_known={} end_to_end={} gpu_time_missing={} pending={} \
         pending_overflow={} canceled={} early_raise={} invalid={} failed_signal={} \
         private_no_guest_vector={} metadata_lost={} irq_journal_lost={} irq_journal_gaps={} \
-        activity_journal_lost={} slow_kept={}",
+        activity_journal_lost={} slow_kept={} {split}",
         gauge(st.gauges[0]),
         gauge(st.gauges[1]),
         gauge(st.gauges[2]),
@@ -674,6 +718,56 @@ fn dump(why: &str) {
             s.observation_lag()
         );
     }
+    let splits = r
+        .state
+        .try_lock()
+        .map(|st| st.splits.slow.iter().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    for s in splits {
+        let context = s
+            .work
+            .iter()
+            .map(|w| {
+                format!(
+                    "thread={} role={} {} [{},{}]",
+                    w.thread,
+                    w.role,
+                    label(w.code, w.detail),
+                    w.start,
+                    w.end
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        eprintln!(
+            "kf3: LATENCY SPLIT ticket={} token={:#x} scope={:?} \
+            requested_ns={} queued_ns={:?} walk_start_ns={:?} apply_end_ns={:?} \
+            ready_ns={:?} released_ns={:?} resumed_ns={:?} success={:?} walk={} walks={} \
+            last_space={:#x} targets={} walk_wall_ns={} rm_calls_by_verb={:?} \
+            diff_runs={} mapped={} unmapped={} shared_walk_cost=true worker={} context=[{context}]",
+            s.ticket,
+            s.token,
+            s.scope,
+            s.requested,
+            s.queued,
+            s.started,
+            s.applied,
+            s.ready,
+            s.released,
+            s.taken,
+            s.success,
+            s.walk,
+            s.walks,
+            s.space,
+            s.targets,
+            s.wall_ns,
+            s.rm,
+            s.diff,
+            s.mapped,
+            s.unmapped,
+            s.worker
+        );
+    }
     for (i, t) in r
         .threads
         .iter()
@@ -699,4 +793,50 @@ pub fn dump_shutdown() {
             dump("shutdown");
         }
     }
+}
+
+fn split_update(f: impl FnOnce(&mut Splits, u64)) {
+    if thread_id() == 0 {
+        return;
+    }
+    if let Some(r) = recorder() {
+        let at = r.now();
+        r.update(|st| f(&mut st.splits, at));
+    }
+}
+/// Worker reached a split; retain the pre-enqueue clock only after enqueue succeeds.
+pub fn split_request_at(ticket: u64, token: u32, scope: SplitScope, requested: Option<u64>) {
+    if let Some(at) = requested {
+        split_update(|s, _| s.request(ticket, token, scope, thread_id(), at));
+    }
+}
+/// Split entered the VA request queue.
+pub fn split_queued(ticket: u64) {
+    split_update(|s, at| s.queued(ticket, at));
+}
+/// A successful walker submission, using the clock sampled immediately before submission.
+pub fn split_start_at(ticket: u64, walk: u64, space: u64, targets: usize, started: Option<u64>) {
+    if let Some(at) = started {
+        split_update(|s, _| s.start(ticket, walk, space, targets, at));
+    }
+}
+/// Actual changed-run size and calling-thread RM counters for one applied target.
+pub fn split_applied(ticket: u64, space: u64, diff: u64, rm: [u64; 8], maps: [u64; 2]) {
+    split_update(|s, at| s.applied(ticket, space, diff, rm, maps, at));
+}
+/// Complete verdict exists, before starting another queued walk.
+pub fn split_ready(ticket: u64, success: bool) {
+    split_update(|s, at| s.ready(ticket, success, at));
+}
+/// Gate release (if any) and result publication have completed.
+pub fn split_released(ticket: u64, success: bool) {
+    split_update(|s, at| s.released(ticket, success, at));
+}
+/// Worker actually consumed the result, distinct from a VA-thread signal.
+pub fn split_taken(ticket: u64) {
+    split_update(|s, at| s.taken(ticket, at));
+}
+/// Reset/retirement abandoned an old ticket; no completion is inferred.
+pub fn split_canceled(ticket: u64) {
+    split_update(|s, _| s.cancel(ticket));
 }

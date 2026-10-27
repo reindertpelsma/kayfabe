@@ -2512,6 +2512,7 @@ impl Inbox {
     /// ★ P6, a WORKER: channel `token` reached a `MEM_OP` invalidate of `pdb` and its prior work
     /// completed — ask the VA thread to walk + reconcile. Returns the ticket to poll. ⊘ Never waits.
     pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
+        let requested_at = kf_host::latency::now();
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
         if kf_mem::maplog::on() {
             eprintln!(
@@ -2521,6 +2522,13 @@ impl Inbox {
         }
         if let Ok(mut q) = self.splits.lock() {
             q.push((t, token, SplitTarget::Pdb(pdb)));
+            kf_host::latency::split_request_at(
+                t,
+                token,
+                kf_host::latency::SplitScope::Pdb(pdb),
+                requested_at,
+            );
+            kf_host::latency::split_queued(t);
         }
         let _ = self.wake.signal();
         t
@@ -2534,6 +2542,7 @@ impl Inbox {
         token: u32,
         key: kf_mem::vasmgr::VasKey,
     ) -> Result<u64, UserSplitError> {
+        let requested_at = kf_host::latency::now();
         let t = self
             .next_ticket
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
@@ -2551,6 +2560,13 @@ impl Inbox {
             q.try_reserve(1)
                 .map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_ALLOCATION"))?;
             q.push((t, token, SplitTarget::Space(key)));
+            kf_host::latency::split_request_at(
+                t,
+                token,
+                kf_host::latency::SplitScope::Space(key.0),
+                requested_at,
+            );
+            kf_host::latency::split_queued(t);
         }
         let _ = self.wake.signal();
         Ok(t)
@@ -2568,6 +2584,7 @@ impl Inbox {
         gate: kf_chan::host::Gate,
         payload: u32,
     ) -> u64 {
+        let requested_at = kf_host::latency::now();
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
         eprintln!(
             "kf3: GATE ticket={t} by channel token {token:#x}: walk {key:?}, then release payload {payload}"
@@ -2577,6 +2594,13 @@ impl Inbox {
         }
         if let Ok(mut q) = self.splits.lock() {
             q.push((t, token, SplitTarget::Space(key)));
+            kf_host::latency::split_request_at(
+                t,
+                token,
+                kf_host::latency::SplitScope::Space(key.0),
+                requested_at,
+            );
+            kf_host::latency::split_queued(t);
         }
         let _ = self.wake.signal();
         t
@@ -2617,8 +2641,10 @@ impl Inbox {
                 .map_err(|e| format!("gate release: {e}")),
             (r, _) => r,
         };
+        let success = r.is_ok();
         if let Ok(mut m) = self.split_results.lock() {
             m.insert(ticket, r);
+            kf_host::latency::split_released(ticket, success);
         }
         self.split_tokens
             .lock()
@@ -2629,10 +2655,15 @@ impl Inbox {
 
     /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
     pub fn split_result(&self, ticket: u64) -> Option<Result<(), String>> {
-        self.split_results
+        let result = self
+            .split_results
             .lock()
             .ok()
-            .and_then(|mut m| m.remove(&ticket))
+            .and_then(|mut m| m.remove(&ticket));
+        if result.is_some() {
+            kf_host::latency::split_taken(ticket);
+        }
+        result
     }
 
     /// The drainer: enqueue one statement and wake the VA thread.

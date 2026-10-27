@@ -108,6 +108,7 @@ impl Gauge {
 }
 #[derive(Debug, Default)]
 pub(super) struct State {
+    pub splits: super::splits::Splits,
     pub pending: VecDeque<Sample>,
     pub slow: VecDeque<Sample>,
     pub gauges: [Gauge; 4],
@@ -234,6 +235,8 @@ impl State {
             .saturating_add((before - self.pending.len()) as u64);
     }
     pub fn expire(&mut self, now: u64) {
+        self.splits.expire(now);
+        self.first_dump |= !self.splits.slow.is_empty();
         let mut save = Vec::new();
         for s in &mut self.pending {
             if !s.saved && s.slow(now) {
