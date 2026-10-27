@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Redact console identifiers while preserving boot progress and error text."""
+import ipaddress
 import re
+
+
+def redact_ipv6(text):
+    def replace(match):
+        try:
+            ipaddress.IPv6Address(match[0].split('%')[0])
+        except ValueError:
+            return match[0]
+        return '[IPv6]'
+
+    pattern = r'(?<![\w:])(?:[A-Fa-f0-9]{0,4}:){2,7}[A-Fa-f0-9]{0,4}(?:%\w+)?'
+    return re.sub(pattern, replace, text)
 
 
 def redact_identifiers(text):
@@ -10,7 +23,7 @@ def redact_identifiers(text):
     text = re.sub(r'\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b', '[MAC]', text)
     text = re.sub(r'(?i)\b(serial(?:\s+number)?|uuid|mac)\s*[:=]\s*\S+',
                   r'\1=[IDENTIFIER]', text)
-    return text
+    return redact_ipv6(text)
 
 
 def redact_secrets(text):
