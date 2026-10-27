@@ -349,32 +349,30 @@ class V7Tests(unittest.TestCase):
                 return 124 if name == failure else 0
 
             hardware = {"gpu_name": "RTX 3060", "compute_cap": 860, "driver_version": "580.159.04"}
-            with patch.object(
-                self.m, "__file__", str(repo / "scripts/ci/vast_payload.py")
-            ), patch.object(self.m, "Path", side_effect=mapped), patch.object(
-                self.m, "prepare_checkout", return_value="fixture"
-            ), patch.object(
-                self.m, "hardware", side_effect=[initial_hardware or hardware, hardware]
-            ), patch.object(
-                self.m,
-                "bounded_text",
-                side_effect=lambda p, *args: original_bounded_text(mapped(p), *args),
-            ), patch.object(
-                self.m.shutil, "copyfile"
-            ), patch.object(
-                self.m.shutil, "disk_usage", return_value=SimpleNamespace(free=free)
-            ), patch.object(
-                self.m.subprocess, "run"
-            ), patch.object(
-                self.m.execute_stages, "__defaults__", (runner,)
-            ), patch.dict(
-                os.environ,
-                {
-                    "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + 10000),
-                    "KF_PROVISION_PROFILE": "full",
-                },
-            ), patch(
-                "sys.argv", ["vast_payload.py", SHA, "a" * 32]
+            with (
+                patch.object(self.m, "__file__", str(repo / "scripts/ci/vast_payload.py")),
+                patch.object(self.m, "Path", side_effect=mapped),
+                patch.object(self.m, "prepare_checkout", return_value="fixture"),
+                patch.object(
+                    self.m, "hardware", side_effect=[initial_hardware or hardware, hardware]
+                ),
+                patch.object(
+                    self.m,
+                    "bounded_text",
+                    side_effect=lambda p, *args: original_bounded_text(mapped(p), *args),
+                ),
+                patch.object(self.m.shutil, "copyfile"),
+                patch.object(self.m.shutil, "disk_usage", return_value=SimpleNamespace(free=free)),
+                patch.object(self.m.subprocess, "run"),
+                patch.object(self.m.execute_stages, "__defaults__", (runner,)),
+                patch.dict(
+                    os.environ,
+                    {
+                        "KF_SOFT_DEADLINE_MS": str(int(time.time() * 1000) + 10000),
+                        "KF_PROVISION_PROFILE": "full",
+                    },
+                ),
+                patch("sys.argv", ["vast_payload.py", SHA, "a" * 32]),
             ):
                 rc = self.m.main()
             result = json.loads((root / "workspace/kf-result.json").read_text())
@@ -443,7 +441,8 @@ class V7Tests(unittest.TestCase):
         rc, result, calls = self._main_fixture(kvm=False)
         self.assertEqual(rc, 1)
         self.assertEqual(calls, [])
-        self.assertEqual(result["suites"], [self.m.row("preflight", failed=1)])
+        self.assertEqual(result["verdict"], "PROVIDER_FAULT")
+        self.assertEqual(result["suites"], [self.m.row("provider_kvm_missing", failed=1)])
 
     def _hook_fixture(self, arm, xid):
         with tempfile.TemporaryDirectory() as d:

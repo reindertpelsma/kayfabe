@@ -1,4 +1,8 @@
-{% extends "base.html" %} {% block title %}{{ section.title }} · kayfabe{% endblock %} {% block
-content %}
-<h1>{{ section.title }}</h1>
-{{ section.content | safe }} {% endblock %}
+{% extends "base.html" %}
+{% block title %}{{ section.title }} · kayfabe{% endblock %}
+{% block content %}
+<article class="wrap prose">
+  <h1>{{ section.title }}</h1>
+  {{ section.content | safe }}
+</article>
+{% endblock %}

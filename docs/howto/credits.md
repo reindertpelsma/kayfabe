@@ -32,6 +32,13 @@ Crates used only by tests and developer tools are listed in `Cargo.lock` and are
 
 NVIDIA's open-gpu-kernel-modules source is the reference the generated tables are checked against, and the version a given table comes from is recorded with it. <!-- src: third_party/README.md, THIRD_PARTY_NOTICES.md section 1.1 -->
 
+## Related projects
+
+Other projects attempt something close to kayfabe: a GPU for a virtual machine that runs the stock NVIDIA driver while the host keeps using the card. They are credited here for readers who want to compare approaches. Kayfabe does not copy code from them.
+
+- **Caraxes** ([silasmue/Caraxes](https://github.com/silasmue/Caraxes), MIT; a fork of [UniStuttgart-IKR/Leandro](https://github.com/UniStuttgart-IKR/Leandro)). A synthetic NVIDIA GPU served over vfio-user that plays the GSP firmware, shadows the guest's page tables and runs the guest's channels on host channels. It is the closest in shape to kayfabe: like kayfabe, it leaves the host's NVIDIA kernel driver in place and works as a client of it. It makes different design choices elsewhere. Its README describes the project and its current limits. <!-- src: https://github.com/silasmue/Caraxes README -->
+- **Open-IOV** ([open-iov.org](https://open-iov.org/index.php/Main_Page)). A community project with the same goal: unmodified NVIDIA drivers inside virtual machines without a vendor vGPU licence. Its site describes replacing the vendor's vGPU licensing and management layer with one host kernel module (`vgsp.ko`) that implements the interface the guest driver expects, the GPU System Processor and its resource-manager firmware. Kayfabe differs in a basic way: it keeps NVIDIA's own host kernel driver and acts as an unprivileged client of it, so the host keeps using the GPU while the VMs share it. The page does not say whether Open-IOV's design lets the host keep using the GPU. Documentation is under CC-BY-4.0 and code under BSD-3-Clause (GPL-2.0 for the kernel modules), per its site. <!-- src: https://open-iov.org/index.php/Main_Page -->
+
 ## Trademarks
 
 NVIDIA, GeForce, CUDA and the like are trademarks of their owners. Windows is a trademark of Microsoft Corporation. All other names are the property of their owners. They are used here only to say what kayfabe works with. **Kayfabe is not affiliated with or endorsed by NVIDIA or Microsoft.** <!-- src: docs/NOTICES.md -->

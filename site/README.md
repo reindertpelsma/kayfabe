@@ -21,12 +21,18 @@ python3 site/report.py
 rm -rf "$TOOLS_DIR"
 ```
 
-Omit `--releases-json` for the no-published-release fallback. Keep the temporary tool directory to
+Omit `--releases-json` for the no-published-release fallback: the landing's Download block then says
+"No release yet: build from source". With a published release (non-draft, with assets) it shows that release, its
+artifact links (only `github.com/reindertpelsma/kayfabe/releases/download/` URLs are accepted) and SHA-256 digests when
+GitHub reports them. The build hands the templates one `data/site.json` (docs sections, versions, release).
+To run the Zola render tests too, point `SITE_TOOLS_DIR` at a tools directory that holds Zola. Keep the temporary tool directory to
 repeat a build without network access: both cached archives are SHA-256 checked on every build.
 `tools.json` pins Zola and mdBook release archives. Output is ignored at `site/public/`;
 `site/build-report.json` records version/page counts and every broken local link (page, target,
 reason). A rendering error, missing title or link into internal docs fails the build. Other missing
-files/anchors are reported without failing. The output tests check SEO, search and version links.
+files/anchors are reported without failing. The output tests check SEO (canonical, noindex, Open Graph and plain-text Twitter cards, sitemap), search, version
+links, the landing's blocks, the manual's breadcrumbs, edit links and previous/next links, and that no built page,
+stylesheet or script fetches anything from another host.
 The broker's workflow tests check the Pages permission boundary and dropdown behavior.
 
 Master pins one toolchain; PR, master and tag builds render every eligible version and fail on any render failure.
@@ -38,7 +44,12 @@ Old HTML is always rebuilt; there are no per-version pins or frozen HTML caches.
 - `/staging/`: master landing, noindex, with no public navigation link to it.
 - `/docs/master/`: current manual, labelled `master (unreleased)` and noindex.
 - `/docs/<tag>/`: that tag's manual, when it has `docs/howto/SUMMARY.md`.
-- `/docs/`: plain version list, search form, contributor link and redirect to the latest manual.
+- `/docs/`: the documentation index: sections in `SUMMARY.md` order (lead-in chapters as "Start here", each
+  `# Part` as written, the appended FAQ on its own) with the manual's own one-line descriptions, a search form,
+  the evidence-label legend, the version list and the contributor link. Rendered by Zola from `docs_index.html`;
+  a root landing from an older tag without that template keeps the plain version list and a redirect.
+- `/about/`, `/security/`: short pages that point into the manual (the security page summarises and links, it does not
+  replace `docs/howto/security.md`).
 - `/docs/latest/`: redirect to the latest published release manual, or master before one exists.
 - `/docs/versions.json`: dropdown data, ordered master then tags by descending git version order.
 
@@ -84,3 +95,13 @@ metadata: `docs/**` and `**/*.md` are skip paths, so docs-only and site-Markdown
 Site Python/HTML/CSS/TOML/assets, workflow changes and any `ci/vast-broker/**` change are relevant and
 request the GPU gate. Unknown or truncated metadata requests a run; renames must have both paths in skip paths. This PR
 does not change those policies.
+
+## Look and feel
+
+No frameworks, no web fonts, no external requests: system fonts, one small stylesheet (`static/style.css`) for the Zola
+pages, `book-theme/kayfabe.css` layered on mdBook's CSS for the manual, and two optional scripts (a copy button on the
+landing's command, and the version dropdown). Both follow `prefers-color-scheme` and `prefers-reduced-motion`. After
+each mdBook render `build.py` adds a skip link, breadcrumbs, an "Edit this page on GitHub" link (master branch, the
+page's source path), previous/next links and marks the manual's `[measured]`, `[inferred]` and `not documented yet`
+text so gaps stay visible. Landing copy lives in `content/_index.md` front matter; each `src` field is written into the
+page as an HTML comment, so every statement keeps its source. New claims need a source in the README or the manual.

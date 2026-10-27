@@ -1,0 +1,1170 @@
+{
+  "cases": [
+    {
+      "mutant": "minimal-profile-not-forced",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "inherited-expensive-profile-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-provision-hardware-stale",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "hardware-refreshed-only-after-success",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "existing-client-target-redirected",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "existing-client-target-nested",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "provision-exit-only",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_provision_missing_build_refuses",
+        "test_vast_payload.PayloadTests.test_provision_red_cannot_be_hidden_by_ready",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_build_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_rc_refuses"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "merge-evidence-bypass",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_gate10_fallback_is_existing_allowed_bar",
+        "test_vast_payload.PayloadTests.test_merge_exact_revision_and_counts",
+        "test_vast_payload.PayloadTests.test_merge_missing_birth_census_refuses",
+        "test_vast_payload.PayloadTests.test_merge_missing_thin_refuses",
+        "test_vast_payload.PayloadTests.test_merge_nonzero_exit_refuses_even_green_text",
+        "test_vast_payload.PayloadTests.test_merge_wrong_revision_refuses",
+        "test_vast_payload_failures.MergeRows.test_a_duplicate_kvm_result_refuses",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_failure_names_the_kvm_suite",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_pass_line_without_a_request_refuses",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_rc_line_next_to_green_totals_refuses [101]",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_rc_line_next_to_green_totals_refuses [2]",
+        "test_vast_payload_failures.MergeRows.test_a_requested_kvm_stage_adds_its_row_first",
+        "test_vast_payload_failures.MergeRows.test_a_requested_kvm_stage_with_no_result_refuses",
+        "test_vast_payload_failures.MergeRows.test_kvm_failed_totals_refuse",
+        "test_vast_payload_failures.MergeRows.test_kvm_skipped_or_unreached_gates_refuse [kvm_ran=0 kvm_skipped=0]",
+        "test_vast_payload_failures.MergeRows.test_kvm_skipped_or_unreached_gates_refuse [kvm_ran=4 kvm_skipped=1]",
+        "test_vast_payload_failures.MergeRows.test_the_default_bar_has_no_crate_test_row",
+        "test_vast_payload_v7.V7Tests.test_merge_conflicting_gate_summary_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_conflicting_test_totals_refuse",
+        "test_vast_payload_v7.V7Tests.test_merge_nonzero_recorded_exit_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_prefix_survives_partial_evidence",
+        "test_vast_payload_v7.V7Tests.test_merge_requires_exit_marker",
+        "test_vast_payload_v7.V7Tests.test_raw_red_keeps_earlier_merge_rows",
+        "test_vast_payload_v7.V7Tests.test_thin_red_keeps_raw_and_build_rows",
+        "test_vast_payload_v7.V7Tests.test_timeout_before_the_gates_has_no_phantom_rows",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 27
+    },
+    {
+      "mutant": "ladder-exit-only",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_ladder_duplicate_row_refuses",
+        "test_vast_payload.PayloadTests.test_ladder_fat_four_unique_correct_rungs",
+        "test_vast_payload.PayloadTests.test_ladder_nonzero_boot_refuses_even_pass",
+        "test_vast_payload.PayloadTests.test_ladder_red_row_cannot_hide_behind_exit_zero",
+        "test_vast_payload.PayloadTests.test_ladder_wrong_revision_refuses",
+        "test_vast_payload_v7.V7Tests.test_ladder_repeated_last_rung_refuses"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "red-record-ignored",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_first_raw_red_is_detected",
+        "test_vast_payload.PayloadTests.test_first_thin_red_is_detected",
+        "test_vast_payload.PayloadTests.test_provision_red_is_detected",
+        "test_vast_payload.PayloadTests.test_runtime_stops_first_red_child",
+        "test_vast_payload_failures.MergeRows.test_kvm_red_lines_stop_the_stage_early",
+        "test_vast_payload_failures.MergeRows.test_kvm_skips_are_red_lines",
+        "test_vast_payload_failures.MergeRows.test_the_first_failing_line_finds_a_kvm_rc_line",
+        "test_vast_payload_summary.SummaryTests.test_provision_failure_summary_carries_the_step_log_tail",
+        "test_vast_payload_summary.SummaryTests.test_summary_gives_the_first_failing_line_of_each_failed_stage",
+        "test_vast_payload_summary.SummaryTests.test_summary_keeps_the_failure_when_it_must_drop_lines",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_build_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_provision_conflicting_rc_refuses",
+        "test_vast_payload_v7.V7Tests.test_red_crate_test_totals_are_not_progress",
+        "test_vast_payload_v7.V7Tests.test_red_cuda_row_is_not_progress"
+      ],
+      "count": 14
+    },
+    {
+      "mutant": "deadline-status-forged",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_runtime_expired_deadline_never_starts",
+        "test_vast_payload.PayloadTests.test_runtime_soft_deadline_kills_own_work",
+        "test_vast_payload_v7.V7Tests.test_timeout_really_stops_grandchild_work"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "finished-prefix-lost",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "first-red-continues",
+      "killers": [
+        "test_vast_payload_result_logs.ResultLogs.test_failure_keeps_both_the_log_and_named_suite_row",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_bounded_to_4_kib",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_the_last_block_on_failure",
+        "test_vast_payload_summary.SummaryTests.test_summary_names_every_stage_with_rc_and_duration",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_first_bad_stage_cancels_later_stages",
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix"
+      ],
+      "count": 11
+    },
+    {
+      "mutant": "result-never-published",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_result_logs.ResultLogs.test_clean_native_log_is_in_the_structured_file",
+        "test_vast_payload_result_logs.ResultLogs.test_failure_keeps_both_the_log_and_named_suite_row",
+        "test_vast_payload_result_logs.ResultLogs.test_guest_log_is_in_the_structured_file",
+        "test_vast_payload_result_logs.ResultLogs.test_guest_source_hash_covers_text_beyond_its_preview",
+        "test_vast_payload_result_logs.ResultLogs.test_large_manifest_stays_bounded_and_keeps_the_late_fault",
+        "test_vast_payload_result_logs.ResultLogs.test_source_hash_and_size_are_for_the_complete_original",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_output_is_plain",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_quiet_is_the_exact_value_cargo_reads",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_exports_quiet_cargo_settings",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_leaves_rustflags_alone",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_printed_when_kvm_is_missing",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_printed_when_preflight_fails",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_pass_summary",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
+        "test_vast_payload_v7.V7Tests.test_result_has_only_the_pr104_payload_keys",
+        "test_vast_payload_v7.V7Tests.test_result_is_accepted_by_pr104_reader",
+        "test_vast_payload_v7.V7Tests.test_timeout_keeps_finished_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_disk_preflight_prevents_spend_work",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_requires_actual_kvm_device",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 29
+    },
+    {
+      "mutant": "approved-source-unpinned",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_source_pin_uses_local_exact_approved_objects",
+        "test_vast_payload_v7.V7Tests.test_wrong_checkout_is_refused_before_remote_changes"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "xid-unconditionally-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_missing_page_marker_without_channel_and_recovery_refuses",
+        "test_vast_payload.PayloadTests.test_xid_cannot_rescue_failed_command",
+        "test_vast_payload.PayloadTests.test_xid_excess_count_refuses",
+        "test_vast_payload.PayloadTests.test_xid_instrument_unreadable_refuses",
+        "test_vast_payload.PayloadTests.test_xid_lost_baseline_refuses",
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload.PayloadTests.test_xid_wrong_address_refuses",
+        "test_vast_payload.PayloadTests.test_xid_wrong_code_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_executor_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_missing_positive_recovery_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_missing_run_source_marker_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_negative_control_cannot_pass_without_kernel_records",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_timer_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_v7.V7Tests.test_duplicate_marker_cannot_expand_allowance",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_marker_must_have_the_source_constant",
+        "test_vast_payload_v7.V7Tests.test_non_ce_client_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_only_the_marked_control_may_fault",
+        "test_vast_payload_v7.V7Tests.test_other_fault_type_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_other_page_fault_type_is_rejected_on_ce1",
+        "test_vast_payload_v7.V7Tests.test_read_fault_is_rejected",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm",
+        "test_vast_payload_v7.V7Tests.test_unknown_client_is_rejected"
+      ],
+      "count": 40
+    },
+    {
+      "mutant": "hardware-unvalidated",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_malformed_hardware_stays_unknown",
+        "test_vast_payload_v7.V7Tests.test_two_gpus_cannot_masquerade_as_one"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-stage-attribution-lost",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_watch_failure_retains_merge_stage_attribution",
+        "test_vast_payload_v7.V7Tests.test_watch_failure_retains_provision_attribution"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "unattributed-stage-xid-admitted",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_extra_record_next_to_approved_fault",
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_unattributed_new_xid"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "duplicate-cuda-rung-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_ladder_duplicate_row_refuses",
+        "test_vast_payload_v7.V7Tests.test_ladder_repeated_last_rung_refuses"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "merge-exit-marker-ignored",
+      "killers": [
+        "test_vast_payload_v7.V7Tests.test_merge_nonzero_recorded_exit_refuses",
+        "test_vast_payload_v7.V7Tests.test_merge_requires_exit_marker"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "wrong-control-va",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_channels_are_derived_from_this_runs_doorbell_records",
+        "test_native_xid_guard.NativeXidGuardTests.test_source_matched_five_faults_are_accepted",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_historical_exact_five_still_admit",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_admit_owner_rule",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_ad102_ce0_parser_fixture_admits_exact_shapes",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ad102_exact_five_admit",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ga102_four_ce_plus_gr_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ad102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ga102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision"
+      ],
+      "count": 13
+    },
+    {
+      "mutant": "unreadable-watch-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_positive_arm_cannot_borrow_control",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ad102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ga102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeArmAdmission.test_executor_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_timer_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_v7.V7Tests.test_executor_control_gets_no_exemption",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm",
+        "test_vast_payload_v7.V7Tests.test_stage_refuses_unattributed_new_xid"
+      ],
+      "count": 13
+    },
+    {
+      "mutant": "other-page-type-admitted",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_fault_type_is_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_wrong_type_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "non-ce-client-admitted",
+      "killers": [
+        "test_guest_xid_guard.GuestGuardTests.test_unrelated_route_fatal_missing",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_non_ce_refuses_defer",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_non_ce_refuses_missing",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce_suffix_garbage_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_non_ce_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "wrong-arm-admitted",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_xid_clean_readable_control",
+        "test_vast_payload_admission.NativeArmAdmission.test_executor_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_admission.NativeArmAdmission.test_timer_cannot_borrow_a_complete_defer_proof",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_clean_arm_diagnostics_are_copied_to_callback_log",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "xid-refusal-status-forged",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "arm-watch-not-installed",
+      "killers": [
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_output_is_plain",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_quiet_is_the_exact_value_cargo_reads",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_exports_quiet_cargo_settings",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_leaves_rustflags_alone",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_pass_summary",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap",
+        "test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_minimal_profile_also_applies_before_failed_provision",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 14
+    },
+    {
+      "mutant": "diagnostics-not-posted",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_clean_arm_diagnostics_are_copied_to_callback_log",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_are_bounded",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_keep_head_and_tail",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_arm_diagnostics_are_copied_before_failure",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_diagnostics_are_bounded",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_keeps_head_tail_and_fault"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "diagnostics-head-lost",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_keep_head_and_tail",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_keeps_head_tail_and_fault"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "diagnostics-tail-lost",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_keep_head_and_tail",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_keeps_head_tail_and_fault"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "diagnostics-unbounded",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_large_arm_diagnostics_are_bounded",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_refused_large_arm_diagnostics_are_bounded"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "diagnostics-no-fault-reserve",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_its_diagnostic_end_marker",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_late_failure_keeps_the_complete_fault_record"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "failed-arm-row-lost",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_failed_defer_arm_has_a_structured_suite_row",
+        "test_vast_payload_diagnostics.ArmDiagnostics.test_failed_missing_page_arm_has_a_structured_suite_row",
+        "test_vast_payload_result_logs.ResultLogs.test_failure_keeps_both_the_log_and_named_suite_row"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "guest-supervisor-bypassed",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "guest-refusal-status-forged",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-allowed-records-lost",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_delegates_real_context_to_shared_supervisor"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "native-source-channel-ignored",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_channel_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_channel_is_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_ce1_with_wrong_channel_must_not_admit",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_channel_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_channel_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "native-source-va-ignored",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_address_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_address_is_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_ce0_with_wrong_va_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_va_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_va_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='GA102')"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "native-extra-record-ignored",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_duplicate_matching_native_fault_is_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_one_extra_known_record_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_extra_record_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "native-ce-instance-hardcoded",
+      "killers": [
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_exact_four_ce_and_one_gr_admit_owner_rule",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_ad102_ce0_parser_fixture_admits_exact_shapes",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_authentic_ga102_four_ce_plus_gr_admit",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_defer_ce0_with_exact_source_admits",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_missing_ce0_with_exact_source_admits",
+        "test_vast_payload_admission.NativeArmAdmission.test_authentic_ga102_defer_four_exact_ce_faults_admit",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision"
+      ],
+      "count": 8
+    },
+    {
+      "mutant": "guest-ce-instance-hardcoded",
+      "killers": [
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_defer_ce0_with_exact_source_admits",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_guest_missing_ce0_with_exact_source_admits"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "native-entire-proof-bypassed",
+      "killers": [
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_address_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_defer_channel_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_fault_type_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_address_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_changed_missing_page_channel_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_duplicate_matching_native_fault_is_fatal",
+        "test_native_xid_guard.NativeXidGuardTests.test_missing_kernel_fault_records_cannot_look_clean",
+        "test_native_xid_guard.NativeXidGuardTests.test_qemu_fault_cannot_use_native_exemption",
+        "test_native_xid_guard.NativeXidGuardTests.test_unmatched_xid32_in_defer_still_stops",
+        "test_native_xid_guard.NativeXidGuardTests.test_unmatched_xid32_in_missing_page_still_stops",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ad102_ce0_with_wrong_va_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_ce1_with_wrong_channel_must_not_admit",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_one_extra_known_record_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_unrelated_xid_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_channel_stays_fatal",
+        "test_native_xid_route_round2.Round2NativeRouteReplay.test_ga102_wrong_va_stays_fatal",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_channel_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce1_wrong_va_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_ce_suffix_garbage_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_extra_record_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_non_ce_refuses",
+        "test_owner_copy_family_rule.OwnerCopyFamilyRule.test_native_wrong_type_refuses",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_extra_exact_record_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_negative_control_cannot_pass_without_kernel_records",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_non_ce_client_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_other_xid_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_fault_type_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_channel_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='AD102')",
+        "test_vast_payload_admission.NativeArmAdmission.test_wrong_source_va_refuses_on_both_dies (die='GA102')",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt"
+      ],
+      "count": 37
+    },
+    {
+      "mutant": "native-receipt-not-created",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_ad102_exact_five_are_frozen_for_guest_supervision",
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_ga102_exact_five_are_frozen_for_guest_supervision"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "native-receipt-refusal-ignored",
+      "killers": [
+        "test_vast_payload_admission.NativeReceipt.test_changed_ga102_kernel_record_stops_without_a_receipt",
+        "test_vast_payload_admission.NativeReceipt.test_extra_ad102_kernel_record_stops_without_a_receipt"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-diagnostics-not-posted",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_delegates_real_context_to_shared_supervisor",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "guest-stop-flag-lost",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestDelegation.test_defer_refusal_stops_and_carries_serial_and_qemu_logs",
+        "test_vast_payload_guest_guard.GuestDelegation.test_missing_page_refusal_stops_and_carries_serial_and_qemu_logs"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "timeout-options-mistaken-for-arm",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDispatch.test_defer_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_executor_arm_is_selected_after_timeout_options"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "guest-log-descriptor-becomes-subshell-pipe",
+      "killers": [
+        "test_vast_payload_guest_guard.GuestHook.test_defer_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_guest_guard.GuestHook.test_missing_hook_keeps_real_regular_log_and_original_timeout"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "structured-arm-logs-omitted",
+      "killers": [
+        "test_vast_payload_result_logs.ResultLogs.test_clean_native_log_is_in_the_structured_file",
+        "test_vast_payload_result_logs.ResultLogs.test_failure_keeps_both_the_log_and_named_suite_row",
+        "test_vast_payload_result_logs.ResultLogs.test_guest_log_is_in_the_structured_file",
+        "test_vast_payload_result_logs.ResultLogs.test_guest_source_hash_covers_text_beyond_its_preview",
+        "test_vast_payload_result_logs.ResultLogs.test_large_manifest_stays_bounded_and_keeps_the_late_fault",
+        "test_vast_payload_result_logs.ResultLogs.test_source_hash_and_size_are_for_the_complete_original"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "local-reader-rejects-arm-logs",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_diagnostic_text_never_changes_a_fail_verdict",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_guest_diagnostics_also_stay_out_of_the_wire_schema",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_local_reader_accepts_bounded_guest_records",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_local_reader_accepts_bounded_native_records",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_wire_result_stays_exactly_the_worker_contract"
+      ],
+      "count": 5
+    },
+    {
+      "mutant": "local-reader-skips-log-validation",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_bad_native_rc_is_refused_before_wire_serialization",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records=\"[{'arm': '--defer-liveness', 'mode': 'native', 'rc': 0, 'admitted': 1, 'text': '\")",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records=\"[{'arm': '--defer-liveness', 'mode': 'native', 'rc': 0, 'admitted': True, 'text'\")",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records=\"[{'arm': '--defer-liveness', 'mode': 'native', 'rc': True, 'admitted': True, 'te\")",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records=\"[{'arm': '--defer-liveness', 'mode': 'other', 'rc': 0, 'admitted': True, 'text':\")",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records='{}')",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_unknown_guest_field_is_refused_before_wire_serialization"
+      ],
+      "count": 7
+    },
+    {
+      "mutant": "local-log-preview-loses-head",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_compaction_preserves_the_first_refusal_head",
+        "test_vast_payload_result_logs.ResultLogs.test_guest_source_hash_covers_text_beyond_its_preview",
+        "test_vast_payload_result_logs.ResultLogs.test_large_manifest_stays_bounded_and_keeps_the_late_fault",
+        "test_vast_payload_result_logs.ResultLogs.test_source_hash_and_size_are_for_the_complete_original"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "local-log-preview-loses-tail",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_compaction_preserves_the_first_refusal_tail",
+        "test_vast_payload_result_logs.ResultLogs.test_guest_source_hash_covers_text_beyond_its_preview",
+        "test_vast_payload_result_logs.ResultLogs.test_large_manifest_stays_bounded_and_keeps_the_late_fault",
+        "test_vast_payload_result_logs.ResultLogs.test_source_hash_and_size_are_for_the_complete_original"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "local-log-hash-covers-preview-only",
+      "killers": [
+        "test_vast_payload_result_logs.ResultLogs.test_guest_source_hash_covers_text_beyond_its_preview",
+        "test_vast_payload_result_logs.ResultLogs.test_source_hash_and_size_are_for_the_complete_original"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "local-log-manifest-budget-disabled",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_validator_caps_an_ascii_manifest_below_the_outer_file_cap",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_validator_counts_json_escapes_in_its_budget"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "local-log-first-refusal-can-be-evicted",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_compaction_preserves_the_first_refusal_head",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_compaction_preserves_the_first_refusal_tail"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "local-logs-leak-into-worker-wire-schema",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_guest_diagnostics_also_stay_out_of_the_wire_schema",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_wire_result_stays_exactly_the_worker_contract"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "local-log-boolean-rc-admitted",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_bad_native_rc_is_refused_before_wire_serialization",
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records=\"[{'arm': '--defer-liveness', 'mode': 'native', 'rc': True, 'admitted': True, 'te\")",
+        "test_vast_payload_result_logs.ResultLogs.test_malformed_state_is_not_silently_ignored (item={'arm': '--defer-liveness', 'mode': 'native', 'rc': True, 'admitted': True, 'text': 'source evidence', 'sha256': '9c7c9338dc3e5d00303f4942fedceac6acba1d8ecf93149932d395407b5effdf', 'source_bytes': 15, 'dropped_bytes': 0})"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "local-log-invalid-source-hash-admitted",
+      "killers": [
+        "test_vast_payload_result_logs.ReporterResultLogs.test_malformed_records_fail_closed (records=\"[{'arm': '--defer-liveness', 'mode': 'native', 'rc': 0, 'admitted': True, 'text'\")",
+        "test_vast_payload_result_logs.ResultLogs.test_malformed_state_is_not_silently_ignored (item={'arm': '--defer-liveness', 'mode': 'native', 'rc': 0, 'admitted': True, 'text': 'source evidence', 'sha256': 'not-a-hash', 'source_bytes': 15, 'dropped_bytes': 0})"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "summary-not-printed-on-failure",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_long_thread_name_in_the_panic_line_is_readable_after_scrubbing",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_token_in_the_panic_message_is_not_laundered_past_the_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base36-with-underscores]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base64url-mixed]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [capitalised-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [digit-heavy-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [fine-grained-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [first-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [ghs-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex40]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex64]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hyphenated]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [leading-capital]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [one-char-run]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-long-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [upper-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_lines_are_capped_at_20_with_a_remainder_line",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_rows_survive_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failure_rows_come_from_the_detail_logs_too",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_non_ascii_and_escape_codes_in_names_are_removed",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_summary_carries_the_first_panic_message",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_summary_lists_each_failed_test_of_the_failed_stage",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_observed_defect_a_long_name_survives_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_panic_row_survives_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_summary_stays_within_4_kib_with_20_long_names",
+        "test_vast_payload_summary.SummaryTests.test_a_failed_stage_without_a_red_line_still_names_its_last_line",
+        "test_vast_payload_summary.SummaryTests.test_a_very_long_failing_line_is_cut",
+        "test_vast_payload_summary.SummaryTests.test_control_characters_never_reach_the_summary",
+        "test_vast_payload_summary.SummaryTests.test_first_failing_line_is_found_in_the_progress_file_too",
+        "test_vast_payload_summary.SummaryTests.test_non_ascii_never_reaches_the_summary",
+        "test_vast_payload_summary.SummaryTests.test_provision_failure_summary_carries_the_step_log_tail",
+        "test_vast_payload_summary.SummaryTests.test_summary_gives_the_first_failing_line_of_each_failed_stage",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_bounded_to_4_kib",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_the_last_block_on_failure",
+        "test_vast_payload_summary.SummaryTests.test_summary_keeps_the_failure_when_it_must_drop_lines",
+        "test_vast_payload_summary.SummaryTests.test_summary_lists_suite_counts",
+        "test_vast_payload_summary.SummaryTests.test_summary_names_every_stage_with_rc_and_duration",
+        "test_vast_payload_summary.SummaryTests.test_timeout_is_marked",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last"
+      ],
+      "count": 45
+    },
+    {
+      "mutant": "summary-not-printed-on-pass",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_passing_stage_prints_no_failure_rows",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_the_last_block_on_pass",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_pass_summary"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "summary-printed-before-the-failure-line",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_long_thread_name_in_the_panic_line_is_readable_after_scrubbing",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_token_in_the_panic_message_is_not_laundered_past_the_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base36-with-underscores]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base64url-mixed]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [capitalised-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [digit-heavy-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [fine-grained-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [first-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [ghs-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex40]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex64]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hyphenated]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [leading-capital]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [one-char-run]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-long-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [upper-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_lines_are_capped_at_20_with_a_remainder_line",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_rows_survive_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failure_rows_come_from_the_detail_logs_too",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_non_ascii_and_escape_codes_in_names_are_removed",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_summary_carries_the_first_panic_message",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_summary_lists_each_failed_test_of_the_failed_stage",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_observed_defect_a_long_name_survives_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_panic_row_survives_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_summary_stays_within_4_kib_with_20_long_names",
+        "test_vast_payload_summary.SummaryTests.test_a_failed_stage_without_a_red_line_still_names_its_last_line",
+        "test_vast_payload_summary.SummaryTests.test_a_very_long_failing_line_is_cut",
+        "test_vast_payload_summary.SummaryTests.test_control_characters_never_reach_the_summary",
+        "test_vast_payload_summary.SummaryTests.test_first_failing_line_is_found_in_the_progress_file_too",
+        "test_vast_payload_summary.SummaryTests.test_non_ascii_never_reaches_the_summary",
+        "test_vast_payload_summary.SummaryTests.test_provision_failure_summary_carries_the_step_log_tail",
+        "test_vast_payload_summary.SummaryTests.test_summary_gives_the_first_failing_line_of_each_failed_stage",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_bounded_to_4_kib",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_the_last_block_on_failure",
+        "test_vast_payload_summary.SummaryTests.test_summary_keeps_the_failure_when_it_must_drop_lines",
+        "test_vast_payload_summary.SummaryTests.test_summary_lists_suite_counts",
+        "test_vast_payload_summary.SummaryTests.test_summary_names_every_stage_with_rc_and_duration",
+        "test_vast_payload_summary.SummaryTests.test_timeout_is_marked",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last"
+      ],
+      "count": 45
+    },
+    {
+      "mutant": "summary-missing-after-preflight-failure",
+      "killers": [
+        "test_vast_payload_summary.SummaryTests.test_summary_is_printed_when_kvm_is_missing",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_printed_when_preflight_fails"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "summary-ignores-the-progress-file",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failure_rows_come_from_the_detail_logs_too",
+        "test_vast_payload_summary.SummaryTests.test_first_failing_line_is_found_in_the_progress_file_too",
+        "test_vast_payload_summary.SummaryTests.test_provision_failure_summary_carries_the_step_log_tail"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "summary-budget-removed",
+      "killers": [
+        "test_vast_payload_summary.SummaryTests.test_summary_is_bounded_to_4_kib",
+        "test_vast_payload_summary.SummaryTests.test_summary_keeps_the_failure_when_it_must_drop_lines"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "summary-failure-queued-behind-passes",
+      "killers": [
+        "test_vast_payload_summary.SummaryTests.test_summary_names_every_stage_with_rc_and_duration",
+        "test_vast_payload_summary.SummaryTests.test_timeout_is_marked",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "summary-line-not-cut",
+      "killers": [
+        "test_vast_payload_failures.FirstPanic.test_the_panic_line_is_bounded",
+        "test_vast_payload_summary.SummaryTests.test_a_very_long_failing_line_is_cut",
+        "test_vast_payload_summary.SummaryTests.test_summary_is_bounded_to_4_kib"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "summary-keeps-control-characters",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_non_ascii_and_escape_codes_in_names_are_removed",
+        "test_vast_payload_summary.SummaryTests.test_control_characters_never_reach_the_summary",
+        "test_vast_payload_summary.SummaryTests.test_non_ascii_never_reaches_the_summary"
+      ],
+      "count": 3
+    },
+    {
+      "mutant": "summary-first-red-line-is-the-last",
+      "killers": [
+        "test_vast_payload_failures.MergeRows.test_the_first_failing_line_finds_a_kvm_rc_line",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_observed_defect_a_long_name_survives_the_old_scrubber",
+        "test_vast_payload_summary.SummaryTests.test_first_failing_line_is_found_in_the_progress_file_too",
+        "test_vast_payload_summary.SummaryTests.test_provision_failure_summary_carries_the_step_log_tail",
+        "test_vast_payload_summary.SummaryTests.test_summary_gives_the_first_failing_line_of_each_failed_stage",
+        "test_vast_payload_summary.SummaryTests.test_summary_keeps_the_failure_when_it_must_drop_lines"
+      ],
+      "count": 6
+    },
+    {
+      "mutant": "summary-cause-from-the-wrong-end",
+      "killers": [
+        "test_vast_payload_summary.SummaryTests.test_provision_failure_summary_carries_the_step_log_tail",
+        "test_vast_payload_summary.SummaryTests.test_step_cause_reads_the_log_of_the_failing_step"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "summary-timeout-not-marked",
+      "killers": [
+        "test_vast_payload_summary.SummaryTests.test_timeout_is_marked",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_prints_the_summary_last"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "kvm-totals-not-checked",
+      "killers": [
+        "test_vast_payload_failures.MergeRows.test_kvm_failed_totals_refuse",
+        "test_vast_payload_failures.MergeRows.test_kvm_skipped_or_unreached_gates_refuse [kvm_ran=0 kvm_skipped=0]"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "kvm-rc-ignored",
+      "killers": [
+        "test_vast_payload_failures.MergeRows.test_a_kvm_rc_line_next_to_green_totals_refuses [101]",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_rc_line_next_to_green_totals_refuses [2]"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "kvm-red-lines-not-red",
+      "killers": [
+        "test_vast_payload_failures.MergeRows.test_kvm_red_lines_stop_the_stage_early",
+        "test_vast_payload_failures.MergeRows.test_the_first_failing_line_finds_a_kvm_rc_line"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "crate-tests-row-required-again",
+      "killers": [
+        "test_vast_payload.PayloadTests.test_gate10_fallback_is_existing_allowed_bar",
+        "test_vast_payload.PayloadTests.test_merge_exact_revision_and_counts",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_failure_names_the_kvm_suite",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_rc_line_next_to_green_totals_refuses [101]",
+        "test_vast_payload_failures.MergeRows.test_a_kvm_rc_line_next_to_green_totals_refuses [2]",
+        "test_vast_payload_failures.MergeRows.test_a_requested_kvm_stage_adds_its_row_first",
+        "test_vast_payload_failures.MergeRows.test_a_requested_kvm_stage_with_no_result_refuses",
+        "test_vast_payload_failures.MergeRows.test_kvm_failed_totals_refuse",
+        "test_vast_payload_failures.MergeRows.test_the_default_bar_does_not_need_a_totals_line",
+        "test_vast_payload_failures.MergeRows.test_the_default_bar_has_no_crate_test_row",
+        "test_vast_payload_summary.SummaryTests.test_whole_adapter_pass_summary",
+        "test_vast_payload_v7.V7Tests.test_host_binary_is_found_by_existing_fast_guest_consumer",
+        "test_vast_payload_v7.V7Tests.test_merge_prefix_survives_partial_evidence",
+        "test_vast_payload_v7.V7Tests.test_payload_forces_minimal_profile_for_all_stages",
+        "test_vast_payload_v7.V7Tests.test_provisioned_musl_binary_is_found_by_existing_guest_helper",
+        "test_vast_payload_v7.V7Tests.test_raw_red_keeps_earlier_merge_rows",
+        "test_vast_payload_v7.V7Tests.test_thin_red_keeps_raw_and_build_rows",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_timeout_keeps_merge_prefix",
+        "test_vast_payload_v7.V7Tests.test_whole_adapter_uses_existing_flows_in_order"
+      ],
+      "count": 19
+    },
+    {
+      "mutant": "failed-tests-not-listed",
+      "killers": [
+        "test_vast_payload_failures.FailedTestNames.test_a_missing_log_is_skipped",
+        "test_vast_payload_failures.FailedTestNames.test_at_most_20_names_are_returned_and_the_total_is_kept",
+        "test_vast_payload_failures.FailedTestNames.test_names_from_several_logs_are_joined_in_order",
+        "test_vast_payload_failures.FailedTestNames.test_terse_failure_line_names_the_test",
+        "test_vast_payload_failures.FailedTestNames.test_verbose_failures_and_list_are_merged_without_duplicates",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_lines_are_capped_at_20_with_a_remainder_line",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_rows_survive_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failure_rows_come_from_the_detail_logs_too",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_summary_lists_each_failed_test_of_the_failed_stage",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_observed_defect_a_long_name_survives_the_old_scrubber"
+      ],
+      "count": 10
+    },
+    {
+      "mutant": "failed-test-cap-removed",
+      "killers": [
+        "test_vast_payload_failures.FailedTestNames.test_at_most_20_names_are_returned_and_the_total_is_kept",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_lines_are_capped_at_20_with_a_remainder_line"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "panic-dropped",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_long_thread_name_in_the_panic_line_is_readable_after_scrubbing",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_token_in_the_panic_message_is_not_laundered_past_the_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base36-with-underscores]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base64url-mixed]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [capitalised-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [digit-heavy-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [fine-grained-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [first-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [ghs-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex40]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex64]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hyphenated]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [leading-capital]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [one-char-run]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-long-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [upper-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_summary_carries_the_first_panic_message",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_panic_row_survives_the_old_scrubber"
+      ],
+      "count": 24
+    },
+    {
+      "mutant": "fold-launders-tokens",
+      "killers": [
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [base36-with-underscores]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [base64url-mixed]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [capitalised-snake]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [digit-heavy-words]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [fine-grained-family]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [first-word-over-20-b]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [ghs-family]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [hex40]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [hex64]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [hyphenated]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [later-word-over-20-b]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [later-word-over-20]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [leading-capital]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [one-char-run]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [over-128-b]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [over-128]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [two-long-words]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [two-words]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [upper-snake]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_token_in_the_panic_message_is_not_laundered_past_the_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base36-with-underscores]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base64url-mixed]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [capitalised-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [digit-heavy-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [fine-grained-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [first-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [ghs-family]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex40]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hex64]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [hyphenated]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [later-word-over-20]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [leading-capital]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [one-char-run]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128-b]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [over-128]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-long-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [two-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [upper-snake]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [word-over-20]"
+      ],
+      "count": 41
+    },
+    {
+      "mutant": "fold-pieces-too-long",
+      "killers": [
+        "test_vast_payload_failures.FoldLongNames.test_a_long_snake_case_name_is_folded_into_short_pieces",
+        "test_vast_payload_failures.FoldLongNames.test_every_keep_vector_is_folded_below_the_scrub_threshold [digits-in-name]",
+        "test_vast_payload_failures.FoldLongNames.test_every_keep_vector_is_folded_below_the_scrub_threshold [failures-list]",
+        "test_vast_payload_failures.FoldLongNames.test_every_keep_vector_is_folded_below_the_scrub_threshold [stdout-banner]",
+        "test_vast_payload_failures.FoldLongNames.test_every_keep_vector_is_folded_below_the_scrub_threshold [terse-failed-line]",
+        "test_vast_payload_failures.FoldLongNames.test_every_keep_vector_is_folded_below_the_scrub_threshold [thread-line]",
+        "test_vast_payload_failures.FoldLongNames.test_every_keep_vector_is_folded_below_the_scrub_threshold [verbose-path]",
+        "test_vast_payload_failures.FoldLongNames.test_folded_text_survives_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_long_thread_name_in_the_panic_line_is_readable_after_scrubbing",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_rows_survive_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_observed_defect_a_long_name_survives_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_panic_row_survives_the_old_scrubber"
+      ],
+      "count": 12
+    },
+    {
+      "mutant": "fold-digit-rule-dropped",
+      "killers": [
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [base36-with-underscores]",
+        "test_vast_payload_failures.FoldLongNames.test_no_token_shaped_vector_is_ever_folded [digit-heavy-words]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [base36-with-underscores]",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_every_token_vector_in_a_panic_message_is_left_whole [digit-heavy-words]"
+      ],
+      "count": 4
+    },
+    {
+      "mutant": "summary-names-not-folded",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_failed_test_rows_survive_the_old_scrubber",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_observed_defect_a_long_name_survives_the_old_scrubber"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "summary-panic-not-folded",
+      "killers": [
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_a_long_thread_name_in_the_panic_line_is_readable_after_scrubbing",
+        "test_vast_payload_failures.SummaryCarriesTheFailures.test_the_panic_row_survives_the_old_scrubber"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "cargo-quiet-not-exported",
+      "killers": [
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_quiet_is_the_exact_value_cargo_reads",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_exports_quiet_cargo_settings"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "cargo-colour-not-disabled",
+      "killers": [
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_output_is_plain",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_exports_quiet_cargo_settings"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "cargo-progress-not-disabled",
+      "killers": [
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_cargo_output_is_plain",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_exports_quiet_cargo_settings"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "rustflags-weakened-by-the-payload",
+      "killers": [
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_exports_quiet_cargo_settings",
+        "test_vast_payload_summary.PayloadQuietEnvironment.test_payload_leaves_rustflags_alone"
+      ],
+      "count": 2
+    },
+    {
+      "mutant": "arm-hook-bypassed",
+      "killers": [
+        "test_vast_payload_diagnostics.ArmDispatch.test_defer_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_executor_arm_is_selected_after_timeout_options",
+        "test_vast_payload_diagnostics.ArmDispatch.test_missing_page_arm_still_selects_its_own_name",
+        "test_vast_payload_guest_guard.GuestHook.test_defer_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_guest_guard.GuestHook.test_missing_hook_keeps_real_regular_log_and_original_timeout",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_marker_without_exact_source_proof",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_non_ce_fault",
+        "test_vast_payload_v7.V7Tests.test_real_hook_refuses_other_raw_arm"
+      ],
+      "count": 8
+    }
+  ]
+}

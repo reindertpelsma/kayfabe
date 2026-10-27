@@ -3,6 +3,7 @@
 from html.parser import HTMLParser
 import json
 from pathlib import Path
+import re
 import unittest
 from urllib.parse import quote, urlsplit
 import xml.etree.ElementTree as ET
@@ -41,7 +42,18 @@ class BuiltOutput(unittest.TestCase):
         self.report = json.loads((SITE / "build-report.json").read_text())
 
     def test_every_page_has_absolute_canonical_and_metadata(self):
-        required = {"title", "description", "og:title", "og:description", "og:url", "canonical"}
+        required = {
+            "title",
+            "description",
+            "og:title",
+            "og:description",
+            "og:url",
+            "og:type",
+            "twitter:card",
+            "twitter:title",
+            "twitter:description",
+            "canonical",
+        }
         for path in OUTPUT.rglob("*.html"):
             meta = Metadata(path).tags
             self.assertTrue(required <= meta.keys(), str(path.relative_to(OUTPUT)))
@@ -99,8 +111,9 @@ class BuiltOutput(unittest.TestCase):
         for path in [OUTPUT / "index.html", OUTPUT / "docs/index.html"]:
             self.assertIn({"action": target, "method": "get"}, Metadata(path).forms)
             self.assertIn('name="search"', path.read_text())
-        for path in [OUTPUT / "docs/index.html", OUTPUT / "docs/latest/index.html"]:
-            self.assertEqual(Metadata(path).tags["refresh"], "0;url=" + target)
+        # /docs/ is a real index page; only /docs/latest/ redirects.
+        self.assertNotIn("refresh", Metadata(OUTPUT / "docs/index.html").tags)
+        self.assertEqual(Metadata(OUTPUT / "docs/latest/index.html").tags["refresh"], "0;url=" + target)
         index = (OUTPUT / "docs/index.html").read_text()
         for version in versions:
             self.assertIn(version["label"], index)
@@ -108,6 +121,129 @@ class BuiltOutput(unittest.TestCase):
         self.assertEqual(
             Metadata(OUTPUT / "docs/master/index.html").selects[0]["data-current"], "master"
         )
+
+
+class Pages(HTMLParser):
+    """Resource references: every tag attribute that makes the browser fetch something."""
+
+    def __init__(self, text):
+        super().__init__()
+        self.resources, self.links, self.text_ids = [], [], set()
+        self.feed(text)
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if "id" in values:
+            self.text_ids.add(values["id"])
+        if tag == "a" and values.get("href"):
+            self.links.append(values["href"])
+        elif tag == "link" and values.get("rel") != "canonical" and values.get("href"):
+            self.resources.append((tag, values["href"]))
+        for key in ["src", "srcset", "data", "poster"]:
+            if values.get(key):
+                self.resources.append((tag, values[key]))
+        if tag == "form" and values.get("action"):
+            self.resources.append((tag, values["action"]))
+
+
+def is_foreign(url):
+    parts = urlsplit(url)
+    return bool(parts.netloc) and parts.netloc != "kayfabe.dev" or url.startswith("//")
+
+
+class SelfContained(unittest.TestCase):
+    # FALSIFIER: any built page, stylesheet or script makes the browser fetch from another host.
+    def test_no_third_party_resources_in_html(self):
+        for path in OUTPUT.rglob("*.html"):
+            for tag, url in Pages(path.read_text()).resources:
+                self.assertFalse(is_foreign(url), f"{path.relative_to(OUTPUT)}: <{tag}> {url}")
+
+    def test_no_third_party_resources_in_css_or_js(self):
+        reference = re.compile(r"""(?:@import\s+(?:url\()?|url\()\s*['"]?(https?:)?//""", re.I)
+        for path in list(OUTPUT.rglob("*.css")):
+            self.assertIsNone(reference.search(path.read_text()), str(path.relative_to(OUTPUT)))
+        for name in ["site.js", "docs/master/theme/versions.js"]:
+            path = OUTPUT / name
+            if path.is_file():
+                self.assertNotRegex(path.read_text(), r"https?://", name)
+
+    def test_landing_weight_is_small(self):
+        page = (OUTPUT / "index.html").read_text()
+        self.assertLess(len(page.encode()), 40_000)
+        self.assertLess((OUTPUT / "style.css").stat().st_size, 20_000)
+        for image in re.findall(r'<img[^>]+src="([^"]+)"', page):
+            self.assertLess((OUTPUT / image.lstrip("/")).stat().st_size, 300_000)
+
+
+class LandingAndDocsIndex(unittest.TestCase):
+    def setUp(self):
+        self.report = json.loads((SITE / "build-report.json").read_text())
+        self.landing = (OUTPUT / "index.html").read_text()
+
+    def test_download_block_matches_the_release_list(self):
+        release = self.report["release"]
+        if release is None:
+            self.assertIn("No release yet: build from source", self.landing)
+            self.assertNotIn("/releases/download/", self.landing)
+        else:
+            self.assertNotIn("No release yet", self.landing)
+            self.assertIn(release["url"], self.landing)
+            for asset in release["assets"]:
+                self.assertIn(asset["url"], self.landing)
+
+    def test_landing_has_the_required_blocks(self):
+        for text in [
+            "Status: research",
+            "no installer, no stable interface and no security audit",
+            "What runs today",
+            "Get started",
+            "Contribute and community",
+            "VFIO passthrough",
+            "NVIDIA vGPU",
+            "API forwarding",
+            "Apache-2.0 OR GPL-2.0-or-later",
+            "not a place to get code you have to trust",
+        ]:
+            self.assertIn(text, self.landing)
+        self.assertEqual(self.landing.count("<h1"), 1)
+        self.assertIn("<svg", self.landing)
+        self.assertRegex(self.landing, r'<img[^>]+alt="[^"]+"')
+        self.assertIn('class="skip-link"', self.landing)
+
+    def test_docs_index_follows_summary_order(self):
+        summary = (SITE.parent / "docs/howto/SUMMARY.md").read_text()
+        files = re.findall(r"\]\(([^)]+)\.md\)", summary)
+        index = (OUTPUT / "docs/index.html").read_text()
+        if self.report["latest"] != "master":
+            return  # the released manual's SUMMARY is not the working tree's
+        positions = [index.index(f'href="/docs/master/{name}.html"') for name in files]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("/docs/master/FAQ.html", index)
+        self.assertEqual(index.count("Design and internals (GitHub)"), 1)
+
+    def test_manual_pages_have_breadcrumbs_edit_link_and_pager(self):
+        book = OUTPUT / "docs/master"
+        if not book.is_dir():
+            return
+        page = (book / "security.html").read_text()
+        self.assertIn('aria-label="Breadcrumb"', page)
+        self.assertIn(
+            "https://github.com/reindertpelsma/kayfabe/edit/master/docs/howto/security.md", page
+        )
+        self.assertIn('rel="prev"', page)
+        self.assertIn('class="skip-link"', page)
+        faq = (book / "FAQ.html").read_text()
+        self.assertIn("/edit/master/docs/FAQ.md", faq)
+        self.assertIn('class="kf-label kf-measured"', (book / "windows-guest.html").read_text())
+        self.assertIn('class="kf-gap"', (book / "security.html").read_text())
+
+    def test_about_and_security_pages_exist_and_are_indexable(self):
+        for name in ["about", "security"]:
+            tags = Metadata(OUTPUT / name / "index.html").tags
+            self.assertNotIn("robots", tags)
+            self.assertEqual(tags["canonical"], f"https://kayfabe.dev/{name}/")
+        urls = [e.text for e in ET.parse(OUTPUT / "sitemap.xml").iter() if e.tag.endswith("loc")]
+        self.assertIn("https://kayfabe.dev/about/", urls)
 
 
 if __name__ == "__main__":
