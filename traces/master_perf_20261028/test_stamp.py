@@ -25,6 +25,8 @@ class Acceptance(unittest.TestCase):
     def bad(self, api, field, value, reason):
         row = result(api=api)
         row[field] = value
+        if field == "duration_s":
+            row["frames"] = int(value * row["fps"])
         self.assertEqual(stamp.validate(row), reason)
 
     def test_valid_d3d11(self):
