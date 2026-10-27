@@ -8045,6 +8045,16 @@ impl ChanPlane {
             };
             let mirror = g.mirror.clone();
             let cursors = g.chan.host_cursors();
+            let verdict = {
+                let mut marked = false;
+                self.completions
+                    .for_each_inflight(|t| marked |= t == g.guest_idx);
+                kf_chan::wakeverdict::wake_verdict(
+                    cursors.map_or(0, |c| c.2),
+                    infl.first().map(|f| f.seq),
+                    marked,
+                )
+            };
             let (fwd, subs, walks) = g.chan.counts();
             let mut lines = vec![format!(
                 "kf3: PROBE-DUMP t={:.6} tok={:#x} host={ht:#x} {why}: key={:?} forwarded={fwd} submissions={subs} walks={walks} serves={} guest USERD GP_PUT={put_now:?} GP_GET={get_now:?} (authored {:?}) put_moved={} our ring GP_GET/GP_PUT/fence={cursors:?} dead={:?} scheduled={} stopped={} disabled={}",
@@ -8064,6 +8074,31 @@ impl ChanPlane {
                 g.stopped,
                 g.disabled
             )];
+            lines.push(format!("kf3: PROBE-DUMP   verdict: {verdict}"));
+            if let Some(head) = infl.first().map(|f| f.seq) {
+                let (wake_ago, wakes) = self.completions.last_wake();
+                let pump = g.chan.probe_last_pump();
+                lines.push(format!(
+                    "kf3: PROBE-DUMP   cause: {} (session wakes={wakes}, last wake {wake_ago:?} ms \
+                     ago; this channel's last pump {:?} ms ago read fence word {:?}, head {head})",
+                    kf_chan::wakeverdict::lost_wake_cause(
+                        wake_ago,
+                        pump.map(|p| p.0),
+                        pump.map(|p| p.1),
+                        head
+                    ),
+                    pump.map(|p| p.0),
+                    pump.map(|p| p.1),
+                ));
+            }
+            // The token's own state says who could ring it: Idle with a reached fence is a ring
+            // that never landed, Busy for a long time is a claim that never released.
+            let word = self
+                .plane
+                .tokens
+                .get(self.plane.token_index.clamp(g.guest_idx) as usize)
+                .map(|w| w.load());
+            lines.push(format!("kf3: PROBE-DUMP   token word: {word:?}"));
             for f in &infl {
                 lines.push(format!(
                     "kf3: PROBE-DUMP   in-flight fence seq={} gp_get={:?} submitted {}ms ago releases={:?}",

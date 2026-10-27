@@ -18,6 +18,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub struct Completions {
     ev: kf_host::EventFd,
     inflight: Box<[AtomicU64]>,
+    /// Diagnostic (`KF3_COMPLETION_PROBE`): when the fd last became ready, and how often.
+    t0: std::time::Instant,
+    last_wake_ns: AtomicU64,
+    wakes: AtomicU64,
 }
 
 impl Completions {
@@ -36,6 +40,9 @@ impl Completions {
         Ok(Completions {
             ev,
             inflight: (0..words).map(|_| AtomicU64::new(0)).collect(),
+            t0: std::time::Instant::now(),
+            last_wake_ns: AtomicU64::new(0),
+            wakes: AtomicU64::new(0),
         })
     }
 
@@ -55,6 +62,25 @@ impl Completions {
     #[must_use]
     pub fn event_fd(&self) -> std::os::fd::BorrowedFd<'_> {
         self.ev.as_fd()
+    }
+
+    /// The worker saw the completion fd ready. Diagnostic bookkeeping only; nothing reads it to
+    /// decide anything.
+    pub fn note_wake(&self) {
+        let ns = u64::try_from(self.t0.elapsed().as_nanos()).unwrap_or(u64::MAX - 1);
+        self.last_wake_ns.store(ns + 1, Ordering::Relaxed);
+        self.wakes.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Milliseconds since the last [`Completions::note_wake`], and the wakes so far.
+    #[must_use]
+    pub fn last_wake(&self) -> (Option<u64>, u64) {
+        let ns = self.last_wake_ns.load(Ordering::Relaxed);
+        let ago = (ns != 0).then(|| {
+            let now = u64::try_from(self.t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            now.saturating_sub(ns - 1) / 1_000_000
+        });
+        (ago, self.wakes.load(Ordering::Relaxed))
     }
 
     /// `token` has (or is about to have) a fence in flight. Call BEFORE the doorbell.
