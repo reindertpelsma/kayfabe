@@ -451,4 +451,41 @@ mod tests {
         rm_verb(Verb::AllocOther, || ());
         assert!(verb_totals()[Verb::AllocOther as usize].max_ns >= 3_000_000);
     }
+
+    #[test]
+    fn the_session_maximum_is_the_slowest_call_of_any_thread_in_any_order() {
+        std::thread::spawn(|| {
+            rm_verb(Verb::AllocOther, || {
+                std::thread::sleep(std::time::Duration::from_millis(6));
+            });
+        })
+        .join()
+        .unwrap();
+        std::thread::spawn(|| rm_verb(Verb::AllocOther, || ()))
+            .join()
+            .unwrap();
+        assert!(verb_totals()[Verb::AllocOther as usize].max_ns >= 6_000_000);
+    }
+
+    #[test]
+    fn only_the_virtual_memory_class_is_a_reservation_whatever_the_neighbour() {
+        for class in [0x0080u32, 0x50a1, 0x509f, 0x00f1, 0xc56f, u32::MAX] {
+            assert_eq!(alloc_verb(class), Verb::AllocOther, "{class:#x}");
+        }
+        assert_eq!(alloc_verb(0x50a0), Verb::ReserveVa);
+    }
+
+    #[test]
+    fn only_the_tlb_invalidate_control_is_the_invalidate_verb() {
+        for cmd in [
+            0x2080_2501u32,
+            0x2080_2503,
+            0x0000_0000,
+            0x2080_0101,
+            u32::MAX,
+        ] {
+            assert_eq!(control_verb(cmd), Verb::Control, "{cmd:#x}");
+        }
+        assert_eq!(control_verb(0x2080_2502), Verb::Invalidate);
+    }
 }

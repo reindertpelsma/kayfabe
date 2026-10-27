@@ -402,3 +402,50 @@ fn ens6_a_cached_refusal_answers_until_its_backoff_ends_then_is_reevaluated() {
     assert_eq!(t.stats.window_hits, 1, "re-evaluated: the refused window answers");
     assert_eq!(m.verbs(), verbs);
 }
+
+#[test]
+fn ens6_normal_over_two_refined_blocks_never_recycles() {
+    let (mut t, m, _) = ens6::tree(1000, 998);
+    t.normal(&m, LO + 5 * NORMAL_GRAIN, 2 * NORMAL_GRAIN).unwrap();
+    assert_eq!(m.verbs(), 0);
+    assert_eq!(t.stats.freed + t.stats.made, 0);
+}
+
+#[test]
+fn ens6_a_wanted_block_in_the_middle_of_the_queue_stays_sparse() {
+    let (mut t, m, slice, base) = e6_queued_cleanup(64);
+    ens6::refresh(&mut t, &m, &slice, |t, ops| {
+        assert_eq!(t.admit(ops, base + 20 * SPARSE_GRAIN, 4 * SPARSE_GRAIN), Ok(true));
+    });
+    e6_drain(&mut t, &m, &slice);
+    let mut have = m.sparse_tiles();
+    have.sort_unstable();
+    let want: Vec<u64> = (20..24).map(|i| base + i * SPARSE_GRAIN).collect();
+    assert_eq!(have, want);
+}
+
+#[test]
+fn ens6_retry_with_a_spent_slice_does_not_reask_an_emptied_blocks_declined_run() {
+    let (mut t, m, base) = ens6::roomy(20000);
+    let slice = slice::Slice::default();
+    ens6::refresh(&mut t, &m, &slice, |t, ops| {
+        t.normal(ops, base, PAGE).unwrap();
+        t.mark(base, PAGE, true);
+        assert_eq!(t.admit(ops, base + PAGE * 16, SPARSE_GRAIN), Ok(false));
+    });
+    t.mark(base, PAGE, false); // the block empties: the declined run is due
+    let (calls, verbs) = (t.stats.admit_calls, m.verbs());
+    slice.renew();
+    e6_spend(&slice, slice::SLICE_VERBS);
+    let clock = || m.now();
+    let ops = slice::Sliced {
+        inner: &m,
+        slice: &slice,
+        clock: &clock,
+    };
+    t.retry(&ops).unwrap();
+    assert_eq!((t.stats.admit_calls, m.verbs()), (calls, verbs));
+    slice.renew();
+    t.retry(&ops).unwrap();
+    assert!(t.stats.admit_calls > calls, "with a fresh slice it is asked");
+}

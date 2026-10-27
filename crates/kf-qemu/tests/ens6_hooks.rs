@@ -87,6 +87,10 @@ fn sparse_callbacks_run_on_the_sliced_ops() {
         gate.contains("slice::Sliced{"),
         "the tree's ops charge the slice"
     );
+    assert!(
+        gate.contains("slice:&self.slice,"),
+        "the host session's own slice"
+    );
     assert!(GATE.contains("fn begin_layout_slice("));
     assert!(GATE.contains("self.slice.renew()"));
 }
