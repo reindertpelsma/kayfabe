@@ -33,6 +33,15 @@ class PublicationGate(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "committed"):
             self.gate.source_records(self.root, [self.root / "paper.tex"])
 
+    def test_dirty_included_figure_is_refused(self):
+        figure = self.root / "figure.tex"
+        figure.write_text("original figure\n")
+        self.git("add", "figure.tex")
+        self.git("commit", "-qm", "figure")
+        figure.write_text("draft figure\n")
+        with self.assertRaisesRegex(ValueError, "committed"):
+            self.gate.source_records(self.root, [figure])
+
     def test_untracked_included_figure_is_refused(self):
         figure = self.root / "figure.tex"
         figure.write_text("untracked figure\n")
