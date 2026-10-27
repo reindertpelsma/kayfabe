@@ -14,18 +14,18 @@ class ConsoleRedactionTests(unittest.TestCase):
 
     def test_boot_phase_retained_without_identifiers(self):
         text = ('Windows Boot Manager 12345678-1234-1234-1234-123456789abc '
-                'at 203.0.113.17 serial=BOARD123')
+                'at 203.0.113.17 fe80::1 serial=BOARD123')
         result = self.module.redact(text)
         self.assertIn('Windows Boot Manager', result)
-        for value in ['12345678-1234', '203.0.113.17', 'BOARD123']:
+        for value in ['12345678-1234', '203.0.113.17', 'fe80::1', 'BOARD123']:
             self.assertNotIn(value, result)
 
     def test_error_retained_without_identifiers(self):
-        text = ('Failed disk serial=BOARD456 mac=00:11:22:33:44:55 '
+        text = ('Failed disk serial=BOARD456 mac=00:11:22:33:44:55 2001:db8::2 '
                 'uuid=12345678-1234-1234-1234-123456789abc')
         result = self.module.redact(text)
         self.assertIn('Failed disk', result)
-        for value in ['BOARD456', '00:11:22:33:44:55', '12345678-1234']:
+        for value in ['BOARD456', '00:11:22:33:44:55', '12345678-1234', '2001:db8::2']:
             self.assertNotIn(value, result)
 
     def test_download_phase_retained_without_secrets(self):
