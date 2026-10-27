@@ -1191,3 +1191,84 @@ mod native_recorder_tests {
         assert_eq!(r.state_lost.load(Relaxed), 1);
     }
 }
+
+#[cfg(test)]
+mod live_export_tests {
+    use super::*;
+
+    fn live_case(name: &str, pending_first: bool) {
+        let name = name.split_once("::").unwrap().1;
+        if std::env::var("KF_ENS12_CHILD").ok().as_deref() != Some(name) {
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", name, "--nocapture", "--test-threads=1"])
+                .env("KF_ENS12_CHILD", name)
+                .env("KF3_DIAG_LATENCY", "1")
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&child.stderr);
+            assert!(child.status.success(), "{stderr}");
+            assert!(stderr.contains("why=first-slow"), "{stderr}");
+            assert!(!stderr.contains("why=shutdown"), "{stderr}");
+            let live = stderr.split("why=live").skip(1).collect::<Vec<_>>();
+            assert!(!live.is_empty(), "late split was never exported: {stderr}");
+            assert!(
+                live.iter().any(|text| text.lines().any(|line| {
+                    line.contains("LATENCY SPLIT ticket=7402 ")
+                        && line.contains("released_ns=Some(")
+                        && line.contains("resumed_ns=Some(")
+                })),
+                "final split stages were never exported: {stderr}"
+            );
+            return;
+        }
+        assert!(init(
+            Instant::now() - std::time::Duration::from_secs(10),
+            &[19]
+        ));
+        register_thread(Role::Probe);
+        let r = recorder().unwrap();
+        r.update(|st| st.splits.request(1, 0x80c, SplitScope::Pdb(None), 1, 1));
+        poll(); // Consume the real first-slow dump with boot-time history.
+        r.update(|st| {
+            st.splits.request(7402, 0x80c, SplitScope::Space(9), 1, 2);
+            st.splits.queued(7402, 3);
+            st.splits.start(7402, 4, 9, 1, 4);
+        });
+        if pending_first {
+            std::thread::sleep(std::time::Duration::from_millis(1010));
+            poll(); // An in-flight export must not consume the later terminal stages.
+        }
+        r.update(|st| {
+            st.splits.applied(7402, 9, 1, [1; 8], [1, 0], SLOW_NS + 5);
+            st.splits.ready(7402, true, SLOW_NS + 6);
+            st.splits.released(7402, true, SLOW_NS + 7);
+            st.splits.taken(7402, SLOW_NS + 8);
+        });
+        std::thread::sleep(std::time::Duration::from_millis(1010));
+        poll(); // No shutdown callback: the next harness action could be SIGKILL.
+    }
+
+    #[test]
+    fn ens12_late_completed_split_reaches_stderr_without_shutdown() {
+        live_case(
+            concat!(
+                module_path!(),
+                "::",
+                "ens12_late_completed_split_reaches_stderr_without_shutdown"
+            ),
+            false,
+        );
+    }
+
+    #[test]
+    fn ens12_live_pending_export_does_not_hide_later_release_and_resume() {
+        live_case(
+            concat!(
+                module_path!(),
+                "::",
+                "ens12_live_pending_export_does_not_hide_later_release_and_resume"
+            ),
+            true,
+        );
+    }
+}
