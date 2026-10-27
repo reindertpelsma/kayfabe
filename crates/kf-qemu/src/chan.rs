@@ -8075,6 +8075,14 @@ impl ChanPlane {
                 g.disabled
             )];
             lines.push(format!("kf3: PROBE-DUMP   verdict: {verdict}"));
+            // The token's own state says who could ring it: Idle with a reached fence is a ring
+            // that never landed, Busy for a long time is a claim that never released.
+            let word = self
+                .plane
+                .tokens
+                .get(self.plane.token_index.clamp(g.guest_idx) as usize)
+                .map(|w| w.load());
+            lines.push(format!("kf3: PROBE-DUMP   token word: {word:?}"));
             for f in &infl {
                 lines.push(format!(
                     "kf3: PROBE-DUMP   in-flight fence seq={} gp_get={:?} submitted {}ms ago releases={:?}",
