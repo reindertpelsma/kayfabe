@@ -1,0 +1,205 @@
+[
+  {
+    "commit": "cc323e1e8",
+    "purpose": "latency core and native hooks",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/core-red.log",
+        "passed": 1,
+        "failed": 17,
+        "ignored": 0,
+        "sha256": "e0370a78af96b343de54193223804c9608e151de3f33235cb35e6b40be16af24"
+      },
+      {
+        "path": "/root/night/ens11/hooks-red.log",
+        "passed": 0,
+        "failed": 10,
+        "ignored": 0,
+        "sha256": "1ff4d7a00c650698473cfaad8fecefe89e2185c173409de353c6428f2b56180d"
+      }
+    ]
+  },
+  {
+    "commit": "c862ac693",
+    "purpose": "snapshot coalescing and split/probe/storm hooks",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/coalesce-red.log",
+        "passed": 2,
+        "failed": 3,
+        "ignored": 0,
+        "sha256": "f73c87b4d9d55e35870ad98052c4ca9ba2ffc35097dd5207e1b89882bf89f9a0"
+      },
+      {
+        "path": "/root/night/ens11/split-hooks-red.log",
+        "passed": 0,
+        "failed": 10,
+        "ignored": 0,
+        "sha256": "c35b9fb0c978dc8c5d9680455a76f958de8525df98d93bfa272614ded145aeec"
+      }
+    ]
+  },
+  {
+    "commit": "4eaf5b214",
+    "purpose": "split-critical layout and row handoff",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/layout-red.log",
+        "passed": 0,
+        "failed": 6,
+        "ignored": 0,
+        "sha256": "84bdb3adf1b8c8d5ad568b0ae91c0beabaa98af4efb34acd507926e14e454f92"
+      },
+      {
+        "path": "/root/night/ens11/rows-red.log",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "08482c1a758ac1dab5304a16a18ed3d8792fbc3d2b6251247e98c87163915389"
+      }
+    ]
+  },
+  {
+    "commit": "869ecef4d",
+    "purpose": "mandatory empty-namespace retirement",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/clear-red.log",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "57077642fb624088d2f99383c737da59d604e498b611eb22aa6431d3a470dd11"
+      }
+    ]
+  },
+  {
+    "commit": "dac45846b",
+    "purpose": "idle layout and resolved-PDB integration",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/layout-hooks-red.log",
+        "passed": 3,
+        "failed": 5,
+        "ignored": 0,
+        "sha256": "9b5336d8a052176e9bdc31858f5490ae99d84822b54aeb709c11d02db15cfd10"
+      }
+    ]
+  },
+  {
+    "commit": "5f793420e",
+    "purpose": "resolved named-PDB native Inbox behavior",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/pdb-red.log",
+        "passed": 4,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "f0b299ecd8f4b1b8f87f6103929c0a427c0687f6a268681403a371753dd4cfd3"
+      }
+    ]
+  },
+  {
+    "commit": "29b69b780",
+    "purpose": "bounded fair layout continuations",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/background-red.log",
+        "passed": 5,
+        "failed": 4,
+        "ignored": 0,
+        "sha256": "0ad666a219aa82eccf83830ae1e3ba8e3c4bb9d5094a24ae2ed1d903aaef8b11"
+      }
+    ]
+  },
+  {
+    "commit": "1a913294a",
+    "purpose": "native context and IRQ source composition",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/context-hooks-red.log",
+        "passed": 0,
+        "failed": 5,
+        "ignored": 0,
+        "sha256": "9b0c79ddcda80326bfb49d9421847201c38da08b581f30cfb5682d0acaf07faa"
+      }
+    ]
+  },
+  {
+    "commit": "c12c99c78",
+    "purpose": "source identity, blocker priority and journal encoding",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/metadata-red2.log",
+        "passed": 34,
+        "failed": 6,
+        "ignored": 0,
+        "sha256": "4b065a0aa467cd4fd9f653610b8b29b0d8e80c899cd884118d30a43e5c5fe855"
+      }
+    ]
+  },
+  {
+    "commit": "0834194e2",
+    "purpose": "slow-record milestone refresh",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/milestones-red.log",
+        "passed": 40,
+        "failed": 4,
+        "ignored": 0,
+        "sha256": "509660bcbb48e2e692fabac2b2d65aad2b2967c8f2d735038646326bf8b07622"
+      }
+    ]
+  },
+  {
+    "commit": "02467f71b",
+    "purpose": "reset cancellation",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/reset-hooks-red.log",
+        "passed": 5,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "773fedc9cc23a07a780249508b1f2f2a01e38b45a73f388d8f57791a06edfc62"
+      }
+    ]
+  },
+  {
+    "commit": "53ad72599",
+    "purpose": "split readiness wiring",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/refusal-red.log",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "26e60b8ead888a08ec9e853a024ec2ed68e433d372fd18ca63f9c71935764884"
+      }
+    ]
+  },
+  {
+    "commit": "1b8ff7d2f",
+    "purpose": "critical/ordinary refresh error propagation",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/refusal-helper-red.log",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "8a6b01b74c7f2ab09cfcd7139173a37fbfec90cbcd118bd6d3ccb5a4151bcc64"
+      }
+    ]
+  },
+  {
+    "commit": "1d89f7938",
+    "purpose": "wait cause and owner association",
+    "executable_red_proofs": [
+      {
+        "path": "/root/night/ens11/wait-owner-red.log",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0,
+        "sha256": "17a927c737bddaa46f7a44f19dab9e489a99eb8e7f6debb6622843a1212db542"
+      }
+    ]
+  }
+]

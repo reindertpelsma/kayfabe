@@ -1,0 +1,18 @@
+{
+  "production_source": "70eff10969a5c5465a1fc791bf8f994abee00d11",
+  "final_source": "d5a24bf80fdc0ecca2d950e754b6963ed529e0da",
+  "test_only_corrections": [
+    "peek marker dataflow pin",
+    "out-of-line test module scanner",
+    "shutdown dump adjacency pin"
+  ],
+  "segments": [
+    "source-70eff/full-before-pin.log before user_loop_model_v2",
+    "remaining-chan.log",
+    "chan-doc.log",
+    "remaining-packages-before-gatelog.log before gatelog_hooks",
+    "last-qemu.log",
+    "last-trap.log",
+    "last-doc.log"
+  ]
+}

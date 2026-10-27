@@ -1,0 +1,20 @@
+{
+  "source_commit": "d5a24bf80fdc0ecca2d950e754b6963ed529e0da",
+  "source_tree": "3633be8336cf0b6236f9fdd59da5bf4e27ef1df5",
+  "seal_sha256": "4c4f82436d3feafa1671e9b2200ab3fc918ea63bf7d69fb9142cbb3d83e601c1",
+  "encoding": "SHA256 of UTF-8 sorted path-to-SHA256 JSON, indent=2, final newline",
+  "file_count": 1185,
+  "scope": [
+    "crates/",
+    "qemu/",
+    "cuda/",
+    "firmware/",
+    ".cargo/",
+    "Cargo.lock",
+    "Cargo.toml",
+    "build.rs",
+    "rust-toolchain.toml"
+  ],
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)"
+}

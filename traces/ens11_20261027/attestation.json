@@ -1,0 +1,67 @@
+{
+  "source": {
+    "source_commit": "d5a24bf80fdc0ecca2d950e754b6963ed529e0da",
+    "source_tree": "3633be8336cf0b6236f9fdd59da5bf4e27ef1df5",
+    "seal_sha256": "4c4f82436d3feafa1671e9b2200ab3fc918ea63bf7d69fb9142cbb3d83e601c1",
+    "encoding": "SHA256 of UTF-8 sorted path-to-SHA256 JSON, indent=2, final newline",
+    "file_count": 1185,
+    "scope": [
+      "crates/",
+      "qemu/",
+      "cuda/",
+      "firmware/",
+      ".cargo/",
+      "Cargo.lock",
+      "Cargo.toml",
+      "build.rs",
+      "rust-toolchain.toml"
+    ],
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)"
+  },
+  "mutation_bases": [
+    "7733a696a6b325abda40bf53440e46b5a1289c38",
+    "70eff10969a5c5465a1fc791bf8f994abee00d11"
+  ],
+  "post_base_change": "Runtime owner-cause correction; then test-only peek dataflow pin and source-scanner updates. All six package targets covered in serialized segments; affected target rerun completely",
+  "mutations": 67,
+  "minimum_distinct_failures": 2,
+  "source_composition": 5,
+  "runtime_or_model": 62,
+  "compile_errors_counted": 0,
+  "required_ignored_unchanged": 14,
+  "gates": {
+    "clippy-final": {
+      "exit": 0,
+      "raw_log": "/root/night/ens11/clippy-final.jsonl",
+      "sha256": "e4ef893cbb73a7dbf2d78be34d1acf7888a4fa3a9c7d17adee2a1f9e138b5de3"
+    },
+    "clippy-final-gate": {
+      "exit": 0,
+      "raw_log": "/root/night/ens11/clippy-final-gate.log",
+      "sha256": "fc48018c9e51d1fd002ad1a0a46eb5d9ed9144a4cae9e15b3fc421c7f6e0f496"
+    },
+    "claims-final-source": {
+      "exit": 0,
+      "raw_log": "/root/night/ens11/claims-final-source.log",
+      "sha256": "95523983e5eeb5960eb5c8608d16add732b5503aa4c8517a280c9756deba5a77"
+    },
+    "clippy-final-gate.log": "clippy: existing-debt=289 new=0 resolved=243",
+    "claims-final-source.log": "claims: existing-debt=3755 new=0 resolved=3"
+  },
+  "supplied_memo": {
+    "path": "/root/night/opus_relay/MEMO.md",
+    "sha256": "8becf9cba990b5d50cd81eb8f4006ac3faaf892f569bc9ea670c4fa36bd8c87d",
+    "runs": [
+      7321,
+      7391
+    ],
+    "new_host_measurement": false
+  },
+  "no_hardware": true,
+  "no_pr": true,
+  "source_restore_manifests": [
+    "mutation-source-sha256.json",
+    "source-sha256.json"
+  ]
+}
