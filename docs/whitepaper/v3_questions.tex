@@ -1,0 +1,339 @@
+\clearpage
+\section{Questions for a reader without the tree}
+\label{sec:questions}
+
+Each setup below specifies a proposed experiment or restates the preceding architecture.
+Observations are requests, not results. An answer can be a public specification, a counterexample
+or a controlled experiment; no private trace or insider branch name is needed to understand
+the fork. The source keys in the preceding sections establish the motivating evidence.
+
+\question{Must every mapping barrier scan the whole space?}
+{A stock driver changes a small range in a large GPU VA space, then submits a mapping barrier. The
+  emulator has confirmed host placements but no trusted changed-range announcement.}
+{Identify an open-interface certificate that proves which table paths could change, or a
+  counterexample where any bounded local check misses a relevant update.}
+{A valid certificate justifies an incremental walk. Without it, the whole-space scan remains a
+  correctness cost and optimisation must target apply work or precomputation.}
+
+\question{Can unchanged ranges stay live through an own-space refresh?}
+{One host address space has running work on range A while the guest remaps disjoint range B. The
+  intended outcome for B during transition is old backing, new backing or fault.}
+{Give a bounded validation protocol that lets A publish safely despite root changes, aliasing and an
+  overflowing change log.}
+{This decides whether per-target holds can become per-range admission or must remain conservative.}
+
+\question{Which event proves that old backing is no longer used?}
+{An emulator unmaps a host VA, asks the host driver to invalidate and wants to free the old memory
+  object while earlier GPU work may still exist.}
+{State the documented ordering guarantee or a counterexample where access continues after the
+  acknowledgement the emulator treats as retirement.}
+{A weaker guarantee requires a separate lifetime fence; a stronger one can simplify deferred frees.}
+
+\question{Is the shared kernel copy stream the wrong granularity?}
+{A guest kernel uses one copy channel for work requested by several applications. Each mapping split
+  serialises later work on that channel.}
+{Distinguish a driver-required shared order from an implementation-created dependency using
+  per-request completion identities and separate target spaces.}
+{An inherent shared order calls for cheaper splits; an artificial one calls for changing grouping or
+  admission while preserving the stock protocol.}
+
+\question{Does a raised watchdog reveal lateness or mask another failure?}
+{The same fixed workload is run with default watchdog settings and a longer diagnostic window. A
+  host publication, a processed marker and guest completion are independently observed.}
+{Show whether the same outstanding work eventually completes, with matching life identity, rather
+  than being canceled and replaced during recovery.}
+{Only the first outcome supports late execution. A replacement or ambiguous identity reopens the
+  missing-completion explanation.}
+
+\question{What clock would separate execution from observation delay?}
+{A host records when it publishes work and when a CPU first reads its completed marker. The
+  observing worker may block in a host driver call.}
+{Find a usable GPU timestamp or independent witness whose ordering can be related to the host clock
+  without adding a correctness poll.}
+{This decides whether publication-to-marker time can be decomposed or must remain an ambiguous sum.}
+
+\question{Can an interrupt be correlated with a packet at all?}
+{Host notifications are engine-wide and may arrive before the CPU samples a marker. Several channels
+  and VMs can request the same kind of notification.}
+{Specify the minimal identity and ordering observations needed to distinguish a covering signal from
+  an unrelated one under coalescing and masking.}
+{Without that proof the diagnostic must report incomplete correlation rather than a fabricated
+  marker-to-interrupt latency.}
+
+\question{Can a finite sparse budget preserve the guest contract?}
+{A guest asks for more sparse reservations than the emulator can afford. A closed fallback leaves
+  missing coverage invalid and counts it.}
+{Identify a stock-driver-visible refusal point that is recoverable, or show a workload that requires
+  sparse semantics after that point and cannot recover.}
+{This chooses between a supported bounded mode, larger representation changes and explicitly
+  unsupported workloads; a silent budget increase alone does not answer it.}
+
+\question{Can sparse geometry be coalesced without a hole?}
+{Two adjacent sparse reservations are live and unchanged. Replacing them with a larger object would
+  reduce resource cost, but release-before-reserve can temporarily fault them.}
+{Find a host operation with atomic replacement semantics, or prove a transition sequence that
+  preserves every unchanged address without pausing the GPU.}
+{A valid primitive enables compression. Otherwise active sparse geometry cannot be reclaimed like
+  empty ordinary reservations.}
+
+\question{What bounds a single native call?}
+{Software stops starting optional work after a slice budget, but one native driver operation can
+  outlive that budget and repairs cannot be abandoned.}
+{Measure the per-operation tail on loaded and idle hosts and identify any documented cancellation or
+  asynchronous completion interface.}
+{A real bound enables deadline reasoning. No bound means the product must tolerate the latency or
+  move the dependency ahead of the guest-visible barrier.}
+
+\question{Can optional geometry starve safely?}
+{Mandatory mapping splits continue indefinitely, leaving no idle opportunity for deferred sparse
+  refinement. Existing accepted backing must stay owned.}
+{Determine whether a guest can continue correctly with the counted deficit forever or requires a
+  progress guarantee for the optional work.}
+{This decides whether idle-only continuation is a complete mode or needs explicit fair admission.}
+
+\question{What can coalescing remove from a serial requester?}
+{One channel requests a fresh walk only after the previous request completes; other channels
+  sometimes request the same target concurrently.}
+{Separate saved concurrent tickets from the irreducible serial request count and measure both.}
+{This prevents a batching optimisation from being credited with a fix it cannot provide and directs
+  effort to the remaining per-request work.}
+
+\question{Is native ring relocation a simpler stock path?}
+{A stock Windows driver asks to move a running user channel's ring. The emulator can either mediate
+  from birth or use an authored native relocation with proven ordering.}
+{Demonstrate cursor continuity, old-ring retirement and a replacement-only completion marker through
+  a move while work is already in flight.}
+{Success could retire part of the mediation machinery; failure preserves the need for a restricted
+  software relay or a clearly separate cooperation tier.}
+
+\question{What makes a registration anchor trustworthy?}
+{A registration reply changes how later command entries must be inspected. The relay has observed
+  PUT at several earlier points and may cache it.}
+{Give an ordering proof or counterexample establishing which observed boundary precedes the reply
+  under concurrent guest publication and ring migration.}
+{The answer determines how much must be scanned and whether the chosen clean anchor is valid.}
+
+\question{Can pointer mode remain independent of command bytes?}
+{The GPU executes user commands under USER privilege in a restricted VA space. Software still
+  validates each descriptor but Pointer mode promises to read no pushbuffer.}
+{Find a software action reachable through uninspected command bytes that escapes that authority
+  boundary, or prove why the hardware boundary suffices for ordinary commands.}
+{A counterexample narrows Pointer eligibility; a sound boundary avoids copying commands solely
+  because a guest can mutate its own memory.}
+
+\question{What is the smallest useful ring for lazy observation?}
+{The relay intentionally writes GET back later than hardware progress. A producer can stop when its
+  small ring appears full.}
+{Construct the worst ordering of publication, observation, credit checks and processed-marker wake
+  for a ring only a few entries long.}
+{This decides whether the effective observation interval is a proven bound or a benchmark-shaped
+  heuristic that needs a different rule.}
+
+\question{What must a holder promise before a waiter parks?}
+{A worker fails a try-lock while an earlier doorbell edge has already been consumed. The lock holder
+  may release just before or just after waiter registration.}
+{Supply a bounded register-recheck-release protocol whose final wake cannot disappear under either
+  ordering, including reset and object reuse.}
+{A counterexample changes the handoff protocol; repeated successful stress runs alone do not remove
+  the missing interleaving.}
+
+\question{Can a progress oracle avoid sharing the implementation's mistake?}
+{Both an implementation and a reference model represent a wake obligation, and both may have been
+  written from the same informal story.}
+{Derive an independent conservation law, such as owner-or-queue-or-published-bit, that can reject a
+  terminal pending state without copying the implementation transitions.}
+{This selects a stronger model oracle and reduces correlated false green results.}
+
+\question{Is finite fair-suffix liveness the right contract?}
+{An explicit-state test explores adversarial prefixes and then gives every live actor fair turns
+  after finite lock holds.}
+{Identify a realistic host execution excluded by those assumptions that the product still promises
+  to survive.}
+{The answer changes either the model scheduler or the claimed product progress guarantee; an
+  unexplored frontier must remain inconclusive.}
+
+\question{How much cross-client authority survives one UID per VM?}
+{Separate VMM processes hold driver clients on one physical GPU. Each runs with a distinct
+  unprivileged UID and a restricted channel address space.}
+{Document or test remaining operations that can name another client's resources without its explicit
+  cooperation.}
+{This decides whether the deployment policy closes the relevant boundary or only one path.}
+
+\question{What is the right live victim for a GPU fault test?}
+{One guest deliberately faults while another has an existing context, queued work and data that must
+  remain correct across the event.}
+{Observe victim completion, content, latency, reset scope and later reuse, with a matched native
+  process control.}
+{A global failure restricts sharing claims; survival supports only the exercised fault class.}
+
+\question{Which resource needs a quota first?}
+{Address spaces isolate normal memory accesses, but tenants share scheduling, encoder capacity, host
+  driver calls and memory apertures.}
+{Find the cheapest unprivileged workload that prevents a live peer from making useful progress and
+  measure recovery after it stops.}
+{This prioritises admission and fairness controls by observed impact rather than by ease of
+  counting.}
+
+\question{Can engine-wide interrupt noise become material denial of service?}
+{Every VM registered on an engine can receive spurious notifications caused by another tenant.
+  Correctness requires retaining real completion debt.}
+{Measure victim CPU and completion latency under an interrupt-heavy neighbour, then test pacing that
+  never erases pending work.}
+{This decides whether the accepted noise needs a bounded-service policy before wider sharing.}
+
+\question{Is a per-die table fundamentally avoidable?}
+{The guest asks for a capability absent from open derivation and unprivileged host queries. Several
+  measured dies agree, but no mechanism explains the agreement.}
+{Provide a public derivation or a new die that distinguishes a family rule from coincidental
+  agreement.}
+{A derivation deletes a table; otherwise exact-die measurement and a tested fallback remain
+  necessary.}
+
+\question{What should an unmeasured die refuse?}
+{A virtual device can advertise fewer optional display features while keeping the guest driver
+  unmodified.}
+{Identify the smallest capability surface that completes a realistic application and recovery suite
+  on the die, with wrong-answer mutations proving each required feature matters.}
+{This defines a working fallback mode instead of equating refusal-first with usable compatibility.}
+
+\question{How should the two driver axes be sampled?}
+{Host and guest driver versions are independent, while interfaces may change inside a release
+  branch. Exhaustive combinations are expensive.}
+{Choose a public-interface change criterion that selects discriminating cells and test whether it
+  predicts actual failures better than major-version sampling.}
+{This changes the supported matrix and which cells need hardware rather than a decoder-only check.}
+
+\question{Does a successful query imply the advertised virtual feature?}
+{A physical host reports a display capability that the emulated display only partly implements.}
+{Mutate each advertised field and compare guest behaviour and output against an independently
+  derived virtual support model.}
+{This decides whether runtime delegation can replace a table or must be filtered field by field.}
+
+\question{How should a device reboot differ from a driver reset?}
+{A new guest OS life must not see stale video memory from the previous life; an in-guest driver
+  recovery belongs to the same trust boundary.}
+{Show that the VMM reset origin and type distinguish every reachable lifecycle event, including a
+  reboot arriving during another reset.}
+{A missing distinction requires a conservative scrub path or a better VMM lifecycle contract.}
+
+\question{What proves repeated unload and reload?}
+{A cold boot works, but a guest repeatedly unloads its driver, reopens it and starts new work
+  without restarting QEMU.}
+{Track queue identity, object ownership, host resources, content and completion over many lives and
+  compare a kill-during-work control.}
+{This decides whether a lifecycle is supported or merely modelled, and which resources need stronger
+  generation identities.}
+
+\question{Why does one OS resume while another does not?}
+{The firmware-facing protocol can retain state through S3, but Windows also has timer and platform
+  dependencies outside the emulated GPU.}
+{Use matched plain-QEMU and device-enabled controls, guest stack evidence and post-wake GPU work to
+  locate the first divergent layer.}
+{A platform-only failure changes the harness diagnosis; a device-specific failure remains a product
+  blocker despite a healthy firmware state machine.}
+
+\question{What makes arm64 a new architecture test?}
+{The logic crates can build for another CPU, but the VMM memory adapter must implement mapping, page
+  sizes, DMA visibility and reset semantics.}
+{Identify the first required shell operation whose semantics differ, then execute it on a VM-capable
+  ARM host with a real GPU.}
+{This decides whether portability needs a new adapter capability or only implementation work;
+  cross-compilation alone cannot settle it.}
+
+\question{What is the minimal second-VMM contract?}
+{The core wants memory views, bounded traps, interrupts and lifecycle events independent of QEMU.}
+{Implement a small second adapter and name every place it cannot express the required ordering or
+  ownership without changing the core.}
+{This tests architectural independence and prices a vfio-user or other frontend without claiming
+  that an abstract trait is already portable behaviour.}
+
+\question{What additional evidence would make multi-GPU real?}
+{A guest can enumerate and use two distinct GPUs in thin tests, but applications may request peer
+  access, shared managed memory or a display on a chosen device.}
+{Run content-checked concurrent application work with explicit peer refusal, device selection and
+  independent reset accounting.}
+{This separates basic enumeration from a supported multi-GPU product and identifies which
+  cross-device features must stay refused.}
+
+\question{Can display completion be independent of the viewer?}
+{A guest keeps flipping while the broker is silent, restarts, or never releases a frame slot. The
+  viewer must not control guest liveness.}
+{Check monotonic guest completion and bounded frame debt through silence, reconnect and flood
+  without using a timeout to manufacture a GPU completion.}
+{This decides whether frame transport and guest display timing are properly separated.}
+
+\question{Which visual oracle catches a colour error?}
+{A pipeline applies matrices and lookup tables with driver-specific widths, rounding and mirroring,
+  while a screenshot can look plausible.}
+{Use boundary values and native pixel comparisons that distinguish sign, scale, interpolation and
+  table capacity, including the control that previously froze.}
+{This chooses behaviour-level tests instead of treating accepted method packets as correct output.}
+
+\question{What ratio survives a nested host?}
+{A guest under nested KVM pays both an exit cost and emulator work. A same-box host control omits
+  one of those layers.}
+{Measure exit count, per-exit latency, batch shape, placement and content on matched nested and
+  physical hosts without changing driver or workload at the same time.}
+{This separates a host-environment penalty from a product bottleneck and prevents extrapolating one
+  ratio to a different deployment.}
+
+\question{Which sample unit estimates the failure we care about?}
+{Many iterations in one boot agree while boot state, host allocation and concurrent applications can
+  vary.}
+{Separate within-boot, between-boot and between-machine spread, retaining timeouts and failed boots
+  in the denominator.}
+{This chooses repetitions for a release criterion; a fast median must not discard the unstable lives
+  a user would actually encounter.}
+
+\question{Does an application PASS mean completed GPU work?}
+{An application exits zero and may print success even when a sync status or numerical result was not
+  checked.}
+{Plant a missing launch, wrong result and forced GPU error and show that the independent harness
+  rejects all three while accepting the valid native control.}
+{This determines which application receipts can grade product correctness rather than startup.}
+
+\question{What can an untrusted GPU gate prove?}
+{A rented operator receives approved source and a run-scoped reporting capability, but can fabricate
+  output and a structured verdict.}
+{State which regression signal remains useful under this trust model and which release claims
+  require an independent trusted builder or observer.}
+{This keeps the gate a tripwire and prevents it from becoming an accidental provenance authority.}
+
+\question{Can exact-tree batching miss an interaction?}
+{Several topics each passed a relevant parent revision. They are then merged into one batch against
+  a moving integration branch.}
+{Test the final tree, preserve its embedded revision and compare changed input closures to the
+  receipts being carried forward.}
+{This decides which earlier results remain applicable and when a fresh hardware run is necessary.}
+
+\question{How can a mutation campaign prove it exercised its universe?}
+{A test runner can time out, omit targets, use stale artifacts or fail before executing the intended
+  mutation.}
+{Plant known failures, count reached targets and require an unmutated green baseline plus
+  independent failing assertions rather than compiler errors.}
+{This changes the interpretation of a kill percentage and prevents an empty or broken campaign from
+  looking stronger than a real one.}
+
+\question{What should an agent reviewer be unable to assume?}
+{An implementation, its tests and a research summary may repeat one author's untested premise.}
+{Require the reviewer to reconstruct one invariant from the opposite boundary and name the
+  observation that would falsify the shared story.}
+{This changes review assignments and evidence requirements when apparent independent agreement is
+  only repetition.}
+
+\question{Which release artefact is actually distributable?}
+{The source offers licence alternatives with file-level exceptions, and the combined VMM links
+  components under different terms.}
+{Obtain a reviewed source-to-binary licence inventory and verify that each redistributed component
+  has the required permission and notice.}
+{This decides packaging and release gates. The question asks for legal review, not a technical test
+  result standing in for permission.}
+
+\question{What would make this paper obsolete in the useful way?}
+{A pinned architecture argument separates measured results from hypotheses, but development
+  continues after publication.}
+{Choose one open fork, preregister the discriminator and publish both outcome and instrument
+  reachability at an exact revision.}
+{A result that closes or changes the fork should update the parent claim visibly. A new fast number
+  without a causal discriminator should not rewrite the explanation.}
+

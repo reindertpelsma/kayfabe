@@ -1,7 +1,19 @@
-# whitepaper
+# Whitepapers
 
-**`kayfabe_architecture.pdf` — the architecture paper.** Start there; it is the
-best single description of the project that exists.
+**STATUS: RESEARCH, 2026-10-27 — the v3 successor is [kayfabe_v3.pdf](kayfabe_v3.pdf).** It is pinned to `origin/next` at `12c4008705f17033a803e56d4d479bf1275cdb94`, with separately identified experimental sources. This writing task ran no GPU or VM. The paper contains a primer, architecture invariants and test limits, a failure case study, an open-PR inventory and 44 outside-reader questions. Start with its attack rules; its uncomfortable section is the longest.
+
+Build the successor from committed sources:
+
+```sh
+bash docs/whitepaper/build.sh v3
+python3 docs/whitepaper/build_v3.py --check
+```
+
+The two-pass XeLaTeX publication gate rejects TeX errors, missing glyphs and undefined references. It requires recorded repository inputs to match committed Git blobs and writes a source/PDF hash receipt. See [publication checks](BUILD_GATES.md), [immutable source index](sources_v3.json) and [PR snapshot](pr_snapshot_v3.json). A receipt is local build evidence, not a signed attestation.
+
+**STATUS: SUPERSEDED, 2026-10-27 — `kayfabe_architecture.tex` / `.pdf`.** The old paper is retained below as history, with this supersession also recorded inside its text. It describes the pre-v3 tree. Its old counts and open verdicts are not the status of v3.
+
+## Historical paper
 
 It is pinned to Rust HEAD `5c367a38` (2026-08-20), with twelve further commits'
 worth of corrections applied in place at `56dc01f3` — including the two that
@@ -47,16 +59,17 @@ softened.
 
 ## Rebuilding
 
-Source and PDF in this directory are in sync — the committed PDF is built from the
-committed `.tex` (verified by checksum).
+For a publishable rebuild of the historical PDF and its new in-text notice, use the committed-input gate:
 
 ```sh
-./build.sh
+python3 docs/whitepaper/build_v3.py --legacy
+python3 docs/whitepaper/build_v3.py --legacy --check
 ```
 
 Needs **xelatex** (TeX Live) with fontspec and TikZ. Every diagram is native TikZ, so
 the output stays vector at any zoom. `lualatex` is deliberately not used. Two passes
-are required, which `build.sh` does for you.
+are required. The Python publication target records the inputs and checks the final log.
+The old default `build.sh` target remains available for historical compatibility.
 
 ## Reading order
 

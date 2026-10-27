@@ -1,0 +1,474 @@
+{
+  "baseline": "12c4008705f17033a803e56d4d479bf1275cdb94",
+  "sources": [
+    {
+      "key": "architecture",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "ARCHITECTURE.md",
+      "blob": "cc9b3f5dd7da7bb079f0303469cda2c3577c807d",
+      "description": "Functional map and stated invariants"
+    },
+    {
+      "key": "rules",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "AGENTS.md",
+      "blob": "15493d07949c193d22706ff58671a0aa4e5b3965",
+      "description": "Contributor rules and next/master merge policy"
+    },
+    {
+      "key": "debt",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "scripts/claim_ledger.py",
+      "blob": "c8b68375582eded7a066ef1a6b0e9edd066fdd26",
+      "description": "Attribution scanner and its stated limitations"
+    },
+    {
+      "key": "readme",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "README.md",
+      "blob": "174321f0ff507593018699c92328875acd0b6176",
+      "description": "Dated product and workload summary"
+    },
+    {
+      "key": "faq",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/FAQ.md",
+      "blob": "dd6f986d69474bbeaee309d649ca585754456c86",
+      "description": "Comparisons, sharing limits and interrupt boundary"
+    },
+    {
+      "key": "credits",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/howto/credits.md",
+      "blob": "4453b208127af4742f24f73177e4e302b70c153d",
+      "description": "Verified positioning and licence notices"
+    },
+    {
+      "key": "notices",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/NOTICES.md",
+      "blob": "f96002572ffddb5a2f251e49dc7b884c286aee29",
+      "description": "Vendor software and trademark notices"
+    },
+    {
+      "key": "license",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "LICENSE",
+      "blob": "8a8aae801dc4bef7532a218fb81e4d415d252df1",
+      "description": "Repository licensing alternatives and exceptions"
+    },
+    {
+      "key": "security",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/howto/security.md",
+      "blob": "9eee524af01033a8ed92948fe187e092c70fee3e",
+      "description": "Threat model, deployment assumptions and dated gaps"
+    },
+    {
+      "key": "windows",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/WINDOWS_GUEST_SETUP.md",
+      "blob": "4b71ede924435246d7f3f25d32396bac46f3a700",
+      "description": "Stock Windows setup and registry configuration"
+    },
+    {
+      "key": "requirements",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/howto/requirements.md",
+      "blob": "95fd9db76788375b55e3754c10060cecf6ef387f",
+      "description": "Recorded hardware and driver cells; explicit gaps"
+    },
+    {
+      "key": "design",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/THE_ARCHITECTURE_v3.md",
+      "blob": "0f6e134fbb8f9416bb235269752db9f3e89b5d35",
+      "description": "Architecture argument and seven compatibility axes"
+    },
+    {
+      "key": "rulings",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/OWNER_RULINGS.md",
+      "blob": "4f9bee6ac8a6fb2208d4b5b9beb89d2687e774dd",
+      "description": "Dated owner decisions and corrected interpretations"
+    },
+    {
+      "key": "handoff",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/STATUS_AND_HANDOFF.md",
+      "blob": "e3217ee6b6ce25d2669a4b89b88cabceb685bc03",
+      "description": "Historical checkpoints and later updates"
+    },
+    {
+      "key": "status",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/STATUS_DETAIL.md",
+      "blob": "ed238ecc16ef0d44792519b6f733e047e1604714",
+      "description": "Scoped evidence catalogue, with staleness warning"
+    },
+    {
+      "key": "old",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/whitepaper/kayfabe_architecture.tex",
+      "blob": "06b8dba35dd310de4d30ee415ff92258ab4e9876",
+      "description": "Predecessor: method and correction history"
+    },
+    {
+      "key": "translated",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/THE_TRANSLATED_PLANE.md",
+      "blob": "a5210a3cd044757a8a95b64358a2e5fe8ee37bce",
+      "description": "Address rewriting and real GPU execution"
+    },
+    {
+      "key": "kinds",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/the_three_channel_kinds.md",
+      "blob": "33cb6546be387787b4a110a827e9c3dde90b1bd0",
+      "description": "Privilege, address and completion by channel kind"
+    },
+    {
+      "key": "gspcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-gsp/src/lib.rs",
+      "blob": "9da5f28ea0887d047552dc2402081667281c9b0c",
+      "description": "Firmware-facing protocol vocabulary"
+    },
+    {
+      "key": "rmcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-rm/src/lib.rs",
+      "blob": "e2cbef089e864bccc6c2b44d2a70ca7bc336dec6",
+      "description": "Guest resource-manager model"
+    },
+    {
+      "key": "corecode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-core/src/lib.rs",
+      "blob": "d76c8423922876dacf537072050c7e88f9a5458e",
+      "description": "Composition of trap and worker planes"
+    },
+    {
+      "key": "trapcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-trap/src/lib.rs",
+      "blob": "97b4d8fe5358fafb499e7384224a30f5df5a861e",
+      "description": "Bounded trap and token interface"
+    },
+    {
+      "key": "hostcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-host/src/lib.rs",
+      "blob": "85a6965263f767f55acfd24f388c50a5822d5a93",
+      "description": "Authored host interface"
+    },
+    {
+      "key": "memcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-mem/src/vasmgr.rs",
+      "blob": "c10dd2f9144eed209905f3f2dbff4df1b41da40e",
+      "description": "VA manager request and result protocol"
+    },
+    {
+      "key": "diffcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-cuda/src/diffmodel.rs",
+      "blob": "83e98ff23a5f219701d84c2aa74e2071fedb7274",
+      "description": "Diff and acknowledgement model"
+    },
+    {
+      "key": "applycode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-mem/src/apply.rs",
+      "blob": "bb3e0d43a5c752952d7ef27c44e3bb4ea3579fc3",
+      "description": "Applying changed runs and invalidation"
+    },
+    {
+      "key": "tsgcode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-host/src/channel.rs",
+      "blob": "3f703c0f39e71eb3938112765911539443f6a596",
+      "description": "Host group and member construction"
+    },
+    {
+      "key": "latejoin",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_LATE_TSG_JOINER.md",
+      "blob": "1eb349df8a2ecafaaf14b404601e540f92d2d51d",
+      "description": "Late-member state and scheduling dependency"
+    },
+    {
+      "key": "relaydesign",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_WINDOWS_USER_RING_RELAY.md",
+      "blob": "b0baddf889498eb7ed4a4b30b65fae538c8b62f9",
+      "description": "Windows user-work relay design"
+    },
+    {
+      "key": "lifecycle",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_USER_RING_LIFECYCLE_20261016.md",
+      "blob": "e73f814e46c52d664d31f0a1fc786fa815fb9f6c",
+      "description": "Corrected lifecycle and lazy-observation rules"
+    },
+    {
+      "key": "eventloop",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_USER_RING_EVENT_LOOP_20261014.md",
+      "blob": "2e8b125c71db341f2515c7f09c393a90f9d4e98d",
+      "description": "GET versus processed marker correction"
+    },
+    {
+      "key": "lazycode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-chan/src/user_lazy.rs",
+      "blob": "fcc8ca784090a9ba6425ddb43ccf4610ddcee1a2",
+      "description": "Cache and forced-observation predicates"
+    },
+    {
+      "key": "turncode",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "crates/kf-chan/src/user_turn.rs",
+      "blob": "d693fe46d7ab49a71b5c275bc5b1dd413b09e1ff",
+      "description": "Actual relay turn and mode transitions"
+    },
+    {
+      "key": "display",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_DISPLAY.md",
+      "blob": "2dbf97d7f43be352bbab037184894fdc7cf78d0f",
+      "description": "Emulated display and boot-layer policy"
+    },
+    {
+      "key": "planes",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_DISPLAY_PLANES_ORACLE.md",
+      "blob": "89b677471721939a023de549536cea80635b8081",
+      "description": "Pixel and completion oracle"
+    },
+    {
+      "key": "pacing",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_DISPLAY_PACING_20261017.md",
+      "blob": "2f6e1dc8d3aa639059dfb34ff0a4b61375e32ecd",
+      "description": "Broker credits, clock fallback and test limits"
+    },
+    {
+      "key": "video",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_VIDEO_ENGINES.md",
+      "blob": "528c282462cfc2d111fe268207df40e3594bc8c3",
+      "description": "Engine grouping and recorded video correctness"
+    },
+    {
+      "key": "uvmdesign",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_UVM_DEMAND_PAGING.md",
+      "blob": "6917912b7128ad52ca98ab55d762369411460242",
+      "description": "Fault-delivery research and stock limitations"
+    },
+    {
+      "key": "driverdesign",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_DRIVER_MATRIX.md",
+      "blob": "8657242414af37973a4941572ce1736e3427d5df",
+      "description": "Independent host and guest driver matrix"
+    },
+    {
+      "key": "constants",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_CONSTANT_STRATEGY.md",
+      "blob": "f55cbe33ae8db4ddf38e2cab483cb0271b32073c",
+      "description": "Tier ladder, source separation and coverage gaps"
+    },
+    {
+      "key": "provenance",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_PROVENANCE.md",
+      "blob": "a3feb0f292ca1ac6517091a98980edc81c0194a9",
+      "description": "Public provenance policy only; no analysis findings"
+    },
+    {
+      "key": "flags",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_FLAG_INVENTORY.md",
+      "blob": "98ecdd0f1a58617c7428ec33f38bc5c69cab984f",
+      "description": "Diagnostic versus product-mode debt"
+    },
+    {
+      "key": "cooperation",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_COOPERATIVE_TIERS.md",
+      "blob": "a1bcde305a4d33a8bb97c1d83fdb252052f39f59",
+      "description": "Stock path versus optional cooperation proposals"
+    },
+    {
+      "key": "gaps",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_FEATURE_GAPS.md",
+      "blob": "7b138bdc53659e7b8138d0a1cbf28f3d7d23e180",
+      "description": "Dated priority and application-gap catalogue"
+    },
+    {
+      "key": "reset",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_DEVICE_RESET.md",
+      "blob": "0c4ce0d5eb812c1ef10fcd78e8fa899b4ad2b458",
+      "description": "Reset stages and lifetime contract"
+    },
+    {
+      "key": "sleep",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_S3_RESUME.md",
+      "blob": "e24a8e3c476f9c73916455e33f9bfe935f166f5a",
+      "description": "Linux evidence and Windows resume limits"
+    },
+    {
+      "key": "migrationdecision",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md",
+      "blob": "882d969e54edea573681e6ea1099397dd843dff1",
+      "description": "Mediation, native relocation correction and cooperation alternatives"
+    },
+    {
+      "key": "owed",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_ENS8_OWED_RING_TESTS.md",
+      "blob": "e6bf04910d3207b7acf9e7d6690b7e682693fc42",
+      "description": "Consumed-wake witness, model limits and later fix"
+    },
+    {
+      "key": "broker",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "ci/vast-broker/README.md",
+      "blob": "43e1dffbcae0aafa72928ea336089e9c884a1e4c",
+      "description": "Broker lifecycle, current policy and unattested verdicts"
+    },
+    {
+      "key": "threat",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "ci/vast-broker/docs/THREAT_MODEL.md",
+      "blob": "08ffd445642e1a644cbfe2244c6d13eb4dcaff50",
+      "description": "Owner approval and test-infrastructure trust boundary"
+    },
+    {
+      "key": "apps",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_APP_MATRIX.md",
+      "blob": "340620a3f92a2d7e5162a4e76b5c15a07b4d247e",
+      "description": "Application outputs, samples and failures"
+    },
+    {
+      "key": "winmatrix",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md",
+      "blob": "853b661519fb90bbebc7816cd5abaed9e9263ffc",
+      "description": "Windows application receipts at a named revision"
+    },
+    {
+      "key": "physevidence",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/phys_operand_oracle_20261008/README.md",
+      "blob": "7d0bdc867d204b23899753ad734b5fbf5db6aea2",
+      "description": "Physical/virtual operand hardware boundary"
+    },
+    {
+      "key": "sweep",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/sw3_die_sweep_20261024/README.md",
+      "blob": "53fe287d4ed4d418dee82e6b15c655e8c4b19e64",
+      "description": "Exact GA104 driver/gate cell"
+    },
+    {
+      "key": "turing",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/v3_turing_master/README.md",
+      "blob": "fb8d519d70fcc4e546d86b672adc1c3f6236087d",
+      "description": "TU116 Linux campaign and its exact checkouts"
+    },
+    {
+      "key": "families",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/v3_families_master/README.md",
+      "blob": "51f80c2a34dce0e042870122a01229a27397d39b",
+      "description": "AD104 workstation and GB205 Linux campaigns"
+    },
+    {
+      "key": "linuxperf",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_LINUX_PERF_BASELINE_6692e621.md",
+      "blob": "bdcec86e6d202293697efad02ce0e6ece11e537c",
+      "description": "Baseline selection, timing methods and limits"
+    },
+    {
+      "key": "winperf",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/perf_status_20261017/README.md",
+      "blob": "44616b15f34c37abdf9020d93fafe9001b6c987a",
+      "description": "Windows experimental and production timing scopes"
+    },
+    {
+      "key": "llmmethod",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "docs/design/V3_BUILD.md",
+      "blob": "8323f3d5c5843b3d20f97674cbc604212ed71159",
+      "description": "Language-model campaign revisions and test method"
+    },
+    {
+      "key": "llmdata",
+      "revision": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "path": "traces/llm_parity/vh_amd/summary.md",
+      "blob": "09f8a08b8240874b47834bb33986139fe25c0cca",
+      "description": "Three-run rates, ranges and text-equality records"
+    },
+    {
+      "key": "admission",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/V3_ENS5_SPARSE_ADMISSION.md",
+      "blob": "88bc9035e0daea8775a9834e62de1aba1522e53e",
+      "description": "Local undo, occupancy and software churn evidence"
+    },
+    {
+      "key": "rmcost",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/V3_ENS6_RM_COST.md",
+      "blob": "0b68ab1f915ec5d9cfd3075b450e0f19a50c7f8f",
+      "description": "Native reservation churn and first-reset counterexample"
+    },
+    {
+      "key": "budget",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/V3_ENS7_SPARSE_BUDGET.md",
+      "blob": "237c67d4f3386fde7358848d499559082625e6fd",
+      "description": "Finite budgets, missing-coverage accounting and exclusions"
+    },
+    {
+      "key": "sparse",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/V3_SPARSE_TWIN.md",
+      "blob": "45329c821f2581e153fa180981f5052aee2dee8d",
+      "description": "Default-OFF sparse representation and refresh contract"
+    },
+    {
+      "key": "walkscope",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/V3_WALK_GATE_SCOPE_20261026.md",
+      "blob": "bc31747de9e2d121154d6d6c5be063cd441cc75a",
+      "description": "Earlier scope proposal and explicit unresolved contracts"
+    },
+    {
+      "key": "walknarrow",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/V3_WALK_GATE_NARROWING.md",
+      "blob": "249e09c5f2c669f6d296c9eda83229a293a0bca5",
+      "description": "Target-scoping proof limits and supplied boot timing"
+    },
+    {
+      "key": "latency",
+      "revision": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+      "path": "docs/design/ENS11_SPLIT_LATENCY_20261027.md",
+      "blob": "1e4fcb12dcc7b65eb682cdd669e0690eec4790f4",
+      "description": "Split freshness, optional continuation and native timing limits"
+    }
+  ]
+}
