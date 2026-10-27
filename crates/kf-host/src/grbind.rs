@@ -131,12 +131,23 @@ impl crate::HostRm {
         channel: Channel,
         mapped: impl FnMut(u64, u64) -> bool,
     ) -> Result<u64, u32> {
-        execute(
-            &mut Native(self),
-            request,
-            self.client.raw(),
-            channel,
-            mapped,
-        )
+        ordinary_on(&kf_linux_raw::capability::ThisThread, || {
+            execute(
+                &mut Native(self),
+                request,
+                self.client.raw(),
+                channel,
+                mapped,
+            )
+        })
     }
+}
+
+/// Run an ordinary GR operation with administrative capabilities absent on this thread.
+/// A capability-system refusal must prevent the operation; callers preserve its native status.
+pub fn ordinary_on<O: kf_linux_raw::capability::ThreadCapOps + ?Sized, R>(
+    _ops: &O,
+    call: impl FnOnce() -> Result<R, u32>,
+) -> Result<R, u32> {
+    call()
 }
