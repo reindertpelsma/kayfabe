@@ -2,7 +2,10 @@
 
 import io
 import json
+import os
+import shlex
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -13,6 +16,78 @@ import vast_report as reporter
 
 
 class ProviderFaults(unittest.TestCase):
+    def real_parent_receipt(self, rc, stopped=False, fragmented=False):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / "bin"
+            binary.mkdir()
+            for name, text in {
+                "dmesg": "#!/bin/sh\nprintf 'kernel fixture\\nkernel readable\\n'\n",
+                "nvidia-smi": "#!/bin/sh\necho fixture-gpu\n",
+            }.items():
+                script = binary / name
+                script.write_text(text)
+                script.chmod(0o755)
+            fixture = root / "fault.txt"
+            fixture.write_text(self.real_case())
+            marker = root / "xid-failed"
+            provision = root / "provision_full.sh"
+            provision.write_text(
+                "#!/bin/bash\n"
+                + ("printf 'DRIVER_RC=8\\n'\nsleep 0.15\n" if fragmented else "")
+                + "cat "
+                + shlex.quote(str(fixture))
+                + "\n"
+                + ("touch " + shlex.quote(str(marker)) + "\n" if stopped else "")
+                + "exit "
+                + str(rc)
+                + "\n"
+            )
+            checkout = Path(payload.__file__).resolve().parents[2]
+            command = payload.watched(["bash", str(provision)], checkout, "provider-fixture")
+            bindings = {
+                "PATH": str(binary) + os.pathsep + os.environ["PATH"],
+                "XID_OUTDIR": str(root),
+                "KF_PAYLOAD_XID_FAILED": str(marker),
+            }
+            with patch.dict(os.environ, bindings), patch.object(payload, "STOP", False):
+                with redirect_stdout(io.StringIO()):
+                    status = payload.run_bounded(
+                        command, int(time.time() * 1000) + 10000, root / "output", []
+                    )
+            receipt = root / "xid_provider-fixture.log"
+            return status, receipt.read_text() if receipt.exists() else ""
+
+    def test_actual_parent_preserves_failed_watch_receipt_one(self):
+        rc, text = self.real_parent_receipt(1)
+        self.assertEqual(rc, 1)
+        self.assertEqual(payload.watch_delta(text, rc, failed_provider=True), [])
+
+    def test_actual_parent_preserves_failed_watch_receipt_two(self):
+        rc, text = self.real_parent_receipt(2)
+        self.assertEqual(rc, 2)
+        self.assertEqual(payload.watch_delta(text, rc, failed_provider=True), [])
+
+    def test_actual_parent_keeps_explicit_xid_stop_one(self):
+        rc, text = self.real_parent_receipt(1, stopped=True)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("HOST Xid CLEAN", text)
+
+    def test_actual_parent_split_driver_receipt_one(self):
+        rc, text = self.real_parent_receipt(1, fragmented=True)
+        self.assertEqual(rc, 1)
+        self.assertEqual(payload.watch_delta(text, rc, failed_provider=True), [])
+
+    def test_actual_parent_split_driver_receipt_two(self):
+        rc, text = self.real_parent_receipt(2, fragmented=True)
+        self.assertEqual(rc, 2)
+        self.assertEqual(payload.watch_delta(text, rc, failed_provider=True), [])
+
+    def test_actual_parent_keeps_explicit_xid_stop_two(self):
+        rc, text = self.real_parent_receipt(2, stopped=True)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("HOST Xid CLEAN", text)
+
     def clean_failed_stage(self, rc):
         from test_vast_payload import watch
 
