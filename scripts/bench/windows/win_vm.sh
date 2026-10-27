@@ -32,7 +32,10 @@
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
 # WINVM_SSH_BIND (127.0.0.1), WINVM_RAM_MB (8192), WINVM_SMP (8), WINVM_KF3_FB_MB (8192).
-# WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a monitor.
+# WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
+# monitor.
+# WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
+# disk with that cache mode; unset keeps QEMU's default, and `run` never reads it.
 # DIAGNOSTIC, default off (2026-10-09): WINVM_TRACE=1 [WINVM_GSP_OBSERVER=1] with KF3_BAR0_READ_TRACE=1
 # records each boot with the VFIO reference's tracer (docs/design/V3_BAR0_TRACE_MODE.md).
 #
@@ -536,7 +539,7 @@ install_boot() {
   if [ -e "$VM/logs/install_boot.done" ]; then log "install boot already completed ($(cat "$VM/logs/install_boot.done"))"; return 0; fi
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
-       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
+       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
        -device virtio-blk-pci,drive=sys,bootindex=1
        -drive "file=$WIN_ISO,if=none,id=cd0,media=cdrom,readonly=on" -device ide-cd,drive=cd0,bus=ide.0,bootindex=0
        -drive "file=$VIRTIO_ISO,if=none,id=cd1,media=cdrom,readonly=on" -device ide-cd,drive=cd1,bus=ide.1
@@ -555,7 +558,7 @@ install_boot() {
 check_boot() {
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
-       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
+       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
        -device virtio-blk-pci,drive=sys,bootindex=0
        -serial "file:$VM/logs/installcheck_b1_serial.log")
   rm -f "$VM/run/stop-requested"
@@ -856,7 +859,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
-    ""|-h|--help|help) sed -n '3,47p' "$0" | sed 's/^# \{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,49p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac
 }
