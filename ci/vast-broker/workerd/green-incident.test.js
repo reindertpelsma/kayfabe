@@ -44,16 +44,18 @@ for (const seedCount of [0, 255])
     const stub = ns.get(ns.idFromName(t.name));
     const snapshot = async () =>
       new Map(await (await stub.fetch('https://test.invalid/snapshot')).json());
-    await stub.fetch('https://test.invalid/seed', {
-      method: 'POST',
-      body: JSON.stringify(
-        Array.from({ length: seedCount }, (_, i) => ['bad-machine:' + (200000 + i), true]),
-      ),
-    });
+    await (
+      await stub.fetch('https://test.invalid/seed', {
+        method: 'POST',
+        body: JSON.stringify(
+          Array.from({ length: seedCount }, (_, i) => ['bad-machine:' + (200000 + i), true]),
+        ),
+      })
+    ).json();
     const now = Math.floor(Date.now() / 1000);
     const token = await jwt({ iat: now, nbf: now - 1, exp: now + 300 });
-    const call = (path, body, bearer = token) =>
-      stub.fetch(env.WORKER_URL + '/' + prefix + path, {
+    const call = async (path, body, bearer = token) => {
+      const response = await stub.fetch(env.WORKER_URL + '/' + prefix + path, {
         method: body === undefined ? 'GET' : 'POST',
         headers: {
           Authorization: 'Bearer ' + bearer,
@@ -62,6 +64,12 @@ for (const seedCount of [0, 255])
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+      // Miniflare requires its proxy response body to be consumed immediately.
+      return new Response(await response.arrayBuffer(), {
+        status: response.status,
+        headers: response.headers,
+      });
+    };
     const rent = () => call('/rent', rentBody(cloud.run.head_sha));
     assert.equal((await rent()).status, 200);
     const original = (await snapshot()).get('record:123-1');
