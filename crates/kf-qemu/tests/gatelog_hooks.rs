@@ -174,7 +174,7 @@ fn the_look_at_gp_put_is_made_only_when_the_gate_holds() {
 fn the_publication_gate_hook_sits_in_the_busy_branch_before_the_retry() {
     let g = sites(USERPUMP, "kf_mem::gatelog::Point::Publish);")[0].0;
     let busy = USERPUMP[..g]
-        .rfind("if me.inbox.walk_busy() {")
+        .rfind("if !me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold) {")
         .expect("busy branch");
     let retry = USERPUMP[g..]
         .find("return Err(Failure::Retry);")

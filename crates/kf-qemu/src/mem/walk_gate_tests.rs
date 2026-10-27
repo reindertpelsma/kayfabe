@@ -451,3 +451,71 @@ fn the_va_release_transaction_wakes_legacy_overflow_when_its_last_statement_sett
     assert_eq!(ready, vec![7]);
     assert!(!inbox.walk_busy());
 }
+
+// Test-only old-code adapter: the original Inbox had no per-target applied milestone.
+// The fix supplies the production method; this no-op is removed in that commit.
+trait AppliedMarker {
+    fn note_statements_applied(&self, _n: u64) {}
+}
+impl AppliedMarker for Inbox {}
+
+fn page_dir(key: VasKey) -> kf_rm::barpde::MemStatement {
+    kf_rm::barpde::MemStatement::PageDir(kf_rm::rmrpc::PageDirStatement {
+        client: kf_arch::ids::HClient(0),
+        vaspace: kf_arch::ids::HObject(key.0 as u32),
+        pdb: kf_arch::ids::Pdb(0x1000_0000),
+        pdb_aperture: Some(kf_arch::Aperture::Vidmem),
+    })
+}
+
+#[test]
+fn per_space_applied_a_resumes_while_b_walks_and_its_rpc_reply_barrier_stays_closed() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(page_dir(A));
+    inbox.take();
+    inbox.wait_walk_for(A, 7);
+    inbox.note_statements_applied(1);
+    let (advanced, ready) = inbox.finish_gate_loop(vec![B], false, None, true, None);
+    assert!(!advanced);
+    assert!(!inbox.all_settled(), "RPC reply settlement remains VM-wide");
+    assert_eq!(ready, vec![7], "A finished; only B is still being walked");
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn per_space_applied_a_releases_while_b_keeps_its_own_pending_statement() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(page_dir(A));
+    inbox.push(page_dir(B));
+    inbox.take();
+    inbox.wait_walk_for(A, 7);
+    inbox.wait_walk_for(B, 9);
+    inbox.note_statements_applied(2);
+    let (advanced, ready) = inbox.finish_gate_loop(vec![B], false, None, true, None);
+    assert!(!advanced);
+    assert_eq!(inbox.counts(), (2, 0));
+    assert_eq!(ready, vec![7]);
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn per_space_applied_milestone_never_clears_a_newer_untaken_space() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(page_dir(A));
+    inbox.take();
+    inbox.push(page_dir(B));
+    inbox.note_statements_applied(1);
+    inbox.finish_gate_loop(vec![], false, None, true, None);
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn per_space_applied_milestone_never_clears_a_newer_untaken_request_for_the_same_space() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(page_dir(A));
+    inbox.take();
+    inbox.push(page_dir(A));
+    inbox.note_statements_applied(1);
+    inbox.finish_gate_loop(vec![B], false, None, true, None);
+    assert!(inbox.walk_busy_for(A));
+}
