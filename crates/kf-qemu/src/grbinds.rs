@@ -760,4 +760,85 @@ mod tests {
         assert_eq!(unique(matches), Err(0x56));
         assert_eq!(unique([(11, 23)]), Ok(Some((11, 23))));
     }
+    #[test]
+    fn mixed_preemption_tsg_cannot_ignore_a_native_non_user_member() {
+        let r = request(true);
+        let members = [(true, (11, 22)), (false, (11, 23))];
+        let candidates = members
+            .into_iter()
+            .filter(|(_, key)| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(user_target(candidates), Err(0x56));
+    }
+    #[test]
+    fn mixed_zcull_tsg_cannot_pick_a_user_share_after_a_non_user_member() {
+        let r = request(false);
+        let members = [(false, (11, 22)), (true, (11, 23))];
+        let candidates = members
+            .into_iter()
+            .filter(|(_, key)| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(user_target(candidates), Err(0x56));
+    }
+    #[test]
+    fn non_user_preemption_target_still_declines_the_user_adapter() {
+        let r = request(true);
+        let members = [(false, (11, 22)), (true, (12, 23))];
+        let candidates = members
+            .into_iter()
+            .filter(|(_, key)| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(user_target(candidates), Ok(None));
+    }
+    #[test]
+    fn non_user_zcull_target_preserves_the_linux_fallback() {
+        let r = request(false);
+        let members = [(false, (11, 22), 1), (true, (11, 23), 9)];
+        let candidates = members
+            .into_iter()
+            .filter(|(_, key, engine)| eligible(r, *key, Some(21), *engine, true))
+            .map(|(user, key, _)| (user, key));
+        assert_eq!(user_target(candidates), Ok(None));
+    }
+    fn busy_pair(first_gfxp: bool) {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake::default());
+        let ready = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let check = ready.clone();
+        let mut first = work(first_gfxp);
+        let a = Reply::default();
+        let b = Reply::default();
+        q.enqueue(
+            Box::new(move |h| {
+                if check.load(Ordering::Acquire) {
+                    first(h)
+                } else {
+                    None
+                }
+            }),
+            a.clone(),
+            || {},
+        )
+        .unwrap();
+        q.enqueue(work(!first_gfxp), b.clone(), || {}).unwrap();
+        q.serve(&host);
+        q.serve(&host);
+        assert!(host.lock().unwrap().binds.is_empty());
+        assert!(a.lock().unwrap().is_none());
+        assert!(b.lock().unwrap().is_none());
+        ready.store(true, Ordering::Release);
+        q.serve(&host);
+        q.serve(&host);
+        assert_eq!(*a.lock().unwrap(), Some(Ok(4096)));
+        assert_eq!(*b.lock().unwrap(), Some(Ok(4096)));
+        let host = host.lock().unwrap();
+        assert_eq!(host.binds[0].kind, request(first_gfxp).kind);
+        assert_eq!(host.binds[1].kind, request(!first_gfxp).kind);
+        assert!(!q.has_work());
+    }
+    #[test]
+    fn busy_preemption_cannot_be_overtaken_by_zcull_on_the_same_context() {
+        busy_pair(true);
+    }
+    #[test]
+    fn busy_zcull_cannot_be_overtaken_by_preemption_on_the_same_context() {
+        busy_pair(false);
+    }
 }
