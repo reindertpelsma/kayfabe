@@ -1,8 +1,9 @@
 //! ENS6 layout time slice: the bound on RM reservation verbs one refresh may START.
 //!
-//! Measured on 7330: a reservation verb costs about 17 us on the host (271 ms / 15 798 calls in
-//! the first slow apply), and the 14 applies of 0.3 .. 1.95 s were 20 000 .. 100 000 reservation
-//! verbs of layout work each (made/freed grew by ~20k per heartbeat), not single slow calls.
+//! Measured on 7330 (2026-10-27, rev 6d95870c7): a reservation verb costs about 17 us on
+//! the host (271 ms / 15 798 calls in the first slow apply), and the 14 slow applies of
+//! 0.3 .. 1.95 s were reservation-verb churn (made/freed grew by ~20k per heartbeat, up to
+//! ~59k verbs in the heaviest one), not single slow calls.
 //! A refresh (one walker entry, `begin_refresh` .. `end_refresh`) holds the VM-wide walk gate and
 //! the placement lock while it runs, so its layout work has a stated bound:
 //!

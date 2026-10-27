@@ -67,7 +67,8 @@ pub(crate) trait Ops {
     fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError>;
     fn release(&self, handle: u32) -> Result<(), RmError>;
     /// Whether this refresh may START more layout work of this kind (the time slice,
-    /// [`slice::Slice`]; `demand` is an explicit sparse admission, else optional work). Restoring a half-done replacement never asks: it must finish.
+    /// [`slice::Slice`]; `demand` is an explicit sparse admission, else optional work).
+    /// Restoring a half-done replacement never asks: it must finish.
     fn budget_left(&self, _demand: bool) -> bool {
         true
     }

@@ -1,6 +1,7 @@
 // ENS6 failing-first regressions (campaign 7330, host evidence).
 //
-// Measured on 7330: at the 8192-block cap every plain map re-ran recycle (release a, release b,
+// Measured on 7330 (2026-10-27, rev 6d95870c7): at the 8192-block cap every plain map
+// re-ran recycle (release a, release b,
 // reserve a merged 4 MiB) and the split; RM refused the reserve, the pair was restored, and the
 // map was counted coarse: ~120 000 refusals, ~300 000 made / ~282 000 freed, 14 applies of
 // 0.3 .. 1.95 s (about 17 us per verb). Boot-time hard errors were RM refusals of sparse tiles
@@ -13,7 +14,8 @@
 mod ens6 {
     use super::*;
 
-    /// Virtual cost of one RM verb (measured on 7330: 271 ms / 15 798 calls).
+    /// Virtual cost of one RM verb (measured on 7330, 2026-10-27, rev 6d95870c7:
+    /// 271 ms / 15 798 calls).
     pub const VERB_NS: u64 = 17_000;
     /// Extra verbs one step may overshoot the slice by (one replacement and its rollback).
     pub const OVERSHOOT_VERBS: u64 = 8;

@@ -9,7 +9,7 @@ Parent: `docs/design/V3_SPARSE_TWIN.md`, `docs/design/V3_ENS5_SPARSE_ADMISSION.m
 `6d95870c7` (ENS5). Evidence: Windows boot 7330 (twin ON, production perf config) and the same binary's run
 7350, host `/data/claude-ens5-20261026/lane/windows-20261022/boundary-kayfabe-{7330,7350}/qemu.log`.
 
-## What 7330 and 7350 show (MEASURED, heartbeat series)
+## What 7330 and 7350 show (MEASURED 2026-10-27, rev `6d95870c7`, heartbeat series)
 
 1. **The slow applies were reservation-verb churn, not slow single RM calls.** Between heartbeat 510 and 543 of
    7330 (about 66 s) `made` grew by 241 584 and `freed` by 241 583, `refused` by 120 142 and `coarse_maps` by
@@ -23,7 +23,7 @@ Parent: `docs/design/V3_SPARSE_TWIN.md`, `docs/design/V3_ENS5_SPARSE_ADMISSION.m
    map/unmap/control verbs). The heaviest heartbeats carry about 59 000 such verbs (33 us per verb there, apply 1.94 s).
 2. **The first two slow applies are boot.** 287.7 ms (7330) and 289.0 ms (7350): the same 15 798 RM calls,
    deterministic. The single 190 .. 191 ms `max_ns` in that snapshot is a *thread-lifetime gauge*
-   (`diag::Snapshot::since` subtracts calls/ns/work only), so it is not proven to belong to that apply. It is
+   (`diag::Snapshot::since` subtracts calls/ns/work only), so it is not proven to belong to that apply (rev `6d95870c7`). It is
    identical in both runs, which points at one fixed boot step on the VA thread; the host benchmark's `roots`
    arm measures the candidate (the space-creation reservations of up to 127 TiB).
 3. **The boot-time `NoMemory` is a host RM refusal, not our budget.** `refused` equals `admit_hard_err`
@@ -86,7 +86,7 @@ a saturated tree with a refusing RM, 20 refreshes, every refresh <= `SLICE_NS` +
 17 us/verb clock) and `ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses`
 (8000-tile admission over many refreshes, monotone coverage).
 
-## Measured on the host
+## Measured on the host (2026-10-27, rev `6d95870c7`)
 
 See `traces/ens6_20261027/` (benchmark tables, mutation ledger) and the lane report.
 

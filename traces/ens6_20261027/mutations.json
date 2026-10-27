@@ -1,0 +1,374 @@
+{
+ "layout_ignores_backoff": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens5_failed_suffix_is_not_published_by_an_unrelated_retry",
+   "sparse::tests::ens5_unaccepted_failed_sparse_is_not_published_by_a_peer_map",
+   "sparse::tests::ens6_a_refusal_backs_off_layout_work_and_the_back_off_doubles_then_resets",
+   "sparse::tests::ens6_a_refused_split_is_rolled_back_and_the_next_map_does_not_retry_it",
+   "sparse::tests::ens6_a_thousand_plain_maps_at_the_cap_with_a_refusing_rm_cost_one_probe",
+   "sparse::tests::ens6_saturated_churn_sim_keeps_every_refresh_inside_the_slice"
+  ],
+  "round": "round1"
+ },
+ "layout_ignores_slice": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+   "sparse::tests::ens6_one_refresh_starts_no_more_layout_work_than_the_slice",
+   "sparse::tests::ens6_retire_converts_at_most_one_slice_per_refresh_and_finishes_later"
+  ],
+  "round": "round1"
+ },
+ "backoff_never_doubles": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refusal_backs_off_layout_work_and_the_back_off_doubles_then_resets",
+   "sparse::tests::ens6_backoff_steps_double_to_the_cap_and_stop"
+  ],
+  "round": "round2"
+ },
+ "backoff_never_resets": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refusal_backs_off_layout_work_and_the_back_off_doubles_then_resets",
+   "sparse::tests::ens6_a_success_resets_the_backoff_only_once_it_has_expired"
+  ],
+  "round": "round2"
+ },
+ "refusal_not_counted": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::a_later_rm_refusal_restores_all_coarse_siblings",
+   "sparse::tests::ens5_failed_admit_is_not_reissued_without_block_change",
+   "sparse::tests::ens5_failed_split_suffix_is_not_reissued_without_block_change",
+   "sparse::tests::ens6_sparse_admit_refused_by_rm_is_a_counted_decline_not_a_hard_error",
+   "sparse::tests::first_rm_reservation_refusal_restores_empty_normal_coverage"
+  ],
+  "round": "round1"
+ },
+ "refusal_sets_no_backoff": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens5_failed_suffix_is_not_published_by_an_unrelated_retry",
+   "sparse::tests::ens5_unaccepted_failed_sparse_is_not_published_by_a_peer_map",
+   "sparse::tests::ens6_a_refusal_backs_off_layout_work_and_the_back_off_doubles_then_resets",
+   "sparse::tests::ens6_a_refused_split_is_rolled_back_and_the_next_map_does_not_retry_it",
+   "sparse::tests::ens6_a_thousand_plain_maps_at_the_cap_with_a_refusing_rm_cost_one_probe",
+   "sparse::tests::ens6_saturated_churn_sim_keeps_every_refresh_inside_the_slice"
+  ],
+  "round": "round1"
+ },
+ "window_never_hits": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_cached_refusal_answers_until_its_backoff_ends_then_is_reevaluated",
+   "sparse::tests::ens6_a_refused_tile_costs_no_verb_after_the_backoff_ended",
+   "sparse::tests::ens6_a_refused_window_is_not_asked_of_rm_again"
+  ],
+  "round": "round2"
+ },
+ "window_never_remembered": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_cached_refusal_answers_until_its_backoff_ends_then_is_reevaluated",
+   "sparse::tests::ens6_a_refused_tile_costs_no_verb_after_the_backoff_ended",
+   "sparse::tests::ens6_a_refused_window_is_not_asked_of_rm_again",
+   "sparse::tests::ens6_adjacent_refused_tiles_merge_into_one_window",
+   "sparse::tests::ens6_refused_windows_are_bounded"
+  ],
+  "round": "round2"
+ },
+ "no_speculative_skip": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_skipped_refinements_leave_the_geometry_alone_over_many_maps",
+   "sparse::tests::ens6_speculative_refine_above_the_reserve_with_nothing_to_recycle_issues_no_rm_verb"
+  ],
+  "round": "round2"
+ },
+ "speculative_skip_ignores_recyclable": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::breaker_i7_budget_recovers_when_every_mapping_is_gone",
+   "sparse::tests::ens6_a_thousand_plain_maps_at_the_cap_with_a_refusing_rm_cost_one_probe"
+  ],
+  "round": "round1"
+ },
+ "normal_always_recycles": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_normal_over_two_refined_blocks_never_recycles",
+   "sparse::tests::ens6_normal_with_nothing_to_split_never_recycles"
+  ],
+  "round": "round3"
+ },
+ "recycle_no_headroom": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_headroom_batch_means_the_next_admissions_do_not_recycle_again",
+   "sparse::tests::ens6_recycle_makes_its_headroom_in_one_batch"
+  ],
+  "round": "round1"
+ },
+ "recycle_ignores_slice": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refused_merge_backs_off_the_next_admission",
+   "sparse::tests::ens6_an_admission_refused_by_a_merge_is_retried_when_its_backoff_ends",
+   "sparse::tests::ens6_optional_recycle_stops_at_half_the_slice_but_demand_still_recycles",
+   "sparse::tests::ens6_recycle_does_not_start_when_the_demand_slice_is_spent",
+   "sparse::tests::ens6_saturated_churn_sim_keeps_every_refresh_inside_the_slice"
+  ],
+  "round": "round2"
+ },
+ "recycle_refusal_is_hard_error": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refused_merge_backs_off_the_next_admission",
+   "sparse::tests::ens6_a_refused_merge_is_a_counted_fallback_for_the_admission",
+   "sparse::tests::ens6_an_admission_refused_by_a_merge_is_retried_when_its_backoff_ends",
+   "sparse::tests::ens6_saturated_churn_sim_keeps_every_refresh_inside_the_slice"
+  ],
+  "round": "round2"
+ },
+ "tile_reserve_ignores_slice": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refusal_backs_off_layout_work_and_the_back_off_doubles_then_resets",
+   "sparse::tests::ens6_gap_tiles_are_reserved_within_the_slice_and_the_rest_resumes"
+  ],
+  "round": "round2"
+ },
+ "sparsify_ignores_slice": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+   "sparse::tests::ens6_one_refresh_starts_no_more_layout_work_than_the_slice"
+  ],
+  "round": "round1"
+ },
+ "deferral_drops_progress": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+   "sparse::tests::ens6_one_refresh_starts_no_more_layout_work_than_the_slice",
+   "sparse::tests::ens6_retire_converts_at_most_one_slice_per_refresh_and_finishes_later"
+  ],
+  "round": "round1"
+ },
+ "deferral_not_expired": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+   "sparse::tests::ens6_retire_converts_at_most_one_slice_per_refresh_and_finishes_later"
+  ],
+  "round": "round1"
+ },
+ "retire_converts_unbounded": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_block_that_becomes_occupied_before_conversion_is_not_converted",
+   "sparse::tests::ens6_cleanup_conversion_in_retry_respects_the_optional_slice",
+   "sparse::tests::ens6_intent_that_returns_before_conversion_keeps_its_sparse_block",
+   "sparse::tests::ens6_retire_converts_at_most_one_slice_per_refresh_and_finishes_later"
+  ],
+  "round": "round2"
+ },
+ "cleanup_skips_recheck": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_block_that_becomes_occupied_before_conversion_is_not_converted",
+   "sparse::tests::ens6_a_wanted_block_in_the_middle_of_the_queue_stays_sparse",
+   "sparse::tests::ens6_intent_that_returns_before_conversion_keeps_its_sparse_block"
+  ],
+  "round": "round4"
+ },
+ "retry_never_ticks": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refusal_backs_off_layout_work_and_the_back_off_doubles_then_resets",
+   "sparse::tests::ens6_an_admission_refused_by_a_merge_is_retried_when_its_backoff_ends",
+   "sparse::tests::ens6_retry_advances_the_tick_even_with_nothing_pending"
+  ],
+  "round": "round2"
+ },
+ "retry_ignores_slice": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_retry_with_a_spent_slice_does_not_reask_an_emptied_blocks_declined_run",
+   "sparse::tests::ens6_retry_with_a_spent_slice_starts_no_deferred_run"
+  ],
+  "round": "round3"
+ },
+ "due_ignored": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_cached_refusal_answers_until_its_backoff_ends_then_is_reevaluated",
+   "sparse::tests::ens6_a_refused_tile_costs_no_verb_after_the_backoff_ended",
+   "sparse::tests::ens6_a_refused_window_expires_after_its_ttl"
+  ],
+  "round": "round2"
+ },
+ "slice_spend_uncounted": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_slow_rm_hits_the_time_limit_before_the_verb_limit",
+   "sparse::tests::ens6_optional_work_stops_before_demand_work_and_each_has_both_limits",
+   "sparse::tests::ens6_slice_peak_tracks_the_busiest_refresh_including_the_running_one"
+  ],
+  "round": "round2"
+ },
+ "slice_verbs_ignored": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_fast_verbs_hit_the_verb_limit_before_the_time_limit",
+   "sparse::tests::ens6_gap_tiles_are_reserved_within_the_slice_and_the_rest_resumes",
+   "sparse::tests::ens6_optional_work_stops_before_demand_work_and_each_has_both_limits",
+   "sparse::tests::ens6_recycle_does_not_start_when_the_demand_slice_is_spent",
+   "sparse::tests::ens6_retry_with_a_spent_slice_does_not_reask_an_emptied_blocks_declined_run",
+   "sparse::tests::ens6_retry_with_a_spent_slice_starts_no_deferred_run"
+  ],
+  "round": "round2"
+ },
+ "slice_optional_equals_demand": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_block_that_becomes_occupied_before_conversion_is_not_converted",
+   "sparse::tests::ens6_a_wanted_block_in_the_middle_of_the_queue_stays_sparse",
+   "sparse::tests::ens6_cleanup_conversion_in_retry_respects_the_optional_slice",
+   "sparse::tests::ens6_intent_that_returns_before_conversion_keeps_its_sparse_block",
+   "sparse::tests::ens6_optional_recycle_stops_at_half_the_slice_but_demand_still_recycles",
+   "sparse::tests::ens6_optional_work_stops_before_demand_work_and_each_has_both_limits"
+  ],
+  "round": "round2"
+ },
+ "sliced_does_not_charge": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+   "sparse::tests::ens6_one_refresh_starts_no_more_layout_work_than_the_slice",
+   "sparse::tests::ens6_retire_converts_at_most_one_slice_per_refresh_and_finishes_later"
+  ],
+  "round": "round1"
+ },
+ "slice_never_renews": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+   "sparse::tests::ens6_retire_converts_at_most_one_slice_per_refresh_and_finishes_later"
+  ],
+  "round": "round1"
+ },
+ "diag_alloc_verb_swapped": {
+  "status": "KILLED",
+  "killers": [
+   "diag::tests::a_va_reservation_alloc_is_the_reserve_verb_and_other_classes_are_not",
+   "diag::tests::only_the_virtual_memory_class_is_a_reservation_whatever_the_neighbour"
+  ],
+  "round": "round3"
+ },
+ "diag_invalidate_as_control": {
+  "status": "KILLED",
+  "killers": [
+   "diag::tests::only_the_tlb_invalidate_control_is_the_invalidate_verb",
+   "diag::tests::the_tlb_invalidate_control_is_the_invalidate_verb_and_others_are_control"
+  ],
+  "round": "round3"
+ },
+ "diag_global_not_recorded": {
+  "status": "KILLED",
+  "killers": [
+   "diag::tests::session_totals_add_every_thread_and_keep_the_global_maximum",
+   "diag::tests::the_session_maximum_survives_a_later_faster_call"
+  ],
+  "round": "round2"
+ },
+ "diag_max_not_kept": {
+  "status": "KILLED",
+  "killers": [
+   "diag::tests::the_session_maximum_is_the_slowest_call_of_any_thread_in_any_order",
+   "diag::tests::the_session_maximum_survives_a_later_faster_call"
+  ],
+  "round": "round3"
+ },
+ "diag_thread_verb_not_recorded": {
+  "status": "KILLED",
+  "killers": [
+   "diag::tests::each_rm_verb_lands_in_its_own_bucket_and_in_the_rm_total",
+   "diag::tests::the_invalidate_verb_is_the_invalidate_phase_and_not_an_rm_call",
+   "diag::tests::verb_time_is_accumulated_and_the_max_is_kept"
+  ],
+  "round": "round1"
+ },
+ "diag_since_ignores_verbs": {
+  "status": "KILLED",
+  "killers": [
+   "diag::tests::each_rm_verb_lands_in_its_own_bucket_and_in_the_rm_total",
+   "diag::tests::interval_subtracts_verb_buckets_without_underflow"
+  ],
+  "round": "round1"
+ },
+ "hook_gate_not_sliced": {
+  "status": "KILLED",
+  "killers": [
+   "sparse_callbacks_run_on_the_sliced_ops",
+   "the_sliced_ops_are_built_on_the_host_session_slice_and_renewed_by_it"
+  ],
+  "round": "round3"
+ },
+ "hook_slice_not_renewed_in_begin": {
+  "status": "KILLED",
+  "killers": [
+   "sparse_callbacks_run_on_the_sliced_ops",
+   "the_sliced_ops_are_built_on_the_host_session_slice_and_renewed_by_it"
+  ],
+  "round": "round2"
+ },
+ "hook_mem_begin_without_renew": {
+  "status": "KILLED",
+  "killers": [
+   "a_new_refresh_renews_the_layout_slice_before_the_first_retry",
+   "the_slice_is_renewed_once_per_refresh_by_the_gpu_mirror"
+  ],
+  "round": "round2"
+ },
+ "hook_heartbeat_without_verbs": {
+  "status": "KILLED",
+  "killers": [
+   "heartbeat_prints_every_rm_verb_class",
+   "heartbeat_verb_indices_follow_the_enum_declaration_order"
+  ],
+  "round": "round2"
+ },
+ "window_ttl_ignored": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_a_refused_window_expires_after_its_ttl",
+   "sparse::tests::ens6_an_expired_window_is_asked_again_and_remembered_again"
+  ],
+  "round": "round3"
+ },
+ "windows_unbounded": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::ens6_refused_windows_are_bounded",
+   "sparse::tests::ens6_window_eviction_drops_the_oldest_first"
+  ],
+  "round": "round4"
+ },
+ "merge_not_counted_coarse": {
+  "status": "KILLED",
+  "killers": [
+   "sparse::tests::a_block_lost_to_a_failed_repair_is_mapped_through_the_range_object",
+   "sparse::tests::a_refused_split_leaves_the_plain_map_in_its_original_block",
+   "sparse::tests::breaker_i1_edge_tile_refinement_at_the_cap_frees_populated_coarse_sibling",
+   "sparse::tests::breaker_i3_sparse_run_in_a_populated_coarse_block_is_a_counted_fallback_not_an_error",
+   "sparse::tests::declined_plain_maps_are_counted_as_coarse_maps_not_as_overflow",
+   "sparse::tests::ens6_a_refused_split_is_rolled_back_and_the_next_map_does_not_retry_it",
+   "sparse::tests::ens6_a_thousand_plain_maps_at_the_cap_with_a_refusing_rm_cost_one_probe",
+   "sparse::tests::ens6_optional_recycle_stops_at_half_the_slice_but_demand_still_recycles"
+  ],
+  "round": "round2"
+ }
+}
