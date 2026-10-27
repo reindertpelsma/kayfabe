@@ -8075,6 +8075,22 @@ impl ChanPlane {
                 g.disabled
             )];
             lines.push(format!("kf3: PROBE-DUMP   verdict: {verdict}"));
+            if let Some(head) = infl.first().map(|f| f.seq) {
+                let (wake_ago, wakes) = self.completions.last_wake();
+                let pump = g.chan.probe_last_pump();
+                lines.push(format!(
+                    "kf3: PROBE-DUMP   cause: {} (session wakes={wakes}, last wake {wake_ago:?} ms \
+                     ago; this channel's last pump {:?} ms ago read fence word {:?}, head {head})",
+                    kf_chan::wakeverdict::lost_wake_cause(
+                        wake_ago,
+                        pump.map(|p| p.0),
+                        pump.map(|p| p.1),
+                        head
+                    ),
+                    pump.map(|p| p.0),
+                    pump.map(|p| p.1),
+                ));
+            }
             // The token's own state says who could ring it: Idle with a reached fence is a ring
             // that never landed, Busy for a long time is a claim that never released.
             let word = self
