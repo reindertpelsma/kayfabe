@@ -68,10 +68,16 @@ fn only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors() {
     let t = tree(&[0, 1, 2]);
     let g = Gate::default();
     let calls = AtomicUsize::new(0);
-    s.tick(0, &g, &t, [0, 0, 1, 2], || {
-        calls.fetch_add(1, Ordering::Relaxed);
-        true
-    });
+    s.tick(
+        || 0,
+        &g,
+        &t,
+        [0, 0, 1, 2],
+        || {
+            calls.fetch_add(1, Ordering::Relaxed);
+            true
+        },
+    );
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(
@@ -84,10 +90,16 @@ fn nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport() {
     let s = storm(7);
     let t = tree(&[5, 70]);
     let calls = AtomicUsize::new(0);
-    s.tick(0, &Gate::default(), &t, [5, 70], || {
-        calls.fetch_add(1, Ordering::Relaxed);
-        true
-    });
+    s.tick(
+        || 0,
+        &Gate::default(),
+        &t,
+        [5, 70],
+        || {
+            calls.fetch_add(1, Ordering::Relaxed);
+            true
+        },
+    );
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert_eq!(
         s.summary(),
@@ -98,7 +110,7 @@ fn nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport() {
 fn before_leaf_arming_no_message_is_emitted() {
     let s = storm(1);
     let t = tree(&[]);
-    s.tick(0, &Gate::default(), &t, [0, 1], || panic!("unarmed"));
+    s.tick(|| 0, &Gate::default(), &t, [0, 1], || panic!("unarmed"));
     assert_eq!(s.raises.load(Ordering::Relaxed), 0);
     assert_eq!(s.skipped_masked.load(Ordering::Relaxed), 2);
 }
@@ -107,7 +119,13 @@ fn before_top_arming_no_message_is_emitted() {
     let s = storm(1);
     let t = tree(&[0, 70]);
     t.write(Reg::TopEnClear, 0xff);
-    s.tick(0, &Gate::default(), &t, [0, 70], || panic!("top disabled"));
+    s.tick(
+        || 0,
+        &Gate::default(),
+        &t,
+        [0, 70],
+        || panic!("top disabled"),
+    );
     assert_eq!(s.skipped_masked.load(Ordering::Relaxed), 2);
 }
 #[test]
@@ -116,7 +134,7 @@ fn leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm() {
     let t = tree(&[0, 1]);
     t.write(Reg::LeafEnClear(0), 3);
     let before = image(&t);
-    s.tick(0, &Gate::default(), &t, [0, 0, 1], || panic!("masked"));
+    s.tick(|| 0, &Gate::default(), &t, [0, 0, 1], || panic!("masked"));
     assert_eq!(image(&t), before);
     assert_eq!(
         s.summary(),
@@ -130,7 +148,7 @@ fn top_masks_skip_vectors_even_with_a_real_pending_leaf() {
     t.latch(70);
     t.write(Reg::TopEnClear, 2);
     let before = image(&t);
-    s.tick(0, &Gate::default(), &t, [70], || panic!("top masked"));
+    s.tick(|| 0, &Gate::default(), &t, [70], || panic!("top masked"));
     assert_eq!(image(&t), before);
     assert_eq!(s.skipped_masked.load(Ordering::Relaxed), 1);
 }
@@ -139,7 +157,7 @@ fn an_empty_enabled_tree_gets_only_a_spurious_message_and_no_status() {
     let s = storm(1);
     let t = tree(&[3]);
     let before = image(&t);
-    s.tick(0, &Gate::default(), &t, [3], || true);
+    s.tick(|| 0, &Gate::default(), &t, [3], || true);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(image(&t), before);
     assert_eq!(t.read(Reg::Top), 0);
@@ -152,7 +170,7 @@ fn guest_w1c_is_never_undone_and_unrelated_real_status_is_preserved() {
     t.latch(70);
     t.write(Reg::Leaf(0), 1 << 3);
     let before = image(&t);
-    s.tick(0, &Gate::default(), &t, [3], || true);
+    s.tick(|| 0, &Gate::default(), &t, [3], || true);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(image(&t), before);
     assert_eq!(t.read(Reg::Leaf(0)), 0);
@@ -170,10 +188,16 @@ fn cadence(ms: u16) {
         u64::from(ms) * MS,
         100 * u64::from(ms) * MS,
     ] {
-        s.tick(now, &g, &t, [0], || {
-            calls.fetch_add(1, Ordering::Relaxed);
-            true
-        });
+        s.tick(
+            || now,
+            &g,
+            &t,
+            [0],
+            || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                true
+            },
+        );
     }
     assert_eq!(
         calls.load(Ordering::Relaxed),
@@ -195,10 +219,16 @@ fn ceiling(vectors: Vec<u32>) {
     let g = Gate::default();
     let calls = AtomicUsize::new(0);
     for us in 0..1_000_000 {
-        s.tick(us * 1000, &g, &t, vectors.iter().copied(), || {
-            calls.fetch_add(1, Ordering::Relaxed);
-            true
-        });
+        s.tick(
+            || us * 1000,
+            &g,
+            &t,
+            vectors.iter().copied(),
+            || {
+                calls.fetch_add(1, Ordering::Relaxed);
+                true
+            },
+        );
     }
     assert_eq!(calls.load(Ordering::Relaxed), 1000);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1000);
@@ -217,10 +247,10 @@ fn reset_gate_blocks_messages_and_reopening_does_not_invent_status() {
     let t = tree(&[0]);
     let g = Gate::default();
     g.close();
-    s.tick(0, &g, &t, [0], || panic!("reset"));
+    s.tick(|| 0, &g, &t, [0], || panic!("reset"));
     assert_eq!(s.raises.load(Ordering::Relaxed), 0);
     g.open();
-    s.tick(0, &g, &t, [0], || true);
+    s.tick(|| 0, &g, &t, [0], || true);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(t.read(Reg::Top), 0);
 }
@@ -231,11 +261,11 @@ fn tree_reset_requires_new_guest_enables_before_renotification() {
     let g = Gate::default();
     t.latch(70);
     t.reset();
-    s.tick(0, &g, &t, [70], || panic!("new life unarmed"));
+    s.tick(|| 0, &g, &t, [70], || panic!("new life unarmed"));
     assert_eq!(s.skipped_masked.load(Ordering::Relaxed), 1);
     t.write(Reg::TopEnSet, 2);
     t.write(Reg::LeafEnSet(2), 1 << (70 % 32));
-    s.tick(MS, &g, &t, [70], || true);
+    s.tick(|| MS, &g, &t, [70], || true);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(t.read(Reg::Leaf(2)), 0);
 }
@@ -243,9 +273,9 @@ fn near_overflow(now: u64) {
     let s = storm(1);
     let t = tree(&[0]);
     let g = Gate::default();
-    s.tick(0, &g, &t, [0], || true);
+    s.tick(|| 0, &g, &t, [0], || true);
     for _ in 0..100 {
-        s.tick(now, &g, &t, [0], || panic!("clock overflow"));
+        s.tick(|| now, &g, &t, [0], || panic!("clock overflow"));
     }
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
 }
@@ -267,10 +297,16 @@ fn contention(v: u32) {
             let (s, t, g, calls) = (&s, &t, &g, &calls);
             scope.spawn(move || {
                 for ms in 0..1000 {
-                    s.tick(ms * MS, g, t, [v], || {
-                        calls.fetch_add(1, Ordering::Relaxed);
-                        true
-                    });
+                    s.tick(
+                        || ms * MS,
+                        g,
+                        t,
+                        [v],
+                        || {
+                            calls.fetch_add(1, Ordering::Relaxed);
+                            true
+                        },
+                    );
                 }
             });
         }
@@ -296,12 +332,19 @@ fn blocked_sender(v: u32) {
     std::thread::scope(|scope| {
         let (s, t, g) = (&s, &t, &g);
         scope.spawn(move || {
-            s.tick(0, g, t, [v], || {
-                begun.send(()).unwrap();
-                done.recv_timeout(std::time::Duration::from_secs(5))
-                    .unwrap();
-                true
-            })
+            s.tick(
+                || 0,
+                g,
+                t,
+                [v],
+                || {
+                    assert!(!g.quiet(), "the sender holds reset quiescence");
+                    begun.send(()).unwrap();
+                    done.recv_timeout(std::time::Duration::from_secs(5))
+                        .unwrap();
+                    true
+                },
+            )
         });
         wait.recv_timeout(std::time::Duration::from_secs(5))
             .unwrap();
@@ -332,7 +375,7 @@ fn hostile_vector_ids_cannot_index_the_tree_or_steal_real_status() {
     let s = storm(1);
     let t = tree(&[0]);
     let before = image(&t);
-    s.tick(0, &Gate::default(), &t, [u32::MAX, 256, 512, 0], || true);
+    s.tick(|| 0, &Gate::default(), &t, [u32::MAX, 256, 512, 0], || true);
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(image(&t), before);
 }

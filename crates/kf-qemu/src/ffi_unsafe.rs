@@ -230,7 +230,7 @@ pub unsafe extern "C" fn kf3_realize(
                 }
             }
             // ★ v3-initrace: the completion probe (`KF3_COMPLETION_PROBE`, default off).
-            if crate::chan::completion_probe_ms().is_some()
+            if d.probe_timer_enabled()
                 && std::thread::Builder::new()
                     .name("kf3-probe".into())
                     .spawn(move || d.probe_loop())
