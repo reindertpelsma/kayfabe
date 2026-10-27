@@ -1,0 +1,81 @@
+{
+  "run": "WC1-round3c-TU106-native-attempts-20261026",
+  "source": "Own create, checkpoint, archive and teardown metadata",
+  "machine": 39235,
+  "host": 79466,
+  "target_die": "TU106",
+  "source_revision": "541033eaf",
+  "other_machine_13058": "Reserved for TUR1; untouched",
+  "no_contract_attempts": 2,
+  "no_contract_reason": "Legacy bundle lookup selected an unavailable ask; no owned ID created",
+  "lookup_correction": "Read-only current asks lookup with explicit selectors; plain CLI create",
+  "leases": [
+    {
+      "id": 57882956,
+      "status": "CLOSED",
+      "api_absent_utc": "2026-10-26T23:14:44.156800+00:00",
+      "failure": "Console transport failed before identity checkpoint persistence or strict SSH",
+      "windows_admitted": false,
+      "capture_exists": false,
+      "linux_reference_exists": false,
+      "private_failure_archive_hash_verified_before_destroy": true
+    },
+    {
+      "id": 57884771,
+      "status": "CLOSED after actual admission refusal; no authorization to change window",
+      "created_utc": "2026-10-26T23:19:36.016799+00:00",
+      "first_reach_utc": "2026-10-26T23:22:43.452946+00:00",
+      "original_deadline_utc": "2026-10-26T23:42:43.452946+00:00",
+      "original_window_seconds": 1200,
+      "required_fresh_stability_seconds": 120,
+      "admission_result": "REFUSED native identity deadline",
+      "windows_admitted": false,
+      "capture_exists": false,
+      "linux_reference": {
+        "driver": "580.95.05",
+        "pci_device": "1f06",
+        "cuda_api_calls": 6,
+        "cuda_api_return_values": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "gpu_count": 1,
+        "xids": 0,
+        "kernel_workload_tested": false,
+        "strict_identity_matches": 6,
+        "match_span_seconds": 200.142946,
+        "sha256": "9fdd9e79b2b5506101f0e8295e1aba9fa0ee8504e020cf7438eb88c23dbd9ac6",
+        "archive_verified_before_conversion": true
+      },
+      "failure_metadata_files": 7,
+      "failure_metadata_archive_hash_verified": true,
+      "watchdog_armed_before_create": true,
+      "watchdog_seconds": 7200,
+      "conservative_full_lease_bound_usd": 0.7,
+      "api_absent_utc": "2026-10-27T00:01:05.007325+00:00",
+      "watchdog_cancelled_after_api_absence": true,
+      "private_closure_archive_hash_verified": true,
+      "lifetime_seconds": 2488.990526,
+      "closed_upper_usd": 0.5037079385833334
+    }
+  ],
+  "round_upper_usd": 0.6312816610833334,
+  "round_stop_usd": 1.5,
+  "round_cap_usd": 2.5,
+  "cybersecurity_notice": false,
+  "scientific_outcome": "No TU106 native Windows values or control/class comparison; no GPU/kayfabe verdict",
+  "family_rules_admitted": 0,
+  "finance": {
+    "credit": 26.04595031684937,
+    "credit_reserve": 8,
+    "daily_cap_usd": 12,
+    "conservative_carried_daily_upper_usd": 11.665601102194444,
+    "includes_other_lane_reserve_usd": 1.5,
+    "posted_charges_may_lag": true
+  },
+  "owned_resources_remaining": 0
+}

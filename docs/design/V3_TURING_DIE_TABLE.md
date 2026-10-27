@@ -1,4 +1,4 @@
-STATUS: PARTIAL, 2026-10-26 — TU116 native580.88 has two complete startup oracles and eight exact-question values; other Turing Windows dies remain unmeasured. The watch closed at20:24UTC with no additional eligible die in the recorded snapshots.
+STATUS: PARTIAL, 2026-10-27 — TU116 native580.88 has two complete startup oracles and eight exact-question values. The round3c TU106 attempt closed at00:01UTC after its original identity deadline refused admission; other Turing Windows dies remain unmeasured.
 
 # Turing Windows reference and die table
 
@@ -131,3 +131,9 @@ CODE READ (public ogkm 595.91.07, `traces/wc1_20261026/round3/tu116/control_sour
 ## Round3b watch close
 
 MEASURED (2026-10-26, `traces/wc1_20261026/round3/availability.json`): the five-hour watch closed with 13 snapshots between 15:27:33 and 20:24:20 UTC. Poll 8 supplied the TU116 offer used for lease57852545. The watch paused during that native capture, resumed after verified teardown, and excluded the completed machine from further admission. No additional Turing die was listed in the remaining snapshots. The final two snapshots contained no Turing offers. The native capture is complete; TU102, TU104, TU106 and TU117 remain unmeasured. No paid resource or polling process remains.
+
+## Round3c TU106 acquisition outcome
+
+MEASURED (`traces/wc1_20261026/round3c/native_attempts.json`, leases57882956/57884771): owner-assigned machine39235 supplied no native Windows capture. The first lease stopped before strict SSH after a console transport failure. The retry preserved its original first-reachable timestamp, obtained six Linux identity observations spanning200.143s, and archived/hash-verified the Linux reference before native conversion. Linux580.95.05 returned0 on six device/context API calls with one GPU and noXid; no CUDA kernel workload was tested.
+
+MEASURED (2026-10-27, lease `57884771`, `traces/wc1_20261026/round3c/native_attempts.json`): the original1200s identity deadline expired before a fresh120s matching Windows-key proof. No Windows login, capture-driver installation, startup oracle or D3D workload occurred. Private failure metadata was hash-verified before exact-id teardown; both owned leases are API-absent and their watchdogs stopped. This is an acquisition/admission failure; it gives no Windows GPU or kayfabe verdict. TU106 control/class sets and exact-question values remain unobserved, so the TU106-versus-TU116 differential remains open and no new family rule is admitted.

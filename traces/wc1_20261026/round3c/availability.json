@@ -1,6 +1,5 @@
 {
   "run": "WC1-round3c-TU106-market-20261026",
-  "target_machine": 13058,
   "target_host": 79466,
   "target_die": "TU106",
   "started_utc": "2026-10-26T20:54:06+00:00",
@@ -47,6 +46,10 @@
       "review_candidates": 0
     }
   ],
-  "status": "watching",
-  "next_poll_utc": "2026-10-26T22:54:08.807343+00:00"
+  "status": "watch stopped after owner reassigned machine39235 to WC1 and13058 to TUR1",
+  "next_poll_utc": null,
+  "initial_target_machine": 13058,
+  "owner_assigned_machine": 39235,
+  "other_machine_reserved_for_TUR1": 13058,
+  "snapshot_scope": "Six free-listing snapshots only; later directed attempts are in native_attempts.json"
 }

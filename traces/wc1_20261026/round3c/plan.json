@@ -2,7 +2,6 @@
   "run": "WC1-round3c-preregistration-20261026",
   "kind": "INFERRED operator plan",
   "target_die": "TU106",
-  "machine": 13058,
   "host": 79466,
   "source": "541033eaf",
   "capture_hypothesis": "Unchanged capture source gives two complete TU106 startup oracles and hardware D3D readbacks",
@@ -26,5 +25,11 @@
   "daily_cap_usd": 12,
   "reserve_usd": 8,
   "family_rules_admitted": 0,
-  "required_gpu_count": 1
+  "required_gpu_count": 1,
+  "initial_machine": 13058,
+  "machine": 39235,
+  "owner_reassignment": "OWNER GO + REASSIGNMENT23:50CET;13058 reserved for TUR1",
+  "market_exception": "Owner-directed single-GPU attempt after VM-deverified/rentable=false flags reported",
+  "actual_lease_bound_usd": 0.7,
+  "identity_current_status": "Original1200s deadline refused; lease closed without Windows login or capture"
 }

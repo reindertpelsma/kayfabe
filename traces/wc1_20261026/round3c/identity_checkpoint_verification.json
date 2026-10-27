@@ -30,7 +30,7 @@
   "changed": "Checkpoint before console I/O; retain stderr; invalidate match progress on incomplete console observation",
   "unchanged": "Original1200s first-reach deadline and endpoint;120s complete matching Windows-key observations",
   "scope": "Operator admission helper only; kfwc binary/source541033eaf unchanged",
-  "live_retest": "57884771 ongoing; firstreach23:22:43.452946Z preserved across known API transport failures",
+  "live_retest": "57884771: checkpoint retained original first reach; original1200s deadline refused before Windows admission",
   "streak_expected_red_commit": "c91b3f214",
   "streak_before_tests": {
     "total": 4,
