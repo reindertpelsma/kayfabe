@@ -4,7 +4,7 @@ The broker connects GitHub Actions to rented NVIDIA GPU machines on Vast.ai so k
 
 ## How a GPU check uses it
 
-1. The [GPU workflow](../../.github/workflows/gpu-vast.yml) decides whether a master push or PR needs a check. It fetches the controller from the trusted master base, without checking out proposed code on the GitHub runner. Two independent path decisions must agree before it reports a check as not needed.
+1. The [GPU workflow](../../.github/workflows/gpu-vast.yml) uses one action-free job to decide whether a master push or PR needs a check. It runs the trusted BASE matcher with the runner's preinstalled Node, without checking out proposed code. Only a successful explicit `run=0` decision with a skipped GPU job reports `NOT_NEEDED`; uncertain metadata requests a GPU check.
 2. The controller presents GitHub OIDC identity. The Worker checks the pinned workflow, the run's owner triggering actor and the exact tested commit, then applies offer eligibility, concurrency and spending policy before creating a rental.
 3. The box bootstrap checks out that exact commit and runs the [repository-side payload and reporter](../../scripts/ci/README.md). Its scoped run token lets it report progress, logs and a structured result, request its own destruction, and obtain permitted private asset download URLs.
 4. The GitHub controller independently validates the result bindings and log hashes, scrubs displayed output and supplies the workflow's `gpu-vast` status. After fetching the final log it requests immediate destruction; result grace and Worker deadlines provide fallback cleanup.

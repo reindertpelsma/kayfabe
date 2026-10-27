@@ -1,0 +1,6 @@
+{
+  ".github/workflows/gpu-vast.yml": "fa4b63c1eee4fa150274a40a9528ebee09390fd3e468751573ce3cde246b759d",
+  "ci/vast-broker/workflow-guard.js": "01bcb23d2fb5ba48832b6de2a9e91a01a0f131e44841f0996c542bdc8036f9c6",
+  "ci/vast-broker/trigger-policy.mjs": "03546e51d5428481a02449445ce2d7efb6b5551ec105009b8bcb15094375d933",
+  "ci/vast-broker/deployment.json": "3a974ef40b249638b80e6de7191f698e991bd0f782ff9e1c83b7e9f14495faa9"
+}

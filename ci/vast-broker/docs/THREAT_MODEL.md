@@ -102,6 +102,8 @@ branch `claude/reaper-redirect-20261025` (unmerged at 93091106d).
 
 ## 5. Workflow allowlist
 
+OWNER / CODE READ (2026-10-27, `gpu-vast.yml`, `trigger-policy.mjs`, `workflow-guard.js`): test infrastructure uses one action-free, read-only trigger job. The runner image, its preinstalled Node, GitHub's API and exact-commit HTTPS source are trusted inputs. That one successful explicit path decision can authorize `NOT_NEEDED`; unknown metadata requests a run and a failed/missing decision cannot skip. The Worker still never decides a skip, and GPU success still requires a verified PASS in GRACE/NONE. Removing duplicate execution of the same matcher changes no Worker authority or deployed module.
+
 CODE READ: `CHECK_JOB_WORKFLOW_REFS` and `SWEEP_JOB_WORKFLOW_REF` are parsed and validated
 (`src/policy.js:66-90`) and set in `wrangler.toml:36-37`, and carried in `cfg` (`src/policy.js:119-120`), but
 `allowedWorkflowRef` never reads them: it hardcodes `gpu-vast.yml` and `gpu-vast-sweep.yml` at

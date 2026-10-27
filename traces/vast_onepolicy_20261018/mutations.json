@@ -1,0 +1,142 @@
+{
+  "baseline": "PASS",
+  "mutants": [
+    {
+      "mutant": "run-required-skips",
+      "kills": 2,
+      "tests": [
+        "one policy refuses wrong skip run0",
+        "one policy refuses wrong skip run1"
+      ]
+    },
+    {
+      "mutant": "missing-output-skips",
+      "kills": 2,
+      "tests": [
+        "one policy refuses wrong skip missing0",
+        "one policy refuses wrong skip missing1"
+      ]
+    },
+    {
+      "mutant": "failed-policy-skips",
+      "kills": 2,
+      "tests": [
+        "one policy refuses wrong skip failed0",
+        "one policy refuses wrong skip failed1"
+      ]
+    },
+    {
+      "mutant": "failed-gpu-skips",
+      "kills": 2,
+      "tests": [
+        "one policy refuses wrong skip gpu-failed0",
+        "one policy refuses wrong skip gpu-failed1"
+      ]
+    },
+    {
+      "mutant": "failed-pending-skips",
+      "kills": 2,
+      "tests": [
+        "one policy refuses wrong skip pending-failed0",
+        "one policy refuses wrong skip pending-failed1"
+      ]
+    },
+    {
+      "mutant": "unverified-pass",
+      "kills": 2,
+      "tests": [
+        "final status rejects unverified PASS 0",
+        "final status rejects unverified PASS true"
+      ]
+    },
+    {
+      "mutant": "worker-supplies-skip",
+      "kills": 3,
+      "tests": [
+        "W2: a Worker-sent NOT_NEEDED + PASS never posts success",
+        "W2: a Worker-sent MANUAL + PASS never posts success",
+        "W2: a Worker-sent NEEDS_APPROVAL + PASS never posts success"
+      ]
+    },
+    {
+      "mutant": "duplicate-job-accepted",
+      "kills": 2,
+      "tests": [
+        "one policy guard refuses a duplicate decision policy-check",
+        "one policy guard refuses a duplicate decision extra-trigger"
+      ]
+    },
+    {
+      "mutant": "policy-action-accepted",
+      "kills": 2,
+      "tests": [
+        "one policy guard refuses even pinned action actions/setup-node",
+        "one policy guard refuses even pinned action actions/github-script"
+      ]
+    },
+    {
+      "mutant": "policy-write-accepted",
+      "kills": 2,
+      "tests": [
+        "one policy guard keeps read-only permission contents",
+        "one policy guard keeps read-only permission pull-requests"
+      ]
+    },
+    {
+      "mutant": "report-policy-dependency-removed",
+      "kills": 2,
+      "tests": [
+        "one policy guard requires its dependency report remove",
+        "one policy guard requires its dependency report rename"
+      ]
+    },
+    {
+      "mutant": "broker-policy-dependency-removed",
+      "kills": 2,
+      "tests": [
+        "one policy guard requires its dependency gpu remove",
+        "one policy guard requires its dependency gpu rename"
+      ]
+    },
+    {
+      "mutant": "selected-source-downloaded",
+      "kills": 2,
+      "tests": [
+        "round actual policy bootstrap runs only BASE modules policy workflow_dispatch",
+        "round actual policy bootstrap runs only BASE modules policy unknown"
+      ]
+    },
+    {
+      "mutant": "https-cap-removed",
+      "kills": 2,
+      "tests": [
+        "round actual policy bootstrap runs only BASE modules policy workflow_dispatch",
+        "round actual policy bootstrap runs only BASE modules policy unknown"
+      ]
+    },
+    {
+      "mutant": "time-cap-removed",
+      "kills": 2,
+      "tests": [
+        "round actual policy bootstrap runs only BASE modules policy workflow_dispatch",
+        "round actual policy bootstrap runs only BASE modules policy unknown"
+      ]
+    },
+    {
+      "mutant": "size-cap-removed",
+      "kills": 2,
+      "tests": [
+        "round actual policy bootstrap runs only BASE modules policy workflow_dispatch",
+        "round actual policy bootstrap runs only BASE modules policy unknown"
+      ]
+    },
+    {
+      "mutant": "environment-inherited",
+      "kills": 2,
+      "tests": [
+        "round actual policy bootstrap runs only BASE modules policy workflow_dispatch",
+        "round actual policy bootstrap runs only BASE modules policy unknown"
+      ]
+    }
+  ]
+}

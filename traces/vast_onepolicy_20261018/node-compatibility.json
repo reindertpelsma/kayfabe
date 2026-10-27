@@ -1,0 +1,27 @@
+{
+  "base": "2b9fa6947bcf5570c30d7edb552760605f5639cb",
+  "trigger_sha256": "03546e51d5428481a02449445ce2d7efb6b5551ec105009b8bcb15094375d933",
+  "results": [
+    {
+      "version": "18.20.0",
+      "official_archive_sha256": "03eea148e56785babb27930b05ed6bf311aaa3bc573c0399dd63cad2fe5713c7",
+      "exit": 0,
+      "output": "run=1\n",
+      "supported": true
+    },
+    {
+      "version": "20.9.0",
+      "official_archive_sha256": "9033989810bf86220ae46b1381bdcdc6c83a0294869ba2ad39e1061f1e69217a",
+      "exit": 1,
+      "output": "",
+      "supported": false
+    },
+    {
+      "version": "20.10.0",
+      "official_archive_sha256": "3fe4ec5d70c8b4ffc1461dec83ab23fc70124e137c4cbbe1ccc9d6ae6ec04a7d",
+      "exit": 0,
+      "output": "run=1\n",
+      "supported": true
+    }
+  ]
+}

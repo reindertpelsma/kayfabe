@@ -1,0 +1,23 @@
+{
+  "utc": "2026-10-27T12:36:42.382635+00:00",
+  "base": "2b9fa6947bcf5570c30d7edb552760605f5639cb",
+  "pr171_merged_at": "2026-10-27T12:21:18Z",
+  "expected_red_commit": "6a096e3ef",
+  "before": {
+    "focused_tests": 90,
+    "pass": 72,
+    "fail": 18
+  },
+  "after": {
+    "tests": 2329,
+    "pass": 2329,
+    "fail": 0
+  },
+  "focused_after": 110,
+  "mutants": 17,
+  "minimum_killers": 2,
+  "worker_runtime_files_changed": [],
+  "worker_bundle_sha256": "8f44d1351d5ab2a9d87701ccaf952033ccf64f8960c19657e378bd59b9f3d90a",
+  "deployment_required": false,
+  "hosted_ci": "not yet published"
+}
