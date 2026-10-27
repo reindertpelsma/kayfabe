@@ -123,7 +123,8 @@ These batch-heavy results should be read beside eager decoding rather than repla
 \src{linuxperf}
 
 \reported For eager Qwen2-0.5B decoding at \code{e5ff45ff}, the nested AMD EPYC 7452 /
-RTX 3060 record gives, for 512-token warm decode, guest \textbf{12.62 tokens/s [12.40, 12.94],
+RTX 3060 record, using 580.159.04, gives for 512-token warm decode guest
+\textbf{12.62 tokens/s [12.40, 12.94],
 $n=3$} and same-box host \textbf{43.98 [43.59, 44.63], $n=3$}; ratio \textbf{0.287}, about
 \textbf{0.29}. Its third reference lane on another Xeon box is \textbf{28.28 [27.96, 28.84],
 $n=3$}; it is not the same-box denominator. The record identifies output equality separately.

@@ -260,13 +260,18 @@ also be tested separately from Unix credentials and host request permissions.
 \item[Several GPUs.] \reported A Linux thin guest used two distinct GPUs, separately and
   concurrently. CUDA/UVM across devices, peer access and a Windows display device choice are
   outside that result.\src{status}\src{rulings}
-\item[Suspend and reset.] \reported Linux S3 passed three cycles at \code{559db30c}; Windows
+\item[Suspend and reset.] \reported Linux S3 passed three cycles in one boot at
+  \code{559db30c}, on a physical RTX 4070 with host 595.91.07 and guest 580.159.04; Windows
   wake failures remain documented. Reboot scrubbing, driver reset and unload/reload are
   different lifetimes. No cold-boot pass proves arbitrary repeated reload or kill-during-work
   recovery.\src{sleep}\src{reset}\src{gaps}
 \item[Other hosts.] \doc QEMU is the implemented VMM adapter. A cross-build does not test
   another CPU's memory mapping, interrupt or reset semantics. Other VMMs and arm64 require
   real adapter evidence.\src{rulings}\src{requirements}
+\item[Windows breadth.] \unverified The Linux Blackwell cell does not qualify Windows.
+  No complete Windows Blackwell result at the pin is indexed here. Multi-head/hot-plug and
+  display continuity across repeated reboots also need their own qualification.
+  \src{requirements}\src{gaps}
 \item[Snapshot and migration.] \unverified This paper establishes no live snapshot/restore
   or VM-migration contract for in-flight GPU state. Preserve this as out of scope until a
   protocol accounts for device state, host objects, outstanding work and destination identity.
