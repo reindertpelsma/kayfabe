@@ -228,3 +228,27 @@ fn ens11_irqstorm_notification_is_identified_without_claiming_packet_causality()
         Some(NotificationSource::Storm)
     );
 }
+
+#[test]
+fn ens11_slow_pending_packet_updates_its_observed_marker_before_any_irq() {
+    let mut st = State::default();
+    st.publish(sample(1, Kind::User, Some(1)));
+    st.expire(80 * MS);
+    st.marker(1, 1, 90 * MS, None);
+    st.expire(91 * MS);
+    assert_eq!(st.slow[0].advanced, Some(90 * MS));
+    assert!(st.slow[0].raised.is_none());
+}
+#[test]
+fn ens11_final_packet_milestone_refreshes_context_after_the_first_slow_dump() {
+    let mut st = State::default();
+    st.publish(sample(1, Kind::User, Some(1)));
+    st.expire(80 * MS);
+    st.slow[0].context_checked = true;
+    st.marker(1, 1, 90 * MS, None);
+    st.notify(19, 100 * MS, true);
+    assert!(
+        !st.slow[0].context_checked,
+        "refresh through the final notification"
+    );
+}

@@ -211,6 +211,27 @@ mod tests {
         s.queued(t, 20);
     }
     #[test]
+    fn ens11_slow_split_updates_release_before_the_requesting_worker_resumes() {
+        let mut s = Splits::default();
+        request(&mut s, 1);
+        s.expire(SLOW_NS + 100);
+        s.ready(1, true, SLOW_NS + 110);
+        s.released(1, true, SLOW_NS + 120);
+        s.expire(SLOW_NS + 130);
+        assert_eq!(s.slow[0].ready, Some(SLOW_NS + 110));
+        assert_eq!(s.slow[0].released, Some(SLOW_NS + 120));
+        assert!(s.slow[0].taken.is_none());
+    }
+    #[test]
+    fn ens11_split_worker_resume_refreshes_the_final_blocking_context() {
+        let mut s = Splits::default();
+        request(&mut s, 1);
+        s.expire(SLOW_NS + 100);
+        s.slow[0].context_checked = true;
+        s.taken(1, SLOW_NS + 150);
+        assert!(!s.slow[0].context_checked);
+    }
+    #[test]
     fn ens11_split_stages_include_queue_walk_signal_and_worker_resume() {
         let mut s = Splits::default();
         request(&mut s, 1);
