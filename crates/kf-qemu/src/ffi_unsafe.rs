@@ -279,6 +279,14 @@ pub unsafe extern "C" fn kf3_realize(
                     let _ = unsafe { atexit(gatelog_atexit) };
                 });
             }
+            // ENS12: latency exit registration is independent of the gate-log diagnostic.
+            if kf_host::latency::now().is_some() {
+                static LATENCY_EXIT: std::sync::Once = std::sync::Once::new();
+                LATENCY_EXIT.call_once(|| {
+                    // SAFETY: the callback has process lifetime and the libc C ABI.
+                    let _ = unsafe { atexit(latency_atexit) };
+                });
+            }
             if !out.is_null() {
                 // SAFETY: `out` is writable (caller contract).
                 unsafe { *out = (d as *const Device).cast_mut().cast::<c_void>() };
@@ -306,6 +314,12 @@ extern "C" fn gatelog_atexit() {
     for line in rec.dump_shutdown(rec.now()) {
         let _ = writeln!(err, "{line}");
     }
+}
+
+/// The optional latency recorder also needs a normal-exit path, separate from unrealize.
+extern "C" fn latency_atexit() {
+    // A closed stderr must not unwind across the C ABI. Dump acquisition uses try_lock.
+    let _ = std::panic::catch_unwind(kf_host::latency::dump_shutdown);
 }
 
 /// Fill `out` with the PCI identity.
