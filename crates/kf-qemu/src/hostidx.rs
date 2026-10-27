@@ -10,6 +10,35 @@
 //! loss for new guest work. The ring is owed back, and ringing needs the GUEST token while the
 //! contended worker only has the host token and cannot read the slot to find it.
 
+use std::collections::HashMap;
+use std::sync::RwLock;
+
+/// Host token to guest token for the live Translated channels.
+#[derive(Debug, Default)]
+pub struct HostIdx(RwLock<HashMap<u32, u32>>);
+
+impl HostIdx {
+    /// A Translated channel was born: `host` is its twin's token, `guest` the plane's token.
+    pub fn insert(&self, host: u32, guest: u32) {
+        if let Ok(mut m) = self.0.write() {
+            m.insert(host, guest);
+        }
+    }
+
+    /// The guest token behind a host token, if the channel is live.
+    #[must_use]
+    pub fn get(&self, host: u32) -> Option<u32> {
+        self.0.read().ok()?.get(&host).copied()
+    }
+
+    /// The channel is gone.
+    pub fn remove(&self, host: u32) {
+        if let Ok(mut m) = self.0.write() {
+            m.remove(&host);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::HostIdx;
@@ -45,7 +74,10 @@ mod tests {
             .expect("serve");
         assert!(serve.contains("self.owe_ring(ht)"), "{serve}");
         let old = "self.contended.fetch_add(1, Ordering::Relaxed);\n            return false;";
-        assert!(!serve.contains(old), "the contended branch still drops the ring");
+        assert!(
+            !serve.contains(old),
+            "the contended branch still drops the ring"
+        );
     }
 
     #[test]
