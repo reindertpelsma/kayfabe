@@ -1194,6 +1194,8 @@ impl UnresolvedCounts {
 struct Probe {
     inflight: VecDeque<ProbeFence>,
     done: Vec<ProbeFence>,
+    /// When this channel was last pumped and the fence word that pump read.
+    last_pump: Option<(std::time::Instant, u32)>,
 }
 
 impl Probe {
@@ -1364,6 +1366,16 @@ impl TranslatedChannel {
             .unwrap_or_default()
     }
 
+    /// ★ Diagnostic: milliseconds since this channel was last pumped, and the fence word read then.
+    #[must_use]
+    pub fn probe_last_pump(&self) -> Option<(u64, u32)> {
+        let (at, word) = self.probe.as_ref()?.last_pump?;
+        Some((
+            u64::try_from(at.elapsed().as_millis()).unwrap_or(u64::MAX),
+            word,
+        ))
+    }
+
     /// ★ v3-initrace: our host ring's own `GP_GET`/`GP_PUT` (USERD) and the fence word — the
     /// host side of the ordering the probe prints.
     pub fn host_cursors(&mut self) -> Option<(u32, u32, u32)> {
@@ -1464,6 +1476,7 @@ impl TranslatedChannel {
     ) -> Result<Pumped, ChanError> {
         let done = self.host.completed().map_err(ChanError::Host)?;
         if let Some(p) = self.probe.as_mut() {
+            p.last_pump = Some((std::time::Instant::now(), done));
             p.reached(done);
         }
         if let Some(rows) = mem.rows() {

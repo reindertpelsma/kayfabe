@@ -30,6 +30,36 @@ pub fn wake_verdict(fence_word: u32, head: Option<u32>, marked: bool) -> &'stati
     }
 }
 
+/// A wake rings a channel within this many milliseconds; a pump that follows a wake closer than
+/// this was caused by it.
+pub const WAKE_TO_PUMP_MS: u64 = 20;
+
+/// Why a fence the host finished was not seen, from the timestamps the probe keeps.
+///
+/// `last_wake_ago_ms`: the session's last completion-fd wake. `last_pump_ago_ms` and `pump_read`:
+/// this channel's last pump and the fence word it read. `head`: the oldest in-flight sequence.
+#[must_use]
+pub fn lost_wake_cause(
+    last_wake_ago_ms: Option<u64>,
+    last_pump_ago_ms: Option<u64>,
+    pump_read: Option<u32>,
+    head: u32,
+) -> &'static str {
+    if pump_read.is_some_and(|r| crate::host::reached(r, head)) {
+        return "PUMP-SAW-IT: the last pump read the fence as reached";
+    }
+    match (last_wake_ago_ms, last_pump_ago_ms) {
+        (None, _) => "NO-WAKE: no completion wake has arrived in this session",
+        (Some(w), p) if p.is_none_or(|p| w < p) => {
+            "WAKE-NOT-PUMPED: a wake arrived after this channel's last pump and did not pump it"
+        }
+        (Some(w), Some(p)) if w - p <= WAKE_TO_PUMP_MS => {
+            "STALE-READ-AT-WAKE: the last pump followed a wake and read the fence short"
+        }
+        _ => "NO-WAKE-AFTER-PUMP: the last pump read the fence short and no wake came after it",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{lost_wake_cause, wake_verdict};
@@ -69,26 +99,31 @@ mod tests {
         );
     }
     #[test]
-    fn no_wake_since_the_fence_was_queued_means_the_interrupt_never_came() {
-        let c = lost_wake_cause(None, Some(300), Some(10), 5);
+    fn no_wake_ever_means_the_interrupt_never_came() {
+        let c = lost_wake_cause(None, Some(300), Some(4), 5);
         assert!(c.starts_with("NO-WAKE"), "{c}");
-        // a wake that is older than the last pump of this channel changes nothing
-        let c = lost_wake_cause(Some(900), Some(300), Some(10), 5);
-        assert!(c.starts_with("NO-WAKE"), "{c}");
+        assert!(!c.starts_with("NO-WAKE-AFTER"), "{c}");
+    }
+
+    #[test]
+    fn a_wake_long_before_the_last_short_pump_means_none_came_after_it() {
+        // the last wake 900 ms ago, the last pump 300 ms ago read word 4 for head 5
+        let c = lost_wake_cause(Some(900), Some(300), Some(4), 5);
+        assert!(c.starts_with("NO-WAKE-AFTER-PUMP"), "{c}");
     }
 
     #[test]
     fn a_wake_after_the_last_pump_that_did_not_pump_is_a_lost_ring() {
-        let c = lost_wake_cause(Some(100), Some(300), Some(10), 5);
+        let c = lost_wake_cause(Some(100), Some(300), Some(4), 5);
         assert!(c.starts_with("WAKE-NOT-PUMPED"), "{c}");
         let c = lost_wake_cause(Some(100), None, None, 5);
         assert!(c.starts_with("WAKE-NOT-PUMPED"), "{c}");
     }
 
     #[test]
-    fn a_pump_after_the_wake_that_read_a_short_fence_is_a_stale_read() {
-        // the last wake 300 ms ago, the last pump 200 ms ago, and it read word 4 for head 5
-        let c = lost_wake_cause(Some(300), Some(200), Some(4), 5);
+    fn a_pump_right_after_a_wake_that_read_a_short_fence_is_a_stale_read() {
+        // the wake 300 ms ago, the pump 290 ms ago (10 ms later) read word 4 for head 5
+        let c = lost_wake_cause(Some(300), Some(290), Some(4), 5);
         assert!(c.starts_with("STALE-READ-AT-WAKE"), "{c}");
     }
 

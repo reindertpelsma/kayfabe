@@ -179,6 +179,7 @@ pub fn run_with_relay(
                 on_other(tag);
             } else if tag == COMPLETIONS_TAG {
                 event = true;
+                completions.note_wake();
                 completions.for_each_inflight(|t| {
                     stats.host_rings.fetch_add(1, Ordering::Relaxed);
                     if plane.ring_internal(t) {
