@@ -114,7 +114,7 @@ pub const GUEST_VA_RANGES: [(u64, u64); 2] =
 pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
 
 /// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
-const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
+pub(crate) const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
 /// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
 const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
 

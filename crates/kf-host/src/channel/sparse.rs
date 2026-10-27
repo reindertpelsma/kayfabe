@@ -160,6 +160,11 @@ impl HostRm {
             occupancy_capped: self.sparse_totals[14].load(Relaxed),
             peak_blocks: self.sparse_totals[15].load(Relaxed),
             live_blocks: self.sparse_object_count.load(Relaxed) as u64,
+            rm_declined: self.sparse_totals[17].load(Relaxed),
+            backoff_skips: self.sparse_totals[18].load(Relaxed),
+            slice_deferred: self.sparse_totals[19].load(Relaxed),
+            speculative_skipped: self.sparse_totals[20].load(Relaxed),
+            window_hits: self.sparse_totals[21].load(Relaxed),
         }
     }
 

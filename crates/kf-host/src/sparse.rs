@@ -10,6 +10,8 @@ mod state;
 use state::{Cache, Live};
 #[path = "sparse/recycle.rs"]
 mod recycle;
+#[path = "sparse/slice.rs"]
+pub(crate) mod slice;
 
 /// Normal reservation grain.
 pub const NORMAL_GRAIN: u64 = 2 << 20;
@@ -18,6 +20,22 @@ pub const SPARSE_GRAIN: u64 = 64 << 10;
 /// Hard per-space bound on reservation objects.
 pub const BLOCK_LIMIT: usize = 8192;
 const PAGE: u64 = 4096;
+/// Blocks kept free for explicit sparse admission: speculative plain-map refinement (which
+/// only prepares a later carve) stops this far below the limit, and costs no RM verb there.
+pub(crate) const fn speculative_reserve(limit: usize) -> usize {
+    limit / 32
+}
+/// Free blocks one recycle makes (as far as empty adjacent pairs and the slice allow), so
+/// a full tree is not recycled again by the very next admission.
+pub(crate) const fn recycle_headroom(limit: usize) -> usize {
+    if limit / 256 == 0 { 1 } else { limit / 256 }
+}
+/// Refresh ticks the first RM refusal silences optional layout work for; doubles per refusal.
+pub(crate) const BACKOFF_FIRST: u64 = 2;
+/// Longest refusal back-off, in refresh ticks.
+pub(crate) const BACKOFF_MAX: u64 = 64;
+/// Entries of the session-wide counter array ([`Stats::deltas`]).
+pub(crate) const SPARSE_TOTALS: usize = 22;
 
 /// Only an explicit `1` enables the selective sparse path.
 #[must_use]
@@ -42,6 +60,11 @@ pub(crate) fn poison_refuses(poisoned: bool, routing: bool) -> bool {
 pub(crate) trait Ops {
     fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError>;
     fn release(&self, handle: u32) -> Result<(), RmError>;
+    /// Whether this refresh may START more optional layout work (the time slice,
+    /// [`slice::Slice`]). Restoring a half-done replacement never asks: it must finish.
+    fn budget_left(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -98,10 +121,20 @@ pub struct Stats {
     pub peak_blocks: u64,
     /// Current tree blocks, including initial roots.
     pub live_blocks: u64,
+    /// Host RM `NoMemory` refusals turned into the counted closed fallback (cumulative).
+    pub rm_declined: u64,
+    /// Layout RM work skipped because a refusal back-off is running (cumulative).
+    pub backoff_skips: u64,
+    /// Layout work deferred to a later refresh because the time slice was spent.
+    pub slice_deferred: u64,
+    /// Speculative plain-map refinements skipped above the high-water mark (no RM verb).
+    pub speculative_skipped: u64,
+    /// Admissions answered by the remembered refused-window cache without an RM verb.
+    pub window_hits: u64,
 }
 
 impl Stats {
-    pub(crate) fn deltas(self, before: Self) -> [u64; 17] {
+    pub(crate) fn deltas(self, before: Self) -> [u64; SPARSE_TOTALS] {
         let after = self;
         [
             after.made.saturating_sub(before.made),
@@ -127,6 +160,13 @@ impl Stats {
                 .saturating_sub(before.occupancy_capped),
             0,
             after.admit_blocks.saturating_sub(before.admit_blocks),
+            after.rm_declined.saturating_sub(before.rm_declined),
+            after.backoff_skips.saturating_sub(before.backoff_skips),
+            after.slice_deferred.saturating_sub(before.slice_deferred),
+            after
+                .speculative_skipped
+                .saturating_sub(before.speculative_skipped),
+            after.window_hits.saturating_sub(before.window_hits),
         ]
     }
 }

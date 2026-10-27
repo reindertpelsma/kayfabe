@@ -38,11 +38,44 @@ pub struct Cost {
     pub max_ns: u64,
 }
 
+/// Host RM verb classes (ENS6). Each timed ioctl lands in exactly one class; the class also
+/// feeds the disjoint [`Phase::Rm`] / [`Phase::Invalidate`] totals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verb {
+    /// Allocation of an `NV50_MEMORY_VIRTUAL` VA reservation (sparse or normal).
+    ReserveVa,
+    /// Any other object allocation.
+    AllocOther,
+    /// Object free (a reservation release is one of these).
+    Free,
+    /// DMA map.
+    Map,
+    /// DMA unmap.
+    Unmap,
+    /// Any control other than the TLB invalidate.
+    Control,
+    /// The TLB invalidate control.
+    Invalidate,
+    /// CPU-view arm/release and other verbs.
+    Other,
+}
+
+/// Number of [`Verb`] classes.
+pub const VERBS: usize = 8;
+
 /// Per-thread counters: other workers cannot contaminate an apply's delta.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Snapshot {
     /// Indexed by [`Phase`], in declaration order.
     pub costs: [Cost; 5],
+    /// Indexed by [`Verb`], in declaration order (this thread only).
+    pub verbs: [Cost; VERBS],
+}
+
+/// Session-wide verb totals, read with relaxed atomics only (safe for the heartbeat).
+#[must_use]
+pub fn verb_totals() -> [Cost; VERBS] {
+    [Cost::default(); VERBS]
 }
 
 /// Explicit opt-in, sampled once.
@@ -131,6 +164,27 @@ fn record(phase: Phase, ns: u64, work: u64) {
 /// Admission timing reuses the caller's existing clock; cheap counters are always on.
 pub fn admission(ns: u64) {
     record(Phase::Admission, ns, 0);
+}
+
+/// The verb class of an object allocation of `class`.
+#[must_use]
+pub(crate) fn alloc_verb(_class: u32) -> Verb {
+    Verb::AllocOther
+}
+
+/// The verb class of a control `cmd`.
+#[must_use]
+pub(crate) fn control_verb(_cmd: u32) -> Verb {
+    Verb::Control
+}
+
+/// Time precisely the supplied ioctl as `verb`; result and errors pass through unchanged.
+pub(crate) fn rm_verb<T>(verb: Verb, f: impl FnOnce() -> T) -> T {
+    rm_verb_with(true, verb, f)
+}
+
+fn rm_verb_with<T>(_active: bool, _verb: Verb, f: impl FnOnce() -> T) -> T {
+    rm_with(true, false, f)
 }
 
 /// Time precisely the supplied ioctl; result and errors pass through unchanged.
@@ -240,5 +294,114 @@ mod tests {
         let delta = snapshot().since(before);
         assert_eq!(delta.costs[0].calls, 0);
         assert_eq!(delta.costs[1].calls, 1);
+    }
+
+    #[test]
+    fn each_rm_verb_lands_in_its_own_bucket_and_in_the_rm_total() {
+        for (i, verb) in [
+            Verb::ReserveVa,
+            Verb::AllocOther,
+            Verb::Free,
+            Verb::Map,
+            Verb::Unmap,
+            Verb::Control,
+            Verb::Other,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let before = snapshot();
+            assert_eq!(rm_verb(verb, || Ok::<_, u32>(1)), Ok(1));
+            let delta = snapshot().since(before);
+            assert_eq!(delta.verbs[verb as usize].calls, 1, "verb {i}");
+            assert_eq!(delta.verbs.iter().map(|c| c.calls).sum::<u64>(), 1);
+            assert_eq!(delta.costs[0].calls, 1, "total Rm phase, verb {i}");
+            assert_eq!(delta.costs[1].calls, 0);
+        }
+    }
+
+    #[test]
+    fn the_invalidate_verb_is_the_invalidate_phase_and_not_an_rm_call() {
+        let before = snapshot();
+        assert_eq!(rm_verb(Verb::Invalidate, || Err::<(), _>(5)), Err(5));
+        let delta = snapshot().since(before);
+        assert_eq!(delta.verbs[Verb::Invalidate as usize].calls, 1);
+        assert_eq!(delta.costs[1].calls, 1);
+        assert_eq!(delta.costs[0].calls, 0);
+    }
+
+    #[test]
+    fn verb_time_is_accumulated_and_the_max_is_kept() {
+        let before = snapshot();
+        rm_verb(Verb::ReserveVa, || {
+            std::thread::sleep(std::time::Duration::from_millis(3));
+        });
+        rm_verb(Verb::ReserveVa, || ());
+        let delta = snapshot().since(before);
+        let c = delta.verbs[Verb::ReserveVa as usize];
+        assert_eq!(c.calls, 2);
+        assert!(c.ns >= 3_000_000, "{c:?}");
+        assert!(c.max_ns >= 3_000_000 && c.max_ns <= c.ns, "{c:?}");
+    }
+
+    #[test]
+    fn interval_subtracts_verb_buckets_without_underflow() {
+        let mut before = Snapshot::default();
+        before.verbs[2].calls = 9;
+        before.verbs[2].ns = 90;
+        let mut after = before;
+        after.verbs[2].calls += 3;
+        after.verbs[2].ns += 30;
+        assert_eq!(after.since(before).verbs[2].calls, 3);
+        assert_eq!(after.since(before).verbs[2].ns, 30);
+        assert_eq!(before.since(after).verbs[2].calls, 0);
+    }
+
+    #[test]
+    fn session_totals_add_every_thread_and_keep_the_global_maximum() {
+        let base = verb_totals()[Verb::Unmap as usize];
+        std::thread::scope(|s| {
+            for _ in 0..4 {
+                s.spawn(|| {
+                    rm_verb(Verb::Unmap, || {
+                        std::thread::sleep(std::time::Duration::from_millis(2));
+                    });
+                });
+            }
+        });
+        let now = verb_totals()[Verb::Unmap as usize];
+        assert!(now.calls >= base.calls + 4, "{base:?} -> {now:?}");
+        assert!(now.ns >= base.ns + 8_000_000, "{base:?} -> {now:?}");
+        assert!(now.max_ns >= 2_000_000, "{now:?}");
+        assert!(now.max_ns <= now.ns);
+    }
+
+    #[test]
+    fn a_disabled_verb_timer_records_nothing_session_wide() {
+        let base = verb_totals()[Verb::Control as usize];
+        let _ = rm_verb_with(false, Verb::Control, || ());
+        assert_eq!(verb_totals()[Verb::Control as usize], base);
+    }
+
+    #[test]
+    fn a_va_reservation_alloc_is_the_reserve_verb_and_other_classes_are_not() {
+        assert_eq!(
+            alloc_verb(crate::channel::NV50_MEMORY_VIRTUAL),
+            Verb::ReserveVa
+        );
+        assert_eq!(
+            alloc_verb(kf_abi::bringup::NV01_MEMORY_VIRTUAL),
+            Verb::AllocOther
+        );
+        assert_eq!(alloc_verb(0), Verb::AllocOther);
+    }
+
+    #[test]
+    fn the_tlb_invalidate_control_is_the_invalidate_verb_and_others_are_control() {
+        assert_eq!(
+            control_verb(crate::channel::NV2080_CTRL_CMD_DMA_INVALIDATE_TLB),
+            Verb::Invalidate
+        );
+        assert_eq!(control_verb(0x2080_0101), Verb::Control);
     }
 }

@@ -900,3 +900,4 @@ include!("breaker_model_tests.rs");
 include!("breaker_cost.rs");
 include!("breaker_more.rs");
 include!("breaker_extra.rs");
+include!("ens6_tests.rs");
