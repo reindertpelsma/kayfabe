@@ -216,6 +216,23 @@ export function checkWorkflows(workflows) {
   const gpuName = 'gpu-vast.yml';
   if (!workflows[gpuName]) return ['GPU workflow missing'];
   const gpu = jobsIn(workflows[gpuName]);
+  const sameJobs = (actual, expected) =>
+    JSON.stringify([...actual].sort()) === JSON.stringify([...expected].sort());
+  if (
+    !sameJobs(
+      gpu.map((job) => job.id),
+      ['pending', 'policy', 'gpu', 'report'],
+    )
+  )
+    errors.push('GPU workflow requires one policy job, one broker and two status writers');
+  const policy = gpu.find((job) => job.id === 'policy');
+  if (
+    !policy ||
+    /\buses['"]?\s*:/.test(policy.body) ||
+    JSON.stringify(Object.entries(policy.grants).sort()) !==
+      JSON.stringify(Object.entries({ contents: 'read', 'pull-requests': 'read' }).sort())
+  )
+    errors.push('GPU policy must be action-free and read-only');
   if (
     !/^  pull_request_target:/m.test(workflows[gpuName]) ||
     /^  pull_request:/m.test(workflows[gpuName]) ||
@@ -232,11 +249,13 @@ export function checkWorkflows(workflows) {
   if (
     report &&
     (!report.body.includes('    if: ${{ always() }}') ||
-      !['pending', 'gpu'].every((id) => report.needs.includes(id)))
+      !sameJobs(report.needs, ['pending', 'policy', 'gpu']))
   )
-    errors.push('Final status must always evaluate both dependencies');
+    errors.push('Final status must always evaluate pending, policy and GPU dependencies');
   const primary = gpu.find((x) => x.id === 'gpu');
   if (!primary) errors.push('GPU poll job missing');
+  if (primary && !sameJobs(primary.needs, ['pending', 'policy']))
+    errors.push('GPU broker must depend on pending status and the policy decision');
   if (
     primary &&
     JSON.stringify(Object.entries(primary.grants).sort()) !==

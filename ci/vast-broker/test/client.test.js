@@ -69,9 +69,6 @@ with open(os.environ['STATUS_LOG'],'a') as f:f.write(json.dumps(body)+'\\n')
       PENDING_RESULT: 'success',
       POLICY_RESULT: policyResult,
       POLICY_RUN: policyRun,
-      // The action-free policy-check agrees on the decision; each job result is checked alone.
-      POLICY_CHECK_RESULT: 'success',
-      POLICY_CHECK_RUN: policyRun,
       GPU_RESULT: forcedResult ?? (controller.status === 0 ? 'success' : 'failure'),
       BROKER_STATE: brokerFields.state ?? fields.state,
       BROKER_VERDICT: brokerFields.verdict ?? fields.verdict,

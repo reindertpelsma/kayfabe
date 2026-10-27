@@ -56,6 +56,8 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
 - When to run (branches, drafts, docs-only paths) lives only in `gpu-vast.yml` and the trusted
   BASE helper `trigger-policy.mjs`.
 
+CODE READ (owner decision 2026-10-27, `gpu-vast.yml`, `workflow-guard.js`): one read-only `policy` job runs the matcher with preinstalled Node and no third-party action. JSON import attributes need Node 20.10.0+ (also backported to 18.20.0). The job fetches code from the exact trusted commit over HTTPS, with 20-second/131072-byte caps, then uses `env -i`. A successful explicit `run=0`, successful pending-status job and skipped GPU job are required for `NOT_NEEDED`. Failed/missing decisions remain non-passing; the Worker never decides a skip. This workflow/guard-only simplification leaves the Worker module and deployment pin unchanged and needs no Worker deployment. See [reading the GPU check](../../docs/howto/vast-gpu-check.md).
+
 **Warning.** Owner-triggered events on someone else's PR (Reopen, Ready for review or Update
 branch, or an owner re-run) make the owner the `triggering_actor`, so they authorize that PR's
 current head commit, reviewed or not. If that is not wanted, add a YAML filter before enabling

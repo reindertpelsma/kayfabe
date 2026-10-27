@@ -1,0 +1,28 @@
+{
+  "utc": "2026-10-27T14:57:06.397079+00:00",
+  "merged_master": "d5a2dcb8152215bfde422c2d1942b4aadf78382c",
+  "previous_pr172_head": "7b62979c78c3211e7a242af7db990ee4ea54aef8",
+  "conflicted_files": ["ci/vast-broker/README.md"],
+  "resolution": "Keep single-policy trigger description and exact-attempt owner authorization description.",
+  "node": {
+    "tests": 2359,
+    "pass": 2359,
+    "fail": 0,
+    "skipped": 0
+  },
+  "workerd": {
+    "tests": 105,
+    "pass": 105,
+    "fail": 0,
+    "skipped": 0
+  },
+  "workflow_guard_errors": [],
+  "mutants": 17,
+  "minimum_named_killers": 2,
+  "mutation_proof_identical_to_recorded": true,
+  "runtime_and_pins_equal_master": true,
+  "workflow_guard_matcher_equal_previous_pr172": true,
+  "bundle_sha256": "2828bf41ed2574b638a7b6fb535e16b6dba9467c997972917050aa58d0bb0460",
+  "deployment_required_for_workflow_change": false,
+  "hosted_ci": "pending push"
+}
