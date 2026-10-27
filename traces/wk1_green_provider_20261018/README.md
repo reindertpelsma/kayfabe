@@ -51,7 +51,14 @@ CODE READ at fix rev44842eff5: the replacement keeps its original configured pro
 cap and deadline, and the first-admission185-minute BUSY guard does not apply to replacement.
 Fresh ordinary attempts still use that guard. No timeout or poll interval changed.
 
-MEASURED at commit 26729a736, incorporating master 7eec1e79e: 2277 Node tests, 75 real-workerd tests and 11 provider Python tests pass.
+MEASURED at commit 7381c38b0, incorporating master 7eec1e79e: 2277 Node tests, 75 real-workerd tests and 11 provider Python tests pass.
 The combined source bundle is2c789c616ea87534c5ee41fa9ddc825606c90ae0215d34d08864d922fbbc7acc.
 The repaired canonical byte-reserve mutation passed its baseline and both named killers;
 full hosted box-script CI is still pending for this update.
+
+MEASURED at EXPECTED RED commit 4caef0fe9: two failed-provision cases with complete clean watcher evidence fail through the actual stage_grade wrapper. The following correction passes208 existing payload and21 provider tests; all38 provider mutations and89 existing payload mutations have at least2 killing tests (mutations.jsonl and payload-mutations.json).
+CODE READ: only an already-classified provider failure can retain its matching failed-command
+exit with complete clean watcher proof. Changed/missing evidence, reserved exits6/7/124 and
+contradictory statuses remain stops. Default product-pass checks still reject failed commands.
+The live PR158 host_xid result exposed this parser limitation; its complete watcher receipt
+was not available in the public summary, so no claim is made that its actual Xid delta was clean.
