@@ -140,8 +140,21 @@ for (const kind of [
         record,
         retryNonce: kind === 'nonce' ? 'd'.repeat(32) : previous.nonce,
         ...(kind === 'cost' ? { cost: 1 + variant / 10 } : {}),
-        ...(kind === 'cap' ? { config: variant === 1 ? { dailyCount: 1 } : { daily: 0.01 } } : {}),
+        ...(kind === 'cap' ? { config: variant === 1 ? { daily: 0.01 } : { rolling: 0.01 } } : {}),
       });
       assert.notEqual(response.status, 200);
       assert.deepEqual(await call('/snapshot'), before);
     });
+
+for (const variant of [1, 2])
+  test('workerd provider retry does not consume another daily slot ' + variant, async (t) => {
+    const { call, record, previous } = await fixture(t);
+    const response = await call('/reserve', {
+      record,
+      retryNonce: previous.nonce,
+      config: { dailyCount: 1 },
+    });
+    assert.equal(response.status, 200, JSON.stringify(response.data));
+    const admin = await call('/admin/list');
+    assert.equal(admin.data.budget.profiles.check.count_today, 1);
+  });

@@ -38,6 +38,8 @@ def status(verdict="UNAVAILABLE"):
         "started_at": 1000,
         "deadline_at": 302000,
         "gpu_model": "RTX_4070",
+        "machine_id": 100000 + rents,
+        "host_id": 3000 + rents,
         "cost_estimate_usd": 0.01,
         "log_cursor": 0,
         "log_tail_sanitised": "",
@@ -110,5 +112,5 @@ if expected == "PROVIDER_FAULT":
     assert result["state"] == "PROVIDER_FAULT", result
 text = "".join(messages)
 assert text.count("RENTAL machine=") == (1 if case.startswith("budget") else 2), text
-assert "runner: provider fault" in text.lower(), text
+assert "runner: provider fault: machine 100001, not a kayfabe verdict" in text, text
 assert calls.count("/stop/123-1") == 1, calls

@@ -13,6 +13,37 @@ import vast_report as reporter
 
 
 class ProviderFaults(unittest.TestCase):
+    def real_case(self):
+        return (
+            Path(__file__).resolve().parents[2]
+            / "ci/vast-broker/test/fixtures/provider-57890737.txt"
+        ).read_text()
+
+    def test_real_3090_failed_swap_is_provider_fault(self):
+        self.assertEqual(payload.provider_fault(self.real_case()), "provider_gpu_unavailable")
+
+    def test_real_initialization_failure_is_not_a_product_fail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "result.json"
+
+            def grade(rc):
+                name = payload.provider_fault(self.real_case())
+                if name:
+                    raise payload.ProviderFault(name)
+                raise payload.EvidenceError("provision")
+
+            result = {"verdict": "FAIL", "suites": [], "hardware": dict(reporter.UNKNOWN_HW)}
+            stage = {
+                "name": "provision",
+                "command": [],
+                "output": target,
+                "progress": [],
+                "grade": grade,
+            }
+            with redirect_stdout(io.StringIO()):
+                payload.execute_stages([stage], 10, result, target, runner=lambda *args: 1)
+            self.assertEqual(result["verdict"], "PROVIDER_FAULT")
+
     def test_missing_kvm_is_provider_fault(self):
         for name in ("missing-kvm", "missing-device"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:

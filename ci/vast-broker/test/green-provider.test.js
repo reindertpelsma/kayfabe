@@ -6,8 +6,9 @@ import { configuration } from '../src/policy.js';
 
 // FALSIFIER: a provider fault already gets one fresh-machine retry, preserving total time/money.
 const row = (h) => h.storage.get('record:123-1');
-async function fixture(bindings = {}) {
+async function fixture(bindings = {}, offerPatch = {}) {
   const h = await setup({ HARD_RUNTIME_MINUTES: '180', BOOT_LIMIT_MINUTES: '40', ...bindings });
+  Object.assign(h.cloud.offer, offerPatch);
   h.cloud.contracts = [900, 901, 902];
   assert.equal((await h.call()).status, 200);
   const original = await row(h);
@@ -84,7 +85,7 @@ for (const kind of ['boot', 'running-boot', 'report'])
         { ...configuration(env), profile: 'check' },
         h.time.value,
       );
-      assert.equal(budget.profiles.check.count_today, 2);
+      assert.equal(budget.profiles.check.count_today, 1);
       assert.ok(budget.rolling_usd <= original.runBudgetUsd);
     });
 for (const verdict of ['FAIL', 'UNAVAILABLE'])
@@ -200,4 +201,46 @@ for (const price of [0.21, 0.25])
     assert.equal(response.status, 200);
     assert.equal((await response.json()).id, '901');
     assert.equal(h.cloud.created.length, 2);
+  });
+
+for (const kind of ['report', 'boot'])
+  test('green provider replacement keeps one daily slot ' + kind, async () => {
+    const { h } = await fixture({ DAILY_RENTALS: '1' });
+    assert.equal((await fault(h, kind)).status, 200);
+    const response = await h.call();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).id, '901');
+    const cfg = configuration({ ...env, DAILY_RENTALS: '1' });
+    const budget = await new Ledger(h.storage).budgetSummary(cfg, h.time.value);
+    assert.equal(budget.profiles.check.count_today, 1);
+  });
+for (const host of [200, 201])
+  test('green provider replacement prefers a different eligible host ' + host, async () => {
+    const { h } = await fixture({}, { host_id: 100 });
+    h.cloud.extraOffers.push({
+      ...h.cloud.extraOffers[0],
+      id: 7,
+      machine_id: 100003,
+      host_id: host,
+      price: 0.11,
+    });
+    assert.equal((await fault(h)).status, 200);
+    const response = await h.call();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).host_id, host);
+  });
+for (const invalid of [{ verified: false }, { price: 2 }])
+  test('green other-host preference retains eligibility ' + JSON.stringify(invalid), async () => {
+    const { h } = await fixture({}, { host_id: 100 });
+    h.cloud.extraOffers.push({
+      ...h.cloud.extraOffers[0],
+      id: 7,
+      machine_id: 100003,
+      host_id: 200,
+      ...invalid,
+    });
+    assert.equal((await fault(h)).status, 200);
+    const response = await h.call();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).machine_id, 100002);
   });
