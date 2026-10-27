@@ -33,11 +33,11 @@ def require_provider_kvm(path):
 
 
 def provider_fault(text):
-    if (
-        re.search(r"^DRIVER_RC=8$", text, re.M)
-        and re.search(r"^NOT_READY driver_rc=8\b", text, re.M)
-        and re.search(r"^NVIDIA_SMI_RC=(?:[1-9][0-9]*)$", text, re.M)
-    ):
+    not_ready = re.search(r"^NOT_READY\b", text, re.M)
+    failed_driver = re.search(r"^DRIVER_RC=[1-9][0-9]*$", text, re.M)
+    unusable = re.search(r"GPU unusable|No devices were found", text, re.I)
+    initialization = re.search(r"RmInitAdapter failed|rm_init_adapter failed", text)
+    if not_ready and (unusable or (failed_driver and initialization)):
         return "provider_gpu_unavailable"
     return None
 

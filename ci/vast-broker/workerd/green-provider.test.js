@@ -29,10 +29,13 @@ async function fixture(t) {
   const ns = await mf.getDurableObjectNamespace('TEST_LEDGER');
   const stub = ns.get(ns.idFromName(t.name));
   const call = async (path, body) => {
-    const r = await stub.fetch('https://test.invalid' + path, {
-      method: body === undefined ? 'GET' : 'POST',
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    const r = await stub.fetch(
+      (path.startsWith('/admin/') ? 'https://internal.invalid' : 'https://test.invalid') + path,
+      {
+        method: body === undefined ? 'GET' : 'POST',
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      },
+    );
     return { status: r.status, data: await r.json() };
   };
   const now = Date.now();

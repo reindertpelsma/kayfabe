@@ -14,6 +14,9 @@ NODE = [
     "--test",
     "ci/vast-broker/test/green-provider.test.js",
     "ci/vast-broker/workerd/green-provider.test.js",
+    "ci/vast-broker/workerd/green-budget-window.test.js",
+    "ci/vast-broker/workerd/green-incident.test.js",
+    "ci/vast-broker/test/green-attempt-budget.test.js",
 ]
 COLLECT = """import io,json,unittest
 s=unittest.defaultTestLoader.discover('scripts/ci',pattern='test_vast_payload*.py')
@@ -49,14 +52,15 @@ CASES = [
     (
         "archive-spend",
         L,
-        "await ledger.put('cost:' + record.key + ':provider:0', { ...previous, created: true });",
+        "await ledger.put('cost:' + record.key + ':provider:0', {\n"
+        "          ...previous,\n          ...costAttempt(prior),\n          created: true,\n        });",
         "void previous;",
         "node",
     ),
     (
         "dollar-count-caps",
         L,
-        "await ledger.budgets(cfg, now, cost, null, { credit });",
+        "await ledger.budgets(cfg, now, cost, null, { credit, sameAttempt: retryNonce !== undefined });",
         "void cost;",
         "node",
     ),
@@ -71,7 +75,8 @@ CASES = [
     (
         "run-allowance-reset",
         I,
-        "r.runBudgetUsd = retrySource?.runBudgetUsd ?? cost;",
+        "r.runBudgetUsd =\n"
+        "      retrySource?.runBudgetUsd ?? (profile === 'sweep' ? cfg.sweepDaily : cfg.daily);",
         "r.runBudgetUsd = cost;",
         "node",
     ),
@@ -99,14 +104,14 @@ CASES = [
     (
         "runner-retries-again",
         R,
-        'if not provider_retry and data.get("provider_retries", 0) == 0:',
+        'if not self.provider_retry and data.get("provider_retries", 0) == 0:',
         "if True:",
         "node",
     ),
     (
         "runner-budget-classification",
         R,
-        'if provider_retry and self.metadata.get("verdict") == "PROVIDER_FAULT":',
+        'if self.provider_retry and self.metadata.get("verdict") == "PROVIDER_FAULT":',
         "if False:",
         "node",
     ),
@@ -121,7 +126,9 @@ CASES = [
     (
         "terminal-rental-fault",
         R,
-        'provider_retry and data["state"] == "NONE" and data["verdict"] == "UNAVAILABLE"',
+        "self.provider_retry\n"
+        '                    and data["state"] == "NONE"\n'
+        '                    and data["verdict"] == "UNAVAILABLE"',
         "False",
         "node",
     ),
@@ -133,6 +140,16 @@ CASES = [
         "        record.bandwidthCost = bandwidth;",
         "node",
     ),
+    ("replacement-busy-window", R, "                    and not self.provider_retry\n", "", "node"),
+    (
+        "retry-count-waiver",
+        L,
+        "if (!options.sameAttempt && values.count_today >= cfg.dailyCount)",
+        "if (values.count_today >= cfg.dailyCount)",
+        "node",
+    ),
+    ("attempt-dedup", L, "!counted[profile].has(attemptKey)", "true", "node"),
+    ("different-host", I, "evaluation.allowed = otherHosts;", "void otherHosts;", "node"),
     ("missing-kvm", P, 'raise ProviderFault("provider_kvm_missing")', "return", "python"),
     ("unusable-gpu", P, 'return "provider_gpu_unavailable"', "return None", "python"),
     (
@@ -151,6 +168,8 @@ CASES = [
         '("PASS", "FAIL", "UNAVAILABLE")',
         "python",
     ),
+    ("attempt-original-day", L, "if (attemptStarted >= day &&", "if (v.started >= day &&", "node"),
+    ("public-provider-attribution", R, ", not a kayfabe verdict\\n", ", provider fault\\n", "node"),
 ]
 
 
@@ -162,6 +181,8 @@ def run(family):
     return len(json.loads(line.split("=", 1)[1])["killers"]), r.returncode
 
 
+for name, filename, old, new, family in CASES:
+    assert Path(filename).read_text().count(old) == 1, (name, "anchor preflight")
 for family in ("node", "python"):
     kills, code = run(family)
     assert kills == 0 and code == 0, ("baseline", family, kills, code)

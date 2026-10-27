@@ -811,6 +811,7 @@ class Runner:
         self.rent_busy = False
         # A configured RENTING_DISABLED refusal of /rent: terminal, the Worker never touched Vast.
         self.renting_disabled = False
+        self.provider_retry = False
         # Edits4 F1: sticky for the whole /rent sequence. Once any /rent reply was ambiguous
         # (5xx, timeout, connection error, garbled page) a box may exist for this run.
         self.rent_ambiguous = False
@@ -850,9 +851,12 @@ class Runner:
                 # Edits4 F1: a BUSY after an ambiguous reply is not definite either (the
                 # Worker's busy flag answers a retry while the first create is still running).
                 remaining = int(self.until - time.monotonic())
+                # A replacement retains the original deadline; the Worker rechecks its
+                # remaining run/job budget. It does not need a fresh180-minute window.
                 if (
                     self.rent_busy
                     and not self.rent_ambiguous
+                    and not self.provider_retry
                     and remaining < ADMISSION_NEED_SECONDS
                 ):
                     raise WaitBudget()
@@ -1024,7 +1028,8 @@ class Runner:
 
     def execute(self):
         result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
-        terminal = final = admitted = provider_retry = False
+        terminal = final = admitted = False
+        self.provider_retry = False
         try:
             profile = self.ctx.get("profile", "check")
             code, availability = self.retry_read("/availability?profile=" + profile)
@@ -1133,7 +1138,7 @@ class Runner:
                         self.diagnostic = line
                     self.show(data["log_tail_sanitised"])
                     result["state"] = data["state"]
-                    if provider_retry and self.metadata.get("verdict") == "PROVIDER_FAULT":
+                    if self.provider_retry and self.metadata.get("verdict") == "PROVIDER_FAULT":
                         result = {
                             "state": "PROVIDER_FAULT",
                             "verdict": "PROVIDER_FAULT",
@@ -1147,11 +1152,19 @@ class Runner:
                     self.rental_shown = data["id"]
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
+                if data["verdict"] == "PROVIDER_FAULT":
+                    self.emit(
+                        "runner: provider fault: machine "
+                        + shown_id(data["machine_id"])
+                        + ", not a kayfabe verdict\n"
+                    )
                 if data["verdict"] == "PROVIDER_FAULT" or (
-                    provider_retry and data["state"] == "NONE" and data["verdict"] == "UNAVAILABLE"
+                    self.provider_retry
+                    and data["state"] == "NONE"
+                    and data["verdict"] == "UNAVAILABLE"
                 ):
-                    if not provider_retry and data.get("provider_retries", 0) == 0:
-                        provider_retry = True
+                    if not self.provider_retry and data.get("provider_retries", 0) == 0:
+                        self.provider_retry = True
                         self.emit("runner: provider fault; requesting one bounded replacement\n")
                         code, data = self.retry_read("/rent", "POST", request)
                         continue

@@ -187,9 +187,19 @@ for (const kind of ['daily-usd', 'rolling-usd', 'credit-reserve', 'daily-count']
             created: true,
           });
       const response = await h.call();
-      assert.equal(response.status, 409);
-      assert.equal((await response.json()).reason, 'BUDGET:' + kind);
-      assert.equal(h.cloud.created.length, 1);
+      if (kind === 'daily-count') {
+        assert.equal(response.status, 200);
+        assert.equal((await response.json()).provider_retries, 1);
+        assert.equal(h.cloud.created.length, 2);
+        await assert.rejects(
+          new Ledger(h.storage).budgets(configuration(env), h.time.value, 0.1),
+          (error) => error.reason === 'BUDGET:daily-count',
+        );
+      } else {
+        assert.equal(response.status, 409);
+        assert.equal((await response.json()).reason, 'BUDGET:' + kind);
+        assert.equal(h.cloud.created.length, 1);
+      }
     });
 
 for (const price of [0.21, 0.25])

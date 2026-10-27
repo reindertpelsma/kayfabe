@@ -30,7 +30,7 @@ import {Vast} from './vast.js';
 // prettier-ignore
 import {OfferBook} from './offers.js';
 // prettier-ignore
-import {Ledger,rentalCost} from './ledger.js';
+import {Ledger,rentalCost,costAttempt} from './ledger.js';
 // prettier-ignore
 import {onstart} from './onstart.js';
 // prettier-ignore
@@ -283,7 +283,7 @@ export function createService({
       }
       try {
         const credit = await vast.credit();
-        await ledger.budgets(cfg, now(), total, record.key, { credit });
+        await ledger.budgets(cfg, now(), total, record.key, { credit, sameAttempt: true });
       } catch (error) {
         await close(record, vast, 'CONTRACT_BUDGET', 'UNAVAILABLE');
         if (error instanceof BrokerError && error.state === 'UNAVAILABLE_BUDGET') throw error;
@@ -294,6 +294,7 @@ export function createService({
       record.price = computeStorage + bandwidth / (cfg.hard / 3600000);
       await ledger.save(record);
       await ledger.put('cost:' + record.key, {
+        ...costAttempt(record),
         profile: record.profile ?? 'check',
         started: record.started,
         ended: null,
@@ -840,6 +841,12 @@ export function createService({
       evaluation.allowed = evaluation.allowed.filter(
         (offer) => offer.machine_id !== retrySource.machineId && offer.pricing.total <= remaining,
       );
+      const otherHosts = evaluation.allowed.filter(
+        (offer) =>
+          providerId(offer.host_id) !== null && providerId(offer.host_id) !== retrySource.hostId,
+      );
+      if (providerId(retrySource.hostId) !== null && otherHosts.length)
+        evaluation.allowed = otherHosts;
       if (!evaluation.allowed.length) return json(expose(retrySource, key));
     }
     const chosen = await offers.select(evaluation, cfg, ledger, profile, rentRequest.preferences),
@@ -847,7 +854,10 @@ export function createService({
       cost = offer.pricing.total,
       credit = await vast.credit();
     try {
-      await ledger.budgets(cfg, now(), cost, null, { credit });
+      await ledger.budgets(cfg, now(), cost, null, {
+        credit,
+        sameAttempt: retrySource !== undefined,
+      });
     } catch (e) {
       if (e instanceof BrokerError && e.state === 'UNAVAILABLE_BUDGET')
         e.selection = { die: offer.die, ignored: chosen.ignored, reason: chosen.reason };
@@ -915,7 +925,8 @@ export function createService({
         rateCount: 0,
         liveCheckedAt: null,
       };
-    r.runBudgetUsd = retrySource?.runBudgetUsd ?? cost;
+    r.runBudgetUsd =
+      retrySource?.runBudgetUsd ?? (profile === 'sweep' ? cfg.sweepDaily : cfg.daily);
     r.providerRetries = retrySource ? 1 : 0;
     if (retrySource) {
       r.originalStarted = retrySource.started;

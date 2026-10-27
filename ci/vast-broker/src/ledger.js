@@ -9,6 +9,9 @@ export function rentalCost(record, at) {
     (record.bandwidthCost ?? 0)
   );
 }
+export function costAttempt(record) {
+  return { attemptKey: record.key, attemptStarted: record.originalStarted ?? record.started };
+}
 export class Ledger {
   constructor(storage) {
     this.storage = storage;
@@ -130,7 +133,11 @@ export class Ledger {
           refuse('NOT_ELIGIBLE', 409);
         // Preserve real spend/count before replacing this run's current receipt. Every proof,
         // cap check, archive and intent is one transaction; a racing replacement loses here.
-        await ledger.put('cost:' + record.key + ':provider:0', { ...previous, created: true });
+        await ledger.put('cost:' + record.key + ':provider:0', {
+          ...previous,
+          ...costAttempt(prior),
+          created: true,
+        });
         await storage.delete('cost:' + record.key);
         await storage.delete('ended:' + record.key);
         if ((await ledger.get('id:' + prior.id)) === record.key)
@@ -161,7 +168,7 @@ export class Ledger {
         open.some((o) => Number.isSafeInteger(o.machineId) && o.machineId === record.machineId)
       )
         refuse();
-      await ledger.budgets(cfg, now, cost, null, { credit });
+      await ledger.budgets(cfg, now, cost, null, { credit, sameAttempt: retryNonce !== undefined });
       await ledger.#writeReservation(record);
     });
   }
@@ -172,6 +179,7 @@ export class Ledger {
     await this.grant(record.key, record);
     await this.put('sha:' + record.sha, { key: record.key, started: record.started });
     await this.put('cost:' + record.key, {
+      ...costAttempt(record),
       profile: record.profile ?? 'check',
       started: record.started,
       ended: null,
@@ -189,6 +197,7 @@ export class Ledger {
       await ledger.save(record);
       const created = record.id ? true : record.closed === 'GONE' ? false : null;
       await ledger.put('cost:' + record.key, {
+        ...costAttempt(record),
         profile: record.profile ?? 'check',
         started: record.started,
         ended: now,
@@ -259,7 +268,8 @@ export class Ledger {
         check: { daily_usd: 0, count_today: 0 },
         sweep: { daily_usd: 0, count_today: 0 },
       },
-      rows = [];
+      rows = [],
+      counted = { check: new Set(), sweep: new Set() };
     let monthly = 0,
       outstanding = 0;
     for (const [key, stored] of entries) {
@@ -307,6 +317,19 @@ export class Ledger {
         (v.bandwidthCost ?? 0) < 0
       )
         refuse();
+      const attemptKey = v.attemptKey ?? key.slice(5),
+        attemptStarted = v.attemptStarted ?? v.started;
+      if (
+        (v.attemptKey !== undefined || v.attemptStarted !== undefined) &&
+        (typeof v.attemptKey !== 'string' ||
+          !attemptKey ||
+          attemptKey.length > 128 ||
+          !['cost:' + attemptKey, 'cost:' + attemptKey + ':provider:0'].includes(key) ||
+          !Number.isFinite(v.attemptStarted) ||
+          attemptStarted < 0 ||
+          attemptStarted > v.started)
+      )
+        refuse();
       const end = v.ended ?? now;
       if (end < v.started) refuse();
       const bandwidth = v.bandwidthCost ?? 0,
@@ -337,7 +360,10 @@ export class Ledger {
         (Math.max(0, end - Math.max(v.started, rolling)) * v.price) / 3600000 +
         remaining +
         (end >= rolling ? bandwidth : 0);
-      if (v.started >= day && !uncreated) profiles[profile].count_today++;
+      if (attemptStarted >= day && !uncreated && !counted[profile].has(attemptKey)) {
+        counted[profile].add(attemptKey);
+        profiles[profile].count_today++;
+      }
       outstanding += reserved;
       rows.push({
         key: key.slice(5),
@@ -384,7 +410,8 @@ export class Ledger {
       };
     if (Object.hasOwn(options, 'credit') && !Number.isFinite(options.credit))
       budgetRefuse('no-credit', values);
-    if (values.count_today >= cfg.dailyCount) budgetRefuse('daily-count', values);
+    if (!options.sameAttempt && values.count_today >= cfg.dailyCount)
+      budgetRefuse('daily-count', values);
     if (values.daily_usd + cost > values.daily_cap_usd) budgetRefuse('daily-usd', values);
     if (values.rolling_usd + cost > cfg.rolling) budgetRefuse('rolling-usd', values);
     if (Object.hasOwn(options, 'credit') && options.credit < values.credit_required_usd)
