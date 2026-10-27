@@ -1288,6 +1288,27 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// ★ P6: a Translated channel reached a `MEM_OP` TLB invalidate naming `pdb` (`None` =
     /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
     /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
+    /// EXPECTED RED batch-admission scaffold: old immediate submission.
+    #[cfg(test)]
+    pub fn queue_split(
+        &mut self,
+        pdb: Option<u64>,
+        key: Option<VasKey>,
+        ticket: u64,
+        trigger: &Trigger,
+    ) {
+        if let Some(key) = key {
+            self.on_split_space(key, ticket, trigger);
+        } else {
+            self.on_split(pdb, ticket, trigger);
+        }
+    }
+    /// EXPECTED RED: callers cannot batch old immediate submission.
+    #[cfg(test)]
+    pub fn start_queued_splits(&mut self, trigger: &Trigger) {
+        self.pump(trigger);
+    }
+
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
         if crate::maplog::on() {
             eprintln!(
@@ -3758,4 +3779,5 @@ mod tests {
         assert_eq!(r.m.stats.no_slot, 1);
         assert!(busy(&r.port), "never cleared: nothing was applied");
     }
+    include!("vasmgr_ens11_tests.rs");
 }
