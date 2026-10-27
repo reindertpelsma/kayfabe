@@ -695,8 +695,15 @@ cmd_run() {
        -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device virtio-blk-pci,drive=sys,bootindex=0)
   local gop="" dev=""
   if [ "$kf3" = 1 ]; then
-    gop=$(gop_signed)
-    dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=$gop,id=kf0"
+    # WINVM_KF3_DISPLAY=off (2026-10-27, TUR1): a headless device, no display plane and no boot GOP.
+    # Turing's display=on is refused at realize (its window class has no payload-size vocabulary),
+    # and a rented box has no monitor; the GPU/GSP path is exercised either way.
+    if [ "${WINVM_KF3_DISPLAY:-on}" = off ]; then
+      dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,id=kf0"
+    else
+      gop=$(gop_signed)
+      dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=$gop,id=kf0"
+    fi
     [ -z "$gdrv" ] || dev+=",guest-driver=$gdrv"
     [ -z "$extra" ] || dev+=",$extra"
     QA+=(-vga none -device "$dev")
