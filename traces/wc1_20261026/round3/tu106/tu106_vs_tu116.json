@@ -1,0 +1,207 @@
+{
+  "run": "WC1-round3e-TU106-57905776",
+  "reference_run": "WC1-round3b-TU116-57852545",
+  "driver": "580.88",
+  "gsp": "580.65.05",
+  "TU106_controls": 173,
+  "TU116_controls": 172,
+  "shared_controls": 172,
+  "TU106_only_controls": [
+    "0x802046"
+  ],
+  "TU116_only_controls": [],
+  "shared_size_and_status_value_set_differences": [],
+  "shared_request_count_differences": 27,
+  "count_limit": "Counts/frequencies vary by startup/workload; retained-only is not die-level absence",
+  "classes": {
+    "reference": "TU116",
+    "native_count": 31,
+    "reference_count": 31,
+    "shared": [
+      "0x0",
+      "0x4",
+      "0x70",
+      "0x73",
+      "0x78",
+      "0x7e",
+      "0x80",
+      "0x2080",
+      "0x2081",
+      "0x402c",
+      "0x5080",
+      "0x902d",
+      "0x9067",
+      "0x9096",
+      "0x90f1",
+      "0x95a1",
+      "0xa06c",
+      "0xa140",
+      "0xb297",
+      "0xc372",
+      "0xc46f",
+      "0xc4b0",
+      "0xc4b7",
+      "0xc570",
+      "0xc57a",
+      "0xc57b",
+      "0xc57d",
+      "0xc57e",
+      "0xc597",
+      "0xc5b5",
+      "0xc5c0"
+    ],
+    "native_only": [],
+    "reference_only": []
+  },
+  "exact_question_values": [
+    {
+      "control": "0x20800a59",
+      "same_exact_question": true,
+      "question": {
+        "zero_bytes": 16
+      },
+      "request_sha256": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+      "TU106_values": [
+        "0x2a000",
+        "0x0",
+        "0x40c20",
+        "0x0"
+      ],
+      "TU116_values": [
+        "0x2a000",
+        "0x0",
+        "0x40c20",
+        "0x0"
+      ],
+      "comparison": "equal"
+    },
+    {
+      "control": "0x2080121f",
+      "same_exact_question": true,
+      "question": {
+        "maxSlots": 4,
+        "other_request_fields_zero": true
+      },
+      "request_sha256": "63ec4e51dc28c12e3e6f85f1111d3fcb8574ddadc6d35e59b899b9f4a9baa490",
+      "TU106_values": [
+        "0x4",
+        "0x65f000",
+        "0x464",
+        "0x1000",
+        "0x197c000",
+        "0x1000"
+      ],
+      "TU116_values": [
+        "0x4",
+        "0x5c9000",
+        "0x464",
+        "0x1000",
+        "0x1724000",
+        "0x1000"
+      ],
+      "comparison": "different"
+    },
+    {
+      "control": "0x20802801",
+      "same_exact_question": true,
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "TU106_values": [
+        "0x2"
+      ],
+      "TU116_values": [
+        "0x2"
+      ],
+      "comparison": "equal"
+    },
+    {
+      "control": "0x20802806",
+      "same_exact_question": true,
+      "question": {
+        "u32": 3
+      },
+      "request_sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178",
+      "TU106_values": [
+        "0x0"
+      ],
+      "TU116_values": [
+        "0x0"
+      ],
+      "comparison": "equal"
+    },
+    {
+      "control": "0x20802a08",
+      "same_exact_question": true,
+      "question": {
+        "zero_bytes": 4
+      },
+      "request_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+      "TU106_values": [
+        "0x2000"
+      ],
+      "TU116_values": [
+        "0x2000"
+      ],
+      "comparison": "equal"
+    },
+    {
+      "control": "0x20809001",
+      "same_exact_question": true,
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "TU106_values": [
+        "0x3fc007f",
+        "0x0"
+      ],
+      "TU116_values": [
+        "0x3fc007f",
+        "0x0"
+      ],
+      "comparison": "equal"
+    },
+    {
+      "control": "0x20809009",
+      "same_exact_question": true,
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "TU106_values": [
+        "0x0",
+        "0xd"
+      ],
+      "TU116_values": [
+        "0x0",
+        "0xd"
+      ],
+      "comparison": "equal"
+    },
+    {
+      "control": "0x50700709",
+      "same_exact_question": true,
+      "question": {
+        "zero_bytes": 8
+      },
+      "request_sha256": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc",
+      "TU106_values": [
+        "0x0",
+        "0x34"
+      ],
+      "TU116_values": [
+        "0x0",
+        "0x34"
+      ],
+      "comparison": "equal"
+    }
+  ],
+  "constant_summary": {
+    "equal": 7,
+    "different": 1
+  },
+  "family_rules_admitted": 0,
+  "limit": "Two GPUs/one driver; equal replies are consistent so far, without a compression mechanism"
+}

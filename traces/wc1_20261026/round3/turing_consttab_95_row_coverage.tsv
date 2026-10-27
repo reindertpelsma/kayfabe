@@ -1,96 +1,96 @@
-source_line	key	source_die	source_branch	source_bytes	source_request	TU102	TU104	TU106	TU116	TU117	TU116_native_observation	TU116_source_question_comparison
-30	cudart.0x20809009	GA106	580	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request
-31	cudart.0x20809009	AD103	575	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request
-32	cudart.0x20809009	AD104	595	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request
-33	cudart.0x20809001	GA106	580	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request
-34	cudart.0x20809001	AD103	575	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request
-35	cudart.0x20809064	GA106	580	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-36	cudart.0x20809064	AD104	595	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-37	cudart.0x2080a001	GA106	580	16	0x0=0x0,0x4=0x0,0x8=0x0,0xc=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-38	gss.0x20808162	GA106	580	1	0x0=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-39	gss.0x20808162	AD104	595	1	0x0=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-46	rm.0x20800a59	GA106	570	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-47	rm.0x20802a08	GA106	570	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-48	rm.0x20800a59	GA106	575	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-49	rm.0x20802a08	GA106	575	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-50	rm.0x20800a59	GA106	580	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-51	rm.0x20802a08	GA106	580	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-52	rm.0x20800a59	GA106	590	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-53	rm.0x20802a08	GA106	590	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-54	rm.0x20800a59	GA106	595	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-55	rm.0x20802a08	GA106	595	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-56	rm.0x20800a59	GA106	610	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-57	rm.0x20802a08	GA106	610	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-58	rm.0x20800a59	GA104	595	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-59	rm.0x20802a08	GA104	595	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-60	rm.0x20802806	GA106	570	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-61	rm.0x20802801	GA106	570	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-62	rm.0x2080121f	GA106	570	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-63	rm.0x50700709	GA106	570	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-64	rm.0x20802806	GA106	575	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-65	rm.0x20802801	GA106	575	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-66	rm.0x2080121f	GA106	575	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-67	rm.0x50700709	GA106	575	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-68	rm.0x20802806	GA106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-69	rm.0x20802801	GA106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-70	rm.0x2080121f	GA106	580	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-71	rm.0x50700709	GA106	580	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-72	rm.0x20802806	GA106	590	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-73	rm.0x20802801	GA106	590	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-74	rm.0x2080121f	GA106	590	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-75	rm.0x50700709	GA106	590	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-76	rm.0x20802806	GA106	595	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-77	rm.0x20802801	GA106	595	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-78	rm.0x2080121f	GA106	595	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-79	rm.0x50700709	GA106	595	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-80	rm.0x20802806	GA106	610	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-81	rm.0x20802801	GA106	610	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-82	rm.0x2080121f	GA106	610	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-83	rm.0x50700709	GA106	610	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-84	rm.0x20802801	GA104	595	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-85	rm.0x2080121f	GA104	595	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped
-86	rm.0x50700709	GA104	595	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim
-87	rm.0x20802806	GA104	595	4	0x0=0x6	C	C	C	C	C	M exact native question; round3/tu116/constants.json	different request; no equality claim
-88	zbc.color	AD102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-89	zbc.depth	AD102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-90	zbc.stencil	AD102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-91	zbc.color	AD103	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-92	zbc.depth	AD103	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-93	zbc.stencil	AD103	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-94	zbc.color	AD104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-95	zbc.depth	AD104	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-96	zbc.stencil	AD104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-97	zbc.color	AD106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-98	zbc.depth	AD106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-99	zbc.stencil	AD106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-100	zbc.color	GA102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-101	zbc.depth	GA102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-102	zbc.stencil	GA102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-103	zbc.color	GA104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-104	zbc.depth	GA104	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-105	zbc.stencil	GA104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-106	zbc.color	GA106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-107	zbc.depth	GA106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-108	zbc.stencil	GA106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-109	zbc.color	GB202	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-110	zbc.depth	GB202	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-111	zbc.stencil	GB202	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-112	zbc.color	GB203	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-113	zbc.depth	GB203	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-114	zbc.stencil	GB203	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-115	zbc.color	GB206	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-116	zbc.depth	GB206	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-117	zbc.stencil	GB206	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-118	zbc.color	TU102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-119	zbc.depth	TU102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-120	zbc.stencil	TU102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-121	zbc.color	TU106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-122	zbc.depth	TU106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-123	zbc.stencil	TU106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-124	zbc.color	TU116	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-125	zbc.depth	TU116	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-126	zbc.stencil	TU116	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant
-127	rm.0x20802801	AD102	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-128	rm.0x20802806	AD102	580	4	0x0=0xb	C	C	C	C	C	M exact native question; round3/tu116/constants.json	different request; no equality claim
-129	rm.0x20802801	TU106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
-130	rm.0x20802806	TU106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request
+source_line	key	source_die	source_branch	source_bytes	source_request	TU102	TU104	TU106	TU116	TU117	TU116_native_observation	TU116_source_question_comparison	TU106_native_observation	TU106_source_question_comparison
+30	cudart.0x20809009	GA106	580	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request	M exact native question; round3/tu106/constants.json	same complete8-byte zero request
+31	cudart.0x20809009	AD103	575	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request	M exact native question; round3/tu106/constants.json	same complete8-byte zero request
+32	cudart.0x20809009	AD104	595	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request	M exact native question; round3/tu106/constants.json	same complete8-byte zero request
+33	cudart.0x20809001	GA106	580	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request	M exact native question; round3/tu106/constants.json	same complete8-byte zero request
+34	cudart.0x20809001	AD103	575	8	0x0=0x0,0x4=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	M exact native question; round3/tu116/constants.json	same complete8-byte zero request	M exact native question; round3/tu106/constants.json	same complete8-byte zero request
+35	cudart.0x20809064	GA106	580	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+36	cudart.0x20809064	AD104	595	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+37	cudart.0x2080a001	GA106	580	16	0x0=0x0,0x4=0x0,0x8=0x0,0xc=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+38	gss.0x20808162	GA106	580	1	0x0=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+39	gss.0x20808162	AD104	595	1	0x0=0x0	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+46	rm.0x20800a59	GA106	570	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+47	rm.0x20802a08	GA106	570	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+48	rm.0x20800a59	GA106	575	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+49	rm.0x20802a08	GA106	575	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+50	rm.0x20800a59	GA106	580	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+51	rm.0x20802a08	GA106	580	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+52	rm.0x20800a59	GA106	590	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+53	rm.0x20802a08	GA106	590	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+54	rm.0x20800a59	GA106	595	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+55	rm.0x20802a08	GA106	595	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+56	rm.0x20800a59	GA106	610	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+57	rm.0x20802a08	GA106	610	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+58	rm.0x20800a59	GA104	595	16	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+59	rm.0x20802a08	GA104	595	4	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+60	rm.0x20802806	GA106	570	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+61	rm.0x20802801	GA106	570	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+62	rm.0x2080121f	GA106	570	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+63	rm.0x50700709	GA106	570	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+64	rm.0x20802806	GA106	575	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+65	rm.0x20802801	GA106	575	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+66	rm.0x2080121f	GA106	575	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+67	rm.0x50700709	GA106	575	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+68	rm.0x20802806	GA106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+69	rm.0x20802801	GA106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+70	rm.0x2080121f	GA106	580	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+71	rm.0x50700709	GA106	580	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+72	rm.0x20802806	GA106	590	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+73	rm.0x20802801	GA106	590	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+74	rm.0x2080121f	GA106	590	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+75	rm.0x50700709	GA106	590	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+76	rm.0x20802806	GA106	595	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+77	rm.0x20802801	GA106	595	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+78	rm.0x2080121f	GA106	595	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+79	rm.0x50700709	GA106	595	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+80	rm.0x20802806	GA106	610	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+81	rm.0x20802801	GA106	610	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+82	rm.0x2080121f	GA106	610	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+83	rm.0x50700709	GA106	610	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+84	rm.0x20802801	GA104	595	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+85	rm.0x2080121f	GA104	595	40	0x0=0x4	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input correspondence unestablished; native question is separately scoped	M exact native question; round3/tu106/constants.json	source input correspondence unestablished; native question is separately scoped
+86	rm.0x50700709	GA104	595	8	-	C	C	C	C	C	M exact native question; round3/tu116/constants.json	source input missing; no equality claim	M exact native question; round3/tu106/constants.json	source input missing; no equality claim
+87	rm.0x20802806	GA104	595	4	0x0=0x6	C	C	C	C	C	M exact native question; round3/tu116/constants.json	different request; no equality claim	M exact native question; round3/tu106/constants.json	different request; no equality claim
+88	zbc.color	AD102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+89	zbc.depth	AD102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+90	zbc.stencil	AD102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+91	zbc.color	AD103	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+92	zbc.depth	AD103	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+93	zbc.stencil	AD103	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+94	zbc.color	AD104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+95	zbc.depth	AD104	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+96	zbc.stencil	AD104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+97	zbc.color	AD106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+98	zbc.depth	AD106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+99	zbc.stencil	AD106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+100	zbc.color	GA102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+101	zbc.depth	GA102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+102	zbc.stencil	GA102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+103	zbc.color	GA104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+104	zbc.depth	GA104	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+105	zbc.stencil	GA104	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+106	zbc.color	GA106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+107	zbc.depth	GA106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+108	zbc.stencil	GA106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+109	zbc.color	GB202	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+110	zbc.depth	GB202	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+111	zbc.stencil	GB202	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+112	zbc.color	GB203	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+113	zbc.depth	GB203	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+114	zbc.stencil	GB203	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+115	zbc.color	GB206	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+116	zbc.depth	GB206	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+117	zbc.stencil	GB206	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+118	zbc.color	TU102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+119	zbc.depth	TU102	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+120	zbc.stencil	TU102	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+121	zbc.color	TU106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+122	zbc.depth	TU106	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+123	zbc.stencil	TU106	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+124	zbc.color	TU116	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+125	zbc.depth	TU116	*	88	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+126	zbc.stencil	TU116	*	132	-	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	H? unqueried on Turing	unmeasured	no native typed constant	unmeasured	no native typed constant
+127	rm.0x20802801	AD102	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+128	rm.0x20802806	AD102	580	4	0x0=0xb	C	C	C	C	C	M exact native question; round3/tu116/constants.json	different request; no equality claim	M exact native question; round3/tu106/constants.json	different request; no equality claim
+129	rm.0x20802801	TU106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request
+130	rm.0x20802806	TU106	580	4	0x0=0x3	C	C	C	C	C	M exact native question; round3/tu116/constants.json	same complete4-byte request	M exact native question; round3/tu106/constants.json	same complete4-byte request

@@ -1,0 +1,16 @@
+{
+  "run": "WC1-round3e-TU106-57905776",
+  "ogkm_tag": "595.91.07",
+  "ogkm_commit": "9f087a6d4e86d85acc0ce1d354d6276fe5047b29",
+  "native_controls": 173,
+  "numeric_macro_hits": 131,
+  "meaning": "Numeric macro equality alone; Windows meaning/layout/support not established",
+  "native_gsp_requested_class_ids": 31,
+  "explicit_tu106_registry_matches": 29,
+  "outside_indexed_registry": [
+    "0x95a1",
+    "0xb297"
+  ],
+  "class_limit": "Not found in indexed595.91.07 registry/SDK search; no all-tag absence claim",
+  "family_rules_admitted": 0
+}

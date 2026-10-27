@@ -1,0 +1,209 @@
+{
+  "run": "WC1-round3e-native-TU106-57905776",
+  "date": "2026-10-27",
+  "source": "541033eaf",
+  "lease": 57905776,
+  "machine": 39235,
+  "host": 79466,
+  "driver": "580.88",
+  "gsp": "580.65.05",
+  "target_die": "TU106",
+  "outcome": "Two complete startup oracles; two hardware D3D passes; archive verified; closed",
+  "capture_receipt": "traces/wc1_20261026/round3/tu106/capture_receipt.json",
+  "comparison": "traces/wc1_20261026/round3/tu106/tu106_vs_tu116.json",
+  "authority": "Explicit ROUND3e owner direction, based on round3d timed console evidence",
+  "precreate_profile": "wc1-round3e-host79466",
+  "identity": {
+    "first_utc": "2026-10-27T02:34:39.910181+00:00",
+    "window_seconds": 3000,
+    "default_seconds": 1200,
+    "matching_seconds_required": 120,
+    "first_matching_observation_seconds": 1314.6836796449497,
+    "admission_elapsed_seconds": 1602.2644083779305,
+    "matching_seconds": 122.58267740812153,
+    "matching_observations": 6,
+    "prior_match_sequence_reset_on_console_export_failure": true,
+    "first_reach_or_window_reset": false,
+    "host_bound_to_owned_budget_provider": true
+  },
+  "market": {
+    "quoted_rate": 0.10611111111111111,
+    "rate_bound": 0.15,
+    "rate_ceiling": 0.4,
+    "disk_gib": 150,
+    "is_vm_deverified": true,
+    "rentable": false,
+    "owner_directed_attempt": true
+  },
+  "console_snapshots": [
+    {
+      "offset_seconds": 0,
+      "first_request_elapsed_seconds": 0.4008678337559104,
+      "actual_request_elapsed_seconds": 0.4008678337559104,
+      "attempts": [
+        {
+          "request_utc": "2026-10-27T02:36:58.380959+00:00",
+          "request_elapsed_seconds": 0.4008678337559104,
+          "cli_exit": 0
+        }
+      ],
+      "cli_exit": 0,
+      "redacted_text_sha256": "4591bb738e142e9bfa291a47a38fab7e0b68daba7ddd3bd52a55e7f6cdc92a0f",
+      "redacted_bytes": 71867,
+      "preparation_done": false,
+      "download_complete_count": 0,
+      "windows_boot_manager_messages": 0
+    },
+    {
+      "offset_seconds": 300,
+      "first_request_elapsed_seconds": 300.00014311494306,
+      "actual_request_elapsed_seconds": 300.00014311494306,
+      "attempts": [
+        {
+          "request_utc": "2026-10-27T02:41:57.980250+00:00",
+          "request_elapsed_seconds": 300.00014311494306,
+          "cli_exit": 0
+        }
+      ],
+      "cli_exit": 0,
+      "redacted_text_sha256": "1acd86de54b70671d4b7cc000fbf40c1e58eb9652084bc334c7c8f83999fd0fc",
+      "redacted_bytes": 159913,
+      "preparation_done": true,
+      "download_complete_count": 5,
+      "windows_boot_manager_messages": 0
+    },
+    {
+      "offset_seconds": 600,
+      "first_request_elapsed_seconds": 600.0001382101327,
+      "actual_request_elapsed_seconds": 640.1256701797247,
+      "attempts": [
+        {
+          "request_utc": "2026-10-27T02:46:57.980251+00:00",
+          "request_elapsed_seconds": 600.0001382101327,
+          "cli_exit": 1
+        },
+        {
+          "request_utc": "2026-10-27T02:47:38.105782+00:00",
+          "request_elapsed_seconds": 640.1256701797247,
+          "cli_exit": 0
+        }
+      ],
+      "cli_exit": 0,
+      "redacted_text_sha256": "1acd86de54b70671d4b7cc000fbf40c1e58eb9652084bc334c7c8f83999fd0fc",
+      "redacted_bytes": 159913,
+      "preparation_done": true,
+      "download_complete_count": 5,
+      "windows_boot_manager_messages": 0
+    },
+    {
+      "offset_seconds": 900,
+      "first_request_elapsed_seconds": 900.000145711936,
+      "actual_request_elapsed_seconds": 900.000145711936,
+      "attempts": [
+        {
+          "request_utc": "2026-10-27T02:51:57.980256+00:00",
+          "request_elapsed_seconds": 900.000145711936,
+          "cli_exit": 0
+        }
+      ],
+      "cli_exit": 0,
+      "redacted_text_sha256": "d3f96f63ebf0820b1c4d6c18d0cf89d1c0717381f9b8c686d578465a9c554308",
+      "redacted_bytes": 160031,
+      "preparation_done": true,
+      "download_complete_count": 5,
+      "windows_boot_manager_messages": 1
+    },
+    {
+      "offset_seconds": 1200,
+      "first_request_elapsed_seconds": 1200.0001323358156,
+      "actual_request_elapsed_seconds": 1200.0001323358156,
+      "attempts": [
+        {
+          "request_utc": "2026-10-27T02:56:57.980241+00:00",
+          "request_elapsed_seconds": 1200.0001323358156,
+          "cli_exit": 0
+        }
+      ],
+      "cli_exit": 0,
+      "redacted_text_sha256": "615112f6cb8ad98a2bc858dfb6aca0353ef2770e1dfec7b700c0f4613e088932",
+      "redacted_bytes": 160266,
+      "preparation_done": true,
+      "download_complete_count": 5,
+      "windows_boot_manager_messages": 3
+    },
+    {
+      "offset_seconds": 1800,
+      "first_request_elapsed_seconds": 1800.000136995688,
+      "actual_request_elapsed_seconds": 1800.000136995688,
+      "attempts": [
+        {
+          "request_utc": "2026-10-27T03:06:57.980244+00:00",
+          "request_elapsed_seconds": 1800.000136995688,
+          "cli_exit": 0
+        }
+      ],
+      "cli_exit": 0,
+      "redacted_text_sha256": "615112f6cb8ad98a2bc858dfb6aca0353ef2770e1dfec7b700c0f4613e088932",
+      "redacted_bytes": 160266,
+      "preparation_done": true,
+      "download_complete_count": 5,
+      "windows_boot_manager_messages": 3
+    }
+  ],
+  "linux_reference": {
+    "api_calls": 6,
+    "returns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "xid_count": 0,
+    "copy_or_kernel_workload_tested": false,
+    "sha256": "893867394eacbccdfbd0493d41e3d006f758a319996fe7c08ca95ae88d605f4f",
+    "hash_verified_before_conversion": true
+  },
+  "archive": {
+    "capture_files": 18,
+    "bytes": 58329369,
+    "manifest_hashes_verified": true,
+    "independent_sha256sum": true,
+    "verified_before_destroy": true,
+    "diagnosis_files_before_destroy": 20,
+    "redacted_console_host_only": true
+  },
+  "teardown": {
+    "id": 57905776,
+    "absent": true,
+    "utc": "2026-10-27T03:27:06.906812+00:00",
+    "capture_hash_verified_before_destroy": true,
+    "independent_sha256sum_before_destroy": true
+  },
+  "watchdog": {
+    "seconds": 5400,
+    "armed_before_create": true,
+    "cancelled_after_api_absence": true,
+    "exited": true
+  },
+  "budget": {
+    "lease": 57905776,
+    "utc": "2026-10-27T03:28:11.021599+00:00",
+    "lifetime_seconds": 3387.402484,
+    "rate_bound": 0.15,
+    "network_allowance": 0.4,
+    "round_upper_usd": 0.5411417701666668,
+    "stop_usd": 1.2,
+    "cap_usd": 1.8,
+    "credit": 23.760340142848918,
+    "reserve": 8,
+    "day_posted": 2.478,
+    "precreate_daily_upper": 7.885455994,
+    "carried_daily_upper_after_closed_lifetime": 7.801597764166667,
+    "other_allowances_retained": true
+  },
+  "owned_resources_remaining": 0,
+  "cybersecurity_notice": false,
+  "family_rules_admitted": 0
+}
