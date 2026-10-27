@@ -1,4 +1,4 @@
-STATUS: PARTIAL, 2026-10-27 — TU116 native580.88 has two complete startup oracles and eight exact-question values. The round3c TU106 attempt closed at00:01UTC after its original identity deadline refused admission; other Turing Windows dies remain unmeasured.
+STATUS: PARTIAL, 2026-10-27 — TU116 native580.88 has two complete startup oracles and eight exact-question values. The final round3d TU106 attempt closed after the original identity deadline refused admission; other Turing Windows dies remain unmeasured.
 
 # Turing Windows reference and die table
 
@@ -137,3 +137,9 @@ MEASURED (2026-10-26, `traces/wc1_20261026/round3/availability.json`): the five-
 MEASURED (`traces/wc1_20261026/round3c/native_attempts.json`, leases57882956/57884771): owner-assigned machine39235 supplied no native Windows capture. The first lease stopped before strict SSH after a console transport failure. The retry preserved its original first-reachable timestamp, obtained six Linux identity observations spanning200.143s, and archived/hash-verified the Linux reference before native conversion. Linux580.95.05 returned0 on six device/context API calls with one GPU and noXid; no CUDA kernel workload was tested.
 
 MEASURED (2026-10-27, lease `57884771`, `traces/wc1_20261026/round3c/native_attempts.json`): the original1200s identity deadline expired before a fresh120s matching Windows-key proof. No Windows login, capture-driver installation, startup oracle or D3D workload occurred. Private failure metadata was hash-verified before exact-id teardown; both owned leases are API-absent and their watchdogs stopped. This is an acquisition/admission failure; it gives no Windows GPU or kayfabe verdict. TU106 control/class sets and exact-question values remain unobserved, so the TU106-versus-TU116 differential remains open and no new family rule is admitted.
+
+## Round3d final TU106 attempt
+
+MEASURED (2026-10-27, lease `57898260`, `traces/wc1_20261026/round3d/attempt.json`): the final machine39235 attempt archived/hash-verified the Linux reference before unchanged native conversion. Redacted console requests at converter+300/+600/+900s were on time. The300s log shows five completed downloads and preparation DONE. The600s export failed the CLI9s wait; a delayed743.207s recovery is byte-identical to300s. The900s log succeeds and first shows Windows Boot Manager starting. The endpoint never presents the expected Windows key in the retained observations; the original1200s guard refuses admission. No Windows login, capture or D3D run occurred. Diagnosis files were independently hash-verified before exact-id destroy/APIabsence01:49:12UTC; the watchdog exited.
+
+INFERRED (same round3d receipt): the delay is in post-preparation Windows installation/boot, with the precise firmware, installation, service or network cause unverified. The console does not establish a converter download failure or a GPU fault. TU106 controls/classes/values and its differential against TU116 remain open; no row is promoted and no new family rule is admitted. The final authorized TU106 retry is closed.

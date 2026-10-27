@@ -1,0 +1,27 @@
+{
+  "run": "WC1-round3d-offline-console-redaction-20261027",
+  "initial_expected_red_commit": "359c84073",
+  "initial_tests": {
+    "total": 4,
+    "errors": 4
+  },
+  "initial_green_commit": "fe0fad910",
+  "ipv6_expected_red_commit": "516aa140e",
+  "ipv6_before": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2
+  },
+  "ipv6_green_commit": "f7574bb1f",
+  "after": {
+    "total": 4,
+    "passed": 4
+  },
+  "mutants": {
+    "identifiers": 2,
+    "secrets": 2,
+    "ipv6": 2
+  },
+  "scope": "Offline console text redaction only; no provider/guest requests or native identity change",
+  "synthetic_test_identifiers": true
+}

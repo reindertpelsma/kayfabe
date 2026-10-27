@@ -1,0 +1,147 @@
+{
+  "run": "WC1-round3d-TU106-57898260",
+  "date": "2026-10-27",
+  "machine": 39235,
+  "host": 79466,
+  "lease": 57898260,
+  "target_die": "TU106",
+  "source_revision": "541033eaf",
+  "capture_binaries_changed": false,
+  "owned_leases": 1,
+  "unavailable_ask_requests_without_contract": 1,
+  "outcome": "Original native identity deadline refused; no Windows admission, login or kfwc capture",
+  "capture_exists": false,
+  "windows_measurements": 0,
+  "family_rules_admitted": 0,
+  "hypothesis": "Unchanged native proof admits Windows within1200s and unchanged capture gives two complete startup oracles plus hardware D3D",
+  "falsifier": "Original deadline refusal, wrong die, discovery/loss/oracle or D3D failure",
+  "hypothesis_status": "Admission falsifier fired; capture/value questions untested",
+  "identity": {
+    "first_utc": "2026-10-27T01:28:06.254692+00:00",
+    "original_window_seconds": 1200,
+    "matching_seconds_required": 120,
+    "windows_matching_observations": 0,
+    "deadline_changed": false,
+    "endpoint_changed": false,
+    "actual_error": "REFUSED native identity deadline"
+  },
+  "linux_reference": {
+    "driver": "580.95.05",
+    "pci_device": "1f06",
+    "api_calls": 6,
+    "api_returns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "gpu_count": 1,
+    "xids": 0,
+    "kernel_or_copy_workload_tested": false,
+    "identity_observations": 4,
+    "observation_span_seconds": 126.3109544692561,
+    "archive_hash_verified_before_conversion": true,
+    "sha256": "3d97db1d9614c746bbd1d6c485256cd0aad2e55086c1691d8b68bf1cb08f082c"
+  },
+  "conversion": {
+    "start_utc": "2026-10-27T01:30:29.429741+00:00",
+    "converter_sha256": "c9b88d8d2373d9c29818b1321191635bf65f468145b204f8812bb29e7b531ee9",
+    "changed": false
+  },
+  "console_snapshots": [
+    {
+      "nominal_offset_seconds": 0,
+      "request_elapsed_seconds": 35.53168642288074,
+      "request_utc": "2026-10-27T01:31:04.961403+00:00",
+      "cli_exit": 0,
+      "archive_text_sha256": "f3e004eb5a5609eb55c8f16ed7f817222a299f04adc1996248926caddb6a95b7",
+      "archive_text_bytes": 81915,
+      "console_available": true,
+      "downloads_complete": 0,
+      "preparation_done": false,
+      "windows_boot_manager_count": 0
+    },
+    {
+      "nominal_offset_seconds": 300,
+      "request_elapsed_seconds": 300.00013210019097,
+      "request_utc": "2026-10-27T01:35:29.429851+00:00",
+      "cli_exit": 0,
+      "archive_text_sha256": "2b46ff4a9bd6cf1477b05d0db66e72118d9b02f7b16cdf73fbd0d11c18dc9753",
+      "archive_text_bytes": 158245,
+      "console_available": true,
+      "downloads_complete": 5,
+      "preparation_done": true,
+      "windows_boot_manager_count": 0
+    },
+    {
+      "nominal_offset_seconds": 600,
+      "request_elapsed_seconds": 600.0001217941754,
+      "request_utc": "2026-10-27T01:40:29.429853+00:00",
+      "cli_exit": 1,
+      "archive_text_sha256": "e3b45b2568a1930ab2e8145b43d87e23268c510c2578e3e2e17db1260a229a45",
+      "archive_text_bytes": 865,
+      "console_available": false,
+      "downloads_complete": null,
+      "preparation_done": null,
+      "windows_boot_manager_count": null
+    },
+    {
+      "nominal_offset_seconds": 900,
+      "request_elapsed_seconds": 900.0001217620447,
+      "request_utc": "2026-10-27T01:45:29.429854+00:00",
+      "cli_exit": 0,
+      "archive_text_sha256": "92c7a4cf84af5788243ed9d9cfa218b357cae88658212b20df09313804c197ef",
+      "archive_text_bytes": 158363,
+      "console_available": true,
+      "downloads_complete": 5,
+      "preparation_done": true,
+      "windows_boot_manager_count": 1
+    }
+  ],
+  "snapshot600_recovery": {
+    "actual_request_elapsed_seconds": 743.2070878688246,
+    "cli_exit": 0,
+    "identical_to_300": true,
+    "sha256": "2b46ff4a9bd6cf1477b05d0db66e72118d9b02f7b16cdf73fbd0d11c18dc9753",
+    "first_request_failed": "Provider asynchronous export not ready within CLI9s wait",
+    "api_attempt": "Provider S3object returned403; no Windows connection or authentication bypass"
+  },
+  "diagnosis": {
+    "measured_stage": "Preparation DONE by300s; unchanged log at743s; Windows Boot Manager starts by900s",
+    "inferred_category": "Post-preparation Windows installation/boot latency",
+    "exact_root_cause": "Unverified; firmware/Windows installation/boot delay versus service/network readiness not separated",
+    "scope": "No Windows GPU or kfwc verdict"
+  },
+  "archive": {
+    "hash_verified_before_destroy": true,
+    "independent_sha256sum": true,
+    "files_before_destroy": 12,
+    "raw_console_persisted": false,
+    "console_text_redacted": true
+  },
+  "teardown": {
+    "id": 57898260,
+    "api_absent": true,
+    "utc": "2026-10-27T01:49:12.286989+00:00",
+    "watchdog_cancelled_after_api_absence": true
+  },
+  "budget": {
+    "lease": 57898260,
+    "lifetime_seconds": 1420.184001,
+    "rate_bound_usd_per_hour": 0.15,
+    "network_allowance_usd": 0.4,
+    "round_upper_usd": 0.459174333375,
+    "stop_usd": 1,
+    "cap_usd": 1.5,
+    "credit": 25.160818547849317,
+    "reserve": 8,
+    "precreate_daily_upper": 5.627281661,
+    "daily_upper_after_closed_lifetime": 5.461455994375,
+    "other_lane_allowance": 3.5,
+    "utc": "2026-10-27T01:49:29.416012+00:00"
+  },
+  "cybersecurity_notice": false,
+  "owned_resources_remaining": 0
+}
