@@ -32,7 +32,7 @@ pub fn wake_verdict(fence_word: u32, head: Option<u32>, marked: bool) -> &'stati
 
 #[cfg(test)]
 mod tests {
-    use super::wake_verdict;
+    use super::{lost_wake_cause, wake_verdict};
 
     #[test]
     fn nothing_in_flight_is_nothing_to_say() {
@@ -67,5 +67,34 @@ mod tests {
             wake_verdict(u32::MAX - 3, Some(2), true),
             "host fence not reached"
         );
+    }
+    #[test]
+    fn no_wake_since_the_fence_was_queued_means_the_interrupt_never_came() {
+        let c = lost_wake_cause(None, Some(300), Some(10), 5);
+        assert!(c.starts_with("NO-WAKE"), "{c}");
+        // a wake that is older than the last pump of this channel changes nothing
+        let c = lost_wake_cause(Some(900), Some(300), Some(10), 5);
+        assert!(c.starts_with("NO-WAKE"), "{c}");
+    }
+
+    #[test]
+    fn a_wake_after_the_last_pump_that_did_not_pump_is_a_lost_ring() {
+        let c = lost_wake_cause(Some(100), Some(300), Some(10), 5);
+        assert!(c.starts_with("WAKE-NOT-PUMPED"), "{c}");
+        let c = lost_wake_cause(Some(100), None, None, 5);
+        assert!(c.starts_with("WAKE-NOT-PUMPED"), "{c}");
+    }
+
+    #[test]
+    fn a_pump_after_the_wake_that_read_a_short_fence_is_a_stale_read() {
+        // the last wake 300 ms ago, the last pump 200 ms ago, and it read word 4 for head 5
+        let c = lost_wake_cause(Some(300), Some(200), Some(4), 5);
+        assert!(c.starts_with("STALE-READ-AT-WAKE"), "{c}");
+    }
+
+    #[test]
+    fn a_pump_that_saw_the_fence_is_not_a_lost_wake() {
+        let c = lost_wake_cause(Some(300), Some(200), Some(5), 5);
+        assert!(c.starts_with("PUMP-SAW-IT"), "{c}");
     }
 }
