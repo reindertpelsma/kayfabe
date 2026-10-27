@@ -264,3 +264,32 @@ fn misaligned_zcull_va_is_refused_before_bind() {
     assert!(execute(&mut h, r, 61, channel(), |_, _| true).is_err());
     assert!(h.binds.is_empty());
 }
+
+#[test]
+fn zcull_no_ctxsw_needs_no_save_buffer_and_still_reaches_host() {
+    let mut h = Fake::default();
+    let r = Request {
+        kind: Kind::Zcull { va: 0, mode: 1 },
+        ..single(false)
+    };
+    assert_eq!(
+        execute(&mut h, r, 61, channel(), |_, _| panic!("no buffer")),
+        Ok(0)
+    );
+    assert!(h.queries.is_empty());
+    assert_eq!(h.binds.len(), 1);
+}
+#[test]
+fn zcull_no_ctxsw_does_not_require_an_available_size_query() {
+    let mut h = Fake {
+        props: Some(Err(0x56)),
+        ..Fake::default()
+    };
+    let r = Request {
+        kind: Kind::Zcull { va: 0, mode: 1 },
+        ..single(false)
+    };
+    assert_eq!(execute(&mut h, r, 61, channel(), |_, _| false), Ok(0));
+    assert!(h.queries.is_empty());
+    assert_eq!(h.binds[0].channel, 81);
+}

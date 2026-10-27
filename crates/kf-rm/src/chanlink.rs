@@ -3718,6 +3718,120 @@ mod tests {
         );
     }
 
+    mod gfxp1_direct_tests {
+        use super::*;
+        use kf_abi::grbind::{Kind, Request, encode};
+        fn params(pm: bool, client: u32) -> (u32, Vec<u8>) {
+            let mut buffers = [0; 9];
+            buffers[0] = 0x10000;
+            let kind = if pm {
+                Kind::Pm {
+                    va: 0x10000,
+                    mode: 1,
+                }
+            } else {
+                Kind::Preemption {
+                    flags: 2,
+                    gfxp: 1,
+                    cilp: 0,
+                    buffers,
+                }
+            };
+            encode(
+                kf_abi::versions::BENCH_DRIVER,
+                Request {
+                    client,
+                    channel: 0x40,
+                    kind,
+                },
+            )
+            .unwrap()
+        }
+        #[test]
+        fn direct_preemption_is_held_for_the_real_user_adapter() {
+            carried(false);
+        }
+        #[test]
+        fn direct_pm_is_held_for_the_real_user_adapter() {
+            carried(true);
+        }
+        fn carried(pm: bool) {
+            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+            let d = kf_gsp::Deferred::new();
+            let done = d.clone();
+            let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            let events = seen.clone();
+            let mut link = ChannelPolicy::new(
+                abi,
+                kf_abi::GuestOs::Windows,
+                std::sync::Arc::new(move |st| {
+                    events.lock().unwrap().push(st);
+                    ChanAnswer::Deferred(done.clone())
+                }),
+            )
+            .with_gr_binds(true);
+            let (cmd, bytes) = params(pm, 0x31);
+            let input = control_on(0x31, 0x33, cmd, &bytes);
+            let reply = link.respond(&input).expect("must reach owned USER adapter");
+            assert_eq!(reply.rpc_result, 0);
+            assert_eq!(reply.body, input.payload);
+            let held = link.defers(&input).expect("must remain asynchronous");
+            assert_eq!(held.outcome(), None);
+            assert_eq!(seen.lock().unwrap().len(), 1);
+            d.resolve(0x1a);
+            assert_eq!(held.outcome(), Some(0x1a));
+        }
+        #[test]
+        fn explicit_off_keeps_new_direct_controls_unserviced() {
+            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+            let mut link = ChannelPolicy::new(
+                abi,
+                kf_abi::GuestOs::Windows,
+                std::sync::Arc::new(|_| panic!("disabled adapter called")),
+            )
+            .with_gr_binds(false);
+            for pm in [false, true] {
+                let (cmd, p) = params(pm, 0x31);
+                assert!(link.respond(&control_on(0x31, 0x33, cmd, &p)).is_none());
+            }
+        }
+        #[test]
+        fn malformed_direct_preemption_size_refuses_before_target_dispatch() {
+            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+            let mut link = ChannelPolicy::new(
+                abi,
+                kf_abi::GuestOs::Windows,
+                std::sync::Arc::new(|_| panic!("malformed target dispatched")),
+            )
+            .with_gr_binds(true);
+            let (cmd, mut p) = params(false, 0x31);
+            p.pop();
+            assert_eq!(
+                link.respond(&control_on(0x31, 0x33, cmd, &p))
+                    .unwrap()
+                    .rpc_result,
+                NV_ERR_INVALID_ARGUMENT
+            );
+        }
+        #[test]
+        fn foreign_client_intent_is_not_copied_to_a_host_handle() {
+            let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+            let mut link = ChannelPolicy::new(
+                abi,
+                kf_abi::GuestOs::Windows,
+                std::sync::Arc::new(|_| panic!("foreign client dispatched")),
+            )
+            .with_gr_binds(true);
+            let (cmd, p) = params(true, 0x32);
+            assert_eq!(
+                link.respond(&control_on(0x31, 0x33, cmd, &p))
+                    .unwrap()
+                    .rpc_result,
+                NV_ERR_INSUFFICIENT_PERMISSIONS
+            );
+        }
+    }
+
     /// ★ v3-gfx: `GR_CTXSW_ZCULL_BIND` reaches the plane decoded (VA across two words, the mode);
     /// a bind naming ANOTHER client, a mode past `SEPARATE_BUFFER`, or a wrong size is refused by
     /// the link before the plane is asked; a channel the plane does not own is declined.
