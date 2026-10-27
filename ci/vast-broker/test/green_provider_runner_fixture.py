@@ -1,0 +1,116 @@
+"""No network: the actual BASE runner handles one provider replacement."""
+
+import importlib.util
+import io
+import json
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("runner", Path(__file__).parents[1] / "runner.py")
+m = importlib.util.module_from_spec(spec)
+sys.modules["runner"] = m
+spec.loader.exec_module(m)
+scope = {}
+exec(Path(__file__).with_name("v5_fixture_data.py").read_text(), scope)
+m.time.sleep = lambda _: None
+case = sys.argv[1]
+ctx = {"run": "123-1", "sha": "a" * 40, "nonce": "f" * 64}
+manifest = {"protocol_version": 6, "worker_version": "v5", "bundle_sha256": "b" * 64}
+rents = 0
+calls = []
+clock = 0.0
+busy_replies = int(case[-1]) if case.startswith("busy") else 0
+m.time.monotonic = lambda: clock
+
+
+def status(verdict="UNAVAILABLE"):
+    final = verdict in {"PASS", "FAIL"}
+    return {
+        **scope["extra_status"](verdict=verdict, pending=not final),
+        "state": "GRACE" if final else "NONE" if verdict == "PROVIDER_FAULT" else "BOOTING",
+        "verdict": verdict,
+        "run": ctx["run"],
+        "id": str(899 + rents),
+        "sha": ctx["sha"],
+        "cleanup_pending": verdict == "UNAVAILABLE",
+        "result_at": 2000 if final else None,
+        "ended_at": 2000 if verdict == "PROVIDER_FAULT" else None,
+        "started_at": 1000,
+        "deadline_at": 302000,
+        "gpu_model": "RTX_4070",
+        "machine_id": 100000 + rents,
+        "host_id": 3000 + rents,
+        "cost_estimate_usd": 0.01,
+        "log_cursor": 0,
+        "log_tail_sanitised": "",
+        "bytes_dropped": 0,
+        "tail_bytes_dropped": 0,
+        "runner_nonce": ctx["nonce"],
+        "log_sha256": "0" * 64,
+        "provider_retries": rents - 1,
+        **manifest,
+    }
+
+
+def client(route, method="GET", body=None):
+    global rents, clock, busy_replies
+    calls.append(route)
+    code = 200
+    if route.startswith("/availability"):
+        data = scope["availability"]()
+    elif route == "/rent" and rents == 1 and busy_replies:
+        busy_replies -= 1
+        code = 409
+        data = {
+            "state": "BUSY",
+            "verdict": "UNAVAILABLE",
+            "log_tail_sanitised": "",
+            "bytes_dropped": 0,
+        }
+    elif route == "/rent":
+        rents += 1
+        assert rents <= 2, "unbounded provider retry"
+        if rents == 2 and case.startswith("budget"):
+            code = 409
+            data = {
+                "state": "UNAVAILABLE_BUDGET",
+                "verdict": "UNAVAILABLE",
+                "log_tail_sanitised": "",
+                "bytes_dropped": 0,
+                "reason": "BUDGET:run-usd",
+                "budget": {"run_cap_usd": 1, "prior_usd": 0.2, "cost_usd": 0.9},
+            }
+        else:
+            data = status()
+    elif route.startswith("/status/"):
+        verdict = "PROVIDER_FAULT"
+        if rents == 2:
+            if case.startswith(("pass", "busy")):
+                verdict = "PASS"
+            elif case.startswith("fail"):
+                verdict = "FAIL"
+        data = status(verdict)
+        if case.startswith("busy") and rents == 1:
+            clock = 40 * 60
+        if rents == 2 and case.startswith("unavailable"):
+            data.update(state="NONE", verdict="UNAVAILABLE", result_at=None, suites=[])
+    else:
+        data = {}
+    return m.Reply(code, {"content-type": "application/json"}, json.dumps(data).encode())
+
+
+messages, summary = [], io.StringIO()
+result = m.Runner(ctx, manifest, client, emit=messages.append, summary=summary).execute()
+assert rents == 2, (result, calls)
+expected = (
+    "PASS"
+    if case.startswith(("pass", "busy"))
+    else "FAIL" if case.startswith("fail") else "PROVIDER_FAULT"
+)
+assert result["verdict"] == expected, result
+if expected == "PROVIDER_FAULT":
+    assert result["state"] == "PROVIDER_FAULT", result
+text = "".join(messages)
+assert text.count("RENTAL machine=") == (1 if case.startswith("budget") else 2), text
+assert "runner: provider fault: machine 100001, not a kayfabe verdict" in text, text
+assert calls.count("/stop/123-1") == 1, calls

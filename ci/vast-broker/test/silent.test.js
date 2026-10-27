@@ -52,8 +52,8 @@ for (const [name, phase, http] of [
       assert.equal(r.calls.includes('rent'), false);
     }
   });
-for (const count of ['21', '40'])
-  test('silent configuration diagnosis keeps current daily-count limit ' + count, async () => {
+for (const count of ['41', '100'])
+  test('silent configuration diagnosis keeps reviewed daily-count ceiling ' + count, async () => {
     assert.throws(() => configuration({ ...env, DAILY_RENTALS: count }));
     const h = await setup({ DAILY_RENTALS: count });
     assert.equal((await h.call('/availability?profile=check', { method: 'GET' })).status, 503);

@@ -145,7 +145,7 @@ export function configuration(env) {
     passGrace: number('PASS_GRACE_MINUTES', DEFAULTS.passGraceMinutes, DEFAULTS.maxMinutes) * 60000,
     failGrace: number('FAIL_GRACE_MINUTES', DEFAULTS.failGraceMinutes, DEFAULTS.maxMinutes) * 60000,
     cronPeriod: DEFAULTS.cronPeriod,
-    dailyCount: number('DAILY_RENTALS', DEFAULTS.dailyCount, 20),
+    dailyCount: number('DAILY_RENTALS', DEFAULTS.dailyCount, 40),
     daily: number('DAILY_SPEND_USD', DEFAULTS.daily),
     rolling: number('ROLLING_SPEND_USD', DEFAULTS.rolling),
     gap: number('SHA_GAP_HOURS', DEFAULTS.gapHours, 720) * 3600000,
