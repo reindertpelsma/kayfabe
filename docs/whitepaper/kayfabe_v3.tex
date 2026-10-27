@@ -1,0 +1,55 @@
+\documentclass[11pt]{article}
+\input{preamble_v3}
+\input{v3_citations}
+\begin{document}
+\begin{titlepage}
+\centering
+\vspace*{20mm}
+{\Huge\sffamily Kayfabe v3\par}
+\vspace{8mm}
+{\LARGE An architecture to argue with\par}
+\vspace{14mm}
+Stock NVIDIA guest drivers, an emulated device, and a GPU the host keeps using.
+\vspace{12mm}
+\begin{minipage}{0.88\textwidth}
+\textbf{STATUS: RESEARCH, 2026-10-27.} This is a source audit and a research argument,
+not a new hardware qualification. The implementation baseline is immutable:
+\begin{center}\code{12c4008705f17033a803e56d4d479bf1275cdb94}\end{center}
+That was \code{origin/next} when writing began. Experimental results and code outside that
+baseline carry separate revisions. A moving branch name never upgrades their status.
+
+The guest driver edits its GPU address map in memory that Kayfabe does not intercept. When
+the driver asks for those edits to take effect, Kayfabe re-reads that map and installs the
+corresponding host mappings before later work proceeds. The INFERRED hypothesis is that this
+takes long enough to delay completion until Windows attempts graphics-driver recovery,
+potentially losing applications' graphics state. Microsoft's default wait for unfinished
+work to finish or yield after a scheduler request is two seconds; this is not a universal
+two-second deadline from submission.\src{architecture}\src{mskeys}\src{msrecovery}
+
+The source records contain working Windows and Linux workloads. They do not qualify the
+pinned baseline on hardware. The later long-wait analysis is UNVERIFIED because its raw trace
+is not in the repository. Host-plus-guest throughput is UNMEASURED; the coexistence claim has
+only screenshot evidence.\src{readme}\src{walknarrow}
+
+\textbf{Reading route:} begin with the rules, use the primer for unfamiliar terms, then read
+Section~\ref{sec:uncomfortable}, the limitations and failure case.
+Section~\ref{sec:questions} asks questions that can be answered without access to this
+repository. Numeric citations link to sources; the companion index holds the full source
+and PR lists. All diagrams are conceptual TikZ drawings, not measured timelines.
+\end{minipage}
+\vfill
+Kayfabe project \quad / \quad publication snapshot 2026-10-27
+\end{titlepage}
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+\input{v3_rules_product}
+\input{v3_primer}
+\input{v3_architecture}
+\input{v3_evidence}
+\input{v3_uncomfortable}
+\input{v3_questions}
+\appendix
+\input{v3_method_sources}
+\end{document}

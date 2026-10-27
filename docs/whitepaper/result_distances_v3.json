@@ -1,0 +1,160 @@
+{
+  "baseline": "12c4008705f17033a803e56d4d479bf1275cdb94",
+  "scope": [
+    "crates/",
+    "qemu/",
+    "cuda/"
+  ],
+  "results": [
+    {
+      "result": "TU116 merge bar",
+      "revision": "1915bd719bb686dfd0b1aaca8540668b626c250a",
+      "changed_product_paths": 442,
+      "pin_only_commits": 1987,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "TU116 ladder",
+      "revision": "a295e2cedd4dd1ac4f06ab4da51b7ab603e0c18e",
+      "changed_product_paths": 442,
+      "pin_only_commits": 1988,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "AD104 merge bar",
+      "revision": "fc2dadc4e07ffa5c0d930972afb8a4d002595855",
+      "changed_product_paths": 442,
+      "pin_only_commits": 1982,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "GB205 bar / both ladders",
+      "revision": "d40dafbfa9e984e2e79608697b10f86201675015",
+      "changed_product_paths": 442,
+      "pin_only_commits": 1985,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "GA104 candidate",
+      "revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "changed_product_paths": 64,
+      "pin_only_commits": 629,
+      "result_only_commits": 52,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Windows matrix",
+      "revision": "eb9f2aa33f2217355bb5a43ee54ebd2f3e09ea26",
+      "changed_product_paths": 135,
+      "pin_only_commits": 864,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Mixed Windows session",
+      "revision": "89fc8a22291dd7bda69c3077ba829b1e934b11db",
+      "changed_product_paths": 84,
+      "pin_only_commits": 660,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux 61/65 apps",
+      "revision": "2830988f183c2475a89acc989523a977c5671ab4",
+      "changed_product_paths": 441,
+      "pin_only_commits": 1984,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux 100 processes",
+      "revision": "4c48ca0cdebff4fbb5caa7d7383206ef1f4495e9",
+      "changed_product_paths": 639,
+      "pin_only_commits": 2114,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux headless graphics",
+      "revision": "d06833f0db5e8534837767efe17ff7ae7715dd95",
+      "changed_product_paths": 641,
+      "pin_only_commits": 2197,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "VFIO native control (QEMU)",
+      "revision": "666ea966f5ae57be54bf9a84ad77f42897f3f41e",
+      "changed_product_paths": 132,
+      "pin_only_commits": 822,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Production FPS subset",
+      "revision": "0a74611734dc91c78c86ff39ed9f06d866072ac4",
+      "changed_product_paths": 130,
+      "pin_only_commits": 821,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux matmul",
+      "revision": "b5c9f71759b3818dac90b7ea056c1b1ad256987e",
+      "changed_product_paths": 307,
+      "pin_only_commits": 1518,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux llama.cpp",
+      "revision": "9d82f2598d267732c87476da27f501aaabe2c4af",
+      "changed_product_paths": 382,
+      "pin_only_commits": 1754,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux eager decoding",
+      "revision": "e5ff45ff85ea77e5d10837ac9bf9d33c3dd7ece0",
+      "changed_product_paths": 801,
+      "pin_only_commits": 2485,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Linux suspend/resume",
+      "revision": "559db30cc6694fc1d4e571f1dc08e5abd2bf7bd5",
+      "changed_product_paths": 169,
+      "pin_only_commits": 938,
+      "result_only_commits": 0,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Host-call cost study",
+      "revision": "6d95870c7c2c26cca07f0382152dd480715fd172",
+      "changed_product_paths": 150,
+      "pin_only_commits": 629,
+      "result_only_commits": 162,
+      "rerun_at_pin_for_this_edition": false
+    },
+    {
+      "result": "Supplied long-wait analysis",
+      "revision": "64c50ad472d4402a5bd7e7a3b07a628254a6565a",
+      "changed_product_paths": 135,
+      "pin_only_commits": 35,
+      "result_only_commits": 182,
+      "rerun_at_pin_for_this_edition": false
+    }
+  ],
+  "missing": [
+    {
+      "result": "Experimental Heaven",
+      "reason": "Stated runtime does not resolve"
+    }
+  ]
+}

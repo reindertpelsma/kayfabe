@@ -1,0 +1,42 @@
+\usepackage[a4paper,margin=23mm]{geometry}
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Pagella}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{Inconsolata}
+\usepackage{amsmath,amssymb,booktabs,longtable,tabularx,enumitem}
+\usepackage{tikz,float}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\usepackage{xcolor,hyperref,xurl}
+\hypersetup{colorlinks=true,linkcolor=blue!45!black,urlcolor=blue!45!black,
+  pdftitle={Kayfabe v3: an architecture to argue with},pdfauthor={Kayfabe project}}
+\setlength{\emergencystretch}{3em}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\setlist{nosep,leftmargin=*}
+\newcommand{\baseline}{12c4008705f17033a803e56d4d479bf1275cdb94}
+\newcommand{\repobase}{https://github.com/reindertpelsma/kayfabe}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\sourceentry}[3]{%
+  \expandafter\def\csname source-number:#1\endcsname{#2}%
+  \expandafter\def\csname source-url:#1\endcsname{#3}}
+\newcommand{\reposource}[4]{\sourceentry{#1}{#2}{\repobase/blob/#3/#4}}
+\newcommand{\src}[1]{\,\textsuperscript{\href{\csname source-url:#1\endcsname}
+  {[\csname source-number:#1\endcsname]}}}
+\newcommand{\readcode}{\textbf{CODE.} }
+\newcommand{\doc}{\textbf{DOC.} }
+\newcommand{\measured}{\textbf{MEASURED.} }
+\newcommand{\reported}{\textbf{REPORTED.} }
+\newcommand{\unmeasured}{\textbf{UNMEASURED.} }
+\newcommand{\inferred}{\textbf{INFERRED.} }
+\newcommand{\unverified}{\textbf{UNVERIFIED.} }
+\newcommand{\evidence}[4]{\item\label{e:#1}\textbf{#1}: #4\\
+  Revision \code{#2}.\\\href{\repobase/blob/#2/#3}{\nolinkurl{#3}}}
+\newcommand{\attack}[3]{\textbf{Invariant:} #1\par
+  \textbf{Tests and scope:} #2\par\textbf{What the test could miss:} #3\par}
+\newcounter{question}
+\newcommand{\question}[4]{\refstepcounter{question}
+  \subsection*{Q\thequestion. #1}\textbf{Setup:} #2\par
+  \textbf{Observation to obtain:} #3\par\textbf{Decision it changes:} #4\par}
+\tikzset{concept/.style={draw,rounded corners,align=center,font=\small,
+  text width=35mm,minimum height=12mm,fill=blue!4},
+  flow/.style={-{Latex[length=2mm]},thick}}

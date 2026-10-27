@@ -1,0 +1,39 @@
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\small,
+  event/.style={draw,align=center,text width=20mm,minimum height=14mm,font=\scriptsize},
+  flow/.style={-{Latex[length=2mm]},thick}]
+\node[event] (submit) at (0,0) {guest queues work};
+\node[event] (trap) at (2.7,0) {barrier write traps};
+\node[event] (start) at (5.4,0) {walk starts};
+\node[event] (end) at (8.1,0) {walk + host apply finish};
+\node[event] (complete) at (10.8,0) {dependent completion observed};
+\draw[flow] (submit) -- (trap);
+\draw[flow] (trap) -- (start);
+\draw[flow] (start) -- (end);
+\draw[flow] (end) -- (complete);
+\node[align=center,font=\scriptsize,text width=145mm] at (5.4,-1.25)
+  {Hypothesised order only. Queue/trap/start offsets and the preemption-request time are
+   not measured by the cited analysis.};
+\foreach \t in {0,1,2,3} {
+  \draw (3.5*\t,-2.0) -- (3.5*\t,-2.12);
+  \node[below,font=\scriptsize] at (3.5*\t,-2.12) {\t\ s};
+}
+\draw[flow] (0,-2.0) -- (11.2,-2.0);
+\draw[very thick,blue] (0,-3.0) -- (7,-3.0);
+\node[anchor=west,font=\scriptsize,text width=80mm] at (0,-2.7)
+  {DOCUMENTED: preemption wait, 2 s from scheduler request};
+\draw[very thick,dashed,red] (0,-4.0) -- (8.505,-4.0);
+\node[anchor=west,font=\scriptsize,text width=90mm] at (0,-3.65)
+  {UNVERIFIED analysis: host apply duration 2.43 s};
+\draw[very thick,dashed,red] (0,-5.0) -- (8.8515,-5.0);
+\node[anchor=west,font=\scriptsize,text width=100mm] at (0,-4.65)
+  {UNVERIFIED analysis: interval between observed completions 2.529 s};
+\draw[densely dotted] (7,-2.2) -- (7,-5.2);
+\end{tikzpicture}
+\caption{Duration comparison, not a measured shared clock. The lower bars have independent
+  origins: the 2 s marker cannot locate an actual reset without the preemption request and
+  packet identity. The long-duration analysis is not in the repository.\src{mskeys}
+  \src{walknarrow}}
+\label{fig:stall}
+\end{figure}
