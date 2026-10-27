@@ -615,3 +615,49 @@ fn caller_announces_processed_statements_after_apply_and_wakes_before_foreign_ap
             .contains("register_walk_waiter_and_rearm(g.key, g.guest_idx, |token|")
     );
 }
+
+#[test]
+fn ens11_resolved_named_pdb_split_releases_unrelated_space() {
+    let inbox = Inbox::new().unwrap();
+    let ticket = inbox.request_split(7, Some(0x1000));
+    inbox.take_split_requests();
+    inbox.set_walk_scope(vec![A], false, None);
+    inbox.mark_split_scopes_resolved(&[ticket]);
+    assert!(current_user_gate(&inbox, A));
+    assert!(!current_user_gate(&inbox, B));
+}
+#[test]
+fn ens11_resolved_named_pdb_split_aliases_hold_only_the_resolved_union() {
+    let inbox = Inbox::new().unwrap();
+    let t = inbox.request_split(7, Some(0x1000));
+    let u = inbox.request_split(8, Some(0x1000));
+    inbox.take_split_requests();
+    let c = VasKey(0x300);
+    inbox.set_walk_scope(vec![A, c], false, None);
+    inbox.mark_split_scopes_resolved(&[t, u]);
+    assert!(current_user_gate(&inbox, A));
+    assert!(current_user_gate(&inbox, c));
+    assert!(!current_user_gate(&inbox, B));
+}
+#[test]
+fn ens11_late_unresolved_pdb_split_restores_the_conservative_hold() {
+    let inbox = Inbox::new().unwrap();
+    let t = inbox.request_split(7, Some(0x1000));
+    inbox.take_split_requests();
+    inbox.set_walk_scope(vec![A], false, None);
+    inbox.mark_split_scopes_resolved(&[t]);
+    inbox.request_split(8, Some(0x2000));
+    assert!(current_user_gate(&inbox, B));
+}
+#[test]
+fn ens11_unknown_or_all_pdb_work_cannot_be_marked_as_resolved() {
+    for pdb in [None, Some(0x1000)] {
+        let inbox = Inbox::new().unwrap();
+        let t = inbox.request_split(7, pdb);
+        inbox.take_split_requests();
+        inbox.set_walk_scope(vec![], true, None);
+        inbox.mark_split_scopes_resolved(&[t]);
+        assert!(current_user_gate(&inbox, A));
+        assert!(current_user_gate(&inbox, B));
+    }
+}

@@ -74,6 +74,8 @@ impl Reason {
 }
 
 impl Inbox {
+    /// EXPECTED RED: a named PDB split still holds the whole VM after target resolution.
+    pub(crate) fn mark_split_scopes_resolved(&self, _tickets: &[u64]) {}
     /// VA thread, before any synchronous apply: publish ALL pending/active mutation targets.
     pub(crate) fn set_walk_scope(&self, keys: Vec<VasKey>, global: bool, sequence: Option<u64>) {
         let global = global
