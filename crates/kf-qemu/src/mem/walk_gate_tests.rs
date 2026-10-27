@@ -661,3 +661,58 @@ fn ens11_unknown_or_all_pdb_work_cannot_be_marked_as_resolved() {
         assert!(current_user_gate(&inbox, B));
     }
 }
+
+#[test]
+fn ens11_idle_layout_admission_cannot_clear_a_queued_split_interrupt() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let inbox = Inbox::new().unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    inbox.bind_layout_interrupt(stop.clone());
+    let t = inbox.request_split(7, Some(0x1000));
+    assert!(stop.load(Ordering::Acquire));
+    assert!(!inbox.allow_deferred_layout());
+    assert!(stop.load(Ordering::Acquire));
+    inbox.take_split_requests();
+    assert!(!inbox.allow_deferred_layout());
+    inbox.finish_split(t, Ok(()));
+    assert!(inbox.allow_deferred_layout());
+    assert!(!stop.load(Ordering::Acquire));
+}
+#[test]
+fn ens11_a_user_split_arriving_after_idle_admission_interrupts_the_next_layout_verb() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let inbox = Inbox::new().unwrap();
+    let stop = Arc::new(AtomicBool::new(true));
+    inbox.bind_layout_interrupt(stop.clone());
+    assert!(inbox.allow_deferred_layout());
+    assert!(!stop.load(Ordering::Acquire));
+    inbox.request_user_split(8, A).ok().unwrap();
+    assert!(stop.load(Ordering::Acquire));
+    assert!(!inbox.allow_deferred_layout());
+}
+
+#[test]
+fn ens11_all_pdb_stays_global_even_with_an_empty_resolved_snapshot() {
+    let inbox = Inbox::new().unwrap();
+    let t = inbox.request_split(7, None);
+    inbox.take_split_requests();
+    inbox.set_walk_scope(vec![], false, None);
+    inbox.mark_split_scopes_resolved(&[t]);
+    assert!(current_user_gate(&inbox, A));
+    assert!(current_user_gate(&inbox, B));
+}
+#[test]
+fn ens11_all_pdb_cannot_borrow_the_previous_named_target_union() {
+    let inbox = Inbox::new().unwrap();
+    let t = inbox.request_split(7, None);
+    inbox.take_split_requests();
+    inbox.set_walk_scope(vec![A], false, None);
+    inbox.mark_split_scopes_resolved(&[t]);
+    assert!(current_user_gate(&inbox, B));
+}

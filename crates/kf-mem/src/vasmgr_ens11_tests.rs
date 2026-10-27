@@ -81,10 +81,18 @@ fn ens11_empty_diff_repeated_splits_do_not_remap_unchanged_rows() {
 }
 
 struct Ens11LayoutTarget {
+    refuse_refresh: std::cell::Cell<bool>,
     key: VasKey,
     visits: Rc<RefCell<Vec<VasKey>>>,
 }
 impl MapTarget for Ens11LayoutTarget {
+    fn end_refresh(&self) -> Result<(), String> {
+        if self.refuse_refresh.get() {
+            Err("ENS11_SPARSE_READY_REFUSED".into())
+        } else {
+            Ok(())
+        }
+    }
     fn sparse_twin(&self) -> bool {
         true
     }
@@ -115,6 +123,7 @@ fn ens11_layout_manager() -> (Ens11LayoutManager, Rc<RefCell<Vec<VasKey>>>) {
         m.table.insert(
             key,
             Ens11LayoutTarget {
+                refuse_refresh: std::cell::Cell::new(false),
                 key,
                 visits: visits.clone(),
             },
@@ -165,4 +174,139 @@ fn ens11_reset_forgets_optional_layout_from_the_old_guest_life() {
     m.deferred_layout.extend([K_A, K_B]);
     m.abandon_life();
     assert!(m.deferred_layout.is_empty());
+}
+
+// Seeded schedules drive the real manager and diff/shadow walker, not an alternate scheduler.
+fn ens11_check_split_step(r: &mut Rig, issued: &mut BTreeMap<u64, usize>) {
+    let submitted = r.m.walker().submits.len();
+    let eligible: BTreeSet<_> =
+        r.m.inflight
+            .as_ref()
+            .map(|batch| {
+                batch
+                    .wants
+                    .iter()
+                    .filter_map(|(w, _, _)| {
+                        if let Want::Split { ticket, .. } = w {
+                            Some(*ticket)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    r.m.on_walk_ready(r.port.trigger());
+    for (ticket, result) in r.m.take_splits() {
+        assert_eq!(result, Ok(()));
+        assert!(
+            eligible.contains(&ticket),
+            "only the completed submission can release a ticket"
+        );
+        assert!(
+            submitted > issued.remove(&ticket).unwrap(),
+            "walk starts after request admission"
+        );
+    }
+}
+#[test]
+fn ens11_seeded_memop_chains_preserve_post_request_walk_receipts_and_bounded_backlog() {
+    for seed in 1..=256u64 {
+        let mut r = rig();
+        let mut rng = seed;
+        let mut issued = BTreeMap::new();
+        let mut ticket = 9000;
+        for _ in 0..200 {
+            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
+            match (rng >> 32) % 6 {
+                0..=2 if issued.len() < 32 => {
+                    let (key, pdb) = if rng & 1 == 0 {
+                        (K_A, PDB_A)
+                    } else {
+                        (K_B, PDB_B)
+                    };
+                    issued.insert(ticket, r.m.walker().submits.len());
+                    if rng & 2 == 0 {
+                        r.m.queue_split(Some(pdb), None, ticket, r.port.trigger());
+                    } else {
+                        r.m.queue_split(None, Some(key), ticket, r.port.trigger());
+                    }
+                    ticket += 1;
+                }
+                3..=4 => r.m.start_queued_splits(r.port.trigger()),
+                _ => ens11_check_split_step(&mut r, &mut issued),
+            }
+            assert!(r.m.pending() <= 32);
+            assert!(issued.len() <= 32);
+        }
+        for _ in 0..64 {
+            r.m.start_queued_splits(r.port.trigger());
+            ens11_check_split_step(&mut r, &mut issued);
+            if issued.is_empty() {
+                break;
+            }
+        }
+        assert!(
+            issued.is_empty(),
+            "fair submissions/polls must drain every seed {seed}"
+        );
+        assert!(!r.m.in_flight());
+        assert_eq!(r.m.pending(), 0);
+    }
+}
+
+#[test]
+fn ens11_an_ordinary_walk_interrupted_by_a_split_also_retains_optional_layout() {
+    let (mut m, visits) = ens11_layout_manager();
+    let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(0xBB_0000).unwrap());
+    let req = guest_invalidate(&port, PDB_B, false);
+    m.on_invalidate(req, port.trigger());
+    m.on_walk_ready(port.trigger());
+    assert!(visits.borrow().is_empty());
+    assert!(m.has_deferred_layout());
+    assert!(m.retry_deferred_layout());
+    assert_eq!(*visits.borrow(), vec![K_B]);
+}
+#[test]
+fn ens11_repeated_memops_in_a_do_not_starve_an_idle_continuation_for_b() {
+    let (mut m, visits) = ens11_layout_manager();
+    let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(0xBB_0000).unwrap());
+    for ticket in 810..818 {
+        m.queue_split(None, Some(K_A), ticket, port.trigger());
+        if ticket == 810 {
+            m.queue_split(None, Some(K_B), 899, port.trigger());
+        }
+        m.start_queued_splits(port.trigger());
+        m.on_walk_ready(port.trigger());
+        assert!(!m.take_splits().is_empty());
+        assert!(m.retry_deferred_layout());
+    }
+    assert!(visits.borrow().iter().filter(|k| **k == K_B).count() >= 3);
+}
+
+#[test]
+fn ens11_empty_diff_split_does_not_succeed_after_a_readiness_refusal() {
+    let (mut m, _) = ens11_layout_manager();
+    m.table.target(K_A).unwrap().refuse_refresh.set(true);
+    let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(0xBB_0000).unwrap());
+    m.queue_split(None, Some(K_A), 910, port.trigger());
+    m.start_queued_splits(port.trigger());
+    m.on_walk_ready(port.trigger());
+    let done = m.take_splits();
+    assert_eq!(done.len(), 1);
+    assert_eq!(done[0].0, 910);
+    assert!(done[0].1.is_err());
+}
+#[test]
+fn ens11_one_targets_readiness_refusal_does_not_forge_another_targets_verdict() {
+    let (mut m, _) = ens11_layout_manager();
+    m.table.target(K_A).unwrap().refuse_refresh.set(true);
+    let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(0xBB_0000).unwrap());
+    m.queue_split(None, Some(K_A), 911, port.trigger());
+    m.queue_split(None, Some(K_B), 912, port.trigger());
+    m.start_queued_splits(port.trigger());
+    m.on_walk_ready(port.trigger());
+    let done: BTreeMap<_, _> = m.take_splits().into_iter().collect();
+    assert!(done[&911].is_err());
+    assert_eq!(done[&912], Ok(()));
 }

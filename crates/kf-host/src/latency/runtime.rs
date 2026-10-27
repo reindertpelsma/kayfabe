@@ -734,7 +734,8 @@ fn dump(why: &str) {
         eprintln!(
             "kf3: LATENCY SLOW id={} stream={} kind={:?} token={:#x} worker={} \
             observe_ns={} publish_ns={} marker_id={:?} marker_observed_ns={:?} \
-            marker_gpu_ns={:?} vector={:?} notification_ns={:?} notification_source={:?} irq_line=0 \
+            marker_gpu_ns={:?} vector={:?} notification_ns={:?} \
+            notification_source={:?} irq_line=0 \
             correlation=eligible-vector-opportunity stages_ns={:?} total_ns={total:?} \
             gpu_observation_lag_ns={:?} waits=[{waits}] worker_context=[{context}]",
             s.cookie,
@@ -919,5 +920,259 @@ mod context_tests {
             ..Span::default()
         };
         assert!(context_key(&held, 0, 100) < context_key(&parent, 0, 100));
+    }
+}
+
+#[cfg(test)]
+mod native_recorder_tests {
+    use super::*;
+    fn native_tracker_pipeline(name: &str, kind: Kind, wrap: bool) {
+        if std::env::var("KF_ENS11_NATIVE_CHILD").ok().as_deref() != Some(name) {
+            let child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", name, "--nocapture", "--test-threads=1"])
+                .env("KF_ENS11_NATIVE_CHILD", name)
+                .env("KF3_DIAG_LATENCY", "1")
+                .output()
+                .unwrap();
+            assert!(
+                child.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&child.stdout),
+                String::from_utf8_lossy(&child.stderr)
+            );
+            return;
+        }
+        // Isolated process: exercise real public hooks with the opt-in enabled, no GPU or RM.
+        assert!(init(Instant::now(), &[19]));
+        assert_ne!(register_thread(Role::Worker), 0);
+        let mut tracker = Tracker::default();
+        tracker.configure(kind, 0x80c, Some(19));
+        tracker.observe();
+        tracker.waiting(Some(Cause::OwnWalk));
+        let rm = activity(Activity::Rm(5));
+        let control = activity(Activity::Control(0x1234));
+        split_request_at(1, 0x80c, SplitScope::Space(0x2a3), now());
+        split_queued(1);
+        std::thread::sleep(std::time::Duration::from_millis(55));
+        drop(control);
+        drop(rm);
+        tracker.published_at(now(), None, wrap);
+        tracker.published_at(now(), Some(7), wrap);
+        tracker.marker_at(6, now());
+        let r = recorder().unwrap();
+        {
+            let st = r.state.lock().unwrap();
+            assert_eq!(st.pending.len(), 2);
+            assert!(
+                st.pending
+                    .iter()
+                    .all(|s| s.marker == Some(7) && s.advanced.is_none())
+            );
+        }
+        tracker.marker(7);
+        let mask = notification_mask(|vector| vector == 19);
+        assert_eq!(mask, 1);
+        notification(mask, false);
+        poll();
+        assert_eq!(r.state.lock().unwrap().pending.len(), 2);
+        let expected = if kind == Kind::Translated {
+            notification_storm(mask, true);
+            NotificationSource::Storm
+        } else {
+            notification(mask, true);
+            NotificationSource::Normal
+        };
+        split_start_at(1, 3, 0x2a3, 1, now());
+        split_applied(1, 0x2a3, 3, [1; 8], [2, 1]);
+        split_ready(1, true);
+        split_released(1, true);
+        split_taken(1);
+        split_request_at(999, 0x80c, SplitScope::Pdb(None), now());
+        split_queued(999);
+        split_canceled(999);
+        poll();
+        let st = r.state.lock().unwrap();
+        assert!(st.pending.is_empty());
+        assert_eq!(st.total.count, 2);
+        assert_eq!(st.slow.len(), 2);
+        for sample in &st.slow {
+            assert_eq!(sample.kind, kind);
+            assert_eq!(sample.token, 0x80c);
+            assert_eq!(sample.source, Some(expected));
+            assert_eq!(sample.gpu, None);
+            assert!(sample.stages().unwrap()[0] >= SLOW_NS);
+            assert!(sample.waits.iter().any(|w| w.cause == Cause::OwnWalk));
+            assert!(sample.work.iter().any(|w| w.code == 64));
+            assert!(
+                sample
+                    .work
+                    .iter()
+                    .any(|w| w.code == 65 && w.detail == 0x1234)
+            );
+        }
+        let split = &st.splits.slow[0];
+        assert!(split.queued.is_some() && split.started.is_some() && split.applied.is_some());
+        assert!(split.ready.is_some() && split.released.is_some() && split.taken.is_some());
+        assert_eq!(split.rm, [1; 8]);
+        assert_eq!(split.diff, 3);
+        assert_eq!([split.mapped, split.unmapped], [2, 1]);
+        assert_eq!(st.splits.gauges[4].count, 1);
+        assert_eq!(st.splits.canceled, 1);
+        assert!(st.splits.pending.is_empty());
+        assert_eq!(r.state_lost.load(Relaxed), 0);
+    }
+    #[test]
+    fn ens11_native_user_tracker_records_real_hook_calls_in_an_isolated_process() {
+        native_tracker_pipeline(
+            concat!(
+                "latency::runtime::native_recorder_tests::",
+                "ens11_native_user_tracker_records_real_hook_calls_in_an_isolated_process"
+            ),
+            Kind::User,
+            false,
+        );
+    }
+    #[test]
+    fn ens11_native_translated_tracker_records_real_hook_calls_in_an_isolated_process() {
+        native_tracker_pipeline(
+            concat!(
+                "latency::runtime::native_recorder_tests::",
+                "ens11_native_translated_tracker_records_real_hook_calls_in_an_isolated_process"
+            ),
+            Kind::Translated,
+            true,
+        );
+    }
+    fn publication() -> Sample {
+        Sample {
+            stream: 1,
+            token: 0x80c,
+            kind: Kind::Translated,
+            observed: 10,
+            published: 20,
+            marker: Some(1),
+            wrap: false,
+            advanced: None,
+            gpu: None,
+            vector: Some(19),
+            raised: None,
+            source: None,
+            waits: Vec::new(),
+            worker: 1,
+            cookie: 0,
+            saved: false,
+            work: Vec::new(),
+            context_checked: false,
+        }
+    }
+    fn clocked_recorder() -> Recorder {
+        Recorder::new(
+            Instant::now() - std::time::Duration::from_millis(200),
+            vec![19],
+        )
+    }
+    #[test]
+    fn ens11_native_recorder_flood_keeps_fixed_packet_and_history_caps() {
+        let r = clocked_recorder();
+        r.update(|st| {
+            for stream in 0..544 {
+                let mut s = publication();
+                s.stream = stream;
+                st.publish(s);
+            }
+        });
+        let st = r.state.lock().unwrap();
+        assert_eq!(st.pending.len(), 512);
+        assert_eq!(st.slow.len(), 64);
+        assert_eq!(st.overflow, 32);
+    }
+    #[test]
+    fn ens11_native_atomic_journal_preserves_normal_and_storm_sources() {
+        for (flag, expected) in [
+            (0, NotificationSource::Normal),
+            (1, NotificationSource::Storm),
+        ] {
+            let r = clocked_recorder();
+            r.notices.push([100_000_000, 1, 1, flag, 0, 0, 0]);
+            r.update(|st| {
+                st.publish(publication());
+                st.marker(1, 1, 30, None);
+            });
+            let st = r.state.lock().unwrap();
+            assert_eq!(st.slow[0].source, Some(expected));
+            assert_eq!(st.slow[0].gpu, None);
+            assert_eq!(st.gauges[3].count, 0);
+        }
+    }
+    #[test]
+    fn ens11_native_receipt_cannot_complete_an_old_stream_with_the_same_guest_token() {
+        let r = clocked_recorder();
+        r.notices.push([100_000_000, 1, 1, 0, 0, 0, 0]);
+        r.update(|st| {
+            st.publish(publication());
+            let mut reborn = publication();
+            reborn.stream = 2;
+            st.publish(reborn);
+            st.marker(2, 1, 30, None);
+        });
+        let st = r.state.lock().unwrap();
+        assert_eq!(st.pending.len(), 1);
+        assert_eq!(st.pending[0].stream, 1);
+        assert_eq!(st.pending[0].advanced, None);
+        assert_eq!(st.total.count, 1);
+    }
+    #[test]
+    fn ens11_native_vector_mask_mapping_cannot_complete_a_different_logical_vector() {
+        let r = Recorder::new(
+            Instant::now() - std::time::Duration::from_millis(200),
+            vec![20],
+        );
+        r.notices.push([100_000_000, 1, 1, 0, 0, 0, 0]);
+        r.update(|st| {
+            st.publish(publication());
+            st.marker(1, 1, 30, None);
+        });
+        let st = r.state.lock().unwrap();
+        assert_eq!(st.pending.len(), 1);
+        assert_eq!(st.slow[0].vector, Some(19));
+        assert_eq!(st.slow[0].raised, None);
+        assert_eq!(st.total.count, 0);
+    }
+    #[test]
+    fn ens11_native_failed_or_masked_irq_is_not_a_packet_notification() {
+        for (mask, success) in [(0, 1), (1, 0)] {
+            let r = clocked_recorder();
+            r.notices.push([100_000_000, mask, success, 0, 0, 0, 0]);
+            r.update(|st| {
+                st.publish(publication());
+                st.marker(1, 1, 30, None);
+            });
+            let st = r.state.lock().unwrap();
+            assert_eq!(st.pending.len(), 1);
+            assert_eq!(st.slow[0].raised, None);
+            assert_eq!(st.total.count, 0);
+        }
+    }
+    #[test]
+    fn ens11_native_recorder_names_the_row_lock_held_during_a_slow_interval() {
+        let r = clocked_recorder();
+        r.operations
+            .push([2, Role::Va as u64, 7, 0, 0, 200_000_000, 0]);
+        r.operations
+            .push([2, Role::Va as u64, 14, 0, 1, 190_000_000, 0]);
+        r.update(|st| st.publish(publication()));
+        let st = r.state.lock().unwrap();
+        assert_eq!(st.slow[0].work[0].code, 14);
+        assert!(label(14, 0).contains("placement rows"));
+    }
+    #[test]
+    fn ens11_native_recorder_drops_contended_metadata_without_blocking_the_caller() {
+        let r = clocked_recorder();
+        let held = r.state.lock().unwrap();
+        r.update(|_| panic!("contended metadata must be dropped"));
+        assert_eq!(r.state_lost.load(Relaxed), 1);
+        drop(held);
+        r.update(|_| {});
+        assert_eq!(r.state_lost.load(Relaxed), 1);
     }
 }

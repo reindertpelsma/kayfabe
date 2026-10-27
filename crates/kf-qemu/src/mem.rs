@@ -1692,14 +1692,23 @@ impl MapTarget for GpuMirror {
         r
     }
     fn end_refresh(&self) -> Result<(), String> {
-        if kf_host::sparse::slice::in_split() {
-            return Ok(());
-        }
-        self.bv
-            .vas
-            .rm
-            .retry_sparse(self.bv.vas.space)
-            .map_err(|e| format!("{e:?}"))
+        crate::refresh_end::finish(
+            kf_host::sparse::slice::in_split(),
+            || {
+                self.bv
+                    .vas
+                    .rm
+                    .sparse_refresh_ready(self.bv.vas.space)
+                    .map_err(|e| format!("{e:?}"))
+            },
+            || {
+                self.bv
+                    .vas
+                    .rm
+                    .retry_sparse(self.bv.vas.space)
+                    .map_err(|e| format!("{e:?}"))
+            },
+        )
     }
     fn invalidate(&self) -> Result<(), String> {
         self.bv.invalidate()
@@ -2414,13 +2423,22 @@ impl Inbox {
         let mut n = 0usize;
         if let Ok(mut q) = self.splits.lock() {
             n = n.saturating_add(q.len());
+            for (ticket, _, _) in q.iter() {
+                kf_host::latency::split_canceled(*ticket);
+            }
             q.clear();
         }
         if let Ok(mut m) = self.split_tokens.lock() {
             n = n.saturating_add(m.len());
+            for ticket in m.keys() {
+                kf_host::latency::split_canceled(*ticket);
+            }
             m.clear();
         }
         if let Ok(mut m) = self.split_results.lock() {
+            for ticket in m.keys() {
+                kf_host::latency::split_canceled(*ticket);
+            }
             m.clear();
         }
         if let Ok(mut m) = self.gates.lock() {
@@ -5284,31 +5302,41 @@ impl RowHandoff {
         let _ = self.0.set(hub);
     }
 }
+// Rust drops fields in declaration order after the wrapper's Drop: actual unlock FIRST,
+// then activity close and handoff. The guard stays structurally live, with no panic fallback.
 #[derive(Debug)]
 struct RowsWriteGuard<'a> {
-    guard: Option<std::sync::RwLockWriteGuard<'a, std::collections::BTreeMap<u64, PlacedRow>>>,
+    guard: std::sync::RwLockWriteGuard<'a, std::collections::BTreeMap<u64, PlacedRow>>,
+    log: &'a RowsLog,
+    _after_unlock: RowReleased<'a>,
+}
+#[derive(Debug)]
+struct RowReleased<'a> {
     log: &'a RowsLog,
     activity: Option<kf_host::latency::ActivityGuard>,
+}
+impl Drop for RowReleased<'_> {
+    fn drop(&mut self) {
+        drop(self.activity.take());
+        if let Some(hub) = self.log.handoff.get().and_then(|h| h.0.get()) {
+            hub.released();
+        }
+    }
 }
 impl std::ops::Deref for RowsWriteGuard<'_> {
     type Target = std::collections::BTreeMap<u64, PlacedRow>;
     fn deref(&self) -> &Self::Target {
-        self.guard.as_ref().expect("live row guard")
+        &self.guard
     }
 }
 impl std::ops::DerefMut for RowsWriteGuard<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.guard.as_mut().expect("live row guard")
+        &mut self.guard
     }
 }
 impl Drop for RowsWriteGuard<'_> {
     fn drop(&mut self) {
         self.log.writer.store(0, Ordering::Release);
-        drop(self.guard.take());
-        drop(self.activity.take());
-        if let Some(hub) = self.log.handoff.get().and_then(|h| h.0.get()) {
-            hub.released();
-        }
     }
 }
 fn write_rows_releasing<'a>(
@@ -5319,11 +5347,14 @@ fn write_rows_releasing<'a>(
         log.writer
             .store(kf_host::latency::thread_id(), Ordering::Release);
         RowsWriteGuard {
-            guard: Some(guard),
+            guard,
             log,
-            activity: Some(kf_host::latency::activity(
-                kf_host::latency::Activity::HeldRows,
-            )),
+            _after_unlock: RowReleased {
+                log,
+                activity: Some(kf_host::latency::activity(
+                    kf_host::latency::Activity::HeldRows,
+                )),
+            },
         }
     };
     match rows.write() {

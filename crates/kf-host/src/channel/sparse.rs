@@ -224,6 +224,14 @@ impl HostRm {
         .unwrap_or(Ok(false))
     }
 
+    /// Check the existing sparse poison/lock guard without retrying optional geometry.
+    /// # Errors
+    /// The same bookkeeping refusal as an ordinary sparse refresh.
+    pub fn sparse_refresh_ready(&self, space: VaSpace) -> Result<(), RmError> {
+        self.with_sparse(space.space, |_, _| Ok(()))
+            .unwrap_or(Ok(()))
+    }
+
     /// Clear all sparse state before this empty host space becomes a spare for a
     /// different guest space. A refusal makes it ineligible for reuse.
     pub fn reset_sparse(&self, space: VaSpace) -> Result<(), RmError> {

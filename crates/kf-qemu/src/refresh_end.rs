@@ -1,11 +1,11 @@
 //! Separate mandatory refresh readiness from optional retry without requiring a GPU in tests.
 
 pub(crate) fn finish(
-    _critical: bool,
-    _ready: impl FnOnce() -> Result<(), String>,
-    _retry: impl FnOnce() -> Result<(), String>,
+    critical: bool,
+    ready: impl FnOnce() -> Result<(), String>,
+    retry: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
-    Ok(())
+    if critical { ready() } else { retry() }
 }
 
 #[cfg(test)]

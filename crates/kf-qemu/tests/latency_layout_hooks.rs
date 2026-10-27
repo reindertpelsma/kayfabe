@@ -86,10 +86,35 @@ fn row_writers_use_scope_release_on_all_mapping_paths() {
 }
 #[test]
 fn row_unlock_happens_before_the_handoff_callback() {
-    let drop = body(
+    let fields = body(MEM, "struct RowsWriteGuard", "struct RowReleased");
+    assert!(fields.find("guard:").unwrap() < fields.find("_after_unlock:").unwrap());
+    let after = body(MEM, "impl Drop for RowReleased", "impl std::ops::Deref");
+    assert!(after.contains("hub.released()"));
+    let wrapper = body(
         MEM,
         "impl Drop for RowsWriteGuard",
         "fn write_rows_releasing",
     );
-    assert!(drop.find("drop(self.guard.take())").unwrap() < drop.find("hub.released()").unwrap());
+    assert!(!wrapper.contains("hub.released()"));
+}
+
+#[test]
+fn split_refresh_entry_skips_the_optional_whole_tree_retry() {
+    let p = body(
+        MEM,
+        "// ENS6: a new refresh",
+        "/// ★ The batch / ownership ledger",
+    );
+    assert!(p.find("slice::in_split()").unwrap() < p.find("rm.retry_sparse").unwrap());
+}
+#[test]
+fn split_refresh_exit_skips_the_optional_whole_tree_retry() {
+    let p = MEM
+        .split("fn end_refresh(&self)")
+        .nth(1)
+        .unwrap()
+        .split("fn invalidate")
+        .next()
+        .unwrap();
+    assert!(p.find("slice::in_split()").unwrap() < p.find("retry_sparse").unwrap());
 }

@@ -1033,8 +1033,6 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.inflight.is_some()
     }
 
-    /// Requests waiting for the next walk.
-    #[must_use]
     /// One optional idle slice, rotating fairly over identities rather than requests.
     pub fn retry_deferred_layout(&mut self) -> bool {
         use std::ops::Bound::{Excluded, Unbounded};
@@ -1060,7 +1058,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Ok(false) => {}
                 Err(e) => {
                     if self.layout_errors < 8 {
-                        self.layout_errors += 1;
+                        self.layout_errors = self.layout_errors.saturating_add(1);
                         eprintln!("kf3: idle sparse layout {key:?} refused: {e}");
                     }
                 }
@@ -1074,6 +1072,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         !self.deferred_layout.is_empty()
     }
 
+    /// Walk requests pending the next submission.
+    #[must_use]
     pub fn pending(&self) -> usize {
         self.pending.len()
     }

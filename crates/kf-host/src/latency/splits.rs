@@ -89,7 +89,9 @@ impl Splits {
         if !self.pending.contains_key(&ticket) {
             self.missing = self.missing.saturating_add(1);
         }
-        self.pending.get_mut(&ticket)
+        let s = self.pending.get_mut(&ticket)?;
+        s.saved = false;
+        Some(s)
     }
     pub fn queued(&mut self, ticket: u64, at: u64) {
         if let Some(s) = self.get(ticket) {
@@ -168,7 +170,7 @@ impl Splits {
             if s.work.is_empty() {
                 s.work = std::mem::take(&mut old.work);
             }
-            s.context_checked |= old.context_checked;
+            s.context_checked = false;
             *old = s;
         } else {
             if self.slow.len() == KEEP {

@@ -63,7 +63,7 @@ fn ens11_split_result_is_recorded_after_gate_release_and_result_publication() {
 #[test]
 fn ens11_whole_drained_split_set_is_queued_before_starting_any_walk() {
     let p = DEVICE
-        .split("for (ticket, target) in self.mem.inbox.take_split_requests()")
+        .split("for (ticket, target) in drained_splits")
         .nth(1)
         .unwrap()
         .split("// Publish resolved mutation domains")
@@ -120,4 +120,30 @@ fn ens11_storm_vector_snapshot_does_not_require_a_pending_completion_bit() {
         .unwrap();
     assert!(p.contains("latency::notification_mask"));
     assert!(p.contains("completion_enabled"));
+}
+
+#[test]
+fn ens11_an_armed_invalidate_cannot_submit_before_the_drained_split_snapshot_is_admitted() {
+    let p = DEVICE
+        .split("let drained_splits = self.mem.inbox.take_split_requests();")
+        .nth(1)
+        .unwrap()
+        .split("// Publish resolved mutation domains")
+        .next()
+        .unwrap();
+    assert!(p.find("m.queue_split").unwrap() < p.find("m.on_invalidate(req, trigger)").unwrap());
+    assert_eq!(p.matches("m.start_queued_splits(trigger)").count(), 1);
+}
+
+#[test]
+fn ens11_actual_probe_interval_exists_with_latency_alone() {
+    let p = DEVICE
+        .split("pub fn probe_loop(")
+        .nth(1)
+        .unwrap()
+        .split("pub fn probe_timer_enabled")
+        .next()
+        .unwrap();
+    assert!(p.contains("overdue.is_some() || self.latency_active"));
+    assert!(p.contains("latency::poll()"));
 }

@@ -167,6 +167,7 @@ impl State {
                 continue;
             }
             s.advanced = Some(at);
+            s.saved = false;
             s.gpu = gpu;
             let basis = gpu.unwrap_or(at);
             if let Some(n) = basis.checked_sub(s.published).filter(|_| basis <= at) {
@@ -203,6 +204,7 @@ impl State {
                 // This is a notification opportunity on a GPU-wide vector, not proof of
                 // which packet caused it. Preserve the first one, including early delivery.
                 s.raised = Some(at);
+                s.saved = false;
                 s.source = Some(source);
             }
         }
@@ -213,7 +215,8 @@ impl State {
             if s.work.is_empty() {
                 s.work = std::mem::take(&mut old.work);
             }
-            s.context_checked |= old.context_checked;
+            // A later milestone extends the interval; refresh bounded native activity context.
+            s.context_checked = false;
             *old = s;
         } else {
             if self.slow.len() == KEEP {
