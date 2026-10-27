@@ -934,6 +934,8 @@ pub struct ChannelPolicy {
     system_pid_is_kernel: bool,
     /// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`], read once, refused without [`DEBUG_PROFILE`]).
     force_migratable: bool,
+    /// Explicit opt-in for the validated default USER GR bind adapter.
+    gr_binds: bool,
 }
 
 /// ★ 2026-10-08: the flag of [`windows_user_work`].
@@ -970,7 +972,14 @@ impl ChannelPolicy {
             windows_kernel_pid: None,
             system_pid_is_kernel: kernel_pid4_enabled(),
             force_migratable: force_migratable_enabled(),
+            gr_binds: std::env::var("KF3_GR_BINDS").as_deref() == Ok("1"),
         }
+    }
+
+    /// Explicit constructor selection for GPU-free adapter tests; production reads the flag.
+    pub fn with_gr_binds(mut self, on: bool) -> Self {
+        self.gr_binds = on;
+        self
     }
 
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, set explicitly (tests; [`ChannelPolicy::new`] reads
