@@ -1029,6 +1029,7 @@ class Runner:
     def execute(self):
         result = {"state": "UNAVAILABLE", "verdict": "UNAVAILABLE", "verified": 0}
         terminal = final = admitted = False
+        provider_notice = None
         self.provider_retry = False
         try:
             profile = self.ctx.get("profile", "check")
@@ -1153,11 +1154,14 @@ class Runner:
                 final = data["state"] in {"GRACE", "NONE"} and data["result_at"] is not None
                 self.pages(data["log_cursor"])
                 if data["verdict"] == "PROVIDER_FAULT":
-                    self.emit(
+                    provider_notice = (
                         "runner: provider fault: machine "
                         + shown_id(data["machine_id"])
-                        + ", not a kayfabe verdict\n"
+                        + " host "
+                        + shown_id(data["host_id"])
+                        + ", not a kayfabe verdict"
                     )
+                    self.emit(provider_notice + "\n")
                 if data["verdict"] == "PROVIDER_FAULT" or (
                     self.provider_retry
                     and data["state"] == "NONE"
@@ -1318,6 +1322,8 @@ class Runner:
                         + time.strftime("%Y-%m-%d", time.gmtime())
                         + " |\n"
                     )
+            if result["verdict"] == "PROVIDER_FAULT" and provider_notice:
+                self.summary.write("\n" + provider_notice + "\n")
             fence = "`" * max(3, 1 + max([len(x) for x in re.findall("`+", safe)] + [0]))
             self.summary.write("\n" + fence + "text\n" + safe + fence + "\n")
         return result

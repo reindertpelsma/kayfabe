@@ -130,8 +130,10 @@ export class OfferBook {
     }
     if (this.failed || !this.cached) refuse();
     const bad = [...(await ledger.storage.list({ prefix: 'bad-machine:', limit: 257 }))];
-    if (bad.length > 256) refuse();
+    const hosts = [...(await ledger.storage.list({ prefix: 'bad-host:', limit: 257 }))];
+    if (bad.length > 256 || hosts.length > 256) refuse();
     const badMachines = bad.map(([k]) => Number(k.slice('bad-machine:'.length)));
+    const badHosts = hosts.map(([k]) => Number(k.slice('bad-host:'.length)));
     const reserved = (await ledger.openRecords())
       .map((r) => r.machineId)
       .filter((id) => Number.isSafeInteger(id));
@@ -170,7 +172,13 @@ export class OfferBook {
             ? values[mid]
             : (values[mid - 1] + values[mid]) / 2
           : null;
-      const reasons = offerRejections(offer, cfg, { profile, median, badMachines, reserved });
+      const reasons = offerRejections(offer, cfg, {
+        profile,
+        median,
+        badMachines,
+        badHosts,
+        reserved,
+      });
       const country = offerCountry(offer);
       if (
         cfg.deniedCountries.includes(country) ||

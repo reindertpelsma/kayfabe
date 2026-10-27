@@ -420,7 +420,7 @@ export function offerPrice(offer, cfg) {
 export function offerRejections(
   offer,
   cfg,
-  { profile = 'check', median = offer.dlperf, badMachines = [], reserved = [] } = {},
+  { profile = 'check', median = offer.dlperf, badMachines = [], badHosts = [], reserved = [] } = {},
 ) {
   const q = cfg.quality[profile],
     reasons = [],
@@ -452,7 +452,8 @@ export function offerRejections(
     badMachines.includes(offer.machine_id)
   )
     reasons.push('MACHINE');
-  if (cfg.badHosts.includes(offer.host_id)) reasons.push('BAD_HOST');
+  if (cfg.badHosts.includes(offer.host_id) || badHosts.includes(offer.host_id))
+    reasons.push('BAD_HOST');
   // Item 8: a machine is held from CREATING until its run has ended; no second run takes it.
   if (reserved.includes(offer.machine_id)) reasons.push('IN_USE');
   if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))

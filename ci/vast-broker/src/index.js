@@ -25,6 +25,7 @@ import {allowedWorkflowRef} from './workflow-authority.js';
 // prettier-ignore
 import {mintBlob,checkBlobBudget} from './blobs.js';
 import { offerPrice, providerId } from './policy.js';
+import { reportedProviderFault } from './provider-fault.js';
 // prettier-ignore
 import {Vast} from './vast.js';
 // prettier-ignore
@@ -331,10 +332,7 @@ export function createService({
         now() - record.bootFailure.last <= cfg.cronPeriod * 2 &&
         Number.isSafeInteger(record.machineId)
       ) {
-        await ledger.put('bad-machine:' + record.machineId, {
-          reason: 'KVM_DOMAIN_NOT_FOUND',
-          at: now(),
-        });
+        await ledger.markProviderFault(record, 'KVM_DOMAIN_NOT_FOUND', now());
         await workerLine(record, 'host excluded after frozen KVM boot signature', cfg);
       }
       await workerLine(record, 'destroy reason=' + reason, cfg);
@@ -549,17 +547,27 @@ export function createService({
           preferences_ignored: r.preferencesIgnored,
         };
         r.hardware = payload.result.hardware;
+        const providerReason = reportedProviderFault(r.result, r.log);
+        if (providerReason) r.result.verdict = 'PROVIDER_FAULT';
         if (r.profile === 'sweep' && payload.result.verdict === 'PASS')
           await ledger.put('passed:' + r.die, now());
         r.resultAt = now();
-        r.verdict = payload.result.verdict;
+        r.verdict = r.result.verdict;
         r.grace = r.verdict === 'PASS' ? cfg.passGrace : cfg.failGrace;
         r.resultDeadline = r.resultAt + r.grace;
         r.phase = 'GRACE';
         r.liveCheckedAt = null;
         if (r.verdict === 'PROVIDER_FAULT') {
-          await ledger.put('bad-machine:' + r.machineId, { reason: 'PROVIDER_FAULT', at: now() });
-          await workerLine(r, 'provider fault; destroy before replacement', cfg);
+          await ledger.markProviderFault(r, 'PROVIDER_FAULT', now());
+          await workerLine(
+            r,
+            'provider fault: machine ' +
+              r.machineId +
+              ' host ' +
+              (r.hostId ?? 'unknown') +
+              ', not a kayfabe verdict',
+            cfg,
+          );
           await close(r, vast, 'PROVIDER_FAULT', 'PROVIDER_FAULT');
         }
       } else if (r.reportCount >= cfg.reportCount || r.reportBytes >= cfg.reportBytes)
@@ -839,14 +847,13 @@ export function createService({
     if (retrySource) {
       const remaining = retrySource.runBudgetUsd - rentalCost(retrySource, retrySource.ended);
       evaluation.allowed = evaluation.allowed.filter(
-        (offer) => offer.machine_id !== retrySource.machineId && offer.pricing.total <= remaining,
-      );
-      const otherHosts = evaluation.allowed.filter(
         (offer) =>
-          providerId(offer.host_id) !== null && providerId(offer.host_id) !== retrySource.hostId,
+          offer.machine_id !== retrySource.machineId &&
+          providerId(retrySource.hostId) !== null &&
+          providerId(offer.host_id) !== null &&
+          offer.host_id !== retrySource.hostId &&
+          offer.pricing.total <= remaining,
       );
-      if (providerId(retrySource.hostId) !== null && otherHosts.length)
-        evaluation.allowed = otherHosts;
       if (!evaluation.allowed.length) return json(expose(retrySource, key));
     }
     const chosen = await offers.select(evaluation, cfg, ledger, profile, rentRequest.preferences),

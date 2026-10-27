@@ -291,3 +291,16 @@ for (const variant of [1, 2]) {
     },
   );
 }
+
+for (const failAt of ['bad-machine:', 'bad-host:'])
+  test('workerd provider fault writes roll back at ' + failAt, async (t) => {
+    const { call } = await fixture(t);
+    await call('/seed', [['bad-machine:800', { reason: 'PROVIDER_FAULT', hostId: 9000 }]]);
+    const before = await call('/snapshot');
+    const response = await call('/provider-fault', {
+      record: { machineId: 801, hostId: 9000 },
+      failAt,
+    });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await call('/snapshot'), before);
+  });

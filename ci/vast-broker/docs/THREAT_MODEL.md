@@ -71,6 +71,8 @@ workflow does not enforce.
 
 ## 3. `bad-machine:` entries never expire
 
+CODE READ (2026-10-27, `src/ledger.js`, `src/offers.js`, `src/provider-fault.js`): explicit provider results and the bounded pre-product failure summary also learn machine entries. Two distinct failed machines with the same known host create a transactional `bad-host:` entry. Both indexes persist and refuse admissions above 256; writes retain at most the 257-entry refusal sentinel. A retry requires another known host and never continues the failed box. The static host seed `224600` cites runs 40425285335 and 40478005010. Historical source references below describe the original machine-only policy.
+
 OWNER: by design, no expiry. CODE READ: the Worker writes `bad-machine:<machine_id>` on the KVM
 boot-failure signature (`src/index.js:296-313`). `evaluate()` lists at most 257 and refuses when there are more than 256 (`src/offers.js:132-133`), a bare `UNAVAILABLE` 503 with no reason code
 (`src/policy.js:13-15`). Pruning does not touch them (`expire()`, `src/ledger.js:119-143`).
