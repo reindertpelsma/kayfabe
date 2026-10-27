@@ -240,24 +240,6 @@ fn record_verb(verb: Verb, ns: u64) {
     atoms[2].fetch_max(ns, Relaxed);
 }
 
-/// Time precisely the supplied ioctl; result and errors pass through unchanged.
-pub(crate) fn rm<T>(invalidate: bool, f: impl FnOnce() -> T) -> T {
-    rm_with(true, invalidate, f)
-}
-
-fn rm_with<T>(active: bool, invalidate: bool, f: impl FnOnce() -> T) -> T {
-    let _timer = Scope::start_with(
-        active,
-        if invalidate {
-            Phase::Invalidate
-        } else {
-            Phase::Rm
-        },
-        0,
-    );
-    f()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,7 +296,7 @@ mod tests {
             let _t = Scope::start_with(false, Phase::Rm, 5);
         }
         assert_eq!(snapshot(), before);
-        assert_eq!(rm(false, || Err::<(), _>(123)), Err(123));
+        assert_eq!(rm_verb(Verb::Other, || Err::<(), _>(123)), Err(123));
     }
 
     #[test]
@@ -333,8 +315,8 @@ mod tests {
     #[test]
     fn ioctl_success_and_error_each_contribute_one_real_call() {
         let before = snapshot();
-        assert_eq!(rm_with(true, false, || Ok::<_, u32>(7)), Ok(7));
-        assert_eq!(rm_with(true, false, || Err::<(), _>(9)), Err(9));
+        assert_eq!(rm_verb_with(true, Verb::Other, || Ok::<_, u32>(7)), Ok(7));
+        assert_eq!(rm_verb_with(true, Verb::Other, || Err::<(), _>(9)), Err(9));
         let delta = snapshot().since(before);
         assert_eq!(delta.costs[0].calls, 2);
         assert_eq!(delta.costs[1].calls, 0);
@@ -343,7 +325,10 @@ mod tests {
     #[test]
     fn invalidate_is_not_counted_as_an_ordinary_rm_call() {
         let before = snapshot();
-        assert_eq!(rm_with(true, true, || Err::<(), _>(123)), Err(123));
+        assert_eq!(
+            rm_verb_with(true, Verb::Invalidate, || Err::<(), _>(123)),
+            Err(123)
+        );
         let delta = snapshot().since(before);
         assert_eq!(delta.costs[0].calls, 0);
         assert_eq!(delta.costs[1].calls, 1);
@@ -432,7 +417,7 @@ mod tests {
     #[test]
     fn a_disabled_verb_timer_records_nothing_session_wide() {
         let base = verb_totals()[Verb::Control as usize];
-        let _ = rm_verb_with(false, Verb::Control, || ());
+        rm_verb_with(false, Verb::Control, || ());
         assert_eq!(verb_totals()[Verb::Control as usize], base);
     }
 

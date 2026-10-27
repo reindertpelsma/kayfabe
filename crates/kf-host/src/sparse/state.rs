@@ -64,12 +64,12 @@ impl Live {
 pub(super) struct Negative {
     pub(super) lo: u64,
     pub(super) hi: u64,
-    epoch: u64,
-    blocks: usize,
+    pub(super) epoch: u64,
+    pub(super) blocks: usize,
     pub(super) overflow: bool,
     pub(super) retry: bool,
     /// Retry tick from which a decision taken on a host RM refusal is asked again (0 = none).
-    due: u64,
+    pub(super) due: u64,
 }
 #[derive(Debug, Default)]
 pub(super) struct Cache {
@@ -105,32 +105,13 @@ impl Cache {
             .copied()
             .filter(|&n| self.valid(n, blocks, tick))
     }
-    pub(super) fn insert(
-        &mut self,
-        key: (u64, u64),
-        lo: u64,
-        hi: u64,
-        blocks: usize,
-        overflow: bool,
-        retry: bool,
-        due: u64,
-    ) -> bool {
+    pub(super) fn insert(&mut self, key: (u64, u64), mut n: Negative) -> bool {
         let evicted = self.entries.len() >= NEGATIVES && !self.entries.contains_key(&key);
         if evicted {
             self.entries.pop_first();
         }
-        self.entries.insert(
-            key,
-            Negative {
-                lo,
-                hi,
-                epoch: self.epoch,
-                blocks,
-                overflow,
-                retry,
-                due,
-            },
-        );
+        n.epoch = self.epoch;
+        self.entries.insert(key, n);
         evicted
     }
     pub(super) fn accept(&mut self, key: (u64, u64)) {
@@ -163,26 +144,10 @@ impl Cache {
             };
             let end = start.saturating_add(len);
             if start < lo {
-                self.insert(
-                    (start, lo - start),
-                    n.lo,
-                    n.hi,
-                    n.blocks,
-                    n.overflow,
-                    n.retry,
-                    n.due,
-                );
+                self.insert((start, lo - start), n);
             }
             if hi < end {
-                self.insert(
-                    (hi, end - hi),
-                    n.lo,
-                    n.hi,
-                    n.blocks,
-                    n.overflow,
-                    n.retry,
-                    n.due,
-                );
+                self.insert((hi, end - hi), n);
             }
         }
         self.touch(lo, hi);

@@ -504,6 +504,7 @@ impl Reservations {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(crate) fn normal(&mut self, ops: &dyn Ops, va: u64, len: u64) -> Result<(), RmError> {
         self.normal_with(ops, va, len, true)
     }
@@ -702,19 +703,20 @@ impl Reservations {
     }
 
     fn remember(&mut self, va: u64, len: u64, lo: u64, hi: u64, overflow: bool, retry: bool) {
-        if self.cache.insert(
-            (va, len),
+        let n = state::Negative {
             lo,
             hi,
-            self.blocks.len(),
+            epoch: 0,
+            blocks: self.blocks.len(),
             overflow,
             retry,
-            if self.rm_refused {
+            due: if self.rm_refused {
                 self.backoff_until
             } else {
                 0
             },
-        ) {
+        };
+        if self.cache.insert((va, len), n) {
             self.stats.negative_evicted = self.stats.negative_evicted.saturating_add(1);
         }
     }

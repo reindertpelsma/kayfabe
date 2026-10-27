@@ -22,7 +22,6 @@ pub use channel::{
 };
 pub use event::EventFd;
 
-use channel::NV2080_CTRL_CMD_DMA_INVALIDATE_TLB;
 use kf_abi::bringup::{
     CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD,
     NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,

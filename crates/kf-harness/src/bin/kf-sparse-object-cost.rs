@@ -72,8 +72,188 @@ fn snapshot(out: &Path, name: &str) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+/// Refuse to run privileged, with the twin env set, or into an existing output directory.
+fn guard(out: &Path) -> Result<(), String> {
+    let status = std::fs::read_to_string("/proc/self/status").map_err(|e| e.to_string())?;
+    let uid = status.lines().find(|l| l.starts_with("Uid:")).unwrap_or("");
+    if uid.split_whitespace().skip(1).any(|id| id == "0")
+        || !status
+            .lines()
+            .any(|l| l.starts_with("CapEff:") && l.ends_with("0000000000000000"))
+    {
+        return Err("run under an unprivileged uid with zero effective capabilities".into());
+    }
+    if std::env::var("KF3_SPARSE_TWIN").ok().as_deref() == Some("1") {
+        return Err("unset twin: this arm measures raw owned RM reservations".into());
+    }
+    std::fs::create_dir(out).map_err(|e| e.to_string())
+}
+
+/// ENS6 churn arm: `N` live background 2 MiB reservations (the saturated tree of 7330), then the
+/// recycling pattern ENS5 introduced: release two adjacent 2 MiB blocks and reserve the merged
+/// 4 MiB at the same VA (3 verbs), then the split back (3 verbs). Reports the first refusal.
+fn churn(args: &[String]) -> Result<(), String> {
+    let usage = "usage: --run-churn <background-N> <cycles> <fresh-output-dir> <watchdog>";
+    if args.len() != 4 {
+        return Err(usage.into());
+    }
+    let n: usize = args[0].parse().map_err(|_| usage)?;
+    let cycles: usize = args[1].parse().map_err(|_| usage)?;
+    if n > 128_000 || cycles > 20_000 {
+        return Err("count outside protocol".into());
+    }
+    let out = PathBuf::from(&args[2]);
+    let watchdog = PathBuf::from(&args[3]);
+    guard(&out)?;
+    probe(&watchdog, &out, "before")?;
+    let _ = snapshot(&out, "before").map_err(|e| eprintln!("{e}"));
+    let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
+    let space = rm
+        .alloc_vaspace_bare()
+        .map_err(|e| format!("space: {e:?}"))?;
+    let grain = kf_host::sparse::NORMAL_GRAIN;
+    let flags = kf_host::channel::guest_reserve_flags(false);
+    let base = 1u64 << 40;
+    let mut samples: Vec<(&str, usize, u128)> = Vec::new();
+    let mut background = Vec::with_capacity(n);
+    let mut refusal = None;
+    for i in 0..n {
+        let start = Instant::now();
+        let r = rm.reserve_va_flags(space.space, base + i as u64 * grain, grain, flags);
+        samples.push(("alloc", i, start.elapsed().as_nanos()));
+        match r {
+            Ok(h) => background.push(h),
+            Err(e) => {
+                refusal = Some(format!("background_refusal_index={i} status={e:?}"));
+                break;
+            }
+        }
+        if i.is_multiple_of(512)
+            && let Err(e) = probe(&watchdog, &out, "during")
+        {
+            refusal = Some(e);
+            break;
+        }
+    }
+    let _ = snapshot(&out, "peak-background").map_err(|e| eprintln!("{e}"));
+    // 64 adjacent pairs just above the background.
+    let region = base + (n as u64 + 16) * grain;
+    let mut pairs: Vec<[u32; 2]> = Vec::new();
+    for p in 0..64u64 {
+        let mut pair = [0u32; 2];
+        for (k, slot) in pair.iter_mut().enumerate() {
+            match rm.reserve_va_flags(
+                space.space,
+                region + (2 * p + k as u64) * grain,
+                grain,
+                flags,
+            ) {
+                Ok(h) => *slot = h,
+                Err(e) => {
+                    refusal.get_or_insert(format!("pair_setup_refusal={p}/{k} status={e:?}"));
+                }
+            }
+        }
+        pairs.push(pair);
+    }
+    let started = Instant::now();
+    let (mut done, mut merge_refusals, mut split_refusals) = (0usize, 0usize, 0usize);
+    let mut first_merge_refusal = None;
+    for c in 0..cycles {
+        if started.elapsed() >= Duration::from_secs(90) {
+            break;
+        }
+        let p = c % 64;
+        let at = region + 2 * p as u64 * grain;
+        if pairs[p].contains(&0) {
+            continue;
+        }
+        for (k, h) in pairs[p].into_iter().enumerate() {
+            let start = Instant::now();
+            let r = rm.free(h);
+            samples.push(("merge_free", c, start.elapsed().as_nanos()));
+            if r.is_err() {
+                return Err(format!("free {k} failed in cycle {c}"));
+            }
+        }
+        let start = Instant::now();
+        let merged = rm.reserve_va_flags(space.space, at, 2 * grain, flags);
+        samples.push(("merge_reserve", c, start.elapsed().as_nanos()));
+        match merged {
+            Ok(m) => {
+                let start = Instant::now();
+                let r = rm.free(m);
+                samples.push(("split_free", c, start.elapsed().as_nanos()));
+                if r.is_err() {
+                    return Err(format!("merged free failed in cycle {c}"));
+                }
+            }
+            Err(e) => {
+                merge_refusals += 1;
+                first_merge_refusal.get_or_insert(format!("cycle={c} status={e:?}"));
+            }
+        }
+        for k in 0..2u64 {
+            let start = Instant::now();
+            let r = rm.reserve_va_flags(space.space, at + k * grain, grain, flags);
+            samples.push(("split_reserve", c, start.elapsed().as_nanos()));
+            match r {
+                Ok(h) => pairs[p][k as usize] = h,
+                Err(e) => {
+                    split_refusals += 1;
+                    pairs[p][k as usize] = 0;
+                    first_merge_refusal.get_or_insert(format!("split cycle={c} status={e:?}"));
+                }
+            }
+        }
+        done += 1;
+        if c.is_multiple_of(256)
+            && let Err(e) = probe(&watchdog, &out, "during")
+        {
+            refusal = Some(e);
+            break;
+        }
+    }
+    let _ = snapshot(&out, "peak-churn").map_err(|e| eprintln!("{e}"));
+    let mut free_errors = 0usize;
+    for h in pairs
+        .into_iter()
+        .flatten()
+        .filter(|&h| h != 0)
+        .chain(background)
+    {
+        let start = Instant::now();
+        if rm.free(h).is_err() {
+            free_errors += 1;
+        }
+        samples.push(("final_free", 0, start.elapsed().as_nanos()));
+    }
+    rm.free_vaspace(space);
+    let _ = snapshot(&out, "after").map_err(|e| eprintln!("{e}"));
+    let watchdog_after = probe(&watchdog, &out, "after");
+    let mut csv = std::fs::File::create(out.join("samples.csv")).map_err(|e| e.to_string())?;
+    writeln!(csv, "op,index,wall_ns").map_err(|e| e.to_string())?;
+    for (op, i, ns) in samples {
+        writeln!(csv, "{op},{i},{ns}").map_err(|e| e.to_string())?;
+    }
+    println!(
+        "ENS6_RM_CHURN background={n} cycles_done={done} merge_refusals={merge_refusals} \
+         split_refusals={split_refusals} first_refusal={first_merge_refusal:?} \
+         setup_refusal={refusal:?} free_errors={free_errors} watchdog_after={watchdog_after:?}"
+    );
+    if free_errors != 0 {
+        return Err("arm stopped; inspect receipts".into());
+    }
+    watchdog_after
+}
+
 fn main() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--run-churn") {
+        return churn(&args[1..]);
+    }
     if args.len() != 5 || args[0] != "--run-native" {
         return Err("usage: --run-native <1000|8000|32000|128000> \
             <sparse|normal> <fresh-output-dir> <desktop-watchdog-program>; \
