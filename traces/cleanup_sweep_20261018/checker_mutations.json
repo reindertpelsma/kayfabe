@@ -1,0 +1,27 @@
+[
+  {
+    "mutant": "skip-front-matter",
+    "exit": 1,
+    "failing_tests": 2
+  },
+  {
+    "mutant": "accept-invalid-state",
+    "exit": 1,
+    "failing_tests": 3
+  },
+  {
+    "mutant": "skip-reciprocal-notice",
+    "exit": 1,
+    "failing_tests": 3
+  },
+  {
+    "mutant": "always-exit-green",
+    "exit": 1,
+    "failing_tests": 18
+  },
+  {
+    "mutant": "skip-opening-order",
+    "exit": 1,
+    "failing_tests": 3
+  }
+]
