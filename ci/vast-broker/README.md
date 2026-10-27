@@ -32,3 +32,5 @@ Renting is enabled by the deployed vars file, which is kept outside the reposito
 - [Placement decision](docs/PLACEMENT.md): US/Canada offer preference and the proposed ledger location.
 - [Evidence summary](../../traces/vast_broker_summary/README.md): recorded runs, retained evidence and its limitations.
 - [Internal implementation and evidence notes](docs/IMPLEMENTATION_NOTES.md): the former README's dated rounds, corrections and superseded behavior.
+
+After deploying the matching Worker bundle, use a fresh GPU-relevant commit to start validation; reruns retain the original trusted BASE pin.
