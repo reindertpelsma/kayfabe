@@ -101,7 +101,9 @@ messages, summary = [], io.StringIO()
 result = m.Runner(ctx, manifest, client, emit=messages.append, summary=summary).execute()
 assert rents == 2, (result, calls)
 expected = (
-    "PASS" if case.startswith("pass") else "FAIL" if case.startswith("fail") else "PROVIDER_FAULT"
+    "PASS"
+    if case.startswith(("pass", "busy"))
+    else "FAIL" if case.startswith("fail") else "PROVIDER_FAULT"
 )
 assert result["verdict"] == expected, result
 if expected == "PROVIDER_FAULT":
