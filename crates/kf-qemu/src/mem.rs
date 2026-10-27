@@ -924,6 +924,10 @@ pub struct RowsLog {
 const ROWS_LOG_MAX: usize = 4096;
 
 impl RowsLog {
+    /// EXPECTED RED: row-writer scope has no handoff callback yet.
+    #[cfg(test)]
+    fn bind_handoff(&self, _hub: std::sync::Arc<crate::ptlock::HandoffHub>) {}
+
     /// A change to the rows over `[lo, hi)` — call with the rows' write lock HELD.
     pub fn commit(&self, lo: u64, hi: u64) {
         let e = self.epoch.fetch_add(1, Ordering::AcqRel).saturating_add(1);
@@ -5196,3 +5200,16 @@ pub(crate) mod walk_scope;
 #[cfg(test)]
 #[path = "mem/walk_relay_model.rs"]
 mod walk_relay_model;
+
+#[cfg(test)]
+fn write_rows_releasing<'a>(
+    rows: &'a PlacedRows,
+    _log: &RowsLog,
+) -> std::sync::LockResult<
+    std::sync::RwLockWriteGuard<'a, std::collections::BTreeMap<u64, PlacedRow>>,
+> {
+    rows.write()
+}
+#[cfg(test)]
+#[path = "rows_handoff_tests.rs"]
+mod rows_handoff_tests;

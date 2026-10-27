@@ -915,3 +915,5 @@ include!("ens6_window_tests.rs");
 include!("ens7_tests.rs");
 
 include!("ens10_tests.rs");
+
+include!("ens11_tests.rs");

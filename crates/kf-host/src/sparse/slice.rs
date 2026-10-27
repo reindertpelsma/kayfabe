@@ -125,3 +125,20 @@ pub(crate) fn mono_ns() -> u64 {
     )
     .unwrap_or(u64::MAX)
 }
+
+/// EXPECTED RED: split-critical layout policy is not implemented yet.
+pub struct CriticalGuard;
+/// EXPECTED RED: optional layout still runs during splits.
+pub fn critical_scope(_active: bool) -> CriticalGuard {
+    CriticalGuard
+}
+/// Whether layout is on a split's critical path.
+pub fn in_split() -> bool {
+    false
+}
+impl Slice {
+    /// EXPECTED RED: the request interrupt is not connected to budget checks yet.
+    pub fn interrupt_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+    }
+}
