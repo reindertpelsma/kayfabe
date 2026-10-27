@@ -1,0 +1,5 @@
+0
+0
+NVIDIA GeForce RTX 3060, 595.91.07, 1 MiB, P8
+0
+CUPROBE_OK roundtrip_equal True bytes 1048576

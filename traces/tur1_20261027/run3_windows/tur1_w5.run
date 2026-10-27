@@ -1,0 +1,7 @@
+WBOOT_START 2026-10-27T00:59:11+00:00 display=on qemu=/workspace/bench/kf3-bins/67339dc0-dirty/qemu-system-x86_64
+10
+[2026-10-27T00:59:11Z] KF_GOP_SIGNED /workspace/winvm/secureboot/kf-gop.67339dc0-dirty.signed.efi sha256=5b81202e5bfe30b8a7edee1151c72b5ac30a3279a4c3587aa91846ae7de03e48 unsigned_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+[2026-10-27T00:59:11Z] detached: tag=tur1_w5, log logs/tur1_w5_run.log (stdout logs/tur1_w5_run.out)
+SSH_UP 2026-10-27T01:02:28+00:00
+{"Name":"NVIDIA GeForce RTX 2060 SUPER","DriverVersion":"32.0.15.8088","Status":"Error","ConfigManagerErrorCode":43}
+WBOOT_STATE_DONE 2026-10-27T01:03:40+00:00

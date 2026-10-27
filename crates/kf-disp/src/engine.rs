@@ -227,17 +227,16 @@ pub struct Vocab {
     w_ctxdma_sem: u32,
     w_sem_control: u32,
     w_sem_offset: (u8, u8),
-    w_sem_payload: (u8, u8),
-    w_sem_rel_mode: (u8, u8),
+    /// The 64-bit payload bit: `None` on Turing (C57E), whose semaphores are 32-bit only.
+    w_sem_payload: Option<(u8, u8)>,
+    /// The release's AWAKEN mode: `None` on Turing (C57E has no release mode).
+    w_sem_rel_mode: Option<(u8, u8)>,
     w_sem_release: u32,
     w_sem_release_hi: Option<u32>,
-    w_ctxdma_acq: u32,
-    w_acq_control: u32,
-    w_acq_offset: (u8, u8),
-    w_acq_payload: (u8, u8),
-    w_acq_mode: (u8, u8),
-    w_acq_value: u32,
-    w_acq_value_hi: Option<u32>,
+    /// The window's separate acquire semaphore (C67E and later). `None` on Turing (C57E), whose
+    /// one semaphore context DMA and control word serve the release, and whose ACQUIRE value is
+    /// not modelled: a Turing window never waits on an acquire here.
+    w_acq: Option<AcqVocab>,
     /// The window's first ISO surface word — a context DMA handle (C5x–C9x) or the surface address's
     /// low word with its ENABLE bit (CAx): non-zero iff the window scans a surface.
     w_iso0: u32,
@@ -251,6 +250,18 @@ pub struct Vocab {
 }
 
 type InlineMethod = (u32, usize, bool, (u8, u8), (u8, u8));
+
+/// The methods of a window's acquire semaphore (C67E and later).
+#[derive(Debug, Clone)]
+struct AcqVocab {
+    ctxdma: u32,
+    control: u32,
+    offset: (u8, u8),
+    payload: (u8, u8),
+    mode: (u8, u8),
+    value: u32,
+    value_hi: Option<u32>,
+}
 
 /// Why a vocabulary could not be resolved (the missing name).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -353,17 +364,25 @@ impl Vocab {
             w_ctxdma_sem: v(win, "SET_CONTEXT_DMA_SEMAPHORE")?,
             w_sem_control: v(win, "SET_SEMAPHORE_CONTROL")?,
             w_sem_offset: f(win, "SET_SEMAPHORE_CONTROL_OFFSET")?,
-            w_sem_payload: f(win, "SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE")?,
-            w_sem_rel_mode: f(win, "SET_SEMAPHORE_CONTROL_REL_MODE")?,
+            w_sem_payload: t.f(win, "SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE"),
+            w_sem_rel_mode: t.f(win, "SET_SEMAPHORE_CONTROL_REL_MODE"),
             w_sem_release: v(win, "SET_SEMAPHORE_RELEASE")?,
             w_sem_release_hi: t.v(win, "SET_SEMAPHORE_RELEASE_HI"),
-            w_ctxdma_acq: v(win, "SET_CONTEXT_DMA_ACQ_SEMAPHORE")?,
-            w_acq_control: v(win, "SET_ACQ_SEMAPHORE_CONTROL")?,
-            w_acq_offset: f(win, "SET_ACQ_SEMAPHORE_CONTROL_OFFSET")?,
-            w_acq_payload: f(win, "SET_ACQ_SEMAPHORE_CONTROL_PAYLOAD_SIZE")?,
-            w_acq_mode: f(win, "SET_ACQ_SEMAPHORE_CONTROL_ACQ_MODE")?,
-            w_acq_value: v(win, "SET_ACQ_SEMAPHORE_VALUE")?,
-            w_acq_value_hi: t.v(win, "SET_ACQ_SEMAPHORE_VALUE_HI"),
+            // An all-or-nothing group: a window class either has the separate acquire semaphore
+            // (C67E and later) or none of it (C57E); half of it is a derivation error, by name.
+            w_acq: if t.v(win, "SET_ACQ_SEMAPHORE_CONTROL").is_some() {
+                Some(AcqVocab {
+                    ctxdma: v(win, "SET_CONTEXT_DMA_ACQ_SEMAPHORE")?,
+                    control: v(win, "SET_ACQ_SEMAPHORE_CONTROL")?,
+                    offset: f(win, "SET_ACQ_SEMAPHORE_CONTROL_OFFSET")?,
+                    payload: f(win, "SET_ACQ_SEMAPHORE_CONTROL_PAYLOAD_SIZE")?,
+                    mode: f(win, "SET_ACQ_SEMAPHORE_CONTROL_ACQ_MODE")?,
+                    value: v(win, "SET_ACQ_SEMAPHORE_VALUE")?,
+                    value_hi: t.v(win, "SET_ACQ_SEMAPHORE_VALUE_HI"),
+                })
+            } else {
+                None
+            },
             w_iso0: t
                 .a(win, "SET_CONTEXT_DMA_ISO", 0)
                 .or_else(|| t.a(win, "SET_SURFACE_ADDRESS_LO_ISO", 0))
@@ -1407,26 +1426,26 @@ impl Engine {
         if c.kind != ChannelKind::Window {
             return None;
         }
-        let v = &self.vocab;
-        let handle = c.a(v.w_ctxdma_acq);
+        let q = self.vocab.w_acq.as_ref()?;
+        let handle = c.a(q.ctxdma);
         if handle == 0 {
             return None;
         }
-        let ctl = c.a(v.w_acq_control);
-        let wide = fld(ctl, v.w_acq_payload) == 1;
-        let hi = v.w_acq_value_hi.map_or(0, |m| c.a(m));
+        let ctl = c.a(q.control);
+        let wide = fld(ctl, q.payload) == 1;
+        let hi = q.value_hi.map_or(0, |m| c.a(m));
         Some(Acquire {
             chn: n,
             client: c.client,
             handle,
-            offset: u64::from(fld(ctl, v.w_acq_offset)) * 16,
+            offset: u64::from(fld(ctl, q.offset)) * 16,
             value: if wide {
-                u64::from(hi) << 32 | u64::from(c.a(v.w_acq_value))
+                u64::from(hi) << 32 | u64::from(c.a(q.value))
             } else {
-                u64::from(c.a(v.w_acq_value))
+                u64::from(c.a(q.value))
             },
             wide,
-            mode: fld(ctl, v.w_acq_mode),
+            mode: fld(ctl, q.mode),
         })
     }
 
@@ -1536,7 +1555,7 @@ impl Engine {
             return None;
         }
         let ctl = c.armed(v.w_sem_control);
-        let wide = fld(ctl, v.w_sem_payload) == 1;
+        let wide = v.w_sem_payload.is_some_and(|f| fld(ctl, f) == 1);
         let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
         let lo = u64::from(c.armed(v.w_sem_release));
         Some(Effect::Release {
@@ -1546,7 +1565,7 @@ impl Engine {
             offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
             value: if wide { u64::from(hi) << 32 | lo } else { lo },
             wide,
-            awaken: fld(ctl, v.w_sem_rel_mode) == 1,
+            awaken: v.w_sem_rel_mode.is_some_and(|f| fld(ctl, f) == 1),
         })
     }
 

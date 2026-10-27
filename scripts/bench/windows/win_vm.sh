@@ -32,6 +32,10 @@
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
 # WINVM_SSH_BIND (127.0.0.1), WINVM_RAM_MB (8192), WINVM_SMP (8), WINVM_KF3_FB_MB (8192).
+# WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
+# monitor.
+# WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
+# disk with that cache mode; unset keeps QEMU's default, and `run` never reads it.
 # DIAGNOSTIC, default off (2026-10-09): WINVM_TRACE=1 [WINVM_GSP_OBSERVER=1] with KF3_BAR0_READ_TRACE=1
 # records each boot with the VFIO reference's tracer (docs/design/V3_BAR0_TRACE_MODE.md).
 #
@@ -535,7 +539,7 @@ install_boot() {
   if [ -e "$VM/logs/install_boot.done" ]; then log "install boot already completed ($(cat "$VM/logs/install_boot.done"))"; return 0; fi
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
-       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
+       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
        -device virtio-blk-pci,drive=sys,bootindex=1
        -drive "file=$WIN_ISO,if=none,id=cd0,media=cdrom,readonly=on" -device ide-cd,drive=cd0,bus=ide.0,bootindex=0
        -drive "file=$VIRTIO_ISO,if=none,id=cd1,media=cdrom,readonly=on" -device ide-cd,drive=cd1,bus=ide.1
@@ -554,7 +558,7 @@ install_boot() {
 check_boot() {
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
-       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
+       -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap${WINVM_INSTALL_CACHE:+,cache=$WINVM_INSTALL_CACHE}"
        -device virtio-blk-pci,drive=sys,bootindex=0
        -serial "file:$VM/logs/installcheck_b1_serial.log")
   rm -f "$VM/run/stop-requested"
@@ -650,6 +654,22 @@ cmd_sign() {
 # ------------------------------------------------------------------------------------------------
 # run: the kf3 boot loop
 # ------------------------------------------------------------------------------------------------
+# KF3_DEVICE_PROPS_BEGIN
+# kf3_device_props GOP_EFI [DISPLAY]: the kf3-gpu device string.
+# DISPLAY on (default): the display plane and the signed boot GOP. DISPLAY off
+# (WINVM_KF3_DISPLAY=off, 2026-10-27): a headless device, no display plane and no GOP, for a
+# rented box without a monitor; the GPU and GSP path is the same. Anything else is refused.
+kf3_device_props() {
+  local gop=$1 display=${2:-on} d
+  d="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432"
+  case "$display" in
+    on | "") d+=",display=on,gop=on,gop-efi=$gop,id=kf0" ;;
+    off) d+=",id=kf0" ;;
+    *) die "WINVM_KF3_DISPLAY must be on or off, not '$display'" ;;
+  esac
+  echo "$d"
+}
+# KF3_DEVICE_PROPS_END
 cmd_run() {
   local argv=("$@") overlay=main once=0 arm=A kf3=1 extra="" gdrv="" tag="" detach=0 max_boots=12
   while [ $# -gt 0 ]; do
@@ -695,8 +715,8 @@ cmd_run() {
        -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device virtio-blk-pci,drive=sys,bootindex=0)
   local gop="" dev=""
   if [ "$kf3" = 1 ]; then
-    gop=$(gop_signed)
-    dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=$gop,id=kf0"
+    [ "${WINVM_KF3_DISPLAY:-on}" = off ] || gop=$(gop_signed)
+    dev=$(kf3_device_props "$gop" "${WINVM_KF3_DISPLAY:-on}")
     [ -z "$gdrv" ] || dev+=",guest-driver=$gdrv"
     [ -z "$extra" ] || dev+=",$extra"
     QA+=(-vga none -device "$dev")
@@ -839,7 +859,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
-    ""|-h|--help|help) sed -n '3,46p' "$0" | sed 's/^# \{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,49p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac
 }

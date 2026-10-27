@@ -1,0 +1,136 @@
+=== boot time
+
+Tuesday, October 27, 2026 1:28:49 AM
+=== bugcheck / TDR / nvlddmkm / dxgkrnl events (last 40 min)
+
+
+TimeCreated  : 10/27/2026 1:31:00 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:31:00 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:58 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:36 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:36 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:34 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:11 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:11 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:30:09 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:29:42 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:29:42 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:29:40 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:29:38 AM
+Id           : 1001
+ProviderName : Microsoft-Windows-WER-SystemErrorReporting
+M            : 
+
+TimeCreated  : 10/27/2026 1:28:57 AM
+Id           : 41
+ProviderName : Microsoft-Windows-Kernel-Power
+M            : The system has rebooted without cleanly shutting down first. This error could be 
+               caused if the system stopped responding, crashed, or lost power unexpectedly.
+
+TimeCreated  : 10/27/2026 1:28:51 AM
+Id           : 153
+ProviderName : Microsoft-Windows-Kernel-Boot
+M            : Virtualization-based security (policies: 0) is disabled.
+
+TimeCreated  : 10/27/2026 1:29:32 AM
+Id           : 6008
+ProviderName : EventLog
+M            : The previous system shutdown at 1:24:22 AM on ?10/?27/?2026 was unexpected.
+
+TimeCreated  : 10/27/2026 1:27:42 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:27:42 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:27:40 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:27:16 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:27:16 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:27:14 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:26:51 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:26:51 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+TimeCreated  : 10/27/2026 1:26:49 AM
+Id           : 153
+ProviderName : nvlddmkm
+M            : 
+
+
+
+
+=== dumps

@@ -1,0 +1,48 @@
+=== cuda_callback rc=1 secs=1
+KFCUDA device NVIDIA GeForce RTX 2060 SUPER
+CHECK cuda_call FAIL cuCtxCreate(&ctx,0,dev) rc=999
+=== cuda_occupancy rc=1 secs=1
+KFCUDA device NVIDIA GeForce RTX 2060 SUPER
+CHECK cuda_call FAIL cuCtxCreate(&ctx,0,dev) rc=999
+=== dxprobe_d3d11 rc=1 secs=9
+KFDX start api=d3d11 iters=200 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x1f06 luid=0x00000000_0x00005a10 dedicated_mb=5775 software=0 name="NVIDIA GeForce RTX 2060 SUPER"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00006498 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 2060 SUPER"
+KFDX FAILED D3D11CreateDevice(hardware, chosen adapter) hr=0x8876017c
+KFDX RESULT FAIL D3D11CreateDevice(hardware, chosen adapter)
+=== dxprobe_d3d12 rc=1 secs=3
+KFDX start api=d3d12 iters=200 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x1f06 luid=0x00000000_0x00005a10 dedicated_mb=5775 software=0 name="NVIDIA GeForce RTX 2060 SUPER"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00006498 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 2060 SUPER"
+KFDX FAILED D3D12CreateDevice(chosen adapter) hr=0x00000000
+KFDX RESULT FAIL D3D12CreateDevice(chosen adapter)
+=== cup2 rc=1 secs=1
+FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+=== cup3 rc=1 secs=1
+FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+=== cup8 rc=1 secs=1
+FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+=== events since boot
+
+TimeCreated            Id ProviderName                 
+-----------            -- ------------                 
+10/27/2026 1:12:44 AM 153 Microsoft-Windows-Kernel-Boot
+10/27/2026 7:08:45 AM 153 Microsoft-Windows-Kernel-Boot
+
+
+
+=== adapters
+
+
+Name                   : NVIDIA GeForce RTX 2060 SUPER
+DriverVersion          : 32.0.15.8088
+Status                 : OK
+ConfigManagerErrorCode : 0
+
+
+
+

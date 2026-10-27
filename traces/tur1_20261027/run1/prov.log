@@ -1,0 +1,23 @@
+START 2026-10-26T23:00:52+00:00
+BOX_RC=0
+67339dc0a fix(bench): accept source-proved Turing HSCE client spelling
+DRIVER_RC=0
+NVIDIA GeForce RTX 2060 SUPER, 595.91.07
+/dev/root       117G   22G   95G  19% /
+TREE_RC=2
+[2026-10-26T23:14:16+00:00] BENCH_TREE_START
+[2026-10-26T23:14:16+00:00] ⊘ missing /root/NVIDIA-Linux-x86_64-580.159.04.run (the guest needs the SAME .run)
+LADDER_RC=0
+FG_RC=1
+build_fast_guest: no guest image at /workspace/bench/guest.qcow2
+KF3_RC=1
+scripts/bench/build_kf3.sh: line 19: cd: /workspace/bench/qemu-10.2.4: No such file or directory
+NOT_READY driver=595.91.07 KF3_RC=1 FG_RC=1
+NVIDIA_SMI_RC=0
+NVIDIA_SMI: NVIDIA GeForce RTX 2060 SUPER, 595.91.07
+NVRM_TAIL_BEGIN (the last 20 NVRM kernel lines)
+[    6.437420] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  955.056806] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[  971.626554] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+NVRM_TAIL_END
+EXIT 2026-10-26T23:14:45+00:00
