@@ -35,6 +35,7 @@ pub mod readtrace;
 pub mod reset;
 pub mod rmfacts;
 pub mod scrub;
+mod grbinds;
 pub mod timeslice;
 pub mod tsgfacts;
 pub mod tsgmirror;
