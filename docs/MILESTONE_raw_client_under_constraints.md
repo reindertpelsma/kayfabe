@@ -1,5 +1,8 @@
 # ★★★★★ MILESTONE — the raw client passes UNDER THE CONSTRAINTS
 
+**STATUS: ANSWERED, 2026-09-11.** The question (can the raw client pass the 30 cases under the
+constraints) was answered ACHIEVED, n=2, on the pre-v3 tree; the result text below is unchanged.
+
 > ⊘ **HISTORICAL — 2026-09-26.** This milestone was reached on the **pre-v3 tree** (the scratchpad
 > isolate and the old `nvkvm-gpu` device), which v3 replaced. It stays true as a record of what
 > that tree did on 2026-09-11. The v3 counterparts are the 30-arm thin guest (30/30 on GA106 and
@@ -7,7 +10,7 @@
 > govern (`docs/design/THE_CONSTRAINTS.md`).
 
 
-**STATUS: ACHIEVED, 2026-09-11, n=2.** Tag: `w447-client-under-constraints` (`98bc7eca`).
+**Result: ACHIEVED, 2026-09-11, n=2.** Tag: `w447-client-under-constraints` (`98bc7eca`).
 
 > **Owner, setting the bar:** *"getting llm to pass isn't impressive anymore, we already have a
 > dozen times incl mode 2 c. getting it to pass under these constraints is what I finally call
