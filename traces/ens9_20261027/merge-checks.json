@@ -1,0 +1,29 @@
+{
+  "parents": {
+    "ens7": "d2ea6d26be6f746e579e6bfc8dbfe39847ddb990",
+    "ens8": "7c3f7dc83c2d2c42229a54c22d022eaef03f96ad",
+    "pr169": "6adec88f9a5f0b847084fbcc8f3d0365b49faa0a"
+  },
+  "all_parents_retained": true,
+  "ens7_memory_sources_byte_identical": [
+    "crates/kf-mem",
+    "crates/kf-host",
+    "crates/kf-qemu/src/mem.rs",
+    "crates/kf-qemu/src/tsgmirror.rs"
+  ],
+  "status_headings": {
+    "ens7": {
+      "total": 83,
+      "missing": []
+    },
+    "ens8": {
+      "total": 81,
+      "missing": []
+    }
+  },
+  "source_head": "5e65679b3095ec69082d823fb537414e71d84866",
+  "merge_commits": [
+    "5e65679b3095ec69082d823fb537414e71d84866 3c44321e674e65ea9ff5243d5201af8a397d566b 6adec88f9a5f0b847084fbcc8f3d0365b49faa0a",
+    "3c44321e674e65ea9ff5243d5201af8a397d566b d2ea6d26be6f746e579e6bfc8dbfe39847ddb990 7c3f7dc83c2d2c42229a54c22d022eaef03f96ad"
+  ]
+}

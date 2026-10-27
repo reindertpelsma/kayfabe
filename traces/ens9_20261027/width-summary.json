@@ -1,0 +1,7 @@
+{
+  "comparison_base": "30e1c64f182751321881e481f789ebb5187b1f17",
+  "added_code_lines": 29273,
+  "inherited_over_100_lines": 308,
+  "new_integration_over_100_lines": [],
+  "policy": "Preserve incoming source; do not mass-reflow inherited unrelated lines."
+}
