@@ -1,0 +1,268 @@
+{
+  "run": "v8-setup-cache-mutants-20261023",
+  "cases": [
+    {
+      "mutant": "permanent-progress-refusal-event",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline"
+      ]
+    },
+    {
+      "mutant": "restore-requires-ack-event",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_when_report_was_refused",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_without_the_readiness_channel"
+      ]
+    },
+    {
+      "mutant": "skip-ack-event",
+      "count": 14,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_lost_progress_ack_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_not_ready_progress_must_be_acknowledged_before_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_arbitrary_bytes_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_channel_blocks_until_the_ack_event",
+        "test_vast_setup_readiness.ReadinessSignal.test_closed_channel_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_missing_channel_fails_closed",
+        "test_vast_setup_readiness.ReadinessSignal.test_refused_report_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_standard_input_cannot_be_used_as_the_channel",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_when_report_was_refused",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_without_the_readiness_channel"
+      ]
+    },
+    {
+      "mutant": "refusal-is-not-ready",
+      "count": 6,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch",
+        "test_vast_setup_readiness.ReadinessSignal.test_refused_report_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.RestoreReadiness.test_restore_refuses_before_mint_when_report_was_refused"
+      ]
+    },
+    {
+      "mutant": "progress-marked-before-ack",
+      "count": 6,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_lost_progress_ack_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_not_ready_progress_must_be_acknowledged_before_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch"
+      ]
+    },
+    {
+      "mutant": "refused-ack-sends-ready",
+      "count": 4,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_oversized_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_progress_request_refuses_cache_without_waiting_for_deadline",
+        "test_vast_setup_readiness.ReadinessIntegration.test_rejected_run_token_never_releases_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_unauthorised_progress_never_starts_cache_fetch"
+      ]
+    },
+    {
+      "mutant": "payload-missing-ready-channel",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_readiness.ReadinessIntegration.test_lost_progress_ack_cannot_release_cache_fetch",
+        "test_vast_setup_readiness.ReadinessIntegration.test_not_ready_progress_must_be_acknowledged_before_cache_fetch"
+      ]
+    },
+    {
+      "mutant": "provision-local-apt-hook",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_apt_hook.SetupAptHook.test_package_install_is_confined_to_the_local_cache",
+        "test_vast_setup_apt_hook.SetupAptHook.test_package_update_is_confined_to_the_local_cache"
+      ]
+    },
+    {
+      "mutant": "image-binding",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_missing_image_refuses",
+        "test_vast_setup_cache.SetupCache.test_wrong_image_refuses"
+      ]
+    },
+    {
+      "mutant": "cargo-lock-binding",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_wrong_cargo_lock_refuses",
+        "test_vast_setup_cache.SetupCache.test_wrong_firmware_lock_refuses"
+      ]
+    },
+    {
+      "mutant": "platform-binding",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_wrong_architecture_refuses",
+        "test_vast_setup_cache.SetupCache.test_wrong_distro_refuses"
+      ]
+    },
+    {
+      "mutant": "package-policy-binding",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_missing_package_policy_refuses",
+        "test_vast_setup_cache.SetupCache.test_stale_package_policy_refuses"
+      ]
+    },
+    {
+      "mutant": "asset-hash",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_download_altered_equal_length_body_refuses",
+        "test_vast_setup_cache.SetupCache.test_download_wrong_hash_refuses"
+      ]
+    },
+    {
+      "mutant": "locator-binding",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_wrong_locator_name_refuses",
+        "test_vast_setup_cache.SetupCache.test_wrong_locator_size_refuses"
+      ]
+    },
+    {
+      "mutant": "download-origin",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_foreign_url_refuses",
+        "test_vast_setup_cache.SetupCache.test_plaintext_url_refuses"
+      ]
+    },
+    {
+      "mutant": "no-redirect",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_redirect_handler_refuses_a_foreign_host",
+        "test_vast_setup_cache.SetupCache.test_redirect_handler_refuses_even_the_same_host"
+      ]
+    },
+    {
+      "mutant": "archive-paths",
+      "count": 3,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_absolute_escape_refuses",
+        "test_vast_setup_cache.SetupCache.test_cross_component_path_refuses",
+        "test_vast_setup_cache.SetupCache.test_parent_escape_refuses"
+      ]
+    },
+    {
+      "mutant": "archive-expansion",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_expansion_limit_refuses",
+        "test_vast_setup_cache.SetupCache.test_second_expansion_boundary_refuses"
+      ]
+    },
+    {
+      "mutant": "preserve-existing-directory",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_existing_empty_destination_is_not_removed",
+        "test_vast_setup_cache.SetupCache.test_existing_extraction_directory_is_preserved"
+      ]
+    },
+    {
+      "mutant": "local-apt-sources",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_install_cannot_read_global_source_fragments",
+        "test_vast_setup_cache.SetupCache.test_update_uses_only_the_local_repo"
+      ]
+    },
+    {
+      "mutant": "no-recommendations",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_compiler_install_omits_optional_recommendations",
+        "test_vast_setup_cache.SetupCache.test_qemu_install_omits_optional_gui_recommendations"
+      ]
+    },
+    {
+      "mutant": "cargo-source-override",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_cache.SetupCache.test_existing_source_override_refuses",
+        "test_vast_setup_cache.SetupCache.test_legacy_config_cannot_override_vendor"
+      ]
+    },
+    {
+      "mutant": "deb-index-binding",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_build.SetupBuild.test_package_index_path_must_match_uri",
+        "test_vast_setup_build.SetupBuild.test_package_index_size_must_match_uri"
+      ]
+    },
+    {
+      "mutant": "deb-download-sha",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_build.SetupBuild.test_deb_bytes_must_match_the_index_hash",
+        "test_vast_setup_build.SetupBuild.test_same_size_wrong_deb_refuses"
+      ]
+    },
+    {
+      "mutant": "deb-epoch-filename",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_build.SetupBuild.test_another_epoch_uses_the_upstream_filename",
+        "test_vast_setup_build.SetupBuild.test_epoch_does_not_become_a_percent_encoded_repository_filename"
+      ]
+    },
+    {
+      "mutant": "mirror-status",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_build.SetupBuild.test_all_http_failures_refuse",
+        "test_vast_setup_build.SetupBuild.test_http_error_cannot_win_on_throughput"
+      ]
+    },
+    {
+      "mutant": "install-blob-helper",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_blob.SetupBlob.test_installed_helper_reads_the_validated_run_contract",
+        "test_vast_setup_blob.SetupBlob.test_real_onstart_installs_private_blob_helper"
+      ]
+    },
+    {
+      "mutant": "blob-path-guard",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_blob.SetupBlob.test_encoded_separator_refuses",
+        "test_vast_setup_blob.SetupBlob.test_traversal_refuses"
+      ]
+    },
+    {
+      "mutant": "blob-token-header",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_blob.SetupBlob.test_installed_helper_reads_the_validated_run_contract",
+        "test_vast_setup_blob.SetupBlob.test_scoped_token_is_stdin_only"
+      ]
+    },
+    {
+      "mutant": "setup-before-work",
+      "count": 2,
+      "killers": [
+        "test_vast_setup_entry.SetupEntry.test_cache_is_ready_before_project_work",
+        "test_vast_setup_entry.SetupEntry.test_failed_setup_cannot_start_project_work"
+      ]
+    }
+  ]
+}

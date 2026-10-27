@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 # kf3-gpu — the v3 device. The Rust archive (crates/kf-qemu, staticlib) is dropped in beside these
 # sources by scripts/bench/build_kf3.sh. Two hunks in the QEMU tree, one line each: subdir('kf3') in
 # hw/misc/meson.build and a four-line Kconfig stanza.

@@ -1,0 +1,36 @@
+{
+  "capture": "offers_any_20261024.json",
+  "sha256": "507b06893d3b833e63a1bfc185aad128478b7713c3d7606e410ef6079d0b3cba",
+  "offer_count": 54,
+  "selected_offers": [
+    {
+      "id": 51156488,
+      "machine_id": 54516,
+      "gpu_name": "RTX 3090",
+      "verification": "deverified",
+      "is_vm_deverified": false,
+      "geolocation": "Quebec, CA",
+      "dph_total": 0.2413888888888889,
+      "cpu_cores_effective": 9.142857142857142,
+      "cpu_ram": 23003,
+      "inet_down": 3007.8,
+      "inet_down_cost": 0.0026041666666666665,
+      "inet_up_cost": 0.00390625
+    },
+    {
+      "id": 57543128,
+      "machine_id": 145338,
+      "gpu_name": "RTX 3090",
+      "verification": "verified",
+      "is_vm_deverified": false,
+      "geolocation": "United Kingdom, GB",
+      "dph_total": 0.4680555555555555,
+      "cpu_cores_effective": 32.0,
+      "cpu_ram": 128794,
+      "inet_down": 501.6,
+      "inet_down_cost": 0.013020833333333334,
+      "inet_up_cost": 0.013020833333333334
+    }
+  ],
+  "GA104_candidate_offer_count": 0
+}

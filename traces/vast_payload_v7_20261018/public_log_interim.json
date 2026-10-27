@@ -1,0 +1,11 @@
+{
+  "run": "v7-kvm-20261023",
+  "at": 1792725093.7551558,
+  "runner_validated_log_chain": true,
+  "cursor": 10,
+  "log_bytes": 1119,
+  "display_dropped": 9,
+  "state": "TESTING",
+  "has_recorded_result": false,
+  "verdict": "UNAVAILABLE"
+}

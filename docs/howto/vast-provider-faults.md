@@ -1,0 +1,9 @@
+# When a GPU check reports a provider fault
+
+CODE READ (`ci/vast-broker/src/provider-fault.js`, `src/index.js`, `runner.py`): a failed provision with a complete final summary, no later stage run, and a specific driver/GPU or missing-KVM signature is a provider fault even when the payload labelled its failed watcher `host_xid`. A plain Xid failure or incomplete summary without that provider evidence stays a failed check. Classification never continues work on the failed box or makes its GPU result pass.
+
+CODE READ (`ci/vast-broker/src/ledger.js`, `src/index.js`): the broker destroys the exact instance and confirms absence before one replacement on a different machine and a different known host. Both rentals keep the original deadline and dollar allowance and count as one daily attempt. If no eligible other host fits, the run remains `PROVIDER_FAULT`.
+
+CODE READ (`ci/vast-broker/src/ledger.js`, `src/offers.js`): two distinct failed machines on the same host create a durable `bad-host:` entry. Entries persist, like `bad-machine:` entries; an index above 256 refuses all offers and admissions until the owner investigates. The static `defaults.json` host seed `224600` cites failed runs 40425285335 and 40478005010; explicit `BAD_HOST_IDS` settings override that default list and must retain the seed when desired.
+
+CODE READ (`.github/workflows/gpu-vast.yml`, `ci/vast-broker/runner.py`): an exhausted or unavailable provider replacement reports `error` with “GPU provider fault; no kayfabe verdict” and prints the machine and host in the public log and job summary. It remains non-passing. GitHub treats `neutral` as satisfying required checks, so that conclusion would not preserve this gate: [GitHub required-check rules](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks).

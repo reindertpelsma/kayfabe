@@ -1,0 +1,15 @@
+{
+  "name": "kayfabe-vast-broker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test",
+    "deploy": "node deploy.mjs"
+  },
+  "dependencies": {
+    "jose": "6.2.13"
+  },
+  "devDependencies": {
+    "wrangler": "4.152.0"
+  }
+}

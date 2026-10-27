@@ -1,0 +1,12 @@
+{
+  "id": 57565088,
+  "machine_id": 54516,
+  "reason": "provider_host_error",
+  "utc": "2026-10-24T21:10:21.853935+00:00",
+  "ssh_ready": false,
+  "status": {
+    "actual_status": "offline",
+    "intended_status": "running",
+    "status_msg": "Waiting for SSH pubkey from server. If message persists, check that SSH pubkey is set on instance."
+  }
+}

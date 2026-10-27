@@ -1,0 +1,93 @@
+UI1 v2 local evidence — 2026-10-26
+Initial base: d3b76ed1d2f47d6fca0a08d2c461d218ebd921f6
+Integrated master: 6a1c43269ba4004601aecb4cae3626a7e2b65969
+EXPECTED RED tests-only commit: a94810903
+New Node tests before implementation: 47 tests, 13 pass, 34 fail.
+New workerd tests before implementation: 6 tests, 2 pass, 4 fail.
+Later coverage adds two invalid-run cases; the proxy fixture advances its cursor.
+Five open-run Stop fixtures passed on v1; Stop condition unchanged.
+
+node --test ci/vast-broker/test
+  ...
+1..2068
+# tests 2068
+# suites 0
+# pass 2068
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 88480.115928
+
+MINIFLARE_ASSERT_BODIES_CONSUMED=true node --test ci/vast-broker/workerd/*.test.js
+  ...
+1..7
+# tests 43
+# suites 0
+# pass 43
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19515.859424
+
+node --test ci/vast-admin/test/*.test.mjs
+  ...
+1..77
+# tests 77
+# suites 0
+# pass 77
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 703.416388
+
+node --test [both admin and both broker admin test files]
+  ...
+1..132
+# tests 132
+# suites 0
+# pass 132
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1170.220862
+
+python3 traces/vast_admin_v2_20261018/mutate.py
+L01 internal origin bypass: 2 killing tests
+L02 public log route exposed: 2 killing tests
+L03 record capability disclosure: 3 killing tests
+L04 four chunks per page: 4 killing tests
+L05 byte limit removed: 2 killing tests
+L06 traversal truncated: 2 killing tests
+L07 phantom final page: 3 killing tests
+L08 final summary hidden: 2 killing tests
+L09 whole tail used as summary: 3 killing tests
+L10 missing log reported available: 2 killing tests
+L11 cursor range bypass: 2 killing tests
+L12 HTML escape bypass: 2 killing tests
+L13 Next loses run binding: 2 killing tests
+L14 Next on exhausted page: 2 killing tests
+L15 log links omitted: 4 killing tests
+L16 Stop requires provider ID: 5 killing tests
+L17 terminal rows get Stop: 2 killing tests
+L18 log owner check bypass: 2 killing tests
+L19 log error body disclosed: 2 killing tests
+L20 missing log loses expiry message: 2 killing tests
+
+Final full suite verifies two deterministic main bundles against this SHA256:
+9ac12a86ed2dbc4bc7a63c9a35d739c9dcc9acf7e18eb117187f6e92082ecd09
+Admin dry-run bundle SHA256:
+9ecf525f73a5e20c10f53ce6cfa0216736fd89bd3587f5f87d3acaafba46f96b
+
+Storage model: two identical fresh runs; spread zero per case. See storage.jsonl.
+Recommendation: LOG_RETENTION_HOURS=6 at default caps with healthy pruning.
+See retention.md for the count bound, modeled SQLite overhead and limits.
+
+Prettier 3.6.2 with broker configuration: PASS
+Black check on mutation script: PASS
+git diff --check; whole-PR credential/private-path/100-column scans: PASS
+Claims ratchet: existing-debt=3758 new=0 resolved=0
+No deployment, direct Vast/Claude call, Cloudflare setting or secret change.

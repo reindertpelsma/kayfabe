@@ -1,0 +1,18 @@
+{
+  "run": "v8-cloudinit-cache-publish-20261023",
+  "tag": "setup-cache-jammy-amd64-20261023-v2",
+  "assets": [
+    {
+      "name": "debs.tar.gz",
+      "bytes": 159253208,
+      "sha256": "5825d940c598ab179af941d1b54bb5ad98a3a53baf4b47aac24aede06a083cba",
+      "download_verified": true
+    },
+    {
+      "name": "vendor.tar.gz",
+      "bytes": 7888026,
+      "sha256": "538e047a235976df7de39ce685bdcabd50351359e77c51ff4fb97915bcdd47b6",
+      "download_verified": true
+    }
+  ]
+}

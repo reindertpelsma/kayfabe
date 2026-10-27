@@ -1,0 +1,6 @@
+{
+  "run": "v9-callback-replay-20261023",
+  "hypothesis": "Native callback control frames preserve exact fault/source proof sufficient for the same S4 matcher to admit four defer CE faults and the separate missing-page GR fault.",
+  "falsifier": "Scrubbing or bounds remove required proof or exact fault fields, so the original shared matcher refuses.",
+  "projection": "Remove only the literal per-line untrusted/box display prefixes; do not rewrite fault or source fields."
+}

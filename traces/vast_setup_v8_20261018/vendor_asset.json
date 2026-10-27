@@ -1,0 +1,12 @@
+{
+  "asset": {
+    "kind": "vendor",
+    "name": "vendor.tar.gz",
+    "size": 7888026,
+    "sha256": "d1d3df758b09210a0e4dda2f11ee2e7b2d52ed35f9bcaa686363fe68af2c3510"
+  },
+  "contents": {
+    "files": 2576,
+    "unpacked_bytes": 52105926
+  }
+}

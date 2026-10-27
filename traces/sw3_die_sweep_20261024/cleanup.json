@@ -1,0 +1,25 @@
+{
+  "utc": "2026-10-24T22:32:16.868128+00:00",
+  "own_ids": [
+    57565088,
+    57565292,
+    57568731
+  ],
+  "all_owned_api_absent": true,
+  "leases_used": 3,
+  "fourth_lease_created": false,
+  "watchdogs_running": 0,
+  "owned_local_cargo_targets_created": false,
+  "owned_gpu_locks_held": false,
+  "new_runtime_estimate_usd": 0.17582299606666665,
+  "lane_runtime_estimate_usd": 0.20170046550925924,
+  "nonruntime_reserve_usd": 0.5,
+  "new_conservative_cost_guard_usd": 0.6758229960666666,
+  "not_settled_invoice": true,
+  "coordinator_new_stop_usd": 2.5,
+  "coordinator_new_cap_usd": 3,
+  "credit_observed_usd": 23.097188094559897,
+  "credit_reserve_usd": 8,
+  "local_worktree_cleanup": "after verified final push",
+  "pre_destroy_idle_probe": "An overbroad process-name scan returned a match; text was not retained. Final controller rc0, all30 supervised child completions, and exact API absence are retained."
+}

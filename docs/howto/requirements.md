@@ -1,0 +1,94 @@
+# Requirements
+
+This page lists only what the repository's evidence states. Where the repository gives no answer, the line says **not documented yet**. Nothing here is a promise of support: kayfabe is a research project. <!-- src: README.md -->
+
+## Host
+
+### Operating system and CPU
+
+- **Linux on x86-64 with KVM** (the host OS is Linux only).  The device is a QEMU device, and every recorded run used `/dev/kvm` with `-cpu host`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/host_preflight.sh, docs/design/THE_ARCHITECTURE_v3.md section 0 ("Host OS is Linux only") -->
+- The CPU needs hardware virtualisation (`vmx` or `svm`). <!-- src: scripts/bench/host_preflight.sh -->
+- Hosts that are themselves KVM guests (nested virtualisation) work, and most hardware results come from such rented hosts. A VM exit costs about 10 to 40 times as much on them as on bare metal. <!-- src: docs/STATUS_DETAIL.md section 4 and AGENTS.md "Bench traps" --> Results on non-nested hardware: the author's RTX 4070 host runs the Windows results in the README. <!-- src: README.md -->
+- Intel and AMD (EPYC 7452) hosts appear in the recorded results. <!-- src: docs/design/V3_APP_MATRIX.md, docs/STATUS_DETAIL.md -->
+- **Host kernel version:** the recorded rented hosts ran Linux 6.8.0-59. A minimum or maximum supported kernel is **not documented yet**. <!-- src: docs/design/V3_DRIVER_MATRIX.md (SW3 GA104 cell) -->
+- **arm64:** no run on arm64 is documented. CI only cross-checks that the workspace builds for aarch64. <!-- src: .github/workflows/ci.yml (aarch64 job) -->
+- **An IOMMU is not required** for kayfabe's isolation: the guest never drives the physical GPU. See [FAQ](FAQ.md). <!-- src: docs/FAQ.md -->
+
+### NVIDIA driver on the host
+
+- **The open NVIDIA kernel module** (`-m=kernel-open`) is what every recorded run used, and the provisioning script refuses a host whose `/proc/driver/nvidia/version` does not say "Open Kernel Module". <!-- src: scripts/bench/provision_host_driver.sh, scripts/bench/provision_bench_tree.sh -->
+- Closed (proprietary) host modules: supported in principle, untested. <!-- src: docs/design/V3_SECURITY_MODEL.md section 10 -->
+- **Host driver versions that passed** the GPU gates (9/9), the 30-arm thin-guest suite and the CUDA ladder with a 580.159.04 guest: 570.148.08 (kayfabe `1f3e4fc4`), 575.57.08, 580.65.06 and 580.95.05 (`ee35ca4a`) and 580.159.04 (`1837166d`) [measured, GA102 boxes, September 2026; nested rented hosts]. <!-- src: docs/design/V3_DRIVER_MATRIX.md section 6.0 (host x guest grid) -->
+- **595.91.07 (open)** on the host and in the guest: gates 9/9 plus gate 10, bare metal 30/30 and thin guest 30/30 on one GA104 box [measured, kayfabe `714ec29d3`, 2026-10-24, n=1]. The author's RTX 4070 host runs the same driver. <!-- src: traces/sw3_die_sweep_20261024/README.md, docs/FAQ.md -->
+- Host drivers 565.57.01 and 550.54.14 were not swapped successfully in the recorded walk, and 535/545 hosts are not documented. Treat hosts older than 570 as untested. <!-- src: docs/design/V3_DRIVER_MATRIX.md section 6.0 -->
+- The host driver version is **measured** by kayfabe from the host, never taken from a guest. An unmeasured host driver is refused by name. <!-- src: docs/design/V3_DRIVER_MATRIX.md (2026-09-30 check) -->
+- `libcuda` (the CUDA driver library) must be loadable on the host: kayfabe opens it with `dlopen` to run its page-table walker on the GPU. The walker's PTX is committed in the repository, so no CUDA toolkit is needed to build. <!-- src: ARCHITECTURE.md (kf-cuda row), cuda/walk -->
+
+### GPU
+
+Kayfabe reads the host GPU's facts from the host driver. Marketing names do not decide the die: the RM architecture and implementation numbers do. <!-- src: traces/sw3_die_sweep_20261024/README.md -->
+
+What has been run (the README's list; revisions and boxes are in the repository's status records):
+
+| Family / die | Linux guest | Windows guest |
+|---|---|---|
+| Ada AD104 (RTX 4070) | yes; the author's GPU | yes; the author's GPU |
+| Ada AD106, AD103 | yes (AD106) | desktops run, with a borrowed display page |
+| Ada AD102 | yes, guest driver 590 | not documented yet |
+| Ada AD104 (RTX 4000 Ada) | yes | not documented yet |
+| Ampere GA106 (RTX 3060) | yes; the usual bench GPU | not documented yet |
+| Ampere GA104 | yes (exact cell: kayfabe `714ec29d3`, 595.91.07) | "only has the GPU" per the README; display not documented yet |
+| Turing TU116 | yes | not documented yet |
+| Blackwell GB205 | yes | not documented yet |
+| Blackwell GB206 | passed at earlier revisions | **open: Code 43** |
+
+<!-- src: README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0; traces/sw3_die_sweep_20261024/README.md -->
+
+- Earlier revisions also passed Linux on GA102, GB203 and a floor-swept RTX 3060 Ti. <!-- src: docs/STATUS_DETAIL.md section 0 and section 1 -->
+- **Hopper, GA100 and datacentre Blackwell (GB10x)** are derived from the open driver's source only; no hardware was available. GA100 and GB10B are refused by name. <!-- src: docs/STATUS_DETAIL.md section 0 -->
+- **Pre-Turing GPUs cannot work.** Below Turing there is no GSP firmware interface for kayfabe to impersonate: the guest driver would drive the hardware directly. <!-- src: docs/design/THE_ARCHITECTURE_v3.md section 0.0.1 -->
+- Consumer GPUs are the tested class; "any NVIDIA GPU" is the goal, not a claim. <!-- src: README.md table -->
+- A current, single, per-die table is **not documented yet** in the user-facing documentation. The README points to a status record that is partly historical.
+
+### Memory and apertures
+
+- **Video memory:** the guest's video memory is a real allocation of host VRAM, sized by the device property `fb-mb` (default 8192 MiB). On a card with less than 10 GiB the bench harness sets it to (total VRAM minus 2048 MiB) rounded down to whole GiB, and the harness script records that 6144 MiB boots on an 8 GiB card. A store the card cannot hold is refused at start with `store of N MiB refused: NoMemory`. <!-- src: qemu/hw/misc/kf3/kf3.c, scripts/fastguest/run_fast_guest.sh, crates/kf-qemu/src/cardbudget.rs -->
+- **Host BAR1:** the sum, over the kayfabe devices on one card, of guest BAR1 + guest BAR2 + 1 MiB (PRAMIN window) + 16 MiB of headroom must not exceed the host's BAR1 aperture. With the common 256 MiB host aperture, a guest BAR1 of 256 MiB does not fit and the harness uses 128 MiB. The device refuses at start, by name, a configuration that does not fit. Whether a larger BAR1 (resizable BAR) is needed is **not documented yet**. <!-- src: crates/kf-qemu/src/cardbudget.rs, scripts/fastguest/run_fast_guest.sh -->
+- **Guest RAM** must be a shared memfd (`memory-backend-memfd,share=on`); with ordinary anonymous RAM every store-backed path refuses. <!-- src: scripts/fastguest/run_fast_guest.sh -->
+- **Host RAM and disk:** the bench's own host checks demand at least 16 GB RAM, 8 cores and 100 GB free disk, but those are limits for a build-and-test box, not product requirements. The harness defaults for a Windows guest are 8192 MB and 8 vCPUs, with an 80 GB disk. A product minimum is **not documented yet**. <!-- src: scripts/bench/host_preflight.sh, scripts/bench/windows/win_vm.sh -->
+
+### Privileges
+
+- The design runs the host side from an unprivileged process using only resource-manager controls the host driver marks non-privileged. <!-- src: ARCHITECTURE.md, README.md -->
+- The provided launch scripts, however, run as root: they open `/dev/nvidia*`, create a tap network and take a lock. <!-- src: scripts/bench/display/interactive.sh -->
+- A recorded, end-to-end run without root is **not documented yet**.
+- **No host patches are required.** An optional patch to the host's `nvidia-uvm` exists as research; it is not part of the stock path. <!-- src: docs/STATUS_DETAIL.md section 0 --> Four of the 65 CUDA applications need unified-memory demand paging and fail without it. <!-- src: README.md -->
+
+## Build host
+
+See [Building from source](building.md) for the package list, the pinned Rust toolchain and QEMU 10.2.4.
+
+## Guest
+
+### Linux
+
+- NVIDIA's stock driver, unmodified, from the `.run` installer or the distribution package. Nothing to set. <!-- src: README.md, docs/WINDOWS_GUEST_SETUP.md -->
+- Every recorded Linux run used the **open kernel module** flavour in the guest. Other flavours are **not documented yet**. <!-- src: scripts/bench/provision_bench_tree.sh -->
+- Guest driver versions that passed the CUDA ladder with host 580.159.04: 575.57.08, 580.105.08, 580.159.04, 590.48.01, 595.84 and 610.57.04 [measured, September 2026, GA102 box]. A declared guest version outside the measured set is refused by name. <!-- src: docs/design/V3_DRIVER_MATRIX.md section 6.0 -->
+- The 30-arm thin-guest suite is graded for 580.x guests only. <!-- src: docs/design/V3_DRIVER_MATRIX.md section 6.0 -->
+- **Display** with the guest's own display driver: the wire layouts were derived for guest 580.159.04 only (as of 2026-09-30); any other guest version is refused. Check the current state before relying on another version. <!-- src: docs/design/V3_DRIVER_MATRIX.md (2026-09-30 check) -->
+
+### Windows
+
+- Windows 11 Pro (build 26200) and Windows 11 Enterprise LTSC 2024 (build 26100) with NVIDIA's stock 580.88 driver, plus three registry settings. See [Windows guest](windows-guest.md). <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
+- The Windows harness gives the guest a TPM 2.0 (swtpm), Secure Boot firmware (OVMF) and kayfabe's boot display driver. Whether a Windows guest works without each of them is not documented yet. <!-- src: scripts/bench/windows/README.md -->
+- You supply and license Windows yourself. <!-- src: docs/NOTICES.md -->
+
+## Not supported or not finished
+
+- Windows sleep/wake. <!-- src: README.md, docs/WINDOWS_GUEST_SETUP.md -->
+- GA100, GB10B (refused by name); Hopper and GB10x (never run on hardware). <!-- src: docs/STATUS_DETAIL.md -->
+- Multi-GPU: one kayfabe device per host GPU is built, and a guest with two distinct host GPUs passed the thin suite. CUDA inside a two-GPU guest, UVM across two GPUs and peer access were not measured. <!-- src: docs/STATUS_DETAIL.md section 3 -->
+- Several VMs sharing one GPU as a verified, isolated configuration: the effect of a guest-triggered GPU fault on other VMs is not yet measured. <!-- src: README.md -->
+
+Verified on: the lists above are taken from the repository README (2026-10-21), the GPU sweep record of 2026-10-24 (kayfabe `714ec29d3`, one GA104 box) and the driver-matrix record of September 2026 (kayfabe `ee35ca4a`, `1f3e4fc4`, `1837166d`; GA102 boxes). Not verified end to end: no single machine was checked against this page as a whole.

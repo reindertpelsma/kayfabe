@@ -2248,6 +2248,8 @@ pub struct ChanPlane {
     caps: Arc<Mutex<VmCaps>>,
     /// Host token → channel.
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
+    /// Host token to guest token, readable without a slot lock (see [`crate::hostidx`]).
+    host_idx: crate::hostidx::HostIdx,
     /// `(hClient, hObject)` → host token.
     by_obj: Mutex<HashMap<(u32, u32), u32>>,
     /// ★ OWNER_RULINGS §U: each Translated channel's software objects, by host token.
@@ -2955,6 +2957,7 @@ impl ChanPlane {
                 64,
             ))),
             slots: RwLock::new(HashMap::new()),
+            host_idx: crate::hostidx::HostIdx::default(),
             by_obj: Mutex::new(HashMap::new()),
             sw_objs: Mutex::new(HashMap::new()),
             defapi_reg: std::sync::OnceLock::new(),
@@ -7267,6 +7270,7 @@ impl ChanPlane {
                 if gr_tier {
                     me.engine_tlive(engine, true);
                 }
+                me.host_idx.insert(ht, idx);
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
                 }
@@ -7567,6 +7571,7 @@ impl ChanPlane {
         let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else {
             return;
         };
+        self.host_idx.remove(ht);
         // ★ The fast path goes FIRST, with NO slot lock held (it waits for the drainer's ack, and a
         // statement on the drainer may lock a slot): placements removed, the eventfd's last count
         // handed to the still-live token (its worker sees `scheduled == false`), acknowledged.
@@ -7720,6 +7725,19 @@ impl ChanPlane {
         );
     }
 
+    /// ★ The slot was locked by another thread for a moment. The ring that brought the worker here
+    /// (a completion, or the guest's doorbell) is consumed; dropping it strands a fence the host
+    /// finished, or new guest work, with nothing left to ring the channel again. Ring it again
+    /// through the plane, by its guest token (the token is `BUSY` with this worker, so the ring
+    /// lands as `BUSY_RUNG` and the worker acts again or republishes it). Counted.
+    fn owe_ring(&self, ht: u32) -> bool {
+        self.contended.fetch_add(1, Ordering::Relaxed);
+        crate::hostidx::reowe(self.host_idx.get(ht), |idx| {
+            let _ = self.plane.ring_internal(idx);
+        });
+        false
+    }
+
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
@@ -7732,10 +7750,10 @@ impl ChanPlane {
         let Some(slot) = self.slot(ht) else {
             return false;
         };
-        // ★ The token's BUSY state is the exclusion; this lock must never be contended.
+        // BUSY excludes other workers; act/probe threads may still hold the slot mutex.
+        // A failed try_lock must preserve the ring that brought this worker here.
         let Ok(mut g) = slot.try_lock() else {
-            self.contended.fetch_add(1, Ordering::Relaxed);
-            return false;
+            return self.owe_ring(ht);
         };
         let g = &mut *g;
         g.serves = g.serves.saturating_add(1);

@@ -68,7 +68,7 @@ ssh <alias> 'cat /root/prov/prov.log'            # BOX_RC/DRIVER_RC/TREE_RC/FG_R
 ssh <alias> 'CARGO_BUILD_JOBS=$(nproc) nohup bash /root/kayfabe/scripts/bench/box/merge_check.sh <branch> <tag> >/dev/null 2>&1 &'
 # ⊘ [2026-10-03, box 54049598] run it from the CHECKOUT: it finds the repo as $(dirname $0)/../../..,
 # so a copy in /root exits at once with "fatal: not a git repository" (EXIT rc=128).
-ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF3_RC / FG_RC / FAST_SUITE_PASS / EXIT
+ssh <alias> 'cat /root/prov/<tag>.log'           # V3_GATES_SUMMARY / KF3_RC / FG_RC / FAST_SUITE_PASS / EXIT (+ KVM_TESTS with KF_MERGE_KVM_TESTS=1)
 ```
 
 - Wait for the `EXIT` line, never for "the file stopped growing": a killed job and a running one look the
@@ -77,7 +77,10 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
   guest that did not shut down cleanly (`dmesg`: "recovery required on readonly filesystem"). Connect it
   read-write with `qemu-nbd` and run `e2fsck -p` on the root AND /boot partitions, then rebuild. Never
   promote on a suite that ran a stale initrd when the raw-client crates changed.
-- A merge to master needs `TESTS … failed 0`, `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
+- *[2026-10-26]* `merge_check.sh` runs no crate tests: the GPU-free `cargo test` of every kf-* crate is CI's `stable` job
+  on every commit (a repeat on the box cost 31 min and ended rc=101 in gate run 40263112941). The /dev/kvm-gated
+  tests, which CI skips, are opt-in: `KF_MERGE_KVM_TESTS=1` (`kvm_tests.sh`, `KVM_TESTS passed N failed 0 kvm_ran=R kvm_skipped=0`).
+- A merge to master needs `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,
   `<tag>_births.log`) means every channel the suite and the gates birthed read
@@ -91,6 +94,15 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
   *before* another checkout's build therefore gets that checkout's code: here kf-cuda failed to compile
   against a `kf-linux-raw` from another revision. `merge_check.sh` is safe because it creates its
   worktree right before it builds. For any other build, give the checkout its own target directory.
+- ⊘ *[2026-10-26, gate run 40255723206 and probe box 57755545, RTX 3090]* `DRIVER_RC=0` followed by
+  `NOT_READY driver=No devices were found`: purging the 575 packages removes the only nouveau
+  blacklist, a udev "add" event while no nvidia module is loaded lets nouveau claim the GPU, and
+  after `rmmod nouveau; modprobe nvidia` the module loads (every old check passed) but
+  RmInitAdapter fails ("GPU is likely in a bad state"). `provision_host_driver.sh` now blacklists
+  nouveau (and reloads udev), and `gpu_settle` repairs a wedged GPU (unload, PCI reset of the
+  NVIDIA display function, reload; 3 tries) or ends with `DRIVER_SWAP_DONE rc=8`, on which
+  `provision_full.sh` stops before the builds. `NOT_READY` now also prints `NVIDIA_SMI_RC` and the
+  last 20 NVRM lines. Tests: `scripts/ci/test_vast_gpu_swap.py`, mutants `gpu_swap_mutants.py`.
 - *[2026-09-27]* A `REBOOT_NEEDED` line in `prov.log` means an unattended upgrade installed a kernel
   newer than the running one: the host driver this run built will not survive a reboot. Either do not
   reboot that box, or reboot it and provision again.
@@ -159,7 +171,7 @@ for f in scripts/bench/provision_box.sh scripts/bench/box/provision_full.sh scri
 vx -b prov 'KAYFABE_BRANCH=<branch> bash /root/provision_full.sh'   # [measured mc20] 11.5 min to READY, no reboot
 vx 'grep -aE "_RC=|READY|REBOOT_NEEDED|^EXIT" /root/prov/prov.log'    # poll; done at the EXIT line
 vx -b mc 'bash /root/kayfabe/scripts/bench/box/merge_check.sh <branch> <tag>'                   # [measured mc20] 19 min
-vx 'grep -aE "^TESTS|RC=|SUMMARY|FAST_SUITE_PASS|^EXIT" /root/prov/<tag>.log'
+vx 'grep -aE "^KVM_TESTS|RC=|SUMMARY|FAST_SUITE_PASS|^EXIT" /root/prov/<tag>.log'
 ```
 
 - ⚠ **One `vx` request lasts at most ~100 s** (Cloudflare answers 524). The command keeps running on

@@ -1,0 +1,63 @@
+{
+  "written_utc": "2026-10-24T22:09:15.276836+00:00",
+  "authority": "COORD consolidated decision: re-preregister same lease57568731 as RM-derived GA104; tests-first operator-only correction.",
+  "id": 57568731,
+  "machine_id": 34087,
+  "host_id": 79466,
+  "actual_die": "GA104",
+  "arch_impl_revision": [
+    368,
+    4,
+    161
+  ],
+  "pci": "0x248710DE",
+  "driver": "595.91.07",
+  "module": "open",
+  "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "operator_fix": "24b9e62ca",
+  "expected_red": "7bbb5289e",
+  "tests": 31,
+  "binding_mutant_killers": [
+    3,
+    4,
+    3,
+    4
+  ],
+  "identity": {
+    "state": "match",
+    "fingerprints": [
+      "SHA256:dRCAMxPJSfxnhlydPq104Vrxc68H49U7szphqAnC/68"
+    ],
+    "expected_fingerprint": "SHA256:dRCAMxPJSfxnhlydPq104Vrxc68H49U7szphqAnC/68",
+    "console_sha256": "bdcda91dad02fc70221ea8fbb20c4f1408e1d04288db0c59dd43761bb2ef4288",
+    "polls": 1,
+    "wait_seconds": 3.0728502948768437,
+    "elapsed_since_create": 199.99537827679887,
+    "deadline_since_create": 436.92248400021344,
+    "transport_error": null,
+    "fingerprint": "SHA256:dRCAMxPJSfxnhlydPq104Vrxc68H49U7szphqAnC/68"
+  },
+  "ssh_verified": true,
+  "arch_impl": [
+    368,
+    4
+  ],
+  "native_hypothesis": "The current production instruments pass GA104 native binding, gates9/9+gate10 and bare30/30 on this exact box.",
+  "native_falsifier": "Binding inconsistency, any gate/bare failure, or unmatched Xid excludes this exact native cell; stop and capture, no kayfabe debugging.",
+  "guest_hypothesis": "After that exact native pass, production kf3 714ec29d3 passes fast30/30 with the same 180-second oracle.",
+  "guest_falsifier": "Any fast arm failure or unmatched Xid after this exact native pass is a kayfabe finding; no timeout changes or reruns.",
+  "flags": {
+    "KF_DEVICE": "kf3",
+    "KF_FROM_HOST": "1"
+  },
+  "bar1_host_mib": 256,
+  "bar1_policy": "Existing truthful harness default; no resize.",
+  "watchdog_pid": 3441128,
+  "fixed_deadline_utc": "2026-10-25T00:13:05.730077+00:00",
+  "budget_stop_usd": 2.5,
+  "budget_cap_usd": 3,
+  "reserve_usd": 8,
+  "no_fourth_lease": true,
+  "stopped_receipt": "actual_die_stop.json; original capture e15a3524dea282bac36efbd4dc21dc06dec13cc64a6a1f4d85a05be698459a93",
+  "original_forecast_preserved": true
+}

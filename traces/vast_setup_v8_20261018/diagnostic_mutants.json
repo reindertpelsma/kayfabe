@@ -1,0 +1,86 @@
+{
+  "run": "v7-diagnostic-mutants-20261023",
+  "tests": 26,
+  "cases": [
+    {
+      "mutant": "ownership-unchecked",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_missing_owned_id_is_refused",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_other_instance_is_refused"
+      ]
+    },
+    {
+      "mutant": "s3-host-unchecked",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_non_s3_amazon_is_refused",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_suffix_confusion_is_refused"
+      ]
+    },
+    {
+      "mutant": "authorization-header-leak",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_no_authorization_headers",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_provider_response_cannot_override_empty_request_headers"
+      ]
+    },
+    {
+      "mutant": "cookie-header-leak",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_no_cookie_headers",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_provider_response_cannot_override_empty_request_headers"
+      ]
+    },
+    {
+      "mutant": "wrong-timeout",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_regional_download_also_has_fixed_timeout",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_timeout_is_thirty_seconds"
+      ]
+    },
+    {
+      "mutant": "larger-size-cap",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_regional_download_also_has_fixed_timeout",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_timeout_is_thirty_seconds"
+      ]
+    },
+    {
+      "mutant": "redirect-followed",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_foreign_redirect_is_also_refused",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_redirect_handler_refuses"
+      ]
+    },
+    {
+      "mutant": "redirect-handler-omitted",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_default_opener_has_redirect_guard",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_default_opener_installs_an_instance_not_a_class"
+      ]
+    },
+    {
+      "mutant": "exception-detail-leaked",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_download_exception_hides_secret_url",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_error_text_contains_no_remote_body_or_credentials"
+      ]
+    },
+    {
+      "mutant": "normal-api-s3-expanded",
+      "count": 2,
+      "killers": [
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_normal_api_allowlist_stays_vast_only",
+        "test_vast_diagnostic_logs.DiagnosticLogs.test_regional_s3_does_not_expand_normal_api"
+      ]
+    }
+  ]
+}
