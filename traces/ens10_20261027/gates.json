@@ -1,0 +1,61 @@
+{
+  "run": "ENS10 GPU-free 2026-10-27",
+  "source": {
+    "source_commit": "a577f065966f0d347b2fac0370e2b9165100f24b",
+    "source_tree": "e1f9a98b2a253f476440047a7304d90c79e58264",
+    "seal_sha256": "9d754523879a9ede6394515311dab92139e7afc10686e3a57768a9ff78e77b63",
+    "file_count": 1168,
+    "scope": [
+      "crates/",
+      "qemu/",
+      "cuda/",
+      "firmware/",
+      ".cargo/",
+      "Cargo.lock",
+      "Cargo.toml",
+      "build.rs",
+      "rust-toolchain.toml"
+    ]
+  },
+  "clippy": {
+    "exit": 0,
+    "all_targets": true,
+    "packages": [
+      "kf-trap",
+      "kf-core",
+      "kf-chan",
+      "kf-qemu",
+      "kf-host",
+      "kf-mem"
+    ],
+    "new": 0,
+    "existing_debt": 289,
+    "gate": "clippy: existing-debt=289 new=0 resolved=243"
+  },
+  "fmt": {
+    "changed_rust_exit": 0,
+    "skip_children": true,
+    "workspace_exit": 1,
+    "inherited_differences": [
+      "crates/kf-chan/src/lib.rs module order",
+      "crates/kf-mem/src/lib.rs module order",
+      "crates/kf-harness/src/bin/kf-sparse-object-cost.rs tuple formatting"
+    ]
+  },
+  "line_width": {
+    "changed_rust_max": 100,
+    "pass_check": true
+  },
+  "claims": {
+    "new": 0,
+    "existing_debt": 3755,
+    "gate": "claims: existing-debt=3755 new=0 resolved=3"
+  },
+  "prototype": {
+    "file": "latency-prototype.rs",
+    "passed": 13,
+    "failed": 0,
+    "production_hooks": false,
+    "part_of_cargo_suite": false
+  }
+}

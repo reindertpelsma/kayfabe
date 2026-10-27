@@ -1,0 +1,17 @@
+{
+  "source_commit": "a577f065966f0d347b2fac0370e2b9165100f24b",
+  "source_tree": "e1f9a98b2a253f476440047a7304d90c79e58264",
+  "seal_sha256": "9d754523879a9ede6394515311dab92139e7afc10686e3a57768a9ff78e77b63",
+  "file_count": 1168,
+  "scope": [
+    "crates/",
+    "qemu/",
+    "cuda/",
+    "firmware/",
+    ".cargo/",
+    "Cargo.lock",
+    "Cargo.toml",
+    "build.rs",
+    "rust-toolchain.toml"
+  ]
+}

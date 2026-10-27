@@ -1,0 +1,22 @@
+{
+  "mutation-source-sha256.json": {
+    "exact_match": true,
+    "files": {
+      "crates/kf-qemu/src/mem/walk_scope.rs": true,
+      "crates/kf-qemu/src/userpump.rs": true,
+      "crates/kf-qemu/src/device.rs": true,
+      "crates/kf-mem/src/vasmgr.rs": true,
+      "crates/kf-qemu/src/mem.rs": true,
+      "crates/kf-qemu/src/mem/walk_gate_tests.rs": true,
+      "crates/kf-qemu/src/mem/walk_relay_model.rs": true,
+      "crates/kf-chan/tests/lifecycle_support/mod.rs": true
+    }
+  },
+  "slice-mutation-source.json": {
+    "exact_match": true,
+    "files": {
+      "crates/kf-host/src/sparse.rs": true,
+      "crates/kf-host/src/sparse/ens10_tests.rs": true
+    }
+  }
+}

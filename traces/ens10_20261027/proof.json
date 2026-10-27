@@ -1,0 +1,113 @@
+{
+  "run": "ENS10 GPU-free 2026-10-27",
+  "source": {
+    "source_commit": "a577f065966f0d347b2fac0370e2b9165100f24b",
+    "source_tree": "e1f9a98b2a253f476440047a7304d90c79e58264",
+    "seal_sha256": "9d754523879a9ede6394515311dab92139e7afc10686e3a57768a9ff78e77b63",
+    "file_count": 1168,
+    "scope": [
+      "crates/",
+      "qemu/",
+      "cuda/",
+      "firmware/",
+      ".cargo/",
+      "Cargo.lock",
+      "Cargo.toml",
+      "build.rs",
+      "rust-toolchain.toml"
+    ]
+  },
+  "red": [
+    {
+      "commit": "309124774",
+      "log": "red-scope.log",
+      "failed": 4,
+      "passed": 2
+    },
+    {
+      "commit": "d6d556d9c",
+      "log": "applied-red.log",
+      "failed": 2,
+      "passed": 2
+    },
+    {
+      "commit": "8a720f118",
+      "log": "handoff-red.log",
+      "failed": 4,
+      "passed": 39
+    },
+    {
+      "commit": "ca9fcbd57",
+      "log": "slice-red.log",
+      "failed": 4,
+      "passed": 0
+    }
+  ],
+  "baseline_completion_hypothesis_falsified": {
+    "log": "baseline-completion.log",
+    "passed": 2
+  },
+  "focused": {
+    "log": "handoff-green.log",
+    "passed": 62,
+    "failed": 0
+  },
+  "model": {
+    "graphs": [
+      "splits",
+      "applied_statements"
+    ],
+    "states_each": 266810,
+    "terminals_each": 1076,
+    "frontier_cap": 4000000,
+    "inconclusive_is_failure": true,
+    "fair_suffix_every_prefix": true,
+    "fair_suffix_steps": 1024,
+    "seeds": 256,
+    "replays_per_seed": 2,
+    "coverage": [
+      "Scan",
+      "Pointer",
+      "Window",
+      "migration",
+      "CreditWait"
+    ],
+    "latency": {
+      "bound": 3,
+      "unit": "fresh fair worker steps",
+      "scope": "already host-finished marker/GET under own and foreign holds",
+      "not_proven": [
+        "all phases",
+        "OS wall time",
+        "Windows IRQ",
+        "GPU progress under permanent stalls"
+      ]
+    }
+  },
+  "mutations": {
+    "scope": 24,
+    "slice": 5,
+    "compile_errors_counted": 0,
+    "source_composition_only": [
+      "drop_before_apply_ready_wake",
+      "bypass_publication_gate",
+      "bypass_migration_gate"
+    ],
+    "min_failing_tests_each": 2
+  },
+  "remaining": [
+    "same-space range admission",
+    "multi-target prefix release",
+    "hard total apply/gate wall-time bound",
+    "host RM path attribution for boot 7391",
+    "hardware validation",
+    "owner latency-decomposition instrumentation (design only)"
+  ],
+  "prototype": {
+    "file": "latency-prototype.rs",
+    "passed": 13,
+    "failed": 0,
+    "production_hooks": false,
+    "part_of_cargo_suite": false
+  }
+}

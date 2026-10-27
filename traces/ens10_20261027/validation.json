@@ -1,0 +1,769 @@
+{
+  "run": "ENS10 GPU-free 2026-10-27",
+  "source": {
+    "source_commit": "a577f065966f0d347b2fac0370e2b9165100f24b",
+    "source_tree": "e1f9a98b2a253f476440047a7304d90c79e58264",
+    "seal_sha256": "9d754523879a9ede6394515311dab92139e7afc10686e3a57768a9ff78e77b63",
+    "file_count": 1168,
+    "scope": [
+      "crates/",
+      "qemu/",
+      "cuda/",
+      "firmware/",
+      ".cargo/",
+      "Cargo.lock",
+      "Cargo.toml",
+      "build.rs",
+      "rust-toolchain.toml"
+    ]
+  },
+  "command": "CARGO_TARGET_DIR=/workspace/shared-target nice -n 19 cargo test --release -j2 -p kf-trap -p kf-core -p kf-chan -p kf-qemu -p kf-host -p kf-mem --locked -- --test-threads=1",
+  "exit_code": 0,
+  "groups": {
+    "kf_chan": {
+      "passed": 700,
+      "failed": 0,
+      "ignored": 4,
+      "targets": 27
+    },
+    "kf_core": {
+      "passed": 50,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 2
+    },
+    "kf_host": {
+      "passed": 327,
+      "failed": 0,
+      "ignored": 3,
+      "targets": 4
+    },
+    "kf_mem": {
+      "passed": 606,
+      "failed": 0,
+      "ignored": 7,
+      "targets": 16
+    },
+    "kf_qemu": {
+      "passed": 648,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 22
+    },
+    "kf_trap": {
+      "passed": 111,
+      "failed": 0,
+      "ignored": 0,
+      "targets": 5
+    }
+  },
+  "targets": [
+    {
+      "target": "kf_chan library",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 214,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.07
+    },
+    {
+      "target": "kf_chan Running tests/channel_formats_vs_ogkm.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_chan Running tests/copy_ring_birth_seed.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/dbfast_bench.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/dbfast_exhaust.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.09
+    },
+    {
+      "target": "kf_chan Running tests/dbfast_kvm.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.89
+    },
+    {
+      "target": "kf_chan Running tests/handoff_protocol.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 1.34
+    },
+    {
+      "target": "kf_chan Running tests/notifiers_vs_ogkm.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_chan Running tests/relay_fairness.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 35,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 71.48
+    },
+    {
+      "target": "kf_chan Running tests/ring.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/tmode.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.06
+    },
+    {
+      "target": "kf_chan Running tests/translated_rewrite.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/user_consumption_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/user_gate_rules.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.27
+    },
+    {
+      "target": "kf_chan Running tests/user_lazy_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.02
+    },
+    {
+      "target": "kf_chan Running tests/user_lazy_turn.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_chan Running tests/user_lifecycle_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 75,
+      "failed": 0,
+      "ignored": 3,
+      "seconds": 607.33
+    },
+    {
+      "target": "kf_chan Running tests/user_lifecycle_props.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 5.6
+    },
+    {
+      "target": "kf_chan Running tests/user_lifecycle_stress.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 13.04
+    },
+    {
+      "target": "kf_chan Running tests/user_loop_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 78.79
+    },
+    {
+      "target": "kf_chan Running tests/user_loop_model_v2.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 53,
+      "failed": 0,
+      "ignored": 1,
+      "seconds": 250.39
+    },
+    {
+      "target": "kf_chan Running tests/user_loop_model_v3_pointer.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 1.26
+    },
+    {
+      "target": "kf_chan Running tests/user_progress_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/user_ring_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/user_stream_model.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan Running tests/user_turn_unit.rs",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_core library",
+      "group": "kf_core",
+      "status": "ok",
+      "passed": 50,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_host library",
+      "group": "kf_host",
+      "status": "ok",
+      "passed": 317,
+      "failed": 0,
+      "ignored": 3,
+      "seconds": 19.46
+    },
+    {
+      "target": "kf_host Running tests/channel_birth_bound.rs",
+      "group": "kf_host",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.09
+    },
+    {
+      "target": "kf_host Running tests/reserve_flags.rs",
+      "group": "kf_host",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem library",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 205,
+      "failed": 0,
+      "ignored": 3,
+      "seconds": 13.5
+    },
+    {
+      "target": "kf_mem Running tests/audit_all_pdb_chunks.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/breaker_ledger_cost.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.02
+    },
+    {
+      "target": "kf_mem Running tests/breaker_sparse_walks.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 1,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/ens3.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 21,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/ens5_diagnostics.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/ens5_sparse.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 219,
+      "failed": 0,
+      "ignored": 3,
+      "seconds": 19.51
+    },
+    {
+      "target": "kf_mem Running tests/gatelog.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 69,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.02
+    },
+    {
+      "target": "kf_mem Running tests/secaudit_all_pdb_over_64_spaces.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/sparse_apply.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 29,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/sparse_leaf.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/store_is_a_bounds_check.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/vahist.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.02
+    },
+    {
+      "target": "kf_mem Running tests/walk_format_vs_ogkm.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem Running tests/walker_sparse_decode.rs",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.07
+    },
+    {
+      "target": "kf_qemu library",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 487,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 119.02
+    },
+    {
+      "target": "kf_qemu Running tests/bar0_trace_gate.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/channel_budget_lazy.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.02
+    },
+    {
+      "target": "kf_qemu Running tests/copy_birth_policy.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/doorbell_no_put_poll.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/ens3_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/ens5_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/ens6_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/ens7_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/gatelog_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_qemu Running tests/gop_rom_knobs.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.04
+    },
+    {
+      "target": "kf_qemu Running tests/gpu_uuid_property.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/kf3_realize_discard.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/max_fps_property.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/mirror_refusal_log_bounded.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/timeslice.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 37,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/timeslice_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_qemu Running tests/timeslice_mirror.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/tsgfacts.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/vahist_hooks.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu Running tests/wire_mirror.rs",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.15
+    },
+    {
+      "target": "kf_trap library",
+      "group": "kf_trap",
+      "status": "ok",
+      "passed": 86,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.73
+    },
+    {
+      "target": "kf_trap Running tests/doorbell_contract.rs",
+      "group": "kf_trap",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.01
+    },
+    {
+      "target": "kf_trap Running tests/hw_boundary_vs_ogkm.rs",
+      "group": "kf_trap",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_trap Running tests/memory_map.rs",
+      "group": "kf_trap",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_chan doc-tests",
+      "group": "kf_chan",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_core doc-tests",
+      "group": "kf_core",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_host doc-tests",
+      "group": "kf_host",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_mem doc-tests",
+      "group": "kf_mem",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_qemu doc-tests",
+      "group": "kf_qemu",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    },
+    {
+      "target": "kf_trap doc-tests",
+      "group": "kf_trap",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 0.0
+    }
+  ],
+  "totals": {
+    "passed": 2442,
+    "failed": 0,
+    "ignored": 14
+  },
+  "target_count": 76,
+  "ignored": [
+    "test a6_open_a_rebind_in_pointer_mode_is_not_known_to_the_window ... ignored, OPEN: a rebind of the software subchannel while in Pointer mode is invisible; a later trigger on the new subchannel is missed (Open question 5)",
+    "test b_open_continued_indices_need_the_new_gp_put_preset_before_the_switch ... ignored, OPEN: if the indices continue across the growth, the new USERD's GP_PUT must already hold the continued value when the relay switches (Open question 4)",
+    "test i6_open_pointer_mode_credit_waits_need_no_look ... ignored, OPEN: Pointer mode cannot announce private-ring credit without a marker (Open question 1)",
+    "test p10_publish_reads_back_before_the_native_doorbell ... ignored, OPEN (EXPECTED RED since the previous commit): owner decision on a read-back before the private doorbell; docs/design/V3_USER_RING_EVENT_LOOP_20261014.md section 9.2",
+    "test sparse::tests::breaker_cost_scaling_table ... ignored, Obsolete helper requires occupied admission Err, contrary to ENS5 counted Ok(false); equivalent admission timing and scaling covered by ens5 regressions.",
+    "test sparse::tests::breaker_i2_backed_to_sparse_has_a_plain_invalid_window_until_the_next_walk ... ignored, Bookkeeping-only mark has no RM Ops; actual apply now retries before invalidate, covered by ens5 vidmem/dma same-apply tests. Changed VAs may fault during refresh.",
+    "test sparse::tests::breaker_i4_refused_admission_at_a_full_tree_is_cheap ... ignored, Obsolete helper requires occupied admission Err, contrary to ENS5 counted Ok(false); equivalent admission timing and scaling covered by ens5 regressions.",
+    "test sim::adversarial::adversarial_debug_replay ... ignored, debug replay",
+    "test sim::fuzz::hostile_rows_replay ... ignored, debug replay",
+    "test sim::tests::property_debug_replay ... ignored, debug replay: KF_SIM_SEED, KF_SIM_FAULT=every,after, KF_SIM_BATCH, KF_SIM_LOW",
+    "test breaker_i4_a_refused_sparse_run_is_re_admitted_on_every_walk ... ignored, Stateless apply_entry fixture bypasses the lifetime-owning HostRm cache and walker ACKs; actual host model plus apply/ACK refresh regressions cover this without a pointer-key cache.",
+    "test host_sparse::tests::breaker_cost_scaling_table ... ignored, Obsolete helper requires occupied admission Err, contrary to ENS5 counted Ok(false); equivalent admission timing and scaling covered by ens5 regressions.",
+    "test host_sparse::tests::breaker_i2_backed_to_sparse_has_a_plain_invalid_window_until_the_next_walk ... ignored, Bookkeeping-only mark has no RM Ops; actual apply now retries before invalidate, covered by ens5 vidmem/dma same-apply tests. Changed VAs may fault during refresh.",
+    "test host_sparse::tests::breaker_i4_refused_admission_at_a_full_tree_is_cheap ... ignored, Obsolete helper requires occupied admission Err, contrary to ENS5 counted Ok(false); equivalent admission timing and scaling covered by ens5 regressions."
+  ],
+  "log_sha256": "539f42aa06540af77e7ef05e5fd2dc48bb18cb7c4a7a89b579f15f0c4578afef"
+}

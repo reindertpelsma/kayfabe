@@ -1,0 +1,57 @@
+[
+  {
+    "name": "slice_cleanup_bypass",
+    "exit": 101,
+    "kills": 2,
+    "tests": [
+      "sparse::tests::ens10_failed_eight_tile_admission_defers_cleanup_after_slice",
+      "sparse::tests::ens10_failed_twenty_tile_admission_keeps_bounded_cleanup_and_resumes"
+    ],
+    "compile_error": false,
+    "sha256": "1cbad7381db47f651042e2ca926f94e5070d0b90d48c12ad896ff097c9da4ead"
+  },
+  {
+    "name": "slice_drop_cleanup_queue",
+    "exit": 101,
+    "kills": 2,
+    "tests": [
+      "sparse::tests::ens10_failed_eight_tile_admission_defers_cleanup_after_slice",
+      "sparse::tests::ens10_failed_twenty_tile_admission_keeps_bounded_cleanup_and_resumes"
+    ],
+    "compile_error": false,
+    "sha256": "557e98effc1ee2637e37bddfb2f8ab3301c7f0347dcc39e9f06bab25f32f4a5f"
+  },
+  {
+    "name": "slice_start_children_after_deadline",
+    "exit": 101,
+    "kills": 2,
+    "tests": [
+      "sparse::tests::ens10_slow_release_defers_first_child_and_restores_original",
+      "sparse::tests::ens10_slow_release_does_not_start_three_child_replacement"
+    ],
+    "compile_error": false,
+    "sha256": "d8c14c155563f05fd14a381089caf0e681848265b795b0eb7960eef7c44bdf4a"
+  },
+  {
+    "name": "slice_deferral_is_refusal",
+    "exit": 101,
+    "kills": 2,
+    "tests": [
+      "sparse::tests::ens10_slow_release_defers_first_child_and_restores_original",
+      "sparse::tests::ens10_slow_release_does_not_start_three_child_replacement"
+    ],
+    "compile_error": false,
+    "sha256": "f8ac85df9b2f931a78fc5c8f8ba00499fc2a88b2a0d28bba2233ffdb463ced1f"
+  },
+  {
+    "name": "slice_sparsify_defer_is_error",
+    "exit": 101,
+    "kills": 2,
+    "tests": [
+      "sparse::tests::ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses",
+      "sparse::tests::ens7_twenty_thousand_tiles_are_honoured_for_eight_gib"
+    ],
+    "compile_error": false,
+    "sha256": "6886a17c8e741fb4c97966aff3d9cbe798d5dfa4bb70b113d9bf847ced8792f2"
+  }
+]

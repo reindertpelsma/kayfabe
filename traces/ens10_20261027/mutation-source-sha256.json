@@ -1,0 +1,10 @@
+{
+  "crates/kf-qemu/src/mem/walk_scope.rs": "077815c40f3b7ee259ff8d8335ee6161c7592a3a9c54b309775b82e5b6bd1f03",
+  "crates/kf-qemu/src/userpump.rs": "c0e023a8a33ffba1bf7bf7a084e7f19e97ecb8d4d84b948ed41aaac472c584bb",
+  "crates/kf-qemu/src/device.rs": "25d216d9016b950737f17d12060a50200c55e3cbf278c634fe4228a10c270283",
+  "crates/kf-mem/src/vasmgr.rs": "b083239ce31ff46de453b2cd037f30eb9e2e88df5f8ad29f85c140a9097cffd8",
+  "crates/kf-qemu/src/mem.rs": "c5eade2355a9bcd336e5443a45b73dd8b937aac2412243df9b51b2a3008bb40c",
+  "crates/kf-qemu/src/mem/walk_gate_tests.rs": "b1ffb50b9907d236679d570ca4357437e4f61b36d626ca86b2afe1482b7dcded",
+  "crates/kf-qemu/src/mem/walk_relay_model.rs": "6de591824d1838e23dff26c4d1cae0a8aa68b34994349ae65850f018ba796a95",
+  "crates/kf-chan/tests/lifecycle_support/mod.rs": "f93a3b7a2bd336d6f4702fe5200de14415284cd26dc03971612cf12c3b01dca1"
+}
