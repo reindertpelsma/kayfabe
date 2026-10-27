@@ -50,6 +50,11 @@ pub(super) struct Span {
     pub start: u64,
     pub end: u64,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum NotificationSource {
+    Normal,
+    Storm,
+}
 #[derive(Debug, Clone)]
 pub(super) struct Sample {
     pub stream: u64,
@@ -63,6 +68,7 @@ pub(super) struct Sample {
     pub gpu: Option<u64>,
     pub vector: Option<u32>,
     pub raised: Option<u64>,
+    pub source: Option<NotificationSource>,
     pub waits: Vec<Wait>,
     pub worker: u64,
     pub cookie: u64,
@@ -174,6 +180,15 @@ impl State {
             }
         }
         self.finish(at);
+    }
+    pub fn notify_source(
+        &mut self,
+        vector: u32,
+        at: u64,
+        success: bool,
+        _source: NotificationSource,
+    ) {
+        self.notify(vector, at, success);
     }
     pub fn notify(&mut self, vector: u32, at: u64, success: bool) {
         if !success {

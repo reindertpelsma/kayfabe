@@ -542,6 +542,7 @@ impl Tracker {
             gpu: None,
             vector: self.vector,
             raised: None,
+            source: None,
             waits: self.waits.clone(),
             worker: self.worker,
             cookie: 0,
@@ -839,4 +840,44 @@ pub fn split_taken(ticket: u64) {
 /// Reset/retirement abandoned an old ticket; no completion is inferred.
 pub fn split_canceled(ticket: u64) {
     split_update(|s, _| s.cancel(ticket));
+}
+
+fn context_key(w: &Span, start: u64, end: u64) -> std::cmp::Reverse<(u8, u64)> {
+    std::cmp::Reverse((0, w.end.min(end).saturating_sub(w.start.max(start))))
+}
+#[cfg(test)]
+mod context_tests {
+    use super::*;
+    #[test]
+    fn ens11_rm_operation_is_not_hidden_by_its_longer_parent_iteration() {
+        let parent = Span {
+            code: 1,
+            start: 0,
+            end: 100,
+            ..Span::default()
+        };
+        let rm = Span {
+            code: 64,
+            start: 20,
+            end: 80,
+            ..Span::default()
+        };
+        assert!(context_key(&rm, 0, 100) < context_key(&parent, 0, 100));
+    }
+    #[test]
+    fn ens11_named_lock_owner_is_not_hidden_by_the_va_loop_scope() {
+        let parent = Span {
+            code: 7,
+            start: 0,
+            end: 100,
+            ..Span::default()
+        };
+        let held = Span {
+            code: 14,
+            start: 25,
+            end: 75,
+            ..Span::default()
+        };
+        assert!(context_key(&held, 0, 100) < context_key(&parent, 0, 100));
+    }
 }

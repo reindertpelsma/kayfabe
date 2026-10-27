@@ -13,6 +13,7 @@ fn sample(stream: u64, kind: Kind, marker: Option<u64>) -> Sample {
         gpu: None,
         vector: Some(19),
         raised: None,
+        source: None,
         waits: vec![],
         worker: 1,
         cookie: 0,
@@ -203,4 +204,27 @@ fn ens11_missing_gpu_time_stays_unknown_on_private_ring() {
     st.marker(1, 1, 90 * MS, None);
     assert_eq!(st.marker_unknown, 1);
     assert_eq!(st.gauges[3].count, 0);
+}
+
+#[test]
+fn ens11_normal_notification_source_is_preserved_in_a_slow_packet() {
+    let mut st = State::default();
+    st.publish(sample(1, Kind::User, Some(1)));
+    st.marker(1, 1, 30 * MS, None);
+    st.notify_source(19, 90 * MS, true, NotificationSource::Normal);
+    assert_eq!(
+        st.slow.back().unwrap().source,
+        Some(NotificationSource::Normal)
+    );
+}
+#[test]
+fn ens11_irqstorm_notification_is_identified_without_claiming_packet_causality() {
+    let mut st = State::default();
+    st.publish(sample(1, Kind::Translated, Some(1)));
+    st.marker(1, 1, 30 * MS, None);
+    st.notify_source(19, 90 * MS, true, NotificationSource::Storm);
+    assert_eq!(
+        st.slow.back().unwrap().source,
+        Some(NotificationSource::Storm)
+    );
 }

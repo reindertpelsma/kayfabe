@@ -78,6 +78,23 @@ impl Journal {
 mod tests {
     use super::*;
     #[test]
+    fn ens11_atomic_journal_sequence_exhaustion_is_terminal() {
+        let j = Journal::default();
+        j.next.store(u64::MAX, Relaxed);
+        j.push([7; 7]);
+        assert_eq!(j.next.load(Relaxed), u64::MAX);
+        assert_eq!(j.lost.load(Relaxed), 1);
+        assert!(j.read().is_empty());
+    }
+    #[test]
+    fn ens11_atomic_journal_version_encoding_never_wraps_into_an_old_sequence() {
+        let j = Journal::default();
+        j.next.store(u64::MAX / 2, Relaxed);
+        j.push([8; 7]);
+        assert_eq!(j.lost.load(Relaxed), 1);
+        assert!(j.read().is_empty());
+    }
+    #[test]
     fn ens11_atomic_irq_journal_retains_exact_last_capacity_without_allocation_by_writers() {
         let j = Journal::default();
         for n in 0..1000 {
