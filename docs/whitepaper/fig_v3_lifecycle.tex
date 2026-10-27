@@ -1,19 +1,18 @@
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[node distance=15mm]
+\begin{tikzpicture}[node distance=20mm]
 \node[concept] (scan) {Scan\\inspect packets};
 \node[concept,right=of scan] (pointer) {Pointer\\forward references};
-\node[concept,below=22mm of pointer] (window) {Window\\inspect registration span};
-\draw[flow] (scan) -- node[above=8mm,align=center,font=\scriptsize,text width=30mm]
-  {software binding known; no registration} (pointer);
-\draw[flow] (pointer) -- node[right,align=left,font=\scriptsize,text width=35mm]
-  {registration becomes live} (window);
-\draw[flow] (window.west) -| node[below,pos=0.25,align=center,font=\scriptsize,
-  text width=37mm] {registration gone; binding retained} (pointer.south west);
-\draw[flow,dashed] (scan.south) |- node[below,pos=0.65,align=center,font=\scriptsize,
-  text width=35mm] {binding known with registration live} (window.west);
+\node[concept,right=of pointer] (window) {Window\\inspect registration span};
+\draw[flow] (scan) -- node[above=8mm,align=center,font=\scriptsize,text width=32mm]
+  {binding known; no registration} (pointer);
+\draw[flow] (pointer) -- node[above=8mm,align=center,font=\scriptsize,text width=32mm]
+  {registration live at the anchor} (window);
+\draw[flow] (window.south) -- ++(0,-15mm) -| (pointer.south);
+\node[below=18mm of pointer,align=center,font=\scriptsize,text width=60mm]
+  {return only when registration is gone and the relay is quiescent};
 \end{tikzpicture}
-\caption{Simplified lifecycle. Window return needs the registration and packet-boundary rules;
-  root or ring changes retain separate lifetime checks.\src{lifecycle}}
+\caption{Main lifecycle path; direct Scan-to-Window and teardown edges are omitted.
+  Registration and packet-boundary rules govern each transition.\src{lifecycle}}
 \label{fig:lifecycle}
 \end{figure}
