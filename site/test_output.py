@@ -236,6 +236,10 @@ class LandingAndDocsIndex(unittest.TestCase):
         self.assertIn(">View and edit source on GitHub</a>", page)
         faq = (book / "FAQ.html").read_text()
         self.assertIn("/edit/master/docs/FAQ.md", faq)
+        goals = (book / "goals.html").read_text()
+        self.assertIn("Goals and plans", goals)
+        self.assertIn("/edit/master/docs/howto/goals.md", goals)
+        self.assertIn("only QEMU is supported", goals)
         self.assertIn('class="kf-label kf-measured"', (book / "windows-guest.html").read_text())
         self.assertIn('class="kf-gap"', (book / "security.html").read_text())
 
