@@ -1,18 +1,18 @@
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[font=\small,
-  step/.style={draw,rounded corners,align=left,text width=120mm,inner sep=3mm},
+  rung/.style={draw,rounded corners,align=left,text width=120mm,inner sep=3mm},
   flow/.style={-{Latex[length=2mm]},thick}]
-\node[step,fill=green!5] (native) at (0,0)
+\node[rung,fill=green!5] (native) at (0,0)
   {\textbf{1. Native behaviour + public mechanism}\\Same-die native control asks what the
    driver accepts. Open headers or a computation explain the answer.};
-\node[step,fill=blue!5] (host) at (0,-2.0)
+\node[rung,fill=blue!5] (host) at (0,-2.0)
   {\textbf{2. Host-derived answer}\\Use an authored read-only request through the host's
    non-privileged interface; filter for virtual-device support.};
-\node[step,fill=yellow!8] (capture) at (0,-4.0)
+\node[rung,fill=yellow!8] (capture) at (0,-4.0)
   {\textbf{3. Exact-die / driver measurement or capture}\\A captured reply is a scoped
    observation, not a family rule. No board-specific bytes become a product table.};
-\node[step,fill=red!6] (fallback) at (0,-6.0)
+\node[rung,fill=red!6] (fallback) at (0,-6.0)
   {\textbf{4. Last resort: tested refusal / reduced mode}\\State what cannot be supplied.
    Demonstrate the fallback on applications; do not borrow a neighbour's answer.};
 \draw[flow] (native) -- (host);
