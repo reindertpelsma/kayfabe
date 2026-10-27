@@ -379,3 +379,173 @@ fn hostile_vector_ids_cannot_index_the_tree_or_steal_real_status() {
     assert_eq!(s.raises.load(Ordering::Relaxed), 1);
     assert_eq!(image(&t), before);
 }
+
+fn late_sender(v: u32) {
+    let s = storm(1);
+    let t = tree(&[v]);
+    let g = Gate::default();
+    let clock = AtomicU64::new(0);
+    s.tick(
+        || clock.load(Ordering::Relaxed),
+        &g,
+        &t,
+        [v],
+        || {
+            clock.store(10 * MS, Ordering::Relaxed);
+            true
+        },
+    );
+    assert_eq!(s.raises.load(Ordering::Relaxed), 1);
+    s.tick(|| clock.load(Ordering::Relaxed), &g, &t, [v], || true);
+    assert_eq!(
+        s.raises.load(Ordering::Relaxed),
+        1,
+        "cooldown follows actual send completion"
+    );
+    clock.store(11 * MS, Ordering::Relaxed);
+    s.tick(|| clock.load(Ordering::Relaxed), &g, &t, [v], || true);
+    assert_eq!(s.raises.load(Ordering::Relaxed), 2);
+}
+#[test]
+fn a_delayed_gr_sender_does_not_create_a_catch_up_message() {
+    late_sender(0);
+}
+#[test]
+fn a_delayed_ce_sender_does_not_create_a_catch_up_message() {
+    late_sender(70);
+}
+fn overlap(v: u32) {
+    let s = storm(1);
+    let t = tree(&[v]);
+    let g = Gate::default();
+    let clock = AtomicU64::new(0);
+    let nested = AtomicUsize::new(0);
+    s.tick(
+        || clock.load(Ordering::Relaxed),
+        &g,
+        &t,
+        [v],
+        || {
+            clock.store(10 * MS, Ordering::Relaxed);
+            s.tick(
+                || clock.load(Ordering::Relaxed),
+                &g,
+                &t,
+                [v],
+                || {
+                    nested.fetch_add(1, Ordering::Relaxed);
+                    true
+                },
+            );
+            true
+        },
+    );
+    assert_eq!(
+        nested.load(Ordering::Relaxed),
+        0,
+        "a sender already owns the emission slot"
+    );
+    assert_eq!(s.raises.load(Ordering::Relaxed), 1);
+}
+#[test]
+fn an_in_progress_gr_message_excludes_another_timer_sender() {
+    overlap(0);
+}
+#[test]
+fn an_in_progress_ce_message_excludes_another_timer_sender() {
+    overlap(70);
+}
+fn failed_send(v: u32) {
+    let s = storm(1);
+    let t = tree(&[v]);
+    let g = Gate::default();
+    s.tick(|| 0, &g, &t, [v], || false);
+    assert_eq!(s.raises.load(Ordering::Relaxed), 0);
+    s.tick(|| 0, &g, &t, [v], || panic!("failed writes cannot spin"));
+    s.tick(|| MS, &g, &t, [v], || true);
+    assert_eq!(s.raises.load(Ordering::Relaxed), 1);
+}
+#[test]
+fn failed_gr_eventfd_writes_are_not_counted_as_raises() {
+    failed_send(0);
+}
+#[test]
+fn failed_ce_eventfd_writes_are_not_counted_as_raises() {
+    failed_send(70);
+}
+fn off_sequence(period: Option<&str>) {
+    let s = Config::parse(period, Some("all")).unwrap().map(Storm::new);
+    assert!(timer_interval(false, s.as_ref()).is_none());
+    let t = tree(&[0]);
+    let g = Gate::default();
+    let mut actual = Vec::new();
+    if t.latch(0) == Raise::Message {
+        actual.push("real");
+    }
+    t.write(Reg::Leaf(0), 1);
+    let before = image(&t);
+    for now in 0..100 {
+        if let Some(s) = &s {
+            s.tick(
+                || now * MS,
+                &g,
+                &t,
+                [0],
+                || {
+                    actual.push("storm");
+                    true
+                },
+            );
+        }
+    }
+    assert_eq!(actual, ["real"]);
+    assert_eq!(image(&t), before);
+    assert_eq!(s.as_ref().map_or_else(String::new, Storm::summary), "");
+}
+#[test]
+fn unset_preserves_the_real_interrupt_event_sequence() {
+    off_sequence(None);
+}
+#[test]
+fn explicit_zero_preserves_the_real_interrupt_event_sequence() {
+    off_sequence(Some("0"));
+}
+#[test]
+fn maximum_period_is_checked_even_with_explicit_all_mode() {
+    assert_eq!(
+        Config::parse(Some("1001"), Some("all")),
+        Err(Invalid::Period)
+    );
+}
+#[test]
+fn a_valid_long_period_does_not_authorize_an_unknown_mode() {
+    assert_eq!(
+        Config::parse(Some("1000"), Some("random")),
+        Err(Invalid::Mode)
+    );
+}
+#[test]
+fn normal_probe_timer_cadence_is_unchanged_with_no_storm() {
+    assert_eq!(
+        timer_interval(true, None),
+        Some(std::time::Duration::from_millis(100))
+    );
+    assert_eq!(timer_interval(false, None), None);
+}
+#[test]
+fn storm_timer_shares_the_probe_thread_without_enabling_channel_probes() {
+    let s = storm(17);
+    assert_eq!(
+        timer_interval(false, Some(&s)),
+        Some(std::time::Duration::from_millis(17))
+    );
+    let s = storm(1000);
+    assert_eq!(
+        timer_interval(false, Some(&s)),
+        Some(std::time::Duration::from_millis(1000))
+    );
+    assert_eq!(
+        timer_interval(true, Some(&s)),
+        Some(std::time::Duration::from_millis(100))
+    );
+}
