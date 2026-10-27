@@ -107,8 +107,10 @@ impl PrivRing {
             return Push::Dropped;
         }
         loop {
-            let tail = self.tail.load(Ordering::Acquire);
+            // Read the consumer first: a stale tail followed by a newer head
+            // would wrap the distance and poison a ring which is not full.
             let head = self.head.load(Ordering::Acquire);
+            let tail = self.tail.load(Ordering::Acquire);
             if tail.wrapping_sub(head) >= CAPACITY as u64 {
                 // ⊘ FULL ⇒ poison, having claimed NOTHING.
                 self.poisoned.store(true, Ordering::Release);

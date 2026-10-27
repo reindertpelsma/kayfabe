@@ -419,6 +419,8 @@ class Navigation(unittest.TestCase):
         self.assertIn('aria-label="Breadcrumb"', out)
         self.assertIn("Reference", out)
         self.assertIn("/edit/master/docs/howto/security.md", out)
+        self.assertIn(">View and edit source on GitHub</a>", out)
+        self.assertNotIn("Edit this page", out)
         self.assertIn('rel="prev" href="nested.html"', out)
         self.assertIn('rel="next" href="FAQ.html"', out)
         self.assertIn('<body><a class="skip-link"', out)

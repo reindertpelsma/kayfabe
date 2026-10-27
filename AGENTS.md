@@ -53,6 +53,15 @@ is frozen (see *Layout*).
   - A correction is folded into its parent, **above** the text it corrects.
   - A supersession is recorded **in** the superseded text, not only in its successor.
 
+## Branches and merging
+
+- **Open PRs against `next`**, not `master`. `next` requires only `CI`. Master requires `CI` and
+  `gpu-vast`, so the real-GPU gate runs once, on the batch PR `next` -> master (merge commit), on the
+  exact final tree. Merge commits (or squash for docs/site PRs that cite no revision); rebase is off.
+  Read master as one line per PR/batch with `git log --first-parent master`.
+- Break-glass: the owner may bypass the required `gpu-vast` check on one PR (rare, e.g. a broken gate
+  runner); no other exceptions.
+
 ## Working rules — hypotheses, models, sessions
 
 - **Correctness before cost.** A wrong hypothesis or a week spent on something irrelevant costs far more

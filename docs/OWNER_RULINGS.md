@@ -1389,3 +1389,18 @@ Owner, 2026-10-25 ("we dont make SaaS"):
    custody and spend/abuse. See `ci/vast-broker/docs/THREAT_MODEL.md` ("Why a Worker (and when not)").
 5. **Budget:** the daily Vast budget is raised to **12 USD for 2026-10-25**; the **8 USD credit reserve is kept**.
    Per-lane stops live in the lane files.
+
+## §AO. Goals recorded for the public goals page: hypervisor independence, arm64, multi-GPU, 2026-10-27
+
+Recorded 2026-10-27 from the owner's instructions of 2026-10-22 (roadmap order) and 2026-10-27 (the goals page), so the
+public page `docs/howto/goals.md` has a repository source for each item. These are goals, not commitments.
+
+1. **Hypervisor independence is a goal, not implemented.** The core is VMM-agnostic by design (`design/THE_ARCHITECTURE_v3.md`
+   version-axis table, row V; `design/THE_DESIGN.md`), and only QEMU is supported today. The long-term goal is to run
+   under other hypervisors, which needs a shim for each.
+2. **Order after the families (owner, 2026-10-22):** all GPU families first, Blackwell included. Then multi-GPU
+   guests (several kf3 devices in one guest, on Windows too, and choosing which GPU serves the display), and arm64
+   (see §K for the aarch64 rulings already made). Neither is started before the family matrix is green.
+3. **What is measured for multi-GPU** stays as `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two
+   distinct GPUs. CUDA in a two-GPU guest, UVM across GPUs, peer access (refused by name) and Windows or display
+   with several GPUs are not measured.

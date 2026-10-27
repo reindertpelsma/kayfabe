@@ -36,4 +36,4 @@ The repository is at [github.com/reindertpelsma/kayfabe](https://github.com/rein
 
 ## About this site
 
-This site is static documentation. It loads nothing from other hosts and is not a place to get code you have to trust. The manual's source is in `docs/howto/` in the repository, and every manual page has an "Edit this page on GitHub" link.
+The manual's source is in `docs/howto/` in the repository, and every manual page has a "View and edit source on GitHub" link.
