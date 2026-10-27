@@ -258,7 +258,7 @@ def decorate_chapter(html, sections, file, version_text):
         + REPO_URL
         + "/edit/master/"
         + source
-        + '">Edit this page on GitHub</a> <span>(source: <code>'
+        + '">View and edit source on GitHub</a> <span>(source: <code>'
         + source
         + "</code>, master branch)</span></p>"
     )
