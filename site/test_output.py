@@ -169,7 +169,7 @@ class SelfContained(unittest.TestCase):
 
     def test_landing_weight_is_small(self):
         page = (OUTPUT / "index.html").read_text()
-        self.assertLess(len(page.encode()), 40_000)
+        self.assertLess(len(page.encode()), 60_000)
         self.assertLess((OUTPUT / "style.css").stat().st_size, 20_000)
         for image in re.findall(r'<img[^>]+src="([^"]+)"', page):
             self.assertLess((OUTPUT / image.lstrip("/")).stat().st_size, 300_000)
@@ -194,10 +194,15 @@ class LandingAndDocsIndex(unittest.TestCase):
     def test_landing_has_the_required_blocks(self):
         for text in [
             "Status: research",
-            "no installer, no stable interface and no security audit",
-            "What runs today",
-            "Get started",
+            "No installer yet",
+            "Windows is not stable",
+            "What works today",
+            "Try it, or help",
             "Contribute and community",
+            "How fast, with the numbers",
+            "Who it is for",
+            "Works today",
+            "Not yet",
             "VFIO passthrough",
             "NVIDIA vGPU",
             "API forwarding",
@@ -210,6 +215,30 @@ class LandingAndDocsIndex(unittest.TestCase):
         self.assertIn("<svg", self.landing)
         self.assertRegex(self.landing, r'<img[^>]+alt="[^"]+"')
         self.assertIn('class="skip-link"', self.landing)
+
+    def test_landing_has_no_banned_claim_and_every_block_has_a_source(self):
+        import claims_guard
+
+        visible = re.sub(r"<!--.*?-->", "", self.landing, flags=re.S)
+        self.assertEqual(claims_guard.find(visible), [])
+        self.assertGreaterEqual(self.landing.count("<!-- src:"), 30)
+        # Every section on the page keeps its source next to it.
+        for section in re.findall(r"<section.*?</section>", self.landing, flags=re.S):
+            if "hero-search" in section and "<h2" not in section.split("</h2>")[0]:
+                continue
+            self.assertIn("<!-- src:", section, section[:80])
+
+    def test_landing_keeps_the_honest_parts(self):
+        for text in [
+            "27 to 31%",
+            "experimental build (unmerged, Heaven only)",
+            "not on master",
+            "Your licences",
+            "use nvkvm-pv",
+            "one guest per GPU",
+        ]:
+            self.assertIn(text, re.sub(r"<[^>]+>", "", self.landing).replace("\n", " "))
+        self.assertNotIn("paguro", self.landing.lower())
 
     def test_docs_index_follows_summary_order(self):
         summary = (SITE.parent / "docs/howto/SUMMARY.md").read_text()

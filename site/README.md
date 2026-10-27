@@ -107,3 +107,6 @@ each mdBook render `build.py` adds a skip link, breadcrumbs, an "View and edit s
 page's source path), previous/next links and marks the manual's `[measured]`, `[inferred]` and `not documented yet`
 text so gaps stay visible. Landing copy lives in `content/_index.md` front matter; each `src` field is written into the
 page as an HTML comment, so every statement keeps its source. New claims need a source in the README or the manual.
+The frontpage and the README must not contain the phrases listed in `claims_guard.py` ("near-native", "secure", "clean-room",
+"anti-cheat compatible", "multi-tenant ready", "works with any GPU", hype words). `test_build.py` checks the sources and
+`test_output.py` the rendered landing; a new banned phrase goes in that list with its reason.
