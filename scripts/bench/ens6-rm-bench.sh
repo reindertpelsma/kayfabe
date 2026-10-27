@@ -24,7 +24,7 @@ UIDN=1000
 mkdir -p "$OUT" && chown "$UIDN:$UIDN" "$OUT" || exit 2
 log() { printf '%s %s\n' "$(date -Is)" "$*" | tee -a "$OUT/sequence.log"; }
 
-pgrep -x 'qemu-system-x86_64' >/dev/null && { log "ABORT vm running"; exit 4; }
+pgrep -f 'bin/qemu-system-x86_64' >/dev/null && { log "ABORT vm running"; exit 4; }
 apps=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c .)
 [[ $apps == 0 ]] || { log "ABORT $apps compute apps on the GPU"; exit 4; }
 
@@ -33,10 +33,15 @@ idle_ms() {
     setpriv --reuid=$UIDN --regid=$UIDN --init-groups env DBUS_SESSION_BUS_ADDRESS="$BUS" \
         timeout 3 gdbus call --session --dest org.gnome.Mutter.IdleMonitor \
         --object-path /org/gnome/Mutter/IdleMonitor/Core \
-        --method org.gnome.Mutter.IdleMonitor.GetIdletime 2>/dev/null | grep -o '[0-9]\+' | head -1
+        --method org.gnome.Mutter.IdleMonitor.GetIdletime 2>/dev/null | grep -o '[0-9]\+' | tail -1
 }
-idle=$(idle_ms)
-[[ -n $idle && $idle -ge 600000 ]] || { log "ABORT owner not idle or compositor silent: idle_ms=${idle:-none}"; exit 5; }
+# Three samples 5 s apart, all must show >= 10 min idle: a compositor (re)start right after a
+# campaign run resets the counter for an instant, a real owner keeps resetting it.
+for k in 1 2 3; do
+    idle=$(idle_ms)
+    [[ -n $idle && $idle -ge 600000 ]] || { log "ABORT owner not idle or compositor silent: idle_ms=${idle:-none} (sample $k)"; exit 5; }
+    [[ $k == 3 ]] || sleep 5
+done
 log "preflight ok: no vm, no compute apps, owner idle ${idle} ms"
 
 cat >"$OUT/watchdog.sh" <<EOF

@@ -1,0 +1,74 @@
+{
+ "alloc-normal-1000": {
+  "before_kb": 28927504,
+  "peak_min_kb": 28932796,
+  "after_kb": 28928976,
+  "peak_delta_mb": -5.2
+ },
+ "alloc-normal-128000": {
+  "before_kb": 28908676,
+  "peak_min_kb": 28591376,
+  "after_kb": 28931920,
+  "peak_delta_mb": 309.9
+ },
+ "alloc-normal-32000": {
+  "before_kb": 28879732,
+  "peak_min_kb": 28852888,
+  "after_kb": 28899736,
+  "peak_delta_mb": 26.2
+ },
+ "alloc-normal-8000": {
+  "before_kb": 28893932,
+  "peak_min_kb": 28889132,
+  "after_kb": 28891068,
+  "peak_delta_mb": 4.7
+ },
+ "alloc-sparse-1000": {
+  "before_kb": 28957216,
+  "peak_min_kb": 28945632,
+  "after_kb": 28946408,
+  "peak_delta_mb": 11.3
+ },
+ "alloc-sparse-128000": {
+  "before_kb": 28906588,
+  "peak_min_kb": 28588152,
+  "after_kb": 28906412,
+  "peak_delta_mb": 311.0
+ },
+ "alloc-sparse-32000": {
+  "before_kb": 28965732,
+  "peak_min_kb": 28870504,
+  "after_kb": 28890272,
+  "peak_delta_mb": 93.0
+ },
+ "alloc-sparse-8000": {
+  "before_kb": 28914448,
+  "peak_min_kb": 28916176,
+  "after_kb": 28899692,
+  "peak_delta_mb": -1.7
+ },
+ "churn-0": {
+  "before_kb": 28928212,
+  "peak_min_kb": 28927388,
+  "after_kb": 28926372,
+  "peak_delta_mb": 0.8
+ },
+ "churn-1000": {
+  "before_kb": 28894100,
+  "peak_min_kb": 28896304,
+  "after_kb": 28879132,
+  "peak_delta_mb": -2.2
+ },
+ "churn-32000": {
+  "before_kb": 28879052,
+  "peak_min_kb": 28848364,
+  "after_kb": 28901140,
+  "peak_delta_mb": 30.0
+ },
+ "churn-8190": {
+  "before_kb": 28872564,
+  "peak_min_kb": 28860648,
+  "after_kb": 28877896,
+  "peak_delta_mb": 11.6
+ }
+}

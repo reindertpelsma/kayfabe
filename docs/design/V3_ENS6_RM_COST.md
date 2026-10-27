@@ -13,8 +13,8 @@ Parent: `docs/design/V3_SPARSE_TWIN.md`, `docs/design/V3_ENS5_SPARSE_ADMISSION.m
 
 1. **The slow applies were reservation-verb churn, not slow single RM calls.** Between heartbeat 510 and 543 of
    7330 (about 66 s) `made` grew by 241 584 and `freed` by 241 583, `refused` by 120 142 and `coarse_maps` by
-   120 229. Per event: 2 reserves, 2 releases, 1 RM refusal, 1 coarse map. That signature is a *reserve refused by
-   RM right after a release*: either the merged 4 MiB reservation of `recycle` (release a, release b, reserve
+   120 229. Per event: 2 reserves, 2 releases, 1 RM refusal, 1 coarse map. INFERRED from the counters (the two paths
+   below are indistinguishable in them): a *reserve refused by RM right after a release*: either the merged 4 MiB reservation of `recycle` (release a, release b, reserve
    both) or the second piece of a split in `replace`; each time the pair is restored and the plain map is
    counted coarse. It starts exactly when the busiest space first reaches 8192 blocks (7330 heartbeat 510, 7350
    heartbeat 620) and then runs once per plain map into a not-yet-refined 2 MiB area, for as long as the guest
@@ -50,7 +50,7 @@ Parent: `docs/design/V3_SPARSE_TWIN.md`, `docs/design/V3_ENS5_SPARSE_ADMISSION.m
 * **A host RM `NoMemory` is a counted closed fallback, never a hard error.** `rm_declined` counts it, the
   refusal starts a **back-off** (2, 4, ... 64 retry ticks; ticks are `retry` calls, two per refresh) during which
   optional and demand layout work starts no RM verb (`backoff_skips`), and the refused sparse tile is remembered
-  in a bounded **refused-window cache** (64 windows, expires after 256 ticks; `window_hits`). A decision taken
+  in a bounded **refused-window cache** (64 windows, lowest address evicted first, expires after 256 ticks; `window_hits`). A decision taken
   on a refusal is asked again when its back-off ends (`Negative::due`). Other RM errors stay hard.
 * **Hysteresis, no churn.** `normal()` returns before any recycling when nothing needs splitting. Plain-map
   refinement above the high-water mark (`limit - limit/32`) with no empty pair to recycle issues no RM verb
@@ -86,9 +86,40 @@ a saturated tree with a refusing RM, 20 refreshes, every refresh <= `SLICE_NS` +
 17 us/verb clock) and `ens6_deferred_sparse_work_resumes_each_refresh_until_honoured_and_never_unsparses`
 (8000-tile admission over many refreshes, monotone coverage).
 
-## Measured on the host (2026-10-27, rev `6d95870c7`)
+## Measured on the host (2026-10-27, rev `6d95870c7` benchmark binary, churn arm from the ENS6 head)
 
-See `traces/ens6_20261027/` (benchmark tables, mutation ledger) and the lane report.
+Own unprivileged RM client (desktop uid, zero capabilities, `no_new_privs`), no VM, host lock held for the 2 minute
+sequence, owner idle 11 h, no new Xid, desktop watchdog (mutter D-Bus) answered after every arm, GPU used memory
+449 -> 450 MiB (nvidia-smi), no compute process left. Tables: `traces/ens6_20261027/rm-bench-percentiles.txt`, raw
+samples on the host in `/data/claude-fx1-bench-20261027/run1/`. A *bare* VA space (no guest roots, no mappings).
+
+| N objects | sparse 64 KiB alloc p50/p99 us | free p50/p99 us | normal 2 MiB alloc p50/p99 us | free p50/p99 us |
+|---|---|---|---|---|
+| 1 000 | 20.1 / 31.7 | 16.6 / 29.9 | 9.2 / 16.6 | 13.8 / 19.7 |
+| 8 000 | 18.5 / 33.0 | 19.9 / 26.2 | 10.2 / 18.1 | 16.6 / 22.6 |
+| 32 000 | 18.5 / 31.9 | 30.2 / 43.9 | 10.3 / 16.4 | 26.7 / 40.3 |
+| 128 000 | 18.7 / 32.4 | 73.3 / 125.8 | 10.3 / 15.7 | 69.9 / 122.7 |
+
+* **No refusal at any N up to 128 000, for either grain.** The 8192/32768 caps are our design constants, not an
+  RM limit in this setting. Allocation cost is flat (~10 us normal, ~19 us sparse); **free cost grows with the
+  live object count** (14 -> 70 us normal, 17 -> 73 us sparse from 1 000 to 128 000), so tearing down a big tree
+  is the expensive direction (128 000 frees: 8.8 / 9.3 s total). Maximum single calls 70 .. 340 us.
+* Host memory (MemAvailable at the peak): about +310 MB at 128 000 objects for both grains (about 2.5 KB per
+  object); smaller N is inside the +-10 .. 90 MB drift of the host and not resolved. GPU memory was not sampled at
+  the peak (the arm queries compute apps only): unmeasured.
+* **Churn (merge: free two adjacent 2 MiB blocks, reserve the merged 4 MiB at the same VA; split back), 2 000
+  cycles each with 0 / 1 000 / 8 190 / 32 000 live background blocks: 0 refusals, 0 failures.** Per-verb p50:
+  reserve 8.2 .. 9.6 us, free 13.2 us (no background) .. 39 us (32 000 background). A clean cycle is 3 + 3 verbs
+  = about 70 us at 8 190 blocks.
+* Space-creation reservations (`GUEST_VA_RANGES`, up to 127 TiB) cost 12 .. 16 us each; creating a space costs
+  1.5 .. 3.2 ms and freeing it 0.6 .. 0.8 ms. **They are not the ~191 ms call of the boot apply.**
+
+What this means for the 7330 attribution: RM does *not* refuse the merged reservation in a clean space, at
+any block count, so the 120 000 refusals of 7330/7350 depend on the state of the real twin space (its guest
+roots and the mappings the guest made through them, or the withheld low window), not on object count. That
+state is not reproduced by this arm; it is unexplained here. ENS6 makes it observable instead
+(`RM refused reserve space=.. lo=.. len=.. sparse=..` for the first 8 refusals, `rmverbs[...]`) and makes it cheap
+(back-off, no churn). The 191 ms call is still unattributed: the next boot's `rmverbs` maximum per class names it.
 
 ## Next host boot
 

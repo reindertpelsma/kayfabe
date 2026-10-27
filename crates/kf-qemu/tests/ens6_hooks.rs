@@ -148,3 +148,19 @@ fn heartbeat_verb_indices_follow_the_enum_declaration_order() {
     assert!(DEVICE.contains("let f = |i: usize|"));
     assert!(DEVICE.contains("let v = kf_host::diag::verb_totals();"));
 }
+
+#[test]
+fn the_first_rm_reservation_refusals_are_logged_with_their_arguments() {
+    let body = GATE
+        .split("fn reserve(&self, lo: u64, len: u64, sparse: bool)")
+        .nth(1)
+        .unwrap()
+        .split("fn release(")
+        .next()
+        .unwrap();
+    assert!(body.contains("RM refused reserve"));
+    for arg in ["space", "lo", "len", "sparse"] {
+        assert!(body.contains(arg), "{arg}");
+    }
+    assert!(body.contains("REFUSAL_LOG_CAP"), "bounded");
+}

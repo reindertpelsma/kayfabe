@@ -18,8 +18,25 @@ struct SpaceOps<'a> {
 }
 impl Ops for SpaceOps<'_> {
     fn reserve(&self, lo: u64, len: u64, sparse: bool) -> Result<u32, RmError> {
-        self.rm
-            .reserve_va_flags_inner(self.space, lo, len, guest_reserve_flags(sparse), true)
+        let result =
+            self.rm
+                .reserve_va_flags_inner(self.space, lo, len, guest_reserve_flags(sparse), true);
+        // ENS6: the first refusals, with their arguments, so a refusal pattern is attributable
+        // (7330: 120 000 refusals and no record of which VA or size). Bounded.
+        const REFUSAL_LOG_CAP: u32 = 8;
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if let Err(e) = &result
+            && LOGGED
+                .try_update(Relaxed, Relaxed, |n| (n < REFUSAL_LOG_CAP).then_some(n + 1))
+                .is_ok()
+        {
+            eprintln!(
+                "kf-host: RM refused reserve space={:#x} lo={lo:#x} len={len:#x} \
+                 sparse={sparse}: {e:?}",
+                self.space
+            );
+        }
+        result
     }
     fn release(&self, handle: u32) -> Result<(), RmError> {
         let result = self.rm.free(handle);

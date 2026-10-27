@@ -1,0 +1,45 @@
+## sequence.log
+2026-10-27T04:34:15+01:00 preflight ok: no vm, no compute apps, owner idle 40713353 ms
+2026-10-27T04:34:15+01:00 arm roots: /data/claude-fx1-bench-20261027/bin/churn-ens6 --run-roots
+2026-10-27T04:34:16+01:00 arm roots rc=0: ENS6_RM_ROOTS refusals=[]
+2026-10-27T04:34:16+01:00 arm alloc-sparse-1000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 1000 sparse
+2026-10-27T04:34:17+01:00 arm alloc-sparse-1000 rc=0: ENS5_RM_COST requested=1000 created=1000 sparse=true grain=65536 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:34:17+01:00 arm alloc-normal-1000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 1000 normal
+2026-10-27T04:34:17+01:00 arm alloc-normal-1000 rc=0: ENS5_RM_COST requested=1000 created=1000 sparse=false grain=2097152 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:34:17+01:00 arm alloc-sparse-8000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 8000 sparse
+2026-10-27T04:34:20+01:00 arm alloc-sparse-8000 rc=0: ENS5_RM_COST requested=8000 created=8000 sparse=true grain=65536 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:34:20+01:00 arm alloc-normal-8000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 8000 normal
+2026-10-27T04:34:23+01:00 arm alloc-normal-8000 rc=0: ENS5_RM_COST requested=8000 created=8000 sparse=false grain=2097152 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:34:23+01:00 arm alloc-sparse-32000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 32000 sparse
+2026-10-27T04:34:32+01:00 arm alloc-sparse-32000 rc=0: ENS5_RM_COST requested=32000 created=32000 sparse=true grain=65536 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:34:32+01:00 arm alloc-normal-32000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 32000 normal
+2026-10-27T04:34:41+01:00 arm alloc-normal-32000 rc=0: ENS5_RM_COST requested=32000 created=32000 sparse=false grain=2097152 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:34:41+01:00 arm alloc-sparse-128000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 128000 sparse
+2026-10-27T04:35:22+01:00 arm alloc-sparse-128000 rc=0: ENS5_RM_COST requested=128000 created=128000 sparse=true grain=65536 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:35:22+01:00 arm alloc-normal-128000: /data/claude-fx1-bench-20261027/bin/alloc-6d95870c7 --run-native 128000 normal
+2026-10-27T04:36:01+01:00 arm alloc-normal-128000 rc=0: ENS5_RM_COST requested=128000 created=128000 sparse=false grain=2097152 free_errors=0 refusal=None watchdog_after=Ok(())
+2026-10-27T04:36:02+01:00 arm churn-0: /data/claude-fx1-bench-20261027/bin/churn-ens6 --run-churn 0 2000
+2026-10-27T04:36:03+01:00 arm churn-0 rc=0: ENS6_RM_CHURN background=0 cycles_done=2000 merge_refusals=0 split_refusals=0 first_refusal=None setup_refusal=None free_errors=0 watchdog_after=Ok(())
+2026-10-27T04:36:03+01:00 arm churn-1000: /data/claude-fx1-bench-20261027/bin/churn-ens6 --run-churn 1000 2000
+2026-10-27T04:36:05+01:00 arm churn-1000 rc=0: ENS6_RM_CHURN background=1000 cycles_done=2000 merge_refusals=0 split_refusals=0 first_refusal=None setup_refusal=None free_errors=0 watchdog_after=Ok(())
+2026-10-27T04:36:05+01:00 arm churn-8190: /data/claude-fx1-bench-20261027/bin/churn-ens6 --run-churn 8190 2000
+2026-10-27T04:36:09+01:00 arm churn-8190 rc=0: ENS6_RM_CHURN background=8190 cycles_done=2000 merge_refusals=0 split_refusals=0 first_refusal=None setup_refusal=None free_errors=0 watchdog_after=Ok(())
+2026-10-27T04:36:09+01:00 arm churn-32000: /data/claude-fx1-bench-20261027/bin/churn-ens6 --run-churn 32000 2000
+2026-10-27T04:36:19+01:00 arm churn-32000 rc=0: ENS6_RM_CHURN background=32000 cycles_done=2000 merge_refusals=0 split_refusals=0 first_refusal=None setup_refusal=None free_errors=0 watchdog_after=Ok(())
+2026-10-27T04:36:19+01:00 sequence complete; new Xids: 0
+
+## arms.txt
+roots rc=0 wall_s=0.813438
+alloc-sparse-1000 rc=0 wall_s=0.609741
+alloc-normal-1000 rc=0 wall_s=0.607661
+alloc-sparse-8000 rc=0 wall_s=2.5099
+alloc-normal-8000 rc=0 wall_s=2.41003
+alloc-sparse-32000 rc=0 wall_s=9.21268
+alloc-normal-32000 rc=0 wall_s=8.81307
+alloc-sparse-128000 rc=0 wall_s=40.9304
+alloc-normal-128000 rc=0 wall_s=39.2274
+churn-0 rc=0 wall_s=1.40891
+churn-1000 rc=0 wall_s=1.70826
+churn-8190 rc=0 wall_s=3.50954
+churn-32000 rc=0 wall_s=10.0131
+
