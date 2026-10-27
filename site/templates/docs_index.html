@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Documentation · kayfabe{% endblock %}
+{% block body_attrs %} data-kf="docs-index"{% endblock %}
+{% block content %}
+{%- set kf = load_data(path="data/site.json", required=false) -%}
+<div class="wrap docs-index">
+  <h1>Documentation</h1>
+  {% if kf and kf.sections %}
+  <p class="lede">The user manual is for developers and system administrators who want to build, run and deploy kayfabe.
+    It describes what exists in the repository today and says so plainly where something does not exist yet.</p>
+  <!-- src: docs/howto/index.md, second paragraph -->
+  <div class="callout warn">
+    <p><strong>Research stage.</strong> There is no installer, no stable interface and no security audit.
+      Read <a href="{{ kf.docs_url }}index.html">Status: read this first</a> before anything else.</p>
+  </div>
+
+  <div role="search">
+    <form action="{{ kf.docs_url }}" method="get">
+      <label for="docs-search">Search the manual</label>
+      <input id="docs-search" name="search" type="search" />
+      <button>Search</button>
+    </form>
+  </div>
+
+  {% for section in kf.sections %}
+  <section aria-labelledby="sec-{{ loop.index }}">
+    <h2 id="sec-{{ loop.index }}">{{ section.title }}</h2>
+    <ul class="doclist">
+      {% for page in section.pages %}
+      <li>
+        <a href="{{ kf.docs_url }}{{ page.href }}">{{ page.title }}</a>
+        {% if page.description %}<span>{{ page.description }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+
+  <section aria-labelledby="labels-h">
+    <h2 id="labels-h">How to read the evidence labels</h2>
+    <!-- src: docs/howto/index.md 'How to read the evidence labels' -->
+    <ul>
+      <li><span class="kf-label kf-measured">[measured]</span> means a run on named hardware at a named revision.</li>
+      <li><span class="kf-label kf-inferred">[inferred]</span> means reasoning, not a measurement.</li>
+      <li><span class="kf-gap">not documented yet</span> means the repository does not state a verified answer. The manual does not guess.</li>
+      <li>Every page ends with a <strong>Verified on</strong> line. Where the evidence does not cover a page end to end, it says <strong>Not verified end to end</strong>.</li>
+    </ul>
+  </section>
+  {% else %}
+  <p>The manual is not part of this build.</p>
+  {% endif %}
+
+  <section aria-labelledby="versions-h">
+    <h2 id="versions-h">Versions</h2>
+    <ul class="versions">
+      {% if kf %}{% for v in kf.versions %}
+      <li><a href="{{ v.url }}">{{ v.label }}</a></li>
+      {% endfor %}{% endif %}
+    </ul>
+    <p>A version dropdown is at the top of every manual page.</p>
+  </section>
+
+  <section aria-labelledby="more-h">
+    <h2 id="more-h">Elsewhere</h2>
+    <ul>
+      <li><a href="https://github.com/reindertpelsma/kayfabe/tree/master/docs/">Design and internals (GitHub)</a>: design documents, status records and evidence. They are for contributors, are not part of the manual and change faster than it does.</li>
+      <li><a href="https://github.com/reindertpelsma/kayfabe#readme">Repository README</a>: the landing text and current status.</li>
+    </ul>
+  </section>
+</div>
+{% endblock %}

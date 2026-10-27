@@ -3,7 +3,7 @@
 
 import argparse
 import hashlib
-from html import escape
+from html import escape, unescape
 from html.parser import HTMLParser
 import io
 import json
@@ -25,6 +25,44 @@ def git(repo, *args):
 
 def has_site(repo, ref):
     return bool(git(repo, "ls-tree", "--name-only", ref, "--", "site"))
+
+
+REPO_URL = "https://github.com/reindertpelsma/kayfabe"
+
+
+def size_text(size):
+    value = float(size)
+    for unit in ["B", "KiB", "MiB", "GiB"]:
+        if value < 1024 or unit == "GiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+
+
+def release_summary(release):
+    """The few fields the landing shows; asset links must stay inside this repository."""
+    assets = []
+    for asset in release.get("assets", []):
+        url = asset.get("browser_download_url", "")
+        if not url.startswith(REPO_URL + "/releases/download/") or not asset.get("name"):
+            continue
+        digest = asset.get("digest") or ""
+        assets.append(
+            {
+                "name": asset["name"],
+                "url": url,
+                "size": size_text(asset.get("size") or 0),
+                "sha256": digest[len("sha256:") :] if digest.startswith("sha256:") else "",
+            }
+        )
+    tag = release["tag_name"]
+    return {
+        "tag": tag,
+        "name": release.get("name") or tag,
+        "url": REPO_URL + "/releases/tag/" + quote(tag),
+        "date": release["published_at"][:10],
+        "prerelease": bool(release.get("prerelease")),
+        "assets": assets,
+    }
 
 
 def version_plan(repo, releases, root_ref="latest"):
@@ -56,7 +94,13 @@ def version_plan(repo, releases, root_ref="latest"):
         root = "master"
     elif root_ref != "latest":
         raise ValueError("root_ref must be latest or master")
-    return {"versions": versions, "refs": ["master", *tags], "latest": latest, "root": root}
+    return {
+        "versions": versions,
+        "refs": ["master", *tags],
+        "latest": latest,
+        "root": root,
+        "release": release_summary(published[0]) if published else None,
+    }
 
 
 def snapshot(repo, ref, destination):
@@ -81,6 +125,149 @@ def manual_source(source, destination):
         summary = summary.rstrip() + "\n\n- [FAQ](FAQ.md)\n"
     (destination / "SUMMARY.md").write_text(summary)
     return re.findall(r"\]\(([^)]+\.md)\)", summary)
+
+
+def page_href(file):
+    """mdBook turns chapter.md into chapter.html (README.md and index.md into index.html)."""
+    return re.sub(r"\.md$", ".html", file)
+
+
+def parse_summary(text):
+    """Sections in SUMMARY.md order: lead-in chapters are 'Start here', each `# Part` is a
+    section as written, and the appended FAQ is its own section."""
+    sections = [{"title": "Start here", "pages": []}]
+    faq = []
+    for line in text.splitlines():
+        part = re.match(r"#\s+(.+?)\s*$", line)
+        if part and part[1] != "Summary":
+            sections.append({"title": part[1], "pages": []})
+            continue
+        chapter = re.match(r"\s*(?:[-*]\s+)?\[([^\]]+)\]\(([^)\s]+\.md)\)", line)
+        if chapter:
+            page = {"title": chapter[1], "file": chapter[2], "href": page_href(chapter[2])}
+            (faq if chapter[2] == "FAQ.md" else sections[-1]["pages"]).append(page)
+    if faq:
+        sections.append({"title": "FAQ", "pages": faq})
+    return [section for section in sections if section["pages"]]
+
+
+def page_descriptions(index_text):
+    """The manual's own 'Pages' table: file -> what the page answers."""
+    found = {}
+    row = r"^\|\s*\[[^\]]+\]\(([^)]+\.md)\)\s*\|\s*(.+?)\s*\|\s*$"
+    for match in re.finditer(row, index_text, re.M):
+        found[match[1]] = match[2].replace("`", "")
+    return found
+
+
+def manual_outline(repo, ref):
+    """Docs-index sections for one ref, read without checking it out."""
+
+    def read(path):
+        if ref == "master":
+            return (repo / path).read_text() if (repo / path).is_file() else ""
+        try:
+            return git(repo, "show", ref + ":" + path)
+        except subprocess.CalledProcessError:
+            return ""
+
+    summary = read("docs/howto/SUMMARY.md")
+    if read("docs/FAQ.md"):
+        summary = summary.rstrip() + "\n\n- [FAQ](FAQ.md)\n"
+    descriptions = page_descriptions(read("docs/howto/index.md"))
+    sections = parse_summary(summary)
+    for section in sections:
+        for page in section["pages"]:
+            page["description"] = descriptions.get(page["file"], "")
+    return sections
+
+
+LABEL_START = re.compile(r"\[(measured|inferred)\b", re.I)
+GAP = re.compile(r"\b(not documented yet|not verified end to end)\b", re.I)
+BLOCKS = {"p", "li", "td", "th", "div", "ul", "ol", "h1", "h2", "h3", "h4", "table", "pre"}
+
+
+def mark_evidence(html):
+    """Make the manual's evidence labels and visible gaps styleable, text nodes only."""
+    out, skip, label = [], 0, None
+    for part in re.split(r"(<[^>]*>)", html):
+        if part.startswith("<"):
+            tag = re.match(r"<(/?)([A-Za-z0-9]+)", part)
+            if tag:
+                name, closing = tag[2].lower(), bool(tag[1])
+                if name in ("pre", "script", "style"):
+                    skip = max(0, skip + (-1 if closing else 1))
+                if label and name in BLOCKS:
+                    out.append("</span>")
+                    label = None
+            out.append(part)
+            continue
+        if skip:
+            out.append(part)
+            continue
+        position = 0
+        while position < len(part):
+            if label:
+                end = part.find("]", position)
+                if end < 0:
+                    out.append(part[position:])
+                    break
+                out.append(part[position : end + 1] + "</span>")
+                position, label = end + 1, None
+                continue
+            start = LABEL_START.search(part, position)
+            chunk = part[position : start.start() if start else len(part)]
+            out.append(GAP.sub(r'<span class="kf-gap">\1</span>', chunk))
+            if not start:
+                break
+            label = start[1].lower()
+            out.append('<span class="kf-label kf-' + label + '">[')
+            position = start.start() + 1
+    if label:
+        out.append("</span>")
+    return "".join(out)
+
+
+def decorate_chapter(html, sections, file, version_text):
+    """Skip link, breadcrumbs, edit link and previous/next text links for one chapter."""
+    flat = [(section["title"], page) for section in sections for page in section["pages"]]
+    index = next((i for i, (_, page) in enumerate(flat) if page["file"] == file), None)
+    if index is None or "<main>" not in html or "</main>" not in html:
+        return html
+    title, page = flat[index]
+    source = "docs/FAQ.md" if file == "FAQ.md" else "docs/howto/" + file
+    crumbs = (
+        '<nav class="kf-crumbs" aria-label="Breadcrumb"><ol>'
+        '<li><a href="/docs/">Docs</a></li>'
+        "<li>" + escape(version_text) + "</li>"
+        "<li>" + escape(title) + "</li>"
+        '<li aria-current="page">' + escape(page["title"]) + "</li></ol></nav>"
+    )
+    pager = '<nav class="kf-pager" aria-label="Previous and next page">'
+    for offset, rel, word in [(-1, "prev", "Previous"), (1, "next", "Next")]:
+        if 0 <= index + offset < len(flat):
+            other = flat[index + offset][1]
+            pager += (
+                '<a rel="{}" href="{}"><span>{}</span> {}</a>'.format(
+                    rel, escape(other["href"], quote=True), word, escape(other["title"])
+                )
+            )
+    pager += "</nav>"
+    edit = (
+        '<p class="kf-edit"><a href="'
+        + REPO_URL
+        + "/edit/master/"
+        + source
+        + '">Edit this page on GitHub</a> <span>(source: <code>'
+        + source
+        + "</code>, master branch)</span></p>"
+    )
+    head, rest = html.split("<main>", 1)
+    body, tail = rest.split("</main>", 1)
+    body = mark_evidence(body).replace("<p>Verified on:", '<p class="kf-verified">Verified on:')
+    skip_link = r'\1<a class="skip-link" href="#content">Skip to content</a>'
+    head = re.sub(r"(<body[^>]*>)", skip_link, head, count=1)
+    return head + "<main>" + crumbs + body + edit + pager + "</main>" + tail
 
 
 def tools(directory):
@@ -152,6 +339,12 @@ def docs_build(source, version, plan, work, output, binaries):
     # mdBook's generated no-JS sidebar frame has no title in this pinned release.
     toc = destination / "toc.html"
     toc.write_text(toc.read_text().replace("<head>", "<head><title>Contents — kayfabe</title>"))
+    sections = parse_summary((book / "src/SUMMARY.md").read_text())
+    for file in selected:
+        chapter = destination / page_href(file)
+        if chapter.is_file():
+            text = decorate_chapter(chapter.read_text(), sections, file, version_label(version, plan))
+            chapter.write_text(text)
     return {
         "version": version,
         "manual_pages": len(selected),
@@ -159,9 +352,31 @@ def docs_build(source, version, plan, work, output, binaries):
     }
 
 
-def landing_build(source, destination, work, binaries, base_url):
+def site_data(plan, repo):
+    """Build-time facts for the templates: docs sections, versions and the latest release."""
+    latest = plan["latest"]
+    return {
+        "latest": latest,
+        "docs_url": version_url(latest),
+        "versions": [
+            {
+                "version": v,
+                "label": version_label(v, plan),
+                "url": version_url(v),
+                "latest": v != "master" and v == latest,
+            }
+            for v in plan["versions"]
+        ],
+        "sections": manual_outline(repo, latest) if latest in plan["versions"] else [],
+        "release": plan.get("release"),
+    }
+
+
+def landing_build(source, destination, work, binaries, base_url, data=None):
     landing = work / "landing"
     landing.mkdir()
+    (landing / "data").mkdir()
+    (landing / "data/site.json").write_text(json.dumps(data or {}, indent=2) + "\n")
     shutil.copy2(SITE / "config.toml", landing / "config.toml")
     for folder in ["content", "templates", "static"]:
         original = source / "site" / folder
@@ -304,10 +519,11 @@ def metadata(output, plan):
     """Apply one URL policy to both generators and emit the combined sitemap."""
     description = "Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, "
     description += "while the host keeps using it."
-    (output / "404.html").write_text(
-        '<html lang="en"><head><title>Page not found — kayfabe</title></head>'
-        '<body><h1>Page not found</h1><a href="/">Home</a></body></html>'
-    )
+    if not (output / "404.html").is_file():
+        (output / "404.html").write_text(
+            '<html lang="en"><head><title>Page not found — kayfabe</title></head>'
+            '<body><h1>Page not found</h1><a href="/">Home</a></body></html>'
+        )
     sitemap = []
     for page in sorted(output.rglob("*.html")):
         relative = page.relative_to(output)
@@ -334,23 +550,35 @@ def metadata(output, plan):
         if url.startswith("/staging/"):
             canonical = "/" + url[len("/staging/") :]
         noindex = url.startswith(("/staging/", "/docs/master/")) or url.endswith("404.html")
+        # A page may carry its own plain description; otherwise the shared one applies.
+        own = re.search(
+            r'<meta\b[^>]*name=["\']description["\'][^>]*content="([^"]*)"', text, re.I
+        )
+        summary = unescape(own[1]).strip() if own and own[1].strip() else description
         # Remove generator metadata before adding this shared policy.
         text = re.sub(
-            r'<meta\b[^>]*(?:name=["\'](?:description|robots)["\']'
+            r'<meta\b[^>]*(?:name=["\'](?:description|robots|twitter:[^"\']+)["\']'
             r'|property=["\']og:[^"\']+["\'])[^>]*>',
             "",
             text,
             flags=re.I,
         )
         text = re.sub(r'<link\b[^>]*rel=["\']canonical["\'][^>]*>', "", text, flags=re.I)
-        tags = '\n<meta name="description" content="' + escape(description, quote=True) + '">'
+        tags = '\n<meta name="description" content="' + escape(summary, quote=True) + '">'
+        # Plain text cards: no generated image, so the small "summary" card type.
         for name, value in [
+            ("type", "website"),
+            ("site_name", "kayfabe"),
             ("title", title),
-            ("description", description),
+            ("description", summary),
             ("url", "https://kayfabe.dev" + url),
         ]:
             tags += (
                 '\n<meta property="og:' + name + '" content="' + escape(value, quote=True) + '">'
+            )
+        for name, value in [("card", "summary"), ("title", title), ("description", summary)]:
+            tags += (
+                '\n<meta name="twitter:' + name + '" content="' + escape(value, quote=True) + '">'
             )
         tags += '\n<link rel="canonical" href="https://kayfabe.dev' + escape(canonical) + '">'
         if noindex:
@@ -358,7 +586,7 @@ def metadata(output, plan):
         text = text.replace("</head>", tags + "\n</head>")
         page.write_text(text)
         if not noindex and (
-            url in ["/", "/docs/"]
+            url in ["/", "/docs/", "/about/", "/security/"]
             or (plan["latest"] != "master" and url.startswith(version_url(plan["latest"])))
         ):
             sitemap.append("https://kayfabe.dev" + url)
@@ -381,6 +609,7 @@ def build(repo, binaries, releases, root_ref="latest"):
     with tempfile.TemporaryDirectory(prefix="kayfabe-site-") as temporary:
         work = Path(temporary)
         landings = {}
+        data = site_data(plan, repo)
         for number, version in enumerate(plan["refs"]):
             folder = work / str(number)
             folder.mkdir()
@@ -392,25 +621,33 @@ def build(repo, binaries, releases, root_ref="latest"):
                 counts.append(docs_build(source, version, plan, folder, output, binaries))
             if (source / "site").is_dir():
                 landing = folder / "rendered"
-                landing_build(source, landing, folder, binaries, "https://kayfabe.dev")
+                landing_build(source, landing, folder, binaries, "https://kayfabe.dev", data)
                 landings[version] = landing
             if version == "master":
                 stage = folder / "staging"
                 stage.mkdir()
                 landing_build(
-                    source, output / "staging", stage, binaries, "https://kayfabe.dev/staging"
+                    source,
+                    output / "staging",
+                    stage,
+                    binaries,
+                    "https://kayfabe.dev/staging",
+                    data,
                 )
         shutil.copytree(landings[plan["root"]], output, dirs_exist_ok=True)
         docs = output / "docs"
         docs.mkdir(exist_ok=True)
         target = version_url(plan["latest"])
-        index = "<h1>Documentation versions</h1><nav>" + version_links(plan) + "</nav>"
-        index += search_form(target)
-        index += (
-            '<p><a href="https://github.com/reindertpelsma/kayfabe/tree/master/docs/">'
-            "Design and internals (GitHub)</a></p>"
-        )
-        (docs / "index.html").write_text(redirect_page("Documentation versions", target, index))
+        # A landing without the docs-index template (an older tag) keeps the plain version list.
+        current = docs / "index.html"
+        if not current.is_file() or 'data-kf="docs-index"' not in current.read_text():
+            index = "<h1>Documentation versions</h1><nav>" + version_links(plan) + "</nav>"
+            index += search_form(target)
+            index += (
+                '<p><a href="https://github.com/reindertpelsma/kayfabe/tree/master/docs/">'
+                "Design and internals (GitHub)</a></p>"
+            )
+            current.write_text(redirect_page("Documentation versions", target, index))
         latest = docs / "latest"
         latest.mkdir(exist_ok=True)
         (latest / "index.html").write_text(redirect_page("Latest documentation", target))
@@ -429,7 +666,9 @@ def build(repo, binaries, releases, root_ref="latest"):
             + "\n"
         )
         for page in [output / "index.html", output / "staging/index.html"]:
-            page.write_text(page.read_text().replace("</main>", search_form(target) + "</main>"))
+            text = page.read_text()
+            if 'name="search"' not in text:
+                page.write_text(text.replace("</main>", search_form(target) + "</main>"))
         metadata(output, plan)
     report = {**plan, "counts": counts, "broken_links": broken_links(output)}
     (repo / "site/build-report.json").write_text(json.dumps(report, indent=2) + "\n")
