@@ -1043,6 +1043,20 @@ mod tests {
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
 
+    /// ★ 2026-10-27 (TU106 rental 57882297, Windows 580.88): the Windows USER ring relay refused every
+    /// Turing channel (`USER_RING_SOURCE_DECLARATION`, class `0xc46f`), so `cuCtxCreate` and
+    /// `D3D11CreateDevice` failed on a Code-0 device. The GPFIFO entry (8 bytes), `GP_GET`/`GP_PUT` in
+    /// `USERD` and the doorbell token are the Volta-and-later layout shared by `0xc36f`, `0xc46f` and
+    /// `0xc56f`; the Hopper (`0xc86f`) and Blackwell (`0xc96f`, `0xca6f`) classes stay declined.
+    #[test]
+    fn the_user_ring_admits_the_turing_and_ampere_gpfifo_classes_only() {
+        assert!(user_ring_class_admitted(0xc56f), "AMPERE_CHANNEL_GPFIFO_A");
+        assert!(user_ring_class_admitted(0xc46f), "TURING_CHANNEL_GPFIFO_A");
+        for declined in [0xc36f, 0xc86f, 0xc96f, 0xca6f, 0xc76f, 0] {
+            assert!(!user_ring_class_admitted(declined), "{declined:#x}");
+        }
+    }
+
     #[test]
     fn windows_relay_is_the_default_with_an_explicit_negative_control() {
         assert!(relay_enabled(None));
