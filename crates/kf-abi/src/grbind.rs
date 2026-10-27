@@ -1,4 +1,4 @@
-//! Bounded GR bind intent. Decoding/authoring is added by the tests-first adapter change.
+//! Bounded GR bind intent, decoded and authored at independently resolved driver layouts.
 
 use crate::DriverVersion;
 
@@ -17,14 +17,28 @@ pub struct Request {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     /// Zcull save/restore state.
-    Zcull { va: u64, mode: u32 },
+    Zcull {
+        /// Untrusted GPU VA in the target's guest space.
+        va: u64,
+        /// SDK zcull mode.
+        mode: u32,
+    },
     /// PM save/restore state.
-    Pm { va: u64, mode: u32 },
+    Pm {
+        /// Untrusted GPU VA in the target's guest space.
+        va: u64,
+        /// SDK PM context-switch mode.
+        mode: u32,
+    },
     /// Graphics/compute preemption state.
     Preemption {
+        /// Valid graphics/compute intent mask.
         flags: u32,
+        /// Requested graphics mode, selected by flags bit1.
         gfxp: u32,
+        /// Requested compute mode, selected by flags bit0.
         cilp: u32,
+        /// SDK pointer slots; slot7 is a separate CPU address domain.
         buffers: [u64; 9],
     },
 }
@@ -136,6 +150,13 @@ pub fn decode(v: DriverVersion, cmd: u32, bytes: &[u8]) -> Option<Request> {
         channel,
         kind,
     })
+}
+
+/// Direct controls contain exactly one struct rather than a fixed-size deferred union.
+pub fn decode_control(v: DriverVersion, cmd: u32, bytes: &[u8]) -> Option<Request> {
+    (schema(v, cmd)?.size() == bytes.len())
+        .then(|| decode(v, cmd, bytes))
+        .flatten()
 }
 
 /// Encode fresh host bytes from bounded intent. Caller supplies owned client/channel handles.

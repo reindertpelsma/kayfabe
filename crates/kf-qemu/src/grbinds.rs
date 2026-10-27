@@ -6,7 +6,7 @@ use std::sync::{
 };
 
 pub(crate) type Reply = Arc<Mutex<Option<Result<u64, u32>>>>;
-type Work<H> = Box<dyn FnMut(&H) -> Option<Result<u64, u32>> + Send>;
+pub(crate) type Work<H> = Box<dyn FnMut(&H) -> Option<Result<u64, u32>> + Send>;
 struct Job<H> {
     work: Work<H>,
     reply: Reply,
@@ -206,6 +206,8 @@ mod tests {
         assert_eq!(*reply.lock().unwrap(), Some(Err(0x40)));
         assert!(weak.upgrade().is_none());
         assert!(!q.has_work());
+        assert_eq!(q.refused.load(Ordering::Relaxed), 1);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
     }
     #[test]
     fn off_and_explicit_zero_leave_the_host_event_sequence_unchanged() {
@@ -241,6 +243,259 @@ mod tests {
         );
         q.cancel_all();
         assert!(!q.has_work());
+    }
+    #[test]
+    fn writable_complete_span_preserves_all_adjacent_placement_rows() {
+        let rows = crate::mem::PlacedRows::default();
+        for at in [0x10000, 0x11000] {
+            rows.write()
+                .unwrap()
+                .insert(at, (4096, at, false, kf_host::MapPerm::READ_WRITE));
+        }
+        let before = rows.read().unwrap().clone();
+        assert!(writable(&rows, 0x10000, 8192));
+        assert!(writable(&rows, 0x10800, 4096));
+        assert_eq!(*rows.read().unwrap(), before);
+        rows.write().unwrap().remove(&0x11000);
+        assert!(!writable(&rows, 0x10000, 8192));
+    }
+    #[test]
+    fn a_read_only_tail_or_missing_middle_is_not_a_writable_buffer() {
+        let rows = crate::mem::PlacedRows::default();
+        let ro = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (4096, 0, false, kf_host::MapPerm::READ_WRITE));
+        rows.write()
+            .unwrap()
+            .insert(0x11000, (4096, 4096, false, ro));
+        assert!(!writable(&rows, 0x10000, 8192));
+        assert!(!writable(&rows, u64::MAX - 10, 4096));
+        assert!(!writable(&rows, 0x10000, 0));
+        rows.write().unwrap().remove(&0x10000);
+        assert!(!writable(&rows, 0x10000, 8192));
+    }
+    #[test]
+    fn same_numeric_handle_in_a_foreign_client_is_not_the_target() {
+        let r = request(true);
+        assert!(eligible(r, (11, 21), None, 1, true));
+        assert!(eligible(r, (11, 22), Some(21), 1, true));
+        assert!(!eligible(r, (12, 21), None, 1, true));
+        assert!(!eligible(r, (11, 22), None, 1, true));
+        assert!(!eligible(r, (11, 21), None, 1, false));
+    }
+    #[test]
+    fn zcull_scope_rejects_freed_wrong_engine_and_foreign_contexts() {
+        let r = request(false);
+        assert!(!eligible(r, (11, 21), None, 9, true));
+        assert!(!eligible(r, (11, 21), None, 1, false));
+        assert!(!eligible(r, (12, 21), Some(21), 1, true));
+        assert!(!eligible(r, (11, 22), Some(23), 1, true));
+    }
+    #[test]
+    fn disabling_gr_binds_does_not_call_a_queued_host_or_credit_results() {
+        let q = Queue::new(false);
+        let reply = Reply::default();
+        let host = Mutex::new(Fake::default());
+        assert_eq!(
+            q.enqueue(work(true), reply, || panic!("disabled wake")),
+            Err(0x56)
+        );
+        q.serve(&host);
+        assert!(host.lock().unwrap().binds.is_empty());
+        assert_eq!(q.served.load(Ordering::Relaxed), 0);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
+    }
+    #[test]
+    fn bind_exclusion_extends_without_locks_and_blocks_other_context_steering() {
+        let regions = Arc::new(crate::userva::Regions::default());
+        let claim = regions.steer(0x10000, 4096).unwrap();
+        claim.extend(0x10800, 4096).unwrap();
+        assert!(regions.steer(0x11000, 2048).is_err());
+        claim.extend(0x20000, 4096).unwrap();
+        assert!(regions.steer(0x20000, 4096).is_err());
+        drop(claim);
+        assert!(regions.steer(0x10000, 4096).is_ok());
+        assert!(regions.steer(0x20000, 4096).is_ok());
+    }
+    #[test]
+    fn extending_one_bind_cannot_steal_another_active_handover_span() {
+        let regions = Arc::new(crate::userva::Regions::default());
+        let first = regions.steer(0x10000, 4096).unwrap();
+        let other = regions.steer(0x20000, 4096).unwrap();
+        assert!(first.extend(0x20000, 4096).is_err());
+        assert!(first.extend(u64::MAX - 1, 4096).is_err());
+        drop(other);
+        first.extend(0x20000, 4096).unwrap();
+        assert!(regions.steer(0x20000, 4096).is_err());
+    }
+    #[test]
+    fn sysmem_read_only_context_buffer_is_rejected_without_rewriting_rows() {
+        let rows = crate::mem::PlacedRows::default();
+        let ro = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (4096, 8192, true, ro));
+        let before = rows.read().unwrap().clone();
+        assert!(!writable(&rows, 0x10000, 4096));
+        assert_eq!(*rows.read().unwrap(), before);
+    }
+    #[test]
+    fn refused_zcull_never_credits_success_or_bound_bytes() {
+        let q = Queue::new(true);
+        let host = Mutex::new(Fake {
+            status: Some(0x1f),
+            ..Fake::default()
+        });
+        let reply = Reply::default();
+        q.enqueue(work(false), reply.clone(), || {}).unwrap();
+        q.serve(&host);
+        assert_eq!(*reply.lock().unwrap(), Some(Err(0x1f)));
+        assert_eq!(q.served.load(Ordering::Relaxed), 0);
+        assert_eq!(q.bytes.load(Ordering::Relaxed), 0);
+        assert_eq!(q.refused.load(Ordering::Relaxed), 1);
+    }
+    #[test]
+    fn cancel_wake_sees_refusal_and_released_target_metadata() {
+        let q = Queue::new(true);
+        let owner = Arc::new(());
+        let weak = Arc::downgrade(&owner);
+        let reply = Reply::default();
+        let completed = reply.clone();
+        q.enqueue(
+            Box::new(move |_: &()| {
+                let _keep = &owner;
+                None
+            }),
+            reply,
+            move || {
+                assert_eq!(*completed.lock().unwrap(), Some(Err(0x40)));
+                assert!(weak.upgrade().is_none());
+            },
+        )
+        .unwrap();
+        q.cancel_all();
+    }
+    #[test]
+    fn a_running_callback_still_owns_admission_credit() {
+        let q = Arc::new(Queue::new(true));
+        let weak = Arc::downgrade(&q);
+        q.enqueue(
+            Box::new(move |_: &()| {
+                assert_eq!(
+                    weak.upgrade()
+                        .unwrap()
+                        .enqueue(Box::new(|_| None), Reply::default(), || {}),
+                    Err(0x51)
+                );
+                None
+            }),
+            Reply::default(),
+            || {},
+        )
+        .unwrap();
+        for _ in 1..MAX {
+            q.enqueue(Box::new(|_| None), Reply::default(), || {})
+                .unwrap();
+        }
+        q.serve(&());
+        q.cancel_all();
+        assert!(!q.has_work());
+    }
+    fn closed_work(gfxp: bool, event: u8) -> Work<Mutex<Fake>> {
+        let original = Arc::new(());
+        let now = if event == 16 {
+            Arc::new(())
+        } else {
+            original.clone()
+        };
+        let mut native = channel();
+        if event == 32 {
+            native.chan += 1;
+        }
+        Box::new(move |host| {
+            let live = same_live(
+                &original,
+                channel(),
+                Life {
+                    allocation: &now,
+                    channel: Some(native),
+                    canceled: event == 1,
+                    retired: event == 2,
+                    free_attempted: event == 4,
+                    dead: event == 8,
+                },
+            );
+            Some(if live {
+                execute(
+                    &mut *host.lock().unwrap(),
+                    request(gfxp),
+                    61,
+                    channel(),
+                    |_, _| true,
+                )
+            } else {
+                Err(0x40)
+            })
+        })
+    }
+    #[test]
+    fn a_deferred_gfxp_request_cannot_bind_after_free_or_numeric_handle_reuse() {
+        for event in [1, 2, 4, 8, 16, 32] {
+            let q = Queue::new(true);
+            let host = Mutex::new(Fake::default());
+            let reply = Reply::default();
+            q.enqueue(closed_work(true, event), reply.clone(), || {})
+                .unwrap();
+            q.serve(&host);
+            assert_eq!(*reply.lock().unwrap(), Some(Err(0x40)));
+            assert!(host.lock().unwrap().binds.is_empty());
+            assert!(!q.has_work());
+        }
+    }
+    #[test]
+    fn a_held_direct_zcull_reply_observes_a_stale_target_refusal_without_host_io() {
+        for event in [1, 2, 4, 8, 16, 32] {
+            let q = Queue::new(true);
+            let host = Mutex::new(Fake::default());
+            let reply = Reply::default();
+            let completed = reply.clone();
+            let d = kf_gsp::Deferred::new();
+            let done = d.clone();
+            q.enqueue(closed_work(false, event), reply, move || {
+                done.resolve(completed.lock().unwrap().unwrap().err().unwrap_or(0));
+            })
+            .unwrap();
+            q.serve(&host);
+            assert_eq!(d.outcome(), Some(0x40));
+            assert!(host.lock().unwrap().binds.is_empty());
+        }
+    }
+    #[test]
+    fn only_literal_one_enables_the_initial_experimental_head() {
+        assert!(!flag_on(None));
+        assert!(!flag_on(Some("")));
+        assert!(!flag_on(Some(" 1")));
+        assert!(!flag_on(Some("2")));
+        assert!(flag_on(Some("1")));
+        assert!(!flag_on(Some("0")));
+    }
+    #[test]
+    fn extending_into_a_partial_foreign_claim_never_releases_its_exclusion() {
+        let regions = Arc::new(crate::userva::Regions::default());
+        let bind = regions.steer(0x10000, 4096).unwrap();
+        let other = regions.steer(0x20000, 4096).unwrap();
+        assert!(bind.extend(0x1f800, 4096).is_err());
+        drop(bind);
+        assert!(regions.steer(0x20000, 4096).is_err());
+        drop(other);
+        assert!(regions.steer(0x20000, 4096).is_ok());
     }
 }
 const MAX: usize = 256;
@@ -307,12 +562,29 @@ impl<H> Queue<H> {
     pub(crate) fn has_work(&self) -> bool {
         self.held.load(Ordering::Relaxed) != 0
     }
-    // The baseline still refuses execution; RED tests precede the production callback dispatch.
-    pub(crate) fn serve(&self, _host: &H) {
-        let job = self.jobs.lock().ok().and_then(|mut q| q.pop_front());
-        if let Some(job) = job {
-            self.finish(job, Err(0x56));
+    // No queue guard crosses a native call or completion callback.
+    pub(crate) fn serve(&self, host: &H) {
+        if !self.on {
+            return;
         }
+        let job = self.jobs.lock().ok().and_then(|mut q| q.pop_front());
+        if let Some(mut job) = job {
+            match (job.work)(host) {
+                Some(result) => self.finish(job, result),
+                None => {
+                    // Admission credit includes this parked job, so it cannot overflow MAX.
+                    if let Ok(mut q) = self.jobs.lock() {
+                        q.push_back(job);
+                    }
+                }
+            }
+        }
+    }
+    pub(crate) fn reject(&self, status: u32) -> u32 {
+        if self.on {
+            self.refused.fetch_add(1, Ordering::Relaxed);
+        }
+        status
     }
     fn finish(&self, job: Job<H>, result: Result<u64, u32>) {
         match result {
@@ -353,4 +625,67 @@ impl<H> Queue<H> {
             self.bytes.load(Ordering::Relaxed)
         )
     }
+}
+
+/// A stream-ordered bind can target its triggering GR channel or its own TSG.
+/// Other logical clients/contexts need a separate target-lifetime adapter.
+pub(crate) fn eligible(
+    request: kf_abi::grbind::Request,
+    key: (u32, u32),
+    tsg: Option<u32>,
+    engine: u32,
+    active: bool,
+) -> bool {
+    active
+        && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
+        && request.client == key.0
+        && (request.channel == key.1 || Some(request.channel) == tsg)
+}
+
+/// Snapshot under the private target lifetime guard, not guest-supplied authority.
+pub(crate) struct Life<'a> {
+    pub allocation: &'a Arc<()>,
+    pub channel: Option<kf_host::Channel>,
+    pub canceled: bool,
+    pub retired: bool,
+    pub free_attempted: bool,
+    pub dead: bool,
+}
+pub(crate) fn same_live(allocation: &Arc<()>, channel: kf_host::Channel, now: Life<'_>) -> bool {
+    !now.canceled
+        && !now.retired
+        && !now.free_attempted
+        && !now.dead
+        && Arc::ptr_eq(allocation, now.allocation)
+        && now.channel.is_some_and(|c| {
+            c.chan == channel.chan && c.tsg == channel.tsg && c.token == channel.token
+        })
+}
+
+/// CODE READ (`writable`): bounded full writable coverage of host placement rows.
+/// The VA worker serializes ordinary mappings; a steer claim excludes act-thread handovers.
+pub(crate) fn writable(rows: &crate::mem::PlacedRows, va: u64, len: u64) -> bool {
+    let Some(end) = va.checked_add(len).filter(|e| *e > va) else {
+        return false;
+    };
+    let Ok(rows) = rows.try_read() else {
+        return false;
+    };
+    let mut at = va;
+    for _ in 0..32768 {
+        let Some((&start, &(bytes, _, _, perm))) = rows.range(..=at).next_back() else {
+            return false;
+        };
+        let Some(next) = start.checked_add(bytes).filter(|n| *n > at) else {
+            return false;
+        };
+        if perm.read_only {
+            return false;
+        }
+        at = next.min(end);
+        if at == end {
+            return true;
+        }
+    }
+    false
 }

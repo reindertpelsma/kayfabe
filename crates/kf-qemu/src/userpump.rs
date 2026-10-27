@@ -565,6 +565,10 @@ struct Wait {
     gapless: bool,
 }
 enum PendingAction {
+    Bind {
+        reply: crate::grbinds::Reply,
+        plan: crate::defapi::Planned,
+    },
     Invalidate {
         ticket: u64,
         plan: crate::defapi::Planned,
@@ -573,6 +577,23 @@ enum PendingAction {
         cell: SwCell,
         plan: crate::defapi::Planned,
     },
+}
+struct GrTarget {
+    record: Arc<userrelay::Cell>,
+    allocation: Arc<()>,
+    key: (u32, u32),
+    tsg: Option<u32>,
+    engine: u32,
+    channel: kf_host::Channel,
+}
+enum BindAdmission {
+    Busy,
+    Refused(u32),
+}
+impl From<u32> for BindAdmission {
+    fn from(status: u32) -> Self {
+        Self::Refused(status)
+    }
 }
 
 /// The guarded private-ring publication shared by the pump's segment machinery and by the per-entry turn's I/O
@@ -2560,6 +2581,25 @@ impl Pump {
         let reg = me.defapi_reg.get().ok_or("USER_RING_REGISTRY_ABSENT")?;
         if let Some(action) = pending.take() {
             let (plan, result, flushed) = match action {
+                PendingAction::Bind { reply, plan } => {
+                    let result = {
+                        let mut out = locked(reply.try_lock(), "USER_RING_GR_REPLY_POISONED")?;
+                        out.take()
+                    };
+                    match result {
+                        Some(result) => (
+                            plan,
+                            result
+                                .map(|_| ())
+                                .map_err(|status| format!("USER_RING_GR_BIND_REFUSED {status:#x}")),
+                            false,
+                        ),
+                        None => {
+                            *pending = Some(PendingAction::Bind { reply, plan });
+                            return Ok(false);
+                        }
+                    }
+                }
                 PendingAction::Invalidate { ticket, plan } => match me.inbox.split_result(ticket) {
                     Some(result) => (plan, result, true),
                     None => {
@@ -2596,6 +2636,20 @@ impl Pump {
         };
         me.defapi_triggers.fetch_add(1, Ordering::Relaxed);
         let outcome = match plan.bundle {
+            _ if crate::grbinds::enabled()
+                && matches!(plan.entry.cmd, 0x20801208 | 0x20801209 | 0x20801211) =>
+            {
+                match me.user_gr_bind(r, &plan) {
+                    Ok(reply) => {
+                        *pending = Some(PendingAction::Bind { reply, plan });
+                        return Ok(false);
+                    }
+                    Err(BindAdmission::Busy) => Err(Failure::Retry),
+                    Err(BindAdmission::Refused(status)) => {
+                        Err(format!("USER_RING_GR_BIND_ADMISSION {status:#x}").into())
+                    }
+                }
+            }
             kf_abi::defapi::Bundle::UpdateChannelInfo(update) => self.migrate(me, r, update),
             kf_abi::defapi::Bundle::InvalidateTlb { .. } => {
                 let ticket =
@@ -2816,6 +2870,209 @@ impl Pump {
 }
 
 impl ChanPlane {
+    /// Queue after the USER prefix witness. RM runs only on the VA worker, with
+    /// the original private publication/lifetime guard, never under pt/row guards.
+    fn user_gr_bind(
+        &self,
+        r: &userrelay::Record,
+        plan: &crate::defapi::Planned,
+    ) -> Result<crate::grbinds::Reply, BindAdmission> {
+        let queue = &self.inbox.gr_binds;
+        let request = plan.entry.gr_bind.ok_or_else(|| queue.reject(0x1f))?;
+        let (tsg, engine) = {
+            let pt = self.pt.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::WouldBlock => BindAdmission::Busy,
+                _ => BindAdmission::Refused(queue.reject(0x40)),
+            })?;
+            let target = pt
+                .get(&r.key)
+                .filter(|t| Arc::ptr_eq(&t.allocation, &r.allocation))
+                .ok_or_else(|| queue.reject(0x40))?;
+            (target.tsg, target.engine)
+        };
+        let channel = r.chan.ok_or_else(|| queue.reject(0x40))?;
+        let source = self
+            .user_ring_record(channel.token)
+            .ok_or_else(|| queue.reject(0x40))?;
+        let target = if crate::grbinds::eligible(request, r.key, tsg, engine, true) {
+            GrTarget {
+                record: source.clone(),
+                allocation: r.allocation.clone(),
+                key: r.key,
+                tsg,
+                engine,
+                channel,
+            }
+        } else {
+            self.gr_target(request)?.ok_or_else(|| queue.reject(0x56))?
+        };
+        let reply = crate::grbinds::Reply::default();
+        let plane = self.plane;
+        let wake = self.wake;
+        let idx = r.idx;
+        queue.enqueue(
+            self.gr_work(target, request, Some(source)),
+            reply.clone(),
+            move || {
+                if plane.ring_internal(idx) {
+                    let _ = wake.signal();
+                }
+            },
+        )?;
+        let _ = self.inbox.wake.signal();
+        Ok(reply)
+    }
+
+    fn gr_work(
+        &self,
+        target: GrTarget,
+        request: kf_abi::grbind::Request,
+        source: Option<Arc<userrelay::Cell>>,
+    ) -> crate::grbinds::Work<kf_host::HostRm> {
+        let GrTarget {
+            record,
+            allocation,
+            key,
+            tsg,
+            engine,
+            channel,
+        } = target;
+        let facts = self.tsg_facts.clone();
+        Box::new(move |rm| {
+            if source.as_ref().is_some_and(|s| s.is_canceled()) {
+                return Some(Err(0x40));
+            }
+            let r = match record.try_lock() {
+                Ok(r) => r,
+                Err(std::sync::TryLockError::WouldBlock) => return None,
+                Err(_) => return Some(Err(0x40)),
+            };
+            let active = crate::grbinds::same_live(
+                &allocation,
+                channel,
+                crate::grbinds::Life {
+                    allocation: &r.allocation,
+                    channel: r.chan,
+                    canceled: record.is_canceled(),
+                    retired: r.retired,
+                    free_attempted: r.free_attempted,
+                    dead: r.dead.is_some(),
+                },
+            );
+            if !crate::grbinds::eligible(request, r.key, tsg, engine, active) || r.key != key {
+                return Some(Err(0x40));
+            }
+            let mut claim: Option<Arc<crate::userva::SteerClaim>> = None;
+            let result = rm.bind_gr_status(request, channel, |va, len| {
+                let protected = match &claim {
+                    Some(c) => c.extend(va, len),
+                    None => r.mirror.user_regions.steer(va, len).map(|c| {
+                        claim = Some(c);
+                    }),
+                };
+                protected.is_ok() && crate::grbinds::writable(&r.mirror.rows, va, len)
+            });
+            let req = match request.kind {
+                kf_abi::grbind::Kind::Preemption {
+                    flags, gfxp, cilp, ..
+                } => crate::tsgfacts::Request::Ctxsw(flags, gfxp, cilp),
+                kf_abi::grbind::Kind::Zcull { mode, .. } => crate::tsgfacts::Request::Zcull(mode),
+                kf_abi::grbind::Kind::Pm { mode, .. } => crate::tsgfacts::Request::Pm(mode),
+            };
+            if let Some(line) = facts.after(
+                channel,
+                "gr-bind",
+                req,
+                result.as_ref().err().copied().unwrap_or(0),
+                rm,
+            ) {
+                eprintln!("kf3: {line}");
+            }
+            Some(result)
+        })
+    }
+
+    fn gr_target(
+        &self,
+        request: kf_abi::grbind::Request,
+    ) -> Result<Option<GrTarget>, BindAdmission> {
+        let queue = &self.inbox.gr_binds;
+        let mut hits = {
+            let pt = self.pt.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::WouldBlock => BindAdmission::Busy,
+                _ => BindAdmission::Refused(queue.reject(0x40)),
+            })?;
+            pt.iter()
+                .filter(|(key, t)| {
+                    crate::grbinds::eligible(request, **key, t.tsg, t.engine, t.user_ring)
+                })
+                .take(2)
+                .map(|(key, t)| (*key, t.allocation.clone(), t.chan, t.tsg, t.engine))
+                .collect::<Vec<_>>()
+        };
+        if hits.is_empty() {
+            return Ok(None);
+        }
+        if hits.len() != 1 {
+            return Err(queue.reject(0x56).into());
+        }
+        let (key, allocation, channel, tsg, engine) = hits.pop().ok_or(0x40u32)?;
+        let record = self
+            .user_ring_record(channel.token)
+            .ok_or_else(|| queue.reject(0x40))?;
+        Ok(Some(GrTarget {
+            record,
+            allocation,
+            key,
+            tsg,
+            engine,
+            channel,
+        }))
+    }
+
+    pub(super) fn direct_gr_bind(&self, request: kf_abi::grbind::Request) -> ChanAnswer {
+        if !crate::grbinds::enabled() {
+            return ChanAnswer::NotOurs;
+        }
+        let target = match self.gr_target(request) {
+            Ok(Some(target)) => target,
+            Ok(None) => return ChanAnswer::NotOurs,
+            Err(why) => {
+                return ChanAnswer::Refused {
+                    status: match why {
+                        BindAdmission::Busy => 0x40,
+                        BindAdmission::Refused(st) => st,
+                    },
+                    why: "GR bind target unavailable or ambiguous".into(),
+                };
+            }
+        };
+        let d = kf_gsp::Deferred::new();
+        let done = d.clone();
+        let reply = crate::grbinds::Reply::default();
+        let completed = reply.clone();
+        let release = self.release;
+        if let Err(status) =
+            self.inbox
+                .gr_binds
+                .enqueue(self.gr_work(target, request, None), reply, move || {
+                    let status = completed
+                        .lock()
+                        .ok()
+                        .and_then(|r| *r)
+                        .map_or(0x40, |r| r.err().unwrap_or(0));
+                    done.resolve(status);
+                    let _ = release.signal();
+                })
+        {
+            return ChanAnswer::Refused {
+                status,
+                why: "GR bind queue admission refused".into(),
+            };
+        }
+        let _ = self.inbox.wake.signal();
+        ChanAnswer::Deferred(d)
+    }
     pub(super) fn user_ring_software_object(
         &self,
         client: u32,

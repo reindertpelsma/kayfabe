@@ -3,11 +3,11 @@
 mod capability_snapshot;
 
 #[test]
-fn pre_535_extension_policies_change_only_by_the_audited_software_constructors() {
+fn pre_535_extension_policies_change_only_by_the_audited_additions() {
     // Full IDs, names, provenance, denials and decision outputs; equal counts are insufficient.
     // See traces/capability_535_545_audit_20260928/README.md for baseline provenance.
     // Preserve the historical fixture. Later deltas are NV01_TIMER and the
-    // source-audited Deferred API software constructor at580+; no controls added.
+    // source-audited Deferred API software constructor at580+ and GR bind controls.
     // NV01_TIMER is
     // audited from OGKM in traces/windows_pool_20261005/timer-source-audit.tsv.
     // Pin its complete row and compare every other decision byte-for-byte.
@@ -17,7 +17,7 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
     // 2026-10-07: NV01_EVENT_KERNEL_CALLBACK at 580+ (Windows StartDevice), an edge only.
     const KCALLBACK: &str = "CLASS 00000078 NV01_EVENT_KERNEL_CALLBACK Mode2Rpc => Listed { name: \"NV01_EVENT_KERNEL_CALLBACK\", origin: Mode2Rpc }\n";
     // 2026-10-07 (OWNER_RULINGS §U): the four class-5080 registration controls at 580+, the only
-    // controls added since the fixture — pinned row by row, then removed like the classes.
+    // class-5080 controls added since the fixture — pinned row by row, then removed.
     let ctl = |cmd: u32, name: &str| {
         format!(
             "CONTROL {cmd:08x} {name} Mode2Rpc => Listed {{ name: \"{name}\", origin: Mode2Rpc }}\n"
@@ -29,7 +29,20 @@ fn pre_535_extension_policies_change_only_by_the_audited_software_constructors()
         ctl(0x5080_0103, "NV5080_CTRL_CMD_DEFERRED_API_V2"),
         ctl(0x5080_0104, "NV5080_CTRL_CMD_DEFERRED_API_INTERNAL"),
     ];
+    // GFXP1: ordinary owned-object GR binds, audited NON_PRIVILEGED in OGKM580/595.
+    // Preserve the fixture and pin the exact two additions at all eight snapshot boundaries.
+    let gr_controls = [
+        (0x2080_1209u32, "NV2080_CTRL_CMD_GR_CTXSW_PM_BIND"),
+        (0x2080_1211u32, "NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND"),
+    ];
     let mut current = capability_snapshot::existing_policy_snapshot();
+    for (cmd, name) in gr_controls {
+        let row = format!(
+            "CONTROL {cmd:08x} {name} Ogkm => Listed {{ name: \"{name}\", origin: Ogkm }}\n"
+        );
+        assert_eq!(current.matches(row.as_str()).count(), 8, "{row}");
+        current = current.replace(row.as_str(), "");
+    }
     assert_eq!(current.matches(TIMER).count(), 8);
     assert_eq!(current.matches(DEFERRED).count(), 2);
     assert_eq!(current.matches(KCALLBACK).count(), 2);

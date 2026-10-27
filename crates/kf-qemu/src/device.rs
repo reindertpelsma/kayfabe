@@ -2122,6 +2122,7 @@ impl Device {
                         }
                     }
                     let splits = self.mem.inbox.reset_life();
+                    self.mem.inbox.gr_binds.cancel_all();
                     // Windows USER-ring private VA: the channel frees queued their leases' release
                     // (and cancelled pending allocations); served now, before the mirrors they
                     // keep live are retired. Bounded: what is left is counted as KEPT below.
@@ -2476,13 +2477,18 @@ impl Device {
                 && self.mem.port.armed_request().is_none()
             {
                 self.mem.inbox.user_va.serve(&m, self.rm);
+                self.mem.inbox.gr_binds.serve(self.rm);
                 if self.mem.inbox.user_va.has_work() {
+                    let _ = self.mem.inbox.wake.signal();
+                }
+                if self.mem.inbox.gr_binds.has_work() {
                     let _ = self.mem.inbox.wake.signal();
                 }
             }
         }
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the walk-gate log's summary at
         // shutdown, bounded (`gatelog::Recorder::dump`), once the loop has stopped.
+        self.mem.inbox.gr_binds.cancel_all();
         if kf_mem::gatelog::enabled() {
             let rec = kf_mem::gatelog::global();
             for line in rec.dump_shutdown(rec.now()) {
@@ -3110,7 +3116,7 @@ impl Device {
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
             toks.join(" "),
-            self.chans.mirror_stats.summary()
+            self.chans.mirror_stats.summary() + &self.mem.inbox.gr_binds.summary()
         );
         let ic = &self.irq_counts;
         let irq = format!(

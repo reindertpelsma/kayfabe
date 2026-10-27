@@ -1,3 +1,4 @@
+//! Production GR bind contracts with bounded fake host effects.
 use kf_abi::grbind::{Kind, Request};
 use kf_host::Channel;
 use kf_host::grbind::{Host, execute};
@@ -292,4 +293,70 @@ fn zcull_no_ctxsw_does_not_require_an_available_size_query() {
     assert_eq!(execute(&mut h, r, 61, channel(), |_, _| false), Ok(0));
     assert!(h.queries.is_empty());
     assert_eq!(h.binds[0].channel, 81);
+}
+
+#[test]
+fn pm_oversized_buffer_cannot_bypass_the_per_buffer_cap() {
+    let mut h = Fake {
+        props: Some(Ok((65 << 20, 256))),
+        ..Fake::default()
+    };
+    assert!(execute(&mut h, single(true), 61, channel(), |_, _| true).is_err());
+    assert!(h.binds.is_empty());
+}
+#[test]
+fn preemption_total_extent_is_bounded_even_with_each_buffer_under_its_cap() {
+    let mut r = preempt();
+    if let Kind::Preemption { buffers, .. } = &mut r.kind {
+        buffers[2] = 0x30000;
+    }
+    let mut h = Fake {
+        props: Some(Ok((48 << 20, 4096))),
+        ..Fake::default()
+    };
+    assert!(execute(&mut h, r, 61, channel(), |_, _| true).is_err());
+    assert!(h.binds.is_empty());
+}
+#[test]
+fn a_full_pointer_array_cannot_exceed_the_total_resource_bound() {
+    let mut r = preempt();
+    if let Kind::Preemption { buffers, .. } = &mut r.kind {
+        *buffers = std::array::from_fn(|i| if i == 7 { 0 } else { 0x10000 + i as u64 * 4096 });
+    }
+    let mut h = Fake {
+        props: Some(Ok((20 << 20, 4096))),
+        ..Fake::default()
+    };
+    assert!(execute(&mut h, r, 61, channel(), |_, _| true).is_err());
+    assert!(h.binds.is_empty());
+}
+#[test]
+fn cpu_pool_pointer_is_not_accepted_even_when_no_gpu_buffers_are_present() {
+    let mut buffers = [0; 9];
+    buffers[7] = 0x10000;
+    let r = Request {
+        kind: Kind::Preemption {
+            flags: 0,
+            gfxp: 0,
+            cilp: 0,
+            buffers,
+        },
+        ..preempt()
+    };
+    let mut h = Fake::default();
+    assert!(execute(&mut h, r, 61, channel(), covered).is_err());
+    assert!(h.binds.is_empty());
+}
+#[test]
+fn misaligned_pm_buffer_does_not_reach_the_native_bind() {
+    let mut h = Fake::default();
+    let r = Request {
+        kind: Kind::Pm {
+            va: 0x10001,
+            mode: 1,
+        },
+        ..single(true)
+    };
+    assert!(execute(&mut h, r, 61, channel(), |_, _| true).is_err());
+    assert!(h.binds.is_empty());
 }

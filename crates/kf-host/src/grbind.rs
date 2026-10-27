@@ -11,7 +11,7 @@ pub trait Host {
     fn bind(&mut self, request: Request) -> Result<(), u32>;
 }
 
-/// Validate every nonzero pointer against native extent/alignment and confirmed writable rows.
+/// CODE READ (`execute`): validate nonzero pointers against native extents and writable rows.
 /// The caller serializes placements and native channel Free; no row lock crosses a host call.
 pub fn execute(
     host: &mut impl Host,
@@ -24,7 +24,12 @@ pub fn execute(
     let mut specs = Vec::with_capacity(9);
     match request.kind {
         Kind::Zcull { va, mode } | Kind::Pm { va, mode } => {
-            if mode > 2 || (mode != 0 && va == 0) {
+            let needs_buffer = if matches!(request.kind, Kind::Zcull { .. }) {
+                mode == 2
+            } else {
+                mode != 0
+            };
+            if mode > 2 || (needs_buffer && va == 0) {
                 return Err(INVALID);
             }
             let engine = if matches!(request.kind, Kind::Pm { .. }) {

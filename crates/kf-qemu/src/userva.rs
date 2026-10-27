@@ -38,6 +38,34 @@ pub struct SteerClaim {
     regions: Arc<Regions>,
     id: u64,
 }
+impl SteerClaim {
+    /// Add a span to this same worker's handover exclusion. Own overlaps are allowed;
+    /// other handovers/private slots still refuse. No lock survives the call.
+    pub(crate) fn extend(&self, va: u64, len: u64) -> Result<(), String> {
+        let end = va
+            .checked_add(len)
+            .filter(|e| *e > va)
+            .ok_or("GR_BIND_SPAN")?;
+        let mut s = self
+            .regions
+            .state
+            .lock()
+            .map_err(|_| "GR_BIND_REGIONS_POISONED")?;
+        if s.steers.len() >= REQUESTS
+            || s.slots.iter().any(|&(a, b)| va < b && a < end)
+            || s.steers
+                .iter()
+                .any(|&(id, a, b)| id != self.id && va < b && a < end)
+        {
+            return Err("GR_BIND_STEER_BUSY".into());
+        }
+        s.steers
+            .try_reserve(1)
+            .map_err(|_| "GR_BIND_STEER_ALLOCATION")?;
+        s.steers.push((self.id, va, end));
+        Ok(())
+    }
+}
 impl Drop for SteerClaim {
     fn drop(&mut self) {
         if let Ok(mut state) = self.regions.state.lock() {

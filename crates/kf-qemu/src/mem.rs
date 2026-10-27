@@ -2280,6 +2280,8 @@ pub enum SplitTarget {
 pub struct Inbox {
     /// Restricted Windows resource requests, consumed only by the VA worker.
     pub user_va: crate::userva::Queue,
+    /// Opt-in USER GR binds, serialized with placement by the VA worker.
+    pub(crate) gr_binds: crate::grbinds::Queue,
     /// ★ w827: guest L2 cache-op requests per [`kf_trap::cacheop::CacheOp`] — bumped by the vCPU
     /// (lock-free) after it stores the busy word; the VA thread performs the host op and publishes
     /// idle. See `ChanDevice::serve_cache_ops`.
@@ -2336,6 +2338,7 @@ impl Inbox {
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
             user_va: Default::default(),
+            gr_binds: Default::default(),
             cache_req: std::array::from_fn(|_| AtomicU64::new(0)),
             cache_done: std::array::from_fn(|_| AtomicU64::new(0)),
             q: Mutex::new(Vec::new()),
