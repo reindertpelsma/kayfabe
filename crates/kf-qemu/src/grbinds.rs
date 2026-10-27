@@ -497,6 +497,39 @@ mod tests {
         drop(other);
         assert!(regions.steer(0x20000, 4096).is_ok());
     }
+    #[test]
+    fn tsg_preemption_must_resolve_canonically_instead_of_picking_the_trigger() {
+        let r = request(true);
+        assert!(!prefer_trigger(r, (11, 22), Some(21), 1, true));
+        assert!(prefer_trigger(r, (11, 21), Some(31), 1, true));
+    }
+    #[test]
+    fn tsg_zcull_cannot_infer_a_share_from_its_triggering_stream() {
+        let r = request(false);
+        assert!(!prefer_trigger(r, (11, 22), Some(21), 1, true));
+        assert!(prefer_trigger(r, (11, 21), Some(31), 1, true));
+    }
+    #[test]
+    fn preemption_target_selection_refuses_two_members_but_accepts_one() {
+        let r = request(true);
+        let members = [(11, 22), (11, 23)];
+        let matches = members
+            .into_iter()
+            .filter(|key| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(unique(matches), Err(0x56));
+        assert_eq!(unique([(11, 22)]), Ok(Some((11, 22))));
+        assert_eq!(unique::<(u32, u32)>([]), Ok(None));
+    }
+    #[test]
+    fn zcull_target_selection_never_collapses_distinct_members_into_a_share() {
+        let r = request(false);
+        let members = [(11, 22), (11, 23)];
+        let matches = members
+            .into_iter()
+            .filter(|key| eligible(r, *key, Some(21), 1, true));
+        assert_eq!(unique(matches), Err(0x56));
+        assert_eq!(unique([(11, 23)]), Ok(Some((11, 23))));
+    }
 }
 const MAX: usize = 256;
 
