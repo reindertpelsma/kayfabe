@@ -7,4 +7,4 @@
 7. Convert host slow-record times through those pairs to the ETL clock; compare DmaDpcComplete gaps, submit/complete events and engine/node identities without assuming token 0x80c equals node 3.
 8. Read heartbeat stage count/max, loop-gap and loss counters; compare `LATENCY SLOW` publication, first observed marker and logical-vector opportunities, distinguishing normal versus storm on physical IRQ line 0.
 9. Read `LATENCY SPLIT` request/queue/start/apply/ready/release/resume, shared walk ID, target, diff runs and RM costs; check whether coalescing reduces walks and layout work moves after release.
-10. Preserve first-slow/shutdown dumps and ETL for both arms; GPU write timestamps are unavailable here, early/failed/masked opportunities and metadata loss limit inference, and storm is an intervention rather than proof of a stall cure.
+10. Preserve first-slow/live/shutdown dumps and ETL for both arms; GPU write timestamps are unavailable here, early/failed/masked opportunities and metadata loss limit inference, and storm is an intervention rather than proof of a stall cure.

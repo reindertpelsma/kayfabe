@@ -13,6 +13,32 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const THREADS: usize = 64;
 const VECTORS: usize = 64;
+// Diagnostics only: at most one fixed-size live dump per second, at most 16,384 per process.
+// First-slow and shutdown each retain their independent single dump allowance.
+const LIVE_PERIOD_NS: u64 = 1_000_000_000;
+const LIVE_DUMPS: u64 = 16_384;
+#[derive(Default)]
+struct LiveBudget {
+    next: AtomicU64,
+    issued: AtomicU64,
+}
+impl LiveBudget {
+    fn claim(&self, at: u64) -> bool {
+        let issued = self.issued.load(Relaxed);
+        let next = self.next.load(Relaxed);
+        if issued >= LIVE_DUMPS || at < next || at > u64::MAX - LIVE_PERIOD_NS {
+            return false;
+        }
+        // Single attempts: overlapping polls can lose a diagnostic opportunity, never spin.
+        self.next
+            .compare_exchange(next, at + LIVE_PERIOD_NS, Relaxed, Relaxed)
+            .is_ok()
+            && self
+                .issued
+                .compare_exchange(issued, issued + 1, Relaxed, Relaxed)
+                .is_ok()
+    }
+}
 static SESSION: OnceLock<Option<Recorder>> = OnceLock::new();
 thread_local! {
     static THREAD: Cell<u64> = const { Cell::new(0) };
@@ -148,6 +174,7 @@ struct Recorder {
     next_due: AtomicU64,
     dumped: AtomicBool,
     shutdown: AtomicBool,
+    live: LiveBudget,
 }
 impl Recorder {
     fn new(born: Instant, vectors: Vec<u32>) -> Self {
@@ -166,6 +193,7 @@ impl Recorder {
             next_due: AtomicU64::new(u64::MAX),
             dumped: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
+            live: LiveBudget::default(),
         }
     }
     fn now(&self) -> u64 {
@@ -639,6 +667,9 @@ pub fn poll() {
     let first = r.state.try_lock().is_ok_and(|st| st.first_dump);
     if first && !r.dumped.swap(true, Relaxed) {
         dump("first-slow");
+    } else if first && r.live.claim(r.now()) {
+        // The harness may kill QEMU without running shutdown. Export while it is alive.
+        dump("live");
     }
 }
 fn gauge(g: Gauge) -> String {
@@ -677,7 +708,7 @@ pub fn summary() -> String {
         observation_lag_gpu_known={} end_to_end={} gpu_time_missing={} pending={} \
         pending_overflow={} canceled={} early_raise={} invalid={} failed_signal={} \
         private_no_guest_vector={} metadata_lost={} irq_journal_lost={} irq_journal_gaps={} \
-        activity_journal_lost={} slow_kept={} {split}",
+        activity_journal_lost={} slow_kept={} live_dumps={}/{} {split}",
         gauge(st.gauges[0]),
         gauge(st.gauges[1]),
         gauge(st.gauges[2]),
@@ -695,7 +726,9 @@ pub fn summary() -> String {
         r.notices.lost.load(Relaxed),
         r.notice_gaps.load(Relaxed),
         r.operations.lost.load(Relaxed),
-        st.slow.len()
+        st.slow.len(),
+        r.live.issued.load(Relaxed),
+        LIVE_DUMPS
     )
 }
 fn dump(why: &str) {
@@ -1195,6 +1228,61 @@ mod native_recorder_tests {
 #[cfg(test)]
 mod live_export_tests {
     use super::*;
+
+    #[test]
+    fn ens12_live_poll_replays_do_not_spend_another_dump() {
+        let b = LiveBudget::default();
+        assert!(b.claim(100));
+        for _ in 0..10_000 {
+            assert!(!b.claim(100));
+        }
+        assert_eq!(b.issued.load(Relaxed), 1);
+    }
+
+    #[test]
+    fn ens12_live_poll_waits_a_full_period_and_does_not_catch_up() {
+        let b = LiveBudget::default();
+        assert!(b.claim(100));
+        assert!(!b.claim(LIVE_PERIOD_NS + 99));
+        assert!(b.claim(100 * LIVE_PERIOD_NS));
+        assert!(!b.claim(100 * LIVE_PERIOD_NS));
+        assert!(!b.claim(u64::MAX));
+    }
+
+    #[test]
+    fn ens12_live_session_is_terminal_after_its_last_credit() {
+        let b = LiveBudget::default();
+        b.issued.store(LIVE_DUMPS - 1, Relaxed);
+        assert!(b.claim(0));
+        assert!(!b.claim(2 * LIVE_PERIOD_NS));
+        assert_eq!(b.issued.load(Relaxed), LIVE_DUMPS);
+    }
+
+    #[test]
+    fn ens12_live_hostile_increasing_clock_cannot_extend_the_session_budget() {
+        let b = LiveBudget::default();
+        for tick in 0..(LIVE_DUMPS + 100) {
+            assert_eq!(b.claim(tick * LIVE_PERIOD_NS), tick < LIVE_DUMPS);
+        }
+        assert_eq!(b.issued.load(Relaxed), LIVE_DUMPS);
+    }
+
+    #[test]
+    fn ens12_concurrent_probes_share_one_dump_credit_per_period() {
+        let b = LiveBudget::default();
+        let grants = AtomicU64::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..32 {
+                scope.spawn(|| {
+                    if b.claim(0) {
+                        grants.fetch_add(1, Relaxed);
+                    }
+                });
+            }
+        });
+        assert_eq!(grants.load(Relaxed), 1);
+        assert_eq!(b.issued.load(Relaxed), 1);
+    }
 
     fn live_case(name: &str, pending_first: bool) {
         let name = name.split_once("::").unwrap().1;
