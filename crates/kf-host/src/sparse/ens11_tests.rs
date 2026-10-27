@@ -112,3 +112,26 @@ fn ens11_nested_noncritical_scope_cannot_reenable_layout_inside_a_split() {
     }
     assert!(!slice::in_split());
 }
+
+#[test]
+fn ens11_empty_namespace_cleanup_finishes_after_the_layout_slice_is_spent() {
+    let (mut t, m, base) = ens6::roomy(2000);
+    t.admit(&m, base, SPARSE_GRAIN).unwrap();
+    let budget = slice::Slice::default();
+    ens6::refresh(&mut t, &m, &budget, |t, ops| {
+        budget.spend(slice::SLICE_NS);
+        assert_eq!(t.clear(ops), Ok(()));
+    });
+    assert!(m.sparse_tiles().is_empty());
+}
+#[test]
+fn ens11_empty_namespace_cleanup_does_not_depend_on_optional_allowance() {
+    let (mut t, m, base) = ens6::roomy(2000);
+    t.admit(&m, base + SPARSE_GRAIN, 2 * SPARSE_GRAIN).unwrap();
+    let budget = slice::Slice::default();
+    ens6::refresh(&mut t, &m, &budget, |t, ops| {
+        budget.spend(slice::SLICE_NS * 2);
+        assert_eq!(t.clear(ops), Ok(()));
+    });
+    assert!(m.sparse_tiles().is_empty());
+}
