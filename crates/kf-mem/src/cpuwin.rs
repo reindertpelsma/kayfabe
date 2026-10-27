@@ -51,6 +51,12 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
+/// Maximum live guest placements in each CPU window. Store views hold host fds
+/// and VMAs; guest-RAM placements also consume VMAs, so both share this budget.
+/// The single boot-display seed is separate. Refusal occurs before host verbs;
+/// existing placements stay usable and successful unmaps release capacity.
+pub const MAX_CPU_WINDOW_PLACEMENTS: usize = 8192;
+
 /// ★ The host verbs one window's placements need. Production is kf-qemu's (an armed RM node +
 /// `GuestWindow::place_device_view`); tests use a recorder. Every verb is one WE author: no guest
 /// value reaches a host flag word.
@@ -573,6 +579,12 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
         if self.placed.borrow().contains_key(&d.va) {
             return self.refuse(format!(
                 "window map {:#x}: a placement WE made is still there",
+                d.va
+            ));
+        }
+        if self.placed.borrow().len() >= MAX_CPU_WINDOW_PLACEMENTS {
+            return self.refuse(format!(
+                "window map {:#x}: placement budget ({MAX_CPU_WINDOW_PLACEMENTS}) exhausted",
                 d.va
             ));
         }
