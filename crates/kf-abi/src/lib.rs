@@ -125,6 +125,7 @@ pub mod gpuatomics;
 pub mod gpuinfo;
 pub mod grfsinfo;
 pub mod grinfo;
+pub mod grbind;
 pub mod grstatic;
 pub mod gspfeatures;
 pub mod gspstaticinfo;
