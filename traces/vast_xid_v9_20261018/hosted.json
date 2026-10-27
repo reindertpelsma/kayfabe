@@ -1,0 +1,30 @@
+{
+  "run": "v9-hosted-20261023",
+  "sha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+  "checks": [
+    {
+      "conclusion": "success",
+      "databaseId": 39949654242,
+      "headSha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+      "name": "Vast box scripts",
+      "status": "completed",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39949654242"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 39949647427,
+      "headSha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+      "name": "Vast box scripts",
+      "status": "completed",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39949647427"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 39949647374,
+      "headSha": "2c908a0e8dc8965dde7f57ec8ff787d19b28ca09",
+      "name": "CI",
+      "status": "completed",
+      "url": "https://github.com/reindertpelsma/kayfabe/actions/runs/39949647374"
+    }
+  ]
+}

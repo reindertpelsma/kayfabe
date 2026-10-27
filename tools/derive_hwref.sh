@@ -227,6 +227,8 @@ rev=$(git -C "$OG" rev-parse --short HEAD 2>/dev/null || echo unknown)
   echo "# columns: dir<TAB>header<TAB>name<TAB>value — value is 0x<hex> (a value), <hi>:<lo> (a bit range, aperture"
   echo "# or structure-bit range; decimal below 4096), mw:<hi>:<lo> (a multi-word field), off=0x<n> / size=0x<n> / absent"
   echo "# (a struct member). Family resolution (which dir a family compiles against) lives in kf_chip::hwref."
+  echo "#"
+  python3 "$HERE/legal/notice.py" ogkm '#'   # NVIDIA's MIT notice travels with what is derived
   LC_ALL=C sort -t$'\t' -k1,1 -k3,3 -u "$tmp/rows"
 } > "$tmp/out"
 if [ -s "$tmp/dropped" ] || [ -s "$tmp/multiarg" ]; then

@@ -1,0 +1,48 @@
+UI1 local evidence — 2026-10-26
+Node: v22.22.1
+Wrangler: 4.152.0
+
+EXPECTED RED commit 41b9a37c2 (initial tests only): 62 tests, 3 pass, 59 fail.
+Corrected baseline: 82 tests, 5 pass, 77 fail; original source restored afterward.
+
+node --test ci/vast-broker/test/admin.test.js ci/vast-admin/test/worker.test.mjs
+  ...
+1..83
+# tests 83
+# suites 0
+# pass 83
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 879.095983
+
+node --test ci/vast-broker/test
+  ...
+1..1943
+# tests 1943
+# suites 0
+# pass 1943
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 88309.137545
+
+python3 traces/vast_admin_20261018/mutate.py
+24/24 mutants killed; every mutant fails 2–13 independent tests.
+See mutations.md and mutation-output.txt.
+
+prettier@3.6.2, broker .prettierrc.json, all broker/admin JS/MJS: PASS
+black --check --line-length 100 traces/vast_admin_20261018/mutate.py: PASS
+git diff --check: PASS
+Secret/private-path and changed-code <=100-column scans: PASS
+python3 scripts/ci/debt.py claims: existing-debt=3758 new=0 resolved=0
+
+Main Worker: Wrangler deploy --dry-run; deterministic bundle checked by broker suite.
+SHA256: 8a0c7358318434f48a9a60255c1ecd47bac2af29f5725c8586cf841d3883f51b
+Admin Worker: Wrangler deploy --config ci/vast-admin/wrangler.toml --dry-run: PASS
+SHA256: a80d7b07136b5ec2e5b95471099a4be98803633424f122167af13daa350a14e5
+
+No deployment, Cloudflare setting/secret change, direct Vast call or Claude call.
+Hosted external binding, Access login and live provider acceptance remain unverified.

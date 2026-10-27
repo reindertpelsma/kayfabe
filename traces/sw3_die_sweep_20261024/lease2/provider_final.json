@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-24T21:13:28.226973+00:00",
+  "instance": {
+    "id": 57565292,
+    "machine_id": 145338,
+    "label": "codex-sw3-ga102-20261024T211130",
+    "actual_status": "created",
+    "intended_status": "running",
+    "status_msg": "success, running docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16",
+    "dph_total": 0.5166666666666666
+  }
+}

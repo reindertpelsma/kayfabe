@@ -1,0 +1,21 @@
+{
+  "native_expected": 5,
+  "native_plus_guest_accepted": 10,
+  "completed_arms": 30,
+  "guest_proofs": [
+    {
+      "arm": "--defer-liveness",
+      "accepted_faults": 4,
+      "serial_sha256": "2b35ea0b3f94291521eb840744dd2300162e3dc25a5e1a4031bcc5daed83a7d5",
+      "qlog_sha256": "cd4ac43eec693796d6038abc3c7479ac581cd60b5e8ffecb1e256b4cdfb23d67"
+    },
+    {
+      "arm": "--missing-page-fault",
+      "accepted_faults": 1,
+      "serial_sha256": "3621cb1d6868883863bce90b75b2f564d53c1ed085bc4096c57ba3e83634ff27",
+      "qlog_sha256": "68126afeddb363dd499c56ed16f89aae9d27853af4eba629b834b804c429202e"
+    }
+  ],
+  "final_kernel_lines_equal_accepted": true,
+  "source_capture_sha256": "ecb7ae5f11989e4afb119fac2be8de769b2dc7211a48179c054f3ea0358830a7"
+}

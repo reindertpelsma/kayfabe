@@ -1,0 +1,7 @@
+E_START name=cuda_guest
+KF_PAYLOAD_STAGE_END name=cuda_guest rc=0 duration_ms=0
+...................
+----------------------------------------------------------------------
+Ran 198 tests in 52.400s
+
+OK

@@ -1,0 +1,60 @@
+test_actual_ga104_under_rtx3060_name (test_die_binding.DieBindingTests.test_actual_ga104_under_rtx3060_name) ... ERROR
+test_console_absence_refused (test_die_binding.DieBindingTests.test_console_absence_refused) ... ok
+test_console_mismatch_refused (test_die_binding.DieBindingTests.test_console_mismatch_refused) ... ok
+test_different_ssh_pin_refused (test_die_binding.DieBindingTests.test_different_ssh_pin_refused) ... ok
+test_different_unknown_native_tuple_refused (test_die_binding.DieBindingTests.test_different_unknown_native_tuple_refused) ... ok
+test_duplicate_probe_refused (test_die_binding.DieBindingTests.test_duplicate_probe_refused) ... ok
+test_inconsistent_driver_refused (test_die_binding.DieBindingTests.test_inconsistent_driver_refused) ... ok
+test_inconsistent_pci_binding_refused (test_die_binding.DieBindingTests.test_inconsistent_pci_binding_refused) ... ok
+test_inconsistent_tuple_binding_refused (test_die_binding.DieBindingTests.test_inconsistent_tuple_binding_refused) ... ok
+test_malformed_tuple_refused (test_die_binding.DieBindingTests.test_malformed_tuple_refused) ... ok
+test_marketing_name_cannot_override_native_tuple (test_die_binding.DieBindingTests.test_marketing_name_cannot_override_native_tuple) ... ERROR
+test_native_tuple_is_retained (test_die_binding.DieBindingTests.test_native_tuple_is_retained) ... ERROR
+test_out_of_scope_blackwell_refused (test_die_binding.DieBindingTests.test_out_of_scope_blackwell_refused) ... ok
+test_out_of_scope_ga107_refused (test_die_binding.DieBindingTests.test_out_of_scope_ga107_refused) ... ok
+test_real_ssh_failure_refused (test_die_binding.DieBindingTests.test_real_ssh_failure_refused) ... ok
+test_truncated_probe_refused (test_die_binding.DieBindingTests.test_truncated_probe_refused) ... ok
+test_unknown_native_tuple_refused (test_die_binding.DieBindingTests.test_unknown_native_tuple_refused) ... ok
+
+======================================================================
+ERROR: test_actual_ga104_under_rtx3060_name (test_die_binding.DieBindingTests.test_actual_ga104_under_rtx3060_name)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sw3-wt/scripts/bench/sw3/test_die_binding.py", line 31, in test_actual_ga104_under_rtx3060_name
+    self.assertEqual(check()["die"], "GA104")
+                     ~~~~~^^
+  File "/workspace/sw3-wt/scripts/bench/sw3/test_die_binding.py", line 26, in check
+    return bind(probe, binding, DIES, ARCHES, copy.deepcopy(PIN) if pin is None else pin)
+  File "/workspace/sw3-wt/scripts/bench/sw3/die_binding.py", line 75, in bind
+    raise BindingRefused("operator forecast expected GA106")
+die_binding.BindingRefused: operator forecast expected GA106
+
+======================================================================
+ERROR: test_marketing_name_cannot_override_native_tuple (test_die_binding.DieBindingTests.test_marketing_name_cannot_override_native_tuple)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sw3-wt/scripts/bench/sw3/test_die_binding.py", line 34, in test_marketing_name_cannot_override_native_tuple
+    self.assertEqual(check(binding=BINDING.replace("RTX 3060", "RTX 3070"))["die"], "GA104")
+                     ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/sw3-wt/scripts/bench/sw3/test_die_binding.py", line 26, in check
+    return bind(probe, binding, DIES, ARCHES, copy.deepcopy(PIN) if pin is None else pin)
+  File "/workspace/sw3-wt/scripts/bench/sw3/die_binding.py", line 75, in bind
+    raise BindingRefused("operator forecast expected GA106")
+die_binding.BindingRefused: operator forecast expected GA106
+
+======================================================================
+ERROR: test_native_tuple_is_retained (test_die_binding.DieBindingTests.test_native_tuple_is_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/sw3-wt/scripts/bench/sw3/test_die_binding.py", line 37, in test_native_tuple_is_retained
+    result = check()
+  File "/workspace/sw3-wt/scripts/bench/sw3/test_die_binding.py", line 26, in check
+    return bind(probe, binding, DIES, ARCHES, copy.deepcopy(PIN) if pin is None else pin)
+  File "/workspace/sw3-wt/scripts/bench/sw3/die_binding.py", line 75, in bind
+    raise BindingRefused("operator forecast expected GA106")
+die_binding.BindingRefused: operator forecast expected GA106
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.003s
+
+FAILED (errors=3)

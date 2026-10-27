@@ -1,0 +1,50 @@
+[
+  {
+    "mutant": "verification_removed",
+    "run": 14,
+    "killers": [
+      "test_offer_selector.OfferSelectorTests.test_deverified_direct",
+      "test_offer_selector.OfferSelectorTests.test_deverified_removed_from_candidate_list",
+      "test_offer_selector.OfferSelectorTests.test_missing_verification_direct",
+      "test_offer_selector.OfferSelectorTests.test_missing_verification_removed_from_candidate_list",
+      "test_offer_selector.OfferSelectorTests.test_unverified_direct",
+      "test_offer_selector.OfferSelectorTests.test_unverified_removed_from_candidate_list"
+    ]
+  },
+  {
+    "mutant": "verification_truthiness",
+    "run": 14,
+    "killers": [
+      "test_offer_selector.OfferSelectorTests.test_deverified_direct",
+      "test_offer_selector.OfferSelectorTests.test_deverified_removed_from_candidate_list",
+      "test_offer_selector.OfferSelectorTests.test_unverified_direct",
+      "test_offer_selector.OfferSelectorTests.test_unverified_removed_from_candidate_list"
+    ]
+  },
+  {
+    "mutant": "blacklist_removed",
+    "run": 14,
+    "killers": [
+      "test_offer_selector.OfferSelectorTests.test_blacklisted_machine_direct",
+      "test_offer_selector.OfferSelectorTests.test_blacklisted_machine_removed_from_candidate_list"
+    ]
+  },
+  {
+    "mutant": "vm_status_removed",
+    "run": 14,
+    "killers": [
+      "test_offer_selector.OfferSelectorTests.test_missing_vm_status_direct",
+      "test_offer_selector.OfferSelectorTests.test_missing_vm_status_removed_from_candidate_list",
+      "test_offer_selector.OfferSelectorTests.test_vm_deverified_direct",
+      "test_offer_selector.OfferSelectorTests.test_vm_deverified_removed_from_candidate_list"
+    ]
+  },
+  {
+    "mutant": "missing_vm_status_accepted",
+    "run": 14,
+    "killers": [
+      "test_offer_selector.OfferSelectorTests.test_missing_vm_status_direct",
+      "test_offer_selector.OfferSelectorTests.test_missing_vm_status_removed_from_candidate_list"
+    ]
+  }
+]

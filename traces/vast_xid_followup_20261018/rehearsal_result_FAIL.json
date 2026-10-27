@@ -1,0 +1,34 @@
+{
+  "verdict": "FAIL",
+  "suites": [
+    {
+      "name": "raw_suite",
+      "pass": 0,
+      "fail": 1,
+      "skip": 0
+    },
+    {
+      "name": "arm_defer_liveness",
+      "pass": 0,
+      "fail": 1,
+      "skip": 0
+    }
+  ],
+  "hardware": {
+    "gpu_name": "NVIDIA GeForce RTX 3090",
+    "compute_cap": 860,
+    "driver_version": "580.159.04"
+  },
+  "diagnostics": [
+    {
+      "arm": "--defer-liveness",
+      "mode": "native",
+      "rc": 6,
+      "admitted": false,
+      "text": "SYNTHETIC WRONG-CHANNEL REPLAY\n[ 2447.449595] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0xff00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n[ 2450.469521] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n[ 2453.470145] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n[ 2456.491053] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n[ 2495.376043] NVRM: Xid (PCI:0000:00:07): 31, pid=107377, name=kayf\n[diagnostic preview: head and tail]\n type FAULT_PTE ACCESS_TYPE_VIRT_READ\n    [ 2450.469521] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n    [ 2453.470145] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n    [ 2456.491053] NVRM: Xid (PCI:0000:00:07): 31, pid=107053, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ\n[xid-watch]    An \"Xid 31  FAULT_PDE\" means the host MMU walked for an address that resolved\n[xid-watch]   to nothing  i.e. OUR placement, not the guest's methods. A rung that reports\n[xid-watch]   'the engine never fetched' beside this line has ONE cause, not two candidates.\n",
+      "sha256": "1ff5ffe47d16468f479ec1affce059e220f5ded6450624f03c489027d483fa46",
+      "source_bytes": 16699,
+      "dropped_bytes": 14689
+    }
+  ]
+}
