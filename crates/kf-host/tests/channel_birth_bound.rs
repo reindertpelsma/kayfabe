@@ -179,8 +179,17 @@ fn matching_brace(s: &str, open: usize) -> usize {
 fn without_test_modules(code: &str) -> String {
     let mut s = code.to_string();
     while let Some(at) = s.find("#[cfg(test)]") {
-        let open = at + s[at..].find('{').expect("a test module body");
-        let end = matching_brace(&s, open);
+        let tail = &s[at..];
+        let body = tail.find('{');
+        let declaration = tail.find(';').filter(|semi| {
+            body.is_none_or(|open| *semi < open)
+                && tail[..*semi].split_whitespace().any(|word| word == "mod")
+        });
+        let end = if let Some(semi) = declaration {
+            at + semi + 1 // An out-of-line test module has no body in this file.
+        } else {
+            matching_brace(&s, at + body.expect("a test module body"))
+        };
         s.replace_range(at..end, "");
     }
     s
@@ -474,4 +483,16 @@ fn only_the_oracle_names_the_belt_off_and_the_passthrough_birth_names_deny() {
         code(&pt).contains("PhysicalCeBelt::Deny"),
         "★ the Passthrough birth no longer passes `PhysicalCeBelt::Deny`"
     );
+}
+
+#[test]
+fn scanner_removes_an_out_of_line_test_module_at_end_of_file() {
+    assert_eq!(without_test_modules("#[cfg(test)] mod tests;"), "");
+}
+#[test]
+fn scanner_keeps_production_after_an_out_of_line_test_module() {
+    let source = "#[cfg(test)] mod support;\nfn production() { admitted(); }";
+    let kept = without_test_modules(source);
+    assert!(kept.contains("fn production() { admitted(); }"));
+    assert!(!kept.contains("mod support"));
 }
