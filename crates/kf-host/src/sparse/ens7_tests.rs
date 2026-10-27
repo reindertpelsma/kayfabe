@@ -281,3 +281,33 @@ fn ens7_space_destruction_removes_only_its_own_deficit() {
     adjust_deficit_gauge(&counter, 40, 0);
     assert_eq!(counter.load(Relaxed), 60);
 }
+fn ens7_whole_retirement_warning(offset: u64) {
+    let mut d = deficit::Deficit::default();
+    for i in 0..300 {
+        d.mark(
+            LO + offset + 2 * i * PAGE,
+            LO + offset + (2 * i + 1) * PAGE,
+            true,
+            HI,
+        );
+    }
+    assert!(d.capped);
+    assert!(d.warning(0, HI).is_some());
+    d.mark(crate::channel::TWIN_VA_FLOOR, HI, false, HI);
+    assert!(!d.capped);
+    assert_eq!(d.bytes, 0);
+    d.mark(LO, LO + NORMAL_GRAIN, true, HI);
+    assert!(
+        d.warning(1, HI).is_none(),
+        "whole retirement must preserve the cooldown"
+    );
+    assert!(d.warning(30_000_000_000, HI).is_some());
+}
+#[test]
+fn ens7_retiring_capped_prefix_coverage_preserves_warning_rate_limit() {
+    ens7_whole_retirement_warning(0);
+}
+#[test]
+fn ens7_retiring_capped_suffix_coverage_preserves_warning_rate_limit() {
+    ens7_whole_retirement_warning(NORMAL_GRAIN);
+}
