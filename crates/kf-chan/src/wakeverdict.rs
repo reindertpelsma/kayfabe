@@ -9,6 +9,27 @@
 //! in-flight sequence, so the host had finished and nothing had pumped the channel since: a lost
 //! wake, not a stuck engine. This names which case a dump is.
 
+/// What a probe dump of a Translated channel says about its oldest in-flight fence.
+///
+/// `fence_word` is the ring's fence word (what the host engine last released), `head` the oldest
+/// in-flight sequence, `marked` whether the channel's token is in the session's completion set
+/// (the set a wake rings).
+#[must_use]
+pub fn wake_verdict(fence_word: u32, head: Option<u32>, marked: bool) -> &'static str {
+    match head {
+        None => "no fence in flight",
+        Some(seq) if !crate::host::reached(fence_word, seq) => "host fence not reached",
+        Some(_) if marked => {
+            "HOST-DONE-NOT-SEEN marked: the host released the fence and no pump has run since \
+             (a lost wake)"
+        }
+        Some(_) => {
+            "HOST-DONE-NOT-SEEN UNMARKED: the host released the fence and the token is not in the \
+             completion set, so no wake would ring it"
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::wake_verdict;
@@ -42,6 +63,9 @@ mod tests {
     fn the_comparison_wraps_like_the_ring_sequence() {
         let v = wake_verdict(2, Some(u32::MAX - 1), true);
         assert!(v.starts_with("HOST-DONE-NOT-SEEN"), "{v}");
-        assert_eq!(wake_verdict(u32::MAX - 3, Some(2), true), "host fence not reached");
+        assert_eq!(
+            wake_verdict(u32::MAX - 3, Some(2), true),
+            "host fence not reached"
+        );
     }
 }
