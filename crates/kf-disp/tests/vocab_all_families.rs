@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! Every display family's method vocabulary must resolve from the derived tables for every derived
-//! driver version. `display=on` refuses to realize otherwise, and a rented Turing box (TU106, lease
-//! 57882297, 2026-10-27) showed that Turing could not: `NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE is
-//! not derived`. Turing's window class (C57E) has a 32-bit-only semaphore with one context DMA, one
-//! control word and an ACQUIRE and a RELEASE value; the 64-bit payload bit, the release mode and the
-//! separate acquire semaphore are C67E and later (`crates/kf-disp/data/classes-*.tsv`).
+//! Every display family's method vocabulary must resolve from the derived tables for every
+//! derived driver version. `display=on` refuses to realize otherwise, and a rented Turing box
+//! (TU106, lease 57882297, 2026-10-27) showed that Turing could not:
+//! `NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE is not derived`. Turing's window class (C57E) has a
+//! 32-bit-only semaphore with one context DMA, one control word and an ACQUIRE and a RELEASE
+//! value; the 64-bit payload bit, the release mode and the separate acquire semaphore are C67E
+//! and later (`crates/kf-disp/data/classes-*.tsv`).
 
 use kf_disp::class;
 use kf_disp::engine::Vocab;
@@ -28,5 +29,8 @@ fn every_family_resolves_its_vocabulary_for_every_derived_version() {
             }
         }
     }
-    assert!(failures.is_empty(), "unresolved vocabularies: {failures:#?}");
+    assert!(
+        failures.is_empty(),
+        "unresolved vocabularies: {failures:#?}"
+    );
 }

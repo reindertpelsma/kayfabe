@@ -32,15 +32,39 @@ MEASURED (2026-10-27, lease 57882297, `run3_windows/matrix_after_userring_fix_fr
 
 MEASURED (2026-10-27, lease 57882297, `run3_windows/w7_nvlddmkm153_bugcheck_xml.txt`, `run3_windows/w8_host_fence_overdue_probe_block.txt`): a few minutes into a boot, nvlddmkm logs `Resetting/Reset/Restarting TDR` triples (66 events by 01:35 UTC), the RM unloads and reloads (nine lives in one boot) and one boot ended in bugcheck 0x113 with parameter 1 0x2c. The completion probe (`KF3_COMPLETION_PROBE=1000`) names one Translated copy-engine channel (token 0x809, host 0x8003b, engine 0xb) with `HOST-FENCE-OVERDUE`: the guest `GP_PUT` is 12028, the guest `GP_GET` 12026, the host ring is drained (GET equals PUT, 230) and fence 765 never completes. No host Xid. This is the "completion lost until TDR" class already tracked in `docs/STATUS_AND_HANDOFF.md`; nothing here shows it is Turing specific.
 
+MEASURED (2026-10-27, lease 57882297, `run3_windows/matrix_second_fresh_boot_tdr_storm.txt`, `run3_windows/tur1_w10.run`): a second fresh boot of the same image met a TDR storm (a `nvlddmkm` 153 triple every 30 s from 02:09 UTC) as soon as the desktop was up; `cuda_callback`, `cuda_occupancy`, `cup2` and `cup3` passed in the gaps, `dxprobe_d3d11`, `dxprobe_d3d12` and `cup8` failed (`D3D11CreateDevice` 0x887a0005, `cuCtxCreate` 999). The matrix is therefore n=2 with different outcomes: the Windows guest on TU106 is NOT yet stable.
+
+MEASURED (2026-10-27, lease 57882297, `run3_windows/tur1_w11_nd.run`, `run3_windows/tur1_w11_idle.txt`): with `WINVM_KF3_DISPLAY=off` and no workload the guest was quiet for four minutes (no new 153 event after the boot, `nvidia-smi` 580.88, 61 MiB used). MEASURED (2026-10-27, lease 57882297, `run3_windows/tur1_w13_nd.run`): with `display=off` and the matrix tools running, the RM unloaded four times and the guest stopped answering ssh for more than six minutes. So the resets follow GPU work, and not only the emulated display.
+
+## Linux regression on the fixed binary
+
+MEASURED (2026-10-27, lease 57882297, `run4_regress/tur1d_suites.run`, `run4_regress/tur1d_suite.out`): with the display and user-ring fixes built in (`kf3-bins/67339dc0-dirty`, branch head `e3c4483a0` plus the test additions), `bare_metal_suite.sh` is 30/30 and the thin-guest `fast_suite.sh` at a 300 s budget is 30/30 (`FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0`); `--ce-client-guest-ram` takes 187 s.
+
+MEASURED (2026-10-27, lease 57882297, `run4_regress/host_reference_after.txt`): host reference after every run: driver 595.91.07 open, 1 MiB used, `cuprobe.py` roundtrip equal, 20 Xid records, all Xid 31 from the approved negative controls of four bare-and-fast suite passes (five each), none from any Windows, ladder or mutant run.
+
 ## Defects found and fixed on this branch
 
-1. `display=on` could not realize on Turing: `NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE is not derived`. C57E's window semaphore is 32-bit with one context DMA and control word. `kf-disp` `Vocab` now carries the payload bit, release mode and separate acquire semaphore as absent on Turing. Test first: `crates/kf-disp/tests/vocab_all_families.rs` (EXPECTED RED commit 267d93a74), fix in the next commit. The Turing ACQUIRE value is NOT modelled (a Turing window never waits on an acquire); that is a stated gap, not a verified behaviour.
-2. The Windows USER ring relay refused every Turing channel (`USER_RING_SOURCE_DECLARATION`, class 0xc46f), so `cuCtxCreate` returned 999 and `D3D11CreateDevice` 0x8876017c on a Code 0 device. It now admits `TURING_CHANNEL_GPFIFO_A` next to `AMPERE_CHANNEL_GPFIFO_A`. Test first: `userrelay::tests::the_user_ring_admits_the_turing_and_ampere_gpfifo_classes_only` (EXPECTED RED commit, no predicate yet).
+1. `display=on` could not realize on Turing: `NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE is not derived`. C57E's window semaphore is 32-bit with one context DMA and control word. `kf-disp` `Vocab` now carries the payload bit, release mode and separate acquire semaphore as absent on Turing. Test first: `crates/kf-disp/tests/vocab_all_families.rs` (EXPECTED RED, commit 267d93a74), fix in the next commit. The Turing ACQUIRE value is NOT modelled (a Turing window never waits on an acquire); that is a stated gap, not a verified behaviour.
+2. The Windows USER ring relay refused every Turing channel (`USER_RING_SOURCE_DECLARATION`, class 0xc46f), so `cuCtxCreate` returned 999 and `D3D11CreateDevice` 0x8876017c on a Code 0 device. It now admits `TURING_CHANNEL_GPFIFO_A` next to `AMPERE_CHANNEL_GPFIFO_A`. Test first: `userrelay::tests::the_user_ring_admits_the_turing_and_ampere_gpfifo_classes_only` (EXPECTED RED: no predicate yet).
 3. `scripts/bench/windows/win_vm.sh`: `WINVM_KF3_DISPLAY=off` builds a headless device (no display plane, no boot GOP) for boxes without a monitor.
+4. SW5's `HUBCLIENT_HSCE[0-9]+` guard fix (two commits, EXPECTED RED then fix) cherry-picked from the local `codex/sw5-20261024`, which was never pushed.
+
+MEASURED (2026-10-27, lease 57882297, `run4_regress/mutants.run`): hand mutants of the fixes, each killed by two tests: payload bit required again (1 kf-disp lib test and 1 vocabulary test fail), acquire group required again (the same two), predicate Ampere-only (2 kf-qemu tests fail); baseline and restored: 0 failures.
+
+## Operator findings (not product defects)
+
+- Master's `provision_bench_tree.sh` wants `/root/NVIDIA-Linux-x86_64-580.159.04.run` even when the host is 595.91.07; the lane branches fetched it. Fetch it by hand.
+- The fat guest needs `KF3_DEV_EXTRA=guest-driver=<guest version>` (above).
+- `win_vm.sh run` does not set the Windows production flags; the 20-flag list lives in `scripts/bench/windows/host_tools/runners/winprod/windows_broker_prod2.sh`. `fb-mb` must be at most about 6144 on an 8 GB GPU (`WINVM_KF3_FB_MB=6144`).
+- Ubuntu 22.04's mingw lacks `D3D_FEATURE_LEVEL_12_2`; `kf_dxprobe.cpp` builds with `-D'D3D_FEATURE_LEVEL_12_2=((D3D_FEATURE_LEVEL)0xc200)'`. `kf_overlayprobe.cpp` does not build there (`SetProcessDPIAware`).
+- A strictly serial harness: a Windows install QEMU running makes every Linux guest arm refuse to start.
+
+## Open hypotheses for the next iteration (INFERRED, each with its falsifier)
+
+- H-CE2 (INFERRED): the Windows TDRs are lost completions of Translated copy-engine fences on LCE2 (engine 0xb), the class in `docs/STATUS_AND_HANDOFF.md`; evidence is the single `HOST-FENCE-OVERDUE` dump (`run3_windows/w8_host_fence_overdue_probe_block.txt`: host ring drained, fence 765 not seen). FALSIFIER: a reset with no overdue Translated fence in the probe, or an overdue fence that completes on a later wake. Next measurement: the same Windows flow on an Ada or Ampere box with `KF3_COMPLETION_PROBE=1000`, to see whether the overdue dump is Turing-specific.
+- H-DISP (INFERRED): the Turing window flip semaphore (acquire not modelled, release on the shared control word) is wrong, which keeps flips from completing (the engine stops at about 30 to 40 updates). FALSIFIER: the headless run (`tur1_w13`) resets too, which it did, so display alone is not the cause; display may still add a second fault. A Turing plane oracle from WC1's TU106 native capture would settle the semaphore semantics.
 
 ## Not done
 
-- Mutant checks for the two fixes (the vocabulary tests and the predicate test each have a second killer only by construction; no hand mutation was run).
-- The full Linux fast suite on the fixed binary is in `run4_regress/` if the run finished; see that directory.
-- The Windows TDR above, the `cup2` out-of-memory after it, `d3d12_signal_probe.ps1`, `opencl_icd`, Heaven and any application.
-- TU106 native Windows reference (lane WC1, machine 39235). The only native Windows Turing reference is TU116 (`docs/design/V3_TURING_DIE_TABLE.md` on `origin/codex/wc1-20261026`).
+- Windows applications, Heaven, the 600 s hold, `driver_status` and `opencl_icd` rows (the lease ended first), and the TDR root cause.
+- TU106 native Windows reference (lane WC1, machine 39235). The only native Windows Turing reference is TU116 (`docs/design/V3_TURING_DIE_TABLE.md` on `origin/codex/wc1-20261026`), so the Windows failures above are classified as kayfabe's only provisionally.

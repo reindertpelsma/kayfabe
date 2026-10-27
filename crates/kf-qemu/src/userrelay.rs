@@ -413,10 +413,10 @@ impl Drop for NeverBorn {
     }
 }
 
-/// The GPFIFO channel classes the Windows USER ring relay admits: `AMPERE_CHANNEL_GPFIFO_A` (GA10x, Ada,
-/// Hopper's second list entry) and, since 2026-10-27, `TURING_CHANNEL_GPFIFO_A` (`0xc46f`), whose
-/// GPFIFO entries, `USERD` `GP_GET`/`GP_PUT` and doorbell token are the same Volta-and-later layout.
-/// Hopper (`0xc86f`) and Blackwell (`0xc96f`, `0xca6f`) classes are declined.
+/// The GPFIFO channel classes the Windows USER ring relay admits: `AMPERE_CHANNEL_GPFIFO_A`
+/// (GA10x, Ada, Hopper's second list entry) and, since 2026-10-27, `TURING_CHANNEL_GPFIFO_A`
+/// (`0xc46f`), whose GPFIFO entries, `USERD` `GP_GET`/`GP_PUT` and doorbell token are the same
+/// Volta-and-later layout. Hopper (`0xc86f`) and Blackwell (`0xc96f`, `0xca6f`) are declined.
 const TURING_CHANNEL_GPFIFO_A: u32 = 0xc46f;
 
 #[must_use]
@@ -1054,11 +1054,12 @@ mod tests {
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
 
-    /// ★ 2026-10-27 (TU106 rental 57882297, Windows 580.88): the Windows USER ring relay refused every
-    /// Turing channel (`USER_RING_SOURCE_DECLARATION`, class `0xc46f`), so `cuCtxCreate` and
-    /// `D3D11CreateDevice` failed on a Code-0 device. The GPFIFO entry (8 bytes), `GP_GET`/`GP_PUT` in
-    /// `USERD` and the doorbell token are the Volta-and-later layout shared by `0xc36f`, `0xc46f` and
-    /// `0xc56f`; the Hopper (`0xc86f`) and Blackwell (`0xc96f`, `0xca6f`) classes stay declined.
+    /// ★ 2026-10-27 (TU106 rental 57882297, Windows 580.88): the Windows USER ring relay refused
+    /// every Turing channel (`USER_RING_SOURCE_DECLARATION`, class `0xc46f`), so `cuCtxCreate` and
+    /// `D3D11CreateDevice` failed on a Code-0 device. The GPFIFO entry (8 bytes), `GP_GET` and
+    /// `GP_PUT` in `USERD` and the doorbell token are the Volta-and-later layout shared by
+    /// `0xc36f`, `0xc46f` and `0xc56f`; Hopper (`0xc86f`) and Blackwell (`0xc96f`, `0xca6f`)
+    /// stay declined.
     #[test]
     fn the_user_ring_admits_the_turing_and_ampere_gpfifo_classes_only() {
         assert!(user_ring_class_admitted(0xc56f), "AMPERE_CHANNEL_GPFIFO_A");
@@ -1066,6 +1067,31 @@ mod tests {
         for declined in [0xc36f, 0xc86f, 0xc96f, 0xca6f, 0xc76f, 0] {
             assert!(!user_ring_class_admitted(declined), "{declined:#x}");
         }
+    }
+
+    /// Over every `0x??6f` (GPFIFO-shaped) id the predicate says yes to exactly two.
+    #[test]
+    fn the_predicate_admits_exactly_two_gpfifo_shaped_ids() {
+        let admitted: Vec<u32> = (0u32..=0xff)
+            .map(|hi| (hi << 8) | 0x6f)
+            .filter(|&c| user_ring_class_admitted(c))
+            .collect();
+        assert_eq!(admitted, vec![0xc46f, 0xc56f]);
+    }
+
+    /// The birth gate must go through the predicate, not compare against one class again.
+    #[test]
+    fn the_birth_gate_uses_the_class_predicate() {
+        let src = include_str!("userrelay.rs");
+        assert!(src.contains("!user_ring_class_admitted(a.class)"));
+        let direct = concat!(
+            "a.class != kf_abi",
+            "::generated::classes::AMPERE_CHANNEL_GPFIFO_A"
+        );
+        assert!(
+            !src.contains(direct),
+            "the gate compares one class directly again"
+        );
     }
 
     #[test]

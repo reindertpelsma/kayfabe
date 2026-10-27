@@ -702,7 +702,8 @@ cmd_run() {
       dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,id=kf0"
     else
       gop=$(gop_signed)
-      dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=$gop,id=kf0"
+      dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432"
+      dev+=",display=on,gop=on,gop-efi=$gop,id=kf0"
     fi
     [ -z "$gdrv" ] || dev+=",guest-driver=$gdrv"
     [ -z "$extra" ] || dev+=",$extra"
