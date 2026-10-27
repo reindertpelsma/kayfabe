@@ -1,13 +1,18 @@
 # kayfabe
 
-**Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.**
+**STATUS: RESEARCH, 2026-10-21.** The scope is spelled out under "Status" below.
 
-Kayfabe is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest loads NVIDIA's real, unmodified driver (Windows or Linux);
+**One NVIDIA card. Your Linux desktop keeps it. The VM gets NVIDIA's real driver.**
+
+Kayfabe shares an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it. It is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest loads NVIDIA's real, unmodified driver (Windows or Linux);
 kayfabe reads what that driver asks for and has the real host GPU do the work, from an **unprivileged** host process that talks to the host driver
 as an ordinary client. Written in Rust.
 
-**Status: research, 2026-10-21.** It runs real applications, but there is no installer, no stable interface, and no security audit yet.
+**Status: research, 2026-10-21.** One maintainer. It runs real applications, but there is no installer (you build it from source), no public binary, no stable interface, and no security audit yet.
+Windows is not stable: sleep/wake fails and some apps make the GPU driver reset.
 Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer experiments, the Blackwell display work and further performance work live on branches.
+
+Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) | [FAQ](docs/FAQ.md) | [goals and plans](docs/howto/goals.md) | [what works today](#what-runs-today)
 
 <img alt="windows desktop with apps while host keeps gpu" src="traces/20261021_131847.jpg" width="1000" height="432" />
 <i>Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 driver. On Windows, displayed using nvkvm broker on an Ubuntu desktop: Minecraft Bedrock/Windows only edition, Unigine Heaven benchmark, nvidia-smi in powershell, Big Buck Bunny Blender on Youtube in Edge. On Linux left screen: Blender, nvidia-smi showing a single gpu being used for all the apps in the screenshots and Firefox in background (host keeps gpu). There is no PCIe/DMA copy of frames for this windows desktop (i.e both screens are directly plugged in the GPU).</i>
@@ -23,7 +28,7 @@ Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
-- **Near-native speed is within reach.** On the same RTX 4070, Unigine Heaven 4.0 in a Windows guest (1920x1080 windowed, Ultra, 260 s runs, Heaven's own score):
+- **Speed today, measured.** The production path is well below native on Direct3D 11 and about two thirds of native on OpenGL; the experimental build is close but unmerged. On the same RTX 4070, Unigine Heaven 4.0 in a Windows guest (1920x1080 windowed, Ultra, 260 s runs, Heaven's own score):
 
   | | Direct3D 11 | OpenGL |
   |---|---|---|
@@ -79,13 +84,13 @@ security model is designed but not audited, and what a guest-triggered GPU fault
 
 ## Trying it
 
-There is no user install path yet; it is still being built. Developers can build from source (`cargo build --workspace --release`; `cargo test` runs without a GPU)
+There is no user install path yet; an installer is planned, with no date. Developers can build from source (`cargo build --workspace --release`; `cargo test` runs without a GPU)
 and follow [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md) and [`scripts/bench/windows/README.md`](scripts/bench/windows/README.md).
 
 ## Learn more
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) (one page) | [`docs/design/`](docs/design/THE_ARCHITECTURE_v3.md) | [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md) |
-[`docs/OWNER_RULINGS.md`](docs/OWNER_RULINGS.md) | [`docs/FAQ.md`](docs/FAQ.md) | [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) | [`AGENTS.md`](AGENTS.md) (rules for contributors)
+[`docs/OWNER_RULINGS.md`](docs/OWNER_RULINGS.md) | [`docs/FAQ.md`](docs/FAQ.md) | [manual](https://kayfabe.dev/docs/) | [`docs/howto/goals.md`](docs/howto/goals.md) | [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) | [`AGENTS.md`](AGENTS.md) (rules for contributors)
 
 Dual-licensed **Apache-2.0 OR GPL-2.0-or-later** ([`LICENSE`](LICENSE) lists exceptions; a QEMU binary built from this tree is not yet distributable under the GPL).
 Provenance policy: [`docs/design/V3_PROVENANCE.md`](docs/design/V3_PROVENANCE.md). Security: not audited; report a suspected vulnerability to the owner privately through GitHub.

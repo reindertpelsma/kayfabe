@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "source_commit": "bd37f1a4e2310faf3d3ca4b52371daad779d126a",
+  "inputs": [
+    {
+      "path": "docs/whitepaper/fig_datapath.tex",
+      "git_blob": "bc704298179094a5a574753dc601a11b98087a29",
+      "sha256": "118b8fec4e2d0153eeea4d0252d2e98a75282a20eb215c8bf042d0966390db7f"
+    },
+    {
+      "path": "docs/whitepaper/fig_deps.tex",
+      "git_blob": "68f8e359f4ec4745745e30b4bf2145a25ca1e826",
+      "sha256": "47d1335e330b8026dc470fe981da399dcfe07ba0066f12af6d3ac5f353f0f2cb"
+    },
+    {
+      "path": "docs/whitepaper/fig_isolation.tex",
+      "git_blob": "79fc81cc5c71feb6df15ea2e700c92fb335837bb",
+      "sha256": "bdf03c41791297f66043cabdf63c0f1a77d680888e4848b97aec1bfae90cddcd"
+    },
+    {
+      "path": "docs/whitepaper/fig_layers.tex",
+      "git_blob": "389fe92a1a9a79f659d911e45a35c62ee56d444f",
+      "sha256": "84aba963768bd61db8d14deb9f000388efce8c4a6c57cf986e1dd6afa1ee1223"
+    },
+    {
+      "path": "docs/whitepaper/fig_lifecycle.tex",
+      "git_blob": "ea9a384a0fe3bc1be237d895cdd7ee18f5408f44",
+      "sha256": "c483b9ebac108b0a85bca1a052892be38fbbf2396e1a179c11dad39be81d81f9"
+    },
+    {
+      "path": "docs/whitepaper/kayfabe_architecture.tex",
+      "git_blob": "d7333b935c80e5100e4cdbe2cab0db827197f979",
+      "sha256": "71eeb64cde94df18129fafb4b33d7e2f46e04b204b079ed192a4cfe5f1bad6cd"
+    },
+    {
+      "path": "docs/whitepaper/preamble.tex",
+      "git_blob": "c6d9fbeac155ea5b30243b757ef246e20e42de96",
+      "sha256": "49ee8fca1c05b9d81c8265c6eccd5ec701c27390d85c2d32cfc72b97b85d413c"
+    }
+  ],
+  "pdf_sha256": "4498244e93c987f68bd35b729903e76331696b2597ae49d6d07f8b4682e62cc7",
+  "engine": "XeTeX 3.141592653-2.6-0.999997 (TeX Live 2025/Debian)",
+  "passes": 2
+}

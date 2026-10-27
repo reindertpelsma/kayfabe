@@ -1,0 +1,114 @@
+\section{The story before the internals}
+\label{sec:attack}
+
+Kayfabe asks whether a virtual machine can run NVIDIA's ordinary driver while the host keeps
+its own NVIDIA driver and GPU. It presents a pretend GPU to the guest, then asks the real host
+driver to do the work. The implementation is research, with no audited security boundary or
+stable installation interface. Windows needs documented registry settings, but no driver
+binary patch.\src{readme}\src{faq}\src{windows}
+
+\textbf{What already works.} A dated Windows matrix completed seven of nine workload rows:
+four graphics-benchmark configurations, two other graphics configurations and Minecraft.
+One browser-video row failed and one idle row was not run. Linux records include correct
+large computations close to the host's speed, and slow workloads that issue many small jobs.
+These results belong to older revisions; \emph{no hardware result presented here tests the
+paper's pinned baseline}. Section~\ref{sec:results} gives their scope and code distance.
+\src{winmatrix}\src{readme}
+
+\textbf{The failure this paper tries to explain.} A Windows guest can run individual programs,
+yet pause or reset its graphics driver under mixed application use. Windows has a watchdog,
+called timeout detection and recovery (TDR). Its default scheduler preemption wait is
+\textbf{two seconds}. If a task cannot finish or yield in that interval, recovery may reset
+graphics state; applications can lose their graphics device. This is not a rule that every
+submission must reset exactly two seconds after it was queued.\src{mskeys}\src{msrecovery}
+
+\textbf{The proposed explanation, INFERRED.} The guest driver edits the GPU's address map in
+memory the emulator does not intercept. To make an edit effective on the real GPU, Kayfabe
+must read that map and ask the host driver to install corresponding mappings. If this takes
+too long and dependent work waits behind it, Windows can see late progress and initiate
+recovery. That chain is plausible; it is not established as the cause of every reset.
+\src{architecture}\src{walknarrow}
+
+\textbf{The evidence gap, UNVERIFIED.} An analysis note gives a 2.43-second mapping update
+beside a 2.529-second completion gap. The analysis and raw trace are not in the repository.
+Those durations motivate a test, not a measured alignment with the watchdog. The decisive
+experiment must identify the same job, locate the scheduler's preemption request, and separate
+waiting before submission from execution and notification delay.\src{walknarrow}\src{latency}
+
+\textbf{The headline limitation, UNMEASURED.} Simultaneous host and guest GPU use is shown by
+the README screenshot, not by a throughput or host-latency experiment. The paper has no
+measurement of how a busy or faulting guest affects the host's desktop. That is an explicit
+open question, not an implication of a fast isolated benchmark.\src{readme}\src{faq}
+
+\subsection{How to attack the argument}
+
+This edition distinguishes six kinds of statement:
+
+\begin{description}[itemsep=0.35em]
+\item[MEASURED] Executed for this edition, with the command and artifact identified. Here this
+  covers publication checks only: no GPU, VM or rental was used.
+\item[REPORTED] A repository record gives a result at a named revision. An available table or
+  trace can be checked by the reader; it was not rerun here. Missing raw data stays explicit.
+\item[CODE] An implementation statement tied to source, not a promise in a design document.
+\item[DOC] A documented requirement, design or status statement; implementation and acceptance
+  may still be incomplete.
+\item[INFERRED] An explanation with an observation that could disprove it.
+\item[UNVERIFIED] A claimed result without inspectable supporting analysis, or an extension
+  beyond the tested evidence. It cannot support an acceptance claim.
+\end{description}
+
+Numeric citations link to the source. Full paths, revisions, evidence qualifications and the
+current PR snapshot are in the linked companion index, not vocabulary the reader must learn.
+The code baseline remains \code{12c4008705f17033a803e56d4d479bf1275cdb94}; later experimental
+code is always identified separately.\src{rules}
+
+\doc The claims ratchet, \code{python3 scripts/ci/debt.py claims}, requires \code{new=0} for
+changed documentation. It checks attribution in Markdown and Rust, not the truth of a causal
+claim and not this TeX prose. A clean result does not certify the paper. Source review and the
+six labels carry that obligation.\src{debt}\src{rules}
+
+A useful challenge supplies a counterexample, a public contract or a discriminating experiment.
+For a wake, identify who must wake whom. For a mapping, identify who owns the old bytes and
+which acknowledgement permits reuse. For speed, specify the workload, sample unit and control.
+The predecessor records both a probe mistaken for a real workload and a reference model that
+shared its implementation's mistake. Those incidents justify checking the instruments too.
+\src{old}
+
+\section{The product claim and its limits}
+
+\doc The guest sees an emulated NVIDIA device. Kayfabe builds host requests itself instead of
+replaying guest requests. The host driver remains loaded, and its ordinary client interface
+provides memory and execution resources. Three different permissions matter: the host driver's
+non-privileged request interface; the GPU channel's USER execution privilege; and the Unix UID
+of the VMM process. None implies the other two. A complete rootless launch is not documented;
+the supplied launch scripts use root.\src{architecture}\src{security}\src{faq}
+
+\subsection{Other approaches, without invented comparisons}
+
+\doc VFIO passthrough assigns the physical GPU to one guest, so the host gives it up.
+NVIDIA vGPU uses a vendor virtualisation stack and its own licensing. API forwarding translates
+guest driver calls; the sister project nvkvm-pv uses a custom guest module. Kayfabe instead
+emulates a device so the guest can use a stock NVIDIA driver. The repository has no detailed
+performance comparison with virtio-gpu, Venus or virgl, and this paper supplies none.
+\src{faq}\src{credits}
+
+\doc The credits describe Caraxes as an MIT fork of Leandro, using a synthetic NVIDIA device
+over vfio-user, a protocol between the VMM and an external device process. It plays the
+firmware role and mirrors guest mappings while retaining the host driver. Open-IOV is a
+separate host-module approach; whether its host keeps using the card is not established by
+the cited description. The credits identify gVisor's nvproxy as a source of capability lists,
+not as evidence of the same stock-device architecture.\src{credits}
+
+\subsection{What would make the title a measured claim?}
+
+\unmeasured A screenshot shows coexistence; it does not grade responsiveness. A convincing
+shared-use result needs a host workload with retained state, measured alone and under guest
+load, including guest faults and recovery. Multiple VMs sharing one GPU and resource fairness
+need different tests again. The security model is a design, not an independent audit.
+\src{readme}\src{security}
+
+\doc Compatibility, deployment permission and distributability are separate questions.
+The repository's source licence does not grant rights to NVIDIA's driver or Windows. The
+legal questions in Section~\ref{sec:questions} include the applicable driver agreement,
+commercial hosting, datacentre restrictions and any relevant technical restrictions.
+No benchmark result answers them.\src{credits}\src{nvidialicense}

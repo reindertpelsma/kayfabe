@@ -978,6 +978,8 @@ pub struct RmGraph {
     /// handle removes exactly its entry. The `Origin`/`Alias` discriminator is the
     /// recorded protocol fact every "is this the allocation?" question reads.
     handles: BTreeMap<NodeKey, HandleRef>,
+    /// Parent edges declared by live origin handles. Dup aliases declare no parent edge.
+    children: BTreeMap<NodeKey, BTreeSet<NodeKey>>,
     /// Dup edges whose source resource is not observed *yet* (order tolerance): a
     /// `Dup` may arrive before its `src`'s `Alloc`. Kept as `dst → src` and resolved
     /// lazily by [`Self::resource_of`]. When `src` becomes known and `dst` is used,
@@ -1077,6 +1079,7 @@ impl RmGraph {
             family,
             resources: BTreeMap::new(),
             handles: BTreeMap::new(),
+            children: BTreeMap::new(),
             pending_dups: BTreeMap::new(),
             device_default_vas: BTreeMap::new(),
             next_res_id: 0,
@@ -1709,6 +1712,10 @@ impl RmGraph {
                             ..node
                         };
                         // Declared by `RM_ALLOC` → THE origin handle of this resource.
+                        let parent_key = NodeKey::new(key.client, node.parent);
+                        if parent_key != key {
+                            self.children.entry(parent_key).or_default().insert(key);
+                        }
                         self.handles.insert(key, HandleRef::Origin(id));
                         self.by_origin.insert(node.id(), id);
                         self.resources.insert(
@@ -1888,38 +1895,21 @@ impl RmGraph {
         // namespace: the target plus its transitive same-namespace children.
         let doomed: BTreeSet<NodeKey> = if root_free {
             self.handles
-                .keys()
-                .filter(|k| k.client == key.client)
-                .copied()
+                .range(
+                    NodeKey::new(key.client, HObject(0))
+                        ..=NodeKey::new(key.client, HObject(u32::MAX)),
+                )
+                .map(|(&key, _)| key)
                 .collect()
         } else {
-            let mut doomed = BTreeSet::from([key]);
-            let mut changed = true;
-            while changed {
-                changed = false;
-                for (&hkey, &href) in &self.handles {
-                    // A handle's parent is same-namespace; read it from the resource's
-                    // payload (only the ORIGIN handle carries a parent — a dup alias is
-                    // a leaf reference with no children of its own).
-                    if hkey.client != key.client || doomed.contains(&hkey) {
-                        continue;
-                    }
-                    let Some(res) = self.resources.get(&href.res()) else {
-                        continue;
-                    };
-                    // Only follow the parent edge from the handle DECLARED BY `RM_ALLOC`
-                    // (§12.25). Asking `res.node.key != hkey` instead would treat a dup
-                    // alias that re-occupies its own resource's freed origin handle value
-                    // as an origin, and drag that resource's declared children into an
-                    // alias's free — a parent edge the alias never declared.
-                    if !href.is_origin() {
-                        continue;
-                    }
-                    let parent_key = NodeKey::new(hkey.client, res.node.parent);
-                    if parent_key != hkey && doomed.contains(&parent_key) {
-                        doomed.insert(hkey);
-                        changed = true;
-                    }
+            let mut doomed = BTreeSet::new();
+            let mut pending = vec![key];
+            while let Some(parent) = pending.pop() {
+                if !doomed.insert(parent) {
+                    continue;
+                }
+                if let Some(children) = self.children.get(&parent) {
+                    pending.extend(children.iter().copied());
                 }
             }
             doomed
@@ -2056,9 +2046,26 @@ impl RmGraph {
         if self.is_client_root(key) {
             self.client_roots.remove(&key.client);
         }
-        let Some(id) = self.handles.remove(&key).map(|h| h.res()) else {
+        let Some(handle) = self.handles.remove(&key) else {
             return;
         };
+        let id = handle.res();
+        if handle.is_origin()
+            && let Some(parent) = self
+                .resources
+                .get(&id)
+                .map(|r| NodeKey::new(key.client, r.node.parent))
+        {
+            let empty = if let Some(children) = self.children.get_mut(&parent) {
+                children.remove(&key);
+                children.is_empty()
+            } else {
+                false
+            };
+            if empty {
+                self.children.remove(&parent);
+            }
+        }
         if let Some(res) = self.resources.get_mut(&id) {
             res.refs.remove(&key);
             // A resource stays alive while any handle OR any live mapping references it

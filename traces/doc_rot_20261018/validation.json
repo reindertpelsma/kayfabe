@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-23",
+  "base_revision": "e9c6d39e5b465d7a20f3dcca8e7e15a4374958b5",
+  "checker_sha256": "e6722ee7cc297e7ac0ddb71d2d5f27af00ec117d7f51cb499cdea6a8876aa4db",
+  "c1_imported_tests": 27,
+  "expected_red": {
+    "commit": "1b8c2373f",
+    "tests": 50,
+    "failures": 47,
+    "errors": 2
+  },
+  "full_ci_python": {
+    "tests": 147,
+    "failures": 0,
+    "errors": 0,
+    "command": "python3 -m unittest discover -s scripts/ci -p 'test*.py' -q"
+  },
+  "mutation_tests_per_run": 108,
+  "mutants": 16,
+  "minimum_mutant_kills": 2,
+  "inventory": {
+    "files": 640,
+    "active_markdown": 171,
+    "findings": 61,
+    "new": 0,
+    "kinds": {
+      "missing-status": 23,
+      "misplaced-status": 22,
+      "invalid-status": 12,
+      "stale-suspect": 2,
+      "missing-date": 1,
+      "missing-supersession-notice": 1
+    }
+  },
+  "baseline_reference_identities": 139,
+  "claims": {
+    "existing": 3758,
+    "new": 0,
+    "resolved": 0
+  },
+  "limits": [
+    "Literal source references are review hints; external tools and source citations may be absent locally.",
+    "No external URL fetching or non-Markdown fragment interpretation.",
+    "Semantic status truth and whole-document archive moves require owner review.",
+    "No GPU, remote host, cargo build or hardware validation was used."
+  ],
+  "absolute_path_expected_red": {
+    "commit": "6ad935677",
+    "tests": 108,
+    "failures": 3,
+    "errors": 0
+  },
+  "private_path_scan": {
+    "sha256": "6ff5f3dd4e69aee06babc7de805cfd7c80515472608079b0c43febc303debf72",
+    "unchanged": true,
+    "findings": 0
+  }
+}

@@ -8,6 +8,9 @@
 #
 # Two passes are required for the table of contents and the cross-references.
 set -e
+if [ "${1:-}" = v3 ]; then
+  exec python3 "$(dirname "$0")/build_v3.py"
+fi
 cd "$(dirname "$0")"
 xelatex -interaction=nonstopmode kayfabe_architecture.tex >/dev/null
 xelatex -interaction=nonstopmode kayfabe_architecture.tex >/dev/null
