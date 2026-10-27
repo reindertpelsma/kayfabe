@@ -1,0 +1,39 @@
+# Status-preserving completion interrupt storm
+
+**STATUS: RESEARCH, implemented diagnostic only, 2026-10-27.** IRQSTORM, base `64c50ad472d4402a5bd7e7a3b07a628254a6565a`. No host/GPU experiment is performed by this lane. This is an optional notification diagnostic, not a stall fix.
+
+## Hypothesis, falsifier and limits
+
+**INFERRED hypothesis supplied by the coordinator:** a lost/late guest completion notification can leave a waiter asleep after its GPU fence is complete. The coordinator cites ETW boot 7321 and the `GUEST-SILENT-AFTER-COMPLETION` probe verdict in 7370/7371/7380; these new captures are not independently inspected by PF1.
+
+Preregister before a later hardware comparison: same binary/configuration, OFF versus an enabled fixed interval, with eventfd raises, guest ISR/DPC activity, pending/mask state and fence progress correlated. If a real pending cause remains unmasked, diagnostic messages reach the guest and its ISR services that cause, yet the same stall remains, extra delivery is insufficient to explain that stall. If status was never latched or was already W1C-cleared, empty messages need not schedule a completion DPC: failure to recover does not falsify every possible lost-notification stage. Recovery would support a notification/timing dependency, not identify the exact missing edge by itself. No timer or TDR constant is changed as a remedy.
+
+## Actual completion paths and arming
+
+**CODE READ at base `64c50ad4`, `kf-qemu/device.rs`, `kf-trap/cpuintr.rs` and `kf-chan/ptnsi.rs`:** engine host non-stall events, FIFO_EVENT_MTHD and retired Translated GR/CE work call `latch_and_deliver`. It atomically latches the logical CPU interrupt-tree leaf, publishes the shadow and emits a message when leaf/top masks permit. `deliver` uses MSI-X transport 0 for every logical vector; v0/v1/v2 are logical causes, not three transport eventfds. FIFO's `host_notify_vector` selects from the same derived engine-vector table. Display/GSP stall and loopback vectors are not additional storm candidates.
+
+The storm reads the device's derived engine-vector list, including other NSI vectors, rather than capturing vector numbers for one die. It deduplicates aliases and checks current leaf AND top enables through a read-only `CpuIntr::diagnostic_message`. Here arming means hardware tree enables; no live-channel/outstanding-work gate is added. Real PT-NSI subscription rules remain unchanged. Standard MSI-X masking/routing is still handled by the existing QEMU/KVM transport. A mask change after eligibility can race an already-issued message just as on the real path; no new lock is imposed on trap writes.
+
+A real latch does not clear itself on message delivery. Guest LEAF W1C clears it, and TOP is derived from leaves. Storm ticks never call `latch`, `write`, shadow publication, notifier callbacks, fence completion or guest-memory writes. Thus a still-pending real cause can be re-notified; a consumed cause remains consumed and an empty tree stays empty. Re-notifying the shared transport can also expose another already-pending cause on that same message; it does not invent that cause.
+
+## Driver semantics: duplicate or spurious message
+
+**CODE READ, OGKM 580.159.04 `intr_tu102.c::intrIsVectorPending_TU102`, `intr_nonstall_tu102.c` and `unix_intr.c::{isrWrapper,rm_isr}`:** the interrupt tree selects pending engines, non-stall service clears the leaf before callbacks, and an empty virtual-device ISR result is `NV_ERR_NO_INTR_PENDING`, with no requested bottom half. A duplicate arriving after W1C can therefore have nothing to dispatch, while another message for a still-pending real cause can let the normal handler service it. The open Linux MSI wrapper additionally tracks unhandled messages and can report them as handled for bookkeeping; it is not evidence of the closed Windows wrapper. [Microsoft's display-miniport ISR contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/dispmprt/nc-dispmprt-dxgkddi_interrupt_routine) requires FALSE if the adapter did not generate the interrupt; otherwise the handler dismisses it and completes the operation or queues a DPC. **INFERRED:** an empty duplicate can be treated as spurious and need not queue a fence DPC; the exact Windows NVIDIA behavior remains a hardware-trace question. Bounded duplicates add ISR load and perturb timing, so this document does not claim zero cost or unconditional harmlessness.
+
+## Timer, rate and reset
+
+The host environment chooses `KF3_DIAG_IRQ_STORM_MS`: unset/0 is OFF; enabled values 1..1000 ms are accepted, others rejected. `KF3_DIAG_IRQ_STORM_MODE` defaults to `all`. No guest register controls either value. The optional existing `kf3-probe` timer thread is shared; the normal completion probe runs only if separately enabled and retains its own 100ms cadence. Storm-only operation performs no channel probe. Worker/relay polling and the trap-write body are unchanged from the base.
+
+Each due check examines at most 512 candidate entries with a fixed 512-bit alias set. Family bounds come from CpuIntr's existing 8/16-leaf model. With all eligible logical causes sharing MSI-X0, one successful signal is sufficient per turn. A non-spinning atomic emission guard serializes senders; a shared deadline is rebased after the actual write/inspection, preventing overlap and delayed-sender catch-up bursts. Minimum spacing is at least the configured interval after the preceding send completes, giving at most 1000 additional successful signal calls per half-open second. Real interrupts are never rate-limited or dropped by this diagnostic. Failed signals also consume the cooldown.
+
+A reset-gate pass covers the entire check/send, so reset quiescence waits for an already admitted sender; closed reset admits none. Tree reset clears enables and pending state, and no storm message can recreate old status after guest rearming. Neither the atomic scheduler nor its emitter guard is touched by a vCPU. The only output is the existing nonblocking eventfd signal; no BQL-taking notify or new unsafe operation is introduced.
+
+Heartbeat output is present only when enabled: `storm_raises` counts successful signal calls, `storm_skipped_masked` counts distinct masked candidates per scheduled check. These are diagnostic counters, not decision inputs, host completion counts or proof of guest receipt. Zero raises can mean no eligible vectors; this arm is non-discriminating until its masks/candidates and delivery are established.
+
+## Why owed is unavailable
+
+**CODE READ at base `64c50ad4`:** CpuIntr retains pending/enables but no per-vector last-host-completion/last-guest-consumed generations. The NSI pacer's owed bits describe a send delayed by optional pacing, not guest consumption. A leaf W1C is not proof that a particular channel fence was consumed. Therefore `owed` is explicitly rejected for an enabled interval; it is not approximated with live twins, doorbells or the pacer. Implementing that mode would require a separately tested consumption contract.
+
+CPU acceptance exercises the real atomic tree with a recording sender: defaults, masks/arming, empty and W1C-cleared status, shared transport, aliases, rate/clock overflow, delayed/concurrent senders, reset barriers, failed-write counters, wider families, bounded scanning and trap progress while a sender is paused. Mutation evidence and final suite counts are recorded under `traces/irq_storm_20261018/`. A simulation establishes these local contracts; native KVM/MSI-X and closed Windows ISR/DPC behavior remain unverified.
+
+Source provenance: NVIDIA official 580.159.04 commit `b81d58ee0224d1d290bef1c080592b619e184042`, common RM interrupt paths and open Linux wrapper; SDK CPU interrupt definitions already used by `kf-trap`. Windows contract: Microsoft WDK page linked above. No closed-driver disassembly or hardware result is published here.

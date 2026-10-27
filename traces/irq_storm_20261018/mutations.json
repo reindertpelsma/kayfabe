@@ -1,0 +1,601 @@
+[
+  {
+    "mutant": "default_on",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::unset_preserves_the_real_interrupt_event_sequence",
+      "irqstorm::tests::unset_and_zero_are_off_even_with_a_mode"
+    ],
+    "seconds": 41.5,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "let Some(period) = period else {\n            return Ok(None);",
+        "new": "let Some(period) = period else {\n            return Ok(Some(Self { period_ms: 1 }));",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "zero_enables_storm",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::explicit_zero_preserves_the_real_interrupt_event_sequence",
+      "irqstorm::tests::unset_and_zero_are_off_even_with_a_mode"
+    ],
+    "seconds": 41.5,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "if period_ms == 0 {\n            return Ok(None);",
+        "new": "if period_ms == 0 {\n            return Ok(Some(Self { period_ms: 1 }));",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "oversized_period_allowed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::maximum_period_is_checked_even_with_explicit_all_mode",
+      "irqstorm::tests::out_of_range_or_malformed_periods_are_rejected"
+    ],
+    "seconds": 54.9,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "if period_ms > 1000 {",
+        "new": "if false && period_ms > 1000 {",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "owed_silently_selects_all",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::no_host_completion_consumption_history_is_claimed_by_the_pacer",
+      "irqstorm::tests::owed_never_silently_falls_back_to_all"
+    ],
+    "seconds": 57.7,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "Some(\"owed\") => Err(Invalid::OwedUnavailable),",
+        "new": "Some(\"owed\") => Ok(Some(Self { period_ms })),",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "unknown_mode_selects_all",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_valid_long_period_does_not_authorize_an_unknown_mode",
+      "irqstorm::tests::unknown_modes_are_rejected"
+    ],
+    "seconds": 59.1,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "Some(_) => Err(Invalid::Mode),",
+        "new": "Some(_) => Ok(Some(Self { period_ms })),",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "no_message_emitted",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_ce_trap_writes",
+      "irqstorm::tests::a_deadline_past_the_clock_domain_fails_without_a_message",
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_gr_trap_writes",
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_longer_period_is_not_shortened_and_a_delayed_tick_does_not_catch_up",
+      "irqstorm::tests::an_empty_enabled_tree_gets_only_a_spurious_message_and_no_status",
+      "irqstorm::tests::an_in_progress_ce_message_excludes_another_timer_sender",
+      "irqstorm::tests::an_in_progress_gr_message_excludes_another_timer_sender",
+      "irqstorm::tests::blackwell_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::competing_ticks_for_ce_share_a_single_global_rate_limit",
+      "irqstorm::tests::competing_ticks_for_gr_share_a_single_global_rate_limit",
+      "irqstorm::tests::failed_ce_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::failed_gr_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::guest_w1c_is_never_undone_and_unrelated_real_status_is_preserved",
+      "irqstorm::tests::hopper_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::hostile_vector_ids_cannot_index_the_tree_or_steal_real_status",
+      "irqstorm::tests::one_ms_period_cannot_spin_on_one_timestamp",
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors",
+      "irqstorm::tests::repeated_ce_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::repeated_gr_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::reset_gate_blocks_messages_and_reopening_does_not_invent_status",
+      "irqstorm::tests::saturated_clock_cannot_mint_unlimited_credits",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz"
+    ],
+    "seconds": 60.5,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "let sent = eligible && send();",
+        "new": "let sent = false;",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "leaf_mask_bypassed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::before_leaf_arming_no_message_is_emitted",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm"
+    ],
+    "seconds": 59.5,
+    "patches": [
+      {
+        "path": "crates/kf-trap/src/cpuintr.rs",
+        "old": "if self.leaf_en[i].load(Ordering::Acquire) & (1 << bit) != 0",
+        "new": "if true",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "top_mask_bypassed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::before_top_arming_no_message_is_emitted",
+      "irqstorm::tests::top_masks_skip_vectors_even_with_a_real_pending_leaf"
+    ],
+    "seconds": 58.2,
+    "patches": [
+      {
+        "path": "crates/kf-trap/src/cpuintr.rs",
+        "old": "            && self.top_en.load(Ordering::Acquire) & (1 << subtree_of_leaf(i)) != 0",
+        "new": "            && true",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "status_invented",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::an_empty_enabled_tree_gets_only_a_spurious_message_and_no_status",
+      "irqstorm::tests::blackwell_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::guest_w1c_is_never_undone_and_unrelated_real_status_is_preserved",
+      "irqstorm::tests::hopper_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::hostile_vector_ids_cannot_index_the_tree_or_steal_real_status",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm",
+      "irqstorm::tests::reset_gate_blocks_messages_and_reopening_does_not_invent_status",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification"
+    ],
+    "seconds": 56.9,
+    "patches": [
+      {
+        "path": "crates/kf-trap/src/cpuintr.rs",
+        "old": "        if self.leaf_en[i].load(Ordering::Acquire) & (1 << bit) != 0",
+        "new": "        self.leaf[i].fetch_or(1 << bit, Ordering::AcqRel);\n        if self.leaf_en[i].load(Ordering::Acquire) & (1 << bit) != 0",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "spurious_message_wrongly_requires_pending",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_deadline_past_the_clock_domain_fails_without_a_message",
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_ce_trap_writes",
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_longer_period_is_not_shortened_and_a_delayed_tick_does_not_catch_up",
+      "irqstorm::tests::an_empty_enabled_tree_gets_only_a_spurious_message_and_no_status",
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_gr_trap_writes",
+      "irqstorm::tests::an_in_progress_gr_message_excludes_another_timer_sender",
+      "irqstorm::tests::an_in_progress_ce_message_excludes_another_timer_sender",
+      "irqstorm::tests::blackwell_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::competing_ticks_for_ce_share_a_single_global_rate_limit",
+      "irqstorm::tests::failed_ce_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::competing_ticks_for_gr_share_a_single_global_rate_limit",
+      "irqstorm::tests::failed_gr_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::guest_w1c_is_never_undone_and_unrelated_real_status_is_preserved",
+      "irqstorm::tests::hopper_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::hostile_vector_ids_cannot_index_the_tree_or_steal_real_status",
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::one_ms_period_cannot_spin_on_one_timestamp",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors",
+      "irqstorm::tests::repeated_ce_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::repeated_gr_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::reset_gate_blocks_messages_and_reopening_does_not_invent_status",
+      "irqstorm::tests::saturated_clock_cannot_mint_unlimited_credits",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz"
+    ],
+    "seconds": 58.4,
+    "patches": [
+      {
+        "path": "crates/kf-trap/src/cpuintr.rs",
+        "old": "if self.leaf_en[i].load(Ordering::Acquire) & (1 << bit) != 0",
+        "new": "if self.leaf[i].load(Ordering::Acquire) & (1 << bit) != 0\n            && self.leaf_en[i].load(Ordering::Acquire) & (1 << bit) != 0",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "aliases_counted_twice",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::before_leaf_arming_no_message_is_emitted",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm"
+    ],
+    "seconds": 60.7,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "if *word & bit != 0 {",
+        "new": "if false && *word & bit != 0 {",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "milliseconds_treated_as_microseconds",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::before_top_arming_no_message_is_emitted",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm",
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors",
+      "irqstorm::tests::storm_timer_shares_the_probe_thread_without_enabling_channel_probes",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second"
+    ],
+    "seconds": 60.2,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "u64::from(config.period_ms) * 1_000_000",
+        "new": "u64::from(config.period_ms) * 1_000",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "deadline_ignored",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_longer_period_is_not_shortened_and_a_delayed_tick_does_not_catch_up",
+      "irqstorm::tests::failed_ce_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::failed_gr_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::competing_ticks_for_gr_share_a_single_global_rate_limit",
+      "irqstorm::tests::competing_ticks_for_ce_share_a_single_global_rate_limit",
+      "irqstorm::tests::one_ms_period_cannot_spin_on_one_timestamp",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second"
+    ],
+    "seconds": 59.2,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "if now_ns < was",
+        "new": "if false && now_ns < was",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "cooldown_from_stale_reservation",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message"
+    ],
+    "seconds": 57.8,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "let finished = clock().max(now_ns);",
+        "new": "let finished = now_ns;",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "overlapping_senders_allowed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::an_in_progress_ce_message_excludes_another_timer_sender",
+      "irqstorm::tests::an_in_progress_gr_message_excludes_another_timer_sender"
+    ],
+    "seconds": 58.3,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "if self\n            .emitting",
+        "new": "if false && self\n            .emitting",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "emission_credit_never_released",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_longer_period_is_not_shortened_and_a_delayed_tick_does_not_catch_up",
+      "irqstorm::tests::failed_gr_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::failed_ce_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::one_ms_period_cannot_spin_on_one_timestamp",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz"
+    ],
+    "seconds": 58.6,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "self.0.store(false, Ordering::Release);",
+        "new": "self.0.store(true, Ordering::Release);",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "reset_gate_bypassed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_ce_trap_writes",
+      "irqstorm::tests::a_blocked_worker_sender_cannot_block_gr_trap_writes",
+      "irqstorm::tests::reset_gate_blocks_messages_and_reopening_does_not_invent_status"
+    ],
+    "seconds": 59.4,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "let Some(_pass) = gate.enter() else { return };",
+        "new": "let _pass = ();",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "failed_writes_credited",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::failed_ce_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::failed_gr_eventfd_writes_are_not_counted_as_raises"
+    ],
+    "seconds": 58.3,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "        if sent {",
+        "new": "        if eligible {",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "raise_counter_omitted",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_delayed_ce_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::a_deadline_past_the_clock_domain_fails_without_a_message",
+      "irqstorm::tests::a_delayed_gr_sender_does_not_create_a_catch_up_message",
+      "irqstorm::tests::an_empty_enabled_tree_gets_only_a_spurious_message_and_no_status",
+      "irqstorm::tests::an_in_progress_ce_message_excludes_another_timer_sender",
+      "irqstorm::tests::an_in_progress_gr_message_excludes_another_timer_sender",
+      "irqstorm::tests::blackwell_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::competing_ticks_for_ce_share_a_single_global_rate_limit",
+      "irqstorm::tests::competing_ticks_for_gr_share_a_single_global_rate_limit",
+      "irqstorm::tests::failed_gr_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::hopper_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::failed_ce_eventfd_writes_are_not_counted_as_raises",
+      "irqstorm::tests::hostile_vector_ids_cannot_index_the_tree_or_steal_real_status",
+      "irqstorm::tests::guest_w1c_is_never_undone_and_unrelated_real_status_is_preserved",
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::repeated_ce_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::repeated_gr_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors",
+      "irqstorm::tests::reset_gate_blocks_messages_and_reopening_does_not_invent_status",
+      "irqstorm::tests::saturated_clock_cannot_mint_unlimited_credits",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification",
+      "irqstorm::tests::many_nsi_vectors_and_aliases_share_one_thousand_messages_per_second",
+      "irqstorm::tests::three_vectors_do_not_turn_one_khz_into_three_khz"
+    ],
+    "seconds": 52.3,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "            self.raises.fetch_add(1, Ordering::Relaxed);",
+        "new": "",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "masked_counter_omitted",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::before_leaf_arming_no_message_is_emitted",
+      "irqstorm::tests::before_top_arming_no_message_is_emitted",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm",
+      "irqstorm::tests::top_masks_skip_vectors_even_with_a_real_pending_leaf",
+      "irqstorm::tests::tree_reset_requires_new_guest_enables_before_renotification"
+    ],
+    "seconds": 49.1,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "                    self.skipped_masked.fetch_add(1, Ordering::Relaxed);",
+        "new": "",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "raise_field_not_printed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors"
+    ],
+    "seconds": 47.6,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "            self.raises.load(Ordering::Relaxed),",
+        "new": "            0,",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "masked_field_not_printed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::before_top_arming_no_message_is_emitted",
+      "irqstorm::tests::leaf_masks_skip_distinct_vectors_and_never_get_changed_by_the_storm"
+    ],
+    "seconds": 54.1,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "            self.skipped_masked.load(Ordering::Relaxed)",
+        "new": "            0",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "clock_saturation_mints_messages",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::a_deadline_past_the_clock_domain_fails_without_a_message",
+      "irqstorm::tests::saturated_clock_cannot_mint_unlimited_credits"
+    ],
+    "seconds": 49.7,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "let Some(next) = now_ns.checked_add(self.period_ns) else {\n            return;\n        };",
+        "new": "let next = now_ns.saturating_add(self.period_ns);",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "wide_families_truncated_to_eight_leaves",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::blackwell_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::hopper_completion_vectors_use_the_full_family_tree"
+    ],
+    "seconds": 58.7,
+    "patches": [
+      {
+        "path": "crates/kf-trap/src/cpuintr.rs",
+        "old": "if i >= self.n_leaf {\n            return Raise::OutOfRange;",
+        "new": "if i >= self.n_leaf.min(8) {\n            return Raise::OutOfRange;",
+        "matches": 2
+      }
+    ]
+  },
+  {
+    "mutant": "candidate_scan_unbounded",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::repeated_ce_aliases_cannot_create_an_unbounded_scan",
+      "irqstorm::tests::repeated_gr_aliases_cannot_create_an_unbounded_scan"
+    ],
+    "seconds": 47.4,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": ".take(kf_trap::cpuintr::MAX_LEAF * 32)",
+        "new": "",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "hostile_vector_unchecked",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::blackwell_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::hopper_completion_vectors_use_the_full_family_tree",
+      "irqstorm::tests::hostile_vector_ids_cannot_index_the_tree_or_steal_real_status"
+    ],
+    "seconds": 58.9,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "let Some(word) = seen.get_mut(v as usize / 64) else {\n                continue;\n            };",
+        "new": "let word = &mut seen[v as usize / 64];",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "off_mode_starts_timer",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::explicit_zero_preserves_the_real_interrupt_event_sequence",
+      "irqstorm::tests::normal_probe_timer_cadence_is_unchanged_with_no_storm",
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::storm_timer_shares_the_probe_thread_without_enabling_channel_probes",
+      "irqstorm::tests::unset_preserves_the_real_interrupt_event_sequence"
+    ],
+    "seconds": 61.0,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "(false, interval) => interval,",
+        "new": "(false, interval) => Some(std::time::Duration::from_millis(1)),",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "storm_alone_has_no_timer",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::nsi_vectors_outside_v0_v1_v2_use_the_same_existing_transport",
+      "irqstorm::tests::only_one_shared_transport_edge_is_sent_for_all_enabled_completion_vectors",
+      "irqstorm::tests::storm_timer_shares_the_probe_thread_without_enabling_channel_probes"
+    ],
+    "seconds": 60.2,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "(false, interval) => interval,",
+        "new": "(false, interval) => None,",
+        "matches": 1
+      }
+    ]
+  },
+  {
+    "mutant": "normal_probe_cadence_changed",
+    "returncode": 101,
+    "killers": [
+      "irqstorm::tests::normal_probe_timer_cadence_is_unchanged_with_no_storm",
+      "irqstorm::tests::storm_timer_shares_the_probe_thread_without_enabling_channel_probes"
+    ],
+    "seconds": 47.2,
+    "patches": [
+      {
+        "path": "crates/kf-qemu/src/irqstorm.rs",
+        "old": "std::time::Duration::from_millis(100)",
+        "new": "std::time::Duration::from_millis(10)",
+        "matches": 2
+      }
+    ]
+  }
+]

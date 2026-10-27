@@ -295,6 +295,8 @@ pub struct Device {
     irq_lines: Vec<Notifier>,
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
+    /// Optional host-configured completion re-notification; probe timer only.
+    irq_storm: Option<crate::irqstorm::Storm>,
     pub(crate) stop: AtomicBool,
     /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
     /// still owes the guest (set by the display worker, taken by the drainer).
@@ -1234,6 +1236,7 @@ impl Device {
                 .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
                 .collect::<Result<Vec<_>, _>>()?,
             irq_counts: IrqCounts::default(),
+            irq_storm: crate::irqstorm::from_env(),
             drainer_efd,
             stop: AtomicBool::new(false),
             hotplug_pending: AtomicU32::new(0),
@@ -1794,9 +1797,9 @@ impl Device {
         }
     }
 
-    /// ★ v3-initrace: the completion probe's own thread (`KF3_COMPLETION_PROBE`, default off) —
-    /// every 100 ms ask the channel plane for overdue Translated channels, and print the device's
-    /// interrupt state beside any dump: the guest's CPU interrupt tree (pending/enabled per leaf,
+    /// Existing optional diagnostic timer: IRQ storm and/or completion probe (both default off).
+    /// With `KF3_COMPLETION_PROBE`, every 100 ms ask for overdue Translated channels and print
+    /// device interrupt state beside any dump: the guest CPU tree (pending/enabled per leaf,
     /// top enable), MSI-X messages sent/held, the host non-stall events seen/raised per engine,
     /// the tokens with a fence in flight, and the workers' counters. ⊘ Never a vCPU, never the
     /// drainer, never a lock a vCPU takes; a sleep here delays nothing but this probe.
@@ -1804,21 +1807,44 @@ impl Device {
         if self.latency_active {
             kf_host::latency::register_thread(kf_host::latency::Role::Probe);
         }
-        let Some(ms) = crate::chan::completion_probe_ms() else {
+        let overdue = crate::chan::completion_probe_ms().map(std::time::Duration::from_millis);
+        let Some(interval) =
+            crate::irqstorm::timer_interval(overdue.is_some(), self.irq_storm.as_ref())
+        else {
             return;
         };
-        eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
-        let overdue = std::time::Duration::from_millis(ms);
-        while !self.stop.load(Ordering::Acquire) {
-            let lines = self.chans.probe_tick(overdue);
-            if !lines.is_empty() {
-                for l in &lines {
-                    eprintln!("{l}");
-                }
-                eprintln!("{}", self.probe_device_state());
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
+        if let Some(ms) = crate::chan::completion_probe_ms() {
+            eprintln!(
+                "kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)"
+            );
         }
+        let mut next_probe = std::time::Instant::now();
+        while !self.stop.load(Ordering::Acquire) {
+            self.irq_storm_tick();
+            if let Some(overdue) = overdue
+                && std::time::Instant::now() >= next_probe
+            {
+                let lines = self.chans.probe_tick(overdue);
+                if !lines.is_empty() {
+                    for l in &lines {
+                        eprintln!("{l}");
+                    }
+                    eprintln!("{}", self.probe_device_state());
+                }
+                next_probe = std::time::Instant::now() + std::time::Duration::from_millis(100);
+            }
+            std::thread::sleep(interval);
+        }
+    }
+
+    /// Whether either optional timer diagnostic needs the existing probe thread.
+    #[must_use]
+    pub fn probe_timer_enabled(&self) -> bool {
+        crate::irqstorm::timer_interval(
+            crate::chan::completion_probe_ms().is_some(),
+            self.irq_storm.as_ref(),
+        )
+        .is_some()
     }
 
     /// ★ v3-initrace: the device-wide half of a probe dump (see [`Device::probe_loop`]).
@@ -1877,6 +1903,27 @@ impl Device {
             self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
         }
         self.deliver(raise);
+    }
+
+    /// Probe timer hook: one shared message, no latch, shadow write or status publication.
+    fn irq_storm_tick(&self) -> bool {
+        let Some(storm) = &self.irq_storm else {
+            return false;
+        };
+        storm.tick(
+            || u64::try_from(self.born.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            &self.reset.gate,
+            &self.intr,
+            self.chans.engines.iter().filter_map(|e| e.vector),
+            || {
+                let sent = self.irq_lines[0].signal().is_ok();
+                if sent {
+                    self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
+                }
+                sent
+            },
+        );
+        true
     }
 
     /// The eventfd of MSI-X vector `v`, for the C device to register as a KVM irqfd.
@@ -3232,6 +3279,11 @@ impl Device {
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
+        let irq = irq
+            + &self
+                .irq_storm
+                .as_ref()
+                .map_or_else(String::new, |s| s.summary());
         let db = format!(" {}", self.dbfast.status());
         // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: `""` with the switch off (the line is the line it was).
         // ★ EXPERIMENT `KF3_GSS_NATIVE`: `""` with the switch off (the line is the line it was).
