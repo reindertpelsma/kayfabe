@@ -113,4 +113,7 @@ if expected == "PROVIDER_FAULT":
 text = "".join(messages)
 assert text.count("RENTAL machine=") == (1 if case.startswith("budget") else 2), text
 assert "runner: provider fault: machine 100001 host 3001, not a kayfabe verdict" in text, text
+if expected == "PROVIDER_FAULT":
+    assert "provider fault: machine " in summary.getvalue(), summary.getvalue()
+    assert "host " in summary.getvalue(), summary.getvalue()
 assert calls.count("/stop/123-1") == 1, calls

@@ -111,11 +111,28 @@ for (const variant of [1, 2]) {
     assert.equal((await response.json()).verdict, 'PROVIDER_FAULT');
     assert.equal(h.cloud.created.length, 1);
   });
-  test('badhost static seed excludes known failing host ' + variant, () => {
-    assert.ok(configuration(env).badHosts.includes(224600));
+  test('badhost static seed excludes known failing host ' + variant, async () => {
+    if (variant === 1) assert.ok(configuration(env).badHosts.includes(224600));
+    else {
+      const h = await setup();
+      h.cloud.offer.host_id = 224600;
+      assert.equal((await h.call()).status, 503);
+      assert.equal(h.cloud.created.length, 0);
+    }
   });
 }
-for (const change of ['product-ran', 'no-driver-proof', 'no-fault-proof', 'truncated', 'ordinary'])
+for (const change of [
+  'product-ran',
+  'guest-ran',
+  'no-driver-proof',
+  'wrong-driver-code',
+  'no-fault-proof',
+  'truncated',
+  'truncated-prefix',
+  'ordinary',
+  'not-ready-only',
+  'plain-xid',
+])
   test('badhost preserves non-provider or incomplete failure ' + change, async () => {
     const h = await fixture();
     let text = summary;
@@ -124,10 +141,21 @@ for (const change of ['product-ran', 'no-driver-proof', 'no-fault-proof', 'trunc
         'cuda_host result=NOT_RUN',
         'cuda_host rc=1 duration_ms=1 result=FAIL reason=host_xid',
       );
+    if (change === 'guest-ran')
+      text = text.replace(
+        'cuda_guest result=NOT_RUN',
+        'cuda_guest rc=1 duration_ms=1 result=FAIL reason=host_xid',
+      );
     if (change === 'no-driver-proof') text = text.replace('DRIVER_RC=8', 'DRIVER_RC=0');
+    if (change === 'wrong-driver-code') text = text.replace('DRIVER_RC=8', 'DRIVER_RC=3');
     if (change === 'no-fault-proof') text = text.replace(/^cause .*\n/m, '');
     if (change === 'truncated') text = text.replace('KF_FINAL_SUMMARY_END', '');
+    if (change === 'truncated-prefix') text = text.replace('KF_FINAL_SUMMARY_BEGIN', 'incomplete');
     if (change === 'ordinary') text = 'DRIVER_RC=8\n';
+    if (change === 'not-ready-only')
+      text = text.replace('DRIVER_RC=8', 'NOT_READY').replace(/^cause .*\n/m, '');
+    if (change === 'plain-xid')
+      text = text.replace('DRIVER_RC=8', 'NEW HOST Xid').replace(/^cause .*\n/m, '');
     assert.equal((await report(h, text)).status, 200);
     assert.equal((await h.storage.get('record:123-1')).verdict, 'FAIL');
     assert.equal(await h.storage.get('bad-machine:100001'), undefined);

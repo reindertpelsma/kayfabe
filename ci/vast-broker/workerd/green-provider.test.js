@@ -120,6 +120,8 @@ for (const kind of [
   'same-machine',
   'same-host',
   'unknown-host',
+  'unknown-prior-host',
+  'configured-host',
   'bad-host',
   'bad-host-cap',
   'deadline',
@@ -136,6 +138,10 @@ for (const kind of [
       if (kind === 'same-machine') record.machineId = previous.machineId;
       if (kind === 'same-host') record.hostId = previous.hostId;
       if (kind === 'unknown-host') record.hostId = variant === 1 ? null : undefined;
+      if (kind === 'unknown-prior-host') {
+        previous.hostId = variant === 1 ? null : undefined;
+        await call('/seed', [['record:123-1', previous]]);
+      }
       if (kind === 'bad-host')
         await call('/seed', [['bad-host:' + record.hostId, { reason: 'PROVIDER_FAULT' }]]);
       if (kind === 'bad-host-cap')
@@ -162,6 +168,7 @@ for (const kind of [
         retryNonce: kind === 'nonce' ? 'd'.repeat(32) : previous.nonce,
         ...(kind === 'cost' ? { cost: 1 + variant / 10 } : {}),
         ...(kind === 'cap' ? { config: variant === 1 ? { daily: 0.01 } : { rolling: 0.01 } } : {}),
+        ...(kind === 'configured-host' ? { config: { badHosts: [record.hostId] } } : {}),
       });
       assert.notEqual(response.status, 200);
       assert.deepEqual(await call('/snapshot'), before);
@@ -210,3 +217,77 @@ for (const hostId of [9000, 9001])
       false,
     );
   });
+
+for (const variant of [1, 2]) {
+  test('workerd provider indexes stay bounded ' + variant, async (t) => {
+    const { call } = await fixture(t);
+    await call(
+      '/seed',
+      Array.from({ length: 257 + variant }, (_, i) => [
+        'bad-machine:' + (1000 + i),
+        { reason: 'PROVIDER_FAULT', hostId: 9000 },
+      ]),
+    );
+    assert.equal(
+      (
+        await call('/provider-fault', {
+          record: { machineId: 800, hostId: 9000 },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await call('/snapshot')).data.filter(([k]) => k.startsWith('bad-machine:')).length,
+      257 + variant,
+    );
+  });
+  test('workerd host index stays bounded ' + variant, async (t) => {
+    const { call } = await fixture(t);
+    await call('/seed', [
+      ['bad-machine:800', { reason: 'PROVIDER_FAULT', hostId: 9000 + variant }],
+      ...Array.from({ length: 257 + variant }, (_, i) => [
+        'bad-host:' + (1000 + i),
+        { reason: 'PROVIDER_FAULT' },
+      ]),
+    ]);
+    assert.equal(
+      (
+        await call('/provider-fault', {
+          record: { machineId: 801, hostId: 9000 + variant },
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await call('/snapshot')).data.filter(([k]) => k.startsWith('bad-host:')).length,
+      257 + variant,
+    );
+  });
+  test(
+    'workerd one provider fault cannot combine unrelated host evidence ' + variant,
+    async (t) => {
+      const { call } = await fixture(t);
+      await call('/seed', [
+        [
+          'bad-machine:800',
+          {
+            reason: variant === 1 ? 'MANUAL' : 'PROVIDER_FAULT',
+            hostId: variant === 1 ? 9000 : 9001,
+          },
+        ],
+      ]);
+      assert.equal(
+        (
+          await call('/provider-fault', {
+            record: { machineId: 801, hostId: 9000 },
+          })
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await call('/snapshot')).data.some(([k]) => k.startsWith('bad-host:')),
+        false,
+      );
+    },
+  );
+}
