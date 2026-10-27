@@ -10,10 +10,11 @@ pub struct Budget {
 impl Budget {
     /// One object per64KiB, with finite floor and ceiling.
     #[must_use]
-    pub fn from_framebuffer(_bytes: u64) -> Self {
+    pub fn from_framebuffer(bytes: u64) -> Self {
+        let per_vm = (bytes / super::SPARSE_GRAIN).clamp(8192, 131072) as usize;
         Self {
-            per_space: 8192,
-            per_vm: 32768,
+            per_space: per_vm.min(65536),
+            per_vm,
         }
     }
 }

@@ -957,9 +957,9 @@ impl HostRm {
                     self.sparse_spaces.lock().expect("sparse spaces").insert(
                         space,
                         std::sync::Arc::new(std::sync::Mutex::new(
-                            crate::sparse::Reservations::new(
+                            crate::sparse::Reservations::new_guest(
                                 &vas.guest,
-                                crate::sparse::BLOCK_LIMIT,
+                                self.sparse_budget().per_space,
                             ),
                         )),
                     );
@@ -1007,7 +1007,7 @@ impl HostRm {
         // consume the capacity needed to restore an empty reservation after a refusal.
         let _placement = if layout { None } else { self.placement_read()? };
         // The session cap also bounds many hostile spaces and micro reservations.
-        const SESSION_BLOCK_LIMIT: usize = 32768;
+        let session_block_limit = self.sparse_budget().per_vm;
         use std::sync::atomic::Ordering::Relaxed;
         // Only the tree's own blocks are counted: a micro or other reservation is placed exactly
         // as with the twin OFF (it must never be refused by the sparse budget).
@@ -1015,7 +1015,7 @@ impl HostRm {
         if self.sparse_enabled
             && !crate::sparse::initial::claim_block(
                 &self.sparse_object_count,
-                SESSION_BLOCK_LIMIT,
+                session_block_limit,
                 layout,
             )
         {
@@ -1082,7 +1082,8 @@ impl HostRm {
         if let Some(layout) = layout {
             let _placement = self.placement_gate.write().expect("placement layout");
             let tree = layout.lock().expect("sparse layout");
-            self.log_sparse(space.space, tree.stats);
+            self.log_sparse(space.space, tree.counters());
+            self.update_sparse_missing(tree.counters(), crate::sparse::Stats::default());
             for handle in tree.handles() {
                 let _ = self.free(handle);
             }

@@ -472,6 +472,10 @@ pub struct HostRm {
     // Layout changes exclude RM allocations, controls and non-FIXED placements. None
     // of these verbs is a vCPU operation. OFF does not acquire the new locks.
     sparse_enabled: bool,
+    sparse_budget: std::sync::OnceLock<sparse::policy::Budget>,
+    sparse_missing: std::sync::atomic::AtomicU64,
+    sparse_capped: std::sync::atomic::AtomicU64,
+    sparse_warnings: std::sync::atomic::AtomicU32,
     placement_gate: std::sync::RwLock<()>,
     layout_poisoned: std::sync::atomic::AtomicBool,
     sparse_spaces: Mutex<BTreeMap<u32, std::sync::Arc<Mutex<sparse::Reservations>>>>,
@@ -605,6 +609,10 @@ impl HostRm {
             supported_class_ids: Vec::new(),
             armed: Mutex::new(std::collections::BTreeSet::new()),
             sparse_enabled: sparse::enabled(),
+            sparse_budget: std::sync::OnceLock::new(),
+            sparse_missing: Default::default(),
+            sparse_capped: Default::default(),
+            sparse_warnings: Default::default(),
             placement_gate: std::sync::RwLock::new(()),
             layout_poisoned: std::sync::atomic::AtomicBool::new(false),
             sparse_spaces: Mutex::new(BTreeMap::new()),

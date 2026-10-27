@@ -160,3 +160,124 @@ fn ens7_twenty_thousand_tiles_are_honoured_for_eight_gib() {
 fn ens7_twenty_thousand_tiles_are_bounded_for_small_framebuffer() {
     ens7_twenty_thousand(128 << 20, false);
 }
+#[test]
+fn ens7_zero_framebuffer_still_has_a_finite_floor() {
+    let p = policy::Budget::from_framebuffer(0);
+    assert_eq!((p.per_space, p.per_vm), (8192, 8192));
+}
+#[test]
+fn ens7_large_configured_framebuffer_still_obeys_the_absolute_cap() {
+    let p = policy::Budget::from_framebuffer(32 << 30);
+    assert_eq!((p.per_space, p.per_vm), (65536, 131072));
+}
+fn ens7_fragmented_deficit(offset: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    for i in 0..300 {
+        t.admit(&r, LO + offset + i * 2 * PAGE, PAGE).unwrap();
+    }
+    let stats = t.counters();
+    assert!(
+        stats.missing_capped,
+        "fragmented hostile input is explicit, never silently zero"
+    );
+    assert!(stats.current_unhonoured_bytes >= 300 * PAGE);
+    assert!(t.missing_warning(0).unwrap().contains("capped=true"));
+    t.retire(&r, LO + offset, PAGE, false).unwrap();
+    assert!(
+        t.counters().missing_capped,
+        "partial retirement retains the upper bound"
+    );
+    t.clear(&r).unwrap_err();
+    assert!(
+        t.counters().missing_capped,
+        "refused clear cannot hide uncertainty"
+    );
+    t.mark(LO, PAGE, false);
+    t.clear(&r).unwrap();
+    assert_eq!(t.counters().current_unhonoured_bytes, 0);
+    assert!(!t.counters().missing_capped);
+}
+#[test]
+fn ens7_fragmented_prefix_deficit_is_bounded_and_explicit() {
+    ens7_fragmented_deficit(NORMAL_GRAIN);
+}
+#[test]
+fn ens7_fragmented_suffix_deficit_survives_a_refused_clear() {
+    ens7_fragmented_deficit(3 * NORMAL_GRAIN);
+}
+#[test]
+fn ens7_overlapping_sparse_declines_count_the_union() {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    t.admit(&r, LO + NORMAL_GRAIN, 2 * SPARSE_GRAIN).unwrap();
+    t.admit(&r, LO + NORMAL_GRAIN + SPARSE_GRAIN, 2 * SPARSE_GRAIN)
+        .unwrap();
+    assert_eq!(t.counters().current_unhonoured_bytes, 3 * SPARSE_GRAIN);
+}
+#[test]
+fn ens7_retiring_the_middle_of_a_deficit_preserves_both_ends() {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    let start = LO + NORMAL_GRAIN;
+    t.admit(&r, start, 3 * SPARSE_GRAIN).unwrap();
+    t.retire(&r, start + SPARSE_GRAIN, SPARSE_GRAIN, false)
+        .unwrap();
+    assert_eq!(t.counters().current_unhonoured_bytes, 2 * SPARSE_GRAIN);
+}
+fn ens7_warning_ranges(offset: u64) {
+    let (mut t, r) = (tree(100), Rm::new());
+    t.mark(LO, PAGE, true);
+    for i in 0..8 {
+        t.admit(&r, LO + offset + i * NORMAL_GRAIN, 1 << 20)
+            .unwrap();
+    }
+    let warning = t.missing_warning(0).unwrap();
+    assert_eq!(
+        warning.matches('(').count(),
+        4,
+        "first four ranges only: {warning}"
+    );
+    assert!(warning.len() <= 512);
+}
+#[test]
+fn ens7_warning_keeps_only_four_aligned_missing_ranges() {
+    ens7_warning_ranges(0);
+}
+#[test]
+fn ens7_warning_keeps_only_four_unaligned_missing_ranges() {
+    ens7_warning_ranges(PAGE);
+}
+fn ens7_session_limit(fb: u64) {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let p = policy::Budget::from_framebuffer(fb);
+    let live = AtomicUsize::new(p.per_vm - 1);
+    assert!(initial::claim_block(&live, p.per_vm, true));
+    assert!(!initial::claim_block(&live, p.per_vm, true));
+    assert_eq!(live.load(Relaxed), p.per_vm);
+    live.fetch_sub(1, Relaxed);
+    assert!(initial::claim_block(&live, p.per_vm, true));
+}
+#[test]
+fn ens7_small_vm_spaces_share_and_recover_the_policy_budget() {
+    ens7_session_limit(0);
+}
+#[test]
+fn ens7_large_vm_spaces_share_and_recover_the_policy_budget() {
+    ens7_session_limit(8 << 30);
+}
+
+#[test]
+fn ens7_session_gauge_recovery_preserves_other_spaces() {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    let counter = AtomicU64::new(10);
+    adjust_deficit_gauge(&counter, 8, 3);
+    assert_eq!(counter.load(Relaxed), 5);
+}
+#[test]
+fn ens7_space_destruction_removes_only_its_own_deficit() {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    let counter = AtomicU64::new(100);
+    adjust_deficit_gauge(&counter, 40, 0);
+    assert_eq!(counter.load(Relaxed), 60);
+}

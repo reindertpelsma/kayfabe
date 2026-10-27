@@ -17,7 +17,7 @@ pub(crate) mod slice;
 pub const NORMAL_GRAIN: u64 = 2 << 20;
 /// Sparse reservation grain.
 pub const SPARSE_GRAIN: u64 = 64 << 10;
-/// Hard per-space bound on reservation objects.
+/// Legacy per-space policy floor; live limits come from [`policy::Budget`].
 pub const BLOCK_LIMIT: usize = 8192;
 const PAGE: u64 = 4096;
 /// Refused sparse windows remembered per space.
@@ -41,8 +41,11 @@ pub(crate) const BACKOFF_FIRST: u64 = 2;
 /// Longest refusal back-off, in refresh ticks.
 pub(crate) const BACKOFF_MAX: u64 = 64;
 /// Entries of the session-wide counter array ([`Stats::deltas`]).
-pub(crate) const SPARSE_TOTALS: usize = 22;
+pub(crate) const SPARSE_TOTALS: usize = 23;
 
+#[path = "sparse/deficit.rs"]
+mod deficit;
+pub(crate) use deficit::adjust_gauge as adjust_deficit_gauge;
 #[path = "sparse/policy.rs"]
 pub mod policy;
 
@@ -183,6 +186,9 @@ impl Stats {
                 .speculative_skipped
                 .saturating_sub(before.speculative_skipped),
             after.window_hits.saturating_sub(before.window_hits),
+            after
+                .withheld_windows
+                .saturating_sub(before.withheld_windows),
         ]
     }
 }
@@ -222,17 +228,74 @@ pub(crate) struct Reservations {
     deferred: bool,
     /// Set when host RM refused a reservation during this call.
     rm_refused: bool,
+    allowed: Option<Vec<(u64, u64)>>,
+    withheld_seen: u8,
+    deficit: deficit::Deficit,
 }
 
 impl Reservations {
     pub(crate) fn new_guest(guest: &[GuestVaRange], limit: usize) -> Self {
-        Self::new(guest, limit)
+        let mut tree = Self::new(guest, limit);
+        let mut allowed: Vec<_> = guest
+            .iter()
+            .filter(|g| g.handle != 0)
+            .map(|g| (g.lo, g.hi))
+            .collect();
+        allowed.sort_unstable();
+        tree.allowed = Some(allowed);
+        tree
     }
-    pub(crate) fn missing_warning(&mut self, _now_ns: u64) -> Option<String> {
-        None
+    pub(crate) fn missing_warning(&mut self, now_ns: u64) -> Option<String> {
+        self.deficit.warning(now_ns, self.ceiling)
+    }
+    // Only initial guest reservations are sparse-able. Their complement has at most4
+    // windows, independently of how many guest runs name them or how the tree is split.
+    fn withheld(&mut self, va: u64, end: u64) -> bool {
+        let Some(allowed) = &self.allowed else {
+            return false;
+        };
+        let mut start = super::channel::TWIN_VA_FLOOR;
+        let mut blocked = false;
+        for (i, &(lo, hi)) in allowed
+            .iter()
+            .chain(std::iter::once(&(self.ceiling, self.ceiling)))
+            .enumerate()
+        {
+            if start < lo && va < lo && start < end {
+                blocked = true;
+                let bit = 1u8 << i;
+                if self.withheld_seen & bit == 0 {
+                    self.withheld_seen |= bit;
+                    self.stats.withheld_windows = self.stats.withheld_windows.saturating_add(1);
+                }
+            }
+            start = hi;
+        }
+        blocked
+    }
+    fn reconcile_deficit(&mut self, va: u64, end: u64) {
+        self.deficit.mark(va, end, false, self.ceiling);
+        let mut cur = va;
+        let lo = self.key(va).unwrap_or(va);
+        for b in self.blocks.range(lo..end).map(|(_, b)| b) {
+            let a = va.max(b.lo);
+            let stop = end.min(b.hi);
+            if cur < a {
+                self.deficit.mark(cur, a, true, self.ceiling);
+            }
+            if !b.sparse {
+                self.deficit.mark(a, stop, true, self.ceiling);
+            }
+            cur = stop;
+        }
+        if cur < end {
+            self.deficit.mark(cur, end, true, self.ceiling);
+        }
     }
     pub(crate) fn counters(&self) -> Stats {
         Stats {
+            current_unhonoured_bytes: self.deficit.bytes,
+            missing_capped: self.deficit.capped,
             live_blocks: self.blocks.len() as u64,
             peak_blocks: self.stats.peak_blocks.max(self.blocks.len() as u64),
             ..self.stats
@@ -275,6 +338,9 @@ impl Reservations {
             cleanup: BTreeSet::new(),
             deferred: false,
             rm_refused: false,
+            allowed: None,
+            withheld_seen: 0,
+            deficit: deficit::Deficit::default(),
         };
         tree.reindex(0, u64::MAX);
         tree
@@ -590,6 +656,9 @@ impl Reservations {
         let start = std::time::Instant::now();
         self.stats.admit_calls = self.stats.admit_calls.saturating_add(1);
         let result = self.admit_local(ops, va, len);
+        if result.is_ok() {
+            self.reconcile_deficit(va, va + len);
+        }
         let ns = start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
         crate::diag::admission(ns);
         self.stats.admit_ns_total = self.stats.admit_ns_total.saturating_add(ns);
@@ -615,6 +684,9 @@ impl Reservations {
         let end = Self::end(va, len)?;
         if end > self.ceiling {
             return Err(RmError::NoMemory);
+        }
+        if self.withheld(va, end) {
+            return self.declined(len, false);
         }
         let accepted_before = self.cache.entries.get(&(va, len)).is_some_and(|n| n.retry);
         if let Some(n) = self.cache.get((va, len), self.blocks.len(), self.tick) {
@@ -818,6 +890,7 @@ impl Reservations {
         preserve: bool,
     ) -> Result<u64, RmError> {
         let end = Self::end(va, len)?;
+        self.deficit.mark(va, end, false, self.ceiling);
         self.cache.retire(va, end);
         let start_key = self.key(va).unwrap_or(va);
         let keys: Vec<_> = self
@@ -1077,6 +1150,8 @@ impl Reservations {
             self.stats.refused = self.stats.refused.saturating_add(1);
             return Err(RmError::NoMemory);
         }
+        self.deficit = deficit::Deficit::default();
+        self.withheld_seen = 0;
         self.cache = Cache::default();
         self.retry_dirty.clear();
         self.refused.clear();

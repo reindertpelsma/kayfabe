@@ -397,6 +397,8 @@ impl Device {
             )
             .map_err(|e| e.to_string())?,
         ));
+        rm.configure_sparse_budget(cfg.fb_mb.saturating_mul(1 << 20))
+            .map_err(|e| format!("sparse budget: {e:?}"))?;
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation)
             .map_err(|e| format!("family: {e:?}"))?;
@@ -2896,6 +2898,7 @@ impl Device {
         };
         let sparse = if self.rm.sparse_twin() {
             let s = self.rm.sparse_totals();
+            let budget = self.rm.sparse_budget();
             let kf_host::sparse::Census {
                 rows: census,
                 total: census_total,
@@ -2908,7 +2911,9 @@ impl Device {
                  negative_evicted={} occupancy_capped={} peak_blocks={} \
                  live_blocks={} admit_blocks={} rm_declined={} backoff_skips={} \
                  slice_deferred={} speculative_skipped={} window_hits={} \
-                 layout_refresh_peak_us={} layout_refresh_peak_verbs={}]",
+                 layout_refresh_peak_us={} layout_refresh_peak_verbs={} \
+                 budget_space={} budget_vm={} current_unhonoured_bytes={} \
+                 missing_capped={} withheld_windows={}]",
                 va.sparse_placed,
                 va.sparse_retired,
                 va.sparse_unhonoured_bytes,
@@ -2936,6 +2941,11 @@ impl Device {
                 s.window_hits,
                 self.rm.layout_slice_peak().1 / 1000,
                 self.rm.layout_slice_peak().0,
+                budget.per_space,
+                budget.per_vm,
+                s.current_unhonoured_bytes,
+                s.missing_capped,
+                s.withheld_windows,
             );
             counters
                 + &format!(

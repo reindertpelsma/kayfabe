@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 pub use kf_host::{RmError, diag};
 mod channel {
-    pub use kf_host::channel::{GuestVaRange, TWIN_VA_FLOOR, VA_ROW_WRAPS};
+    pub use kf_host::channel::{GuestVaRange, HOST_HOLE_LO, TWIN_VA_FLOOR, VA_ROW_WRAPS};
 }
 #[path = "../../kf-host/src/sparse.rs"]
 mod host_sparse;

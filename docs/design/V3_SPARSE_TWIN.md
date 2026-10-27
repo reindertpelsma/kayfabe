@@ -1,6 +1,6 @@
 # V3 selective sparse twin mappings (`KF3_SPARSE_TWIN`)
 
-**STATUS: LIVE (default OFF), 2026-10-27.** ENS6 (2026-10-27): a host RM `NoMemory` during sparse admission is now a counted closed
+**STATUS: LIVE (default OFF), 2026-10-27.** ENS7 scales the finite object budget with configured guest VRAM, excludes host-owned windows before RM, and reports current missing coverage with bounded warnings: see `docs/design/V3_ENS7_SPARSE_BUDGET.md`. ENS6 (2026-10-27): a host RM `NoMemory` during sparse admission is now a counted closed
 fallback with a back-off (not a hard error), reservation work a refresh may start is bounded by a time slice, and per-verb RM
 timing is in the heartbeat: see `docs/design/V3_ENS6_RM_COST.md` (it corrects the *Fallbacks* and *Counters* text below where they differ).
 (2026-10-26 text follows.) Implementation by lanes SPR1 (tasks 1-3) and SPR2 (harness fix, hardware
@@ -36,7 +36,7 @@ fault, never random memory. No unmap-then-remap interval: old to sparse and spar
 3. **Reservation tree** (`crates/kf-host/src/sparse.rs`, `channel/sparse.rs`). The static guest reservations become a tree of
    host reservation blocks split only while EMPTY (the RM refuses a reservation inside a live block). Normal blocks have a
    2 MiB grain, sparse blocks 64 KiB, created on demand for a sparse run whose full 64 KiB tile is derived sparse.
-4. **Bounds** (hostile guest). At most 8192 blocks per space and 32768 reservation objects per session; a decline is
+4. **Bounds** (hostile guest). The configured VRAM policy caps each space at65536 blocks and the VM/session at131072 objects (minimum8192); a decline is
    counted and the sparse VA stays INVALID (a plain map is never declined, see below). Counters saturate; log lines are capped (128 per process).
    Nothing on this path runs on a vCPU thread.
 
@@ -72,7 +72,7 @@ budget, one per declined admission (before the 2026-10-26 fix it also counted ev
 which gave 8.3 M on the first Windows campaign: CODE READ). `unhonoured_bytes`: sparse bytes left invalid at admission,
 summed per admission (a retried run is counted again). `retained_bytes`: sparse-to-invalid bytes kept sparse.
 `coarse_maps`: plain maps placed in a coarse block because refinement was declined, one per map call; they are not
-refused. Bounds: 8192 tree blocks per space, 32768 per session, 128 log lines. ENS6 adds `rm_declined` (host RM `NoMemory` turned into
+refused. Bounds: the ENS7 configured per-space/per-VM policy above;128 legacy log lines. ENS6 adds `rm_declined` (host RM `NoMemory` turned into
 the counted fallback), `backoff_skips` (layout work skipped during a refusal back-off), `slice_deferred` (work left for a later
 refresh by the time slice), `speculative_skipped` (plain-map refinement skipped above the high-water mark, no RM verb),
 `window_hits` (admissions answered by the refused-window cache), `layout_refresh_peak_{us,verbs}` (busiest refresh), and the

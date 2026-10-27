@@ -1,8 +1,7 @@
 # ENS6: host RM cost, refusal fallback and the layout time slice
 
-**STATUS: LIVE ENS6 implementation, 2026-10-27; GPU-free validation, host benchmark and Windows boot pending
-(see *Measured on the host* for what ran).** Sparse twin stays default OFF. The 8192-block per-space and
-32768-object per-session bounds are unchanged. Labels: MEASURED (a named log or run), CODE READ (source at the
+**STATUS: LIVE ENS6 mechanisms, 2026-10-27; GPU-free validation, host benchmark and Windows boot pending
+(see *Measured on the host* for what ran).** Sparse twin stays default OFF. ENS7 supersedes the historical fixed object bounds below with a finite VRAM-scaled policy; see `docs/design/V3_ENS7_SPARSE_BUDGET.md`. The ENS6 snapshot used8192 per space and32768 per session. Labels: MEASURED (a named log or run), CODE READ (source at the
 named revision), INFERRED (reasoning, with its falsifier).
 
 Parent: `docs/design/V3_SPARSE_TWIN.md`, `docs/design/V3_ENS5_SPARSE_ADMISSION.md`. Base revision
@@ -66,7 +65,7 @@ Parent: `docs/design/V3_SPARSE_TWIN.md`, `docs/design/V3_ENS5_SPARSE_ADMISSION.m
   (`cleanup`) and converted within the optional slice. `layout_refresh_peak_{us,verbs}` in the heartbeat is the
   busiest refresh so far. Map/unmap/invalidate verbs of the guest's own diff are not sliced (they are the
   diff); they are visible in `rmverbs`.
-* Bounds: refused windows 64, negative cache 256, cleanup queue <= blocks <= 8192, pairs per recycle 256,
+* Bounds: refused windows 64, negative cache 256, cleanup queue <= blocks <= the configured per-space limit, pairs per recycle 256,
   layout verbs per refresh 4096 plus one restore. `tsgmirror.rs` is untouched; the twin stays default OFF.
 
 ## Contract changes (tests amended, none deleted or weakened)

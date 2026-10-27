@@ -48,6 +48,40 @@ impl Ops for SpaceOps<'_> {
 }
 
 impl HostRm {
+    /// Set once, before any selective space is created, from the configured guest framebuffer.
+    /// # Errors
+    /// A different policy was already configured or used.
+    pub fn configure_sparse_budget(&self, fb_bytes: u64) -> Result<(), RmError> {
+        let wanted = crate::sparse::policy::Budget::from_framebuffer(fb_bytes);
+        if self.sparse_budget.set(wanted).is_err() && self.sparse_budget.get() != Some(&wanted) {
+            return Err(RmError::NoMemory);
+        }
+        Ok(())
+    }
+    /// Live immutable VM policy; non-QEMU callers safely default to the minimum framebuffer.
+    #[must_use]
+    pub fn sparse_budget(&self) -> crate::sparse::policy::Budget {
+        *self
+            .sparse_budget
+            .get_or_init(|| crate::sparse::policy::Budget::from_framebuffer(0))
+    }
+    pub(super) fn update_sparse_missing(&self, before: Stats, after: Stats) {
+        for (counter, a, b) in [
+            (
+                &self.sparse_missing,
+                before.current_unhonoured_bytes,
+                after.current_unhonoured_bytes,
+            ),
+            (
+                &self.sparse_capped,
+                u64::from(before.missing_capped),
+                u64::from(after.missing_capped),
+            ),
+        ] {
+            crate::sparse::adjust_deficit_gauge(counter, a, b);
+        }
+    }
+
     pub(super) fn with_sparse<T>(
         &self,
         space: u32,
@@ -80,7 +114,7 @@ impl HostRm {
                 return Err(RmError::NoMemory);
             }
             let mut tree = layout.lock().map_err(|_| RmError::NoMemory)?;
-            let before = tree.stats;
+            let before = tree.counters();
             // Every reservation verb of this call is charged to the refresh's slice, and
             // optional layout work stops starting when it is spent (ENS6).
             let base = SpaceOps { rm: self, space };
@@ -92,6 +126,17 @@ impl HostRm {
             };
             let result = f(&mut tree, &ops);
             let after = tree.counters();
+            self.update_sparse_missing(before, after);
+            // At most32 warnings per session, with a30s per-space cooldown and4 ranges.
+            if self.sparse_warnings.load(Relaxed) < 32
+                && let Some(warning) = tree.missing_warning(clock())
+                && self
+                    .sparse_warnings
+                    .try_update(Relaxed, Relaxed, |n| (n < 32).then_some(n + 1))
+                    .is_ok()
+            {
+                eprintln!("kf-host: SPARSE_UNHONOURED space={space:#x} {warning}");
+            }
             for (counter, delta) in self.sparse_totals.iter().zip(after.deltas(before)) {
                 let _ = counter.try_update(Relaxed, Relaxed, |n| Some(n.saturating_add(delta)));
             }
@@ -202,9 +247,9 @@ impl HostRm {
             slice_deferred: self.sparse_totals[19].load(Relaxed),
             speculative_skipped: self.sparse_totals[20].load(Relaxed),
             window_hits: self.sparse_totals[21].load(Relaxed),
-            current_unhonoured_bytes: 0,
-            missing_capped: false,
-            withheld_windows: 0,
+            current_unhonoured_bytes: self.sparse_missing.load(Relaxed),
+            missing_capped: self.sparse_capped.load(Relaxed) != 0,
+            withheld_windows: self.sparse_totals[22].load(Relaxed),
         }
     }
 

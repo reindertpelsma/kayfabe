@@ -1,6 +1,6 @@
 # Saturated sparse admission and reservation lifetime
 
-**STATUS: LIVE ENS5 implementation, 2026-10-27; GPU-free validation.** Sparse twin stays default OFF. The existing8192-block per-space and32768-object per-session bounds are unchanged. Hardware validation and the native RM object-cost campaign remain unrun.
+**STATUS: ENS5 implementation history, 2026-10-27; mechanisms remain live.** Sparse twin stays default OFF. ENS6 supersedes refusal/churn handling and records native RM measurements; ENS7 supersedes the fixed object limits and adds permanent exclusions/current deficit accounting. See `V3_ENS6_RM_COST.md` and `V3_ENS7_SPARSE_BUDGET.md`. The bounds and validation descriptions below describe the ENS5 checkpoint.
 
 ## Failure and intervention
 
