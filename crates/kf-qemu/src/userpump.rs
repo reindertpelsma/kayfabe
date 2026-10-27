@@ -2894,7 +2894,7 @@ impl ChanPlane {
         let source = self
             .user_ring_record(channel.token)
             .ok_or_else(|| queue.reject(0x40))?;
-        let target = if crate::grbinds::eligible(request, r.key, tsg, engine, true) {
+        let target = if crate::grbinds::prefer_trigger(request, r.key, tsg, engine, true) {
             GrTarget {
                 record: source.clone(),
                 allocation: r.allocation.clone(),
@@ -2997,26 +2997,20 @@ impl ChanPlane {
         request: kf_abi::grbind::Request,
     ) -> Result<Option<GrTarget>, BindAdmission> {
         let queue = &self.inbox.gr_binds;
-        let mut hits = {
+        let hit = {
             let pt = self.pt.try_lock().map_err(|e| match e {
                 std::sync::TryLockError::WouldBlock => BindAdmission::Busy,
                 _ => BindAdmission::Refused(queue.reject(0x40)),
             })?;
-            pt.iter()
-                .filter(|(key, t)| {
-                    crate::grbinds::eligible(request, **key, t.tsg, t.engine, t.user_ring)
-                })
-                .take(2)
-                .map(|(key, t)| (*key, t.allocation.clone(), t.chan, t.tsg, t.engine))
-                .collect::<Vec<_>>()
-        };
-        if hits.is_empty() {
+            crate::grbinds::unique(pt.iter().filter_map(|(key, t)| {
+                crate::grbinds::eligible(request, *key, t.tsg, t.engine, t.user_ring)
+                    .then(|| (*key, t.allocation.clone(), t.chan, t.tsg, t.engine))
+            }))
+        }
+        .map_err(|st| BindAdmission::Refused(queue.reject(st)))?;
+        let Some((key, allocation, channel, tsg, engine)) = hit else {
             return Ok(None);
-        }
-        if hits.len() != 1 {
-            return Err(queue.reject(0x56).into());
-        }
-        let (key, allocation, channel, tsg, engine) = hits.pop().ok_or(0x40u32)?;
+        };
         let record = self
             .user_ring_record(channel.token)
             .ok_or_else(|| queue.reject(0x40))?;

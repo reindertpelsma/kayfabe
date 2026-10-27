@@ -146,8 +146,24 @@ impl crate::HostRm {
 /// Run an ordinary GR operation with administrative capabilities absent on this thread.
 /// A capability-system refusal must prevent the operation; callers preserve its native status.
 pub fn ordinary_on<O: kf_linux_raw::capability::ThreadCapOps + ?Sized, R>(
-    _ops: &O,
+    ops: &O,
     call: impl FnOnce() -> Result<R, u32>,
 ) -> Result<R, u32> {
-    call()
+    // Linux UAPI CAP_SYS_ADMIN, CAP_SYS_NICE and CAP_PERFMON. Existing capability
+    // brackets affect only this worker thread and retain permitted/inheritable sets.
+    clear(ops, 21, || clear(ops, 23, || clear(ops, 38, call)))
+}
+
+fn clear<O: kf_linux_raw::capability::ThreadCapOps + ?Sized, R>(
+    ops: &O,
+    cap: u32,
+    call: impl FnOnce() -> Result<R, u32>,
+) -> Result<R, u32> {
+    use kf_linux_raw::capability::{EffectiveBracket, with_effective_cap_cleared_on};
+    let (result, bracket) = with_effective_cap_cleared_on(ops, cap, call).map_err(|_| 0x40u32)?;
+    if matches!(bracket, EffectiveBracket::ClearedNotRestored { .. }) {
+        // The native operation may already have run; its owned objects remain retained.
+        return Err(0x40);
+    }
+    result
 }

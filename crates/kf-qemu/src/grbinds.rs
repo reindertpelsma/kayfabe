@@ -689,3 +689,25 @@ pub(crate) fn writable(rows: &crate::mem::PlacedRows, va: u64, len: u64) -> bool
     }
     false
 }
+
+/// Select the triggering channel only when its stream proves the requested scope.
+pub(crate) fn prefer_trigger(
+    request: kf_abi::grbind::Request,
+    key: (u32, u32),
+    tsg: Option<u32>,
+    engine: u32,
+    active: bool,
+) -> bool {
+    eligible(request, key, tsg, engine, active)
+}
+
+/// Resolve at most two canonical matches; never guess a member of an ambiguous TSG.
+pub(crate) fn unique<T>(candidates: impl IntoIterator<Item = T>) -> Result<Option<T>, u32> {
+    let mut candidates = candidates.into_iter();
+    let first = candidates.next();
+    if candidates.next().is_some() {
+        Err(0x56)
+    } else {
+        Ok(first)
+    }
+}

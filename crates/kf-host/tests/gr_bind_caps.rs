@@ -7,6 +7,7 @@ struct Caps {
     state: Cell<ThreadCaps>,
     fail_read: bool,
     fail_clear: bool,
+    fail_restore: bool,
 }
 impl Caps {
     fn root() -> Self {
@@ -18,6 +19,7 @@ impl Caps {
             }),
             fail_read: false,
             fail_clear: false,
+            fail_restore: false,
         }
     }
 }
@@ -30,7 +32,7 @@ impl ThreadCapOps for Caps {
         }
     }
     fn set(&self, caps: ThreadCaps) -> Result<(), i32> {
-        if self.fail_clear {
+        if self.fail_clear || (self.fail_restore && caps.effective & ADMIN == ADMIN) {
             return Err(1);
         }
         self.state.set(caps);
@@ -95,4 +97,39 @@ fn refused_cap_clear_does_not_issue_a_native_query_or_bind() {
         Err(0x40)
     );
     assert!(!called.get());
+}
+
+#[test]
+fn success_with_failed_restore_is_reported_as_uncertain_and_keeps_caps_reduced() {
+    let caps = Caps {
+        fail_restore: true,
+        ..Caps::root()
+    };
+    let called = Cell::new(false);
+    assert_eq!(
+        ordinary_on(&caps, || {
+            called.set(true);
+            Ok(4096u64)
+        }),
+        Err(0x40)
+    );
+    assert!(called.get());
+    assert_eq!(caps.state.get().effective & (1 << 21), 0);
+}
+#[test]
+fn native_refusal_with_failed_restore_keeps_capability_failure_visible() {
+    let caps = Caps {
+        fail_restore: true,
+        ..Caps::root()
+    };
+    let called = Cell::new(false);
+    assert_eq!(
+        ordinary_on(&caps, || {
+            called.set(true);
+            Err::<(), _>(0x1f)
+        }),
+        Err(0x40)
+    );
+    assert!(called.get());
+    assert_eq!(caps.state.get().effective & (1 << 21), 0);
 }
