@@ -1,0 +1,781 @@
+{
+  "captured_utc": "2026-10-27T20:46:19.609653+00:00",
+  "baseline": "12c4008705f17033a803e56d4d479bf1275cdb94",
+  "note": "Writing-start snapshot; bodies not republished. Falsifiers are paper proposals.",
+  "pull_requests": [
+    {
+      "number": 5,
+      "head": "c9f00664b439a27b7e52c1157c7262a4c50fa444",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Archive unused predecessor crates without breaking the grader",
+      "proposed_falsifier": "The raw-client dependency closure no longer builds or a product crate acquires a legacy dependency.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/5"
+    },
+    {
+      "number": 7,
+      "head": "320b3317033b3755836d59abd69e6b75b2394953",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Model shared Turing display semaphores",
+      "proposed_falsifier": "Native acquire/release ordering differs or one window consumes another window's event.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/7"
+    },
+    {
+      "number": 8,
+      "head": "598ca60f8b76231e023e2152cc220e07d683c1e3",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Compose address-named Blackwell windows inside the store",
+      "proposed_falsifier": "A window escapes the store or a native pixel/ordering reference disagrees.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/8"
+    },
+    {
+      "number": 9,
+      "head": "c3f9c13d557607e40ef95fdaf022268dde875721",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Wire exact AD102 Windows initialisation facts",
+      "proposed_falsifier": "Native same-die replies or Windows acceptance disagree with the supplied fields.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/9"
+    },
+    {
+      "number": 10,
+      "head": "728e6febde5e42d53c8085675e2bf1209ab38375",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Admit measured Turing channel and driver layouts",
+      "proposed_falsifier": "A same-die driver cell disagrees or an unrelated branch inherits the layout.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/10"
+    },
+    {
+      "number": 12,
+      "head": "24b6a4256ebdd4d806854696d417b93eddf34df4",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Wire measured GB206 display capabilities across both guests",
+      "proposed_falsifier": "Exact-head Linux or Windows still fails its application and display acceptance.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/12"
+    },
+    {
+      "number": 13,
+      "head": "8aa16cd645572dadeaca065091c6623e7f418540",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Recover guest command results after agent disconnect",
+      "proposed_falsifier": "Recovery reexecutes a side-effecting command or associates output with another request.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/13"
+    },
+    {
+      "number": 14,
+      "head": "631f087e34e2e575f303835da9f11fedd3a97df6",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Follow early queue movement in the observer",
+      "proposed_falsifier": "The observer misses a real queue relocation or reads an unvalidated candidate.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/14"
+    },
+    {
+      "number": 15,
+      "head": "886f885c5ffaa9cb49df6058b1b05af61c32371c",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Compare derived display capabilities to native oracles",
+      "proposed_falsifier": "A mutated wrong capability still passes the claimed behaviour-level oracle.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/15"
+    },
+    {
+      "number": 16,
+      "head": "9251e45c45410e62935a01b6e82b0c11a92b58a6",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Export bounded ordered firmware metadata",
+      "proposed_falsifier": "An overflow looks like complete coverage or ordering changes during export.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/16"
+    },
+    {
+      "number": 17,
+      "head": "75b247c07e65cfa48a50141b048170e3827c645f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Share CPU views of the backing store",
+      "proposed_falsifier": "View sharing breaks the Linux fast gate or permits stale topology/lifetime access.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/17"
+    },
+    {
+      "number": 18,
+      "head": "20e0ddc4b0634febb3ed7e97297dc9e31c14705b",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Follow validated public firmware mailbox indirection",
+      "proposed_falsifier": "An unvalidated pointer becomes a source or a legitimate relocation is missed.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/18"
+    },
+    {
+      "number": 19,
+      "head": "2bf43d609ff5126d70a1e194c5cb79366a91960a",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Require a fresh event for GPU-walk completion",
+      "proposed_falsifier": "An old completion can acknowledge a newly submitted walk or a fresh result is lost.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/19"
+    },
+    {
+      "number": 20,
+      "head": "21b72582ccdbadc771181f6efe0bf05baccffe25",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Stop fast guests without forced process kills",
+      "proposed_falsifier": "The normal stop leaves an owned process alive or kills a process outside the run.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/20"
+    },
+    {
+      "number": 21,
+      "head": "3008bc8346bdfa45162c62c400bffe3f8e7c25e6",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Retain full startup and teardown trace alignment",
+      "proposed_falsifier": "A truncated trace looks complete or the aligner pairs different device lives.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/21"
+    },
+    {
+      "number": 22,
+      "head": "4d83e661fcc60f48235381308fd1091dea4351a5",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Trace replies actually posted to the guest",
+      "proposed_falsifier": "A queued but unposted reply is counted as delivered or a posted reply is omitted.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/22"
+    },
+    {
+      "number": 23,
+      "head": "ac01b7bd306dc00202f523cf1545b3cdf9ae026b",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Align firmware heartbeat time to the guest timer",
+      "proposed_falsifier": "A changed offset breaks monotonicity or produces a heartbeat in another clock domain.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/23"
+    },
+    {
+      "number": 24,
+      "head": "5b8dd3a5ff43c73d8434b7cae52e96ab5bc1d9b0",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Add measured GB205 driver-specific capability words",
+      "proposed_falsifier": "Repeat measurement or another branch differs, yet the consumer silently reuses the row.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/24"
+    },
+    {
+      "number": 25,
+      "head": "fee2ac9336eed69444b9edbb94a6d126d95f80e3",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Bound metadata traces across guest lifetimes",
+      "proposed_falsifier": "Reset evades the cap or old-life records are attributed to a new guest.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/25"
+    },
+    {
+      "number": 26,
+      "head": "c07f8e8ad4704a0a4060d499493f7ffe3bf3f2e3",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Select broker guest image and ABI explicitly",
+      "proposed_falsifier": "An implicit image or driver choice overrides the requested test cell.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/26"
+    },
+    {
+      "number": 27,
+      "head": "d9aec37d5afe4f208f79945909a5aefc159ca14d",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Stop only the owned interactive QEMU safely",
+      "proposed_falsifier": "Shutdown targets a foreign PID or returns while the owned guest is still running.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/27"
+    },
+    {
+      "number": 28,
+      "head": "5a300e75d3b1b99fa17b8d4f07a5eea136f4118f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Synchronise bounded guest-agent file staging",
+      "proposed_falsifier": "A lost acknowledgement replays a write or a partial transfer is used as a complete file.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/28"
+    },
+    {
+      "number": 29,
+      "head": "712a0a4755c48fa40eec72724da7d9a09927845f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive virtual Blackwell tiles and display assignments",
+      "proposed_falsifier": "Native acceptance and virtual assignment bounds disagree or an unimplemented feature is enabled.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/29"
+    },
+    {
+      "number": 30,
+      "head": "73af410b683c48b5419651073fb41867f4b21312",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Isolate sensitivity to one Blackwell log-buffer refusal",
+      "proposed_falsifier": "Matched refusal and served arms leave the outcome unchanged while reachability is proven.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/30"
+    },
+    {
+      "number": 31,
+      "head": "98b49a1a4fb6f13bd8bad8214f63039dffa81d42",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive exact public display layouts for a driver tag",
+      "proposed_falsifier": "The native layout differs or the table is selected for a different driver version.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/31"
+    },
+    {
+      "number": 38,
+      "head": "ed81e56f37f01f9a78d897b9bf5426d528223d34",
+      "draft": false,
+      "head_in_baseline": false,
+      "goal": "Preregister object-binding experiments",
+      "proposed_falsifier": "An arm is interpreted without its positive control or an outcome contradicts its recorded prediction.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/38"
+    },
+    {
+      "number": 46,
+      "head": "90364d9d86a634f6319352f42549cacaa77ed9e7",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Scope a Windows allocation diagnostic to its measured die",
+      "proposed_falsifier": "An unsupported die or driver inherits the diagnostic answer as a product capability.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/46"
+    },
+    {
+      "number": 50,
+      "head": "61dc81b73aa2ed25fb07d5b922f88eb450c410e7",
+      "draft": false,
+      "head_in_baseline": false,
+      "goal": "Handle a legacy cursor format and bounded diagnostics",
+      "proposed_falsifier": "Cursor pixels or inversion differ from the native reference, or composition violates broker ownership.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/50"
+    },
+    {
+      "number": 51,
+      "head": "70afcac481a861def36a4368595524f3a41d8a57",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive display DMA bounds from the class",
+      "proposed_falsifier": "A boundary operand reaches outside the owned store or a valid last element is refused.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/51"
+    },
+    {
+      "number": 52,
+      "head": "b9e2462811ef0310b72fa029c7af2a7325d06289",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Observe public Blackwell firmware bootstrap indirection",
+      "proposed_falsifier": "A moved queue is missed or an unvalidated location becomes a capture source.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/52"
+    },
+    {
+      "number": 53,
+      "head": "aa8fdea9cb0e00fd4e5ec148461d1e805d308e0c",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Admit generated Blackwell video-decode constructors",
+      "proposed_falsifier": "Decode content or errors differ from the native reference despite successful construction.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/53"
+    },
+    {
+      "number": 55,
+      "head": "844eb167f3a4a5b86e6b001e62ba3f6f7078402b",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Admit the public Blackwell optical-flow constructor",
+      "proposed_falsifier": "The native constructor or an actual flow workload fails despite an accepted class.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/55"
+    },
+    {
+      "number": 56,
+      "head": "c58989dab89e8e033efc9ab807a29771b3d0006c",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Review silent registration of a power-management notifier",
+      "proposed_falsifier": "The guest later requires a hardware action that the accepted inert registration did not perform.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/56"
+    },
+    {
+      "number": 57,
+      "head": "1bba760c4c6f0d32cb48f9e11a13ccc663786300",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Add one independently measured GB202 capability scalar",
+      "proposed_falsifier": "A same-die repeat disagrees or the row is applied to an unmeasured driver branch.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/57"
+    },
+    {
+      "number": 58,
+      "head": "d04f8ae9ad9a6169da7bb2de68bbf0f63d4c6778",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Admit public Blackwell kernel-graphics report releases",
+      "proposed_falsifier": "The report value or completion order disagrees with the native oracle.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/58"
+    },
+    {
+      "number": 59,
+      "head": "680efbb32c7742026812303604cd60e37ede53e1",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive Blackwell post-composition tile capabilities",
+      "proposed_falsifier": "A native supported tile is refused or the virtual device advertises a tile it cannot execute.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/59"
+    },
+    {
+      "number": 60,
+      "head": "f62ec368f68a204a23b3707a135178cbeb6ba9f9",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive Blackwell output-table capacity",
+      "proposed_falsifier": "The advertised table size exceeds the emulated decoder or rejects a valid native boundary.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/60"
+    },
+    {
+      "number": 61,
+      "head": "97dc65cc8ec9a1317bb2dcf9b828c2fb8780688c",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Use allocated family classes in native graphics fixtures",
+      "proposed_falsifier": "The fixture fails because it uses a foreign class, or false success comes from no engine work.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/61"
+    },
+    {
+      "number": 62,
+      "head": "fd23ab1c5933d196847eba4c91eae6b97559ed51",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Keep process ownership during relay qualification",
+      "proposed_falsifier": "A harness stop kills a foreign process or loses the GPU lease while its owned process is live.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/62"
+    },
+    {
+      "number": 65,
+      "head": "296636c66264b94b591f77fb38dae71d4b13ef1a",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive post-composition unit widths",
+      "proposed_falsifier": "A boundary-value native transform disagrees or an impossible width is advertised.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/65"
+    },
+    {
+      "number": 68,
+      "head": "ffd1d1d518e8550e9b44e070f070ca78e5d37fad",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Prototype scoped GPU CI callbacks and endpoint routing",
+      "proposed_falsifier": "Wrong-run or expired data is admitted, or a URL locator is mistaken for content approval.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/68"
+    },
+    {
+      "number": 69,
+      "head": "6e7cb6ff1befc2c8920a80e615c266901a7044fc",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive colour-space precision from the open display interface",
+      "proposed_falsifier": "A native boundary-value transform disagrees with the derived precision or field width.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/69"
+    },
+    {
+      "number": 70,
+      "head": "03715b7d32554995215b477ca24ede10240c5b21",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Record unresolved command-descriptor continuation choices",
+      "proposed_falsifier": "A packet spanning descriptors is accepted without a consistent continuation and lifetime rule.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/70"
+    },
+    {
+      "number": 71,
+      "head": "1c6452a276d7014bece3adf42d68cbd4edffbc18",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Propagate real translated-channel errors to the guest",
+      "proposed_falsifier": "A host error becomes success, loses its notifier, or contaminates another live channel.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/71"
+    },
+    {
+      "number": 72,
+      "head": "295419c84a542ff2ac1eb428ad5d4ab7cd0800ac",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Document normal colour decoding and optional diagnostics",
+      "proposed_falsifier": "Following the documented default requires a diagnostic flag or produces a different transform.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/72"
+    },
+    {
+      "number": 73,
+      "head": "69ef5973d0440dca5333b13a667557b4c7b1c57b",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Require native privilege stamps for kernel-channel authority",
+      "proposed_falsifier": "Guest-controlled identity bits grant privileged execution without a trusted allocation stamp.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/73"
+    },
+    {
+      "number": 74,
+      "head": "e6a0d2b8185dd14e137dd2a06e74d387ee636912",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Split all-space walks at the ABI batch boundary",
+      "proposed_falsifier": "The first space beyond the batch limit is omitted, duplicated or prematurely acknowledged.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/74"
+    },
+    {
+      "number": 75,
+      "head": "01de2fed491aca938da2b862344dafbc56c27d85",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Expose root-move invalidation and withdrawal questions",
+      "proposed_falsifier": "A moved or removed root can acknowledge success while the wrong host translation remains live.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/75"
+    },
+    {
+      "number": 76,
+      "head": "468a35c9d845afc1938683540acc251bdef90e5a",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Admit pointer descriptors using their hardware format",
+      "proposed_falsifier": "Valid hardware descriptor bits are refused or reserved bits create extra address authority.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/76"
+    },
+    {
+      "number": 77,
+      "head": "1c510cb68e94ee85a717c50c93258bcb6012b1e7",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Preserve scan fairness and trailing rescan wakes",
+      "proposed_falsifier": "One hot token starves another or the final publication is stranded without a future wake.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/77"
+    },
+    {
+      "number": 78,
+      "head": "750820e95d88f9f975aa95dbd25edc2e3ed737d7",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Prevent stale ring-tail arithmetic from poisoning publication",
+      "proposed_falsifier": "A wrapped or stale tail underflows into a false capacity or corrupts a live producer.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/78"
+    },
+    {
+      "number": 79,
+      "head": "e018e784cecba94f8a6c43ab0ebc5388271ed5fb",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Bound streamed command classification on workers",
+      "proposed_falsifier": "A hostile packet stream consumes unbounded work or a bounded continuation loses parser state.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/79"
+    },
+    {
+      "number": 80,
+      "head": "5532cdc88ba8b3e4513aafd54ab095aac906b659",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Index expensive resource-manager free paths",
+      "proposed_falsifier": "A growing object graph still produces quadratic cost in the targeted free path.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/80"
+    },
+    {
+      "number": 81,
+      "head": "fdccc15e869253f3bfdd1ba0e0da73d150fe2489",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Cap live CPU mapping windows before native placement",
+      "proposed_falsifier": "Concurrent admissions exceed the cap or failure rollback leaks ownership or a slot.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/81"
+    },
+    {
+      "number": 82,
+      "head": "2363313c8c280fbd0d607542f834fa563bc0b16f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Expose invalidate snapshot drift with failing contracts",
+      "proposed_falsifier": "A root change can settle against a stale snapshot; ignored contracts are not a runtime fix.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/82"
+    },
+    {
+      "number": 83,
+      "head": "fa012c5b4d962e841e02b702907d4505409b3a94",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Bound guest-driven diagnostics at one admission point",
+      "proposed_falsifier": "A flood bypasses the cap through another path or a refusal hides unrelated progress.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/83"
+    },
+    {
+      "number": 84,
+      "head": "2165486e0a21985ce204d1776461a88c61af2d51",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Prevent unsupported device unplug on the current topology",
+      "proposed_falsifier": "The guest can still unplug it or legitimate reset/shutdown loses the required lifecycle event.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/84"
+    },
+    {
+      "number": 85,
+      "head": "124a37ce3dba62fc70eea47c41bf5a74bf849e1c",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Query display capabilities through unprivileged host requests",
+      "proposed_falsifier": "The query needs privilege or a whole physical answer enables an unsupported virtual field.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/85"
+    },
+    {
+      "number": 86,
+      "head": "ee80c5eb95891874704e33d7f30164bf8c47e26f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Repair combined-candidate review findings",
+      "proposed_falsifier": "A hostile-input or ownership regression remains reachable in the exact integrated candidate.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/86"
+    },
+    {
+      "number": 87,
+      "head": "e50cf4da55d129e985f6c18dc6093d096ada56d1",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Check design status and identify dead code",
+      "proposed_falsifier": "A live proposal is deleted as dead or a source-status correction claims implementation exists.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/87"
+    },
+    {
+      "number": 88,
+      "head": "c63f66cdbc8633dece1b27d3bfc962f358154fbf",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Bound trap-side doorbell batches",
+      "proposed_falsifier": "An admitted large delta blocks a vCPU or the worker fallback loses or duplicates entries.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/88"
+    },
+    {
+      "number": 90,
+      "head": "9490d7227e26dc0f5c9c618530ece0c39437cb77",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Seed the copy decoder from the allocated host class",
+      "proposed_falsifier": "A family-specific object is decoded with the wrong method set or privilege checks weaken.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/90"
+    },
+    {
+      "number": 91,
+      "head": "67df34aff3c7d24e8ba7c2cb9228d63105972b65",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Test translated errors against a live Linux victim",
+      "proposed_falsifier": "An induced attacker fault silently succeeds, corrupts the victim, or poisons later guest work.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/91"
+    },
+    {
+      "number": 92,
+      "head": "e636236cf34621b0c9e53170638c54a55a22f979",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Handle mirrored output lookup tables in the colour path",
+      "proposed_falsifier": "Native colour controls and captured output disagree or the target UI operation still freezes.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/92"
+    },
+    {
+      "number": 93,
+      "head": "e4cec12b1b31864dfa94b0fca0c1aebbf1726e61",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Derive virtual display fields before consulting host facts",
+      "proposed_falsifier": "A physical host capability enables a virtual feature that the emulated display cannot perform.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/93"
+    },
+    {
+      "number": 95,
+      "head": "1ac2b51d56ca5fc20bcc08b30c496e20d920635b",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Observe actual Windows adapter readiness independently",
+      "proposed_falsifier": "An enable-command return is confused with adapter Code 0 or the observer reads a stale instance.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/95"
+    },
+    {
+      "number": 97,
+      "head": "f4879bda249946da0ce237edd84cfce442ed6480",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Register native completion listeners before submission",
+      "proposed_falsifier": "A completion arriving immediately after submission is missed or attributed to another client.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/97"
+    },
+    {
+      "number": 98,
+      "head": "820db0c11d16e150d256a522495f895e1da1bba6",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Ratchet source width at one hundred columns",
+      "proposed_falsifier": "A newly long non-exempt source line passes, or an unchanged allowed line creates false debt.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/98"
+    },
+    {
+      "number": 99,
+      "head": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Qualify a combined descriptor and mapping candidate",
+      "proposed_falsifier": "The exact combined tree fails full-profile Windows or other-die regression, despite parent passes.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/99"
+    },
+    {
+      "number": 101,
+      "head": "b7fd84011a7b2b10cd12a6de7456b432a8bbd2b2",
+      "draft": false,
+      "head_in_baseline": false,
+      "goal": "Inventory stale documentation with a ratchet",
+      "proposed_falsifier": "A planted stale active document escapes detection or a historical archive is treated as live.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/101"
+    },
+    {
+      "number": 103,
+      "head": "19dcdd9b3d50d6453a933921f96f60667002d7f3",
+      "draft": false,
+      "head_in_baseline": false,
+      "goal": "Correct two historical status checkpoints",
+      "proposed_falsifier": "The new status still implies the old checkpoint is the current integrated implementation.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/103"
+    },
+    {
+      "number": 107,
+      "head": "95dac5d5eacb3d2f7b9b8763c4f9df556056599f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Calibrate the Windows readiness observer",
+      "proposed_falsifier": "A slower observer merely hides a product failure or accepts readiness without the required state.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/107"
+    },
+    {
+      "number": 108,
+      "head": "2ace3d219ad4490af41c5eccff5b48ea7009a228",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Measure display fields with a privileged read-only tool",
+      "proposed_falsifier": "The tool alters state or its independently decoded replies disagree with the native oracle.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/108"
+    },
+    {
+      "number": 110,
+      "head": "d53cfd9f44d7bdbc87887c2e19fb3431545d84b5",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Retire failed provider machines before retrying",
+      "proposed_falsifier": "Retry starts before absence is verified or chooses the same failed machine or host.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/110"
+    },
+    {
+      "number": 112,
+      "head": "008c97705a2c1cd043f407dc1b5c9e8eb446ad1f",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Consume measured Blackwell display capabilities",
+      "proposed_falsifier": "Same-die native answers disagree, or the exact-head Windows A/B still fails the target path.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/112"
+    },
+    {
+      "number": 127,
+      "head": "f0fa7f4953b9b6c1d651cbf33a8ddef657919ad3",
+      "draft": false,
+      "head_in_baseline": false,
+      "goal": "Record a Blackwell driver-readiness refusal",
+      "proposed_falsifier": "The operator labels a failed provider boot as a tested product cell or fails owned cleanup.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/127"
+    },
+    {
+      "number": 137,
+      "head": "794d4a700d752018aedf45a28a0df77792effd2a",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Prototype a private controller without the Worker",
+      "proposed_falsifier": "A real owned-instance lifecycle violates approval, spend, exact-SHA or teardown constraints.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/137"
+    },
+    {
+      "number": 140,
+      "head": "edfd0271f38111b6ba32b14d7fd6cf78d8deaeb9",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Keep retired backing until invalidation acknowledges",
+      "proposed_falsifier": "Old backing is freed while an old translation can execute, or failed invalidate loses ownership.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/140"
+    },
+    {
+      "number": 146,
+      "head": "3e52e0161c24547bf2e68d90e79b07c26a30df6d",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Represent guest sparse pages with selective host reservations",
+      "proposed_falsifier": "Sparse-ON repeats the failure under the full production profile or breaks another die.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/146"
+    },
+    {
+      "number": 160,
+      "head": "0b44315ef7f33dd19f919f2937b07c230e73e37a",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Bring up the TU106 Windows path",
+      "proposed_falsifier": "An exact-head guest fails the full workload despite a successful adapter initialisation.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/160"
+    },
+    {
+      "number": 163,
+      "head": "e5b9ee2fe647834f9dc141540c64c9792f884b89",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Permit an explicit headless Windows device experiment",
+      "proposed_falsifier": "Display-disabled setup still creates a display device or is mistaken for full desktop acceptance.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/163"
+    },
+    {
+      "number": 164,
+      "head": "c7e085b3d82a6ff01561887c3530eb47d5133bfc",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Model Turing display-window semaphore releases",
+      "proposed_falsifier": "The native release oracle and guest notification disagree; acquire semantics remain unmodelled.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/164"
+    },
+    {
+      "number": 165,
+      "head": "a1cd0e6283e6261d56164089ce5dac2a6251f4fd",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Reduce repeated Windows lease setup",
+      "proposed_falsifier": "A cached guest differs from the pinned clean image, leaks private state, or fails a cold control.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/165"
+    },
+    {
+      "number": 169,
+      "head": "6adec88f9a5f0b847084fbcc8f3d0365b49faa0a",
+      "draft": true,
+      "head_in_baseline": false,
+      "goal": "Explain a consumed completion wake",
+      "proposed_falsifier": "An induced lost wake remains invisible, or a harmless pending channel is called stranded.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/169"
+    },
+    {
+      "number": 172,
+      "head": "5ced95e19e8dc6df4a996470703e996d642da0d3",
+      "draft": false,
+      "head_in_baseline": false,
+      "goal": "Simplify the GPU trigger workflow",
+      "proposed_falsifier": "Removing the action dependencies changes which approved SHA is tested or skips required work.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/172"
+    },
+    {
+      "number": 176,
+      "head": "12c4008705f17033a803e56d4d479bf1275cdb94",
+      "draft": false,
+      "head_in_baseline": true,
+      "goal": "Batch the documentation and site changes",
+      "proposed_falsifier": "The final batch tree differs from the approved tree or a publication check fails.",
+      "url": "https://github.com/reindertpelsma/kayfabe/pull/176"
+    }
+  ]
+}

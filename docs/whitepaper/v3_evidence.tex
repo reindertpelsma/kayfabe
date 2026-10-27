@@ -1,0 +1,112 @@
+\section{What the evidence establishes}
+\label{sec:results}
+
+\subsection{A result belongs to a cell and a revision}
+
+\readcode The status-detail document warns that much of its main body is September history.
+The README and newer per-topic records add Windows, display and relay results. This paper
+therefore does not copy a historical heading such as ``Windows: research only'' into a current
+support claim. Conversely, a later source audit does not rerun an earlier hardware test.
+The following table deliberately retains the recorded revisions.\src{status}\src{readme}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}p{25mm}p{27mm}X@{}}
+\toprule Cell & Revision & Recorded scope; repetition limit \\
+\midrule
+Linux / TU116 & \code{1915bd71} & Gates 9/9, bare and thin 30/30; one recorded merge-bar
+campaign. Ladder at \code{a295e2ce}, described as the same code. No timing spread claimed.
+\src{turing} \\
+Linux / AD104 workstation & \code{fc2dadc4} & Gates 9/9, bare and thin 30/30; ladder
+4/4 at \code{d40dafbf}. Distinct checkout revisions are preserved.\src{families} \\
+Linux / GB205 & \code{d40dafbf} & Gates 9/9, bare and thin 30/30, ladder 4/4.
+One recorded cell, not a Windows pass.\src{families} \\
+Linux / GA104 & \code{714ec29d3} & Host and guest 595.91.07; gates 9/9 plus gate 10,
+bare and thin 30/30, one box/cell.\src{requirements}\src{sweep} \\
+Windows / AD104 desktop & \code{eb9f2aa3} & Stock 580.88 application matrix; later
+relay session at \code{89fc8a222}. Completion, recovery and output grades differ by app.
+No full-matrix pass at the paper baseline is asserted.\src{readme}\src{winmatrix} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\measured The family records above are dated 2026-09-30; the GA104 record is dated
+2026-10-24. Pass counts enumerate tests or arms, not independent boots of the entire workload.
+A 30/30 thin suite boots separate arms; it is not a thirty-boot confidence interval for a
+multi-application desktop. The Linux family campaigns used nested rented hosts and open
+580.159.04 drivers unless the cell says otherwise.\src{turing}\src{families}\src{sweep}
+
+\readcode The public requirements list additional earlier Linux runs on GA106, GA102,
+AD106 and GB203, and the README mentions an AD102 Linux guest with driver 590. Windows desktops
+on AD106 and AD103 used a borrowed display page. The requirements explicitly say that no single
+current per-die table is documented. This is evidence fragmentation, not permission to call
+all neighbouring dies supported. Hopper and datacentre families remain source-derived or
+refused cases, not hardware qualifications.\src{requirements}\src{readme}
+
+\subsection{Correctness results and their sample units}
+
+\measured The recorded Linux application matrix reports 61/65 passing applications and six
+stream probes, with output comparisons to the same host; its source is an earlier GA106
+campaign, not the paper baseline. The four remaining failures need managed-memory demand
+paging. The record of 100 sequential processes applies to one persistence-mode boot. These
+are useful workload and lifetime samples, but neither is a soak distribution.\src{status}
+\src{apps}\src{readme}
+
+\measured The headless graphics record reports 38/38 items, including 31 byte-identical
+outputs, at \code{d06833f0} on a GA104 box. The video lane reports byte-identical encode/decode
+outputs on a GA106. These compare content, which is stronger than a renderer name; they do
+not cover every display mode, all video families or later revisions.\src{status}\src{video}
+
+\readcode The driver matrix varies host and guest independently. Several guest versions
+passed a CUDA ladder against a fixed host, and several hosts passed the gates, thin suite and
+ladder against a fixed guest. The public guide preserves the versions and revisions and warns
+that the raw 30-arm suite is graded for 580.x guests. A decoder's support range and a tested
+application range are different sets.\src{requirements}\src{driverdesign}
+
+\subsection{A performance row with actual spread}
+
+\measured At device revision \code{e5ff45ff}, the AMD EPYC 7452 nested host with RTX 3060
+and 580.159.04 ran eager Qwen2-0.5B decoding. For 512-token warm decode, the summary gives
+\textbf{12.62 tokens/s [12.40, 12.94], $n=3$} in the guest and
+\textbf{43.98 [43.59, 44.63], $n=3$} on the host, ratio \textbf{0.287}.
+These are the table's reported aggregates and ranges, not a new estimate or confidence
+interval. The associated text-equality checks matter separately from throughput.
+\src{llmmethod}\src{llmdata}
+
+\measured The Windows performance summary, 2026-10-17, records three experimental
+Direct3D 11 Heaven runs at \code{134dcb54}: \textbf{299.1, 296.5 and 299.2 fps}
+with scan-off and lazy observation together, 1920$\times$1080, Ultra, 260-second windows,
+stock 580.88 guest on the owner's AD104 host with 595.91.07. Its production-path samples at
+other listed revisions are slower. The record itself says these experiments were not a
+safe integrated lifecycle qualification and did not have an application matrix. Their
+combined gain cannot be assigned to just one optimisation.\src{winperf}
+
+\inferred These examples support two narrower conclusions: large batches and small launches
+need separate measurements, and a fast renderer can coexist with a correctness or latency
+problem under mixed use. They do not establish a universal ``virtualisation overhead'' number.
+Nested versus non-nested execution, host load, guest workload and baseline revision all change
+the denominator.\src{linuxperf}\src{winperf}
+
+\subsection{The Worker GPU gate: useful, unattested and owner-controlled}
+
+\readcode GitHub requests a check through a Cloudflare Worker. A Durable Object ledger
+reserves liability, tracks owned instances, deadlines and spending, and coordinates cleanup.
+The provider account key stays in the Worker. Identity checks bind the workflow, owner
+triggering actor, signed run attempt and tested SHA. A scoped box capability can report only
+within its run contract. Cloudflare Access reduces noise; it is not the content-approval
+boundary.\src{broker}\src{threat}
+
+\readcode At the baseline's contributor policy, ordinary PRs target \code{next}; the GPU
+check belongs on the exact final \code{next} to \code{master} batch. The policy states CI is
+required on next and CI plus \code{gpu-vast} on master. This is the recorded policy, not an
+audit of live GitHub ruleset settings. Older triage or handoff statements about required
+checks are historical.\src{rules}
+
+\attack{Only the owner-approved SHA rents within the configured policy, and cleanup acts on
+ledger-owned instances.}
+{Broker unit/runtime tests and recorded provider campaigns exercise identity, accounting,
+results, retries and teardown. A real runtime matters because Node fakes cannot reproduce
+all Worker fetch behaviour.\src{threat}\src{broker}}
+{The rented machine and its operator can lie. A valid callback authenticates the run capability,
+not honest GPU execution. A PASS is a regression tripwire, not release provenance, an
+attestation or a security audit. A missed cron or failed provider deletion can also outlive
+an internal deadline.\src{broker}\src{threat}}

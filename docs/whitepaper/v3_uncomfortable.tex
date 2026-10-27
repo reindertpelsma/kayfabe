@@ -1,0 +1,442 @@
+\clearpage
+\section{The uncomfortable part}
+\label{sec:uncomfortable}
+
+The following is the research ledger, not a collection of release promises. It distinguishes
+fixed defects, competing explanations, experimental code and unrun acceptance tests. The
+open-PR inventory at the end preserves the publication snapshot; an open PR is not evidence
+that all of its changes are absent from the baseline.
+
+\subsection{The multi-application stall: start with the dependency, not its name}
+
+\readcode The October investigation asks why Windows applications can stall or recover while
+individual workloads run well. The later mapping experiments use the Enscape arm of the
+SPECviewperf workload. This paper discusses the failure and its timings; it publishes no
+SPEC scores, viewset results or proprietary workload images. The experimental mapping line
+is distinct from the baseline's earlier relay fixes.\src{admission}\src{rmcost}\src{latency}
+
+A useful causal chain has separate stages: Windows queues work; the relay observes demand;
+it publishes host work; the GPU processes a covering marker; host software observes that
+marker; the interrupt path notifies the guest; the guest scheduler observes progress. A
+silence at the end does not locate the missing or late step. The proposed diagnostic contract
+keeps these stages separate and explicitly refuses to identify a private host publication
+with a Windows packet without evidence.\src{latency}\src{walknarrow}
+\input{fig_v3_stall}
+
+\subsection{Timeline: defects that really existed, and explanations that did not survive}
+
+\begin{enumerate}[itemsep=0.7em]
+\item \readcode The October 9 invalidate incident left a guest trigger incomplete:
+  run 223 counted 3,138 invalidates and 3,137 clears. The owner ruling records a guest polling
+  that trigger indefinitely. Clearing over absent guest leaves became a policy; refused
+  host unmap or host invalidate was explicitly not covered by that exception. A later
+  reservation-edge defect was Kayfabe's mapping failure, not invalid guest tables.
+  These are documented predecessors, not proof of the later Enscape cause.\src{rulings}
+\item \readcode The earlier USER-ring completion gate used GET as a witness. The event-loop
+  record says hardware could fetch beyond a dependency before the dependent work ran.
+  A tagged processed-reference marker replaced that proof. The attractive explanation
+  ``GET passed it, so it executed'' was too strong.\src{eventloop}
+\item \measured The README records an earlier relay-handoff campaign with 0 stalled pairs
+  out of 26 after the fix, against 3 out of 12 before, plus a later Windows mixed-app session
+  of more than fifteen minutes. These are the README's scoped reports at \code{89fc8a222};
+  the paper does not claim a population-wide stall rate or transfer that result to the
+  later sparse experiment.\src{readme}
+\item \readcode A later Translated-slot contention defect consumed a wake while another
+  thread held the channel slot. The token could return idle with no owner or future pump.
+  The merged recovery retains the owed ring; behavioural tests demonstrated cases that
+  source-shape guards had missed. Its design record also says a Turing run still had
+  Windows reset storms after the narrow wake defect was fixed.\src{owed}
+\item \readcode The first sparse-admission implementation cloned and restored the whole
+  reservation tree on failure, returned an uncounted hard error for occupied coarse geometry,
+  and could resend a failed acknowledgement on later walks. Local undo, explicit decline
+  accounting and retry metadata addressed those software mechanisms. Their CPU tests
+  were not an Enscape acceptance run.\src{admission}
+\item \measured At sparse-admission revision \code{6d95870c7}, runs 7330 and 7350 showed
+  reservation churn near the 8,192-block policy boundary. In run 7330, over approximately
+  66 seconds, made objects rose by 241,584 and freed objects by 241,583. The record also
+  reports a 1.94-second apply with roughly 59,000 reservation verbs. This refutes the
+  simple explanation that every long apply must be one slow native call.\src{rmcost}
+\item \measured That same record puts run 7330's first event 153 near the Enscape start
+  while recent VA heartbeats were idle. Missing sparse coverage and declines coincided
+  with onset. This argues against treating earlier reservation-churn latency as a complete
+  account of that particular first reset. It does not prove missing coverage caused it.
+  \inferred The hypotheses require separate interventions.\src{rmcost}
+\item \readcode Later scope tests passed on the original gate while harvesting a published
+  marker and writing GET back before the PUT admission gate. They falsify the narrow
+  claim that this gate alone prevents completion observation. They do not falsify delayed
+  worker scheduling, lock contention or a dependency before publication.\src{walknarrow}
+\end{enumerate}
+
+The timeline is deliberately non-monotone: a real lost wake, a throughput defect and a missing
+mapping can all occur during one campaign. Finding the next defect does not retract a
+previously demonstrated one, and fixing the previous one does not close the new case.
+
+\subsection{What the later walks actually say}
+
+\measured The public split-latency note attributes \textbf{297,495 of 318,747} walks in boot
+7321 and \textbf{461,389 of 490,686} in boot 7391 to one privileged Translated copy-channel
+token. These are roughly \textbf{93--94\%}, with one count pair per boot, not a sampled estimate
+with a confidence interval. The note is a secondary report supplied to the implementation
+review; this paper has not audited the raw host traces.\src{latency}
+
+\measured The scope-narrowing note reports a \textbf{2.43-second apply} and a
+\textbf{2.529-second completion gap} in boot 7391 at \code{64c50ad4}. With raised diagnostic
+TDR thresholds, that Enscape arm reached its time limit without event 153. The note reports
+completion intervals following walk ends in boot 7321. These observations support a
+\emph{late rather than permanently lost} account for that arm; they are not a timeout-based
+fix, a broad timing distribution, or a one-to-one packet-identity proof.\src{walknarrow}
+
+\inferred A mostly serial channel that asks for a mapping split, waits for its result and
+then issues the next request can produce one observed completion near each walk end. That is
+consistent with the timing report. Identifying the Windows scheduling node with that exact
+host channel still requires ticket-level correlation. Correlation of two periodic series is
+not the missing identity.\src{latency}\src{walknarrow}
+
+\readcode A split requests a fresh post-admission walk because releasing later work against
+an earlier snapshot could expose stale translations. Same-target tickets admitted together
+can share a walk; a request arriving during an active walk belongs to a later submission.
+A channel that waits for each result before issuing the next request supplies nothing
+concurrent to coalesce.\src{latency}
+
+\textbf{Acceptance still absent from the cited record:} a full production-profile,
+default-timeout, sparse-twin-enabled Windows boot that passes the failing mixed workload.
+The software validation notes explicitly retain pending host acceptance and the default-OFF
+sparse policy. A longer diagnostic timeout cannot fill that gap.\src{sparse}\src{budget}
+\src{latency}
+
+\subsection{How our explanation could be wrong}
+
+\textbf{First fork: publication delay versus observation delay.} A packet can spend its time
+waiting to be published, executing on hardware, or complete while the observing worker is
+busy. The native marker has no GPU-write timestamp in the current diagnostic contract;
+\code{marker_gpu_ns=None} is intentional. Publication-to-observed-marker therefore combines
+execution and observation latency. Calling all of it ``GPU time'' would be false.
+\src{latency}
+
+\textbf{Second fork: CPU scope versus shared hardware.} A VM-wide admission gate can delay an
+unrelated ring before publication. Narrowing it by trusted host mutation target removes that
+particular dependency. It cannot remove shared engine scheduling, a global host RM lock, or
+necessary same-target ordering. If the same stalls persist with unrelated holds removed,
+that does not show the scope fix was inert; it shows the intervention did not isolate the
+remaining bottleneck.\src{walknarrow}
+
+\textbf{Third fork: trigger, victim and common cause.} A kernel copy channel can request most
+walks while an application merely suffers from them. Alternatively, the application's
+allocation pattern can cause both sparse work and scheduler distress. Per-channel walk
+counts alone cannot distinguish those stories. The decisive observation needs request,
+walk start, apply end, readiness, consumption, publication and notification in one life and
+clock domain.\src{latency}
+
+\textbf{Proposed falsifier, not a run result:} repeat the same workload and fixed image with
+native publication/marker/vector histories and guest event tracing. Include a diagnostic
+\code{TdrDelay=60} arm only as an observation window, alongside unchanged default thresholds.
+If long completion gaps occur without a corresponding pre-publication split hold, reopen
+relay/observation and GPU scheduling explanations. If changing sparse coverage alone changes
+onset while latency remains unchanged, prioritise the semantic mapping hypothesis. Record
+missing coverage and incomplete timestamps rather than dropping those samples.
+
+\subsection{Sparse backing: semantic fidelity has a resource cost}
+
+\readcode A sparse guest page is not the same as an invalid unmapped address. The selective
+sparse-twin experiment exists to reproduce that distinction using host reservation objects.
+It stays default OFF. A native micro-oracle can show that the sparse state changes a fault
+outcome without proving a long-lived Windows desktop remains correct.\src{sparse}\src{sparsepr}
+
+\readcode The newer policy scales finite per-space and per-session object budgets from the
+configured guest framebuffer and counts missing coverage separately from cumulative declines.
+Its interval tracker uses an explicit conservative upper bound on overflow; it must not turn
+unknown missing coverage into a zero gauge. A permanently excluded host-owned window remains
+excluded rather than repeatedly retried. These choices prefer faulting to inventing zero-filled
+backing or taking ownership of a host placement.\src{budget}
+
+\inferred This is a design tradeoff that deserves an unfriendly name: the fallback can be
+closed for host authority while still incompatible with a guest that needs sparse semantics.
+A finite cap protects the host; it does not make the guest's request disappear. The acceptance
+question is whether supported workloads stay within the defined mode, not whether a counter
+has an appealing value.\src{budget}\src{rulings}
+
+\subsection{Soft budgets are not deadlines}
+
+\readcode The sparse layout allowance limits the work that may \emph{start} in one slice.
+Already started replacements must finish or repair their original ownership. An individual
+native RM call is not software-preemptible. Ordinary map/unmap, invalidation, retirement and
+full teardown are not all covered by the optional-layout allowance.\src{rmcost}\src{budget}
+
+\measured A later CPU simulation with 120-ms releases required 240 ms for release and
+mandatory repair, even after two budget bypasses were fixed. That result explicitly disproves
+a universal 110-ms expectation. The original assertion of at most one replacement overshoot
+was false for error cleanup that started additional work without checking the slice.
+These are simulated timings at the scope-repair checkpoint, not a hardware guarantee.
+\src{walknarrow}
+
+\readcode The latest experimental continuation defers optional geometry until mandatory
+split results and wakes are released, rotates among target identities and stops between
+native verbs when a new split arrives. Mandatory repair still completes. Under continuous
+mandatory work, optional coverage may remain unhonoured; it is counted rather than hidden.
+No hard total-apply deadline or Windows cure is established.\src{latency}
+
+\subsection{Mirrors: retiring memory is an ordering protocol}
+
+\readcode A mirrored address space contains host placements, not merely a dictionary of guest
+addresses. The retirement PR delays freeing old backing until invalidation acknowledges that
+hardware can no longer use the old translation. A failed invalidate retains ownership.
+Its original proposal also keeps explicit unresolved scope tests rather than claiming a
+per-range gate exists.\src{retirementpr}\src{walkscope}
+
+\inferred A mirror can be correct after every completed refresh and still produce excessive
+latency during a refresh. Conversely, narrowing an admission gate can be fast and wrong if it
+releases a source whose mapping is still changing. The experimental target-scoping argument
+is about the host object actually mutated, not an assumption that distinct guest roots never
+share table pages. Unknown/global requests retain conservative holds.\src{walknarrow}
+
+The remaining fork is per-range certification: can unchanged source spans continue through an
+own-space refresh while changed spans permit only old, new or fault outcomes? The latest note
+marks that as design work. It needs a bounded change history, root-generation handling,
+overflow fallback and publication revalidation; a per-space flag alone is not that protocol.
+\src{latency}\src{walknarrow}
+
+\subsection{Pointer mode and lazy observation: the proof costs more than the optimisation}
+
+\readcode Pointer mode exists because repeatedly reading command bytes costs CPU time even
+when hardware can safely read the guest's own admitted commands. Registration and migration
+still require scanning boundaries. A window anchor is a fact about what was observed before
+a reply; retrospectively choosing the current PUT would weaken the proof. The lifecycle
+record corrects earlier boundary and mode-scope claims in place.\src{lifecycle}
+
+\readcode Lazy observation additionally makes the guest-visible GET lag. The code compensates
+with fresh observations on waits, low credits, split segments, full-ring pressure and mode
+changes. Its argument is that staleness can only reduce credit or delay a gate, never create
+progress. The small-ring bound matters because a large benchmark ring can hide guest
+backpressure.\src{lifecycle}\src{lazycode}
+
+\inferred These mechanisms are justified only if the whole lifecycle remains easier to test
+than an always-scanning path is to run. A local counter win is insufficient. One should demand
+small-ring tests, hostile mutation schedules, migration at packet boundaries and native
+completion timing. The combined scratch performance arms do not reveal which half of lazy
+observation deserves its permanent complexity.\src{winperf}\src{lifecycle}
+
+\subsection{Relay debt and recorded disagreement}
+
+\readcode The public ruling records an evolution in the Windows mediation decision: an
+initial immutable-copy rule was superseded by the owner's clarification that native USER
+privilege plus restricted mappings can permit ordinary GP references unchanged. The earlier
+design required immutable command copies; the owner later permitted ordinary pointers under
+the native authority boundary. This is a recorded correction to the design, not evidence
+that host-owned writable memory became acceptable. Linux Passthrough's stricter mapping prohibition
+  remains.\src{rulings}
+\src{migrationdecision}
+
+\readcode The latest split note explicitly preserves the existing event-driven relay and
+introduces no 64-attempt budget. The new mapping work targets a different dependency. A
+convenient retry count would not prove that a lock holder hands progress back correctly.
+The contention test's finite fair suffix is an assumption about scheduling, not a product
+polling interval.\src{latency}\src{owed}
+
+\unverified This paper found no public repository record sufficient to attribute a current
+coordinator preference between every historical relay alternative. It therefore invents no
+personal dissent. The practical competing proposals that are recorded are native relocation,
+restricted mediation and an optional host-cooperation tier; their acceptance obligations are
+more useful than an attributed opinion without a source.\src{migrationdecision}
+
+\subsection{Poor shapes we should be willing to replace}
+
+\begin{description}[itemsep=0.6em]
+\item[Global publication dependencies.] \inferred Holding every relayed ring while one
+  target changes gives one workload an avoidable latency path into others. The scope
+  experiment addresses only this part. Owner policy still requires unchanged VAs to remain
+  usable and prohibits solving ordering with a GPU pause.\src{walknarrow}\src{rulings}
+\item[Work hidden behind a soft bound.] \readcode A ``100 ms slice'' that excludes repair,
+  mapping and teardown is easy to overstate. The newer notes name these exclusions. Owner
+  policy requires prompt invalidate completion; changing a diagnostic timer is not compliance.
+  \src{rmcost}\src{rulings}
+\item[Control-plane scaling.] \readcode The open indexing PR describes a partial correction
+  to quadratic RM free paths. It does not claim all graph or hostile-flood costs are linear.
+  A cap is a finite memory bound, not a useful throughput bound.\src{indexpr}
+\item[Classification by convenient identity.] \readcode The PR catalogue includes separate
+  privilege-stamp and mirror-classification work. Guest-handle bit patterns are not an
+  authority proof; the rule is native privilege and validated ownership. Integration must
+  preserve that rule across old branches, not merely fix the newest path.\src{rulings}
+\item[Flag accumulation.] \readcode The flag inventory and cooperative-tier plan distinguish
+  measurement switches from product modes. A correctness feature that requires an undocumented
+  diagnostic flag has not met the stock-path requirement. The sparse switch currently labels
+  an experiment, not a supported mode that must be enabled.\src{flags}\src{cooperation}\src{sparse}
+\item[Evidence scattered across heads.] \readcode Status pages, exact-SHA traces and open
+  stack PRs often refer to different revisions. The original status page warns about its own
+  age. A correction in one page cannot silently update a binary or a downstream summary.
+  \src{status}\src{handoff}\src{old}
+\end{description}
+
+\subsection{Per-die constants: derive first, then admit the coverage gap}
+
+\readcode The public provenance policy permits computed values, pinned open sources,
+unprivileged host queries and source-tagged hardware measurements. Closed-binary material is
+not a public data source, build dependency or source of interface layouts. The policy itself
+is draft wording awaiting review, and it explicitly does not claim a clean-room process.
+This paper carries no findings, values or citations derived from closed binaries.
+\src{provenance}\src{credits}
+
+\readcode The constants strategy says to derive or compute first, then ask the unprivileged
+host, then measure on the exact die and driver when necessary. A family compression needs both
+agreement across measured dies and a mechanism. Agreement of adjacent dies is only
+``consistent so far''. An unmeasured die or branch gets a defined, tested refusal or fallback,
+not a neighbour's unlabelled row.\src{constants}\src{rulings}
+
+\readcode Coverage is not all on the baseline. The strategy identifies published constants
+and display-capability consumers on separate experimental heads while the baseline retains
+older paths. Some Windows dies use borrowed display data; Blackwell Windows remains a set of
+specific failures and proposed field derivations. Hopper and datacentre cases have no hardware
+cell in the guide. A table loader existing is not proof that every caller uses it or that the
+fallback runs real applications.\src{constants}\src{requirements}
+
+\inferred A demanding external test is to remove every borrowed optional bit for an unmeasured
+die and run the exact acceptance workload. If the fallback only boots but cannot complete
+ordinary applications, ``clean mode'' was a name rather than a product configuration. This
+follows the owner's explicit fallback requirement, not a new promise of support.\src{constants}
+
+\subsection{Security: unprivileged is a capability limit, not containment evidence}
+
+\readcode Kayfabe trusts the host NVIDIA driver, GPU and VMM adapter. It has no independent
+security audit or penetration test. The process has no Kayfabe-owned sandbox; deployment must
+confine it. GPU USER privilege and per-channel VA spaces are central because the guest does
+not own the physical device. The host IOMMU is a separate host protection layer and does not
+provide per-VM identities on this shared physical GPU.\src{security}\src{faq}
+
+\measured The physical-operand oracle at \code{8c084ab7}, RTX 4070 and 595.91.07, reports
+that USER copy channels refuse physical operands while virtual operands are delivered.
+That is strong evidence for that tested boundary. It is not an audit of every engine,
+privilege transition, host-driver bug or same-UID cross-client path.\src{physevidence}\src{faq}
+
+\readcode Deployment recommendations include one UID per VM, dropping capabilities and
+confining the whole VMM. The public security page records resource gaps from a dated source
+review: GPU time, NVENC sessions, host BAR1, RM call rate and logging were not all bounded per
+VM. It explicitly says that review has not been repeated and later code may address parts.
+This paper does not turn that historical list into a fresh vulnerability census.\src{security}
+
+\subsection{Fault containment, notification noise and fairness}
+
+\readcode GPU-wide non-stall notifications can wake every registered VM. Extra interrupts
+and timing information about engine use are accepted tradeoffs; dropping a real wake would
+break correctness. A guest checks its own completion value after a spurious notification.
+Optional pacing can delay a signal but must not erase the debt.\src{faq}\src{rulings}
+
+\unverified The effect of a guest-triggered fault on other VMs sharing the same GPU remains
+unmeasured in the public guide. Isolation of normal addresses does not establish reset or
+fault containment. Likewise a finite framebuffer allocation does not establish fair scheduling,
+encoder access or host-call service under an adversarial peer. A useful claim needs a live
+victim with retained work across the fault, not just a new process started afterwards.
+\src{security}\src{faq}
+
+\subsection{Performance honesty: denominator, placement and missing samples}
+
+\readcode The public Linux performance baseline distinguishes nested rented hosts from the
+owner's physical host. It records why the obvious pre-Windows comparison revision could not
+run with the current host driver, so the chosen baseline already contains earlier Windows
+work. A before/after delta using it cannot measure all Windows cost.\src{linuxperf}
+
+\inferred A throughput ratio is useful only for the named workload and placement. Comparing
+a GPU reading host system memory with one reading VRAM answers a placement question as well
+as a virtualisation question. An application that batches a token's work cannot grade eager
+launch overhead. Three repeated runs in one boot do not estimate boot-to-boot variability.
+The older paper's correction record contains exactly these denominator and control failures.
+\src{old}\src{linuxperf}
+
+\readcode The display summary warns that average Heaven FPS omits low-frame behaviour and
+that its native reference was not repeated with every experimental arm. A fast scratch build
+is not a passing integrated lifecycle. No proprietary 3DMark, Steel Nomad or Geekbench score
+is reproduced here. No SPEC numerical score is needed to describe the stall.\src{winperf}
+
+\subsection{Unsupported, partially measured and explicitly postponed}
+
+\begin{description}[itemsep=0.6em]
+\item[Multiple GPUs.] \readcode A Linux thin guest used two distinct GPUs, sequentially and
+  concurrently. CUDA in that guest, UVM across devices, peer access, Windows and choosing a
+  display GPU remain outside that result. Calling multi-GPU simply ``unbuilt'' would erase
+  real evidence; calling it a complete product would overstate it.\src{status}\src{rulings}
+\item[Other VMMs and arm64.] \readcode The owner records these as goals after family coverage.
+  QEMU is the implemented adapter. A cross-build or historical pure-core ARM test does not
+  establish today's memory/interrupt/reset shell on arm64.\src{rulings}\src{requirements}
+\item[Blackwell Windows.] \readcode The guide records GB206 Code 43; open proposals cover
+  display fields, constructor admission, native probes and readiness. A successful Linux
+  GB205 cell is not a Windows GB206 or GB202 pass.\src{requirements}
+\item[Driver unload and recovery.] \readcode The reset and gap documents distinguish device
+  life, in-guest reset and reboot. A correct cold boot cannot establish repeated driver
+  unload/reload, kill-during-work recovery or generation reuse. Some reset work exists; its
+  presence is not a complete lifecycle acceptance.\src{reset}\src{gaps}
+\item[Suspend.] \measured Linux S3 passed three cycles at \code{559db30c}; the status record
+  reports Windows wake failures. Thus S3 is neither globally absent nor globally working.
+  The FSP-family resume path remains a named gap.\src{sleep}\src{handoff}
+\item[Display across reboots.] \readcode Reboot scrubbing and boot-layer taint are distinct
+  policies: a reboot must scrub before the next OS life, while a driver reset must not
+  pretend to create a new trust boundary. The owner's host-allocation isolation premise is
+  explicitly accepted, not independently verified by the project.\src{rulings}\src{reset}
+\item[Other long tails.] \readcode Multi-head, advanced display fidelity, vIOMMU addressing,
+  demand faults, peer resources, container packaging and a rootless launcher need their own
+  evidence or implementation. The gap catalogue preserves the issue distinctions; an
+  untested configuration is not a supported fallback.\src{gaps}\src{faq}
+\end{description}
+
+\subsection{Licensing and provenance are unfinished release work}
+
+\readcode The repository states Apache-2.0 OR GPL-2.0-or-later with exceptions. Some
+nvproxy-derived files remain Apache-only; the credits say a QEMU binary linked from the
+current tree is not yet distributable under the GPL. The broker has its own notice.
+Vendor driver, firmware and OS binaries are not supplied by Kayfabe. These are the project's
+stated notices, not this paper's legal interpretation.\src{credits}\src{license}\src{notices}
+
+\readcode Tests obtain vendor software under its own terms. The public downloads note is a
+draft and records unresolved installer/automation questions. Building a sealed Windows cache
+or automating an installer is engineering work separate from permission to redistribute it.
+The policy calls for review of provenance wording and the full history before release.
+Nothing in a successful benchmark or build settles those questions.\src{credits}\src{provenance}
+
+\subsection{Process risk: one maintainer, many agents, fallible instruments}
+
+\readcode The repository's workflow assigns an owner approval boundary and uses agents for
+research, implementation and review. It requires falsifiers, expected-red tests, multiple
+mutation killers, exact revisions and attribution. These mechanisms expose claims to tests;
+they do not establish reviewer independence when the same mistaken model informs both code
+and oracle. The predecessor records an independent-looking reference tracker with the same
+logical omission as the implementation.\src{rules}\src{old}
+
+\inferred The maintainer remains an integration bottleneck: choosing among many experimental
+heads requires understanding both the code and which hardware receipts still apply. A
+machine-written summary can amplify a confident commit message that was never evidence.
+The remedy is source and experiment review, not counting how many reviewers repeat it.
+The old paper's corrected object-graph hypothesis illustrates that amplification.\src{old}
+
+\readcode The current PR policy batches real-GPU validation on master and keeps next for
+integration. That controls cost, but makes exact final-tree qualification essential. A passing
+parent plus a passing child on another date is not a passing merge. Open expected-red PRs and
+ignored contracts are useful debt records only while their status remains visible.
+\src{rules}\src{owed}
+
+\subsection{Research inventory at the publication cutoff}
+\label{sec:inventory}
+
+\readcode The following inventory covers the 86 open PRs captured when writing began, before
+this paper's own PR. It includes ordinary and draft PRs, older experiments and a pending batch.
+Each entry states its goal, snapshot state and a \emph{proposed} falsifier or acceptance result.
+A falsifier here is the paper's research question, not a claim that the PR author preregistered
+or ran it. The public PR number and immutable head identify the source. Names from PR titles
+are translated into plain descriptions; historical labels are decoded in the appendix.
+
+State ``open'' means GitHub state at capture. ``Head already in baseline'' is a Git ancestry
+check, not a claim that a later replacement is identical. Body-reported validation, when
+mentioned, has not been rerun. Conflicts, policy decisions and full-profile hardware
+qualification remain integration work. The separate experiment notes cited above may contain
+later work beyond the older sparse/mirror PR heads.
+\input{v3_pr_inventory}
+
+\subsection{A gap ledger can itself be stale}
+
+\readcode The feature-gap catalogue mixes closed rows, open questions and corrections. Its
+priority rule puts application blockers first and console fidelity later. The handoff also
+retains superseded decisions, including a capability allowlist already approved and a
+migration alternative later tested natively. Keeping history is valuable only if readers
+follow dated corrections before reading old verdicts.\src{gaps}\src{handoff}\src{rulings}
+
+\inferred The paper has the same failure mode. Its source pin prevents silently moving the
+implementation under a claim; it cannot prevent a new experiment tomorrow from falsifying an
+explanation. The inventory should be regenerated for a later edition, and the case study
+should change only when a discriminating measurement changes it. The unanswered questions
+that follow are intended to help make that happen.
