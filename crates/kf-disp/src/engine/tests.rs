@@ -1992,3 +1992,32 @@ fn a_reset_engine_arms_nothing_and_lights_the_next_life_like_a_fresh_one() {
     e.reset_life();
     assert_eq!(e.heads_armed(), fresh.heads_armed());
 }
+
+/// ★ 2026-10-27 (TU106 rental 57882297): Turing's window class (C57E) has one semaphore context
+/// DMA and one control word with only an OFFSET field, a 32-bit ACQUIRE and a 32-bit RELEASE
+/// value. The 64-bit payload bit, the release mode and the separate acquire semaphore are C67E
+/// and later, so the vocabulary carries them as absent, not as a refusal to build the plane.
+#[test]
+fn turing_window_semaphores_are_32_bit_with_no_separate_acquire() {
+    for version in ["580.65.06", "580.159.04"] {
+        let t = class::for_version(version).unwrap();
+        let r = Regs::for_ip(version, kf_chip::display::TURING.ip_version).unwrap();
+        let v = Vocab::resolve(t, &Classes::of(&kf_chip::display::TURING), &r)
+            .unwrap_or_else(|e| panic!("{version}: {}", e.0));
+        assert!(v.w_sem_payload.is_none(), "{version}: C57E has no payload-size bit");
+        assert!(v.w_sem_rel_mode.is_none(), "{version}: C57E has no release mode");
+        assert!(v.w_acq.is_none(), "{version}: C57E has no separate acquire semaphore");
+        assert_eq!(v.w_sem_release, t.v(0xC57E, "SET_SEMAPHORE_RELEASE").unwrap());
+        assert_eq!(v.w_ctxdma_sem, t.v(0xC57E, "SET_CONTEXT_DMA_SEMAPHORE").unwrap());
+    }
+}
+
+/// The families that have them keep the 64-bit payload, the release mode and the acquire semaphore.
+#[test]
+fn ampere_window_semaphores_keep_payload_mode_and_acquire() {
+    let v = engine().vocab.clone();
+    assert!(v.w_sem_payload.is_some() && v.w_sem_rel_mode.is_some());
+    let q = v.w_acq.as_ref().expect("C67E has the separate acquire semaphore");
+    assert_eq!(q.ctxdma, m(WIN, "SET_CONTEXT_DMA_ACQ_SEMAPHORE"));
+    assert_eq!(q.control, m(WIN, "SET_ACQ_SEMAPHORE_CONTROL"));
+}
