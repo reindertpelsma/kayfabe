@@ -17,8 +17,17 @@ fn row_writer_records_its_registered_thread_and_named_activity() {
 #[test]
 fn row_writer_clears_ownership_before_unlocking_and_waking() {
     let drop = MEM.split("impl Drop for RowsWriteGuard").nth(1).unwrap();
-    let clear = drop.find("writer.store(0").unwrap();
-    assert!(clear < drop.find("drop(self.guard.take())").unwrap());
+    assert!(drop.contains("writer.store(0"));
+    let wrapper = drop.split("fn write_rows_releasing").next().unwrap();
+    assert!(!wrapper.contains("hub.released()"));
+    let fields = MEM
+        .split("struct RowsWriteGuard")
+        .nth(1)
+        .unwrap()
+        .split("struct RowReleased")
+        .next()
+        .unwrap();
+    assert!(fields.find("guard:").unwrap() < fields.find("_after_unlock:").unwrap());
 }
 #[test]
 fn user_source_snapshots_keep_the_same_row_owner_metadata_across_revalidation() {
@@ -35,4 +44,27 @@ fn normal_and_storm_irq_outcomes_have_distinct_recording_entries() {
 #[test]
 fn packet_and_split_context_both_prioritize_named_blockers() {
     assert_eq!(RUNTIME.matches("sort_by_key(|w| context_key(").count(), 2);
+}
+
+#[test]
+fn reset_cancels_queued_split_latency_without_inventing_a_completion() {
+    let p = MEM
+        .split("pub fn reset_life(&self) -> usize")
+        .nth(1)
+        .unwrap()
+        .split("if let Ok(mut m) = self.split_tokens")
+        .next()
+        .unwrap();
+    assert!(p.contains("latency::split_canceled"));
+}
+#[test]
+fn reset_cancels_running_and_released_split_latency() {
+    let p = MEM
+        .split("if let Ok(mut m) = self.split_tokens.lock()")
+        .nth(1)
+        .unwrap()
+        .split("if let Ok(mut m) = self.gates")
+        .next()
+        .unwrap();
+    assert_eq!(p.matches("latency::split_canceled").count(), 2);
 }
