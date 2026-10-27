@@ -1033,6 +1033,87 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.pending.len()
     }
 
+    /// Host mutation targets that must hold future relay source reads. A guest table alias
+    /// alone does not mutate another target: each apply addresses its own table entry/host VAS.
+    /// Unknown/PDB_ALL work stays global; cap the published snapshot independently of guest size.
+    #[must_use]
+    pub fn walk_gate_scope(&self, armed: Option<InvalidateRequest>) -> (Vec<VasKey>, bool) {
+        let mut keys = BTreeSet::new();
+        let mut global = false;
+        let mut want = |w: &Want| {
+            if global {
+                return;
+            }
+            match w {
+                Want::Root(key) | Want::Split { key: Some(key), .. } => {
+                    keys.insert(*key);
+                }
+                Want::Split { pdb: Some(pdb), .. } => {
+                    let named: Vec<_> = self
+                        .table
+                        .spaces
+                        .iter()
+                        .filter(|(_, space)| space.root == Some(*pdb))
+                        .take(513)
+                        .map(|(&key, _)| key)
+                        .collect();
+                    global |= named.is_empty();
+                    keys.extend(named);
+                }
+                Want::Invalidate(req, _) => {
+                    let named: Vec<_> = self
+                        .table
+                        .spaces
+                        .iter()
+                        .filter(|(_, space)| space.root == Some(req.inval.pdb))
+                        .take(513)
+                        .map(|(&key, _)| key)
+                        .collect();
+                    global |= req.inval.all_pdb
+                        || req.inval.pdb_aperture != PdbAperture::Vidmem
+                        || named.is_empty();
+                    keys.extend(named);
+                }
+                Want::Split {
+                    pdb: None,
+                    key: None,
+                    ..
+                } => global = true,
+            }
+            if keys.len() > 512 {
+                global = true;
+                keys.clear();
+            }
+        };
+        for w in &self.pending {
+            want(w);
+        }
+        if let Some(batch) = &self.inflight {
+            for (w, _, _) in &batch.wants {
+                want(w);
+            }
+        }
+        if let Some(req) = armed {
+            want(&Want::Invalidate(req, std::time::Instant::now()));
+        }
+        if global {
+            return (Vec::new(), true);
+        }
+        for (_, waiting, _) in &self.awaiting {
+            for &key in waiting {
+                keys.insert(key);
+                if keys.len() > 512 {
+                    return (Vec::new(), true);
+                }
+            }
+        }
+        if keys.len() > 512 {
+            (Vec::new(), true)
+        } else {
+            (keys.into_iter().collect(), global)
+        }
+    }
+
     /// ★ Invalidates applied but held un-cleared until a target's asynchronous work is live.
     #[must_use]
     pub fn awaiting(&self) -> usize {
@@ -2313,6 +2394,53 @@ mod tests {
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
         r.m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem).unwrap();
         r
+    }
+
+    #[test]
+    fn ens10_named_root_scope_includes_every_host_target_with_the_same_root() {
+        let mut r = rig();
+        r.m.table.set_root(K_B, PDB_A, PdbAperture::Vidmem).unwrap();
+        let req = guest_invalidate(&r.port, PDB_A, false);
+        let (keys, global) = r.m.walk_gate_scope(Some(req));
+        assert!(!global);
+        assert_eq!(keys, vec![K_A, K_B]);
+        r.m.on_invalidate(req, r.port.trigger());
+        assert_eq!(r.m.walk_gate_scope(None), (vec![K_A, K_B], false));
+    }
+
+    #[test]
+    fn ens10_active_and_pending_space_work_are_both_published_before_apply() {
+        let mut r = rig();
+        r.m.on_split_space(K_A, 1, r.port.trigger());
+        r.m.on_split_space(K_B, 2, r.port.trigger());
+        assert!(r.m.in_flight());
+        assert_eq!(r.m.pending(), 1);
+        assert_eq!(r.m.walk_gate_scope(None), (vec![K_A, K_B], false));
+    }
+
+    #[test]
+    fn ens10_pending_named_root_preserves_aliases_behind_another_active_root() {
+        let mut r = rig();
+        r.m.table.set_root(K_B, PDB_A, PdbAperture::Vidmem).unwrap();
+        let k_c = VasKey(0x3333);
+        let h = host(&r, None, Vec::new());
+        r.m.table.insert(k_c, h);
+        r.m.table.set_root(k_c, PDB_B, PdbAperture::Vidmem).unwrap();
+        r.m.on_split_space(k_c, 1, r.port.trigger());
+        let req = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(req, r.port.trigger());
+        let (keys, global) = r.m.walk_gate_scope(None);
+        assert!(!global);
+        assert!(keys.contains(&K_A) && keys.contains(&K_B) && keys.contains(&k_c));
+    }
+
+    #[test]
+    fn ens10_all_pdb_and_unknown_roots_retain_the_global_fallback() {
+        let r = rig();
+        let req = guest_invalidate(&r.port, PDB_A, true);
+        assert!(r.m.walk_gate_scope(Some(req)).1);
+        let req = guest_invalidate(&r.port, 0x0380_0000, false);
+        assert!(r.m.walk_gate_scope(Some(req)).1);
     }
 
     /// The guest's sequence through the PORT (PDB lo, PDB hi, TRIGGER) — what a vCPU does.

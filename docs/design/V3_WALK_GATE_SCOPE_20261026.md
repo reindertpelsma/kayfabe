@@ -1,3 +1,5 @@
+**STATUS: SUPERSEDED for per-host-target scope, 2026-10-27, by [V3_WALK_GATE_NARROWING.md](V3_WALK_GATE_NARROWING.md).** The implementation keys the barrier to the host targets a request can mutate, not to an unproved assumption that guest page tables never alias. Global/unknown work remains conservative. The historical questions and original code citations below explain the starting point; the four original scope tests are now active contracts. Per-range admission remains design-only.
+
 **STATUS: DESIGN-ONLY, 2026-10-26.** FX1 analysis on candidate `6564dd597`. The production walk gate remains VM-wide. Four executable scope questions are parked as explicitly ignored tests in `crates/kf-qemu/src/mem/walk_gate_tests.rs`; they are expected to fail when selected with `--ignored`. This note proposes a scope, not a verified implementation.
 
 # Scope of the USER-ring mapping-walk gate

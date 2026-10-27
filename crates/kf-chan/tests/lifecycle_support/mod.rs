@@ -230,6 +230,11 @@ pub enum Ev {
 }
 
 pub trait Env {
+    /// Test-side production-adapter hook, default inert for all historical scenarios.
+    fn publication_ready(&self) -> bool {
+        true
+    }
+
     /// VA apply pending; default keeps the historical scenarios unchanged.
     fn walk_busy(&self) -> bool {
         false
@@ -428,6 +433,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         guest_get: u32,
         entry: u64,
     ) -> Turn<()> {
+        if !self.env.publication_ready() {
+            return Err(Fail::Retry);
+        }
         fetch
             .publish(Some((generation, guest_get)))
             .map_err(str::to_owned)?;
@@ -439,6 +447,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         Ok(())
     }
     fn publish_gate(&mut self, fetch: &mut Fetch, marks: &mut Marks) -> Turn<u64> {
+        if !self.env.publication_ready() {
+            return Err(Fail::Retry);
+        }
         fetch.publish(None).map_err(str::to_owned)?;
         self.env.publish(Pub::Barrier);
         fetch.publish(None).map_err(str::to_owned)?;
@@ -447,6 +458,9 @@ impl<E: Env> Io for EnvIo<'_, E> {
         Ok(n)
     }
     fn publish_marker(&mut self, fetch: &mut Fetch, marks: &mut Marks) -> Turn<()> {
+        if !self.env.publication_ready() {
+            return Err(Fail::Retry);
+        }
         fetch.publish(None).map_err(str::to_owned)?;
         let (n, _) = marks.issue().map_err(str::to_owned)?;
         self.env.publish(Pub::Marker(n));
@@ -583,6 +597,9 @@ impl Relay {
     }
 
     fn step_inner(&mut self, env: &mut impl Env) {
+        if matches!(self.sub, Sub::PubScan | Sub::Stage | Sub::Action) && !env.publication_ready() {
+            return;
+        }
         match self.sub {
             Sub::Core => {
                 let r = {

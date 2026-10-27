@@ -1,7 +1,5 @@
-//! Executable questions for a future per-space walk gate. Production policy is unchanged.
-//!
-//! The adapter deliberately calls the current VM-global predicate, just as PumpIo does.
-//! Replace it with the scoped predicate only after scope/alias and wake rules are settled.
+//! Production Inbox contracts for scoped source admission and its release/wake protocol.
+//! The original four unrelated-space questions are active tests after the EXPECTED RED proof.
 
 use super::{Inbox, SplitTarget};
 use kf_mem::vasmgr::VasKey;
@@ -9,8 +7,8 @@ use kf_mem::vasmgr::VasKey;
 const A: VasKey = VasKey(0x100);
 const B: VasKey = VasKey(0x200);
 
-fn current_user_gate(inbox: &Inbox, _ring_space: VasKey) -> bool {
-    inbox.walk_busy()
+fn current_user_gate(inbox: &Inbox, ring_space: VasKey) -> bool {
+    inbox.walk_busy_for(ring_space)
 }
 
 #[test]
@@ -88,4 +86,368 @@ fn a_scoped_retire_statement_does_not_hold_an_unrelated_ring() {
         !current_user_gate(&inbox, B),
         "unsettled is currently a VM-global gate"
     );
+}
+
+#[test]
+fn two_own_space_requests_do_not_release_each_other() {
+    let inbox = Inbox::new().unwrap();
+    let a = inbox.request_user_split(7, A).ok().unwrap();
+    let b = inbox.request_user_split(8, A).ok().unwrap();
+    inbox.take_split_requests();
+    inbox.finish_split(a, Ok(()));
+    assert!(inbox.walk_busy_for(A));
+    assert!(!inbox.walk_busy_for(B));
+    inbox.finish_split(b, Ok(()));
+    assert!(!inbox.walk_busy_for(A));
+}
+
+#[test]
+fn taking_an_own_request_preserves_its_target_until_host_invalidate_ack() {
+    let inbox = Inbox::new().unwrap();
+    let t = inbox.request_user_split(7, A).ok().unwrap();
+    inbox.take_split_requests();
+    inbox.set_walk_scope(vec![A], false, None);
+    assert!(inbox.walk_busy_for(A));
+    assert!(!inbox.walk_busy_for(B));
+    inbox.set_walk_scope(vec![], false, None);
+    assert!(
+        inbox.walk_busy_for(A),
+        "the split's host ACK has not arrived"
+    );
+    inbox.finish_split(t, Ok(()));
+    assert!(!inbox.walk_busy_for(A));
+}
+
+#[test]
+fn an_unresolved_named_pdb_split_is_global_even_after_dequeue() {
+    let inbox = Inbox::new().unwrap();
+    let t = inbox.request_split(7, Some(0x3000));
+    inbox.take_split_requests();
+    assert!(inbox.walk_busy_for(A));
+    assert!(inbox.walk_busy_for(B));
+    inbox.finish_split(t, Ok(()));
+    assert!(!inbox.walk_busy_for(A));
+}
+
+#[test]
+fn manager_global_fallback_and_cpu_window_targets_hold_every_ring() {
+    for key in [super::K_BAR1, super::K_BAR2] {
+        let inbox = Inbox::new().unwrap();
+        inbox.set_walk_scope(vec![key], false, None);
+        assert!(inbox.walk_busy_for(A));
+        assert!(inbox.walk_busy_for(B));
+    }
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![], true, None);
+    assert!(inbox.walk_busy_for(A));
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn a_new_armed_generation_invalidates_the_resolved_scope_snapshot() {
+    let inbox = Inbox::new().unwrap();
+    let regs =
+        kf_trap::InvalidateRegs::from_usermode_base(kf_trap::memmap::VF_USERMODE_PAGE).unwrap();
+    let port = std::sync::Arc::new(kf_trap::InvalidatePort::new(regs));
+    inbox.walk_port.set(port.clone()).unwrap();
+    let first = port.trigger().arm_next();
+    inbox.set_walk_scope(vec![A], false, Some(first));
+    assert!(!inbox.walk_busy_for(B));
+    port.trigger().arm_next();
+    assert!(
+        inbox.walk_busy_for(B),
+        "the new request has not been resolved"
+    );
+    assert!(inbox.walk_busy_for(A));
+}
+
+#[test]
+fn an_unresolved_first_arm_closes_even_an_idle_scoped_snapshot() {
+    let inbox = Inbox::new().unwrap();
+    let regs =
+        kf_trap::InvalidateRegs::from_usermode_base(kf_trap::memmap::VF_USERMODE_PAGE).unwrap();
+    let port = std::sync::Arc::new(kf_trap::InvalidatePort::new(regs));
+    inbox.walk_port.set(port.clone()).unwrap();
+    inbox.set_walk_scope(vec![], false, None);
+    port.trigger().arm_next();
+    assert!(inbox.walk_busy_for(A));
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn scoped_statement_settlement_never_erases_a_later_statement() {
+    let inbox = Inbox::new().unwrap();
+    let st = kf_rm::barpde::MemStatement::Retire {
+        client: 0,
+        vaspace: A.0 as u32,
+    };
+    inbox.push(st);
+    inbox.take();
+    inbox.push(st);
+    inbox.settle(1);
+    assert!(inbox.walk_busy_for(A));
+    assert!(!inbox.walk_busy_for(B));
+    assert!(
+        !inbox.all_settled(),
+        "held RPC reply ordering is still global"
+    );
+    inbox.settle(2);
+    assert!(!inbox.walk_busy_for(A));
+    assert!(inbox.all_settled());
+}
+
+#[test]
+fn statement_scope_overflow_is_global_and_recovers_after_settlement() {
+    let inbox = Inbox::new().unwrap();
+    for vaspace in 1..=513 {
+        inbox.push(kf_rm::barpde::MemStatement::Retire { client: 0, vaspace });
+    }
+    assert!(inbox.walk_busy_for(VasKey(1000)));
+    inbox.settle(512);
+    assert!(inbox.walk_busy_for(VasKey(1000)));
+    inbox.settle(513);
+    assert!(!inbox.walk_busy_for(VasKey(1000)));
+}
+
+#[test]
+fn sysmembar_is_global_and_is_not_released_by_settling_an_older_statement() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(kf_rm::barpde::MemStatement::Sysmembar);
+    inbox.push(kf_rm::barpde::MemStatement::Sysmembar);
+    inbox.settle(1);
+    assert!(inbox.walk_busy_for(A));
+    assert!(inbox.walk_busy_for(B));
+    inbox.settle(2);
+    assert!(!inbox.walk_busy_for(B));
+}
+
+#[test]
+fn ready_waiter_a_is_rung_while_b_is_still_held_without_a_timer() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_busy(true);
+    inbox.set_walk_scope(vec![A, B], false, None);
+    inbox.wait_walk_for(A, 7);
+    inbox.wait_walk_for(B, 9);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    inbox.set_walk_scope(vec![B], false, None);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    inbox.set_walk_scope(vec![], false, None);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![9]);
+}
+
+#[test]
+fn completion_between_check_and_waiter_insertion_keeps_the_trailing_wake() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    assert!(inbox.walk_busy_for(A));
+    inbox.set_walk_scope(vec![], false, None);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    inbox.wait_walk_for(A, 7);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+}
+
+#[test]
+fn reset_drops_old_waiter_identity_before_a_token_is_reused() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    inbox.wait_walk_for(A, 7);
+    inbox.reset_life();
+    inbox.set_walk_scope(vec![B], false, None);
+    inbox.wait_walk_for(B, 7);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    inbox.set_walk_scope(vec![], false, None);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+}
+
+#[test]
+fn scoped_waiter_metadata_is_bounded_and_overflow_keeps_the_legacy_wake() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    for token in 0..600 {
+        inbox.wait_walk_for(A, token);
+    }
+    assert_eq!(inbox.scoped_waiters.lock().unwrap().len(), 512);
+    assert_eq!(inbox.take_walk_waiters().len(), 88);
+    inbox.set_walk_scope(vec![], false, None);
+    assert_eq!(inbox.take_ready_walk_waiters().len(), 512);
+}
+
+#[test]
+fn another_key_enqueued_after_take_survives_settling_the_older_key() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(kf_rm::barpde::MemStatement::Retire {
+        client: 0,
+        vaspace: A.0 as u32,
+    });
+    inbox.take();
+    inbox.push(kf_rm::barpde::MemStatement::Retire {
+        client: 0,
+        vaspace: B.0 as u32,
+    });
+    inbox.settle(1);
+    assert!(!inbox.walk_busy_for(A));
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn bar1_target_scope_retains_a_global_hold_for_cpu_source_views() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![super::K_BAR1], false, None);
+    assert!(inbox.walk_busy_for(A));
+}
+
+#[test]
+fn bar2_target_scope_retains_a_global_hold_for_cpu_source_views() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![super::K_BAR2], false, None);
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn manager_snapshot_overflow_is_closed_even_for_an_unlisted_ring() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope((0..513).map(VasKey).collect(), false, None);
+    assert!(inbox.walk_busy_for(VasKey(1000)));
+}
+
+#[test]
+fn turn_publication_and_migration_all_call_the_native_scoped_helper() {
+    let src = include_str!("../userpump.rs")
+        .split("#[cfg(test)]")
+        .next()
+        .unwrap();
+    assert_eq!(
+        src.matches("!me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold)")
+            .count(),
+        3
+    );
+    let predicate = include_str!("walk_scope.rs");
+    assert!(predicate.contains("self.source_gate(key, token)"));
+    assert!(predicate.contains("self.wait_walk_for(key, token);"));
+}
+
+#[test]
+fn publication_rechecks_scope_before_any_guarded_native_write() {
+    let src = include_str!("../userpump.rs");
+    let body = src
+        .split("fn publish_guarded(")
+        .nth(1)
+        .unwrap()
+        .split("let userd = r.userd.clone();")
+        .next()
+        .unwrap();
+    assert!(body.contains("!me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold)"));
+}
+
+#[test]
+fn migration_rechecks_scope_before_switching_any_source_or_generation() {
+    let src = include_str!("../userpump.rs");
+    let body = src
+        .split("USER_RING_MIGRATION_RING")
+        .nth(1)
+        .unwrap()
+        .split("r.userd = userrelay::UserdSource::Registered")
+        .next()
+        .unwrap();
+    assert!(body.contains("!me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold)"));
+}
+
+#[test]
+fn manager_scope_is_published_before_synchronous_walk_apply_and_after_ack() {
+    let src = include_str!("../device.rs");
+    let before = src
+        .split("let r = m.on_walk_ready(trigger);")
+        .next()
+        .unwrap();
+    assert!(before.rsplit("set_walk_scope(").next().unwrap().len() < 256);
+    assert_eq!(src.matches("m.walk_gate_scope(armed)").count(), 2);
+    assert!(src.contains("finish_gate_loop("));
+}
+
+#[test]
+fn scoped_ready_drain_follows_statement_settlement_in_the_real_va_loop() {
+    let src = include_str!("../device.rs");
+    assert!(src.contains(".finish_gate_loop("));
+    let body = include_str!("walk_scope.rs")
+        .split("pub(crate) fn finish_gate_loop(")
+        .nth(1)
+        .unwrap();
+    assert!(
+        body.find("self.settle(n)").unwrap() < body.find("self.take_ready_walk_waiters()").unwrap()
+    );
+}
+
+#[test]
+fn settled_statement_waiter_is_ready_while_an_unrelated_manager_walk_continues() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![B], false, None);
+    inbox.push(kf_rm::barpde::MemStatement::Retire {
+        client: 0,
+        vaspace: A.0 as u32,
+    });
+    inbox.wait_walk_for(A, 7);
+    assert!(inbox.take_ready_walk_waiters().is_empty());
+    inbox.settle(1);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn the_source_gate_registers_a_queued_split_waiter_before_giving_up() {
+    let inbox = Inbox::new().unwrap();
+    let ticket = inbox.request_user_split(7, A).ok().unwrap();
+    assert!(inbox.source_gate(A, 7).held());
+    inbox.take_split_requests();
+    inbox.finish_split(ticket, Ok(()));
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+}
+
+#[test]
+fn the_source_gate_registers_an_active_walk_waiter_before_giving_up() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A], false, None);
+    assert!(inbox.source_gate(A, 7).held());
+    inbox.set_walk_scope(vec![], false, None);
+    assert_eq!(inbox.take_ready_walk_waiters(), vec![7]);
+}
+
+#[test]
+fn the_before_apply_snapshot_is_not_replaced_by_only_an_end_of_loop_snapshot() {
+    let src = include_str!("../device.rs");
+    let apply = src.find("let r = m.on_walk_ready(trigger);").unwrap();
+    let publish = src.find(".set_walk_scope(").unwrap();
+    assert!(publish < apply);
+}
+
+#[test]
+fn oversized_snapshot_with_repeated_targets_still_holds_an_unrelated_ring() {
+    let inbox = Inbox::new().unwrap();
+    inbox.set_walk_scope(vec![A; 513], false, None);
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn the_va_release_transaction_resumes_a_statement_waiter_before_another_space_finishes() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(kf_rm::barpde::MemStatement::Retire {
+        client: 0,
+        vaspace: A.0 as u32,
+    });
+    inbox.wait_walk_for(A, 7);
+    let (advanced, ready) = inbox.finish_gate_loop(vec![B], false, None, true, Some(1));
+    assert!(advanced);
+    assert_eq!(ready, vec![7]);
+    assert!(inbox.walk_busy_for(B));
+}
+
+#[test]
+fn the_va_release_transaction_wakes_legacy_overflow_when_its_last_statement_settles() {
+    let inbox = Inbox::new().unwrap();
+    inbox.push(kf_rm::barpde::MemStatement::Sysmembar);
+    inbox.wait_walk(7);
+    let (advanced, ready) = inbox.finish_gate_loop(vec![], false, None, false, Some(1));
+    assert!(advanced);
+    assert_eq!(ready, vec![7]);
+    assert!(!inbox.walk_busy());
 }

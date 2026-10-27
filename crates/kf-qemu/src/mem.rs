@@ -2278,6 +2278,11 @@ pub enum SplitTarget {
 /// flight or pending). A held reply is delivered when they are equal.
 #[derive(Debug)]
 pub struct Inbox {
+    pub(crate) walk_stats: walk_scope::Stats,
+    scoped_waiters: Mutex<std::collections::BTreeMap<u32, VasKey>>,
+    walk_scope: Mutex<Option<walk_scope::Scope>>,
+    statement_scope: Mutex<walk_scope::Statements>,
+    walk_port: std::sync::OnceLock<std::sync::Arc<InvalidatePort>>,
     /// Restricted Windows resource requests, consumed only by the VA worker.
     pub user_va: crate::userva::Queue,
     /// ★ w827: guest L2 cache-op requests per [`kf_trap::cacheop::CacheOp`] — bumped by the vCPU
@@ -2299,7 +2304,7 @@ pub struct Inbox {
     /// `(the ring's gate, the payload its acquire waits for)`.
     gates: Mutex<std::collections::HashMap<u64, (kf_chan::host::Gate, u32)>>,
     /// ★ P6: tickets the VA thread took and has not finished — ticket → guest token.
-    split_tokens: Mutex<std::collections::HashMap<u64, u32>>,
+    split_tokens: Mutex<std::collections::HashMap<u64, (u32, SplitTarget)>>,
     /// ★ P6: finished splits waiting for their channel's next pump.
     split_results: Mutex<std::collections::HashMap<u64, Result<(), String>>>,
     next_ticket: AtomicU64,
@@ -2335,6 +2340,11 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
+            walk_stats: walk_scope::Stats::default(),
+            scoped_waiters: Mutex::new(Default::default()),
+            walk_scope: Mutex::new(None),
+            statement_scope: Mutex::new(Default::default()),
+            walk_port: std::sync::OnceLock::new(),
             user_va: Default::default(),
             cache_req: std::array::from_fn(|_| AtomicU64::new(0)),
             cache_done: std::array::from_fn(|_| AtomicU64::new(0)),
@@ -2384,7 +2394,13 @@ impl Inbox {
         for a in self.cache_req.iter().chain(self.cache_done.iter()) {
             a.store(0, Ordering::Release);
         }
+        if let Ok(mut w) = self.scoped_waiters.lock() {
+            w.clear();
+        }
         self.walk_busy.store(false, Ordering::Release);
+        if let Ok(mut s) = self.walk_scope.lock() {
+            *s = None;
+        }
         // The VA thread's BAR1 physical-view notice restarts from 0 with it (the review of
         // 2026-10-13: a non-zero count read as a fresh request).
         self.bar1_physical.store(0, Ordering::Release);
@@ -2566,15 +2582,15 @@ impl Inbox {
 
     /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, target)`.
     pub fn take_split_requests(&self) -> Vec<(u64, SplitTarget)> {
-        let taken = self
-            .splits
-            .lock()
-            .map(|mut q| std::mem::take(&mut *q))
-            .unwrap_or_default();
-        if let Ok(mut m) = self.split_tokens.lock() {
-            for (t, tok, _) in &taken {
-                m.insert(*t, *tok);
-            }
+        let Ok(mut queue) = self.splits.lock() else {
+            return Vec::new();
+        };
+        let Ok(mut running) = self.split_tokens.lock() else {
+            return Vec::new();
+        };
+        let taken = std::mem::take(&mut *queue);
+        for (ticket, token, target) in &taken {
+            running.insert(*ticket, (*token, *target));
         }
         taken.into_iter().map(|(t, _, p)| (t, p)).collect()
     }
@@ -2606,6 +2622,7 @@ impl Inbox {
             .lock()
             .ok()
             .and_then(|mut m| m.remove(&ticket))
+            .map(|(token, _)| token)
     }
 
     /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
@@ -2618,10 +2635,20 @@ impl Inbox {
 
     /// The drainer: enqueue one statement and wake the VA thread.
     pub fn push(&self, s: MemStatement) {
-        if let Ok(mut q) = self.q.lock() {
-            q.push(s);
+        // Scope and received sequence are serialized with settlement. Publish before enqueue.
+        if let Ok(mut scope) = self.statement_scope.lock() {
+            let seq = self
+                .received
+                .fetch_add(1, Ordering::AcqRel)
+                .saturating_add(1);
+            scope.add(&s, seq);
+            if let Ok(mut q) = self.q.lock() {
+                q.push(s);
+            }
+        } else {
+            // A poisoned scope remains globally closed and must also hold its RPC reply.
+            self.received.fetch_add(1, Ordering::AcqRel);
         }
-        self.received.fetch_add(1, Ordering::AcqRel);
         let _ = self.wake.signal();
     }
 
@@ -2641,6 +2668,9 @@ impl Inbox {
 
     /// The VA thread: `n` statements (counted from the start) are settled.
     pub fn settle(&self, n: u64) -> bool {
+        if let Ok(mut scope) = self.statement_scope.lock() {
+            scope.settle(n);
+        }
         self.settled.fetch_max(n, Ordering::AcqRel) < n
     }
 
@@ -2743,7 +2773,7 @@ pub fn window_with_scratch(
 /// ★★★ **The memory plane's shared half** — what the vCPU and the VA thread both reach.
 pub struct MemPlane {
     /// The three `MMU_INVALIDATE` registers.
-    pub port: InvalidatePort,
+    pub port: std::sync::Arc<InvalidatePort>,
     /// The PRAMIN window's views.
     pub pramin: PraminPool<WindowOps>,
     /// The PRAMIN trap's node pool and reaper.
@@ -2841,9 +2871,14 @@ impl MemPlane {
         );
         let regs = kf_trap::InvalidateRegs::from_usermode_base(kf_trap::memmap::VF_USERMODE_PAGE)
             .ok_or("MMU_INVALIDATE registers: the usermode base is below the PRIV delta")?;
+        let port = std::sync::Arc::new(InvalidatePort::new(regs));
+        inbox
+            .walk_port
+            .set(port.clone())
+            .map_err(|_| "MMU port already bound")?;
         Ok((
             MemPlane {
-                port: InvalidatePort::new(regs),
+                port,
                 pramin,
                 pramin_trap: trap,
                 pramin_reg: WindowReg::for_family(family),
@@ -5121,3 +5156,10 @@ mod memory_list_tests {
 #[cfg(test)]
 #[path = "mem/walk_gate_tests.rs"]
 mod walk_gate_tests;
+
+#[path = "mem/walk_scope.rs"]
+pub(crate) mod walk_scope;
+
+#[cfg(test)]
+#[path = "mem/walk_relay_model.rs"]
+mod walk_relay_model;

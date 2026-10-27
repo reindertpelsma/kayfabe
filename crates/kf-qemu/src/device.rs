@@ -2227,6 +2227,12 @@ impl Device {
                     crate::mem::SplitTarget::Space(key) => m.on_split_space(key, ticket, trigger),
                 }
             }
+            // Publish resolved mutation domains BEFORE synchronous host apply can take time.
+            let armed = self.mem.port.armed_request();
+            let (keys, global) = m.walk_gate_scope(armed);
+            self.mem
+                .inbox
+                .set_walk_scope(keys, global, armed.map(|r| r.seq));
             let r = m.on_walk_ready(trigger);
             // ★ Ruling 2026-09-26 (5): a BAR1 doorbell overlay the main loop has now made live (or
             // removed) releases the invalidate clear it was holding. Never a wait: with nothing
@@ -2418,24 +2424,6 @@ impl Device {
                 }
                 bar1_phys_lines = bar1_phys_lines.saturating_add(1);
             }
-            // ★ P1+P2 review fix (2026-10-04, §3.5): publish whether a walk is in flight or
-            // pending; when none is, ring the Translated channels waiting for one to land (a
-            // T-mode operand that had no row yet). Every idle loop, so a late registration is
-            // rung at most one loop later.
-            let walk_busy = m.in_flight()
-                || m.pending() > 0
-                || !self.mem.inbox.all_settled()
-                || self.mem.port.armed_request().is_some();
-            self.mem.inbox.set_walk_busy(walk_busy);
-            // the VA thread is a holder too (the source mapping swap, the RAM views): ring the relays that lost a try_lock to it
-            self.chans.handoff_released();
-            if !walk_busy {
-                for tok in self.mem.inbox.take_walk_waiters() {
-                    if self.plane.ring_internal(tok) {
-                        let _ = self.worker_efd.signal();
-                    }
-                }
-            }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
                 eprintln!(
                     "kf3: mem t={:.3}s REFUSED {why}",
@@ -2459,9 +2447,23 @@ impl Device {
             }
             refusals_seen = m.stats.refusals.len();
             self.publish_trigger();
-            // ★ Everything received so far is applied and nothing is walking: held replies go.
-            if !m.in_flight() && m.pending() == 0 && self.mem.inbox.settle(taken) {
+            // Release statement holds before computing and draining scoped/overflow waiters.
+            let settled = (!m.in_flight() && m.pending() == 0).then_some(taken);
+            let armed = self.mem.port.armed_request();
+            let (keys, global) = m.walk_gate_scope(armed);
+            let busy = m.in_flight() || m.pending() > 0 || armed.is_some();
+            let (advanced, ready) =
+                self.mem
+                    .inbox
+                    .finish_gate_loop(keys, global, armed.map(|r| r.seq), busy, settled);
+            if advanced {
                 let _ = self.drainer_efd.signal();
+            }
+            self.chans.handoff_released();
+            for tok in ready {
+                if self.plane.ring_internal(tok) {
+                    let _ = self.worker_efd.signal();
+                }
             }
             if let Ok(mut s) = self.va_stats.lock() {
                 *s = m.stats.clone();
@@ -2816,6 +2818,7 @@ impl Device {
         let mc = &self.mem.counters;
         let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
         let (recv, settled) = self.mem.inbox.counts();
+        eprintln!("kf3: WALK_GATE {}", self.mem.inbox.walk_stats.summary());
         // ★ P5c: the window since the last heartbeat (the cumulative mean hides growth).
         let tm = &match self.vat_prev.lock() {
             Ok(mut p) => {

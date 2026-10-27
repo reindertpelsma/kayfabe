@@ -509,6 +509,8 @@ pub(super) struct Pump {
 /// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
 #[derive(Default)]
 struct Aux {
+    last_marker: Option<u32>,
+    writeback_wait: Option<u64>,
     ring: Option<Mapping<'static>>,
     source: Option<Snapshot<'static>>,
     entry: u64,
@@ -590,8 +592,7 @@ fn publish_guarded(
         &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
     ) -> Result<(), String>,
 ) -> Turn<()> {
-    if me.inbox.walk_busy() {
-        me.inbox.wait_walk(r.idx);
+    if !me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold) {
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the publication gate held this channel.
         if kf_mem::gatelog::enabled()
             && let Some(h) = r
@@ -741,6 +742,14 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             .map_err(|_| "USER_RING_STORAGE_POISONED")?;
         let words = (storage.gpu_get()?, storage.gpu_reference()?);
         drop(storage);
+        if self.aux.last_marker.is_some_and(|old| old != words.1) && self.me.inbox.walk_busy() {
+            self.me
+                .inbox
+                .walk_stats
+                .marker_during_walk
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        self.aux.last_marker = Some(words.1);
         if kf_host::diag::enabled()
             && let Some(chan) = self.r.chan
         {
@@ -767,8 +776,21 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             kf_abi::submit::USERD_GP_GET,
             &get.to_le_bytes(),
         ) {
-            Ok(()) => Ok(true),
-            Err(kf_rm::memory_list::AccessError::Busy) => Ok(false),
+            Ok(()) => {
+                self.me
+                    .inbox
+                    .walk_stats
+                    .writeback(&mut self.aux.writeback_wait, false, false);
+                Ok(true)
+            }
+            Err(kf_rm::memory_list::AccessError::Busy) => {
+                self.me.inbox.walk_stats.writeback(
+                    &mut self.aux.writeback_wait,
+                    true,
+                    self.me.inbox.walk_busy(),
+                );
+                Ok(false)
+            }
             Err(e) => Err(format!("USER_RING_GET_WRITE {e:?}").into()),
         }
     }
@@ -780,8 +802,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
     }
     fn walk_busy(&mut self) -> bool {
         let (me, r) = (self.me, self.r);
-        if me.inbox.walk_busy() {
-            me.inbox.wait_walk(r.idx);
+        if !me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold) {
             self.gatelog_hold();
             return true;
         }
@@ -2726,8 +2747,7 @@ impl Pump {
             store_read_bound(me.layout.carve()),
         )
         .map_err(|e| source_error(e, "USER_RING_MIGRATION_RING"))?;
-        if me.inbox.walk_busy() {
-            me.inbox.wait_walk(r.idx);
+        if !me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold) {
             return Err(Failure::Retry);
         }
         userd
@@ -3841,8 +3861,8 @@ mod tests {
             "the gate is the Io's"
         );
         assert!(
-            io.contains("me.inbox.walk_busy()")
-                && io.contains("wait_walk(r.idx)")
+            io.contains("!me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold)")
+                && include_str!("mem/walk_scope.rs").contains("self.wait_walk_for(key, token);")
                 && io.contains("return true;"),
             "and it reports the walk after registering the wait"
         );
@@ -3886,8 +3906,8 @@ mod tests {
             .nth(1)
             .unwrap();
         let gate = gate.split("fn gp_put").next().unwrap();
-        assert!(gate.contains("me.inbox.walk_busy()"));
-        assert!(gate.contains("me.inbox.wait_walk(r.idx);"));
+        assert!(gate.contains("!me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold)"));
+        assert!(include_str!("mem/walk_scope.rs").contains("self.wait_walk_for(key, token);"));
         assert!(gate.contains("return true;"));
     }
 

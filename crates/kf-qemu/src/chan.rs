@@ -1430,6 +1430,7 @@ impl StoreViews {
 
 /// The guest's memory at a guest VA of the channel's space, through OUR placements.
 struct Mem<'a> {
+    key: Option<VasKey>,
     mirror: &'a Mirror,
     ram: &'a RamMap,
     rm: &'a HostRm,
@@ -1489,7 +1490,10 @@ impl kf_chan::tmode::Rows for Mem<'_> {
         self.mirror.log.changed_since(epoch, va, len)
     }
     fn walk_pending(&self) -> bool {
-        self.inbox.walk_busy()
+        self.key.map_or_else(
+            || self.inbox.walk_busy(),
+            |key| self.inbox.walk_busy_for(key),
+        )
     }
 }
 
@@ -6370,6 +6374,7 @@ impl ChanPlane {
             let mirror = g.mirror.clone();
             let store_len = store_read_bound(self.layout.carve());
             let mut m = Mem {
+                key: None,
                 mirror: &mirror,
                 ram: self.ram,
                 rm: self.rm,
@@ -6628,6 +6633,7 @@ impl ChanPlane {
         let mirror = g.mirror.clone();
         let store_len = store_read_bound(self.layout.carve());
         let mut mem = Mem {
+            key: None,
             mirror: &mirror,
             ram: self.ram,
             rm: self.rm,
@@ -8215,6 +8221,7 @@ impl ChanPlane {
         // extent, never the mirror's window length (0 on a T-mode twin) — [`store_read_bound`].
         let store_len = store_read_bound(self.layout.carve());
         let mut mem = Mem {
+            key: Some(g.key),
             mirror: &mirror,
             ram: self.ram,
             rm: self.rm,
@@ -8267,7 +8274,7 @@ impl ChanPlane {
         // ★ Review fix 2026-10-04 (§3.5): a stash waiting for a pending walk is rung by the VA
         // thread once it is idle again.
         if g.chan.waiting_on_walk() {
-            self.inbox.wait_walk(g.guest_idx);
+            self.inbox.wait_walk_for(g.key, g.guest_idx);
         }
         // ★ P1+P2 inc A: what this pump counted (count-only), summed for the status line.
         let inca = g.chan.inca().total();

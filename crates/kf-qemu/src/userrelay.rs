@@ -374,6 +374,7 @@ impl UserdSource {
 }
 
 pub(super) struct Record {
+    pub walk_hold: crate::mem::walk_scope::Hold,
     pub allocation: Arc<()>,
     pub quota: Arc<super::userquota::NativeQuota>,
     pub key: (u32, u32),
@@ -529,6 +530,7 @@ impl Birth {
         let record = Arc::new(Cell::new(
             self.idx,
             Record {
+                walk_hold: Default::default(),
                 quota: self
                     .count
                     .quota
@@ -927,6 +929,9 @@ impl ChanPlane {
         }
         let (lease, identity, quota, sources_ok, notifier) = {
             let Ok(mut r) = record.lock() else { return };
+            self.inbox
+                .walk_stats
+                .observe(&r.walk_hold, crate::mem::walk_scope::Reason::Clear);
             r.retired = true;
             record.cancel();
             let sources_ok = r
@@ -1022,6 +1027,9 @@ impl ChanPlane {
     fn release_never_born_record(&self, record: &Arc<Cell>) {
         let (lease, identity, quota, sources_ok, notifier) = {
             let Ok(mut r) = record.lock() else { return };
+            self.inbox
+                .walk_stats
+                .observe(&r.walk_hold, crate::mem::walk_scope::Reason::Clear);
             r.retired = true;
             record.cancel();
             let sources_ok = r
