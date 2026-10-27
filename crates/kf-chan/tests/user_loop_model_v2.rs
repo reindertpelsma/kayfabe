@@ -2474,7 +2474,9 @@ fn pin_the_arm_mapping_and_the_peek_decision_are_the_models() {
         .unwrap();
     for o in [
         "look_needed(why, false, record.is_waiting())",
-        "w.satisfied(p.core.marks.peek(reference), popped)",
+        "let marker = p.core.marks.peek(reference)",
+        "p.aux.latency.marker(marker)",
+        "w.satisfied(marker, popped)",
         "pops = popped > p.core.fetch.fetched()",
         "kf_chan::user_loop::Wait::Marker { .. } | kf_chan::user_loop::Wait::Popped { .. }",
         "record.set_unannounced(true)",
