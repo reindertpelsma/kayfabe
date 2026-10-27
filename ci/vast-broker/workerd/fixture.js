@@ -51,7 +51,7 @@ export class AdmissionFixture {
       return Response.json([...(await this.ctx.storage.list())]);
     }
     if (path === '/reserve') {
-      const { record, config, cost = 0.1, credit = 20, failAt } = await request.json();
+      const { record, config, cost = 0.1, credit = 20, failAt, retryNonce } = await request.json();
       const failing = (storage) => ({
         get: (...args) => storage.get(...args),
         list: (...args) => storage.list(...args),
@@ -68,6 +68,7 @@ export class AdmissionFixture {
           now: record.started,
           cost,
           credit,
+          retryNonce,
         });
         return Response.json({ state: 'RESERVED' });
       } catch (error) {

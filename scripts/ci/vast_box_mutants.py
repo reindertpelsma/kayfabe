@@ -515,7 +515,10 @@ CASES = [
         "tail-kept",
         "byte-reserve-off",
         R,
-        "size = min(limits.tail_posts * (limits.chunk + 256), limits.max_bytes // 4) if reserve else 0",
+        "size = (\n"
+        "            min(limits.tail_posts * (limits.chunk + 256), limits.max_bytes // 4) "
+        "if reserve else 0\n"
+        "        )",
         "size = 0",
         [CK + "test_byte_cap_keeps_the_last_lines", CK + "test_byte_cap_delivers_head_and_tail"],
     ),

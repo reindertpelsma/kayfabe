@@ -10,7 +10,7 @@ export function checkedResult(result) {
       .join(',') !== 'hardware,nonce,runner_nonce,sha,suites,verdict' ||
     (result.host_reference !== undefined &&
       !['GREEN', 'NOT_GREEN', 'MISSING'].includes(result.host_reference)) ||
-    !['PASS', 'FAIL', 'UNAVAILABLE'].includes(result.verdict) ||
+    !['PASS', 'FAIL', 'UNAVAILABLE', 'PROVIDER_FAULT'].includes(result.verdict) ||
     !/^([0-9a-f]{32})$/.test(result.nonce) ||
     !/^([0-9a-f]{64})$/.test(result.runner_nonce) ||
     !/^([0-9a-f]{40})$/.test(result.sha)
@@ -35,6 +35,13 @@ export function checkedResult(result) {
       )
     )
       refuse('BAD_REPORT', 400);
+  if (
+    result.verdict === 'PROVIDER_FAULT' &&
+    !rows.some(
+      (r) => ['provider_kvm_missing', 'provider_gpu_unavailable'].includes(r.name) && r.fail > 0,
+    )
+  )
+    refuse('BAD_REPORT', 400);
   const h = result.hardware;
   if (
     !object(h) ||

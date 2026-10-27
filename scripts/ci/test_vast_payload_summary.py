@@ -236,8 +236,8 @@ class SummaryTests(unittest.TestCase):
             rc, result, calls = self._main_fixture(kvm=False)
         self.assertEqual(rc, 1)
         block = self.block(captured.getvalue())
-        self.assertTrue(block[0].startswith(BEGIN + " verdict=FAIL stages=0"))
-        self.assertIn("suite name=preflight pass=0 fail=1 skip=0", block)
+        self.assertTrue(block[0].startswith(BEGIN + " verdict=PROVIDER_FAULT stages=0"))
+        self.assertIn("suite name=provider_kvm_missing pass=0 fail=1 skip=0", block)
 
     def test_whole_adapter_prints_the_summary_last(self):
         with contextlib.redirect_stdout(io.StringIO()) as captured:
