@@ -509,6 +509,8 @@ pub(super) struct Pump {
 /// What the I/O of the per-entry turn keeps between its micro-steps and its reporting counters.
 #[derive(Default)]
 struct Aux {
+    latency: kf_host::latency::Tracker,
+    latency_word: Option<(u32, Option<u64>)>,
     last_marker: Option<u32>,
     writeback_wait: Option<u64>,
     ring: Option<Mapping<'static>>,
@@ -591,7 +593,7 @@ fn publish_guarded(
     write: impl FnOnce(
         &kf_chan::user_storage::Storage<kf_chan::user_storage::CpuView>,
     ) -> Result<(), String>,
-) -> Turn<()> {
+) -> Turn<Option<u64>> {
     if !me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold) {
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the publication gate held this channel.
         if kf_mem::gatelog::enabled()
@@ -628,7 +630,11 @@ fn publish_guarded(
             if me.stop.load(Ordering::Acquire) {
                 return Err("USER_RING_PUBLICATION_STOPPED".into());
             }
-            let storage = locked(r.lease.storage.try_lock(), "USER_RING_STORAGE_POISONED")?;
+            let storage_try = r.lease.storage.try_lock();
+            if matches!(storage_try, Err(std::sync::TryLockError::WouldBlock)) {
+                kf_host::latency::contention(kf_host::latency::Cause::Storage, 0);
+            }
+            let storage = locked(storage_try, "USER_RING_STORAGE_POISONED")?;
             // Exclude first-object admission even on an uncertain native write.
             // A premature/hostile doorbell can only close its own admission.
             let publish = || {
@@ -662,9 +668,11 @@ fn publish_guarded(
             }
         })
         .map_err(|e| access_error(e, "USER_RING_USERD_ADMISSION"))??;
+    let published_at = kf_host::latency::now();
     me.rm
         .doorbell(r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token)
-        .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into())
+        .map_err(|e| Failure::from(format!("USER_RING_DOORBELL_UNCERTAIN {e:?}")))?;
+    Ok(published_at)
 }
 
 fn snapshot_with(
@@ -741,6 +749,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
             .lock()
             .map_err(|_| "USER_RING_STORAGE_POISONED")?;
         let words = (storage.gpu_get()?, storage.gpu_reference()?);
+        self.aux.latency_word = Some((words.1, kf_host::latency::now()));
         drop(storage);
         if self.aux.last_marker.is_some_and(|old| old != words.1) && self.me.inbox.walk_busy() {
             self.me
@@ -803,9 +812,16 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
     fn walk_busy(&mut self) -> bool {
         let (me, r) = (self.me, self.r);
         if !me.inbox.user_source_ready(r.vas_key, r.idx, &r.walk_hold) {
+            let cause = match me.inbox.walk_reason(r.vas_key) {
+                crate::mem::walk_scope::Reason::OwnWalk => kf_host::latency::Cause::OwnWalk,
+                crate::mem::walk_scope::Reason::Split => kf_host::latency::Cause::Split,
+                _ => kf_host::latency::Cause::OtherWalk,
+            };
+            self.aux.latency.waiting(Some(cause));
             self.gatelog_hold();
             return true;
         }
+        self.aux.latency.waiting(None);
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the gate lets this channel through.
         if kf_mem::gatelog::enabled()
             && let Some(h) = gl_of(self.aux, r)
@@ -977,7 +993,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         guest_get: u32,
         entry: u64,
     ) -> Turn<()> {
-        publish_guarded(
+        let published_at = publish_guarded(
             self.me,
             self.r,
             self.ram_generation,
@@ -993,6 +1009,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.publish_put(put)
             },
         )?;
+        self.aux.latency.published_at(published_at, None, false);
         *self.source_admitted = true;
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`): the entry reached the private host ring.
         if kf_mem::gatelog::enabled()
@@ -1009,7 +1026,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
     ) -> Turn<u64> {
         let mut count = 0;
         // the barrier, then the marker (a packet is not open: the gate's open-packet branch)
-        publish_guarded(
+        let published_at = publish_guarded(
             self.me,
             self.r,
             self.ram_generation,
@@ -1027,6 +1044,9 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.publish_put(put)
             },
         )?;
+        self.aux
+            .latency
+            .published_at(published_at, Some(count), false);
         *self.source_admitted = true;
         Ok(count)
     }
@@ -1036,7 +1056,7 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
         marks: &mut kf_chan::user_gate::Marks,
     ) -> Turn<()> {
         // No guest source is involved, so no source guard is taken.
-        publish_guarded(
+        let published_at = publish_guarded(
             self.me,
             self.r,
             self.ram_generation,
@@ -1051,6 +1071,9 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 storage.publish_put(put)
             },
         )?;
+        self.aux
+            .latency
+            .published_at(published_at, Some(marks.issued()), false);
         Stats::bump(&self.me.relay_stats.markers);
         Ok(())
     }
@@ -1105,7 +1128,11 @@ impl kf_chan::user_turn::Io for PumpIo<'_> {
                 }
             }
             Ev::CreditWait => Stats::bump(&me.relay_stats.credit_waits),
-            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused | Ev::ScanBudget => {}
+            Ev::ScanBudget => self
+                .aux
+                .latency
+                .waiting(Some(kf_host::latency::Cause::ScanBudget)),
+            Ev::PutBound | Ev::EntryRefused | Ev::ScanRefused => {}
         }
     }
 }
@@ -1250,7 +1277,11 @@ impl Pump {
             trace,
             aux,
         };
-        f(core, &mut io)
+        let result = f(core, &mut io);
+        if let Some((word, at)) = io.aux.latency_word.take() {
+            io.aux.latency.marker_at(core.marks.peek(word), at);
+        }
+        result
     }
 
     /// Measurement only: what the last turn published on the private ring.
@@ -1991,6 +2022,14 @@ impl Pump {
 
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         use kf_chan::user_loop::Need;
+        kf_host::latency::visit();
+        let _activity = kf_host::latency::activity(kf_host::latency::Activity::User);
+        self.aux.latency.configure(
+            kf_host::latency::Kind::User,
+            r.chan.map_or(r.idx, |c| c.token),
+            r.latency_vector,
+        );
+        self.aux.latency.observe();
         self.core.need = Need::Idle;
         self.core.again = false;
         let out = self.turn_body(me, r);
@@ -2024,6 +2063,20 @@ impl Pump {
             Err(Failure::Retry) => self.core.need = Need::Contended,
             _ => {}
         }
+        if matches!(out, Err(Failure::Retry)) {
+            let reason = me.inbox.walk_reason(r.vas_key);
+            let cause = match reason {
+                crate::mem::walk_scope::Reason::OwnWalk => kf_host::latency::Cause::OwnWalk,
+                crate::mem::walk_scope::Reason::Split => kf_host::latency::Cause::Split,
+                crate::mem::walk_scope::Reason::Global => kf_host::latency::Cause::OtherWalk,
+                _ => kf_host::latency::last_contention()
+                    .map_or(kf_host::latency::Cause::Worker, |(c, _)| c),
+            };
+            self.aux.latency.waiting(Some(cause));
+        }
+        self.aux
+            .latency
+            .end_turn(matches!(self.core.need, Need::Idle));
         out
     }
 
@@ -2338,9 +2391,15 @@ impl Pump {
         ) -> Result<(), String>,
     ) -> Turn<()> {
         let ram_generation = self.ram_generation;
+        let before_marker = self.core.marks.issued();
         let result = publish_guarded(me, r, ram_generation, software, ring, gp, pb, |storage| {
             write(self, storage)
         });
+        if let Ok(published_at) = result.as_ref() {
+            let marker =
+                (self.core.marks.issued() > before_marker).then_some(self.core.marks.issued());
+            self.aux.latency.published_at(*published_at, marker, false);
+        }
         if result.is_ok()
             && kf_host::diag::enabled()
             && let Some(chan) = r.chan
@@ -2356,7 +2415,7 @@ impl Pump {
                 },
             );
         }
-        result
+        result.map(|_| ())
     }
 
     fn segment_turn(
@@ -2478,7 +2537,11 @@ impl Pump {
         // bytes before taking shared source/topology/Pt publication guards.
         // A retry leaves PUT unchanged; re-staging those bytes is harmless.
         if !s.staged {
-            let storage = locked(r.lease.storage.try_lock(), "USER_RING_STORAGE_POISONED")?;
+            let storage_try = r.lease.storage.try_lock();
+            if matches!(storage_try, Err(std::sync::TryLockError::WouldBlock)) {
+                kf_host::latency::contention(kf_host::latency::Cause::Storage, 0);
+            }
+            let storage = locked(storage_try, "USER_RING_STORAGE_POISONED")?;
             storage.write_authored(0, &s.patched)?;
         }
         // Initial publication retains exact source guards. Once staged, the owned
@@ -3151,7 +3214,9 @@ impl ChanPlane {
                         Ok(popped) => {
                             // pops the guest's `GP_GET` write-back has not shown yet (they carry no event)
                             pops = popped > p.core.fetch.fetched();
-                            w.satisfied(p.core.marks.peek(reference), popped)
+                            let marker = p.core.marks.peek(reference);
+                            p.aux.latency.marker(marker);
+                            w.satisfied(marker, popped)
                         }
                         // outside the ring / beyond what was issued: the turn refuses it by name
                         Err(_) => true,

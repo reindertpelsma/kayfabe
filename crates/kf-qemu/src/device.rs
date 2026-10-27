@@ -244,6 +244,7 @@ pub struct Device {
     va_stats: Mutex<kf_mem::vasmgr::VaStats>,
     /// Realize time — the boot log's clock for the memory plane's lines.
     born: std::time::Instant,
+    latency_active: bool,
     /// The plane (trap → workers / drainer).
     pub plane: &'static Plane<'static>,
     /// The host die's facts the served chain answers from (`kf_rm::hostfacts::PROVENANCE`).
@@ -1186,6 +1187,12 @@ impl Device {
             mem.port.regs().trigger,
         );
 
+        let born = std::time::Instant::now();
+        let latency_vectors: Vec<_> = chans.engines.iter().filter_map(|e| e.vector).collect();
+        let latency_active = kf_host::latency::init(born, &latency_vectors);
+        chans
+            .latency_active
+            .store(latency_active, Ordering::Release);
         Ok(Device {
             rm,
             timer,
@@ -1195,7 +1202,8 @@ impl Device {
             mem,
             va: Mutex::new(Some(va)),
             va_stats: Mutex::new(kf_mem::vasmgr::VaStats::default()),
-            born: std::time::Instant::now(),
+            born,
+            latency_active,
             plane,
             host_facts: host,
             chain_logs,
@@ -1759,7 +1767,24 @@ impl Device {
     fn deliver(&self, raise: kf_trap::cpuintr::Raise) {
         match raise {
             kf_trap::cpuintr::Raise::Message => {
-                let _ = self.irq_lines[0].signal();
+                // Fixed vector scan plus an atomic journal; this also runs on vCPUs.
+                let mask = if self.latency_active {
+                    kf_host::latency::notification_mask(|v| {
+                        let leaf = (v / 32) as usize;
+                        let bit = 1u32 << (v % 32);
+                        leaf < kf_trap::cpuintr::leaf_regs_for(self.family)
+                            && self.intr.read(kf_trap::cpuintr::Reg::Leaf(leaf)) & bit != 0
+                            && self.intr.read(kf_trap::cpuintr::Reg::LeafEnSet(leaf)) & bit != 0
+                            && self.intr.read(kf_trap::cpuintr::Reg::TopEnSet) & (1 << (leaf / 2))
+                                != 0
+                    })
+                } else {
+                    0
+                };
+                let sent = self.irq_lines[0].signal();
+                if self.latency_active {
+                    kf_host::latency::notification(mask, sent.is_ok());
+                }
                 self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
             }
             kf_trap::cpuintr::Raise::None => {}
@@ -1776,6 +1801,9 @@ impl Device {
     /// the tokens with a fence in flight, and the workers' counters. ⊘ Never a vCPU, never the
     /// drainer, never a lock a vCPU takes; a sleep here delays nothing but this probe.
     pub fn probe_loop(&self) {
+        if self.latency_active {
+            kf_host::latency::register_thread(kf_host::latency::Role::Probe);
+        }
         let Some(ms) = crate::chan::completion_probe_ms() else {
             return;
         };
@@ -1970,6 +1998,9 @@ impl Device {
     /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
     /// blocks on the GPU: a walk is submitted and collected on its fd.
     pub fn va_loop(&self) {
+        if self.latency_active {
+            kf_host::latency::register_thread(kf_host::latency::Role::Va);
+        }
         let Some(mut m) = self.va.lock().ok().and_then(|mut g| g.take()) else {
             return;
         };
@@ -2026,6 +2057,7 @@ impl Device {
         self.va_up.store(true, Ordering::Release);
         let _up = Up(&self.va_up);
         while !self.stop.load(Ordering::Acquire) {
+            let _activity = kf_host::latency::activity(kf_host::latency::Activity::Walk);
             if let Some(line) =
                 crate::tspace::prewarm(&self.tspace, &self.mem, self.rm, self.store.handle, carve)
             {
@@ -2489,6 +2521,9 @@ impl Device {
                     let _ = self.mem.inbox.wake.signal();
                 }
             }
+        }
+        if self.latency_active {
+            kf_host::latency::dump_shutdown();
         }
         // ⊘ DIAGNOSTIC ONLY (`KF3_DIAG_GATELOG=1`, default off): the walk-gate log's summary at
         // shutdown, bounded (`gatelog::Recorder::dump`), once the loop has stopped.
@@ -3120,7 +3155,15 @@ impl Device {
             self.chans.contended.load(o),
             self.chans.poisoned.load(o),
             toks.join(" "),
-            self.chans.mirror_stats.summary()
+            format!(
+                "{} {}",
+                self.chans.mirror_stats.summary(),
+                if self.latency_active {
+                    kf_host::latency::summary()
+                } else {
+                    "latency[off-or-other-device]".into()
+                }
+            )
         );
         let ic = &self.irq_counts;
         let irq = format!(
@@ -3718,6 +3761,9 @@ impl Device {
     /// plane: a doorbell or a host completion wakes it; it claims a token and pumps the channel.
     /// ⊘ Never a vCPU; never waits on the GPU (a completion is an fd in its epoll set).
     pub fn worker_loop(&self) {
+        if self.latency_active {
+            kf_host::latency::register_thread(kf_host::latency::Role::Worker);
+        }
         self.worker_stats
             .prof
             .store(crate::prof::on(), Ordering::Relaxed);

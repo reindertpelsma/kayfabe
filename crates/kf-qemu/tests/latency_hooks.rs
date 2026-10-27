@@ -1,4 +1,4 @@
-// Source-composition tests bind recorder contracts to actual native boundaries.
+//! Source-composition tests bind recorder contracts to actual native boundaries.
 const PUMP: &str = include_str!("../src/userpump.rs");
 const DEVICE: &str = include_str!("../src/device.rs");
 const HOST: &str = include_str!("../../kf-chan/src/host.rs");
@@ -54,8 +54,9 @@ fn ens11_private_fence_is_recorded_only_after_successful_doorbell() {
         .split("pub const GATE_OFF")
         .next()
         .unwrap();
-    assert!(p.contains("latency.published"));
-    assert!(p.find("rm.doorbell(").unwrap() < p.find("latency.published").unwrap());
+    let compact: String = p.split_whitespace().collect();
+    assert!(compact.contains("latency.published"));
+    assert!(compact.find("rm.doorbell(").unwrap() < compact.find("latency.published").unwrap());
 }
 #[test]
 fn ens11_private_fence_observation_is_recorded_at_the_native_load() {

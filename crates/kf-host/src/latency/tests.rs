@@ -15,6 +15,10 @@ fn sample(stream: u64, kind: Kind, marker: Option<u64>) -> Sample {
         raised: None,
         waits: vec![],
         worker: 1,
+        cookie: 0,
+        saved: false,
+        work: vec![],
+        context_checked: false,
     }
 }
 fn complete(gpu: Option<u64>, observed: u64, raised: u64) -> Sample {

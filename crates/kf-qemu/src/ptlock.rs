@@ -51,28 +51,43 @@ impl HandoffHub {
 pub(crate) struct PtLock<T> {
     inner: Mutex<T>,
     hub: std::sync::Arc<HandoffHub>,
+    owner: std::sync::atomic::AtomicU64,
 }
 
 pub(crate) struct PtGuard<'a, T> {
     g: Option<MutexGuard<'a, T>>,
     hub: &'a HandoffHub,
+    owner: &'a std::sync::atomic::AtomicU64,
+    activity: Option<kf_host::latency::ActivityGuard>,
 }
 
 impl<T> PtLock<T> {
     pub(crate) fn new(value: T, hub: std::sync::Arc<HandoffHub>) -> Self {
         Self {
             inner: Mutex::new(value),
+            owner: std::sync::atomic::AtomicU64::new(0),
             hub,
         }
     }
     fn wrap<'a>(&'a self, g: MutexGuard<'a, T>) -> PtGuard<'a, T> {
+        self.owner.store(
+            kf_host::latency::thread_id(),
+            std::sync::atomic::Ordering::Release,
+        );
         PtGuard {
             g: Some(g),
             hub: &self.hub,
+            owner: &self.owner,
+            activity: Some(kf_host::latency::activity(
+                kf_host::latency::Activity::HeldPt,
+            )),
         }
     }
     pub(crate) fn lock(&self) -> LockResult<PtGuard<'_, T>> {
-        match self.inner.lock() {
+        let wait = kf_host::latency::activity(kf_host::latency::Activity::WaitPt);
+        let result = self.inner.lock();
+        drop(wait);
+        match result {
             Ok(g) => Ok(self.wrap(g)),
             Err(e) => Err(PoisonError::new(self.wrap(e.into_inner()))),
         }
@@ -84,7 +99,13 @@ impl<T> PtLock<T> {
     pub(crate) fn try_lock(&self) -> TryLockResult<PtGuard<'_, T>> {
         match self.inner.try_lock() {
             Ok(g) => Ok(self.wrap(g)),
-            Err(TryLockError::WouldBlock) => Err(TryLockError::WouldBlock),
+            Err(TryLockError::WouldBlock) => {
+                kf_host::latency::contention(
+                    kf_host::latency::Cause::PtLock,
+                    self.owner.load(std::sync::atomic::Ordering::Acquire),
+                );
+                Err(TryLockError::WouldBlock)
+            }
             Err(TryLockError::Poisoned(e)) => Err(TryLockError::Poisoned(PoisonError::new(
                 self.wrap(e.into_inner()),
             ))),
@@ -106,7 +127,9 @@ impl<T> DerefMut for PtGuard<'_, T> {
 impl<T> Drop for PtGuard<'_, T> {
     fn drop(&mut self) {
         // release FIRST, then tell: the loser's retry must find the lock free
+        self.owner.store(0, std::sync::atomic::Ordering::Release);
         drop(self.g.take());
+        drop(self.activity.take());
         self.hub.released();
     }
 }

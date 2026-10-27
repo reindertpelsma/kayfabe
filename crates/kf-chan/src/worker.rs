@@ -172,6 +172,7 @@ pub fn run_with_relay(
 ) {
     // The ready tags of one wait, dispatched. Returns (doorbell eventfd, engine/completion/other event).
     let dispatch = |ready: &ReadyTokens| -> (bool, bool) {
+        let _activity = kf_host::latency::activity(kf_host::latency::Activity::Dispatch);
         let (mut doorbell, mut event) = (false, false);
         for tag in ready.iter() {
             if tag >= OTHER_TAG_BASE {
@@ -200,11 +201,16 @@ pub fn run_with_relay(
     let mut busy_from = std::time::Instant::now();
     let mut after_timeout = false;
     while !stop.load(Ordering::Acquire) {
+        kf_host::latency::worker_loop();
+        let _iteration = kf_host::latency::activity(kf_host::latency::Activity::Worker);
         let owed = on_tick();
         // §5.3: every `seen` load happens-before the scan.
         let seen = plane.worker_wake().seen();
         // SERVE with a per-visit bound: every flagged token, each up to `REACT_ROUNDS + 1` rounds (kf-core `worker_pass`).
-        let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
+        let n = {
+            let _activity = kf_host::latency::activity(kf_host::latency::Activity::Serve);
+            plane.worker_pass(host, &mut scratch, SCAN_LIMIT)
+        };
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
             if after_timeout {
@@ -250,7 +256,10 @@ pub fn run_with_relay(
             stats.busy_ns.fetch_add(b, Ordering::Relaxed);
             stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
         }
-        let got = poller.wait(&mut ready, park_timeout(owed, infinite));
+        let got = {
+            let _activity = kf_host::latency::activity(kf_host::latency::Activity::Park);
+            poller.wait(&mut ready, park_timeout(owed, infinite))
+        };
         if let Some(tw) = tw {
             busy_from = std::time::Instant::now();
             let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);

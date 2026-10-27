@@ -2269,6 +2269,7 @@ fn heap_gate(
 
 /// ★★★ The channel plane.
 pub struct ChanPlane {
+    pub(crate) latency_active: AtomicBool,
     /// ★ GR tier (2026-10-07): GR-tier pumps that retired engine-written work since the worker
     /// last relayed it to the guest's GR0 vector ([`ChanPlane::take_gr_relay`]).
     gr_relay: AtomicU64,
@@ -3048,6 +3049,7 @@ impl ChanPlane {
             dbg: Mutex::new(HashMap::new()),
             cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
             acts: Mutex::new(None),
+            latency_active: AtomicBool::new(false),
             release,
             engines,
             acts_run: AtomicU64::new(0),
@@ -3166,6 +3168,10 @@ impl ChanPlane {
             .spawn(move || {
                 let mut q = crate::actq::ActQueue::new(rx);
                 while let Some((act, d, what)) = q.next_act() {
+                    if self.latency_active.load(Ordering::Relaxed) {
+                        kf_host::latency::register_thread(kf_host::latency::Role::Act);
+                    }
+                    let _activity = kf_host::latency::activity(kf_host::latency::Activity::Act);
                     // What is parked BESIDES the act about to run (the reset's barrier reads it).
                     self.acts_parked.store(q.parked(), Ordering::Release);
                     let t0 = std::time::Instant::now();
@@ -8161,6 +8167,8 @@ impl ChanPlane {
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
+        kf_host::latency::visit();
+        let _activity = kf_host::latency::activity(kf_host::latency::Activity::Translated);
         if let Some(r) = self.user_ring_serve(ht) {
             return r;
         }
@@ -8173,6 +8181,8 @@ impl ChanPlane {
         // BUSY excludes other workers; act/probe threads may still hold the slot mutex.
         // A failed try_lock must preserve the ring that brought this worker here.
         let Ok(mut g) = slot.try_lock() else {
+            let _activity = kf_host::latency::activity(kf_host::latency::Activity::SlotBusy);
+            kf_host::latency::contention(kf_host::latency::Cause::Act, 0);
             return self.owe_ring(ht);
         };
         let g = &mut *g;
@@ -8208,6 +8218,12 @@ impl ChanPlane {
                 );
             }
         }
+        let vector = self
+            .engines
+            .iter()
+            .find(|e| e.engine_type == g.guest_engine)
+            .and_then(|e| e.vector);
+        g.chan.latency_begin(vector);
         let before = g.chan.counts().1;
         let mirror = g.mirror.clone();
         let probe = completion_probe_ms().is_some();
@@ -8274,11 +8290,17 @@ impl ChanPlane {
         // ★ Review fix 2026-10-04 (§3.5): a stash waiting for a pending walk is rung by the VA
         // thread once it is idle again.
         if g.chan.waiting_on_walk() {
+            g.chan.latency_wait(Some(kf_host::latency::Cause::OwnWalk));
             self.inbox
                 .register_walk_waiter_and_rearm(g.key, g.guest_idx, |token| {
                     let _ = self.plane.ring_internal(token);
                 });
         }
+        if !g.chan.waiting_on_walk() {
+            g.chan.latency_wait(None);
+        }
+        g.chan
+            .latency_end(matches!(&r, Ok(kf_chan::host::Pumped::Caught)));
         // ★ P1+P2 inc A: what this pump counted (count-only), summed for the status line.
         let inca = g.chan.inca().total();
         if inca > g.inca_seen {

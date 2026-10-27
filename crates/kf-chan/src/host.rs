@@ -147,6 +147,7 @@ struct RingOwned {
 /// ★ A copy-engine host channel we own. Its completions reach the worker through the SESSION's one
 /// completion fd ([`crate::completions::Completions`]), never an fd of its own.
 pub struct HostRing {
+    latency: kf_host::latency::Tracker,
     /// `None` once [`HostRing::release`] has unmapped it. ★ §U: shared (never cloned out of this
     /// ring except into [`Gate`], which [`HostRing::release`] revokes BEFORE dropping this one, so
     /// the mapping still goes before its aperture is given back).
@@ -442,6 +443,7 @@ impl HostRing {
         let cpu = std::sync::Arc::new(cpu);
         let gate = Gate::over(cpu.clone(), layout.fence_off + GATE_OFF);
         let mut ring = HostRing {
+            latency: kf_host::latency::Tracker::default(),
             cpu: Some(cpu),
             gate,
             _node: node,
@@ -459,6 +461,8 @@ impl HostRing {
             seq: 0,
             live: VecDeque::new(),
         };
+        ring.latency
+            .configure(kf_host::latency::Kind::Private, chan.token, None);
         let tail = (|| {
             use kf_chip::classes::Kind;
             let video = kf_abi::submit::nvdec_index_of_engine_type(engine)
@@ -568,6 +572,7 @@ impl HostRing {
             .load_u32(At::new(self.layout.userd_off + USERD_GP_PUT))
             .ok()?;
         let fence = c.load_u32(At::new(self.layout.fence_off)).ok()?;
+        self.latency.marker(u64::from(fence));
         Some((get, put, fence))
     }
 
@@ -702,6 +707,7 @@ impl HostRing {
             .cpu()?
             .load_u32(At::new(self.layout.fence_off))
             .map_err(|e| format!("{e:?}"))?;
+        self.latency.marker(u64::from(done));
         while self.live.front().is_some_and(|r| reached(done, r.seq)) {
             self.live.pop_front();
         }
@@ -713,6 +719,7 @@ impl HostRing {
     /// # Errors
     /// `Ok(Err(Busy))` when there is no free space until a completion; `Err` for a store failure.
     pub fn push(&mut self, words: &[u32]) -> Result<Result<(), Busy>, String> {
+        self.latency.observe();
         // ★ 2026-10-14: a video ring takes the T-mode VIDEO tier's output (`crate::vtables`):
         // authored semaphore rows and host methods only. No codec or CE execution reaches it —
         // the decoder refuses `EXECUTE`, every codec operand and every CE method by name — and
@@ -834,8 +841,12 @@ impl HostRing {
             )
             .map_err(|e| format!("{e:?}"))?;
         kf_linux_raw::release_fence();
+        let published_at = kf_host::latency::now();
         rm.doorbell(self.chan.token)
             .map_err(|e| format!("doorbell: {e:?}"))?;
+        self.latency
+            .published_at(published_at, Some(u64::from(seq)), true);
+        self.latency.end_turn(false);
         Ok(Ok(seq))
     }
 }
@@ -1236,6 +1247,21 @@ impl Probe {
 }
 
 impl TranslatedChannel {
+    /// Diagnostic worker-demand observation and native guest-vector identity.
+    pub fn latency_begin(&mut self, vector: Option<u32>) {
+        self.host
+            .latency
+            .configure(kf_host::latency::Kind::Translated, self.token, vector);
+        self.host.latency.observe();
+    }
+    /// Diagnostic gate interval; never alters whether the pump waits.
+    pub fn latency_wait(&mut self, cause: Option<kf_host::latency::Cause>) {
+        self.host.latency.waiting(cause);
+    }
+    /// An idle visit must not become the next demand's observation timestamp.
+    pub fn latency_end(&mut self, idle: bool) {
+        self.host.latency.end_turn(idle);
+    }
     /// A Translated channel over the guest ring `ring`, executing on `host`, known to the doorbell
     /// plane as `token`.
     #[must_use]

@@ -375,6 +375,7 @@ impl UserdSource {
 
 pub(super) struct Record {
     pub walk_hold: crate::mem::walk_scope::Hold,
+    pub latency_vector: Option<u32>,
     pub allocation: Arc<()>,
     pub quota: Arc<super::userquota::NativeQuota>,
     pub key: (u32, u32),
@@ -530,6 +531,11 @@ impl Birth {
         let record = Arc::new(Cell::new(
             self.idx,
             Record {
+                latency_vector: me
+                    .engines
+                    .iter()
+                    .find(|e| e.engine_type == a.engine_type.unwrap_or(0))
+                    .and_then(|e| e.vector),
                 walk_hold: Default::default(),
                 quota: self
                     .count

@@ -204,6 +204,7 @@ pub(crate) fn control_verb(cmd: u32) -> Verb {
 
 /// Time precisely the supplied ioctl as `verb`; result and errors pass through unchanged.
 pub(crate) fn rm_verb<T>(verb: Verb, f: impl FnOnce() -> T) -> T {
+    let _activity = crate::latency::activity(crate::latency::Activity::Rm(verb as u8));
     rm_verb_with(true, verb, f)
 }
 

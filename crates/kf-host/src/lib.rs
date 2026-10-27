@@ -13,8 +13,7 @@ pub mod birth;
 pub mod channel;
 pub mod diag;
 pub mod event;
-#[cfg(test)]
-mod latency;
+pub mod latency;
 pub mod sparse;
 pub mod tier;
 pub mod timer;
@@ -1202,6 +1201,7 @@ impl HostRm {
     /// # Errors
     /// The host's status, by name.
     pub fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        let _activity = latency::activity(latency::Activity::Control(cmd));
         // ★ The host-driver axis: the payload is the bench layout; carry it to the host's own
         // measured layout and back (`kf_abi::hostabi::HOST_CONTROLS`). Same layout ⇒ untouched.
         let carry = self
