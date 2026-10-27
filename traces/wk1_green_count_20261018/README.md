@@ -15,8 +15,12 @@ The two old SILENT configuration-refusal cases now use41/100 rather than21/40, m
 new reviewed ceiling. The20-ceiling mutant causes7 failures and the400 mutant causes2.
 Bundle b784ffb0fb357ffcfb51f09df246f072bfdda65dd06b4594cc2e0714bc1e0594.
 
-MEASURED at commit 3543ac827: combined source passes2284 Node tests and77 real-workerd tests; the20-ceiling mutant has7 killing tests and the400 mutant has2 (mutations.jsonl).
+MEASURED at commit 01eea3b14: combined source passes2284 Node tests and77 real-workerd tests; the20-ceiling mutant has7 killing tests and the400 mutant has2 (mutations.jsonl).
 Combined bundle c2386b3ae52ae25657bbfad763b28fe9052351f67c68cf2ce6820f37890c75e5.
 CODE READ: this branch includes PR159 and merged PR157; merge PR159 first, then this count
 change, so the final combined manifest agrees with all three source concerns.
 The settings guidance now distinguishes one logical attempt from its two possible dollar receipts.
+
+CODE READ: the provider-wrapper correction from PR159 rev8639a59f5 is incorporated.
+It changes payload Python rather than the Worker module; the combined module pin stays
+c2386b3ae52ae25657bbfad763b28fe9052351f67c68cf2ce6820f37890c75e5.

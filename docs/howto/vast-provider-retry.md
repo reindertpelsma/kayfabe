@@ -34,3 +34,8 @@ the immutable bundle check.
 The runner prints `provider fault: machine X, not a kayfabe verdict` with the validated machine id.
 No extra driver-swap pre-check is added: the existing bounded driver recovery supplies the
 incident evidence before product suites; repeating it would add work without proving a fresh GPU.
+
+CODE READ from watch_delta and stage_grade in this branch: a failed provision command can
+retain PROVIDER_FAULT only when its wrapper preserves the exact exit and positively reports
+a readable, unchanged, clean Xid log. The product-pass path still rejects nonzero commands.
+Missing/contradictory watcher proof, an Xid stop, an instrument failure or timeout stays a stop.

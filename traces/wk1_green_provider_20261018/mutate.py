@@ -160,7 +160,13 @@ CASES = [
         "python",
     ),
     ("main-classification", P, "if isinstance(error, ProviderFault):", "if False:", "python"),
-    ("unmatched-xid-stop", P, "if watch_delta(bounded_text(log), rc):", "if False:", "python"),
+    (
+        "unmatched-xid-stop",
+        P,
+        "if watch_delta(bounded_text(log), rc, failed_provider=True):",
+        "if False:",
+        "python",
+    ),
     (
         "reporter-classification",
         S,
@@ -170,6 +176,11 @@ CASES = [
     ),
     ("attempt-original-day", L, "if (attemptStarted >= day &&", "if (v.started >= day &&", "node"),
     ("public-provider-attribution", R, ", not a kayfabe verdict\\n", ", provider fault\\n", "node"),
+    ("failed-provider-wrapper", P, "failed_provider=True", "failed_provider=False", "python"),
+    ("failed-provider-exit", P, "command_rc == rc", "True", "python"),
+    ("failed-provider-scope", P, "failed_provider and command_rc", "command_rc", "python"),
+    ("failed-provider-reserved-exit", P, "rc not in (0, 6, 7, 124)", "True", "python"),
+    ("failed-provider-counts", P, "and before == after and", "and True and", "python"),
 ]
 
 

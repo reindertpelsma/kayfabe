@@ -395,7 +395,7 @@ def print_final_summary(result):
     print(final_summary(result, STAGE_RECORDS), flush=True)
 
 
-def watch_delta(text, rc):
+def watch_delta(text, rc, *, failed_provider=False):
     """Validate the existing watcher's instrument, process status and exact delta."""
     if int(only(r"^\[xid-watch\] host_dmesg_lines=([0-9]+) .*$", text, "host_xid")) < 2:
         raise EvidenceError("host_xid")
@@ -405,9 +405,13 @@ def watch_delta(text, rc):
     command_rc = int(
         only(r"^\[xid-watch\] --- command output ends \(rc=([0-9]+)\) ---$", text, "host_xid")
     )
-    if command_rc:
+    # Only an already-proved provider fault may have a failed wrapped command.
+    # Its wrapper must preserve that exact exit and positively prove a clean log.
+    # Instrument failure, an Xid stop and timeout are never this exception.
+    clean_failure = failed_provider and command_rc == rc and rc not in (0, 6, 7, 124)
+    if command_rc and not clean_failure:
         raise EvidenceError("host_xid")
-    if rc == 0 and before == after and "HOST Xid CLEAN" in text:
+    if (rc == 0 or clean_failure) and before == after and "HOST Xid CLEAN" in text:
         return []
     if rc != 6:
         raise EvidenceError("host_xid")
@@ -818,7 +822,7 @@ def stage_grade(root, tag, log, grade, rc):
             return grade(rc)
         except ProviderFault:
             # Provider recovery must never bypass the unmatched-Xid safety stop.
-            if watch_delta(bounded_text(log), rc):
+            if watch_delta(bounded_text(log), rc, failed_provider=True):
                 raise EvidenceError("host_xid") from None
             raise
     text = bounded_text(log)
