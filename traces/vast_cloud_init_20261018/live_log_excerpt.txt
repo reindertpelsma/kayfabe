@@ -1,0 +1,343 @@
+::stop-commands::6f7a084d820673c46a41e02890395423487d84cd71b6bad4
+UNTRUSTED Worker/box output
+[untrusted] Availability: check
+[untrusted] die gpu compute_cap count effective_hourly estimated_total kvm
+[untrusted] AD102 RTX_4090 890 1 0.560036 1.689277 1
+[untrusted] Thresholds: bandwidth_down_gb=15 bandwidth_up_gb=2 cores=8 cpuGhz=2 diskMbps=100 downMbps=200 medianRatio=0.5 price=1 ramMb=34360 reliability=0.98 upMbps=50 verified=1
+[untrusted] Rejected counts: CPU_RAM=11 DIE=24 DISK_BW=1 DRIVER=23 NETWORK=2 PERFORMANCE=7 PRICE=10 RELIABILITY=20 VERIFICATION=20
+[untrusted] Verified counts: AD102=9/13 AD103=1/2 AD106=2/2 CC_120=3/4 CC_86=0/1 CC_89=2/2 GA102=3/7 GA106=0/2 GB202=4/7 GB203=1/1 GB206=1/2
+::6f7a084d820673c46a41e02890395423487d84cd71b6bad4::
+
+::stop-commands::9902a874af039b07090c28b819a7355e45e11514853394a3
+UNTRUSTED Worker/box output
+[untrusted] [Worker] selection profile=check die=AD102 reason=PREFERENCE ignored=0
+::9902a874af039b07090c28b819a7355e45e11514853394a3::
+
+::stop-commands::6645444123901ce26b74b3d068efe3267e5110f66dae7fb3
+UNTRUSTED Worker/box output
+[untrusted] [Worker] provider=loading phase=BOOTING
+::6645444123901ce26b74b3d068efe3267e5110f66dae7fb3::
+
+::stop-commands::eca97e74e2326a0303575f93deceef55aba960daafaf252e
+UNTRUSTED Worker/box output
+[untrusted] [Worker] provider=created phase=BOOTING
+::eca97e74e2326a0303575f93deceef55aba960daafaf252e::
+
+::stop-commands::659e8225d5dfe1a587a3ade5ebc772148a7c279b3706c868
+UNTRUSTED Worker/box output
+[untrusted] [box] Box ready; payload starting
+[untrusted] [Worker] provider=running phase=TESTING
+[untrusted] [box] KF_SETUP_CACHE_START utc=1792746654
+::659e8225d5dfe1a587a3ade5ebc772148a7c279b3706c868::
+
+::stop-commands::a6157b9879bd59126e260c87288e28c95ceabaece5ffb20e
+UNTRUSTED Worker/box output
+[untrusted] [box] KF_SETUP_ASSET kind=debs bytes=159253208 sha256=[redacted] seconds=7.027
+[untrusted] [box] KF_SETUP_ASSET kind=vendor bytes=7888026 sha256=[redacted] seconds=2.361
+[untrusted] [box] KF_SETUP_MIRRORS {"fallback_mirror":"archive.ubuntu.[redacted]","probes":[{"host":"archive.ubuntu.[redacted]","status":206,"bytes":8388608,"seconds":1.129606,"curl_rc":0},{"host":"azure.archive.ubuntu.[redacted]","status":0,"bytes":0,"seconds":10.001289,"curl_rc":28},{"host":"mirrors.edge.kernel.org","status":206,"bytes":8388608,"seconds":1.142094,"curl_rc":0}],"actual_apt_source":"local-cache"}
+[untrusted] [box] KF_SETUP_CACHE_END {"seconds":20.346,"package_policy_sha256":"[redacted]","asset_bytes":167141234}
+[untrusted] [box] Filesystem      Size  Used Avail Use% Mounted on
+[untrusted] [box] /dev/root       117G  9.0G  108G   8% /
+[untrusted] [box] KF_PREFLIGHT_FREE_BYTES=115030446080
+[untrusted] [box] KF_PAYLOAD_STAGE_START name=provision
+[untrusted] [box] [xid-watch] tag=[run-tag]_provision  host=ubuntu  utc=2026-10-23T09:11:14Z
+[untrusted] [box] [xid-watch] [redacted]mand: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[untrusted] [box] [xid-watch] host_dmesg_lines=683  (readable  the clean/unwatched ambiguity is closed)
+[untrusted] [box] [xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 575.51.03
+[untrusted] [box] [xid-watch] xid_before=0
+[untrusted] [box] [xid-watch] --- [redacted]mand output begins ---
+[untrusted] [box] START 2026-10-23T09:11:14+00:00
+[3 bytes dropped by runner]
+::a6157b9879bd59126e260c87288e28c95ceabaece5ffb20e::
+
+::stop-commands::c0191074bca7721e9a9332843ecbb39a2ed2a74baeca5abe
+UNTRUSTED Worker/box output
+[untrusted] [box] BOX_RC=0
+[untrusted] [box] d196c055a fix(ci): provision guest SSH tools and replay the cloud-init payload offline
+::c0191074bca7721e9a9332843ecbb39a2ed2a74baeca5abe::
+
+::stop-commands::6e751b66232234e31b94ceaadd49a7814d8b2fabe7b2b5d3
+UNTRUSTED Worker/box output
+[untrusted] [box] DRIVER_RC=0
+[untrusted] [box] NVIDIA GeForce RTX 4090, 580.159.04
+[untrusted] [box] /dev/root       117G   14G  103G  12% /
+::6e751b66232234e31b94ceaadd49a7814d8b2fabe7b2b5d3::
+
+::stop-commands::e97b50c4a8948de981c3323286cc0767206ac425fbe9c791
+UNTRUSTED Worker/box output
+[untrusted] [box] TREE_RC=0
+[untrusted] [box] [2026-10-23T09:16:15+00:00] B4: guest ladder built: 5058248 bytes
+[untrusted] [box] [2026-10-23T09:16:15+00:00] BENCH_TREE_DONE
+[untrusted] [box] warning: missing documentation for a function
+[untrusted] [box]     --> crates/kf-util/src/lock.rs:1150:5
+[untrusted] [box]      |
+[untrusted] [box] 1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+[untrusted] [box]      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]      |
+[untrusted] [box]      = note: requested on the [redacted]mand line with `-W missing-docs`
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a function
+[untrusted] [box]     --> crates/kf-util/src/lock.rs:1432:5
+[untrusted] [box]      |
+[untrusted] [box] 1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+[untrusted] [box]      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a function
+[untrusted] [box]    --> crates/kf-util/src/lockwitness.rs:193:5
+[untrusted] [box]     |
+[untrusted] [box] 193 |     pub fn is_vcpu() -> bool {
+[untrusted] [box]     |     ^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a method
+[untrusted] [box]    --> crates/kf-arch/src/gsp.rs:827:5
+[untrusted] [box]     |
+[untrusted] [box] 827 | /     fn on_read(
+[untrusted] [box] 828 | |         &self,
+[untrusted] [box] 829 | |         _model: &dyn GspModel,
+[untrusted] [box] 830 | |         _bar: u8,
+[untrusted] [box] ...   |
+[untrusted] [box] 833 | |         _state: &ArchBootState,
+[untrusted] [box] 834 | |     ) -> Option<u64> {
+[untrusted] [box]     | |____________________^
+[untrusted] [box]     |
+[untrusted] [box]     = note: requested on the [redacted]mand line with `-W missing-docs`
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a method
+[untrusted] [box]    --> crates/kf-arch/src/gsp.rs:956:5
+[untrusted] [box]     |
+[untrusted] [box] 956 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+[untrusted] [box]     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:90:18
+[untrusted] [box]    |
+[untrusted] [box] 90 |     NoChannels { engine: u32 },
+[untrusted] [box]    |                  ^^^^^^^^^^^
+[untrusted] [box]    |
+[untrusted] [box]    = note: requested on the [redacted]mand line with `-W missing-docs`
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:92:20
+[untrusted] [box]    |
+[untrusted] [box] 92 |     BelowMinimum { asked: u32 },
+[untrusted] [box]    |                    ^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:95:9
+[untrusted] [box]    |
+[untrusted] [box] 95 |         asked: u32,
+[untrusted] [box]    |         ^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:96:9
+[untrusted] [box]    |
+[untrusted] [box] 96 |         limit: u32,
+[untrusted] [box]    |         ^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:97:9
+[untrusted] [box]    |
+[untrusted] [box] 97 |         engine: u32,
+[untrusted] [box]    |         ^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:98:9
+[untrusted] [box]    |
+[untrusted] [box] 98 |         total: u32,
+[untrusted] [box]    |         ^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]   --> crates/kf-abi/src/chanbudget.rs:99:9
+[untrusted] [box]    |
+[untrusted] [box] 99 |         in_use: u32,
+[untrusted] [box]    |         ^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]    --> crates/kf-abi/src/chanbudget.rs:103:9
+[untrusted] [box]     |
+[untrusted] [box] 103 |         derived: u32,
+[untrusted] [box]     |         ^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]    --> crates/kf-abi/src/chanbudget.rs:104:9
+[untrusted] [box]     |
+[untrusted] [box] 104 |         engine: u32,
+[untrusted] [box]     |         ^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]    --> crates/kf-abi/src/chanbudget.rs:105:9
+[untrusted] [box]     |
+[untrusted] [box] 105 |         total: u32,
+[untrusted] [box]     |         ^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a struct field
+[untrusted] [box]    --> crates/kf-abi/src/chanbudget.rs:106:9
+[untrusted] [box]     |
+[untrusted] [box] 106 |         in_use: u32,
+[untrusted] [box]     |         ^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a function
+[untrusted] [box]     --> crates/kayfabe-util/src/lock.rs:1150:5
+[untrusted] [box]      |
+[untrusted] [box] 1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+[untrusted] [box]      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]      |
+[untrusted] [box]      = note: requested on the [redacted]mand line with `-W missing-docs`
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a function
+[untrusted] [box]     --> crates/kayfabe-util/src/lock.rs:1432:5
+[untrusted] [box]      |
+[untrusted] [box] 1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+[untrusted] [box]      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a function
+[untrusted] [box]    --> crates/kayfabe-util/src/lockwitness.rs:193:5
+[untrusted] [box]     |
+[untrusted] [box] 193 |     pub fn is_vcpu() -> bool {
+[untrusted] [box]     |     ^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a method
+[untrusted] [box]    --> crates/kayfabe-arch/src/gsp.rs:699:5
+[untrusted] [box]     |
+[untrusted] [box] 699 | /     fn on_read(
+[untrusted] [box] 700 | |         &self,
+[untrusted] [box] 701 | |         _model: &dyn GspModel,
+[untrusted] [box] 702 | |         _bar: u8,
+[untrusted] [box] ...   |
+[untrusted] [box] 705 | |         _state: &ArchBootState,
+[untrusted] [box] 706 | |     ) -> Option<u64> {
+[untrusted] [box]     | |____________________^
+[untrusted] [box]     |
+[untrusted] [box]     = note: requested on the [redacted]mand line with `-W missing-docs`
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a constant
+[untrusted] [box]   --> crates/kayfabe-linux-raw/src/arena_unsafe.rs:72:1
+[untrusted] [box]    |
+[untrusted] [box] 72 | pub const ARENA_EXHAUSTED: &str = "the framebuffer page arena is exhausted: every 4 KiB index \
+[untrusted] [box]    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]    |
+[untrusted] [box]    = note: requested on the [redacted]mand line with `-W missing-docs`
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for an associated function
+[untrusted] [box]    --> crates/kayfabe-linux-raw/src/arena_unsafe.rs:161:5
+[untrusted] [box]     |
+[untrusted] [box] 161 |     pub fn create(page: HostPageSize) -> Result<Self, RawError> {
+[untrusted] [box]     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: missing documentation for a method
+[untrusted] [box]    --> crates/kayfabe-linux-raw/src/mapping_unsafe.rs:977:5
+[untrusted] [box]     |
+[untrusted] [box] 977 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+[untrusted] [box]     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[untrusted] [box]
+[untrusted] [box] warning: direct cast of function item into an integer
+[17469 bytes dropped by runner]
+::e97b50c4a8948de981c3323286cc0767206ac425fbe9c791::
+
+::group::Final bounded log: UNTRUSTED Worker/box output
+
+[80136 bytes dropped by runner display budget]
+::endgroup::
+
+
+FINAL BOUNDED TAIL — UNTRUSTED Worker/box data
+[box] bench sizes=16,2048 iters=20 batch=10
+[box] host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+[box] src cup2.c md5 [redacted]
+[box] src cup3.c md5 [redacted]
+[box] src cup8.c md5 [redacted]
+[box] src cup8bench.c md5 [redacted]
+[box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1634 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+[box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1634 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+[box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1572 graded=[CUP3_VAL=43]
+[box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1572 graded=[CUP3_VAL=43]
+[box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1616 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+[box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1616 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+[box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.479 med_ms=3.479 p90_ms=3.486 min_ms=3.457 max_ms=3.489 gflops=4937.675 batch_per_launch_ms=3.452 batch_gflops=4976.790 h2d_ms=1.897 d2h_med_ms=0.910 submit_med_ms=0.001 sync_med_ms=3.478 sync_cpu_med_ms=3.478 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+[box] CUDA_LADDER_STARTED=2026-10-23T09:16:57+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=d196c055
+[box] bench sizes=16,2048 iters=20 batch=10
+[box] host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+[box] src cup2.c md5 [redacted]
+[box] src cup3.c md5 [redacted]
+[box] src cup8.c md5 [redacted]
+[box] src cup8bench.c md5 [redacted]
+[box] CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1634 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+[box] CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=1572 graded=[CUP3_VAL=43]
+[box] CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=1616 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+[box] CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=1821 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+[box] CL_BENCH mode=host rep=1 BENCH_INIT_MS=1283.92
+[box] CL_BENCH mode=host rep=1 BENCH_CTX_MS=79.52
+[box] CL_BENCH mode=host rep=1 BENCH_MODULE_MS=9.32
+[box] CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.018 med_ms=0.005 p90_ms=0.005 min_ms=0.005 max_ms=0.005 gflops=1.746 batch_per_launch_ms=0.002 batch_gflops=3.577 h2d_ms=0.017 d2h_med_ms=0.004 submit_med_ms=0.001 sync_med_ms=0.003 sync_cpu_med_ms=0.003 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+[box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.479 med_ms=3.479 p90_ms=3.486 min_ms=3.457 max_ms=3.489 gflops=4937.675 batch_per_launch_ms=3.452 batch_gflops=4976.790 h2d_ms=1.897 d2h_med_ms=0.910 submit_med_ms=0.001 sync_med_ms=3.478 sync_cpu_med_ms=3.478 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+[box] CUDA_LADDER_DONE=2026-10-23T09:17:04+00:00
+[box] [xid-watch] --- [redacted]mand output ends (rc=0) ---
+[box] CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=1821 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+[box] CL_BENCH mode=host rep=1 BENCH_INIT_MS=1283.92
+[box] CL_BENCH mode=host rep=1 BENCH_CTX_MS=79.52
+[box] CL_BENCH mode=host rep=1 BENCH_MODULE_MS=9.32
+[box] CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.018 med_ms=0.005 p90_ms=0.005 min_ms=0.005 max_ms=0.005 gflops=1.746 batch_per_launch_ms=0.002 batch_gflops=3.577 h2d_ms=0.017 d2h_med_ms=0.004 submit_med_ms=0.001 sync_med_ms=0.003 sync_cpu_med_ms=0.003 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+[box] CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=3.479 med_ms=3.479 p90_ms=3.486 min_ms=3.457 max_ms=3.489 gflops=4937.675 batch_per_launch_ms=3.452 batch_gflops=4976.790 h2d_ms=1.897 d2h_med_ms=0.910 submit_med_ms=0.001 sync_med_ms=3.478 sync_cpu_med_ms=3.478 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+[box] CUDA_LADDER_DONE=2026-10-23T09:17:04+00:00
+[box] [xid-watch] xid_after=0
+[box] [xid-watch] ★ HOST Xid CLEAN across the [redacted]mand — 0 before, 0 after, read from a
+[box] [xid-watch]   ring buffer PROVED READABLE in phase 0 (716 lines). ⊘ That proof is what
+[box] [xid-watch]   separates this line from the same line printed by a blind instrument.
+[box] [xid-watch] evidence: /workspace/bench/[redacted].log
+[box] KF_PAYLOAD_STAGE_END name=cuda_host rc=0 duration_ms=10445
+[box] KF_PAYLOAD_STAGE_START name=merge_bar
+[box] [xid-watch] tag=[run-tag]_merge_bar  host=ubuntu  utc=2026-10-23T09:17:06Z
+[box] [xid-watch] [redacted]mand: bash /workspace/kf-ci-src/scripts/bench/box/merge_check.sh [redacted] [run-tag]
+[box] [xid-watch] host_dmesg_lines=716  (readable — the clean/unwatched ambiguity is closed)
+[box] [xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 580.159.04
+[box] [xid-watch] xid_before=0
+[box] [xid-watch] --- [redacted]mand output begins ---
+[box] START 2026-10-23T09:17:07+00:00
+[box] Preparing worktree (detached HEAD d196c055a)
+[box] Updating files:  83% (16861/20224)
+[box] Updating files:  84% (16989/20224)
+[box] Updating files:  85% (17191/20224)
+[box] Updating files:  86% (17393/20224)
+[box] Updating files:  87% (17595/20224)
+[box] Updating files:  88% (17798/20224)
+[box] Updating files:  89% (18000/20224)
+[box] Updating files:  90% (18202/20224)
+[box] Updating files:  91% (18404/20224)
+[box] Updating files:  92% (18607/20224)
+[box] Updating files:  93% (18809/20224)
+[box] Updating files:  94% (19011/20224)
+[box] Updating files:  95% (19213/20224)
+[box] Updating files:  96% (19416/20224)
+[box] Updating files:  97% (19618/20224)
+[box] Updating files:  98% (19820/20224)
+[box] Updating files:  99% (20022/20224)
+[box] Updating files: 100% (20224/20224)
+[box] Updating files: 100% (20224/20224), done.
+[box] HEAD is now at d196c055a fix(ci): provision guest SSH tools and replay the cloud-init payload offline
+[box] HEAD=[redacted] CHECKOUT=/workspace/bench/verify-worktrees/[run-tag]
+[box] TESTS passed 3749 failed 0
+[box] GATES_RC=0
+[box] V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS
+[box] KF3_RC=0
+[box] KF3_BUILT /workspace/bench/kf3-bins/d196c055/qemu-system-x86_64 rev=d196c055 mtime=2026-10-23 [address].987556174 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[box] BARE_SUITE_STARTED=2026-10-23T09:30:55+00:00 arms=30 budget=180s
+[box] bin=/workspace/kf-ci-src/target/release/kayfabe-rm-ladder  rev=d196c055a
+[box] gpu=NVIDIA GeForce RTX 4090  driver=580.159.04(open)  pci_dev=0x268410DE  cc=8.9
+[box] ARM                          VERDICT    secs  why
+[box] --timer                      PASS         5s  5s
+[box] BARE_CELL_ARM arm=timer verdict=PASS secs=5 ms=4894 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] --engines                    PASS         5s  5s
+[box] BARE_CELL_ARM arm=engines verdict=PASS secs=5 ms=4907 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] --doorbell-census            PASS         5s  5s
+[box] BARE_CELL_ARM arm=doorbell-census verdict=PASS secs=5 ms=4909 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] --gpu-info-sweep             PASS         4s  4s
+[box] BARE_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=4 ms=4853 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] --bus-info-sweep             PASS         9s  9s
+[box] BARE_CELL_ARM arm=bus-info-sweep verdict=PASS secs=9 ms=8041 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] --concurrency                PASS         7s  7s
+[box] BARE_CELL_ARM arm=concurrency verdict=PASS secs=7 ms=7923 rc=0 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] --defer-liveness             FAIL        17s  client rc=6
+[box] BARE_CELL_ARM arm=defer-liveness verdict=FAIL secs=17 ms=16920 rc=6 pci_dev=0x268410DE drv=580.159.04 kmod=open cc=8.9 rev=d196c055a
+[box] KF_PAYLOAD_STAGE_END name=merge_bar rc=1 duration_ms=881209
+[box] KF_PAYLOAD_FAIL suite=raw_suite
+[box] Suite [redacted]plete.

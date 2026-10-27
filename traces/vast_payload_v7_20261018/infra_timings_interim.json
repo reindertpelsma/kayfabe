@@ -1,0 +1,30 @@
+{
+  "run": "v7-kvm-20261023",
+  "box_start_utc": "2026-10-23T02:00:03Z",
+  "box_end_utc": "2026-10-23T02:54:58Z",
+  "box_elapsed_seconds": 3295,
+  "driver_start_utc": "2026-10-23T02:54:58Z",
+  "driver_end_utc": "2026-10-23T02:58:55Z",
+  "driver_elapsed_seconds": 237,
+  "driver_after_swap": "580.159.04",
+  "guest_vcpus": 30,
+  "guest_memory_kib": 103589964,
+  "apt_mirror_selected": "azure.archive.ubuntu.com/ubuntu",
+  "mirror_release_probe_bytes_per_second": {
+    "archive.ubuntu.com/ubuntu": 346021,
+    "azure.archive.ubuntu.com/ubuntu": 1849679,
+    "mirrors.edge.kernel.org/ubuntu": 1336943
+  },
+  "initial_apt_complete_utc": "2026-10-23T02:53:55Z",
+  "initial_apt_observation_window_seconds": 3232,
+  "initial_apt_window_includes": "box preflight, update, download and installation; not exact apt command duration",
+  "apt_recorded_package_configuration_seconds": 57,
+  "bench_tree_start_utc": "2026-10-23T02:58:56Z",
+  "bench_tree_host_deps_end_utc": "2026-10-23T03:14:00Z",
+  "bench_tree_host_deps_seconds": 904,
+  "qemu_download_rc": 0,
+  "qemu_download_bytes": 141137724,
+  "cloud_image_download_rc": 0,
+  "cloud_image_download_bytes": 621284352,
+  "full_provision_complete": false
+}

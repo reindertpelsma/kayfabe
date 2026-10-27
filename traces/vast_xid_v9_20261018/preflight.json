@@ -1,0 +1,29 @@
+{
+  "run": "v9-gpu-free-20261023",
+  "tests": 461,
+  "seconds": 67.317,
+  "os": "Ubuntu22.04/GNU/Python3.10",
+  "result": "PASS",
+  "shared_s4_tests_included": 100,
+  "original_assertions_retained": true,
+  "mutation_components": {
+    "payload_shared": 50,
+    "cache_helper": 43,
+    "policy": 6,
+    "provider_env": 8,
+    "diagnostic": 10
+  },
+  "noncanonical_mutants": 117,
+  "minimum_named_killers": 2,
+  "canonical": {
+    "mutants": 60,
+    "killed": 60,
+    "problems": 0
+  },
+  "remaining_checks": [],
+  "production_sources_sha256": {
+    "scripts/ci/vast_payload.py": "11344f1101c5079bf70cb73ef0ef9da24eba18d2b6ff1070e714a103a4620a8a",
+    "scripts/ci/vast_payload_hooks.sh": "139bcbd623c7a42a3a57e9a3dc19b9ff6e2d92fa05654445021e40a34f8fa961",
+    "scripts/bench/native_xid_guard.py": "ae5947e488f1cc1fab4f16a80ff089c17de6f3973bea74d2bc9522fdee915d52"
+  }
+}

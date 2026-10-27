@@ -1,0 +1,15 @@
+kf-host: channel birth h=0xcafe0024 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe0029 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe002e engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe0032 engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe0036 engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: RC host twin 0x1b (guest chid 0x3, engine 0x9) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf-host: channel birth h=0xcafe003a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe003e engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe0042 engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: RC host twin 0x1b (guest chid 0x3, engine 0x9) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1c (guest chid 0x4, engine 0x9) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf-host: channel birth h=0xcafe0046 engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe004a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf-host: channel birth h=0xcafe004e engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: RC host twin 0x1b (guest chid 0x3, engine 0x9) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED

@@ -1,8 +1,35 @@
 # V3 per-die and per-driver constants: the strategy
 
-**STATUS: LIVE, 2026-10-11 (strategy; nothing here is implemented yet).** Owner rulings: `docs/OWNER_RULINGS.md` §AF (sources, source tags,
-published table), §AG (reverse engineering private), §AH (this strategy). Provenance rules: `V3_PROVENANCE.md`. The inventory this strategy works
-through: `V3_CONSTANT_INVENTORY_20261011.md` (being written; until it lands this page names no item as open).
+**STATUS: LIVE, 2026-10-22 (strategy; implementation is split between master and unmerged branches).**
+
+**CODE READ — correction above the superseded 2026-10-11 status.** At master
+`e9c6d39e5`, identity/classes/register derivations, `kf_rm::hostfacts`, the inventory,
+tier checks and the Windows capture tooling exist. The published `kf_rm::consttab`
+and `crates/kf-rm/data/measured_constants.tsv` exist on
+`claude/gpu-types-20261015` at `1cb048610`; their later version is on
+`codex/sweep-dies-20261022` at `bc3a967e0`. Neither is on this master base.
+The latter branch also carries `kf-disp/data/caps_measured.tsv` and caps derivations;
+master retains the AD104 caps probe and the older captured cudart/ZBC paths.
+The [historical matrix](V3_CONSTANT_MATRIX_20261014.md) records the earlier branch's
+work; the [coverage grid](V3_CONSTANT_COVERAGE_20261022.md) separates same-die
+evidence, inherited code and gaps. Restoring those documents does not wire the tables.
+
+**MEASURED — historical artifacts, not a new hardware run:** the tier-2 probes and
+Windows census/body excerpts are in `traces/constants_night_20261014/` and
+`traces/constants_measure_20261014b/`; the source revisions and excerpt selections
+are recorded in `traces/cw1_constants_20261018/source_manifest.tsv`.
+Unmeasured dies/branches require the named fail-closed fallback in §3; equal values
+on neighbouring dies do not establish coverage. Floorsweeping-dependent facts still
+come from the host at runtime. AD104 GMMU decision D-1 still needs its Windows A/B.
+
+> Superseded status, 2026-10-11: "strategy; nothing here is implemented yet".
+> The inventory was then being written; it is now
+> `V3_CONSTANT_INVENTORY_20261011.md`, with tier checks under `tier_checks/`.
+
+Owner rulings: `docs/OWNER_RULINGS.md` §AF (sources, source tags, published table),
+§AG (reverse engineering private), §AH (this strategy). Provenance rules:
+`V3_PROVENANCE.md`. The remaining plan below preserves its dated context; Windows
+and sweep results are indexed in the coverage grid rather than implied by that plan.
 
 ## 1. Goal
 

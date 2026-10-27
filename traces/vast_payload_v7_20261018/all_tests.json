@@ -1,0 +1,19 @@
+{
+  "run": "v7-all-vast-tests-20261023",
+  "date": "2026-10-23",
+  "tested_revision": "5d26f8b57dac0a8c73204462a0591aef94197935",
+  "tests": 198,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 52.4,
+  "suites": {
+    "canonical_box": 72,
+    "payload": 83,
+    "provider_environment": 17,
+    "diagnostic_logs": 26
+  },
+  "new_expected_red_probes": {
+    "target_contract": 2,
+    "failure_hardware": 2
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "run": "v9-shared-guard-provenance-20261023",
+  "upstream_revision": "12f86ae38a367b02f80d87e73d7daefa45efbe87",
+  "verbatim_import_commit": "56dfc55be",
+  "upstream_module_sha256": "2e7a0c25dd07442bfe0b20519c1493ecc760fb4a0dfdb39d07d72c4711fcd490",
+  "local_module_sha256": "ae5947e488f1cc1fab4f16a80ff089c17de6f3973bea74d2bc9522fdee915d52",
+  "native_matcher_ast_unchanged": true,
+  "verbatim_existing_functions": [
+    "copy_engine_client",
+    "approve_guest",
+    "supervise_guest",
+    "_guest_record",
+    "_guest_operations",
+    "capture_guest",
+    "verify_guest_identity",
+    "pin_suite",
+    "kernel_snapshot"
+  ],
+  "new_api": "approve_native_arm(journal, arm, source)",
+  "one_production_implementation": "scripts/bench/native_xid_guard.py",
+  "fixture_normalization": "Only trailing ASCII whitespace in imported source-control text; kernel Xid records not rewritten."
+}

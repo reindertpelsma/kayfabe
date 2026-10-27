@@ -44,6 +44,25 @@ no runtime code and opened no draft PR. The timeline limits, four ranked
 hypotheses and default-off TEST-FIRST diagnostic design are in
 [`V3_TDR_SPECVIEWPERF_20261022.md`](design/V3_TDR_SPECVIEWPERF_20261022.md).
 
+## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
+
+[CODE READ: 2026-10-21 provider docs] BLOCKED: the documented Vast VM/onstart
+launch modes conflict with strict no SSH; see the design STOP section.
+[CODE READ: codex/vast-broker-20261021] The proposed Worker and GitHub workflow use
+owner numeric OIDC identity, exact-head approval, a master-base exclusion filter,
+request-only read GitHub tokens and a singleton paid-account ledger. Actions
+URL/path secrets bind only to the broker step; optional constant-time prefix
+routing reduces scanning noise without replacing OIDC/HMAC. Run HMAC
+reports have strict caps/liveness checks; structured results and stop revoke
+before owned deletion. Sanitised logs neutralise embedded command delimiters. Plain JS has
+no npm dependencies; the runner never connects to the rented box. Merge queues
+are deferred for the personal repository. The binding defaults disable renting.
+[MEASURED: 2026-10-22 Node tests] Tests-first evidence and mutation results are in
+[traces/vast_broker_summary](../traces/vast_broker_summary/README.md); deployment,
+Vast GPU runs and the live API/onstart/Free-plan contracts remain untested.
+Owner setup and billing limits: [design](design/V3_CI_VAST_GPU_20261021.md),
+[deployment instructions](../ci/vast-broker/README.md). No master merge is performed.
+
 ## UPDATE 2026-10-18 — hitch measurement gates
 
 CODE READ: `codex/hitch-gates-20261018` makes display step timing and the relay event

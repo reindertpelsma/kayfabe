@@ -1,0 +1,165 @@
+{
+  "run": "v8-cloudinit-proof-kvm-20261023",
+  "source_sha": "d196c055ab97e63293804ede0ff354f25a6067ba",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "one_rental": true,
+  "vm": true,
+  "runtype": "ssh_direct",
+  "country": "IL",
+  "die": "AD102",
+  "gpu_model": "NVIDIA GeForce RTX 4090",
+  "compute_cap": 890,
+  "driver_version": "580.159.04",
+  "initial_driver_version": "575.51.03",
+  "offer_effective_hourly_usd": 0.5600355902777778,
+  "compute_storage_hourly_usd": 0.5502222222222223,
+  "full_transfer_reserve_usd": 0.029440104166666668,
+  "first_report_seconds": 121.7751030921936,
+  "first_running_poll_seconds": 124.4288694858551,
+  "running_poll_period_seconds": 20,
+  "cache_seconds": 20.346,
+  "cache_assets": [
+    {
+      "kind": "debs",
+      "bytes": 159253208,
+      "fetch_verify_extract_seconds": 7.027
+    },
+    {
+      "kind": "vendor",
+      "bytes": 7888026,
+      "fetch_verify_extract_seconds": 2.361
+    }
+  ],
+  "stages": [
+    {
+      "name": "provision",
+      "rc": 0,
+      "duration_ms": 340059,
+      "record": "authenticated status capture retained in operator journal before final-tail rollover"
+    },
+    {
+      "name": "cuda_host",
+      "rc": 0,
+      "duration_ms": 10445
+    },
+    {
+      "name": "merge_bar",
+      "rc": 1,
+      "duration_ms": 881209
+    }
+  ],
+  "reported_suites": [
+    {
+      "name": "provision",
+      "pass": 1,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "name": "cuda_host",
+      "pass": 4,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "name": "kf_tests",
+      "pass": 3749,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "name": "gates",
+      "pass": 9,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "name": "kf3_build",
+      "pass": 1,
+      "fail": 0,
+      "skip": 0
+    },
+    {
+      "name": "raw_suite",
+      "pass": 0,
+      "fail": 1,
+      "skip": 0
+    }
+  ],
+  "raw_arms_observed": [
+    {
+      "arm": "timer",
+      "verdict": "PASS",
+      "wall_ms": 4894,
+      "wrapper_rc": 0
+    },
+    {
+      "arm": "engines",
+      "verdict": "PASS",
+      "wall_ms": 4907,
+      "wrapper_rc": 0
+    },
+    {
+      "arm": "doorbell-census",
+      "verdict": "PASS",
+      "wall_ms": 4909,
+      "wrapper_rc": 0
+    },
+    {
+      "arm": "gpu-info-sweep",
+      "verdict": "PASS",
+      "wall_ms": 4853,
+      "wrapper_rc": 0
+    },
+    {
+      "arm": "bus-info-sweep",
+      "verdict": "PASS",
+      "wall_ms": 8041,
+      "wrapper_rc": 0
+    },
+    {
+      "arm": "concurrency",
+      "verdict": "PASS",
+      "wall_ms": 7923,
+      "wrapper_rc": 0
+    },
+    {
+      "arm": "defer-liveness",
+      "verdict": "FAIL",
+      "wall_ms": 16920,
+      "wrapper_rc": 6
+    }
+  ],
+  "raw_arms_not_run": 23,
+  "runner_result": {
+    "state": "GRACE",
+    "verdict": "FAIL",
+    "verified": 1
+  },
+  "strict_xid_guard_unchanged": true,
+  "exact_fault_cause_verified": false,
+  "thin_census_fat_reached": false,
+  "ssh_authenticated": false,
+  "ssh_public_key_attach_http": 200,
+  "ssh_snapshot_data_available": false,
+  "fresh_apt_install_time_measured": false,
+  "cargo_path_live_used": true,
+  "guest_ladder_built_bytes": 5058248,
+  "independent_cargo_artifact_stat": false,
+  "estimated_upper_usd": 0.2420457048171244,
+  "cost_is_invoice": false,
+  "real_cron_trigger_count": 22,
+  "cleanup": {
+    "run": "v8-cloudinit-cleanup-20261023",
+    "at": 1792748114.4520206,
+    "exact_id_absent": true,
+    "exact_label_absent": true,
+    "native_api_reverified": true,
+    "local_ports_released": true,
+    "children_stopped": true,
+    "independent_reaper_stopped_after_absence": true,
+    "no_firewall_rule_added": true,
+    "temporary_secrets_removed": true
+  },
+  "not_attested": true
+}

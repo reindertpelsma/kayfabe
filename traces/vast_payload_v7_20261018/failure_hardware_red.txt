@@ -1,0 +1,25 @@
+
+FAIL: test_failed_provision_refreshes_an_initial_unknown_compute_cap (test_vast_payload_v7.V7Tests.test_failed_provision_refreshes_an_initial_unknown_compute_cap)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/scripts/ci/test_vast_payload_v7.py", line 403, in test_failed_provision_refreshes_an_initial_unknown_compute_cap
+    self.assertEqual(result["hardware"]["compute_cap"], 860)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 860
+
+======================================================================
+FAIL: test_failed_provision_reports_the_driver_after_swap (test_vast_payload_v7.V7Tests.test_failed_provision_reports_the_driver_after_swap)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<checkout>/scripts/ci/test_vast_payload_v7.py", line 397, in test_failed_provision_reports_the_driver_after_swap
+    self.assertEqual(result["hardware"]["driver_version"], "580.159.04")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '575.51.03' != '580.159.04'
+- 575.51.03
++ 580.159.04
+
+
+----------------------------------------------------------------------
+Ran 83 tests in 2.014s
+
+FAILED (failures=2)

@@ -1,0 +1,93 @@
+UI1 second merge validation — 2026-10-26
+UI1 parent: 0dd321070403c9688239b1ef4f67476e2359e12b
+Merged master: 3cb9469aa2599ac070f27394172afc1c0b5c1265
+Node: v22.22.1
+Wrangler: 4.152.0
+Method: merge commit; no history rewrite or force push.
+index.js unchanged from UI1 parent; ledger/sanitizer/runner exactly match master.
+
+Bundle test before pin refresh: 2 pass / 1 expected hash-mismatch failure.
+Base hash: b70c8b92233599f3d2fac4fea1e059b738e6ddba3799608828c1cd8bd1c475e1
+Combined hash: 700463eb10f57c3bfc88f4c2d49101649bc53bee85bbeeae0016142660468062
+Both pins updated; complete broker suite then verifies the deterministic bundle.
+
+node --test ci/vast-broker/test
+  ...
+1..2042
+# tests 2042
+# suites 0
+# pass 2042
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 88909.02694
+
+MINIFLARE_ASSERT_BODIES_CONSUMED=true node --test ci/vast-broker/workerd/admission.test.js
+  ...
+1..1
+# tests 37
+# suites 0
+# pass 37
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16446.427759
+
+node --test ci/vast-admin/test/*.test.mjs
+  ...
+1..50
+# tests 50
+# suites 0
+# pass 50
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 898.569223
+
+node --test ci/vast-broker/test/admin.test.js ci/vast-admin/test/worker.test.mjs
+  ...
+1..83
+# tests 83
+# suites 0
+# pass 83
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 620.135152
+
+python3 traces/vast_admin_20261018/mutate.py
+M23 JWT signature verification bypass: 13 killing tests
+M24 truncated ledger accepted: 2 killing tests
+M01 internal origin bypass: 2 killing tests
+M02 public routing exposed: 4 killing tests
+M03 raw record disclosure: 2 killing tests
+M04 scalar whitelist bypass: 2 killing tests
+M05 oldest first: 3 killing tests
+M06 output cap removed: 2 killing tests
+M07 ambiguous selection accepted in DO: 2 killing tests
+M08 stop bypasses owner service: 8 killing tests
+M09 failed cleanup reported as success: 4 killing tests
+M10 owner authority omitted: 8 killing tests
+M11 deletion acknowledgement treated as absence: 2 killing tests
+M12 owner check bypass: 5 killing tests
+M13 issuer check omitted: 2 killing tests
+M14 audience check omitted: 2 killing tests
+M15 time validation weakened: 4 killing tests
+M16 empty audience not fail-closed: 2 killing tests
+M17 ambiguous selection accepted in UI: 2 killing tests
+M18 proxy paths swapped: 4 killing tests
+M19 duplicate stop proxy call: 2 killing tests
+M20 Stop all confirmation bypass: 3 killing tests
+M21 ended run gets Stop button: 2 killing tests
+M22 untrusted cells interpreted as HTML: 3 killing tests
+
+Prettier 3.6.2 with broker configuration: PASS
+UI1 changed code against master <=100 columns: PASS
+git diff --check: PASS
+Credential audit: only two uniform synthetic scrub vectors inherited from master.
+No vector values printed; no credentials or new private paths found.
+No deployment, direct Vast/Claude calls, Cloudflare setting or secret changes.

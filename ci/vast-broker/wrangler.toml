@@ -1,0 +1,53 @@
+name = "kayfabe-vast-broker"
+main = "src/index.js"
+compatibility_date = "2026-10-21"
+workers_dev = true
+# No per-version preview hostnames (wrangler 4.152.0 schema: top-level boolean).
+preview_urls = false
+
+# Workers Logs (owner 2026-10-24: on while the first CI run is debugged). A deploy replaces the
+# dashboard setting with this block, so it must be stated here or a deploy switches logging off.
+# Request logs carry the path prefix: turn this off again once the path works.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "BrokerLedger"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BrokerLedger"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Public origin and exact OIDC audience; the runner environment variable must match.
+WORKER_URL = "https://ci.kayfabe.dev"
+# Numeric owner policy defaults are defined once in defaults.json.
+RENTING_ENABLED = "false"
+# SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
+DEPLOYED_BUNDLE_SHA256 = "c2386b3ae52ae25657bbfad763b28fe9052351f67c68cf2ce6820f37890c75e5"
+# Public GitHub account id of the owner (also in every commit author email); never a secret.
+OWNER_GITHUB_ID = "229738317"
+REPOSITORY = "reindertpelsma/kayfabe"
+REPOSITORY_GITHUB_ID = "1311106387"
+OIDC_SUB = "repo:reindertpelsma@229738317/kayfabe@1311106387:environment:gpu-vast"
+CHECK_JOB_WORKFLOW_REFS = '["reindertpelsma/kayfabe/.github/workflows/gpu-vast.yml@refs/heads/master"]'
+SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-sweep.yml@refs/heads/master"
+
+# Secret bindings: VAST_API_KEY, RUN_TOKEN_SECRET, OWNER_STOP_TOKEN.
+# Optional secret BROKER_PATH_PREFIX: one random base64url segment, 32-128 chars.
+# RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
+# Optional GITHUB_API_TOKEN: read-only GitHub checks and release metadata.
+# BLOB_GITHUB_TOKEN: deprecated asset-only fallback.
+# No Cloudflare or Vast secret belongs in GitHub Actions.
+
+# Optional PREFERRED_COUNTRIES JSON overrides defaults.json; eligibility always comes first.
+
+# Authorization: signed OIDC identity + pinned master workflow + run triggering_actor ==
+# OWNER_GITHUB_ID + tested sha == run head_sha. When to run is decided by the workflow YAML.
+# Cloudflare Access is a dashboard-only front door; the Worker verifies no Access header.
+# Optional secrets BOX_ACCESS_ID/BOX_ACCESS_SECRET: box service-token pair, passed through.

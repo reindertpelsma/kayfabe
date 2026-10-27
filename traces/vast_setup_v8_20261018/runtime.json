@@ -1,0 +1,10 @@
+{
+  "run": "v8-kvm-20261023",
+  "wrangler": "4.152.0",
+  "node": "v22.22.1",
+  "controller_python": "3.14.4",
+  "worker_compatibility_date": "2026-10-21",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "source_sha": "9535df4c062d987eb960a33cd78acb7b3814ecbd",
+  "live_source_sha": "ff29c4a83a1bd359352263e135573c8167c298b6"
+}

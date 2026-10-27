@@ -1,0 +1,17 @@
+MEASURED run CW1-docs-20261022 (2026-10-22):
+source artifacts: 105 PASS
+constant evidence paths: 96 PASS
+Windows RM value comparisons: 46 PASS
+ZBC value comparisons: 39 PASS
+native caps evidence paths: 6 PASS
+docs-only / compiler input / README invariants: 3 PASS
+behavior changes: 0; mutation campaign: N/A; GPU/Windows runs: 0
+
+MEASURED run CW1-docs-20261022-resume (2026-10-22), base e9c6d39e5:
+scripts/ci_gates.sh: ALL GATES CLEAN (14 steps); 39 Python self-tests passed.
+python3 scripts/ci/debt.py claims: existing-debt=3758 new=0 resolved=0.
+git diff --cached --check: PASS.
+Secret/IP scan: no credential/restricted-path hit or public-IP candidate.
+CODE READ: compiler and Clippy inputs match the base; no Rust/Clippy execution.
+No gate bar, debt baseline, README, executable, consumer or default changed.
+Hardware/Windows n=0; mutation campaign N/A for this docs-only PR.

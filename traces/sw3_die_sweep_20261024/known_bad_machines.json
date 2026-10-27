@@ -1,0 +1,32 @@
+[
+  {
+    "machine_id": 150531,
+    "instance_id": 57296911,
+    "reason": "provider_host_error",
+    "utc": "2026-10-23T00:46:20.609095+00:00",
+    "source": "own exact-id teardown/API absence already verified; owner03:15 retry grant"
+  },
+  {
+    "machine_id": 145861,
+    "instance_id": 57142142,
+    "reason": "historical_provider_startup_failure"
+  },
+  {
+    "machine_id": 152912,
+    "instance_id": 57143789,
+    "reason": "historical_provider_startup_failure"
+  },
+  {
+    "machine_id": 69146,
+    "instance_id": 57425378,
+    "reason": "provider_boot_timeout",
+    "utc": "2026-10-23T21:31:20.164581+00:00",
+    "source": "B1b own exact-id teardown/API absence verified; controller23:40 B1c grant"
+  },
+  {
+    "machine_id": 54516,
+    "instance_id": 57565088,
+    "reason": "provider_host_error",
+    "utc": "2026-10-24T21:11:01.886994+00:00"
+  }
+]

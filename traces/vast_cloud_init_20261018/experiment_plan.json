@@ -1,0 +1,11 @@
+{
+  "run": "v8-cloudinit-proof-20261023",
+  "authorised_leases": 1,
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "hypothesis": "A fresh minimal root non-login noninteractive Ubuntu22 environment without HOME/USER/LOGNAME and without systemd can drive the actual repo entry, restored cache, provision_box/provision_full and structured payload orchestration; hardware reflects the simulated driver swap even on failure.",
+  "falsifier": "Any missing environment dependency, uncontrolled network request after cache fetch, incorrect stage order, stale post-swap hardware, hidden failed stage, or missed expected verdict. GPU/compiler leaf operations use explicit recorded fixtures and are not GPU evidence.",
+  "live_hypothesis": "The immutable tested source restores cache, reaches READY near900s, then executes host CUDA and existing merge/thin/fat suites to a bound verdict.",
+  "live_falsifier": "Missing required stage/verdict, lost report/ACK, stale hardware or wrong Cargo artifact path; code failures are findings, not to fix on the rental.",
+  "source_before_test": "b68b83b54977614b6e192a6fe66c19f714819673"
+}
