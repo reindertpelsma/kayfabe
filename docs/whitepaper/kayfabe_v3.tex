@@ -18,12 +18,13 @@ not a new hardware qualification. The implementation baseline is immutable:
 That was \code{origin/next} when writing began. Experimental results and code outside that
 baseline carry separate revisions. A moving branch name never upgrades their status.
 
-The guest driver edits its GPU address map in memory that Kayfabe does not intercept. At a
-translation barrier, Kayfabe re-reads that map and installs the corresponding host mappings
-before dependent work proceeds. The INFERRED hypothesis is that this delays completion until
-Windows attempts recovery, potentially losing applications' graphics state. Microsoft's
-default scheduler preemption wait is two seconds; it is not a universal two-second deadline
-from submission.\src{architecture}\src{mskeys}\src{msrecovery}
+The guest driver edits its GPU address map in memory that Kayfabe does not intercept. When
+the driver asks for those edits to take effect, Kayfabe re-reads that map and installs the
+corresponding host mappings before later work proceeds. The INFERRED hypothesis is that this
+takes long enough to delay completion until Windows attempts graphics-driver recovery,
+potentially losing applications' graphics state. Microsoft's default wait for unfinished
+work to finish or yield after a scheduler request is two seconds; this is not a universal
+two-second deadline from submission.\src{architecture}\src{mskeys}\src{msrecovery}
 
 The source records contain working Windows and Linux workloads. They do not qualify the
 pinned baseline on hardware. The later long-wait analysis is UNVERIFIED because its raw trace
