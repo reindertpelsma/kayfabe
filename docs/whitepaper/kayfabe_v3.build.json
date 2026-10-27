@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "c30f160128dad4379447f17917655cd5faa6cf65",
+  "source_commit": "1faac5a69c9d5587d2d1b098b005500d2eab97b8",
   "inputs": [
     {
       "path": "docs/whitepaper/fig_v3_evidence_ladder.tex",
@@ -29,8 +29,8 @@
     },
     {
       "path": "docs/whitepaper/kayfabe_v3.tex",
-      "git_blob": "a70866a6b5dd6a48de4c5ddd8cc4571096856a7d",
-      "sha256": "cf912bae8bfe29bd0fbb5b4eb8c905928d47ac8c063145d8a558c4490cb65659"
+      "git_blob": "75dafbe670571b4b4a8c0984b6788709bc55ebf7",
+      "sha256": "ca4e3fa7b29b8dfdb201294441633aeab68e1b0f8f8795de672c5924d2295594"
     },
     {
       "path": "docs/whitepaper/preamble_v3.tex",
@@ -83,7 +83,7 @@
       "sha256": "eadd8faa7eb048c2cc56af470297cb39a89952a19e5db2438ff69bdd72947737"
     }
   ],
-  "pdf_sha256": "aeed91adb398416b658f0d0a316a98682bffb2db350621e4fe507cd2ee543992",
+  "pdf_sha256": "10f9129cc41077830da8453eae9d93e88200b2772bf982ae4c788413957764eb",
   "engine": "XeTeX 3.141592653-2.6-0.999997 (TeX Live 2025/Debian)",
   "passes": 2
 }
