@@ -8,7 +8,7 @@
   "crates/kf-host/src/channel/sparse.rs": "b84edbeb9b1720e1f7329dae7aed5b4de274113ca571ad2f1f9382bfc3d4962c",
   "crates/kf-host/src/diag.rs": "682d0989978c2a6352c94892c9dc973dd814eef2901c947bdcb54b8c19bf3377",
   "crates/kf-host/src/lib.rs": "e3aa092f7bd000d30a99379ef1c41644df98b982eab26da042e32f2e2301fc3c",
-  "crates/kf-host/src/sparse.rs": "787f1ca8ac6e542cbeb3a9c4c49f229a8b8e342b0f077290bb002bdc27a5be93",
+  "crates/kf-host/src/sparse.rs": "8fb8c8ac16443a8e2f5fc16950dec7034aef28a0a5110aa370d8087e1600ef3a",
   "crates/kf-host/src/sparse/breaker_cost.rs": "83fb61f62e14441f14a35689394cb9ff265079ea0fd4981964437fd798bb2cc9",
   "crates/kf-host/src/sparse/breaker_extra.rs": "0f307b581edae27f6fd03fad97900a5fc8c9bfe0ec01e213fa8b4a4ede0f614a",
   "crates/kf-host/src/sparse/breaker_model.rs": "c66cf7046f4b034d250eef01cd92eb26290fc4518d2d5cc8ad66aa9cc87941b5",

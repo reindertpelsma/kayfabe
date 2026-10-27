@@ -54,8 +54,8 @@ struct Block {
     wanted: [u64; 8],
 }
 
-/// Bounded, saturating counters; no guest-controlled log stream. Each says what it counts:
-/// all are EVENTS or BYTES summed over the session, never "distinct" objects.
+/// Bounded event/byte counters and block gauges; each field states its scope.
+/// No guest-controlled log stream or distinct-object inference from cumulative events.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Stats {
     /// Reservation objects created after initial space creation (cumulative).
@@ -65,7 +65,7 @@ pub struct Stats {
     pub freed: u64,
     /// Host RM verb refusals (a reserve or release that RM, or the session cap, refused).
     pub refused: u64,
-    /// SPARSE admissions declined by the object budget (the run stays invalid): one per
+    /// SPARSE admissions declined by occupancy or object budget (closed fallback): one per
     /// declined admission. Plain maps never count here.
     pub overflow: u64,
     /// Sparse bytes left invalid at admission, summed per admission (a run retried later is
@@ -148,7 +148,7 @@ pub(crate) struct Reservations {
     limit: usize,
     pub(crate) stats: Stats,
     pub(crate) poisoned: bool,
-    /// Set by the object budget; read by the caller that decides what a decline means.
+    /// Set by occupancy or object budget; the caller decides what a decline means.
     declined: bool,
     cache: Cache,
     retry_dirty: BTreeSet<u64>,
