@@ -1,0 +1,11 @@
+{
+  "red.log": "fdb4dad76d30515b879157b82f534f454fcf7b537e54ffad79713a9219a69aa7",
+  "red-with-shape-guards.log": "c3aee438bd0c9784f92de9de1c78fd913659ac79f35ff37a1f1941d189783812",
+  "green-final.log": "2c1fc990f5b69486e4b30c9f08cd8c619fc1e6de9a10c9bb293fe09bf902102b",
+  "full.log": "5b890ed0899f6f19a91f2c6777ae010de502936e806afe1aa8a11dfcc2024606",
+  "mutants/results.json": "d1aa9328b2a5db89b73da5acd4092a1ae88df95fd8ce06f8e4421af4754dfc97",
+  "clippy.jsonl": "66b4d8b56a871f837031eca71748464bf48499d099b5dc1f5d79f3c362e53848",
+  "clippy-gate.log": "5fe4df0c5649ac1af288489034191e29fa4227382bcc82a2c57425d5c6f9d061",
+  "claims.log": "f4c1b1b54bc5bb2724099b1e4ebbc7179d4c220a4c222c03cc6d35c4e1b22c2b",
+  "claims-final.log": "f4c1b1b54bc5bb2724099b1e4ebbc7179d4c220a4c222c03cc6d35c4e1b22c2b"
+}

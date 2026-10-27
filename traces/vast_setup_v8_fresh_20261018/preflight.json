@@ -1,0 +1,24 @@
+{
+  "run": "v8-fresh-gpu-free-20261023",
+  "tests": 317,
+  "failures": 0,
+  "errors": 0,
+  "runtime": "Ubuntu22.04 / Python3.10 / GNU coreutils8.32 / curl7.81.0",
+  "network": "disabled except loopback",
+  "cpus": 2,
+  "memory_gib": 2,
+  "cache_helper_parser_guard_mutants": 40,
+  "minimum_named_killers": 2,
+  "combined_noncanonical_mutants": 91,
+  "unchanged_mutation_components": {
+    "payload": 29,
+    "provider_env": 8,
+    "diagnostic": 10,
+    "package_policy": 4
+  },
+  "canonical_mutants": 60,
+  "canonical_killed": 60,
+  "native_runtime_difference": "Dev uutils0.8.0 leaves the fake transport child pipe open; target GNU assertions retained and passed.",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "lease_created": false
+}

@@ -1,0 +1,284 @@
+BOX_PROBE_START 2026-10-14T14:57:57Z
+GPU NVIDIA GeForce RTX 5060 Ti, 0x2D0410DE, 580.105.08
+PROC Uid: 0 0 0 0
+PROC CapEff: 00000000a80405fb
+NODE nvidia6
+== gss rows (exactly kayfabe's realize-time requests)
+PROBE_SESSION driver=580.105.08
+PROBE_DIE arch=0x1b0 impl=0x6 die=GB206
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 1), (8, 8)] probe=zero status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 1), (8, 8)] probe=bg status=0x0 OK changed_bytes=12
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 100000), (20c, 100000)] probe=zero status=0x0 OK changed_bytes=11
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 100000), (20c, 100000)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 1), (20c, 1)] probe=zero status=0x0 OK changed_bytes=11
+GSSROW cmd=0x2080a028 size=2192 exact=false inputs=[(0, 1), (8, 1), (c, 1), (20c, 1)] probe=bg status=0x1f INVALID_ARGUMENT changed_bytes=0
+GSSROW cmd=0x2080a084 size=4 exact=false inputs=[(0, 0)] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a084 size=4 exact=false inputs=[(0, 0)] probe=bg status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a026 size=532 exact=false inputs=[(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] probe=zero status=0x0 OK changed_bytes=9
+GSSROW cmd=0x2080a026 size=532 exact=false inputs=[(0, 400), (8, 0), (10, 2), (14, 1), (18, 0), (1c, 0), (20, 0), (24, 10), (28, 0), (2c, 0), (30, 0)] probe=bg status=0x0 OK changed_bytes=12
+GSSROW cmd=0x20809009 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=zero status=0x0 OK changed_bytes=1
+GSSROW cmd=0x20809009 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=bg status=0x0 OK changed_bytes=1
+GSSROW cmd=0x20809001 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=zero status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809001 size=8 exact=false inputs=[(0, 0), (4, 0)] probe=bg status=0x0 OK changed_bytes=3
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 2), (8, 1), (18, 4)] probe=zero status=0x0 OK changed_bytes=6
+GSSROW cmd=0x20809064 size=520 exact=false inputs=[(0, 0), (4, 2), (8, 1), (18, 4)] probe=bg status=0x0 OK changed_bytes=24
+GSSROW cmd=0x2080a001 size=16 exact=false inputs=[(0, 0), (4, 0), (8, 0), (c, 0)] probe=zero status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080a001 size=16 exact=false inputs=[(0, 0), (4, 0), (8, 0), (c, 0)] probe=bg status=0x0 OK changed_bytes=4
+GSSROW cmd=0x2080852a size=1784 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=53
+GSSROW cmd=0x20808524 size=4 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080a70a size=26 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=6
+GSSROW cmd=0x2080a088 size=12 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+GSSROW cmd=0x2080852e size=528 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=19
+GSSROW cmd=0x2080853a size=1456 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=185
+GSSROW cmd=0x2080a618 size=8620 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=659
+GSSROW cmd=0x20808162 size=1 exact=true inputs=[] probe=zero status=0x0 OK changed_bytes=0
+PROBE_SUMMARY INVALID_ARGUMENT=2
+PROBE_SUMMARY OK=24
+PROBE_END admin_run=false mode=gss_rows
+== cudart gate replies (measured request shapes)
+PROBE kind=subdevice cmd=0x20809009 size=8 status=0x0 OK reply_head=000000000d000000
+PROBE kind=subdevice cmd=0x20809001 size=8 status=0x0 OK reply_head=5f00fc0300000000
+PROBE kind=subdevice cmd=0x20809064 size=520 status=0x0 OK reply_head=00000000020000000100000001000000010000006400000004000000100000000100000064000000
+PROBE kind=subdevice cmd=0x20808162 size=1 status=0x0 OK reply_head=00
+PROBE kind=subdevice cmd=0x2080a001 size=16 status=0x0 OK reply_head=01000000050000000200000011000000
+PROBE kind=subdevice cmd=0x2080a084 size=4 status=0x0 OK reply_head=00000000
+PROBE_SUMMARY OK=6
+PROBE_END admin_run=false
+== built-in Windows-only rows (zero requests)
+PROBE kind=subdevice cmd=0x2080852a size=1784 status=0x0 OK reply_head=ff000000130000001300000000000000
+PROBE kind=subdevice cmd=0x2080852e size=528 status=0x0 OK reply_head=ff000000010000000100000000ffffff
+PROBE kind=subdevice cmd=0x2080852f size=776 status=0x0 OK reply_head=00000000000000000000000000000000
+PROBE kind=subdevice cmd=0x2080853a size=1456 status=0x0 OK reply_head=02000000ffcf01000000000000000000
+PROBE kind=subdevice cmd=0x2080853b size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20808524 size=4 status=0x0 OK reply_head=00000000
+PROBE kind=subdevice cmd=0x20809001 size=8 status=0x0 OK reply_head=5f00fc0300000000
+PROBE kind=subdevice cmd=0x20809004 size=1544 status=0x3a INVALID_PARAM_STRUCT
+PROBE kind=subdevice cmd=0x20809009 size=8 status=0x0 OK reply_head=000000000d000000
+PROBE kind=subdevice cmd=0x20809064 size=520 status=0x3a INVALID_PARAM_STRUCT
+PROBE kind=subdevice cmd=0x2080a02f size=1 status=0x56 NOT_SUPPORTED
+PROBE kind=subdevice cmd=0x2080a060 size=28 status=0x0 OK reply_head=260000002b010000000e000008000000
+PROBE kind=subdevice cmd=0x2080a088 size=12 status=0x0 OK reply_head=000000000000000000000000
+PROBE kind=subdevice cmd=0x2080a618 size=8620 status=0x0 OK reply_head=40010000ffff070001040100797c0100
+PROBE kind=subdevice cmd=0x2080a619 size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a619 size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080a630 size=1160 status=0x0 OK reply_head=ff0000000100000001010100f0490200
+PROBE kind=subdevice cmd=0x2080a70a size=26 status=0x0 OK reply_head=010001000100000000000000ffff0000
+PROBE kind=subdevice cmd=0x2080a801 size=1028 status=0x0 OK reply_head=00000000000000000000000000000000
+PROBE kind=subdevice cmd=0x2080b201 size=2188 status=0x0 OK reply_head=ff000000010000000000000005000000
+PROBE kind=subdevice cmd=0x20802806 size=4 status=0x56 NOT_SUPPORTED
+PROBE kind=subdevice cmd=0x20802801 size=4 status=0x1b INSUFFICIENT_PERMISSIONS
+PROBE kind=subdevice cmd=0x20802a12 size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20802a12 size=8 status=0x1b INSUFFICIENT_PERMISSIONS
+PROBE kind=subdevice cmd=0x2080121f size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080121f size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a2e size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a3f size=256 status=0x56 NOT_SUPPORTED
+PROBE kind=subdevice cmd=0x20800a80 size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a80 size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a80 size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a80 size=16 status=0x56 NOT_SUPPORTED
+PROBE kind=subdevice cmd=0x20800a87 size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800a87 size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800ab8 size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=4 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=8 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=12 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=20 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=24 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=28 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=32 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=64 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=128 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=256 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=512 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=1024 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=2048 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x20800b03 size=4096 status=0x1f INVALID_ARGUMENT
+PROBE kind=device cmd=0x00809908 size=16 status=0x1f INVALID_ARGUMENT
+PROBE kind=binapi cmd=0x20810108 size=- status=- NOT_PROBED (no object of this kind in v1)
+PROBE kind=binapi cmd=0x2081010d size=- status=- NOT_PROBED (no object of this kind in v1)
+PROBE_SUMMARY INSUFFICIENT_PERMISSIONS=2
+PROBE_SUMMARY INVALID_ARGUMENT=120
+PROBE_SUMMARY INVALID_PARAM_STRUCT=2
+PROBE_SUMMARY NOT_SUPPORTED=4
+PROBE_SUMMARY OK=14
+PROBE_END admin_run=false
+== 595-branch request sizes (Windows 596.51 / GSP 595.76 capture; zero requests)
+PROBE kind=subdevice cmd=0x2080852e size=596 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080852e size=1432 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853a size=15352 status=0x0 OK reply_head=02000000ffcf01000000000000000000
+PROBE kind=subdevice cmd=0x2080a618 size=8632 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=14320 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=14320 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080853b size=1832 status=0x0 OK reply_head=02000000010000000000000000000000
+PROBE kind=subdevice cmd=0x2080b201 size=2444 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080852f size=844 status=0x1f INVALID_ARGUMENT
+PROBE kind=subdevice cmd=0x2080852f size=776 status=0x0 OK reply_head=00000000000000000000000000000000
+PROBE_SUMMARY INVALID_ARGUMENT=7
+PROBE_SUMMARY OK=3
+PROBE_END admin_run=false
+== ZBC clear table (idle rental: the occupied entries are the defaults physical RM installs)
+ZBC table=1 size start=1 end=30
+ZBC table=1 index=1 valid=1 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=2 valid=1 format=0 value=ffffffff ffffffff ffffffff ffffffff 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=3 valid=1 format=0 value=3f800000 3f800000 3f800000 3f800000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=4 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=5 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=6 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=7 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=8 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=9 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=10 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=11 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=12 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=13 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=14 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=15 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=16 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=17 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=18 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=19 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=20 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=21 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=22 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=23 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=24 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=25 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=26 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=27 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=28 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=29 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=1 index=30 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 size start=1 end=15
+ZBC table=2 index=1 valid=1 format=1 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=2 valid=1 format=1 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 3f800000 00000000
+ZBC table=2 index=3 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=4 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=5 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=6 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=7 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=8 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=9 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=10 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=11 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=12 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=13 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=14 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=2 index=15 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 size start=1 end=15
+ZBC table=3 index=1 valid=1 format=1 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=2 valid=1 format=1 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000001
+ZBC table=3 index=3 valid=1 format=1 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 000000ff
+ZBC table=3 index=4 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=5 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=6 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=7 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=8 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=9 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=10 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=11 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=12 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=13 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=14 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+ZBC table=3 index=15 valid=0 format=0 value=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+PROBE_END admin_run=false mode=zbc
+== accepted paramsSize per Windows-only control (zero requests, 4..16384 step 4)
+SCAN cmd=0x2080852e range=4..=16384 accepted_sizes=1
+SCAN cmd=0x2080853a range=4..=16384 accepted_sizes=3733
+SCAN cmd=0x2080a618 range=4..=16384 accepted_sizes=1
+SCAN cmd=0x2080b201 range=4..=16384 accepted_sizes=1
+SCAN cmd=0x2080852f range=4..=16384 accepted_sizes=1
+PROBE_END admin_run=false mode=scan
+BOX_PROBE_END rc=0 2026-10-14T14:58:00Z

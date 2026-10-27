@@ -1,0 +1,83 @@
+{
+  "run": "v7-provider-env-mutants-20261023",
+  "cases": [
+    {
+      "mutant": "provider-file-ignored",
+      "count": 10,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_bounded_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_check_env_loads_quoted_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_check_env_uses_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_duplicate_missing_protocol_refuses",
+        "test_vast_provider_env.ProviderEnvTests.test_duplicate_missing_repository_refuses",
+        "test_vast_provider_env.ProviderEnvTests.test_large_unknown_field_is_bounded",
+        "test_vast_provider_env.ProviderEnvTests.test_loads_quoted_vm_repository",
+        "test_vast_provider_env.ProviderEnvTests.test_loads_vm_protocol_from_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_provider_file_cannot_have_two_words",
+        "test_vast_provider_env.ProviderEnvTests.test_shell_substitution_is_data"
+      ]
+    },
+    {
+      "mutant": "unknown-secret-imported",
+      "count": 4,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_never_imports_billed_account_key",
+        "test_vast_provider_env.ProviderEnvTests.test_never_imports_provider_instance_key",
+        "test_vast_provider_env.ProviderEnvTests.test_preserves_explicit_process_protocol",
+        "test_vast_provider_env.ProviderEnvTests.test_preserves_explicit_process_repository"
+      ]
+    },
+    {
+      "mutant": "process-value-overridden",
+      "count": 2,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_preserves_explicit_process_protocol",
+        "test_vast_provider_env.ProviderEnvTests.test_preserves_explicit_process_repository"
+      ]
+    },
+    {
+      "mutant": "duplicate-provider-field-admitted",
+      "count": 2,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_duplicate_missing_protocol_refuses",
+        "test_vast_provider_env.ProviderEnvTests.test_duplicate_missing_repository_refuses"
+      ]
+    },
+    {
+      "mutant": "quotes-left-unparsed",
+      "count": 4,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_check_env_loads_quoted_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_loads_quoted_vm_repository",
+        "test_vast_provider_env.ProviderEnvTests.test_provider_file_cannot_have_two_words",
+        "test_vast_provider_env.ProviderEnvTests.test_shell_substitution_is_data"
+      ]
+    },
+    {
+      "mutant": "provider-file-size-unbounded",
+      "count": 2,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_bounded_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_large_unknown_field_is_bounded"
+      ]
+    },
+    {
+      "mutant": "provider-file-not-used-at-check",
+      "count": 2,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_check_env_loads_quoted_provider_file",
+        "test_vast_provider_env.ProviderEnvTests.test_check_env_uses_provider_file"
+      ]
+    },
+    {
+      "mutant": "invalid-provider-file-success",
+      "count": 2,
+      "killers": [
+        "test_vast_provider_env.ProviderEnvTests.test_duplicate_provider_file_returns_failure",
+        "test_vast_provider_env.ProviderEnvTests.test_invalid_provider_file_returns_failure"
+      ]
+    }
+  ],
+  "measured_run": "v9-gpu-free-20261023",
+  "measured_date": "2026-10-23"
+}

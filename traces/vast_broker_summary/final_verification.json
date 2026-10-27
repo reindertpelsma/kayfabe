@@ -1,0 +1,94 @@
+{
+  "run": "v5-final-verification-20261023",
+  "portable_tests": {
+    "pass": 1113,
+    "fail": 0,
+    "skip": 0,
+    "duration_ms": 42854.436451
+  },
+  "worker_mutations": [
+    {
+      "campaign": "legacy",
+      "cases": 94,
+      "minimum_named_killers": 2,
+      "source": "57d52653f4109866d084e7f7ff33eea62623893d",
+      "execution": "guarded build farm BF_HEAD 57d52653f4109866d084e7f7ff33eea62623893d"
+    },
+    {
+      "campaign": "v4",
+      "cases": 28,
+      "minimum_named_killers": 2,
+      "source": "57d52653f4109866d084e7f7ff33eea62623893d",
+      "execution": "guarded build farm BF_HEAD 57d52653f4109866d084e7f7ff33eea62623893d"
+    },
+    {
+      "campaign": "r3",
+      "cases": 38,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "v5",
+      "cases": 73,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "security",
+      "cases": 14,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "bootstrap",
+      "cases": 3,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "identity",
+      "cases": 8,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "blob",
+      "cases": 9,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "rest_env",
+      "cases": 3,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    },
+    {
+      "campaign": "country",
+      "cases": 9,
+      "minimum_named_killers": 2,
+      "source": "68e2da82f47febfa07f50dbbb5ed6eecd5680f70",
+      "execution": "isolated local source copy"
+    }
+  ],
+  "worker_mutations_total": 279,
+  "canonical_box_python_tests": 72,
+  "canonical_box_mutations": 60,
+  "canonical_rule": "at least two mutants per behavior; some individual mutants have one named killer",
+  "bundle": {
+    "protocol_version": 4,
+    "worker_version": "v5",
+    "bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f"
+  },
+  "bundle_bytes": 113254,
+  "wrangler": "4.152.0",
+  "deploy_dry_run": "exit 0; no upload",
+  "renting_enabled_committed": false
+}

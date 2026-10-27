@@ -1,0 +1,43 @@
+[
+  {
+    "line": "ens5",
+    "other": "6d95870c7",
+    "status": 1,
+    "conflicts": [
+      "docs/STATUS_AND_HANDOFF.md"
+    ],
+    "combined_code_contains_serve_reowe": true,
+    "combined_code_contains_early_timeslice": true,
+    "combined_code_contains_end_refresh": true
+  },
+  {
+    "line": "ens6",
+    "other": "21b17af213e0ff751797775a67624f82cc4de347",
+    "status": 1,
+    "conflicts": [
+      "docs/STATUS_AND_HANDOFF.md"
+    ],
+    "combined_code_contains_serve_reowe": true,
+    "combined_code_contains_early_timeslice": true,
+    "combined_code_contains_end_refresh": true
+  },
+  {
+    "line": "ens7",
+    "other": "d2ea6d26be6f746e579e6bfc8dbfe39847ddb990",
+    "status": 1,
+    "conflicts": [
+      "docs/STATUS_AND_HANDOFF.md"
+    ],
+    "combined_code_contains_serve_reowe": true,
+    "combined_code_contains_early_timeslice": true,
+    "combined_code_contains_end_refresh": true,
+    "combined_code_contains_vram_budget": true,
+    "combined_code_contains_live_deficit": true
+  },
+  {
+    "line": "probe169",
+    "other": "6adec88f9a5f0b847084fbcc8f3d0365b49faa0a",
+    "status": 0,
+    "conflicts": []
+  }
+]

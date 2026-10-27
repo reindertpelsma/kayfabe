@@ -1,0 +1,30 @@
+{
+  "run": "v9-no-rental-target-20261023",
+  "os": "Ubuntu22.04/GNU/Python3.10",
+  "before_tests": 461,
+  "after_tests": 480,
+  "seconds": 70.134,
+  "expected_red_commit": "76fb3b8c4",
+  "new_contract_tests": 19,
+  "mutation_components": {
+    "target-payload": 61,
+    "env": 8,
+    "diagnostic": 10,
+    "policy": 6,
+    "cache": 43
+  },
+  "mutants": 128,
+  "minimum_named_killers": 2,
+  "canonical": {
+    "mutants": 60,
+    "killed": 60,
+    "problems": 0
+  },
+  "worker_changed": false,
+  "rentals": 0,
+  "source_sha256": {
+    "scripts/ci/vast_payload.py": "c23fb1e6220adea03c5f0ea07e271fd3ede4e44981fae4b70b5fed7dec5473b3",
+    "scripts/ci/vast_report.py": "207dcbba66943baf24a9930e757a04cc9ceda5546005c646ae64ff826899f1b2",
+    "scripts/ci/payload_mutants.py": "78a0ba05ca5c0b8e46a38594bb76b370c12347a300df11a5634bd8273d15e4c9"
+  }
+}

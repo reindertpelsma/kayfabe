@@ -1,0 +1,278 @@
+{
+  "run": "v8-kvm-20261023",
+  "source_sha": "ff29c4a83a1bd359352263e135573c8167c298b6",
+  "state": "COMPLETE_FAIL_SETUP_CACHE",
+  "one_authorised_lease": true,
+  "reaper_armed_before_create": true,
+  "vm": true,
+  "runtype": "ssh_direct",
+  "effective_hourly_usd": 0.4489583333333333,
+  "compute_storage_hourly_usd": 0.4333333333333333,
+  "bandwidth_reserve_usd": 0.046875,
+  "die": "GA102",
+  "country": "JP",
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "hypothesis": "Verified private cache removes the dominant host dependency delay and unattended provider environment loading permits first reporting. Interactive SSH changes GRACE to MANUAL and real cron retains the exact result beyond its original grace deadline.",
+  "falsifier": "cache restore plus provision_full to READY exceeds about 900 seconds; missing required dependency; no unattended first report; MANUAL expires at the saved original grace deadline; any runner-bound result field changes.",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "verdict": "FAIL",
+  "suites": [
+    {
+      "name": "setup_cache",
+      "pass": 0,
+      "fail": 1,
+      "skip": 0
+    }
+  ],
+  "run_key": "1792731473113-1",
+  "lease_id": "57323968",
+  "first_unattended_report_s": 130.6095941066742,
+  "first_independent_running_poll_s": 145.91832089424133,
+  "provider_poll_interval_s": 20,
+  "elapsed_to_absence_s": 737.5653896331787,
+  "estimated_upper_usd": 0.13565601912251224,
+  "exact_id_and_label_absent": true,
+  "manual": {
+    "attempted": true,
+    "ssh_rc": 0,
+    "at": 1792731631.4078953,
+    "hold_measured": true,
+    "before_deadline_at": 1792732216837,
+    "after_deadline_at": 1792733435760,
+    "state": "MANUAL",
+    "retention_cron_at": 1792732220.312485,
+    "retention_state": "MANUAL",
+    "original_grace_expired_box_alive": true,
+    "checked_at": 1792732220.3124874
+  },
+  "live_setup_below_15_minutes": "NOT VERIFIED",
+  "full_payload": "NOT RUN",
+  "same_sha_restart": false,
+  "callback_trace": [
+    {
+      "at": 1792731607278,
+      "kind": "callback_arrival",
+      "route": "report",
+      "actual_status": "created"
+    },
+    {
+      "at": 1792731607828,
+      "kind": "callback_response",
+      "route": "report",
+      "status": 409
+    },
+    {
+      "at": 1792731608693,
+      "kind": "callback_arrival",
+      "route": "report",
+      "actual_status": "created"
+    },
+    {
+      "at": 1792731608916,
+      "kind": "callback_response",
+      "route": "report",
+      "status": 409
+    },
+    {
+      "at": 1792731608940,
+      "kind": "callback_arrival",
+      "route": "blob-url",
+      "actual_status": "created"
+    },
+    {
+      "at": 1792731609268,
+      "kind": "callback_response",
+      "route": "blob-url",
+      "status": 401
+    },
+    {
+      "at": 1792731611489,
+      "kind": "callback_arrival",
+      "route": "report",
+      "actual_status": "created"
+    },
+    {
+      "at": 1792731611683,
+      "kind": "callback_response",
+      "route": "report",
+      "status": 409
+    },
+    {
+      "at": 1792731614756,
+      "kind": "callback_arrival",
+      "route": "report",
+      "actual_status": "created"
+    },
+    {
+      "at": 1792731614926,
+      "kind": "callback_response",
+      "route": "report",
+      "status": 200
+    },
+    {
+      "at": 1792731615751,
+      "kind": "callback_arrival",
+      "route": "report",
+      "actual_status": "running"
+    },
+    {
+      "at": 1792731615769,
+      "kind": "callback_response",
+      "route": "report",
+      "status": 200
+    },
+    {
+      "at": 1792731616816,
+      "kind": "callback_arrival",
+      "route": "report",
+      "actual_status": "running"
+    },
+    {
+      "at": 1792731616842,
+      "kind": "callback_response",
+      "route": "report",
+      "status": 200
+    },
+    {
+      "at": 1792731635559,
+      "kind": "callback_arrival",
+      "route": "hold",
+      "actual_status": "running"
+    },
+    {
+      "at": 1792731635768,
+      "kind": "callback_response",
+      "route": "hold",
+      "status": 200
+    },
+    {
+      "at": 1792731823095,
+      "kind": "callback_arrival",
+      "route": "blob-url",
+      "actual_status": "running"
+    },
+    {
+      "at": 1792731824225,
+      "kind": "callback_response",
+      "route": "blob-url",
+      "status": 200
+    }
+  ],
+  "diagnostic_locator_after_running": {
+    "at": 1792731824.5809734,
+    "rc": 0,
+    "name": "debs.tar.gz",
+    "size": 158145005,
+    "locator_received": true
+  },
+  "cron_calls": [
+    {
+      "at": 1792731546.4844623,
+      "returned_at": 1792731547.2527137
+    },
+    {
+      "at": 1792731607.6577952,
+      "returned_at": 1792731608.2724104
+    }
+  ],
+  "cleanup": {
+    "run": "v8-cleanup-20261023",
+    "at": 1792732382.2446978,
+    "exact_id_absent": true,
+    "exact_label_absent": true,
+    "independent_native_api_reverification": true,
+    "local_ports_released": true,
+    "gate_removed": true,
+    "controller_children_stopped": true,
+    "independent_reaper_stopped_after_absence": true,
+    "firewall_rule_added": false
+  },
+  "retention_cron_trace": [
+    {
+      "at": 1792732219192,
+      "kind": "cron_begin"
+    },
+    {
+      "at": 1792732219642,
+      "kind": "cron_end"
+    }
+  ],
+  "provider_observations": [
+    {
+      "at": 1792731486.5455499,
+      "actual_status": null,
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731507.0202818,
+      "actual_status": null,
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731527.4732885,
+      "actual_status": "created",
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731548.165449,
+      "actual_status": "created",
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731568.6440654,
+      "actual_status": "created",
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731589.140768,
+      "actual_status": "created",
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731609.7539,
+      "actual_status": "created",
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    },
+    {
+      "at": 1792731630.234727,
+      "actual_status": "running",
+      "cur_state": "running",
+      "intended_status": "running",
+      "dph_total": 0.4333333333333333,
+      "total_cost": null,
+      "start_date": 1792731484.6209564
+    }
+  ],
+  "controller_rent_started_at": 1792731484.316406,
+  "absent_at": 1792732221.8817956,
+  "timing_origin": "controller immediately before Runner.execute/rent"
+}

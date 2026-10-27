@@ -1,0 +1,5 @@
+DRIVER_RC=8
+NOT_READY driver_rc=8 (GPU unusable after the driver swap; see driver.log)
+NVRM: RmInitAdapter failed! (0x62:0x56:2028)
+rm_init_adapter failed
+DRIVER_SWAP_DONE rc=8

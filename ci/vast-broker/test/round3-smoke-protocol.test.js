@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+for (const caseName of ['nonce', 'sha'])
+  test('R3 local diagnostic client checks rent binding ' + caseName, () => {
+    const code = `import sys,tempfile\nsys.path.insert(0,sys.argv[1]);import smoke\nseen=[]\ndef request(url,method='GET',token=None,body=None,gh=None):\n if url.endswith('/token'):return 200,{'token':'synthetic.jwt.token'}\n seen.append(body);return 200,{'runner_nonce':body['runner_nonce'] if sys.argv[2]=='nonce' else '0'*64,'sha':body['tested_sha'] if sys.argv[2]=='sha' else 'b'*40}\nsmoke.request=request\nwith tempfile.TemporaryDirectory() as d:\n c=smoke.Client({},'http://127.0.0.1','http://127.0.0.2',d)\n try:c.rent('a'*40);raise AssertionError('binding mismatch accepted')\n except smoke.Stop:pass\n assert len(seen[0]['runner_nonce'])==64 and seen[0]['tested_sha']=='a'*40\n`;
+    const p = spawnSync(
+      'python3',
+      ['-c', code, new URL('../', import.meta.url).pathname, caseName],
+      { encoding: 'utf8', timeout: 5000 },
+    );
+    assert.equal(p.status, 0, p.stderr);
+  });
+for (const credit of [6, 8.1])
+  test('R3 diagnostic preflight retains eight-dollar reserve ' + credit, () => {
+    const code = `import sys\nsys.path.insert(0,sys.argv[1]);import smoke\no={'id':5,'verified':True,'vms_enabled':True,'rentable':True,'rented':False,'num_gpus':1,'gpu_name':'RTX 4070','reliability':.999,'disk_space':200,'dph_total':.5}\nsmoke.provider=lambda path,*_: {'offers':[o]} if path.endswith('/bundles/') else {'credit':float(sys.argv[2]),'balance':0}\nassert smoke.preflight()['reserve_plus_one_21min_run_met'] is False\n`;
+    const p = spawnSync(
+      'python3',
+      ['-c', code, new URL('../', import.meta.url).pathname, String(credit)],
+      { encoding: 'utf8', timeout: 5000 },
+    );
+    assert.equal(p.status, 0, p.stderr);
+  });
+for (const text of ['workflow_ref', 'workflow_sha'])
+  test('R3 local test identity includes BASE claim ' + text, async () => {
+    const s = await readFile(new URL('../native-identity.mjs', import.meta.url), 'utf8');
+    assert.match(s, new RegExp('^\\s+' + text + ':', 'm'));
+    assert.match(s, /event_name: 'pull_request_target'/);
+  });

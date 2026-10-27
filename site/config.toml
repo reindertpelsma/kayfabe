@@ -1,0 +1,9 @@
+base_url = "https://kayfabe.dev"
+title = "kayfabe"
+description = """\
+Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, \
+while the host keeps using it."""
+compile_sass = false
+build_search_index = false
+generate_feeds = false
+default_language = "en"

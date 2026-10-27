@@ -1,0 +1,12 @@
+{
+  "run": "v8-fresh-kvm-20261023",
+  "authorised_leases": 1,
+  "cap_usd": 4,
+  "stop_usd": 3,
+  "independent_reaper_minutes": 150,
+  "hypothesis": "The approved cache and ACK gate provision a fresh verified KVM host to READY in about 900 s; the approved exact checkout then completes the existing host CUDA, merge bar, thin 30/30 and fat CUDA flows to a bound verdict.",
+  "falsifier": "Any cache integrity/refusal failure, setup to READY materially exceeding 900 s, lost ACK gate, wrong Cargo output path/stale failure hardware, or missing required suite verdict. Kayfabe-side failures are findings, not defects to change during acceptance.",
+  "worker_blob_requirement": "Only serves when its own Vast inspection reports running; unchanged.",
+  "box_blob_retry": "8 retries with curl exponential backoff, 20 s/request, 299 s total hard deadline.",
+  "payload_restart_allowed": false
+}

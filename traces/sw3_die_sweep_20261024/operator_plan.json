@@ -1,0 +1,245 @@
+{
+  "lane": "SW3",
+  "written_utc": "2026-10-24T21:09:06.941707+00:00",
+  "production_rev": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+  "base": "a9105acb6",
+  "lease1": {
+    "offer": 51156488,
+    "machine_id": 54516,
+    "candidate_die": "GA102",
+    "country_iso": "CA",
+    "native_hypothesis": "The current raw client and gates pass on the actual GA102 with stock open 595.91.07.",
+    "native_falsifier": "Any native gate, gate10 proof, or bare-suite arm fails. Exclude that box/die cell; do not debug kayfabe.",
+    "guest_hypothesis": "After this exact native baseline passes, production kf3 passes the unchanged Linux fast suite (30/30).",
+    "guest_falsifier": "Any guest arm fails or misses its original 180-second budget. Record the first verdict; no timeout changes.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1": "Observe the Vast 256 MiB limitation; use existing harness defaults; no resizing.",
+    "linux_only": true
+  },
+  "bounds": {
+    "hourly_cap_usd": 2.5,
+    "stop_usd": 3.0,
+    "hard_cap_usd": 3.5,
+    "reserve_usd": 8,
+    "max_leases": 3,
+    "max_hours_per_lease": 3,
+    "chosen_stricter_watchdog_minutes": 150,
+    "provider_pre_ssh_retries": 1,
+    "identity_refusal": "Stop lane; no retry."
+  },
+  "read_sources": [
+    "COMMON.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "SW2.md",
+    "6_NEXT.md",
+    "COST.md and MATRIX.md from s4-wt (not present on origin/master)",
+    "V3_SWEEP_AND_INSTALL.md",
+    "V3_DRIVER_MATRIX.md"
+  ],
+  "market": "/data/sw3_private_capture/offers_any_20261024.json",
+  "raw_capture_root": "/data/sw3_private_capture",
+  "lease2": {
+    "offer": 57543128,
+    "machine_id": 145338,
+    "candidate_die": "GA102",
+    "country_iso": "GB",
+    "native_hypothesis": "The current raw client and gates pass on the actual GA102 with stock open 595.91.07.",
+    "native_falsifier": "Any native gate, gate10 proof, or bare-suite arm fails. Exclude that box/die cell; do not debug kayfabe.",
+    "guest_hypothesis": "After this exact native baseline passes, production kf3 passes the unchanged Linux fast suite (30/30).",
+    "guest_falsifier": "Any guest arm fails or misses its original 180-second budget. Record the first verdict; no timeout changes.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1": "Observe the Vast 256 MiB limitation; use existing harness defaults; no resizing.",
+    "linux_only": true,
+    "written_utc": "2026-10-24T21:11:30.926931+00:00",
+    "provider_retry_for": 57565088,
+    "prior_runtime_usd": 0.008967549,
+    "reason": "First box offline before authenticated SSH; different machine, single permitted retry."
+  },
+  "final_stop": {
+    "reason": "First selected offer was deverified; OWNER_RULINGS T.12 requires verified hosts.",
+    "no_further_rentals": true,
+    "native_runs": 0,
+    "guest_runs": 0
+  },
+  "attempt2": {
+    "authority": "Controller correction: same budget and at most three leases total.",
+    "written_utc": "2026-10-24T21:40:39.349990+00:00",
+    "market_utc": "2026-10-24T21:39:51.166628+00:00",
+    "market_query": "verified=true vms_enabled=true num_gpus=1 inet_down>=200 disk_space>=180 reliability>=0.95",
+    "market_sha256": "2808c4fbb28df5cffa7b012e2c6f6d13de9a4f9f6dc7eb1e46522f17d8ed66d6",
+    "candidates": [
+      {
+        "die": "GA106",
+        "offer_id": 54435093,
+        "machine_id": 34087,
+        "host_id": 79466,
+        "price_usd_hour": 0.20055555555555554,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "Quebec, CA",
+        "blacklisted": false
+      },
+      {
+        "die": "AD106",
+        "offer_id": 43725433,
+        "machine_id": 29929,
+        "host_id": 166946,
+        "price_usd_hour": 0.2961111111111111,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "United Kingdom, GB",
+        "blacklisted": false
+      },
+      {
+        "die": "AD106",
+        "offer_id": 49645022,
+        "machine_id": 20126,
+        "host_id": 92038,
+        "price_usd_hour": 0.3987222222222222,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "Quebec, CA",
+        "blacklisted": false
+      },
+      {
+        "die": "AD106",
+        "offer_id": 49744625,
+        "machine_id": 16592,
+        "host_id": 92038,
+        "price_usd_hour": 0.3987222222222222,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "Quebec, CA",
+        "blacklisted": false
+      },
+      {
+        "die": "GA102",
+        "offer_id": 46019435,
+        "machine_id": 143824,
+        "host_id": 166946,
+        "price_usd_hour": 0.4018518518518518,
+        "verified": "verified",
+        "is_vm_deverified": false,
+        "vms_enabled": true,
+        "country": "United Kingdom, GB",
+        "blacklisted": false
+      }
+    ],
+    "GA104": "NOT AVAILABLE",
+    "TU106": "NOT AVAILABLE in this fresh snapshot",
+    "prior_spend_usd": 0.026,
+    "leases_used": 2,
+    "remaining_leases": 1,
+    "priority": "Original die order among currently verified-available offers; GA106 first.",
+    "native_hypothesis": "The confirmed die passes production 714ec29d3 native gates 9/9 plus gate10 and bare 30/30.",
+    "native_falsifier": "Any native test fails, or any unmatched Xid appears; exclude the cell and stop GPU work.",
+    "guest_hypothesis": "On that exact passing native box, production 714ec29d3 passes fast suite 30/30.",
+    "guest_falsifier": "Any arm fails the unchanged 180-second oracle, or unmatched Xid appears.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1": "Observe and report, never resize.",
+    "lease_retry": "No remaining lease after the next allocation; no identity-refusal retry.",
+    "selected": {
+      "offer_id": 54435093,
+      "die": "GA106",
+      "machine_id": 34087,
+      "host_id": 79466,
+      "price_usd_hour": 0.20055555555555554,
+      "verified": "verified",
+      "is_vm_deverified": false,
+      "country_iso": "CA",
+      "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7"
+    },
+    "selector_fix": "434297484; tests-only EXPECTED RED 2ff605c1b",
+    "mutant_killers": {
+      "verification_removed": 6,
+      "verification_truthiness": 4,
+      "blacklist_removed": 2,
+      "vm_status_removed": 4,
+      "missing_vm_status_accepted": 2
+    }
+  },
+  "ga104_repreregistration": {
+    "written_utc": "2026-10-24T22:10:41.891478+00:00",
+    "authority": "COORD consolidated decision: re-preregister same lease57568731 as RM-derived GA104; tests-first operator-only correction.",
+    "id": 57568731,
+    "machine_id": 34087,
+    "host_id": 79466,
+    "actual_die": "GA104",
+    "arch_impl_revision": [
+      368,
+      4,
+      161
+    ],
+    "pci": "0x248710DE",
+    "driver": "595.91.07",
+    "module": "open",
+    "production_revision": "714ec29d3fdca0a013d9d478755346b0f1af6fa7",
+    "operator_fix": "24b9e62ca",
+    "expected_red": "7bbb5289e",
+    "tests": 31,
+    "binding_mutant_killers": [
+      3,
+      4,
+      3,
+      4
+    ],
+    "identity": {
+      "state": "match",
+      "fingerprints": [
+        "SHA256:dRCAMxPJSfxnhlydPq104Vrxc68H49U7szphqAnC/68"
+      ],
+      "expected_fingerprint": "SHA256:dRCAMxPJSfxnhlydPq104Vrxc68H49U7szphqAnC/68",
+      "console_sha256": "bdcda91dad02fc70221ea8fbb20c4f1408e1d04288db0c59dd43761bb2ef4288",
+      "polls": 1,
+      "wait_seconds": 3.0728502948768437,
+      "elapsed_since_create": 199.99537827679887,
+      "deadline_since_create": 436.92248400021344,
+      "transport_error": null,
+      "fingerprint": "SHA256:dRCAMxPJSfxnhlydPq104Vrxc68H49U7szphqAnC/68"
+    },
+    "ssh_verified": true,
+    "arch_impl": [
+      368,
+      4
+    ],
+    "native_hypothesis": "The current production instruments pass GA104 native binding, gates9/9+gate10 and bare30/30 on this exact box.",
+    "native_falsifier": "Binding inconsistency, any gate/bare failure, or unmatched Xid excludes this exact native cell; stop and capture, no kayfabe debugging.",
+    "guest_hypothesis": "After that exact native pass, production kf3 714ec29d3 passes fast30/30 with the same 180-second oracle.",
+    "guest_falsifier": "Any fast arm failure or unmatched Xid after this exact native pass is a kayfabe finding; no timeout changes or reruns.",
+    "flags": {
+      "KF_DEVICE": "kf3",
+      "KF_FROM_HOST": "1"
+    },
+    "bar1_host_mib": 256,
+    "bar1_policy": "Existing truthful harness default; no resize.",
+    "watchdog_pid": 3441128,
+    "fixed_deadline_utc": "2026-10-25T00:13:05.730077+00:00",
+    "budget_stop_usd": 2.5,
+    "budget_cap_usd": 3,
+    "reserve_usd": 8,
+    "no_fourth_lease": true,
+    "stopped_receipt": "actual_die_stop.json; original capture e15a3524dea282bac36efbd4dc21dc06dec13cc64a6a1f4d85a05be698459a93",
+    "original_forecast_preserved": true,
+    "die_name_source_revision": "a9105acb6",
+    "die_name_source_reason": "Production714ec29d3 predates die.rs; use the controller-reviewed open derived source in the operator kit, without modifying the production checkout.",
+    "die_name_source_sha256": {
+      "crates/kf-chip/src/die.rs": "37445d3255a0869a9ff6047504eb5295116391be70da14bc4cb19cad760f482c",
+      "crates/kf-chip/src/lib.rs": "f2cd2c52cf7426cd3e7352402784b66d33dc4fb3bc732199374c077dc9aa98e2"
+    }
+  },
+  "final_stop_scope": "Original final_stop records attempt1 only; COORD explicitly authorized attempt2 and same-lease GA104 resumption."
+}

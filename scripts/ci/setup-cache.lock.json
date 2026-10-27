@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "image": "docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16",
+  "platform": {
+    "os": "ubuntu",
+    "version": "22.04",
+    "arch": "x86_64"
+  },
+  "package_policy_sha256": "f8f26e548d1314e057f4f98806539ac4c4c7cca39456c1e4f87cff7d3548957a",
+  "locks": {
+    "Cargo.lock": "3a4ac2e08457fb26e411dd4ce1c6965efa2b034667dacad00404ddeee1fab972",
+    "firmware/kf-gop/Cargo.lock": "2b19472557f3f4fcaf2f35f2814e985dc2192435a0dd90cb5055c05cceceba93"
+  },
+  "tag": "setup-cache-jammy-amd64-20261023-v2",
+  "assets": [
+    {
+      "kind": "debs",
+      "name": "debs.tar.gz",
+      "size": 159253208,
+      "sha256": "5825d940c598ab179af941d1b54bb5ad98a3a53baf4b47aac24aede06a083cba"
+    },
+    {
+      "kind": "vendor",
+      "name": "vendor.tar.gz",
+      "size": 7888026,
+      "sha256": "538e047a235976df7de39ce685bdcabd50351359e77c51ff4fb97915bcdd47b6"
+    }
+  ]
+}

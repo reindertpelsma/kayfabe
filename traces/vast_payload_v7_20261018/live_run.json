@@ -1,0 +1,91 @@
+{
+  "run": "v7-kvm-20261023",
+  "source_sha": "28084b96cebad2a853d72171f72f8d776946b8ba",
+  "worker_bundle_sha256": "2402798ce8ab53dcc4db5efca7891b565c0bca7e92723ff0b5050e5bb6e6760f",
+  "one_rental": true,
+  "vm": true,
+  "runtype": "ssh_direct",
+  "image": "docker.io/vastai/kvm:ubuntu_cli_22.04-2025-05-16",
+  "country": "US",
+  "die": "AD102",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "compute_storage_hourly_usd": 0.7533333333333334,
+  "full_transfer_reserve_usd": 0.046875,
+  "effective_hourly_usd": 0.7689583333333333,
+  "price_cap_usd_hour": 1.0,
+  "spend_cap_usd": 4,
+  "stop_at_usd": 3,
+  "created_at": 1792718848.9933379,
+  "absent_at": 1792725516.1341345,
+  "compute_storage_window_seconds": 6667.140796661377,
+  "estimated_upper_usd": 1.4420359444865476,
+  "invoice_verified": false,
+  "reaper_armed_before_create": true,
+  "reaper_original_deadline_utc": "2026-10-23T03:45:00Z",
+  "unattended_startup_succeeded": false,
+  "controlled_recovery_utc": "2026-10-23T02:00:03Z",
+  "source_changed_on_box": false,
+  "create_response_to_first_report_seconds": 1954.9560000896454,
+  "create_request_to_first_report_seconds": 1955.5316622257233,
+  "create_request_to_first_running_seconds": 904.6235945224762,
+  "payload_stage_seconds": {
+    "provision": 4690.191,
+    "cuda_host": null,
+    "merge_bar": null,
+    "cuda_fat": null
+  },
+  "runner_result": {
+    "state": "MANUAL",
+    "verdict": "FAIL",
+    "verified": 1
+  },
+  "runner_validation_scope": "bindings, schema, log chain; gpu-vast is an untrusted tripwire",
+  "structured_result": {
+    "verdict": "FAIL",
+    "suites": [
+      {
+        "name": "provision",
+        "pass": 0,
+        "fail": 1,
+        "skip": 0
+      }
+    ],
+    "hardware": {
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "compute_cap": 890,
+      "driver_version": "575.51.03"
+    }
+  },
+  "reported_driver_is_initial_stale_probe": true,
+  "observed_driver_after_swap": "580.159.04",
+  "failure_cause": "adapter redirected Cargo outputs away from paths resolved by existing bench consumers",
+  "code_suites_executed": false,
+  "interactive_ssh": {
+    "at": 1792725499.3684723,
+    "ssh_rc": 0,
+    "before_state": "GRACE",
+    "before_deadline_at": 1792726095250,
+    "after_state": "MANUAL",
+    "after_deadline_at": 1792727301345,
+    "same_result": true,
+    "hold_measured": true
+  },
+  "proxy_ssh_return_code": 255,
+  "survival_past_original_grace_observed": false,
+  "owner_stop_before_original_grace_deadline": true,
+  "actual_scheduled_invocations": 109,
+  "completed_scheduled_invocations": 109,
+  "accepted_callbacks": 14,
+  "cleanup": {
+    "run": "v7-kvm-20261023",
+    "verified_at": 1792725849.7911255,
+    "exact_id_absent": true,
+    "exact_label_absent": true,
+    "independent_reaper_stopped_after_absence": true,
+    "all_owned_listener_ports_released": true,
+    "source_ip_gate_removed": true,
+    "controller_children_stopped": true,
+    "temporary_secret_bindings_and_local_state_removed": true,
+    "own_untracked_worker_artifacts_removed": true
+  }
+}

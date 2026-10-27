@@ -1,0 +1,208 @@
+{
+  "run": "v8-cloud-init-replay-20261023",
+  "container_image": "kf-v8-fresh-tests:latest (scripts/ci/setup-test.Dockerfile)",
+  "scenarios": [
+    {
+      "run": "v8-cloud-init-replay-20261023",
+      "scenario": "pass",
+      "seconds": 73.729,
+      "entry_rc": 0,
+      "result": {
+        "verdict": "PASS",
+        "suites": [
+          {
+            "name": "provision",
+            "pass": 1,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "cuda_host",
+            "pass": 4,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "kf_tests",
+            "pass": 123,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "gates",
+            "pass": 9,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "kf3_build",
+            "pass": 1,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "raw_suite",
+            "pass": 30,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "thin_suite",
+            "pass": 30,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "birth_census",
+            "pass": 1,
+            "fail": 0,
+            "skip": 0
+          },
+          {
+            "name": "cuda_fat",
+            "pass": 4,
+            "fail": 0,
+            "skip": 0
+          }
+        ],
+        "hardware": {
+          "gpu_name": "NVIDIA GeForce RTX 3090",
+          "compute_cap": 860,
+          "driver_version": "580.159.04"
+        }
+      },
+      "posted_results": [
+        {
+          "nonce": "abababababababababababababababab",
+          "sha": "7f135f63980cd372040e82004be3be462e130e96",
+          "runner_nonce": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "verdict": "PASS",
+          "suites": [
+            {
+              "name": "provision",
+              "pass": 1,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "cuda_host",
+              "pass": 4,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "kf_tests",
+              "pass": 123,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "gates",
+              "pass": 9,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "kf3_build",
+              "pass": 1,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "raw_suite",
+              "pass": 30,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "thin_suite",
+              "pass": 30,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "birth_census",
+              "pass": 1,
+              "fail": 0,
+              "skip": 0
+            },
+            {
+              "name": "cuda_fat",
+              "pass": 4,
+              "fail": 0,
+              "skip": 0
+            }
+          ],
+          "hardware": {
+            "gpu_name": "NVIDIA GeForce RTX 3090",
+            "compute_cap": 860,
+            "driver_version": "580.159.04"
+          }
+        }
+      ],
+      "host_environment": [
+        "CURL_CA_BUNDLE",
+        "KF_CI_REPORTER_ARGS",
+        "LC_ALL",
+        "PATH",
+        "SSL_CERT_FILE"
+      ],
+      "hardware_and_builds": "recorded fixtures, not GPU evidence",
+      "cache_sha_verified": true,
+      "no_external_network": true
+    },
+    {
+      "run": "v8-cloud-init-replay-20261023",
+      "scenario": "swap-failure",
+      "seconds": 55.325,
+      "entry_rc": 1,
+      "result": {
+        "verdict": "FAIL",
+        "suites": [
+          {
+            "name": "provision",
+            "pass": 0,
+            "fail": 1,
+            "skip": 0
+          }
+        ],
+        "hardware": {
+          "gpu_name": "NVIDIA GeForce RTX 3090",
+          "compute_cap": 860,
+          "driver_version": "580.159.04"
+        }
+      },
+      "posted_results": [
+        {
+          "nonce": "abababababababababababababababab",
+          "sha": "01f01840d89c01fa80c02e5af4053195359af5e5",
+          "runner_nonce": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+          "verdict": "FAIL",
+          "suites": [
+            {
+              "name": "provision",
+              "pass": 0,
+              "fail": 1,
+              "skip": 0
+            }
+          ],
+          "hardware": {
+            "gpu_name": "NVIDIA GeForce RTX 3090",
+            "compute_cap": 860,
+            "driver_version": "580.159.04"
+          }
+        }
+      ],
+      "host_environment": [
+        "CURL_CA_BUNDLE",
+        "KF_CI_REPORTER_ARGS",
+        "LC_ALL",
+        "PATH",
+        "SSL_CERT_FILE"
+      ],
+      "hardware_and_builds": "recorded fixtures, not GPU evidence",
+      "cache_sha_verified": true,
+      "no_external_network": true
+    }
+  ]
+}

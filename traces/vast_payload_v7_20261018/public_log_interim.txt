@@ -1,0 +1,24 @@
+[untrusted] [Worker] selection profile=check die=AD102 reason=PREFERENCE ignored=0
+[untrusted] [Worker] provider=unknown phase=BOOTING
+[untrusted] [Worker] provider=loading phase=BOOTING
+[untrusted] [Worker] provider=created phase=BOOTING
+[untrusted] [Worker] provider=running phase=BOOTING
+[untrusted] [box] Box ready; payload starting
+[untrusted] [box] Filesystem      Size  Used Avail Use% Mounted on
+[untrusted] [box] /dev/root       117G  8.8G  108G   8% /
+[untrusted] [box] KF_PREFLIGHT_FREE_BYTES=115255881728
+[untrusted] [box] KF_PAYLOAD_STAGE_START name=provision
+[untrusted] [box] [xid-watch] tag=ci[redacted]_provision  host=ubuntu  utc=2026-10-23T02:00:03Z
+[untrusted] [box] [xid-watch] [redacted]mand: bash /workspace/kf-ci-src/scripts/bench/box/provision_full.sh
+[untrusted] [box] [xid-watch] host_dmesg_lines=671  (readable  the clean/unwatched ambiguity is closed)
+[untrusted] [box] [xid-watch] host_gpu=NVIDIA GeForce RTX 4090, 575.51.03
+[untrusted] [box] [xid-watch] xid_before=0
+[untrusted] [box] [xid-watch] --- [redacted]mand output begins ---
+[untrusted] [box] START 2026-10-23T02:00:03+00:00
+[untrusted] [box] BOX_RC=0
+[untrusted] [box] 28084b96c ci: adapt existing box merge bar to the Vast payload contract
+[untrusted] [box] DRIVER_RC=0
+[untrusted] [box] NVIDIA GeForce RTX 4090, 580.159.04
+[untrusted] [box] /dev/root       117G   15G  102G  13% /
+[9 bytes dropped by runner]
+

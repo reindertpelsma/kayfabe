@@ -1,0 +1,12 @@
+[
+  {
+    "binary": "/usr/bin/timeout",
+    "rc": 124,
+    "elapsed_seconds": 2.0113
+  },
+  {
+    "binary": "/usr/bin/gnutimeout",
+    "rc": -9,
+    "elapsed_seconds": 0.1538
+  }
+]
