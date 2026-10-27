@@ -51,6 +51,7 @@ async function fixture(t) {
     price: 0.2,
     ttl: 7200000,
     machineId: 100001,
+    hostId: 100,
     id: '900',
     nonce: 'b'.repeat(32),
     runnerNonce: 'f'.repeat(64),
@@ -87,6 +88,7 @@ async function fixture(t) {
     closed: null,
     verdict: null,
     machineId: 100002,
+    hostId: 200,
     providerRetries: 1,
     retryCostUsd: 0.2 / 3600,
     originalStarted: previous.started,
@@ -116,6 +118,10 @@ for (const count of [2, 4])
   });
 for (const kind of [
   'same-machine',
+  'same-host',
+  'unknown-host',
+  'bad-host',
+  'bad-host-cap',
   'deadline',
   'allowance',
   'unclean',
@@ -128,6 +134,18 @@ for (const kind of [
     test('workerd provider replacement rejects ' + kind + variant, async (t) => {
       const { call, record, previous } = await fixture(t);
       if (kind === 'same-machine') record.machineId = previous.machineId;
+      if (kind === 'same-host') record.hostId = previous.hostId;
+      if (kind === 'unknown-host') record.hostId = variant === 1 ? null : undefined;
+      if (kind === 'bad-host')
+        await call('/seed', [['bad-host:' + record.hostId, { reason: 'PROVIDER_FAULT' }]]);
+      if (kind === 'bad-host-cap')
+        await call(
+          '/seed',
+          Array.from({ length: 256 + variant }, (_, i) => [
+            'bad-host:' + (1000 + i),
+            { reason: 'PROVIDER_FAULT' },
+          ]),
+        );
       if (kind === 'deadline') record.hardDeadline += variant;
       if (kind === 'allowance') record.runBudgetUsd += variant;
       if (kind === 'unclean') {
@@ -160,4 +178,35 @@ for (const variant of [1, 2])
     assert.equal(response.status, 200, JSON.stringify(response.data));
     const admin = await call('/admin/list');
     assert.equal(admin.data.budget.profiles.check.count_today, 1);
+  });
+
+for (const count of [2, 4])
+  test('workerd concurrent distinct provider faults learn a host ' + count, async (t) => {
+    const { call } = await fixture(t);
+    const replies = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        call('/provider-fault', { record: { machineId: 800 + i, hostId: 9000 } }),
+      ),
+    );
+    assert.ok(replies.every((r) => r.status === 200));
+    const rows = (await call('/snapshot')).data;
+    const host = rows.find(([key]) => key === 'bad-host:9000')?.[1];
+    assert.equal(host.reason, 'PROVIDER_FAULT');
+    assert.equal(new Set(host.machines).size, 2);
+    for (const machine of host.machines)
+      assert.equal(rows.find(([key]) => key === 'bad-machine:' + machine)[1].hostId, 9000);
+  });
+
+for (const hostId of [9000, 9001])
+  test('workerd repeated one-machine fault cannot condemn a host ' + hostId, async (t) => {
+    const { call } = await fixture(t);
+    for (let i = 0; i < 3; i++)
+      assert.equal(
+        (await call('/provider-fault', { record: { machineId: 800, hostId } })).status,
+        200,
+      );
+    assert.equal(
+      (await call('/snapshot')).data.some(([key]) => key.startsWith('bad-host:')),
+      false,
+    );
   });

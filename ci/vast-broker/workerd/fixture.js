@@ -50,6 +50,11 @@ export class AdmissionFixture {
     if (path === '/snapshot') {
       return Response.json([...(await this.ctx.storage.list())]);
     }
+    if (path === '/provider-fault') {
+      const { record, reason = 'PROVIDER_FAULT', now = Date.now() } = await request.json();
+      await new Ledger(this.ctx.storage).markProviderFault(record, reason, now);
+      return Response.json({ state: 'RECORDED' });
+    }
     if (path === '/reserve') {
       const { record, config, cost = 0.1, credit = 20, failAt, retryNonce } = await request.json();
       const failing = (storage) => ({
