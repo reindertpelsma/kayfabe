@@ -31,3 +31,12 @@ Synchronization: the CUDA guest tool waits for a preregistered wall-clock epoch
 Actual execution-window overlap must be recorded. The GPU-drain observation limit
 is 11264 MiB for planned pairs of 4096 MiB stores on the 12 GiB card; the 180-second
 workload oracle is unchanged. The short raw subset uses one boot with four arms.
+
+Capture correction before any hardware workload: the accumulated boot journal is
+32.7 MB, beyond the existing 16 MiB reader bound. Z1 therefore pins the first of
+two readable real kernel records and the boot ID before running. Every scoped
+read includes that exact cursor and all later kernel entries, using the same
+16 MiB byte bound; cursor loss, vacuum, boot change or malformed/non-kernel data
+refuses. The existing source/PID/channel/VA/type/CE matching oracle is unchanged.
+The unsupported nvidia-smi inventory field stopped setup before builds or GPU use;
+that receipt is retained, and BAR1 is read using nvidia-smi -q -d MEMORY instead.

@@ -1,0 +1,35 @@
+{
+  "source": "58638e9737badf46d28ec813d52768106d792170",
+  "gpu_free_tests": 26,
+  "existing_xid_oracle_tests": 109,
+  "expected_red": [
+    {
+      "commit": "7d33d8b29",
+      "tests": 4,
+      "failures": 4
+    },
+    {
+      "commit": "4c5aa7869",
+      "errors": 1,
+      "reason": "host_guard module not implemented"
+    },
+    {
+      "commit": "7d4fac21d",
+      "errors": 1,
+      "reason": "kernel_scope module not implemented"
+    }
+  ],
+  "mutants": {
+    "restore_shared_name_kill": 2,
+    "erase_vm_name": 2,
+    "foreign_qemu_admitted": 3,
+    "ram_headroom_removed": 2,
+    "capabilities_accepted": 2,
+    "extra_groups_accepted": 2,
+    "cursor_loss_accepted": 2,
+    "boot_change_accepted": 2,
+    "nonkernel_accepted": 2
+  },
+  "claims_new": 0,
+  "hardware": "UNRUN at preparation"
+}

@@ -10,6 +10,7 @@ import sys
 import time
 
 from host_guard import Refused, preflight, qemus
+from kernel_scope import snapshot
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "scripts/bench"))
@@ -17,7 +18,7 @@ import native_xid_guard as xid_guard
 
 
 def run_case(manifest, image, output, label, pair, tool, owned):
-    baseline = xid_guard.xid_lines(xid_guard.kernel_snapshot())
+    baseline = xid_guard.xid_lines(snapshot())
     jobs = []
     start = int(time.time()) + 20
     try:
@@ -73,11 +74,11 @@ def run_case(manifest, image, output, label, pair, tool, owned):
                 raise Refused("guest exited before both slots could be launched")
         deadline = time.monotonic() + 190
         while any(child.poll() is None for child, _, _, _ in jobs):
-            xid_guard.check_unchanged(xid_guard.kernel_snapshot(), baseline)
+            xid_guard.check_unchanged(snapshot(), baseline)
             if time.monotonic() >= deadline:
                 raise Refused("owned guest exceeded the unchanged 180-second oracle")
             time.sleep(0.2)
-        xid_guard.check_unchanged(xid_guard.kernel_snapshot(), baseline)
+        xid_guard.check_unchanged(snapshot(), baseline)
         results = []
         for child, log, bench, resources in jobs:
             rc = child.wait(timeout=190)

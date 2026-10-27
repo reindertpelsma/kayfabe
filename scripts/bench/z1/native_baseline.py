@@ -8,6 +8,8 @@ import re
 import subprocess
 import sys
 
+from kernel_scope import snapshot
+
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "scripts/bench"))
 spec = importlib.util.spec_from_file_location("vast_payload", REPO / "scripts/ci/vast_payload.py")
@@ -25,10 +27,10 @@ def main():
     arms = ["--timer"] + re.findall(r"--[a-z0-9-]+", block)
     if len(arms) != 30 or len(set(arms)) != 30:
         raise guard.GuardRefused("expected unchanged 30-arm source list")
-    initial = guard.xid_lines(guard.kernel_snapshot())
+    initial = guard.xid_lines(snapshot())
     accepted = initial
     for arm in arms:
-        guard.check_unchanged(guard.kernel_snapshot(), accepted)
+        guard.check_unchanged(snapshot(), accepted)
         name = arm.removeprefix("--")
         watched = out / f"{name}.watch.log"
         env = {**os.environ, "XID_OUTDIR": str(out)}
@@ -52,7 +54,7 @@ def main():
         text = watched.read_text()
         if not payload.xid_ok(text, result.returncode, arm, text):
             raise guard.GuardRefused("native arm or exact Xid proof refused: " + arm)
-        accepted = guard.xid_lines(guard.kernel_snapshot())
+        accepted = guard.xid_lines(snapshot())
         print("Z1_BARE_ARM_PASS", arm, flush=True)
     delta = accepted[len(initial) :]
     guard.approve_native(

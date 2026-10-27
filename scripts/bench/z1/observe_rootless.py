@@ -14,6 +14,7 @@ import sys
 import time
 
 from host_guard import identity
+from kernel_scope import snapshot
 
 REPO = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location(
@@ -45,7 +46,7 @@ def main():
     pins = guard.pin_suite(REPO, revision)
     state = json.loads(Path(receipt_path).read_text())
     baseline = tuple(state.get("accepted_xid_lines", state["approved_native_xid_lines"]))
-    guard.check_unchanged(guard.kernel_snapshot(), baseline)
+    guard.check_unchanged(snapshot(), baseline)
     ack = Path(ack_dir)
     ack.mkdir(parents=True, exist_ok=True)
     child = subprocess.Popen(command, start_new_session=True)
@@ -72,7 +73,7 @@ def main():
                     }
                     guard.verify_guest_identity(context)
                     record = candidate
-            journal = guard.kernel_snapshot()
+            journal = snapshot()
             if context:
                 snapshot = Path(process_dir) / f"qemu-{context['pid']}.json"
                 latest = json.loads(snapshot.read_text())
@@ -114,7 +115,7 @@ def main():
             if child.poll() is not None:
                 if child.returncode or context:
                     raise guard.GuardRefused("suite failed or an arm lacks final proof")
-                guard.check_unchanged(guard.kernel_snapshot(), baseline)
+                guard.check_unchanged(snapshot(), baseline)
                 print("ROOTLESS_OBSERVER_PASS", flush=True)
                 return 0
             time.sleep(0.1)
