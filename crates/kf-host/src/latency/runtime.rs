@@ -857,7 +857,7 @@ fn dump(why: &str) {
         );
     }
 }
-/// One bounded shutdown dump, from a non-vCPU thread after work has stopped.
+/// One bounded shutdown snapshot; normal process exit may still have unfinished work.
 pub fn dump_shutdown() {
     if let Some(r) = recorder()
         && !r.shutdown.swap(true, Relaxed)
