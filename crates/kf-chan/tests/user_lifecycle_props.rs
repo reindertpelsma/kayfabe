@@ -1311,11 +1311,13 @@ fn b_the_monotone_entry_counter_survives_the_u32_boundary() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Always run at least 512 seeds, each generating at least 2,000 entries. An explicit
-// KF3_STRESS_SECS budget may extend this minimum, but scheduling can never truncate it.
+// Run until both 512 seeds and the duration have completed; each seed has at least 2,000 entries.
+// Keep the two-second default and KF3_STRESS_SECS override, without truncating minimum coverage.
 
 fn soak_duration(value: Option<&str>) -> Option<Duration> {
-    value.map(|seconds| Duration::from_secs_f64(seconds.parse().unwrap_or(2.0)))
+    value
+        .or(Some("2"))
+        .map(|seconds| Duration::from_secs_f64(seconds.parse().unwrap_or(2.0)))
 }
 
 fn soak_seeds(
