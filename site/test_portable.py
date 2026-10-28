@@ -65,6 +65,13 @@ class PortableURLs(unittest.TestCase):
                                           self.root / 'style.css', self.root),
                          'x{background:url(data:image/png;base64,AA)}')
 
+    def test_base_tag_cannot_rebase_404_assets_outside_book(self):
+        # mdBook's generated 404 has <base href="/">, unlike normal chapters.
+        self.assertEqual(self.rewrite('<base href="/"><link href="theme/book.css">'),
+                         '<base href="chapter.html"><link href="theme/book.css">')
+        self.assertEqual(self.rewrite('<BASE HREF="https://kayfabe.dev/">'),
+                         '<BASE HREF="chapter.html">')
+
 
 class PortableNavigation(unittest.TestCase):
     def run_js(self, protocol, missing=False):
