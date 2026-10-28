@@ -96,6 +96,8 @@ cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder
 
 **The thin guest** (a kernel and an initrd that insmods the driver, runs the raw client and powers off): `bash scripts/fastguest/build_fast_guest.sh [guest.qcow2] [outdir]`. It needs `busybox` and `cpio`, a guest image that is not in use, and the raw client. <!-- src: scripts/fastguest/build_fast_guest.sh -->
 
+The builder disconnects `/dev/nbd0` only after its own image attachment succeeded. Host-kernel mode (`KF_FROM_HOST=1`), skipped attachment and failed attachment leave other attachments alone. After a successful release it does not disconnect again when packing finishes or fails. A failed release remains eligible for cleanup at exit. <!-- src: scripts/fastguest/build_fast_guest.sh NBD_ATTACHED; scripts/fastguest/tests/test_build_cleanup.py -->
+
 **The display broker** (the host program that owns the window and input; see [Display and the broker](display.md)):
 
 ```sh
