@@ -1,0 +1,14 @@
+diff --git a/util/main-loop.c b/util/main-loop.c
+--- a/util/main-loop.c
++++ b/util/main-loop.c
+@@ -107,6 +107,10 @@ static int qemu_signal_init(Error **errp)
+     pthread_sigmask(SIG_BLOCK, &set, NULL);
+ 
+     sigdelset(&set, SIG_IPI);
++    /* E11 debug only: SIGALRM belongs to the unmasked VA thread, not signalfd. */
++    if (g_strcmp0(g_getenv("KF3_DIAG_REFRESH_STACK"), "1") == 0) {
++        sigdelset(&set, SIGALRM);
++    }
+     sigfd = qemu_signalfd(&set);
+     if (sigfd == -1) {
+         error_setg_errno(errp, errno, "failed to create signalfd");

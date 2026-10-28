@@ -2655,6 +2655,7 @@ impl<T: Send + 'static> Reaper<T> {
         max_overflow: usize,
         work: impl Fn(T) + Send + 'static,
     ) -> Option<Self> {
+        let _alarm_mask = kf_linux_raw::refresh_stack_unsafe::spawn_mask().ok()?;
         let (tx, rx) = std::sync::mpsc::sync_channel::<T>(queue);
         std::thread::Builder::new()
             .name(name.into())

@@ -368,6 +368,7 @@ impl Device {
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        kf_host::diag::refresh_stack_install()?;
         cfg.check()?;
         // ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): read once, here, and said once.
         let gss_native = kf_rm::gssnative::enabled()
@@ -2062,6 +2063,10 @@ impl Device {
     /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
     /// blocks on the GPU: a walk is submitted and collected on its fd.
     pub fn va_loop(&self) {
+        if let Err(e) = kf_host::diag::refresh_stack_va() {
+            eprintln!("kf3: E11 VA signal setup refused: {e}");
+            return;
+        }
         if self.latency_active {
             kf_host::latency::register_thread(kf_host::latency::Role::Va);
         }

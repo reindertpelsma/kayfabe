@@ -490,3 +490,27 @@ mod tests {
         assert_eq!(control_verb(0x2080_2502), Verb::Invalidate);
     }
 }
+
+/// E11 debug timer lifetime, held by one VA refresh batch.
+pub use kf_linux_raw::refresh_stack_unsafe::RefreshStack;
+/// Default-off install, before realization creates any Rust children.
+pub fn refresh_stack_install() -> Result<(), String> {
+    if std::env::var("KF3_DIAG_REFRESH_STACK").as_deref() == Ok("1") {
+        kf_linux_raw::refresh_stack_unsafe::install().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+/// First operation on the VA thread; all other children retain the inherited block.
+pub fn refresh_stack_va() -> Result<(), String> {
+    kf_linux_raw::refresh_stack_unsafe::enter_va().map_err(|e| e.to_string())
+}
+/// The optional diagnostic must never change the mapping or completion verdict.
+pub fn refresh_stack_arm() -> Option<RefreshStack> {
+    match kf_linux_raw::refresh_stack_unsafe::arm() {
+        Ok(timer) => timer,
+        Err(e) => {
+            eprintln!("kf3: E11 timer refused: {e}");
+            None
+        }
+    }
+}

@@ -693,6 +693,8 @@ pub struct Abandoned {
 /// The walk in flight and what it answers.
 #[derive(Debug)]
 struct Batch {
+    /// E11 debug only: covers the async walk and its CPU apply, including error returns.
+    debug_stack: Option<kf_host::diag::RefreshStack>,
     /// Each want, with the objects it named and when it arrived.
     wants: Vec<(Want, Vec<VasKey>, std::time::Instant)>,
     /// Every object walked, with the slot and root it was walked with.
@@ -1435,6 +1437,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
         let wants = core::mem::take(&mut self.pending);
         let mut batch = Batch {
+            debug_stack: None,
             wants: Vec::with_capacity(wants.len()),
             walked: BTreeMap::new(),
             remaining: BTreeMap::new(),
@@ -1540,6 +1543,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             // Every named object lacks a slot: each want fails by name (no walk to wait for).
             self.refuse_batch(&batch, "no named object has a walker slot".to_string());
             return;
+        }
+        if batch.debug_stack.is_none() {
+            batch.debug_stack = kf_host::diag::refresh_stack_arm();
         }
         let t0 = std::time::Instant::now();
         let split_started_at = kf_host::latency::now();
@@ -2174,6 +2180,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             };
             self.pending.insert(0, w);
         }
+        drop(batch.debug_stack.take());
         self.pump(trigger);
         out
     }
