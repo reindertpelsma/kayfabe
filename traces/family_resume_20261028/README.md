@@ -1,6 +1,13 @@
 # Bounded current-source family sweep
 
-STATUS: LIVE, 2026-10-28. Bounded stage closed; all owned resources retired.
+STATUS: ANSWERED, 2026-10-29. Earlier bounded stage and later Stage C are closed;
+no new run authority.
+
+Update2026-10-29: the later [Stage C guard/profile proof](../sw5_stage_c_20261028/README.md)
+addresses the conditional lost-create-receipt gap without changing the historical evidence
+below. Its one admitted Blackwell attempt stopped on a real SSH identity refusal before
+native or guest work; actual die is UNBOUND and all GPU tiers remain UNRUN/UNATTRIBUTED.
+The older GA106 pass remains a separate exact-source result. No retries or identity bypass.
 
 MEASURED (2026-10-28, [GA106 result](lease2/result.json)): GA106 passed native gates9/9,
 gate10 and bare30/30, then stock Linux fast30/30 at the original180s arm limit. The source
@@ -41,7 +48,8 @@ actualGB206, then require all native controls before guest work. MEASURED (2026-
 the create call returned no parseable contract receipt. Repeated API queries observed no
 third allocation. There was no ID, workload, retry or third destroy call. The empty-ledger
 watchdog was identity-checked and retired. Its label/response receipt was not retained;
-that adapter limitation remains unresolved, and no GB206 hardware result is claimed.
+that historical receipt gap is not reconstructed. The later Stage C guards address the
+conditional adapter defect; no retrospective allocation or GB206 hardware result is claimed.
 
 MEASURED (2026-10-28, [closeout](closeout.json)): both created IDs58115039 and58117397 were
 captured and SHA-verified before exact-id destruction, then verified API-absent. All3 owned

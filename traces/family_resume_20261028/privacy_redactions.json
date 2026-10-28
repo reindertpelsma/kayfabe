@@ -68,5 +68,12 @@
     "published_sha256": "87989092a2bbb67feb573e4086f82e391459f8ad5d7f1399404083fafc515780",
     "replacements": 2,
     "rule": "local operator, report, handoff and SSH-directory path redaction"
+  },
+  {
+    "path": "known_bad_machines_after_lease1.json",
+    "raw_sha256": "2ee4414fd6f8e54b7a15b6533efe7f5a838b57cc8b89e42e56adb2392372f195",
+    "published_sha256": "fe76b9c8f7c805e8a241b29f438a747222fee0e7030ac74b8fab5156761cc0f7",
+    "replacements": 1,
+    "rule": "Inherited already-published local audit path removed; machine/host exclusions and refusal reasons unchanged."
   }
 ]
