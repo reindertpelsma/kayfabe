@@ -19,6 +19,14 @@ except ImportError:
 NOW = dt.datetime(2026, 10, 28, 18, 0, tzinfo=dt.timezone.utc)
 SOURCE = "7dcedefea093de078188efd5f712561bde746362"
 SECRET = "FAKE_CREATE_SECRET_MUST_NEVER_PERSIST"
+FAKE_TIME = dict(
+    verified=True,
+    field="start_date",
+    meaning="contract-creation",
+    unit="unix-seconds",
+    precision_seconds=0,
+    evidence="exact filesystem fake-provider clock contract",
+)
 
 
 class GuardFixture(unittest.TestCase):
@@ -39,7 +47,15 @@ class GuardFixture(unittest.TestCase):
             stop_usd=1.5,
             capture_lead_seconds=420,
         )
-        self.ref = G.prepare(self.root, self.offer, self.plan, 71, self.snapshot(), SOURCE)
+        self.ref = G.prepare(
+            self.root,
+            self.offer,
+            self.plan,
+            71,
+            self.snapshot(),
+            SOURCE,
+            provider_time_contract=FAKE_TIME,
+        )
         self.intent = G.load(self.ref)
         self.events = []
 
@@ -49,7 +65,12 @@ class GuardFixture(unittest.TestCase):
 
     def row(self, **changes):
         value = dict(
-            id=42, label=self.intent["label"], machine_id=21018, host_id=120071, dph_total=0.24
+            id=42,
+            label=self.intent["label"],
+            machine_id=21018,
+            host_id=120071,
+            dph_total=0.24,
+            start_date=NOW.timestamp(),
         )
         return dict(value, **changes)
 
@@ -139,7 +160,15 @@ class IntentTests(GuardFixture):
 
     def test_intent_cannot_be_overwritten(self):
         with self.assertRaises(FileExistsError):
-            G.prepare(self.root, self.offer, self.plan, 71, self.snapshot(), SOURCE)
+            G.prepare(
+                self.root,
+                self.offer,
+                self.plan,
+                71,
+                self.snapshot(),
+                SOURCE,
+                provider_time_contract=FAKE_TIME,
+            )
 
     def test_tampered_intent_is_refused(self):
         (self.root / "intent.json").chmod(0o600)
@@ -172,7 +201,15 @@ class IntentTests(GuardFixture):
         root = self.root / "fsync"
         root.mkdir()
         with patch.object(G.os, "fsync", side_effect=sync):
-            ref = G.prepare(root, self.offer, self.plan, 71, self.snapshot(), SOURCE)
+            ref = G.prepare(
+                root,
+                self.offer,
+                self.plan,
+                71,
+                self.snapshot(),
+                SOURCE,
+                provider_time_contract=FAKE_TIME,
+            )
             self.assertIn("file", seen)
             self.assertIn("directory", seen)
             self.root, self.ref, self.intent = root, ref, G.load(ref)
@@ -181,7 +218,15 @@ class IntentTests(GuardFixture):
     def test_two_labels_differ_despite_same_timestamp(self):
         other = self.root / "other"
         other.mkdir()
-        ref = G.prepare(other, self.offer, self.plan, 71, self.snapshot(), SOURCE)
+        ref = G.prepare(
+            other,
+            self.offer,
+            self.plan,
+            71,
+            self.snapshot(),
+            SOURCE,
+            provider_time_contract=FAKE_TIME,
+        )
         self.assertNotEqual(self.intent["label"], G.load(ref)["label"])
 
     def test_labels_have_full_collision_resistant_nonce(self):
@@ -407,7 +452,15 @@ class BoundDeadlineTests(GuardFixture):
             capture_lead_seconds=20,
             deadline_utc=(NOW + dt.timedelta(seconds=60)).isoformat(),
         )
-        self.ref = G.prepare(self.root, self.offer, plan, 71, self.snapshot(), SOURCE)
+        self.ref = G.prepare(
+            self.root,
+            self.offer,
+            plan,
+            71,
+            self.snapshot(),
+            SOURCE,
+            provider_time_contract=FAKE_TIME,
+        )
         self.intent = G.load(self.ref)
         self.issue("success")
         clock = [NOW]
@@ -479,61 +532,130 @@ class BoundParentDeathTests(GuardFixture):
         calls = [0]
         events = []
         self.issue("success")
+
         def inventory():
             calls[0] += 1
-            if calls[0] > 1 and mode == "inventory": raise OSError("fake inventory down")
+            if calls[0] > 1 and mode == "inventory":
+                raise OSError("fake inventory down")
             return self.snapshot([self.row()])
+
         def credit():
-            if calls[0] > 1 and mode == "credit": raise ValueError("fake credit down")
+            if calls[0] > 1 and mode == "credit":
+                raise ValueError("fake credit down")
             return 40
+
         def publish(value):
-            if clock[0] >= NOW + dt.timedelta(seconds=120): raise StopFake()
+            if clock[0] >= NOW + dt.timedelta(seconds=120):
+                raise StopFake()
+
         def capture(iid):
-            events.append(("capture",iid,clock[0]))
+            events.append(("capture", iid, clock[0]))
             raise OSError("fake capture unavailable")
+
         try:
-            G.watch(self.root,self.ref,inventory=inventory,credit=credit,now=lambda:clock[0],
-                    pause=lambda n:clock.__setitem__(0,clock[0]+dt.timedelta(seconds=n)),
-                    parent_alive=lambda _:clock[0] < NOW + dt.timedelta(seconds=20),ready=lambda _:None,publish=publish,
-                    capture=capture,destroy=lambda iid:events.append(("destroy",iid,clock[0])))
-        except StopFake:pass
-        destroyed=[v for v in events if v[0]=="destroy"]
-        self.assertTrue(destroyed,'known ownership was forgotten after creator death')
-        self.assertEqual({v[1] for v in destroyed},{42})
-        self.assertLess(destroyed[0][2],NOW+dt.timedelta(seconds=60))
+            G.watch(
+                self.root,
+                self.ref,
+                inventory=inventory,
+                credit=credit,
+                now=lambda: clock[0],
+                pause=lambda n: clock.__setitem__(0, clock[0] + dt.timedelta(seconds=n)),
+                parent_alive=lambda _: clock[0] < NOW + dt.timedelta(seconds=20),
+                ready=lambda _: None,
+                publish=publish,
+                capture=capture,
+                destroy=lambda iid: events.append(("destroy", iid, clock[0])),
+            )
+        except StopFake:
+            pass
+        destroyed = [v for v in events if v[0] == "destroy"]
+        self.assertTrue(destroyed, "known ownership was forgotten after creator death")
+        self.assertEqual({v[1] for v in destroyed}, {42})
+        self.assertLess(destroyed[0][2], NOW + dt.timedelta(seconds=60))
 
 
 class CreationWindowTests(GuardFixture):
     def checked_intent(self):
-        self.intent['created_window'] = dict(field='start_date', verified=True,
-            lower=NOW.timestamp(), upper=(NOW+dt.timedelta(hours=2)).timestamp())
+        self.intent["created_window"] = dict(
+            field="start_date",
+            verified=True,
+            lower=NOW.timestamp(),
+            upper=(NOW + dt.timedelta(hours=2)).timestamp(),
+        )
         return self.intent
 
     def test_contract_older_than_intent_window_is_unresolved(self):
         with self.assertRaises(G.Unresolved):
-            G.match(self.checked_intent(),self.snapshot([self.row(start_date=NOW.timestamp()-1)]))
+            G.match(
+                self.checked_intent(), self.snapshot([self.row(start_date=NOW.timestamp() - 1)])
+            )
 
     def test_contract_after_intent_deadline_is_unresolved(self):
         with self.assertRaises(G.Unresolved):
-            G.match(self.checked_intent(),self.snapshot([self.row(start_date=NOW.timestamp()+7201)]))
+            G.match(
+                self.checked_intent(), self.snapshot([self.row(start_date=NOW.timestamp() + 7201)])
+            )
 
     def test_missing_provider_creation_timestamp_is_unresolved(self):
         with self.assertRaises(G.Unresolved):
-            G.match(self.checked_intent(),self.snapshot([self.row()]))
+            row = self.row()
+            row.pop("start_date", None)
+            G.match(self.checked_intent(), self.snapshot([row]))
 
     def test_malformed_provider_creation_timestamp_is_unresolved(self):
         with self.assertRaises(G.Unresolved):
-            G.match(self.checked_intent(),self.snapshot([self.row(start_date='unknown')]))
+            G.match(self.checked_intent(), self.snapshot([self.row(start_date="unknown")]))
 
     def test_unverified_timestamp_semantics_never_bind(self):
-        intent=self.checked_intent();intent['created_window']['verified']=False
+        intent = self.checked_intent()
+        intent["created_window"]["verified"] = False
         with self.assertRaises(G.Unresolved):
-            G.match(intent,self.snapshot([self.row(start_date=NOW.timestamp())]))
+            G.match(intent, self.snapshot([self.row(start_date=NOW.timestamp())]))
 
     def test_unverified_precision_never_binds(self):
-        intent=self.checked_intent();intent['created_window']['verified']=None
+        intent = self.checked_intent()
+        intent["created_window"]["verified"] = None
         with self.assertRaises(G.Unresolved):
-            G.match(intent,self.snapshot([self.row(start_date=NOW.timestamp())]))
+            G.match(intent, self.snapshot([self.row(start_date=NOW.timestamp())]))
+
+
+class LateAllocationTests(GuardFixture):
+    def test_allocation_after_deadline_still_recovers_exact_owned_id(self):
+        self.late(NOW.timestamp()+8000)
+
+    def test_late_allocation_missing_start_field_still_recovers(self):
+        self.late(None)
+
+    def test_late_allocation_ambiguous_start_field_still_recovers(self):
+        self.late("unknown-provider-start")
+
+    def late(self, started):
+        clock=[NOW];gone=[False];events=[]
+        self.issue("empty") if False else None
+        try:self.issue("empty")
+        except G.Unresolved:pass
+        def inventory():
+            rows=[]
+            if clock[0]>=NOW+dt.timedelta(seconds=7220) and not gone[0]:
+                row=self.row(start_date=started)
+                if started is None:row.pop('start_date',None)
+                rows=[row]
+            return self.snapshot(rows)
+        def publish(value):
+            if clock[0]>=NOW+dt.timedelta(seconds=7300):raise StopFake()
+        def destroy(iid):events.append(('destroy',iid));gone[0]=True
+        def capture(iid):events.append(('capture',iid));return dict(id=iid,capture_verified=True)
+        result=None
+        try:
+            result=G.watch(self.root,self.ref,inventory=inventory,credit=lambda:40,
+                now=lambda:clock[0],pause=lambda n:clock.__setitem__(0,clock[0]+dt.timedelta(seconds=n)),
+                parent_alive=lambda _:False,ready=lambda _:None,publish=publish,
+                capture=capture,destroy=destroy)
+        except StopFake:pass
+        self.assertIsNotNone(result,'positive late allocation was stranded by time metadata')
+        self.assertEqual(result['id'],42)
+        self.assertTrue(result['absence_verified'])
+        self.assertEqual(events,[('capture',42),('destroy',42)])
 
 
 if __name__ == "__main__":
