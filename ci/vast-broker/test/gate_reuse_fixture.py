@@ -188,6 +188,27 @@ if case in {"ci-ambiguous-failed", "ci-ambiguous-pending", "ci-multiple-success"
     checks["check_runs"].append(duplicate)
     checks["total_count"] = 2
 
+child_runs = {
+    "total_count": 1,
+    "workflow_runs": [{
+        "id": 456, "head_sha": sha, "head_branch": "master", "event": "push",
+        "path": ".github/workflows/gpu-vast.yml", "status": "completed",
+        "conclusion": "success", "repository": {"full_name": repo},
+        "head_repository": {"full_name": repo},
+    }],
+}
+data["/actions/workflows/gpu-vast.yml/runs?head_sha=" + sha + "&event=push&per_page=100"] = child_runs
+if case == "release-child-missing":
+    child_runs.update(total_count=0, workflow_runs=[])
+if case == "release-child-pending":
+    child_runs["workflow_runs"][0]["status"] = "in_progress"
+if case == "release-child-failed":
+    child_runs["workflow_runs"][0]["conclusion"] = "failure"
+if case == "release-child-foreign":
+    child_runs["workflow_runs"][0]["repository"]["full_name"] = "other/repo"
+if case == "release-child-workflow":
+    child_runs["workflow_runs"][0]["path"] = ".github/workflows/unrelated.yml"
+
 commit_reads = 0
 
 
@@ -225,7 +246,7 @@ if case.startswith("release"):
 else:
     module = load("gate_reuse")
     proof = module.find_reuse(sha, event, ref, get, lambda _: "\n".join(lines))
-    assert bool(proof) == (case in {"valid", "ci-multiple-success"}), (case, proof)
+    assert bool(proof) == (case in {"valid", "ci-multiple-success", "prepare-pending"}), (case, proof)
     if proof:
         assert proof["parent"] == parent and proof["tree"] == tree
         assert proof["url"] == url and proof["description"] == status["description"]
@@ -253,3 +274,23 @@ if case == "valid":
         summary.seek(0)
         assert module.render(proof) in output.getvalue()
         assert html.escape(module.render(proof)) in summary.read()
+
+if case == "prepare-pending":
+    writes = []
+    module.api = lambda path, body: writes.append((path, body))
+    module.find_reuse = lambda *_: proof
+    with tempfile.NamedTemporaryFile(mode="w+") as output:
+        os.environ.update({
+            "GITHUB_REPOSITORY": repo, "TARGET_SHA": sha, "GITHUB_RUN_ID": "456",
+            "GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/master",
+            "GITHUB_OUTPUT": output.name,
+        })
+        sys.argv = ["gate_reuse.py", "prepare"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            module.main()
+        required = [body for path, body in writes if body["context"] == "gpu-vast"]
+        assert not any(body["state"] == "success" for body in required), writes
+        if parent != sha:
+            assert [body["state"] for body in required] == ["pending"], writes
+        output.seek(0)
+        assert "reused=true" in output.read()
