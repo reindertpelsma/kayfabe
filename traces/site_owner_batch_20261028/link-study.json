@@ -1,0 +1,438 @@
+[
+  {
+    "url": "https://tailscale.com/",
+    "sha256": "d17f9f7faaa967b2051f9192d931dda36999507bd51ae5291b9b3c10029256b9",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 197,
+        "links": 5,
+        "links_per_100_words": 2.54
+      },
+      {
+        "heading": "50,000 businesses   choose Tailscale",
+        "words": 40,
+        "links": 3,
+        "links_per_100_words": 7.5
+      },
+      {
+        "heading": "Easy, secure, identity-based access to anything",
+        "words": 89,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Developer approved,  But don\u2019t just take our word for it.",
+        "words": 959,
+        "links": 2,
+        "links_per_100_words": 0.21
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://asahilinux.org/",
+    "sha256": "748ce3a2941a65241ec13c8b6da5ea98c0ba6894adb9d8793952c2f1af033477",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 25,
+        "links": 1,
+        "links_per_100_words": 4.0
+      },
+      {
+        "heading": "Install from macOS",
+        "words": 102,
+        "links": 8,
+        "links_per_100_words": 7.84
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://zed.dev/",
+    "sha256": "30887755a14807c42b0efc98aa6a47a7d5b3fbf98ad66b5cc65c93cf4c20edce",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 1038,
+        "links": 3,
+        "links_per_100_words": 0.29
+      },
+      {
+        "heading": "Trusted by world-class developers & industry leading teams",
+        "words": 226,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Zed Just Works",
+        "words": 264,
+        "links": 12,
+        "links_per_100_words": 4.55
+      },
+      {
+        "heading": "AI that works the way you code",
+        "words": 192,
+        "links": 9,
+        "links_per_100_words": 4.69
+      },
+      {
+        "heading": "Growing extensions ecosystem",
+        "words": 208,
+        "links": 22,
+        "links_per_100_words": 10.58
+      },
+      {
+        "heading": "Built with ultimate care",
+        "words": 166,
+        "links": 7,
+        "links_per_100_words": 4.22
+      },
+      {
+        "heading": "From the team",
+        "words": 81,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "The latest from Zed",
+        "words": 27,
+        "links": 1,
+        "links_per_100_words": 3.7
+      },
+      {
+        "heading": "Replace PRs with Delta \u2013 Now in Public Beta",
+        "words": 27,
+        "links": 1,
+        "links_per_100_words": 3.7
+      },
+      {
+        "heading": "Xanadu Was Waiting for Agents",
+        "words": 25,
+        "links": 1,
+        "links_per_100_words": 4.0
+      },
+      {
+        "heading": "Introducing Delta",
+        "words": 21,
+        "links": 1,
+        "links_per_100_words": 4.76
+      },
+      {
+        "heading": "Daily drive with Zed",
+        "words": 12,
+        "links": 2,
+        "links_per_100_words": 16.67
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://immich.app/",
+    "sha256": "e41c9da088cac4a0a58e5d89afa1d8a337b19e9da99e84479cc35259fdd0d383",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 28,
+        "links": 16,
+        "links_per_100_words": 57.14
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://syncthing.net/",
+    "sha256": "b0e1da6be8e9d70381115a3b8cc8158ebec91fcede2922a5516f35673c3cdf79",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 71,
+        "links": 1,
+        "links_per_100_words": 1.41
+      },
+      {
+        "heading": "Get Started",
+        "words": 298,
+        "links": 8,
+        "links_per_100_words": 2.68
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://caddyserver.com/",
+    "sha256": "774aea1c717c1e1f165901e2cc8f7f799ac7ba8b495e03b94871ad3a33224529",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 59,
+        "links": 3,
+        "links_per_100_words": 5.08
+      },
+      {
+        "heading": "By default,  Caddy  automatically obtains  and  renews  TLS certificates for  all your sites.",
+        "words": 143,
+        "links": 1,
+        "links_per_100_words": 0.7
+      },
+      {
+        "heading": "The  most advanced  HTTPS server  in the world",
+        "words": 166,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Experience it",
+        "words": 145,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Deploy your own PKI with Caddy",
+        "words": 232,
+        "links": 1,
+        "links_per_100_words": 0.43
+      },
+      {
+        "heading": "Recommended by experts",
+        "words": 244,
+        "links": 3,
+        "links_per_100_words": 1.23
+      },
+      {
+        "heading": "A forward-thinking reverse proxy",
+        "words": 272,
+        "links": 1,
+        "links_per_100_words": 0.37
+      },
+      {
+        "heading": "Production-grade static file server",
+        "words": 208,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Flexible configuration compatible with any workflow",
+        "words": 272,
+        "links": 4,
+        "links_per_100_words": 1.47
+      },
+      {
+        "heading": "Unparalleled extensibility",
+        "words": 135,
+        "links": 1,
+        "links_per_100_words": 0.74
+      },
+      {
+        "heading": "4x faster PHP apps",
+        "words": 140,
+        "links": 3,
+        "links_per_100_words": 2.14
+      },
+      {
+        "heading": "The  gold standard  web server",
+        "words": 210,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Take everyone's word for it",
+        "words": 31,
+        "links": 0,
+        "links_per_100_words": 0.0
+      }
+    ],
+    "visible_citations_observed": 3,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://looking-glass.io/",
+    "sha256": "cbf7a165532f0c7828b577f120b039234eb58ce0992e8366ef76a025aa7815dc",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 98,
+        "links": 3,
+        "links_per_100_words": 3.06
+      },
+      {
+        "heading": "Project resources",
+        "words": 46,
+        "links": 3,
+        "links_per_100_words": 6.52
+      },
+      {
+        "heading": "Looking Glass in use",
+        "words": 5,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Looking Glass is open source.",
+        "words": 16,
+        "links": 2,
+        "links_per_100_words": 12.5
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://www.wireguard.com/",
+    "sha256": "3ba735a9ab49db806ea52c576d2effb7b03a7f443a69073dae73d35d6460cfa2",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 612,
+        "links": 43,
+        "links_per_100_words": 7.03
+      },
+      {
+        "heading": "Simple Network Interface",
+        "words": 295,
+        "links": 1,
+        "links_per_100_words": 0.34
+      },
+      {
+        "heading": "Cryptokey Routing",
+        "words": 659,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Built-in Roaming",
+        "words": 120,
+        "links": 0,
+        "links_per_100_words": 0.0
+      },
+      {
+        "heading": "Ready for Containers",
+        "words": 80,
+        "links": 1,
+        "links_per_100_words": 1.25
+      },
+      {
+        "heading": "Learning More",
+        "words": 45,
+        "links": 3,
+        "links_per_100_words": 6.67
+      },
+      {
+        "heading": "Source Code",
+        "words": 158,
+        "links": 6,
+        "links_per_100_words": 3.8
+      },
+      {
+        "heading": "License",
+        "words": 29,
+        "links": 0,
+        "links_per_100_words": 0.0
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://podman.io/",
+    "sha256": "ae5980b149aa4ebfc68531cde8ac1fe193b4e71b1bc4f7eccd8c9cffd447992d",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 209,
+        "links": 12,
+        "links_per_100_words": 5.74
+      },
+      {
+        "heading": "Have fun coloring and learn about Podman!",
+        "words": 43,
+        "links": 1,
+        "links_per_100_words": 2.33
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://www.proxmox.com/en/",
+    "sha256": "787c71ac50c030815de5c45358ed104d3afc75e5205b9279f71288094ff42994",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 34,
+        "links": 1,
+        "links_per_100_words": 2.94
+      },
+      {
+        "heading": "Proxmox Virtual Environment",
+        "words": 46,
+        "links": 2,
+        "links_per_100_words": 4.35
+      },
+      {
+        "heading": "Proxmox Backup Server",
+        "words": 39,
+        "links": 2,
+        "links_per_100_words": 5.13
+      },
+      {
+        "heading": "Proxmox Datacenter Manager",
+        "words": 181,
+        "links": 5,
+        "links_per_100_words": 2.76
+      },
+      {
+        "heading": "Proxmox is committed to open source",
+        "words": 100,
+        "links": 8,
+        "links_per_100_words": 8.0
+      },
+      {
+        "heading": "Some of our customers",
+        "words": 22,
+        "links": 2,
+        "links_per_100_words": 9.09
+      }
+    ],
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  },
+  {
+    "url": "https://tailscale.com/compare/wireguard",
+    "sha256": "2f47439472130ae5166a2b59b46e1ef55cded330c4ed4d1f50b1db441b426776",
+    "method": "curl HTML; headings h2; exclude nav/header/footer/script/style; static text, not visibility",
+    "sections": [
+      {
+        "heading": "lead",
+        "words": 1020,
+        "links": 18,
+        "links_per_100_words": 1.76
+      },
+      {
+        "heading": "Try Tailscale for   free",
+        "words": 7,
+        "links": 2,
+        "links_per_100_words": 28.57
+      }
+    ],
+    "comparison_structure": "Intro, topic sections (configuration, connectivity, security, performance, features, administration), action links; no table or source footnotes observed.",
+    "visible_citations_observed": 0,
+    "capture_limit": "Static HTML; client-rendered text and CSS visibility not measured."
+  }
+]

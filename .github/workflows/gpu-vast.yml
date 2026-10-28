@@ -23,8 +23,33 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       statuses: write
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+    outputs:
+      reused: ${{ steps.reuse.outputs.reused }}
+      proof: ${{ steps.reuse.outputs.proof }}
     steps:
+      - name: Find complete same-tree gate evidence without contacting the Worker
+        id: reuse
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com/reindertpelsma/kayfabe
+          curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+            -o "$temporary/gate_reuse.py" \
+            "$source_origin/$GITHUB_SHA/ci/vast-broker/gate_reuse.py"
+          python3 -I "$temporary/gate_reuse.py" prepare
       - name: Post pending status without contacting the Worker
+        id: status
+        if: steps.reuse.outputs.reused != 'true'
         shell: bash --noprofile --norc -eo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,7 +80,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PATH_SKIP_PATTERNS: >-
-            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ["**/*.md","docs/**","site/**","traces/**","archive/**","LICENSE*",
             ".github/ISSUE_TEMPLATE/**"]
         run: |
           set +x
@@ -92,7 +117,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PATH_SKIP_PATTERNS: >-
-            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ["**/*.md","docs/**","site/**","traces/**","archive/**","LICENSE*",
             ".github/ISSUE_TEMPLATE/**"]
         run: |
           set +x
@@ -118,7 +143,9 @@ jobs:
   gpu:
     name: Isolated BASE runner validates untrusted Worker
     needs: [pending, policy]
-    if: ${{ needs.policy.outputs.run == '1' && !github.event.pull_request.draft }}
+    if: >-
+      ${{ needs.pending.outputs.reused == 'true' ||
+          (needs.policy.outputs.run == '1' && !github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     environment: gpu-vast
     timeout-minutes: 210
@@ -129,7 +156,25 @@ jobs:
       verdict: ${{ steps.broker.outputs.verdict }}
       verified: ${{ steps.broker.outputs.verified }}
     steps:
+      - name: Replay verified parent result
+        if: needs.pending.outputs.reused == 'true'
+        env:
+          REUSE_PROOF: ${{ needs.pending.outputs.proof }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" = push && "$GITHUB_REF" = refs/heads/master ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com/reindertpelsma/kayfabe
+          curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+            -o "$temporary/gate_reuse.py" \
+            "$source_origin/$GITHUB_SHA/ci/vast-broker/gate_reuse.py"
+          env -i PATH=/usr/bin:/bin GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            REUSE_PROOF="$REUSE_PROOF" GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" \
+            python3 -I "$temporary/gate_reuse.py" replay
       - name: Fetch BASE controller and request bounded test
+        if: needs.pending.outputs.reused != 'true'
         id: broker
         shell: bash --noprofile --norc -eo pipefail {0}
         timeout-minutes: 205
@@ -177,6 +222,8 @@ jobs:
       POLICY_CHECK_RESULT: ${{ needs.policy-check.result }}
       POLICY_CHECK_RUN: ${{ needs.policy-check.outputs.run }}
       GPU_RESULT: ${{ needs.gpu.result }}
+      REUSED: ${{ needs.pending.outputs.reused }}
+      REUSE_PROOF: ${{ needs.pending.outputs.proof }}
       BROKER_STATE: ${{ needs.gpu.outputs.state }}
       BROKER_VERIFIED: ${{ needs.gpu.outputs.verified }}
       BROKER_VERDICT: ${{ needs.gpu.outputs.verdict }}
@@ -200,7 +247,12 @@ jobs:
           result=error
           # NOT_NEEDED needs two agreeing decisions; the action-free policy-check job is one.
           # The Worker never decides a skip: a GPU success needs a verified GRACE/NONE PASS.
-          if [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
+          if [[ "${REUSED:-false}" = true && "$PENDING_RESULT" = success &&
+            "$POLICY_RESULT" = success && "${POLICY_CHECK_RESULT:-}" = success &&
+            "$GPU_RESULT" = success ]]; then
+            state=REUSED
+            result=success
+          elif [[ "$PENDING_RESULT" = success && "$POLICY_RESULT" = success &&
             "$POLICY_RUN" = 0 && "${POLICY_CHECK_RESULT:-}" = success &&
             "${POLICY_CHECK_RUN:-}" = 0 && "$GPU_RESULT" = skipped ]]; then
             state=NOT_NEEDED
@@ -214,12 +266,27 @@ jobs:
             result=failure
           fi
           description="GPU broker $state"
+          target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "$state" = REUSED ]]; then
+            description=$(python3 -I -c '
+          import json, os, re
+          proof = json.loads(os.environ["REUSE_PROOF"])
+          assert re.fullmatch("[0-9a-f]{40}", proof["parent"])
+          print("reused: same tree verified on " + proof["parent"][:7])')
+            target_url=$(python3 -I -c '
+          import json, os, re
+          proof = json.loads(os.environ["REUSE_PROOF"])
+          assert re.fullmatch(
+              r"https://github.com/reindertpelsma/kayfabe/actions/runs/[1-9][0-9]{0,19}",
+              proof["url"])
+          print(proof["url"])')
+          fi
           if [[ "$state" = PROVIDER_FAULT && "$BROKER_VERDICT" = PROVIDER_FAULT ]]; then
             description="GPU provider fault; no kayfabe verdict"
           fi
           temporary=$(mktemp)
           jq -n --arg state "$result" --arg description "$description" \
-            --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg url "$target_url" \
             '{state:$state,context:"gpu-vast",description:$description,target_url:$url}' > "$temporary"
           curl --silent --show-error --fail --max-time 20 \
             -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \

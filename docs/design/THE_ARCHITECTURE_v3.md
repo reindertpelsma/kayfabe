@@ -1,6 +1,6 @@
 # kayfabe v3 — the architecture after the owner's review
 
-**STATUS: LIVE, 2026-09-20 (w820). Supersedes `THE_ARCHITECTURE_v2.md`**, which this document
+**STATUS: LIVE, 2026-10-28 (owner corrections to §2.4 and §4.2; original w820). Supersedes `THE_ARCHITECTURE_v2.md`**, which this document
 keeps only as the record of what was proposed before the review corrected it.
 
 ⊘ **w820 rewrote §2 entirely** around a second privilege boundary the owner named: the one
@@ -784,6 +784,10 @@ carries it as one.**
 
 ### 2.4 The wakeup protocol
 
+> **CORRECTION / STATUS: LIVE, 2026-10-28 — owner answers Q5/Q6, by design ([§AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28)).** A worker may park only when every pending completion is epoll-servable.
+> Consuming the eventfd must not strand outstanding work: waiter registration, work recheck and release notification must preserve a wake across every ordering of producer release and registration.
+> The historical sequence-word protocol below does not by itself establish that every completion source is epoll-servable.
+
 One word, `worker_vcpu_poll`, and the futex `prepare_to_wait`-then-`schedule` idiom. `[owner]`
 supplied the field split; an adversarial review supplied the orderings and the layout.
 
@@ -961,6 +965,12 @@ addresses. The review gives three independent defeaters, any one of which is fat
 ⇒ Mirror is also **completely rootless**, which is the security posture the product needs.
 
 ### 4.2 The diff
+
+> **CORRECTION / STATUS: LIVE, 2026-10-28 — owner answer Q1, by design ([§AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28)).** Before a refresh, edited leaves may resolve old, new or unmapped; unedited valid VAs stay valid throughout.
+> After a refresh, edited VAs reflect their state at its start or later.
+> Refresh requests coalesce, and the last refresh need only observe all changes preceding its own start, so requests must not accumulate a refresh backlog.
+> Deferring or skipping an invalid-to-valid invalidate for TLB batching is within this contract, without a carve-out.
+> **CODE READ at `7dcedefea`:** the source and simulator checks in [§AP](../OWNER_RULINGS.md#code-checks-accompanying-the-fold-in) support the unchanged-VA invariant; they do not constitute a hardware qualification of every concurrent walk.
 
 > ### ★★★★★ CURRENT `[owner design + COMMIT-ON-ACK ruling, 2026-09-25]` — THE GPU SENDS ONLY A DIFF
 >

@@ -1,3 +1,6 @@
+> **CORRECTION / STATUS: SUPERSEDED, 2026-10-28.** The v3 architecture [THE_ARCHITECTURE_v3.md](../design/THE_ARCHITECTURE_v3.md) supersedes this v2 design; the earlier archive banner below retains its historical successor reference.
+> <!-- src: docs/design/THE_ARCHITECTURE_v3.md, opening STATUS supersession notice -->
+
 > ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
 > The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
 > its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not

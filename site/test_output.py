@@ -151,8 +151,8 @@ def is_foreign(url):
     return bool(parts.netloc) and parts.netloc != "kayfabe.dev" or url.startswith("//")
 
 
-class SelfContained(unittest.TestCase):
-    # FALSIFIER: any built page, stylesheet or script makes the browser fetch from another host.
+class UninstrumentedOutput(unittest.TestCase):
+    # FALSIFIER: ordinary build output gains external resources; deploy analytics is separate.
     def test_no_third_party_resources_in_html(self):
         for path in OUTPUT.rglob("*.html"):
             for tag, url in Pages(path.read_text()).resources:
@@ -246,7 +246,7 @@ class LandingAndDocsIndex(unittest.TestCase):
         works = (OUTPUT / "works-today/index.html").read_text()
         different = (OUTPUT / "how-it-differs/index.html").read_text()
         for claim in ["VFIO passthrough", "NVIDIA vGPU", "API forwarding",
-                      "gVisor with nvproxy", "virtio-gpu", "How it is isolated"]:
+                      "CUDA container", "gVisor with nvproxy", "virtio-gpu", "How it is isolated"]:
             self.assertIn(claim, different)
         for claim in ["result files are not committed", "not merged yet", "non-goal"]:
             self.assertIn(claim, works)
@@ -261,10 +261,9 @@ class LandingAndDocsIndex(unittest.TestCase):
                       "No all-app pass exists", "Not measured yet"]:
             self.assertIn(claim, text)
         self.assertIn('id="not-measured-yet"', works)
-        for claim in ["Caraxes", "Open-IOV", "patched Cloud Hypervisor", "vgsp.ko"]:
-            self.assertIn(claim, different)
-        for url in ["https://github.com/silasmue/Caraxes", "https://open-iov.org/"]:
-            self.assertIn(url, different)
+        self.assertIn("How the options differ", different)
+        self.assertIn("Open-IOV", different)
+        self.assertNotIn("Caraxes", different)
         self.assertNotIn("coordinator", works.lower() + different.lower())
         self.assertNotIn("task direction", works.lower() + different.lower())
 
