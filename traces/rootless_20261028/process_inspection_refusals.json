@@ -1,0 +1,35 @@
+{
+  "run": "Z1-d9cfef0f",
+  "errors": [
+    {
+      "file": "fast_z1_rootless_bus-info-sweep_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/531454/fd'"
+    },
+    {
+      "file": "fast_z1_rootless_concurrency_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/531669/fd'"
+    },
+    {
+      "file": "fast_z1_rootless_defer-liveness_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/531897/fd'"
+    },
+    {
+      "file": "fast_z1_rootless_doorbell-census_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/531072/fd'"
+    },
+    {
+      "file": "fast_z1_rootless_engines_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/530893/fd'"
+    },
+    {
+      "file": "fast_z1_rootless_gpu-info-sweep_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/531277/fd'"
+    },
+    {
+      "file": "fast_z1_rootless_timer_qemu.log",
+      "refusal": "ROOTLESS_REFUSED: [Errno 13] Permission denied: '/proc/530703/fd'"
+    }
+  ],
+  "exit_records": 0,
+  "live_observer_acknowledged_arms": 0
+}

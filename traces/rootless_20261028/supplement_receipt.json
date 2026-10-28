@@ -1,0 +1,8 @@
+{
+  "files": {
+    "rootless-STOP.txt": "fad026348fc4833ed1224d6e8b53ab8967b73378b9a512a414f6a3f4dd5f2209",
+    "final-scoped-xids.json": "35ef3791c697fa00a492ff61229c0418a0ab07b64471b19d412d15ec78f83c20",
+    "final-kernel.jsonl": "10d4a6b39f17ddf7758d9743be7e2617218fe52d8d126c6a6d62b0ca1e1f8a81"
+  },
+  "verified_utc": "2026-10-28T00:01:50.450937+00:00"
+}

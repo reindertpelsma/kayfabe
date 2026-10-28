@@ -1,0 +1,536 @@
+{
+  "run": "Z1-d9cfef0f",
+  "records": [
+    {
+      "pid": 530703,
+      "starttime": 13364498,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145211.7605817,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145211.8618944,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145211.9637742,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--timer,--probe-launch-dma"
+    },
+    {
+      "pid": 530893,
+      "starttime": 13365043,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145217.203891,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145217.3053153,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145217.4080594,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--engines,--probe-launch-dma"
+    },
+    {
+      "pid": 531072,
+      "starttime": 13365547,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145222.2488606,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145222.3502665,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145222.452916,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--doorbell-census,--probe-launch-dma"
+    },
+    {
+      "pid": 531277,
+      "starttime": 13366092,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145227.6935117,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145227.7948303,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145227.8974278,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--gpu-info-sweep,--probe-launch-dma"
+    },
+    {
+      "pid": 531454,
+      "starttime": 13366576,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145232.536206,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145232.6375313,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145232.7402427,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--bus-info-sweep,--probe-launch-dma"
+    },
+    {
+      "pid": 531669,
+      "starttime": 13367380,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145240.5825508,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145240.6839292,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145240.7865877,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--concurrency,--probe-launch-dma"
+    },
+    {
+      "pid": 531897,
+      "starttime": 13368235,
+      "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a",
+      "samples": [
+        {
+          "time": 1793145249.1283793,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/null"
+          ]
+        },
+        {
+          "time": 1793145249.2297792,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        },
+        {
+          "time": 1793145249.3322227,
+          "status": {
+            "Uid": "997\t997\t997\t997",
+            "Gid": "971\t971\t971\t971",
+            "Groups": "991",
+            "CapEff": "0000000000000000",
+            "CapPrm": "0000000000000000",
+            "CapBnd": "0000000000000000",
+            "NoNewPrivs": "1",
+            "VmLck": "0 kB",
+            "VmPin": "0 kB"
+          },
+          "devices": [
+            "/dev/kvm",
+            "/dev/null",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia0",
+            "/dev/nvidiactl"
+          ]
+        }
+      ],
+      "observed_devices": [
+        "/dev/kvm",
+        "/dev/null",
+        "/dev/nvidia-uvm",
+        "/dev/nvidia0",
+        "/dev/nvidiactl"
+      ],
+      "exit_record_present": false,
+      "arm": "--defer-liveness,--probe-launch-dma"
+    }
+  ],
+  "uid": 997,
+  "groups": {
+    "primary": 971,
+    "kvm": 991
+  },
+  "all_observed_CapEff_CapPrm_CapBnd_zero": true
+}
