@@ -39,6 +39,18 @@ BOTH = [
     (r"(guaranteed|impossible)\s+(isolation|for the guest)", "isolation is designed, not audited"),
     (r"\binsecure\s+without", "confinement is an extra layer, not a precondition"),
     (r"(fully|completely)\s+(isolated|sandboxed)", "not audited"),
+    (
+        r"\bguarantee[sd]?\b|\b(can ?not|can't)\s+block\b",
+        "sharing and isolation are designed, not measured or audited: no guarantee wording",
+    ),
+    (
+        r"fail(s|ed)?\s+loudly",
+        "conjugateGradientUM printed SUCCESS with a wrong result: failures are not always loud",
+    ),
+    (
+        r"\bscores?\b[^.\n|]{0,25}\b\d{3,6}\b",
+        "benchmark scores stay private (docs/SPEC_RESULTS.md)",
+    ),
 ]
 
 # Keep the hero free of the two low-level terms named by the owner.

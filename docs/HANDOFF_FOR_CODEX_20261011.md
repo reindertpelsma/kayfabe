@@ -1,5 +1,7 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+**STATUS: LIVE, 2026-10-11 (updates are listed newest first; the original status line is further down).**
+
 ## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
 
 Source3ee0dd10ac89d62c44d64ac9ca412a685503a5ad / RTX4070 / stock595.91.07 /
@@ -453,7 +455,7 @@ cleared GPU-free primitive scope. Full trap/core/abi/rm/chan/qemu1899 PASS/0fail
 Evidence gravity-vulkan/user-scan. Runtime userrelay::enabled() remains false;
 source admission/native ordering/software migration integration still open.
 
-Exact4df9c0095 hardware on172.22.1.20: gates9/9+gate10, USERbirths12/12,
+Exact4df9c0095 hardware onthe trusted test host: gates9/9+gate10, USERbirths12/12,
 fast30/30/crash0/NOTRUN0/exit0. Five Xid31 match deliberate negative arms; no32.
 Linux desktop disposable child: Cinnamon/Xorg + NVIDIA580.159.04 RTX4070 gears
 ~60FPS, no hostXid; guest startup flip timeout and shared-data assertions mean
@@ -1079,7 +1081,7 @@ Windows verdict yet; Vulkan unfixed. Owner personal1380chain remains preserved.
 
 ## Latest checkpoint, 2026-10-11 21:39 UTC
 
-Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;
+Last confirmed public push89e8ddf8b, private1dc9c0e. Owner releasedthe trusted test host;
 manual1380 stopped UNCLEAN-kill21:33:57 after failed ACPI/QGA shutdown. Installed
 image + backing chain retained; writable personal child/firmware/KEEP.json in
 owner-state/manual1380. qcow2 check0 is not NTFS shutdown proof. User explicitly
@@ -2027,7 +2029,7 @@ README `traces/windows_gl_crash_20261011/README.md`); (2) the overlay (MPO) flip
 The OpenGL/CUDA context-creation root cause (needs the RM trace diff vs the VFIO reference and user-mode crash analysis, diagnosis only) and the
 overlay interlock stall. If you work on them anyway: write each hypothesis and its falsifier BEFORE the run, one variable per run.
 
-## Run mechanics (host `root@172.22.1.20`, RTX 4070; see `scripts/bench/windows/host_tools/README.md`)
+## Run mechanics (host the trusted test host, RTX 4070; see `scripts/bench/windows/host_tools/README.md`)
 - GPU is shared: take `/tmp/kayfabe-fastguest.lock` with `flock -o`; queue with `tdropus/queue.sh N REV HOLD RUNNER [env...]`. One QEMU at a time.
 - Runner: `tdrhunt/tdr-run26.sh` (production profile, scripted sign-in with a retrying password step, `DWM_OVERLAY_OFF=1` disables the guest
   overlay via `OverlayTestMode=5`, `KF_GUEST_PW` env). NEVER edit a runner script while a run uses it: copy it to a new name.

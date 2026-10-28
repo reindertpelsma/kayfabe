@@ -527,7 +527,7 @@ cleared GPU-free primitive scope. Full trap/core/abi/rm/chan/qemu1899 PASS/0fail
 Evidence gravity-vulkan/user-scan. Runtime userrelay::enabled() remains false;
 source admission/native ordering/software migration integration still open.
 
-Exact4df9c0095 hardware on172.22.1.20: gates9/9+gate10, USERbirths12/12,
+Exact4df9c0095 hardware onthe trusted test host: gates9/9+gate10, USERbirths12/12,
 fast30/30/crash0/NOTRUN0/exit0. Five Xid31 match deliberate negative arms; no32.
 Linux desktop disposable child: Cinnamon/Xorg + NVIDIA580.159.04 RTX4070 gears
 ~60FPS, no hostXid; guest startup flip timeout and shared-data assertions mean
@@ -1205,7 +1205,7 @@ Windows verdict yet; Vulkan unfixed. Owner personal1380chain remains preserved.
 
 ## Latest checkpoint, 2026-10-11 21:39 UTC
 
-Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;
+Last confirmed public push89e8ddf8b, private1dc9c0e. Owner releasedthe trusted test host;
 manual1380 stopped UNCLEAN-kill21:33:57 after failed ACPI/QGA shutdown. Installed
 image + backing chain retained; writable personal child/firmware/KEEP.json in
 owner-state/manual1380. qcow2 check0 is not NTFS shutdown proof. User explicitly
@@ -1583,7 +1583,7 @@ Open: no VM-reset hook exists in kf3 (arms are cleared at fn 1, the guest RM's s
 - **New in master:** VMM-neutral input traits (`InputSink`, `CursorSink` in `kf-broker`; kf3 ABI 22 to 23), the native physical-operand oracle (`kf-phys-oracle`, `traces/phys_operand_oracle_20261008/`: a copy-engine physical operand is refused on a USER-privilege channel, measured; 3D/compute/video have no physical-operand method, by reading), `docs/design/the_three_channel_kinds.md` §1.1 (the relayed Passthrough sub-kind), the real-hardware control diff `traces/windows_code43_walls_20261007/vfio10-vs-run89-controls.txt` (⊘ its framing is partly wrong: the vfio-10 reference is a DisplayPort monitor while kayfabe's connector is DVI-D by design, so the DP cluster is not a signal; see the Windows lines below).
 - **Not in master (branches; each needs the merge bar):** Windows `claude/windows-display-20261008`, `claude/windows-walls-20261008`, `claude/windows-timeout-20261008`, `claude/windows-reenable-20261008`, `claude/windows-pass-20261008` (in progress); `claude/rawclient-ce-interrupt-20261008` (the `--ce-interrupt` arm: bare metal positive leg 50/50 at a median 47 us wake, but the negative control cannot be graded on a busy GPU: other tenants raise the GPU-wide notifier; run it on the quiet box, then in the guest); `claude/userd-iova-spike-20261008` (negative result, below); the nvkvm-pv branch `kf-broker-fixes-20261008` (sub-pixel remainder, host cursor under grab).
 - **Windows state (2026-10-08):** NVIDIA-enabled idle works; per-process channels run as Passthrough twins; D3D device creation still fails and the guest bugchecks 0x116 at the first D3D device work (a GPU-scheduler timeout). RULED OUT with falsifiers: lost CE interrupts, stale `GP_GET`, the preempt and its re-enable, the USERD relay, the USERD address (run 89: identity IOMMU, plain adoption, same hang), a second GSP event, subchannel binds, VA base, display control `0x007302a5`. Leading inference: the display flip/vblank path (kayfabe raises no guest vblank interrupt, `vblirq=0.0`; Linux works without one). The owner may connect a DVI-D monitor so a like-for-like real-hardware reference can be traced.
-- **USERD (urgent, to be discussed once Windows passes):** Windows' USERD is in guest system memory; the host's IOVA for it is 47-bit and RM refuses it (`NV_ERR_INVALID_ADDRESS`, address > 2^40). Measured: a separate one-page OS descriptor is refused as well (`userd-iova-spike`), probably the kernel's 47-bit DMA latch. Run 89 shows that an identity IOMMU domain for the GPU makes adoption work. Agreed packaging: adopt first; fall back only on exactly 0x1e AND a system-memory USERD (and, later, no host-kernel patch); fallback = the relay, with the twin's USERD in host-owned VRAM, done inline in the doorbell table (copy `GPPut` in; the owner assumes Windows never reads `GP_GET`, a poison experiment would test it); the VRAM-backed alias as the later host-independent fix. ⚠ The GPU's IOMMU group on 172.22.1.20 may currently be in identity mode (set by the Windows agents for their control runs): check `cat /sys/kernel/iommu_groups/<n>/type` (the group of `0000:01:00.0`); the default is `DMA-FQ`.
+- **USERD (urgent, to be discussed once Windows passes):** Windows' USERD is in guest system memory; the host's IOVA for it is 47-bit and RM refuses it (`NV_ERR_INVALID_ADDRESS`, address > 2^40). Measured: a separate one-page OS descriptor is refused as well (`userd-iova-spike`), probably the kernel's 47-bit DMA latch. Run 89 shows that an identity IOMMU domain for the GPU makes adoption work. Agreed packaging: adopt first; fall back only on exactly 0x1e AND a system-memory USERD (and, later, no host-kernel patch); fallback = the relay, with the twin's USERD in host-owned VRAM, done inline in the doorbell table (copy `GPPut` in; the owner assumes Windows never reads `GP_GET`, a poison experiment would test it); the VRAM-backed alias as the later host-independent fix. ⚠ The GPU's IOMMU group on the trusted test host may currently be in identity mode (set by the Windows agents for their control runs): check `cat /sys/kernel/iommu_groups/<n>/type` (the group of `0000:01:00.0`); the default is `DMA-FQ`.
 - **Owner decisions waiting:** `KF3_WIN_TWIN_DEFAPI_OBJECT` (conflicts with §U.1; meets §U.3), `KF3_ASYNC_PREEMPT`, `KF3_RELAY_GET_REFRESH`, the software-runlist flag, the USERD packaging above, §T items T.9 and T.10, `raw_control_native` behind a non-default feature, the colour mode-3 hardware test, the DVI-D reference session.
 
 **MASTER, 2026-10-08 (later the same day) — the candidate below was promoted: master is the code of `6692e621` plus docs.** ⊘ *The "MASTER CANDIDATE" paragraph after this one is history: its "NOT run" list was run.* The standing merge approval was met for the exact code commit `6692e621`:
@@ -2264,7 +2264,7 @@ broker_lane.sh). Candidate procedure = `traces/v3_candidates/cand1_20261003/READ
     CeUtils timeout on the first boot after a stray QEMU was SIGKILLed on the same GPU (§4.9). It was
     **30/30** on the rerun at the same revision. `traces/v3_cifix/`.
   - **Open owner choices:** (1) build the guest doorbell helper now, or first measure a non-nested
-    host? Needs a physical host: `172.22.1.20` was still `Network is unreachable` from this workspace
+    host? Needs a physical host: the trusted test host was still `Network is unreachable` from this workspace
     on 2026-09-30, and the RTX 3050 kiosk PC's address is not recorded in the repo.
     (2) `GF100_DISP_SW` (X11 desktops): A = allocate a host object for it, which breaks the rule that
     kf-rm refuses unknown classes; B = keep refusing it, which leaves X11 partial. Recommendation: B
@@ -2338,7 +2338,7 @@ broker_lane.sh). Candidate procedure = `traces/v3_candidates/cand1_20261003/READ
   in the exact combined candidate above.
   Do not use those historical results to certify a new candidate. The fresh allowlist candidate
   starts from the published baseline, so it does not silently promote the other pending changes.
-- **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`
+- **Physical baseline access:** read-only SSH to the trusted test host reports `Network is unreachable`
   from this workspace on 2026-09-28. Prepare the protocol locally; do not label a Vast KVM VM as a
   non-nested host. No physical-host session or display was changed. The owner subsequently
   requested the nested Vast ioeventfd experiment; label its results as nested, not physical-host.

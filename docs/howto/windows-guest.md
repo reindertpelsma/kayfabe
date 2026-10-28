@@ -125,6 +125,6 @@ See also [Troubleshooting](troubleshooting.md) and [Display and the broker](disp
 
 - A Windows install on a machine without the harness (a plain ISO install onto a kayfabe-backed VM by hand).
 - Windows 10, or other Windows 11 builds than the two above.
-- Other NVIDIA driver versions in a Windows guest.
+- A successful guest run with another NVIDIA driver version. Windows 581.51 was attempted on AD102 and failed with Code 43 [measured in the sweep matrix, revision `24906bf33`, P19 profile; historical source `9d6f210ba`]. This is recorded on the branch `codex/sweep-integrate-20261018`, not merged: [matrix](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/MATRIX.md). Its same-board native Windows control passed, which is not a kayfabe guest pass.
 
 Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb9f2aa3`, 2026-10-14; further results up to master `89fc8a222`, 2026-10-21, in the README); LTSC 26100 on rented hosts. Not verified end to end: the `reg add` snippet is the repository's own text and is not a recorded run of exactly those lines. Settings 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the harness.

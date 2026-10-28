@@ -251,6 +251,23 @@ class LandingAndDocsIndex(unittest.TestCase):
         for claim in ["result files are not committed", "not merged yet", "non-goal"]:
             self.assertIn(claim, works)
 
+    def test_evidence_grades_and_the_central_unmeasured_list(self):
+        # FALSIFIER: the matrix result and the unmatrixed observations merge again, the central
+        # "not measured yet" list disappears, or the comparison pages stop naming their sources.
+        works = (OUTPUT / "works-today/index.html").read_text()
+        different = (OUTPUT / "how-it-differs/index.html").read_text()
+        text = re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", "", works, flags=re.S))
+        for claim in ["Seven of nine rows passed", "Edge video failed", "separate observations",
+                      "No all-app pass exists", "Not measured yet"]:
+            self.assertIn(claim, text)
+        self.assertIn('id="not-measured-yet"', works)
+        for claim in ["Caraxes", "Open-IOV", "patched Cloud Hypervisor", "vgsp.ko"]:
+            self.assertIn(claim, different)
+        for url in ["https://github.com/silasmue/Caraxes", "https://open-iov.org/"]:
+            self.assertIn(url, different)
+        self.assertNotIn("coordinator", works.lower() + different.lower())
+        self.assertNotIn("task direction", works.lower() + different.lower())
+
     def test_public_copy_checks_pass_and_manual_is_excluded(self):
         import claims_guard
 

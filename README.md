@@ -13,11 +13,11 @@ Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) 
 
 ## Why it is interesting
 
-| | host keeps the GPU | safe for untrusted guests | guest driver | needs |
+| | host keeps the GPU | isolation between guests | guest driver | needs |
 |---|---|---|---|---|
 | VFIO passthrough | no, one VM owns it | depends on the IOMMU and trust model; see [FAQ](docs/FAQ.md) | stock | any GPU |
-| NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | [supported GPU](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html), licence |
-| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | possible, but fragile for multi-tenant VMs | a custom guest module | any NVIDIA GPU |
+| NVIDIA vGPU | no, VMs share it, the host does not | documented by NVIDIA for multi-tenant use ([overview](https://docs.nvidia.com/ai-enterprise/release-8/latest/infra-software/vgpu/overview.html)); not assessed here | vendor vGPU driver | a GPU on [NVIDIA's supported list](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html) (workstation and data-centre cards), vGPU software and licence |
+| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | nvkvm-pv: default-deny by design; no external review, and its own audits list open findings (its `docs/faq.md`) | a custom guest module | any NVIDIA GPU |
 | **kayfabe** | **yes** | **designed for hostile guests; safety not established or audited** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
@@ -49,8 +49,8 @@ Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) 
 | Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
 | CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
 | SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
-| Blender on Windows | Renders sample files properly, needs more testing |
-| 3DMark demo on Steam | Steel Nomad (full, DX12) runs to the end. Result files are not committed yet |
+| Blender on Windows | Recorded CUDA and OptiX renders, plus a later large-tile denoise reset [measured in VM 2990, revision `eb9f2aa3`, RTX 4070, guest 580.88]. [Report](https://github.com/reindertpelsma/kayfabe/blob/b746e1b60/traces/win11_apps_20261015/README.md) on `claude/win11-apps-20261015`, not merged; broader stability is open |
+| 3DMark demo on Steam | Steel Nomad (full, DX12) runs to the end. Later [branch records](https://github.com/reindertpelsma/kayfabe/blob/ca20742c1/traces/host_campaign_20261023/README.md) include valid completions and a failed control [measured in runs 5001 to 5008, binary revision `0d7ba743`, RTX 4070]. They are on `claude/host-campaign-20261023`, not merged; scores stay private under the [publication policy](docs/SPEC_RESULTS.md) |
 | OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used (OBS log: `obs_nvenc_h264_tex`; the host GPU's encoder showed 21% load attributed to the VM process). MP4 video playback has no issues that I noticed. Result is not commited yet |
 | Office 365 | No issues so far |
 

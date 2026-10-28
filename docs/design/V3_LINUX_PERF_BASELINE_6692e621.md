@@ -1,6 +1,6 @@
 # V3_LINUX_PERF_BASELINE_6692e621 - the Linux performance baseline before the Windows integration
 
-**STATUS: LIVE, 2026-10-10 (BEFORE end only; the AFTER end has not been run).** Measured on the trusted host (172.22.1.20: Ryzen 9 7900, 24 threads, RTX 4070, host driver 595.91.07 open module, kernel 7.0.0-34, **not nested**) with `scripts/bench/perf_compare.sh 6692e621 --reps 3`. Raw output and parsed numbers are in `traces/perf_baseline_6692e621_20261010/` (and on the host in `/var/lib/kf-windows-20261005/perf-baseline/6692e621/`). Purpose (owner): quantify the performance impact of everything added for Windows, by running the identical command on the integrated branch and diffing against this baseline.
+**STATUS: LIVE, 2026-10-10 (BEFORE end only; the AFTER end has not been run).** Measured on the trusted host (the trusted test host: Ryzen 9 7900, 24 threads, RTX 4070, host driver 595.91.07 open module, kernel 7.0.0-34, **not nested**) with `scripts/bench/perf_compare.sh 6692e621 --reps 3`. Raw output and parsed numbers are in `traces/perf_baseline_6692e621_20261010/` (and on the host in `/var/lib/kf-windows-20261005/perf-baseline/6692e621/`). Purpose (owner): quantify the performance impact of everything added for Windows, by running the identical command on the integrated branch and diffing against this baseline.
 
 ## 1. Which revision, and why (read before using the diff)
 

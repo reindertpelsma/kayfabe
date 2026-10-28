@@ -1,5 +1,7 @@
 # Resume Windows apps and GravityMark Vulkan
 
+**STATUS: LIVE, 2026-10-12 (updates are listed newest first; the original status line is further down).**
+
 ## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
 
 Source3ee0dd10ac89d62c44d64ac9ca412a685503a5ad / RTX4070 / stock595.91.07 /
@@ -470,7 +472,7 @@ cleared GPU-free primitive scope. Full trap/core/abi/rm/chan/qemu1899 PASS/0fail
 Evidence gravity-vulkan/user-scan. Runtime userrelay::enabled() remains false;
 source admission/native ordering/software migration integration still open.
 
-Exact4df9c0095 hardware on172.22.1.20: gates9/9+gate10, USERbirths12/12,
+Exact4df9c0095 hardware onthe trusted test host: gates9/9+gate10, USERbirths12/12,
 fast30/30/crash0/NOTRUN0/exit0. Five Xid31 match deliberate negative arms; no32.
 Linux desktop disposable child: Cinnamon/Xorg + NVIDIA580.159.04 RTX4070 gears
 ~60FPS, no hostXid; guest startup flip timeout and shared-data assertions mean
@@ -1014,7 +1016,7 @@ personal Windows chain preserved. Next native cursor sampling; no app fix yet.
 
 ## Hardware is idle; preserve the personal image
 
-Trusted **root@172.22.1.20**, one RTX4070/AD104, host595.91.07/guest580.88.
+Trusted **the trusted test host**, one RTX4070/AD104, host595.91.07/guest580.88.
 W=/var/lib/kf-windows-20261005. Owner released manual1380 and authorized stopping
 it/further runs. It stopped UNCLEAN-kill21:33:57UTC; qcow2 check0 does not prove
 NTFS clean shutdown. Keep these **personal convenience** files on this host:
