@@ -160,16 +160,24 @@ def summary_lines(text, parent):
         r"rc=[0-9]+ duration_ms=[0-9]+ result=PASS",
     ]
     groups = [[] for _ in patterns]
+    final_blocks = 0
     for raw in text.splitlines():
         line = raw.split("Z ", 1)[-1]
+        if line.startswith("[untrusted] [box] KF_FINAL_SUMMARY_BEGIN "):
+            final_blocks += 1
         for index, pattern in enumerate(patterns):
             if re.fullmatch(pattern, line) and line not in groups[index]:
                 groups[index].append(line)
     expected = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
     stages = [line.split("stage name=", 1)[1].split(" ", 1)[0] for line in groups[-1]]
+    modes = [line.split(" mode=", 1)[1].split(" ", 1)[0] for line in groups[2]]
     if any(not group for group in groups) or sorted(stages) != sorted(expected):
         raise ValueError("missing original result lines")
-    return [line for group in groups for line in group][:20]
+    if sorted(modes) != ["guest", "host"] or final_blocks != 1:
+        raise ValueError("incomplete or conflicting original verdict")
+    if any(len(groups[index]) != 1 for index in [0, 1, 3]):
+        raise ValueError("ambiguous original rental or verdict")
+    return [line for group in groups for line in group]
 
 
 def find_reuse(sha, event, ref, get=api, logs=original_logs):

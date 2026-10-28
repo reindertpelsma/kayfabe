@@ -82,6 +82,8 @@ lines = [
     "[untrusted] [box] stage name=" + name + " rc=0 duration_ms=1 result=PASS"
     for name in ["provision", "cuda_host", "merge_bar", "cuda_guest"]
 ]
+# Valid evidence includes both CUDA modes for this exact original revision.
+lines.insert(3, lines[2].replace("mode=host", "mode=guest"))
 event, ref = "push", "refs/heads/master"
 if case == "tree":
     data["/commits/" + parent]["commit"]["tree"]["sha"] = "f" * 40
@@ -117,11 +119,11 @@ if case == "pr":
 if case == "logs-missing":
     lines = []
 if case == "logs-fail":
-    lines[3] = lines[3].replace("PASS", "FAIL")
+    lines[4] = lines[4].replace("PASS", "FAIL")
 if case == "logs-revision":
     lines[2] = lines[2].replace(parent[:8], old[:8])
 if case == "logs-duplicate-stage":
-    lines[4:] = [
+    lines[5:] = [
         "[untrusted] [box] stage name=provision rc=0 duration_ms=" + str(i) + " result=PASS"
         for i in range(1, 5)
     ]
@@ -129,8 +131,6 @@ if case == "logs-missing-guest-stage":
     lines[-1] = (
         lines[-1].replace("cuda_guest", "provision").replace("duration_ms=1", "duration_ms=2")
     )
-# Valid evidence includes both CUDA modes for this exact original revision.
-lines.insert(3, lines[2].replace("mode=host", "mode=guest"))
 if case == "logs-no-guest-start":
     lines = [line for line in lines if "mode=guest" not in line]
 if case == "logs-no-host-start":
