@@ -120,6 +120,13 @@ if case == "logs-fail":
     lines[3] = lines[3].replace("PASS", "FAIL")
 if case == "logs-revision":
     lines[2] = lines[2].replace(parent[:8], old[:8])
+if case == "logs-duplicate-stage":
+    lines[4:] = [
+        "[untrusted] [box] stage name=provision rc=0 duration_ms=" + str(i) + " result=PASS"
+        for i in range(1, 5)
+    ]
+if case == "logs-missing-guest-stage":
+    lines[-1] = lines[-1].replace("cuda_guest", "provision").replace("duration_ms=1", "duration_ms=2")
 if case == "not-needed":
     status["description"] = "GPU broker NOT_NEEDED"
 if case == "api-error":

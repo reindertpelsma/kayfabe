@@ -23,6 +23,8 @@ const cases = [
   'logs-missing',
   'logs-fail',
   'logs-revision',
+  'logs-duplicate-stage',
+  'logs-missing-guest-stage',
   'not-needed',
   'api-error',
   'release-valid',
