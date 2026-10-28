@@ -38,6 +38,29 @@ The broker's workflow tests check the Pages permission boundary and dropdown beh
 Master pins one toolchain; PR, master and tag builds render every eligible version and fail on any render failure.
 Old HTML is always rebuilt; there are no per-version pins or frozen HTML caches.
 
+## Portable copies
+
+Use `python3 site/build.py --tools-dir "$TOOLS_DIR" --portable` to build a local copy.
+Open `site/public/index.html` directly, or serve the whole output below any HTTP
+prefix, such as `/x/y/`. Internal navigation, forms, assets, metadata URLs and
+redirects use relative paths with explicit `index.html` directory targets. The
+portable copy omits the production sitemap and robots file. The default build
+keeps the existing Pages URLs and SEO metadata.
+
+The version selector resolves its JSON relative to its script. Under HTTP it keeps
+a chapter when that chapter exists in the selected version, otherwise opening the
+version index. Under `file://`, where browsers can block fetch, the options included
+in the document stay available and version changes open the selected index. The
+no-JavaScript links work in either mode. No release packaging or publication job
+is added by this build option.
+
+Check portable output with `python3 site/check_portable.py`. This starts a loopback
+server under `/x/y/`, checks all local HTML/CSS targets plus the selector/TOC/search
+resources over HTTP, and verifies the corresponding `file://` targets exist. To
+run the real two-version build fixture in the existing test suite, also set
+`SITE_PORTABLE_TOOLS="$TOOLS_DIR"`. Use `python3 site/test_output.py` after a default
+Pages build; those strict Pages assertions are intentionally unchanged.
+
 ## URLs and versions
 
 - `/`: newest published `v*` release with assets and site content; master if none qualifies.
