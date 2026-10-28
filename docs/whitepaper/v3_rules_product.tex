@@ -98,11 +98,22 @@ emulates a device so the guest can use a stock NVIDIA driver. The repository has
 performance comparison with virtio-gpu, Venus or virgl, and this paper supplies none.
 \src{faq}\src{credits}
 
-\doc The credits describe Caraxes as an MIT fork of Leandro, using a synthetic NVIDIA device
-over vfio-user, a protocol between the VMM and an external device process. It plays the
-firmware role and mirrors guest mappings while retaining the host driver. Open-IOV is a
-separate host-module approach; whether its host keeps using the card is not established by
-the cited description. The credits identify gVisor's nvproxy as a source of capability lists,
+\doc Public project documentation checked on 2026-10-28 corrects the comparison in the
+pinned credits. Caraxes serves a synthetic NVIDIA device over vfio-user and retains the host
+driver. Its quickstart's example run sets \code{CARAXES\_DMA=register}, which needs a binary
+with \code{cap\_sys\_admin} set using sudo; setup also uses sudo for the network device and
+the guest driver's module options. The same quickstart separately describes submission as an
+unprivileged host-driver client; this does not make the documented run sudo-free.
+\url{https://github.com/silasmue/Caraxes/blob/HEAD/docs/vfio/quickstart.md}
+
+\doc Open-IOV's system overview describes its host module binding to the physical GPU and
+exposing virtual GPUs through mediated devices, with the distribution NVIDIA module unbound.
+Its install guide requires root or sudo for module loading and device creation, but also
+describes an emulated path using the distribution driver. These pages do not establish
+whether the host can keep using the card.
+\url{https://open-iov.org/index.php/System_Overview}
+\url{https://open-iov.org/index.php/Install_and_First_Run}
+The pinned credits identify gVisor's nvproxy as a source of capability lists,
 not as evidence of the same stock-device architecture.\src{credits}
 
 \subsection{What would make the title a measured claim?}

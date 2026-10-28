@@ -6,16 +6,16 @@ description = "A short summary of kayfabe's security model and how to report a v
 <!-- src: docs/howto/security.md, opening note -->
 > **Kayfabe has not been security audited.** The model is a design, and the repository's own review of it (a source reading, 2026-10-03) listed gaps. Do not run untrusted or multi-tenant guests on a machine you cannot afford to lose.
 
-This page only summarises. The full, sourced text is [Security model in the manual](/@docs/security.html).
+The [security model in the manual](/@docs/security.html) explains the design and its evidence.
 
 ## The model in five lines
 
-<!-- src: docs/howto/security.md "The threat model" -->
+<!-- src: docs/howto/security.md 'The threat model', 'What the isolation is made of', 'Deployment' -->
 - The guest is hostile. Guest userspace and guest root are both untrusted.
-- Host actions are authored, never forwarded: every call kayfabe makes on the host GPU is built by kayfabe from a few verbs, using the host driver's unprivileged interface. Nothing the guest sends is replayed to the host.
-- The host process is meant to run unprivileged. In one audit on one machine, the Linux test suite and a Windows benchmark ran as an ordinary user, not root. The record is on the branch `claude/rootless-audit-20261016`. The launch scripts in the repository still start as root.
-- Confining the VMM, as an ordinary user and ideally in a container or sandbox, is an extra layer we recommend. kayfabe is linked into the VMM, so you confine the whole hypervisor process.
-- <!-- src: docs/howto/security.md 'Deployment'; docs/FAQ.md 'Why does it matter that kayfabe is an ordinary, unprivileged GPU process?' -->By design, a compromised kayfabe has the reach of an ordinary GPU-container tenant on the host driver, plus access to `/dev/kvm`. A guest first has to break kayfabe to get there. NVIDIA driver bugs and KVM bugs still apply. Enable the host IOMMU when you run untrusted guests.
+- Kayfabe builds the requests it sends to the host driver and checks what the guest asks to map and run.
+- The launch scripts still use root; a run without sudo is recorded on one host.
+- By design, running the hypervisor as an ordinary user in a container or sandbox adds a layer of protection.
+- NVIDIA driver bugs and KVM bugs still apply. Enable the host IOMMU when you run untrusted guests.
 
 ## What is not claimed
 

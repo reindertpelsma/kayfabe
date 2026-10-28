@@ -4,6 +4,10 @@
 
 This file is an index, not a hardware qualification or a current defect list. The publication task ran no hardware. [Source identities](sources_v3.json), [result distances](result_distances_v3.json), [PR metadata](pr_snapshot_v3.json) and [historical gap topics](gap_topics_v3.json) are machine-readable companions.
 
+## Project-description correction, 2026-10-28
+
+CODE READ: the current paper's product section corrects the pinned credits using public project pages retrieved on 2026-10-28. Caraxes's [quickstart](https://github.com/silasmue/Caraxes/blob/HEAD/docs/vfio/quickstart.md) example uses `CARAXES_DMA=register`, requiring a binary with `cap_sys_admin` set with sudo; it also uses sudo for networking and guest-driver options. Its separate description of submission as an unprivileged client does not describe the complete documented run. Open-IOV's [overview](https://open-iov.org/index.php/System_Overview) says its module binds the GPU and leaves the distribution NVIDIA module unbound; the [install guide](https://open-iov.org/index.php/Install_and_First_Run) requires root or sudo and also describes a path using the distribution driver. Neither page establishes whether the host can keep using the card. These are source readings, with no speed or security comparison. The implementation pin and historical source identities below are unchanged.
+
 ## Evidence qualification
 
 - **REPORTED:** public repository records can be inspected, but were not reproduced here.

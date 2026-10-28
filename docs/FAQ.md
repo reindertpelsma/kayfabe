@@ -47,16 +47,10 @@ The owner sees vfio-user as a possible future VMM frontend. It would add communi
 The project's history page (written 2026-09-06) describes it this way: nvkvm-pv forwards the guest's driver calls to the host and needs a custom kernel module in the guest, so the guest is Linux and the host and guest driver versions must match. Kayfabe emulates the device instead, so the guest runs NVIDIA's stock kernel driver, the guest driver version is decoupled from the host's by design, and Windows guests are possible. The same page says that if you want GPU forwarding that works today, use nvkvm-pv; kayfabe is a research project.
 <!-- src: docs/PROJECT_HISTORY.md section 3; README.md status line -->
 
-### How does kayfabe compare with Caraxes and Open-IOV?
+### Is there something similar?
 
-These are facts from the two projects' own public pages, retrieved on 2026-10-28; read the pages for their current state. Neither is described here as better or worse.
-
-**Caraxes** ([README](https://github.com/silasmue/Caraxes)) lists as host requirements a Linux x86-64 host with KVM and the NVIDIA open kernel modules with GSP firmware active, plus Cloud Hypervisor v53.0 with its patches. Its [quickstart](https://github.com/silasmue/Caraxes/blob/HEAD/docs/vfio/quickstart.md) keeps the host NVIDIA driver bound and runs the device as an unprivileged client of the host resource manager, with a copy of the binary that carries the file capability `cap_sys_admin+p`. Its README says to use trusted guests and that no adversarial guest has been tested. Its newer version serves the guest's stock driver; its older one uses its own guest modules. The core is MIT-licensed, the guest module GPL-2.0-only ([licences](https://github.com/silasmue/Caraxes/blob/HEAD/LICENSES.md)).
-
-**Open-IOV** ([main page](https://open-iov.org/index.php/Main_Page), [About](https://open-iov.org/index.php/Open-IOV:About), [install page](https://open-iov.org/index.php/Install_and_First_Run)) says the one component it adds is a host kernel module, `vgsp.ko`, and that it needs no change to the host driver, the guest driver, the hypervisor or the GPU firmware. Its install page lists Ubuntu 22.04 or 24.04, an enabled IOMMU, hugepages, kernel headers and root for loading the module and creating mediated devices. It validates a stock 570.144 Linux guest driver, and it states that CUDA kernel execution is its current frontier.
-
-**Kayfabe** needs a QEMU binary built with the kayfabe device (built from source by the repository's scripts), the NVIDIA open kernel module on the host (every recorded run used it), and no host kernel module or host driver patch of its own. The launch scripts still start as root; one run as an ordinary user is recorded (see *Do I need root, or a patched host?*). No performance or security comparison with either project exists in this repository: not measured yet.
-<!-- src: https://github.com/silasmue/Caraxes README "Requirements" and docs/vfio/quickstart.md, docs/wiki/isolation-rules.md rule D12, LICENSES.md (retrieved 2026-10-28); https://open-iov.org/index.php/Open-IOV:About, /Install_and_First_Run (status 2026-10-12), /FAQ (retrieved 2026-10-28); docs/howto/requirements.md; docs/howto/building.md; docs/howto/security.md -->
+[Caraxes](https://github.com/silasmue/Caraxes) and [Open-IOV](https://open-iov.org/index.php/Main_Page) also work toward running stock NVIDIA guest drivers without a vendor vGPU licence. Their documented host requirements differ; the [credits](howto/credits.md#related-projects) describe those requirements and link to their own documentation. No speed or security comparison with either project is recorded here.
+<!-- src: https://github.com/silasmue/Caraxes README and docs/vfio/quickstart.md; https://open-iov.org/index.php/System_Overview and https://open-iov.org/index.php/Install_and_First_Run (retrieved 2026-10-28); docs/howto/credits.md Acknowledgements -->
 
 ### Is there an installer or a download?
 
