@@ -1,6 +1,6 @@
 {
   "source": "58638e9737badf46d28ec813d52768106d792170",
-  "gpu_free_tests": 33,
+  "gpu_free_tests": 39,
   "existing_xid_oracle_tests": 109,
   "expected_red": [
     {
@@ -23,6 +23,13 @@
       "tests": 7,
       "errors": 7,
       "reason": "startup shadowing and missing lifecycle helper"
+    },
+    {
+      "commit": "2c1dd8405",
+      "launch_tests": 8,
+      "launch_failures": 4,
+      "suite_tests": 2,
+      "suite_failures": 2
     }
   ],
   "mutants": {
@@ -38,8 +45,19 @@
     "startup_scope_shadowed": 2,
     "pending_exit_accepted": 2,
     "pending_exit_refused": 2,
-    "reused_pid_accepted": 2
+    "reused_pid_accepted": 2,
+    "failed_qemu_scored_pass": 2,
+    "rootless_refusal_ignored": 2,
+    "suite_continues_after_refusal": 2
   },
   "claims_new": 0,
-  "hardware": "UNRUN at preparation"
+  "hardware": "REFUSED; no full rootless or sharing result",
+  "gpu_free_revision": "3c16c6dd7",
+  "vast_payload_tests": 208,
+  "birth_census_selftests": {
+    "cases": 11,
+    "wrong": 0
+  },
+  "forwarding_gate_selftest": "PASS",
+  "hardware_revision": "d9cfef0fae8aa136d010db638419931cc6db08d1"
 }
