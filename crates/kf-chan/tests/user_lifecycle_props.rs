@@ -1310,22 +1310,14 @@ fn b_the_monotone_entry_counter_survives_the_u32_boundary() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// soak (seconds by default; KF3_STRESS_SECS for longer)
-
-fn stress_secs() -> f64 {
-    std::env::var("KF3_STRESS_SECS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(2.0)
-}
+// Fixed work, independent of KF3_STRESS_SECS or runner scheduling. Each of the 512 seeds
+// generates at least 2,000 entries, so every run covers more than one million entries.
 
 #[test]
 fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(stress_secs());
     let mut total = 0u64;
-    let mut seed = 0u64;
-    while std::time::Instant::now() < deadline {
-        seed += 1;
+    let mut streams = 0u64;
+    for seed in 1..=512 {
         let mut rng = Rng::new(0x50AC + seed);
         let n = 2000 + rng.below(3000) as usize;
         let mut stream = gen_stream(&mut rng, n, true, false);
@@ -1368,9 +1360,15 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
             "seed {seed}: private ring drained"
         );
         assert_eq!(relay.life.counts().pointer_pb_read_violation, 0);
+        assert_eq!(
+            out.forwarded.len(),
+            stream.len(),
+            "seed {seed}: every entry relayed"
+        );
         total += out.forwarded.len() as u64;
+        streams += 1;
     }
-    println!("soak: {total} entries over {seed} streams");
+    println!("soak: {total} entries over {streams} streams");
     assert!(total > 100_000);
 }
 
@@ -1401,7 +1399,10 @@ fn soak_counts_with_expired_budget(seconds: &str) -> (u64, u64) {
     let entries: u64 = words[0].parse().unwrap();
     let streams: u64 = words[3].parse().unwrap();
     assert_eq!(streams, 512, "the full deterministic seed set must run");
-    assert!(entries >= 1_000_000, "every scheduled stream must be fully relayed");
+    assert!(
+        entries >= 1_000_000,
+        "every scheduled stream must be fully relayed"
+    );
     println!("soak coverage proof: budget={seconds} entries={entries} streams={streams}");
     (entries, streams)
 }
