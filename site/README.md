@@ -31,8 +31,8 @@ repeat a build without network access: both cached archives are SHA-256 checked 
 `site/build-report.json` records version/page counts and every broken local link (page, target,
 reason). A rendering error, missing title or link into internal docs fails the build. Other missing
 files/anchors are reported without failing. The output tests check SEO (canonical, noindex, Open Graph and plain-text Twitter cards, sitemap), search, version
-links, the landing's blocks, the manual's breadcrumbs, edit links and previous/next links, and that no built page,
-stylesheet or script fetches anything from another host.
+links, the landing's blocks, the manual's breadcrumbs, edit links and previous/next links, and that ordinary build output contains no external resources; deployment analytics is tested
+separately with synthetic HTML.
 The broker's workflow tests check the Pages permission boundary and dropdown behavior.
 
 Master pins one toolchain; PR, master and tag builds render every eligible version and fail on any render failure.
@@ -122,9 +122,19 @@ metadata requests a run; renames must have both paths in skip paths.
 
 ## Look and feel
 
-The site loads nothing from other hosts (maintainer note, enforced by `test_output.py`; it is deliberately not stated
-in the published copy).
-No frameworks, no web fonts, no external requests: system fonts, one small stylesheet (`static/style.css`) for the Zola
+<!-- src: .github/workflows/site.yml; site/build.py; site/deployment_slots.py; site/check_slots.mjs -->
+Local, PR and fork output contains no publication slot, beacon or privacy text. The upstream
+publication build adds one neutral head comment, using the layout or a verified byte splice for
+other page families. Every page has a stable footer element. A pinned jsdom build check validates
+that the slot is directly inside the head and that a dummy replacement adds only the expected nodes.
+The protected deployment job validates its runtime HTML variable, accepting only canonical comments
+and the approved script, then replaces that exact slot in bytes. It never parses pages, checks out
+source or executes a downloaded helper. Valid input adds
+the beacon and fixed privacy JavaScript from the workflow. That script adds one privacy sentence
+only when the beacon element exists, waiting for the footer when needed. Empty, absent or invalid
+input removes the slot and deploys without a beacon or privacy text; valid input with zero slots
+fails. The actual variable is never stored in source or fixtures.
+No frameworks or web fonts: system fonts, one small stylesheet (`static/style.css`) for the Zola
 pages, `book-theme/kayfabe.css` layered on mdBook's CSS for the manual, and two optional scripts (a copy button on the
 landing's command, and the version dropdown). Both follow `prefers-color-scheme` and `prefers-reduced-motion`. After
 each mdBook render `build.py` adds a skip link, breadcrumbs, an "View and edit source on GitHub" link (master branch, the

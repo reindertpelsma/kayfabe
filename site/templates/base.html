@@ -12,6 +12,7 @@
     <link rel="icon" href="{{ get_url(path='icon.svg') | replace(from="https://kayfabe.dev", to="") }}" type="image/svg+xml" />
     <link rel="stylesheet" href="{{ get_url(path='style.css') | replace(from="https://kayfabe.dev", to="") }}" />
     <script src="{{ get_url(path='site.js') | replace(from="https://kayfabe.dev", to="") }}" defer></script>
+    {% if kf and kf.deploy_candidate %}<!-- kf-slot-a -->{% endif %}
   </head>
   <body{% block body_attrs %}{% endblock %}>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -32,7 +33,7 @@
       </div>
     </header>
     <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
-    <footer class="site-footer">
+    <footer class="site-footer" id="kf-footer">
       <div class="wrap">
         <ul class="footer-links">
           <li><a href="https://github.com/reindertpelsma/kayfabe/blob/master/LICENSE">Licence: Apache-2.0 OR GPL-2.0-or-later</a></li>

@@ -15,3 +15,7 @@ The owner adds `site` as a required master check after reviewing and merging the
 CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): PR file pagination rechecks the head, base SHA and changed-file count after the last page. A concurrent synchronize or base update leaves a conservative build decision and cannot report the older head as not needed.
 
 CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): Site reuse binds every CI record through its job and check suite to the intended ci.yml workflow on the same SHA. All legitimate push/PR duplicates must pass; ambiguity takes the ordinary build path.
+
+## Optional publication instrumentation
+
+CODE READ 2026-10-28 (`.github/workflows/site.yml`, `site/build.py`, `site/deployment_slots.py`): ordinary local, PR and fork builds contain no publication slot or beacon. Only an upstream publication candidate gets one neutral head comment. The build checks its position with a real DOM parser. The protected deploy job validates its runtime input and replaces only that comment's bytes; it never parses or reserializes pages. Empty, absent or invalid input removes the comment and publishes without instrumentation. Valid input with no matching slots fails. Conditional footer text is supplied by the deployment workflow, so it is absent from ordinary built files.

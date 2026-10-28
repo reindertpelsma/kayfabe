@@ -86,12 +86,25 @@ jobs:
       - name: Test version selection and render every version
         env:
           ROOT_REF: ${{ inputs.root_ref || 'latest' }}
+          DEPLOY_CANDIDATE: >-
+            ${{ '1' == needs.policy.outputs.deploy &&
+                github.repository == 'reindertpelsma/kayfabe' &&
+                !startsWith(github.event_name, 'pull_request') &&
+                ('refs/heads/master' == github.ref ||
+                 startsWith(github.ref, 'refs/tags/v')) }}
         run: |
           set -euo pipefail
           python3 -m unittest discover -s site -p 'test_build.py'
+          python3 -m unittest discover -s site -p 'test_deploy*.py'
+          npm ci --prefix site --ignore-scripts --no-audit --no-fund
+          node --test site/test_slots_dom.mjs
+          candidate=()
+          if [[ "$DEPLOY_CANDIDATE" == true ]]; then candidate=(--deploy-candidate); fi
           python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" \
-            --releases-json "$RUNNER_TEMP/site-releases.json" --root-ref "$ROOT_REF"
+            --releases-json "$RUNNER_TEMP/site-releases.json" \
+            --root-ref "$ROOT_REF" "${candidate[@]}"
           python3 site/test_output.py
+          node site/check_slots.mjs site/public "$DEPLOY_CANDIDATE"
           python3 site/report.py >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
         with:
@@ -111,5 +124,174 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/pages-deploy
+      - name: Replace the deployment head slot
+        env:
+          SITE_DEPLOY_ENVIRONMENT: github-pages
+          WEB_ANALYTICS_SNIPPET: ${{ vars.WEB_ANALYTICS_SNIPPET }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, sys, tarfile
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          if (
+              os.environ.get("GITHUB_ACTIONS") != "true"
+              or os.environ.get("GITHUB_REPOSITORY") != "reindertpelsma/kayfabe"
+              or os.environ.get("GITHUB_JOB") != "deploy"
+              or os.environ.get("SITE_DEPLOY_ENVIRONMENT") != "github-pages"
+              or os.environ.get("GITHUB_EVENT_NAME")
+              not in {"push", "release", "schedule", "workflow_dispatch"}
+              or not (
+                  os.environ.get("GITHUB_REF") == "refs/heads/master"
+                  or os.environ.get("GITHUB_REF", "").startswith("refs/tags/v")
+              )
+          ):
+              sys.exit(0)
+
+
+          class Tokens(HTMLParser):
+              def __init__(self, value):
+                  super().__init__(convert_charrefs=False)
+                  self.tags, self.body, self.comments = [], [], []
+                  self.active = self.inline = False
+                  self.source = value
+                  self.feed(value)
+                  self.close()
+
+              def handle_starttag(self, tag, attrs):
+                  self.tags.append(("start", tag, attrs))
+                  self.active = tag == "script"
+
+              def handle_endtag(self, tag):
+                  self.tags.append(("end", tag, []))
+                  self.active = False
+
+              def handle_startendtag(self, tag, attrs):
+                  self.tags.append(("empty", tag, attrs))
+
+              def handle_comment(self, value):
+                  line, column = self.getpos()
+                  lines = self.source.split("\n")
+                  offset = sum(len(part) + 1 for part in lines[: line - 1]) + column
+                  if (
+                      value.startswith((">", "->"))
+                      or "--" in value
+                      or value.endswith("-")
+                      or not self.source.startswith("<!--" + value + "-->", offset)
+                  ):
+                      raise ValueError("noncanonical comment")
+                  self.comments.append(value)
+
+              def handle_data(self, value):
+                  self.body.append(value)
+                  self.inline = self.inline or self.active and bool(value)
+
+              def handle_entityref(self, value):
+                  self.body.append("&" + value)
+
+              def handle_charref(self, value):
+                  self.body.append("&" + value)
+
+              def handle_decl(self, value):
+                  self.body.append(value)
+
+              def unknown_decl(self, value):
+                  self.body.append(value)
+
+              def handle_pi(self, value):
+                  self.body.append(value)
+
+
+          snippet = os.environ.get("WEB_ANALYTICS_SNIPPET", "")
+          valid = False
+          try:
+              parsed = Tokens(snippet)
+              if len(parsed.tags) != 2:
+                  raise ValueError("one script")
+              start, end = parsed.tags
+              if start[:2] != ("start", "script") or end[:2] != ("end", "script"):
+                  raise ValueError("script")
+              attrs = dict(start[2])
+              if len(attrs) != len(start[2]):
+                  raise ValueError("duplicate attributes")
+              if set(attrs) - {"type", "src", "data-cf-beacon", "defer", "async"}:
+                  raise ValueError("attrs")
+              if attrs.get("src") != "https://static.cloudflareinsights.com/beacon.min.js":
+                  raise ValueError("source")
+              if "type" in attrs and attrs["type"] != "module":
+                  raise ValueError("type")
+              pairs = json.loads(
+                  attrs.get("data-cf-beacon", ""), object_pairs_hook=lambda value: value
+              )
+              if (
+                  not isinstance(pairs, list)
+                  or len(pairs) != 1
+                  or not isinstance(pairs[0], tuple)
+                  or pairs[0][0] != "token"
+                  or not isinstance(pairs[0][1], str)
+              ):
+                  raise ValueError("token")
+              if parsed.inline or any(value.strip() for value in parsed.body):
+                  raise ValueError("content")
+              valid = True
+          except (ValueError, TypeError, AssertionError):
+              print("::warning::Analytics absent or invalid; removing deployment slot")
+
+          # Sources: Cloudflare RUM privacy and Web Analytics data collection, checked 2026-10-28.
+          privacy = b"""<!-- src:
+          https://developers.cloudflare.com/speed/observatory/rum-beacon/#privacy-information
+          https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/
+          -->
+          <script>(() => {
+            const add = () => {
+              const f = document.getElementById("kf-footer");
+              if (
+                !f ||
+                !document.querySelector("script[data-cf-beacon]") ||
+                document.getElementById("kf-privacy")
+              )
+                return;
+              const p = document.createElement("p");
+              p.id = "kf-privacy";
+              p.className = "wrap";
+              const a = document.createElement("a");
+              a.href =
+                "https://developers.cloudflare.com/web-analytics/" +
+                "data-metrics/data-origin-and-collection/";
+              a.textContent = "Cloudflare Web Analytics";
+              p.append(a, " uses no cookies or cross-site tracking.");
+              f.append(p);
+            };
+            if (document.readyState === "loading") {
+              document.addEventListener("DOMContentLoaded", add, { once: true });
+            } else {
+              add();
+            }
+          })();
+          </script>"""
+          slot = b"<!-- kf-slot-a -->"
+          replacement = snippet.encode("utf-8") + privacy if valid else b""
+          root = Path(os.environ["RUNNER_TEMP"])
+          folder = root / "pages-patched"
+          with tarfile.open(root / "pages-deploy/artifact.tar") as archive:
+              archive.extractall(folder, filter="data")
+          found = 0
+          for path in folder.rglob("*.html"):
+              raw = path.read_bytes()
+              found += raw.count(slot)
+              path.write_bytes(raw.replace(slot, replacement))
+          if valid and not found:
+              raise SystemExit("No deployment head slots found")
+          PY
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          name: github-pages-deploy
+          path: ${{ runner.temp }}/pages-patched
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
+        with:
+          artifact_name: github-pages-deploy
