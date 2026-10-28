@@ -9,19 +9,33 @@ import re
 from html.parser import HTMLParser
 
 BOTH = [
-    (r"production path|experimental build|research build", "stale labels: lazy observe and the pointer lifecycle are on master; re-measurement pending"),
-    (r"\b(89|102|212|233|296|299|338|362)\b[^.\n]{0,12}fps|\b330\b[^.\n]{0,12}fps|\b342\b[^.\n]{0,12}fps", "no Windows Heaven fps figure until the re-measurement (PF2) lands"),
+    (
+        r"production path|experimental build|research build",
+        "stale labels: lazy observe and the pointer lifecycle are on master; "
+        "re-measurement pending",
+    ),
+    (
+        r"\b(89|102|212|233|296|299|338|362)\b[^.\n]{0,12}fps|"
+        r"\b330\b[^.\n]{0,12}fps|\b342\b[^.\n]{0,12}fps",
+        "no Windows Heaven fps figure until the re-measurement (PF2) lands",
+    ),
     (r"near[- ]native", "speed claims need the table, with the production path next to native"),
     (r"\bsecure(ly)?\b", "the security model is designed, not audited"),
     (r"clean[- ]room", "the provenance policy makes no clean-room claim"),
     (r"reverse[- ]engineer", "nothing in public copy may mention reverse engineering"),
-    (r"anti-?cheat[- ]+(compatible|friendly|proof|ready)", "anti-cheat compatibility is undocumented"),
+    (
+        r"anti-?cheat[- ]+(compatible|friendly|proof|ready)",
+        "anti-cheat compatibility is undocumented",
+    ),
     (r"multi-?tenant[- ]+(ready|safe|proof)", "several tenants on one card are not measured"),
     (r"(works?|runs?|supports?)\s+(with|on)\s+any\s+(nvidia\s+)?gpu", "Turing and newer only"),
     (r"\b(revolutionary|seamless|blazing|game-changing|cutting-edge)\b", "hype words"),
     (r"replaces\s+nvkvm-pv", "a goal, not today's fact"),
     (r"\bcertified\b(?!\s+by)", "no vendor certifies this setup"),
-    (r"never\s+(hands|gives|exposes|shows)[^.]{0,40}physical", "the guest does use real GPU memory, through virtual addresses; say that"),
+    (
+        r"never\s+(hands|gives|exposes|shows)[^.]{0,40}physical",
+        "the guest does use real GPU memory, through virtual addresses; say that",
+    ),
     (r"(guaranteed|impossible)\s+(isolation|for the guest)", "isolation is designed, not audited"),
     (r"\binsecure\s+without", "confinement is an extra layer, not a precondition"),
     (r"(fully|completely)\s+(isolated|sandboxed)", "not audited"),
@@ -34,9 +48,9 @@ JARGON = [r"/dev/\w+", r"\bphysical\b"]
 def jargon(text):
     return [m.group(0) for rx in JARGON for m in re.finditer(rx, text, re.I)]
 
+
 FRONTPAGE_ONLY = [
-    (r"\b\d+(?:\.\d+)?\s*(?:fps|frames? per second)\b",
-     "no kayfabe fps figures in site copy"),
+    (r"\b\d+(?:\.\d+)?\s*(?:fps|frames? per second)\b", "no kayfabe fps figures in site copy"),
     (r"\bof native\b|\d+ to \d+%", "no percent-of-native headline: the re-measurement is pending"),
     (r"[\u2014\u2013]", "no em or en dashes in site copy"),
     (r"\bnot just\b[^.]{0,60}\bbut\b", "'not just X but Y' is a tell"),

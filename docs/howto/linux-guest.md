@@ -8,13 +8,13 @@ All of these are the repository's claims, with the revision or box where it stat
 
 - **The 30-arm suite passes** in the thin guest (also with the relay forced on), with the GPU gates at 9/9. [measured: kayfabe `afb552ea`, RTX 3060, 2026-09-30; GA104 at `714ec29d3`, 2026-10-24] <!-- src: docs/STATUS_DETAIL.md section 0, traces/sw3_die_sweep_20261024/README.md -->
 - **CUDA is correct:** `cup3` returns 43, `cup8` (a 2048 x 2048 matrix multiply) returns `BAD=0 MAXERR=0`. <!-- src: docs/STATUS_DETAIL.md section 2 -->
-- **61 of 65 CUDA applications** pass (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), with 6 of 6 stream probes and 100 processes in one boot, and outputs equal to bare metal [measured, an earlier revision, a rented RTX 3060]. The 4 failures use unified (UVM) memory paging and fail loudly (CUDA error 719 and a host Xid 31). <!-- src: README.md, docs/STATUS_DETAIL.md section 2 -->
+- **61 of 65 CUDA applications** pass (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), with 6 of 6 stream probes and 100 processes in one boot, and outputs equal to bare metal [measured, an earlier revision, a rented RTX 3060]. Four workloads need unified (UVM) memory paging and fail correctness checks, including CUDA error 719, a host Xid 31 and a recorded wrong result despite SUCCESS. <!-- src: README.md, docs/STATUS_DETAIL.md section 2 -->
 - **NVENC and NVDEC output is byte-identical to bare metal** in the graded lane [measured, RTX 3060]. <!-- src: docs/STATUS_DETAIL.md section 3 -->
 - **Headless graphics:** Vulkan, EGL, and GLX through Xvfb and VirtualGL; 38 of 38 items of the test set, 31 byte-identical to bare metal [measured, GA104]. <!-- src: docs/STATUS_DETAIL.md section 0 -->
 - **A desktop** with display planes (overlay, YUV) and 3 of 3 suspend/resume cycles. See [Display and the broker](display.md). <!-- src: README.md -->
 - **Driver versions:** see [Requirements](requirements.md).
 
-Not done: demand-paged managed memory (4 applications), a rootless boot record on master (one exists on the branch `claude/rootless-audit-20261016`, see [Security model](security.md)), and any statement about sharing performance between two VMs on one GPU (two VMs have booted together; see the [FAQ](FAQ.md)). <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
+Not done: demand-paged managed memory (4 applications), a rootless boot record on master (one exists on the branch `claude/rootless-audit-20261016`, see [Security model](security.md)), and any statement about sharing performance between two VMs on one GPU (two VMs have booted together; see the [FAQ](../FAQ.md)). <!-- src: README.md, docs/PRODUCT_POSITIONING.md -->
 
 ## Prepare a guest image
 

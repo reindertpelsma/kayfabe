@@ -9,10 +9,10 @@ src = "README.md What runs today; docs/howto/requirements.md GPU table; prior la
 ## Windows and Linux
 
 <!-- src: README.md Windows table; docs/howto/windows-guest.md -->
-Windows 11 has run Minecraft, Unigine Heaven, GravityMark, CUDA, and 4K YouTube with hardware decode on the author's RTX 4070. Blender renders have used CUDA and OptiX. GravityMark has completed Direct3D 12 and Vulkan runs. The guest uses NVIDIA's own 580.88 driver and installer. Only Windows driver 580.88 is covered here. It needs three registry settings, listed in the [Windows guide](/@docs/windows-guest.html).
+Windows 11 has run Minecraft, Unigine Heaven, GravityMark, CUDA, and 4K YouTube with hardware decode on the author's RTX 4070. Blender renders have used CUDA and OptiX. GravityMark has completed Direct3D 12 and Vulkan runs. The guest uses NVIDIA's own 580.88 driver and installer. These are separate demonstrations, not an all-app pass. Only Windows driver 580.88 is covered here. It needs three registry settings, listed in the [Windows guide](/@docs/windows-guest.html).
 
 <!-- src: README.md Linux guest; docs/howto/linux-guest.md -->
-Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. On a rented RTX 3060, 61 of 65 CUDA programs gave the same output as the host. These include PyTorch and llama.cpp. The four failures need memory paging that is not supported yet.
+Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. On a rented RTX 3060, 61 of 65 CUDA programs gave the same output as the host. These include PyTorch and llama.cpp. The four failures need memory paging that is not supported yet. One failure printed SUCCESS with a wrong result.
 
 <!-- src: README.md screenshot; traces/20261021_131847.jpg -->
 ![Windows 11 and a Linux desktop using one RTX 4070](/screenshot-windows-desktop.jpg)

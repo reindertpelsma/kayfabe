@@ -16,7 +16,7 @@ No Windows frame-rate figure is published here while that work is pending. For t
 ## Linux: large jobs and small launches
 
 <!-- src: README.md Linux CUDA table and note; docs/design/V3_LINUX_PERF_BASELINE_6692e621.md -->
-The published Linux results came from a rented RTX 3060 host that was itself a VM. They used older kayfabe revisions. Large jobs kept pace with the host. Many small GPU launches cost more.
+These older results come from separate campaigns on rented RTX 3060 hosts. Each host was itself a VM. They used older kayfabe revisions. Large jobs kept pace with the host. Many small GPU launches cost more.
 
 | Workload | Guest / host | Context |
 |---|---|---|

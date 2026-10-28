@@ -16,7 +16,7 @@ VFIO gives the whole card to one VM. While it runs, the host cannot use that car
 ### NVIDIA vGPU
 
 <!-- src: README.md comparison table (vGPU row) -->
-NVIDIA vGPU shares a card between VMs. It needs a data-centre GPU and a licence. The host does not use the card in this setup.
+NVIDIA vGPU shares a card between VMs. It needs a supported GPU and a licence. The host does not use the card in this setup.
 
 ### API forwarding
 

@@ -533,10 +533,6 @@ class LandingRender(unittest.TestCase):
         self.assertIn("1.0 MiB", landing)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -616,3 +612,7 @@ class FrontpageClaims(unittest.TestCase):
         top = "\n".join((ROOT / "README.md").read_text().splitlines()[:15]).lower()
         for text in ["research", "no installer", "sleep", "audit", "build"]:
             self.assertIn(text, top)
+
+
+if __name__ == "__main__":
+    unittest.main()

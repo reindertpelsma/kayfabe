@@ -27,13 +27,13 @@ This is the precise version of the home page's "How it is isolated". In short: t
 - **Who separates what.** Between this VM and your other programs or VMs on the card, the separation is the host driver's and the GPU's: each client has its own address space, and channel privilege decides what a channel may do, as for any two programs on one card. Kayfabe's own responsibility is deciding what goes into the VM's address space. A bug in that address resolution therefore matters more than it would under VFIO, and it is the code that gets hostile-input tests and review. Kayfabe's own GPU programs (the page-table walker and the display copy) run in a CUDA context inside the VMM process, and their bounds checks are a host-memory-safety obligation. <!-- src: docs/design/V3_SECURITY_MODEL.md R3.5, R5.1, R6; docs/FAQ.md IOMMU answer -->
 - **What is not claimed.** No audit, and no statement that a guest cannot reach a bug in NVIDIA's own driver: the host driver is trusted. What a guest-triggered GPU fault does to other VMs on the card is not measured. <!-- src: docs/design/V3_SECURITY_MODEL.md sections 9, 12 -->
 
-Details, including why an IOMMU is not part of the argument, are in the [FAQ](FAQ.md). <!-- src: docs/FAQ.md -->
+Details, including why an IOMMU is not part of the argument, are in the [FAQ](../FAQ.md). <!-- src: docs/FAQ.md -->
 
 ## Deployment: one process, and an extra layer you add
 
 Kayfabe is linked into the VMM. There are no helper processes, no IPC and no sandbox of its own. <!-- src: ARCHITECTURE.md "One process", docs/design/V3_SECURITY_MODEL.md section 0 -->
 
-**Confining that process is defence in depth, and it is recommended.** The GPU-level separation described above does not rest on your confinement. When kayfabe runs as an ordinary user, it is whatever the host driver gives any unprivileged client. When it runs as root with `CAP_SYS_ADMIN`, as the launch scripts do today, it holds only because kayfabe never asks for a privileged operation (reviewed in code, not enforced), so the unprivileged way is the better one. On top of that, run kayfabe as an ordinary user and, if you can, in a container or sandbox (`systemd-nspawn`, `bubblewrap`, or Docker with `/dev/kvm` and the NVIDIA device nodes passed in; see [FAQ](FAQ.md)). Then even a compromised kayfabe process stops at an unprivileged KVM user and an unprivileged CUDA-level GPU client. What an attacker can do after taking over the VMM is outside the security model's scope. <!-- src: docs/design/V3_SECURITY_MODEL.md R3.4, R3 "Out of scope", section 11; owner direction 2026-10-28 (defence in depth) -->
+**Confining that process is defence in depth, and it is recommended.** The GPU-level separation described above does not rest on your confinement. When kayfabe runs as an ordinary user, it is whatever the host driver gives any unprivileged client. When it runs as root with `CAP_SYS_ADMIN`, as the launch scripts do today, it holds only because kayfabe never asks for a privileged operation (reviewed in code, not enforced), so the unprivileged way is the better one. On top of that, run kayfabe as an ordinary user and, if you can, in a container or sandbox (`systemd-nspawn`, `bubblewrap`, or Docker with `/dev/kvm` and the NVIDIA device nodes passed in; see [FAQ](../FAQ.md)). Then even a compromised kayfabe process stops at an unprivileged KVM user and an unprivileged CUDA-level GPU client. What an attacker can do after taking over the VMM is outside the security model's scope. <!-- src: docs/design/V3_SECURITY_MODEL.md R3.4, R3 "Out of scope", section 11; owner direction 2026-10-28 (defence in depth) -->
 
 The deployment assumptions the repository's security review lists (as recommendations; it was written to be stated in the support notes) are: <!-- src: docs/design/V3_SECURITY_MODEL.md section 11 -->
 
@@ -63,6 +63,6 @@ Harness secrets: the Windows harness generates its password, ssh key and TPM sta
 
 ## Related
 
-[Technical FAQ](technical-faq.md) for how the design works; [FAQ](FAQ.md) for the IOMMU and interrupt questions.
+[Technical FAQ](technical-faq.md) for how the design works; [FAQ](../FAQ.md) for the IOMMU and interrupt questions.
 
 Verified on: the threat model is from the repository's documents of 2026-10-03 (source review at master `7c9234d2`), the README (2026-10-21) and the FAQ (2026-10-08, kayfabe `8c084ab7`, RTX 4070). Not verified end to end: this model was not tested on this page, and the repository states it is not audited.

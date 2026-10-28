@@ -119,11 +119,39 @@ def snapshot(repo, ref, destination):
 
 def manual_source(source, destination):
     """Keep the author-written mdBook order; publish only the manual and FAQ."""
-    shutil.copytree(source / "docs/howto", destination)
+    manual = source / "docs/howto"
+    shutil.copytree(manual, destination)
+    published = {
+        page.resolve(): page.relative_to(manual).as_posix()
+        for page in manual.rglob("*")
+        if page.is_file()
+    }
     summary = (destination / "SUMMARY.md").read_text()
     if (source / "docs/FAQ.md").is_file():
-        shutil.copy2(source / "docs/FAQ.md", destination / "FAQ.md")
+        published[(source / "docs/FAQ.md").resolve()] = "FAQ.md"
         summary = summary.rstrip() + "\n\n- [FAQ](FAQ.md)\n"
+    pattern = (
+        r"(?P<code>(?P<ticks>`+)(?!`)(.*?)(?P=ticks)(?!`))|"
+        r"(?P<prefix>!?\[[^\]\n]*\]\()(?P<target>[^)\s]+)(?P<suffix>\))"
+    )
+    for page, output in published.items():
+        if page.suffix != ".md":
+            continue
+
+        def rewrite(match):
+            if match["code"] is not None:
+                return match[0]
+            target = urlsplit(match["target"])
+            if target.scheme or target.netloc or not target.path:
+                return match[0]
+            mapped = published.get((page.parent / unquote(target.path)).resolve())
+            if mapped is None:
+                return match[0]
+            relative = posixpath.relpath(mapped, posixpath.dirname(output) or ".")
+            target = target._replace(path=quote(relative))
+            return match["prefix"] + target.geturl() + match["suffix"]
+
+        (destination / output).write_text(re.sub(pattern, rewrite, page.read_text(), flags=re.S))
     (destination / "SUMMARY.md").write_text(summary)
     return re.findall(r"\]\(([^)]+\.md)\)", summary)
 

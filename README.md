@@ -16,9 +16,9 @@ Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) 
 | | host keeps the GPU | safe for untrusted guests | guest driver | needs |
 |---|---|---|---|---|
 | VFIO passthrough | no, one VM owns it | depends on the IOMMU and trust model; see [FAQ](docs/FAQ.md) | stock | any GPU |
-| NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | data-centre GPU, licence |
+| NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | [supported GPU](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html), licence |
 | API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | possible, but fragile for multi-tenant VMs | a custom guest module | any NVIDIA GPU |
-| **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
+| **kayfabe** | **yes** | **designed for hostile guests; safety not established or audited** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
@@ -58,7 +58,7 @@ Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmo
 
 **Linux guest** (NVIDIA's stock driver, unmodified, nothing to set): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
 and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with
-outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
+outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). Four workloads need unified-memory demand paging and fail correctness checks. One recorded failure printed SUCCESS with a wrong result.
 
 **GPUs:** all of the above on the owner's RTX 4070 (AD104). Linux guests also passed on GA106 (RTX 3060), TU116, AD104 (RTX 4000 Ada), GB205 and, more recently, AD102
 (Linux guest driver 590); Windows desktops run on AD106 and AD103 with a borrowed display page, GA104 only has the GPU, and GB206 under Windows is still open
