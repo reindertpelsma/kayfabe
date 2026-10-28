@@ -1374,6 +1374,48 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
     assert!(total > 100_000);
 }
 
+// Exercise the real soak in an isolated process, including its invariants and actual counts.
+// A consumed scheduling budget must never choose a shorter seed prefix for this coverage.
+fn soak_counts_with_expired_budget(seconds: &str) -> (u64, u64) {
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env("KF3_STRESS_SECS", seconds)
+        .output()
+        .expect("run the actual soak with its scheduling budget already consumed");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        output.status.success(),
+        "budget={seconds}: {stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let counts = stdout
+        .lines()
+        .find_map(|line| line.split_once("soak: ").map(|(_, counts)| counts))
+        .expect("actual soak counts");
+    let words: Vec<_> = counts.split_whitespace().collect();
+    let entries: u64 = words[0].parse().unwrap();
+    let streams: u64 = words[3].parse().unwrap();
+    assert_eq!(streams, 512, "the full deterministic seed set must run");
+    assert!(entries >= 1_000_000, "every scheduled stream must be fully relayed");
+    println!("soak coverage proof: budget={seconds} entries={entries} streams={streams}");
+    (entries, streams)
+}
+
+#[test]
+fn soak_zero_elapsed_budget_cannot_truncate_the_seed_set() {
+    soak_counts_with_expired_budget("0");
+}
+
+#[test]
+fn soak_already_expired_nanosecond_budget_cannot_truncate_entries() {
+    soak_counts_with_expired_budget("0.000000001");
+}
+
 // ------------------------------------------------------------------------------------------------
 // the real corpus
 
