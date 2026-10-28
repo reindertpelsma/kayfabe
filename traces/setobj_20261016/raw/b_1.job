@@ -1,0 +1,25 @@
+JOB_START 2026-10-17T02:39:50+02:00 pid=2578255 n=23 bin_md5=8b0cd0d0c9fd
+DONE case=c_ok rep=1 pid=2578263 rc=0 xid_lines_for_pid=0
+DONE case=c_ok rep=2 pid=2578291 rc=0 xid_lines_for_pid=0
+DONE case=c_ok rep=3 pid=2578362 rc=0 xid_lines_for_pid=0
+DONE case=c_badclass rep=1 pid=2578386 rc=0 xid_lines_for_pid=1
+DONE case=c_badclass rep=2 pid=2578424 rc=0 xid_lines_for_pid=1
+DONE case=c_badclass rep=3 pid=2578516 rc=0 xid_lines_for_pid=1
+DONE case=c_badsw rep=1 pid=2578592 rc=0 xid_lines_for_pid=1
+DONE case=c_badsw rep=2 pid=2578632 rc=0 xid_lines_for_pid=1
+DONE case=c_badsw rep=3 pid=2578708 rc=0 xid_lines_for_pid=1
+DONE case=c_hw_rebind rep=1 pid=2578743 rc=0 xid_lines_for_pid=0
+DONE case=c_hw_rebind rep=2 pid=2578814 rc=0 xid_lines_for_pid=0
+DONE case=c_hw_rebind rep=3 pid=2578842 rc=0 xid_lines_for_pid=0
+DONE case=c_hw_two rep=1 pid=2578874 rc=0 xid_lines_for_pid=1
+DONE case=c_hw_two rep=2 pid=2578950 rc=0 xid_lines_for_pid=1
+DONE case=c_hw_two rep=3 pid=2578997 rc=0 xid_lines_for_pid=1
+DONE case=r0 rep=1 pid=2579117 rc=0 xid_lines_for_pid=0
+DONE case=r0 rep=2 pid=2579148 rc=0 xid_lines_for_pid=0
+DONE case=r0 rep=3 pid=2579178 rc=0 xid_lines_for_pid=0
+DONE case=c_hwsub0 rep=1 pid=2579241 rc=0 xid_lines_for_pid=1
+DONE case=c_hwsub1 rep=1 pid=2579324 rc=0 xid_lines_for_pid=0
+DONE case=c_hwsub2 rep=1 pid=2579390 rc=0 xid_lines_for_pid=1
+DONE case=c_hwsub3 rep=1 pid=2579436 rc=0 xid_lines_for_pid=1
+DONE case=c_hwsub4 rep=1 pid=2579512 rc=0 xid_lines_for_pid=1
+JOB_END 2026-10-17T02:43:18+02:00
