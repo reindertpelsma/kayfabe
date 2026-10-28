@@ -152,6 +152,20 @@ class BuildCleanup(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(releases, [["--disconnect", "/dev/nbd0"]])
 
+    def test_successful_release_interrupted_by_term_does_not_disconnect_twice(self):
+        result, _, releases = self.build(
+            BUILDER_SIGNAL_AT="release", BUILDER_SIGNAL=str(signal.SIGTERM)
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(releases, [["--disconnect", "/dev/nbd0"]])
+
+    def test_successful_release_interrupted_by_int_does_not_disconnect_twice(self):
+        result, _, releases = self.build(
+            BUILDER_SIGNAL_AT="release", BUILDER_SIGNAL=str(signal.SIGINT)
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(releases, [["--disconnect", "/dev/nbd0"]])
+
     def test_failed_release_is_retried_while_still_owned(self):
         result, _, releases = self.build(BUILDER_RELEASE_RETRY="1")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

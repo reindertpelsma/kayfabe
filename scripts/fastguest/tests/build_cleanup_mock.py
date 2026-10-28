@@ -31,6 +31,8 @@ elif name == "qemu-nbd":
             json.loads(line)[:2] == ["qemu-nbd", "--disconnect"]
             for line in log.read_text().splitlines()
         )
+        if os.environ.get("BUILDER_SIGNAL_AT") == "release" and attempts == 1:
+            os.kill(os.getppid(), int(os.environ["BUILDER_SIGNAL"]))
         if os.environ.get("BUILDER_RELEASE_RETRY") == "1" and attempts == 1:
             sys.exit(1)
     else:
