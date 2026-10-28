@@ -141,6 +141,30 @@ class Deployment(unittest.TestCase):
         )
         self.assertNotIn(b"wrong.invalid", (self.folder / "index.html").read_bytes())
 
+    def assert_bad_comment_rejected(self, prefix):
+        result = self.run_inline(prefix + SNIPPET)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("warning", result.stdout)
+        self.assertEqual((self.folder / "index.html").read_bytes(), PAGE.replace(SLOT, b""))
+
+    def test_abrupt_empty_comment_cannot_hide_an_image(self):
+        self.assert_bad_comment_rejected('<!--><img src="https://wrong.invalid/x">-->')
+
+    def test_abrupt_dash_comment_cannot_hide_another_script(self):
+        self.assert_bad_comment_rejected('<!---><script src="https://wrong.invalid/x"></script>-->')
+
+    def test_noncanonical_comment_closes_are_rejected(self):
+        for prefix in ["<!-- benign --!>", "<!-- benign -- >"]:
+            self.assert_bad_comment_rejected(prefix)
+
+    def test_canonical_comment_with_head_lookalike_is_accepted(self):
+        value = "<!-- </head> -->" + SNIPPET
+        self.assertEqual(self.run_inline(value).returncode, 0)
+        self.assertEqual(
+            (self.folder / "index.html").read_bytes(),
+            PAGE.replace(SLOT, value.encode() + self.privacy),
+        )
+
     def test_empty_value_has_no_privacy_script(self):
         self.assertEqual(self.run_inline("").returncode, 0)
         raw = (self.folder / "index.html").read_bytes()
