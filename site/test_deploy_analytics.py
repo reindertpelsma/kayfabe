@@ -1,18 +1,22 @@
-"""Deployment analytics boundaries; snippets here are synthetic, never environment values."""
+"""Execute the workflow's actual isolated inline Python; all snippet tokens are synthetic."""
 
-import importlib.util
 import io
 import os
 from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+import textwrap
 import unittest
 
-HERE = Path(__file__).resolve().parent
-SCRIPT = HERE / "deploy_analytics.py"
-SNIPPET = '<script defer src="https://analytics.invalid/beacon.js"></script>'
-PAGE = "<!doctype html><html><head><title>Fixture</title></head><body>Hi</body></html>"
+WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/site.yml"
+SNIPPET = (
+    "<!-- Cloudflare Web Analytics -->"
+    "<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' "
+    "data-cf-beacon='{\"token\":\"fixture-token\"}'></script>"
+    "<!-- End Cloudflare Web Analytics -->"
+)
+PAGE = '<!doctype html><html><head><title>Fixture</title></head><body>Hi</body></html>'
 TRUSTED = {
     "GITHUB_ACTIONS": "true",
     "GITHUB_REPOSITORY": "reindertpelsma/kayfabe",
@@ -23,176 +27,155 @@ TRUSTED = {
 }
 
 
-def module():
-    spec = importlib.util.spec_from_file_location("deploy_analytics", SCRIPT)
-    result = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(result)
-    return result
-
-
-def archive(path, pages=None):
-    pages = pages or {"index.html": PAGE, "docs/master/FAQ.html": PAGE, "style.css": "body{}"}
-    with tarfile.open(path, "w") as output:
-        for name, text in pages.items():
-            data = text.encode()
-            item = tarfile.TarInfo(name)
-            item.size = len(data)
-            item.mode = 0o644
-            output.addfile(item, io.BytesIO(data))
-
-
-def contents(path):
-    with tarfile.open(path) as source:
-        return {m.name: source.extractfile(m).read().decode() for m in source if m.isfile()}
+def inline_source():
+    text = WORKFLOW.read_text()
+    return textwrap.dedent(text.split("          python3 -I - <<'PY'\n")[1].split("          PY\n")[0])
 
 
 class Analytics(unittest.TestCase):
-    # FALSIFIER: an ordinary build context gains a beacon, or a deploy page gets duplicates.
+    # FALSIFIER: inline deploy code corrupts a page, accepts active input, or enters a PR build.
     def setUp(self):
-        self.impl = module()
-        self.temp = tempfile.TemporaryDirectory(prefix="site-analytics-")
+        self.source = inline_source()
+        self.temp = tempfile.TemporaryDirectory(prefix="site-inline-analytics-")
         self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / "artifact.tar"
-        archive(self.path)
+        self.root = Path(self.temp.name)
+        (self.root / "pages-deploy").mkdir()
+        self.archive = self.root / "pages-deploy/artifact.tar"
+        self.output = self.root / "pages-patched"
+        self.make_archive({"index.html": PAGE, "docs/master/FAQ.html": PAGE, "style.css": "body{}"})
 
-    def test_all_deploy_pages_receive_one_snippet_inside_head(self):
-        self.impl.transform(self.path, SNIPPET, TRUSTED)
-        for name, text in contents(self.path).items():
-            if name.endswith(".html"):
-                self.assertEqual(text.count(SNIPPET), 1)
-                self.assertLess(text.index("<head>"), text.index(SNIPPET))
-                self.assertLess(text.index(SNIPPET), text.index("</head>"))
+    def make_archive(self, pages):
+        with tarfile.open(self.archive, "w") as target:
+            for name, text in pages.items():
+                data = text if isinstance(text, bytes) else text.encode()
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                target.addfile(member, io.BytesIO(data))
 
-    def test_second_deploy_transform_is_byte_identical(self):
-        self.impl.transform(self.path, SNIPPET, TRUSTED)
-        before = self.path.read_bytes()
-        self.impl.transform(self.path, SNIPPET, TRUSTED)
-        self.assertEqual(self.path.read_bytes(), before)
-
-    def test_existing_head_snippet_is_not_duplicated(self):
-        text = PAGE.replace("</head>", SNIPPET + "</head>")
-        self.assertEqual(self.impl.inject(text, SNIPPET), text)
-
-    def test_comments_and_script_text_cannot_forge_head_end(self):
-        text = PAGE.replace("<title>", '<!-- </head> --><script>let s = "</head>";</script><title>')
-        result = self.impl.inject(text, SNIPPET)
-        self.assertEqual(result.count(SNIPPET), 1)
-        self.assertIn("</title>\n" + SNIPPET, result)
-
-    def test_uppercase_head_and_quoted_attribute_are_valid(self):
-        text = '<HTML><HEAD data-note="</head>"><TITLE>X</TITLE></HEAD><BODY></BODY></HTML>'
-        result = self.impl.inject(text, SNIPPET)
-        self.assertIn("</TITLE>\n" + SNIPPET, result)
-        self.assertLess(result.index(SNIPPET), result.index("</HEAD>"))
-
-    def test_self_closing_metadata_keeps_a_valid_head(self):
-        text = PAGE.replace("<title>", '<meta charset="utf-8"/><link href="/x.css"/><title>')
-        result = self.impl.inject(text, SNIPPET)
-        self.assertIn("</title>\n" + SNIPPET, result)
-
-    def test_invalid_heads_fail_before_archive_replacement(self):
-        for text in [
-            "<html><body>x</body></html>",
-            "<head></head><head></head>",
-            "<head><title>x</head>",
-            "<body><head></head></body>",
-        ]:
-            with self.subTest(text=text):
-                archive(self.path, {"ok.html": PAGE, "bad.html": text})
-                before = self.path.read_bytes()
-                with self.assertRaises(ValueError):
-                    self.impl.transform(self.path, SNIPPET, TRUSTED)
-                self.assertEqual(self.path.read_bytes(), before)
-
-    def test_missing_head_is_rejected(self):
-        with self.assertRaises(ValueError):
-            self.impl.inject("<html><body>Missing head</body></html>", SNIPPET)
-
-    def test_unclosed_title_is_rejected(self):
-        with self.assertRaises(ValueError):
-            self.impl.inject("<html><head><title>Bad</head></html>", SNIPPET)
-
-    def test_snippet_in_body_is_rejected(self):
-        text = PAGE.replace("Hi", SNIPPET)
-        with self.assertRaises(ValueError):
-            self.impl.inject(text, SNIPPET)
-
-    def test_duplicate_existing_snippet_is_rejected(self):
-        text = PAGE.replace("</head>", SNIPPET * 2 + "</head>")
-        with self.assertRaises(ValueError):
-            self.impl.inject(text, SNIPPET)
-
-    def test_empty_and_whitespace_leave_archive_bytes_untouched(self):
-        before = self.path.read_bytes()
-        for snippet in ["", " \n\t"]:
-            self.impl.transform(self.path, snippet, TRUSTED)
-            self.assertEqual(self.path.read_bytes(), before)
-
-    def test_non_html_members_are_unchanged(self):
-        self.impl.transform(self.path, SNIPPET, TRUSTED)
-        self.assertEqual(contents(self.path)["style.css"], "body{}")
-
-    def test_each_untrusted_context_is_noop(self):
-        for key, value in [
-            ("GITHUB_ACTIONS", "false"),
-            ("GITHUB_REPOSITORY", "fork/repo"),
-            ("GITHUB_JOB", "build"),
-            ("GITHUB_EVENT_NAME", "pull_request"),
-            ("GITHUB_REF", "refs/heads/next"),
-            ("SITE_DEPLOY_ENVIRONMENT", "preview"),
-        ]:
-            with self.subTest(key=key):
-                before = self.path.read_bytes()
-                self.impl.transform(self.path, SNIPPET, {**TRUSTED, key: value})
-                self.assertEqual(self.path.read_bytes(), before)
-
-    def test_local_context_does_not_read_accidental_snippet(self):
-        before = self.path.read_bytes()
-        self.impl.transform(self.path, SNIPPET, {})
-        self.assertEqual(self.path.read_bytes(), before)
-
-    def test_publication_events_and_version_tags_are_supported(self):
-        for event in ["push", "release", "workflow_dispatch", "schedule"]:
-            self.assertTrue(self.impl.eligible({**TRUSTED, "GITHUB_EVENT_NAME": event}))
-        self.assertTrue(self.impl.eligible({**TRUSTED, "GITHUB_REF": "refs/tags/v1.0"}))
-        self.assertFalse(self.impl.eligible({**TRUSTED, "GITHUB_EVENT_NAME": "workflow_run"}))
-
-    def cli(self, context, snippet):
-        environment = {
-            k: v
-            for k, v in os.environ.items()
-            if not k.startswith(("GITHUB_", "SITE_", "WEB_ANALYTICS_"))
-        }
-        environment.update(context)
+    def run_inline(self, snippet=SNIPPET, context=None):
+        env = {k: v for k, v in os.environ.items()
+               if not k.startswith(("GITHUB_", "SITE_", "WEB_ANALYTICS_"))}
+        env.update(TRUSTED if context is None else context)
+        env.update(RUNNER_TEMP=str(self.root), GITHUB_OUTPUT=str(self.root / "outputs"))
         if snippet is not None:
-            environment["WEB_ANALYTICS_SNIPPET"] = snippet
-        result = subprocess.run(
-            ["python3", str(SCRIPT), str(self.path)],
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn(SNIPPET, result.stdout + result.stderr)
+            env["WEB_ANALYTICS_SNIPPET"] = snippet
+        result = subprocess.run(["python3", "-I", "-"], input=self.source, env=env,
+                                text=True, capture_output=True, check=False)
+        self.assertNotIn("fixture-token", result.stdout + result.stderr)
+        return result
 
-    def test_cli_local_pr_and_fork_outputs_stay_beacon_free(self):
-        for context in [
-            {},
-            {**TRUSTED, "GITHUB_EVENT_NAME": "pull_request"},
-            {**TRUSTED, "GITHUB_REPOSITORY": "fork/repo"},
-        ]:
-            self.cli(context, SNIPPET)
-            self.assertNotIn(SNIPPET, self.path.read_bytes().decode(errors="replace"))
+    def test_comments_script_strings_and_escaped_code_do_not_forge_head(self):
+        for extra in ['<!-- </head> -->', '<script>let x="</head>";</script>',
+                      '<style>x::after{content:"</head>"}</style>', '<![CDATA[ </head> ]]>']:
+            with self.subTest(extra=extra):
+                page = PAGE.replace("<title>", extra + "<title>")
+                page = page.replace("Hi", '<pre>&lt;/head&gt;</pre>')
+                self.make_archive({"index.html": page})
+                self.assertEqual(self.run_inline().returncode, 0)
+                self.assertEqual((self.output / "index.html").read_bytes(),
+                                 page.replace("</title></head>", "</title>" + SNIPPET + "</head>").encode())
 
-    def test_cli_unset_deploy_variable_is_noop(self):
-        before = self.path.read_bytes()
-        self.cli(TRUSTED, None)
-        self.assertEqual(self.path.read_bytes(), before)
+    def test_uppercase_spaced_head_and_utf8_bytes_are_preserved(self):
+        page = '<HTML><HEAD title="</head>"><TITLE>café</TITLE></HEAD ><BODY>λ</BODY></HTML>'
+        self.make_archive({"index.html": page})
+        self.assertEqual(self.run_inline().returncode, 0)
+        self.assertEqual((self.output / "index.html").read_bytes(),
+                         page.replace("</TITLE></HEAD >", "</TITLE>" + SNIPPET + "</HEAD >").encode())
 
-    def test_cli_deploy_injects_environment_html_without_logging_it(self):
-        self.cli(TRUSTED, SNIPPET)
-        self.assertEqual(contents(self.path)["index.html"].count(SNIPPET), 1)
+    def test_every_html_gets_one_snippet_inside_head(self):
+        self.assertEqual(self.run_inline().returncode, 0)
+        for path in self.output.rglob("*.html"):
+            text = path.read_text()
+            self.assertEqual(text.count(SNIPPET), 1)
+            self.assertLess(text.index(SNIPPET), text.index("</head>"))
+        self.assertEqual((self.output / "style.css").read_bytes(), b"body{}")
+
+    def test_repeated_transform_is_byte_identical(self):
+        self.assertEqual(self.run_inline().returncode, 0)
+        pages = {p.relative_to(self.output).as_posix(): p.read_bytes()
+                 for p in self.output.rglob("*") if p.is_file()}
+        self.make_archive(pages)
+        self.assertEqual(self.run_inline().returncode, 0)
+        self.assertEqual({p.relative_to(self.output).as_posix(): p.read_bytes()
+                          for p in self.output.rglob("*") if p.is_file()}, pages)
+
+    def test_already_instrumented_page_is_not_duplicated(self):
+        page = PAGE.replace("</head>", SNIPPET + "</head>")
+        self.make_archive({"index.html": page})
+        self.assertEqual(self.run_inline().returncode, 0)
+        self.assertEqual((self.output / "index.html").read_bytes(), page.encode())
+
+    def test_empty_or_unset_does_not_extract_or_modify_archive(self):
+        before = self.archive.read_bytes()
+        for snippet in ["", None]:
+            self.assertEqual(self.run_inline(snippet).returncode, 0)
+            self.assertFalse(self.output.exists())
+            self.assertEqual(self.archive.read_bytes(), before)
+
+    def test_invalid_snippets_warn_and_keep_original_artifact(self):
+        values = [SNIPPET.replace("</script>", "alert(1)</script>"), SNIPPET + SNIPPET,
+                  SNIPPET + '<img src="https://example.invalid/x">',
+                  SNIPPET.replace("static.cloudflareinsights.com", "example.invalid"),
+                  SNIPPET.replace("type='module'", "onclick='x()'"), "text" + SNIPPET,
+                  SNIPPET.replace('"token":"fixture-token"', '"other":"fixture-token"'),
+                  SNIPPET.replace('"token":"fixture-token"', '"token":3')]
+        for value in values:
+            with self.subTest(value=value):
+                self.assertEqual(self.run_inline(value).returncode, 0)
+                self.assertFalse(self.output.exists())
+                self.assertEqual((self.root / "outputs").read_text().splitlines()[-1],
+                                 "artifact_name=github-pages")
+
+    def test_inline_script_body_is_never_executed_or_accepted(self):
+        self.assertEqual(self.run_inline(SNIPPET.replace("</script>", "bad()</script>")).returncode, 0)
+        self.assertFalse(self.output.exists())
+
+    def test_wrong_beacon_host_cannot_receive_injected_script(self):
+        self.assertEqual(self.run_inline(SNIPPET.replace("static.cloudflareinsights.com",
+                                                        "wrong.invalid")).returncode, 0)
+        self.assertFalse(self.output.exists())
+
+    def test_comment_containing_head_close_is_inert(self):
+        value = "<!-- </head> -->" + SNIPPET
+        self.assertEqual(self.run_inline(value).returncode, 0)
+        self.assertEqual((self.output / "index.html").read_bytes(),
+                         PAGE.replace("</head>", value + "</head>").encode())
+
+    def test_bad_pages_are_skipped_without_blocking_good_pages(self):
+        for bad in ["<html><body>no head</body></html>", "<head></head><head></head>",
+                    "<head><title>unclosed</head>"]:
+            with self.subTest(bad=bad):
+                self.make_archive({"ok.html": PAGE, "bad.html": bad})
+                run = self.run_inline()
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertIn("bad.html", run.stdout)
+                self.assertEqual((self.output / "bad.html").read_bytes(), bad.encode())
+                self.assertEqual((self.output / "ok.html").read_text().count(SNIPPET), 1)
+
+    def test_zero_eligible_pages_fail_the_patch_step(self):
+        self.make_archive({"no-head.html": "<html><body>nothing</body></html>"})
+        self.assertNotEqual(self.run_inline().returncode, 0)
+
+    def test_missing_heads_never_receive_a_snippet(self):
+        self.make_archive({"bad.html": "<body>no head</body>", "ok.html": PAGE})
+        self.assertEqual(self.run_inline().returncode, 0)
+        self.assertEqual((self.output / "bad.html").read_bytes(), b"<body>no head</body>")
+
+    def test_local_pr_and_fork_contexts_remain_beacon_free(self):
+        for context in [{}, {**TRUSTED, "GITHUB_EVENT_NAME": "pull_request"},
+                        {**TRUSTED, "GITHUB_REPOSITORY": "fork/repo"}]:
+            self.assertEqual(self.run_inline(context=context).returncode, 0)
+            self.assertFalse(self.output.exists())
+
+    def test_build_job_context_does_not_extract(self):
+        self.assertEqual(self.run_inline(context={**TRUSTED, "GITHUB_JOB": "build"}).returncode, 0)
+        self.assertFalse(self.output.exists())
+
+    def test_snippet_shell_syntax_is_only_attribute_data(self):
+        value = SNIPPET.replace("fixture-token", "$(touch shell-executed)")
+        self.assertEqual(self.run_inline(value).returncode, 0)
+        self.assertFalse((self.root / "shell-executed").exists())
+        self.assertIn(value.encode(), (self.output / "index.html").read_bytes())
 
 
 if __name__ == "__main__":
