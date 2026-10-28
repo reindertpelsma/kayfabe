@@ -30,6 +30,7 @@ class ProviderTests(unittest.TestCase):
                 machine_id=21018,
                 host_id=120071,
                 dph_total=0.24,
+                start_date=1234.125,
                 instance_api_key="FAKE_MUST_NOT_RETURN",
             )
             return dict(
@@ -52,6 +53,14 @@ class ProviderTests(unittest.TestCase):
     def test_inventory_projects_no_provider_secrets(self):
         query, _ = self.pages()
         self.assertNotIn("FAKE_MUST_NOT_RETURN", str(P.snapshot(71, query=query)))
+
+    def test_projection_preserves_creation_timestamp(self):
+        query, _ = self.pages()
+        self.assertEqual(P.snapshot(71, query=query)['rows'][0]['start_date'], 1234.125)
+
+    def test_second_page_preserves_creation_timestamp(self):
+        query, _ = self.pages()
+        self.assertEqual(P.snapshot(71, query=query)['rows'][1]['start_date'], 1234.125)
 
     def test_changed_account_is_unresolved(self):
         query, _ = self.pages(changed_owner=True)
@@ -105,13 +114,21 @@ class SnapshotBudgetTests(unittest.TestCase):
     def run_budget(self, increments, budget):
         clock = [0.0]
         calls = []
+
         def query(args, *, timeout):
             calls.append((list(args), timeout))
             clock[0] += increments
-            if args[:2] == ['show', 'user']: return dict(id=71, credit=40)
-            count = len([v for v, _ in calls if v[:2] != ['show', 'user']])
-            return dict(success=True, instances=[dict(id=40 + count)], instances_found=1,
-                        total_instances=400, next_token='page' + str(count))
+            if args[:2] == ["show", "user"]:
+                return dict(id=71, credit=40)
+            count = len([v for v, _ in calls if v[:2] != ["show", "user"]])
+            return dict(
+                success=True,
+                instances=[dict(id=40 + count)],
+                instances_found=1,
+                total_instances=400,
+                next_token="page" + str(count),
+            )
+
         with self.assertRaises(P.InventoryUnresolved):
             P.snapshot(71, query=query, budget_seconds=budget, monotonic=lambda: clock[0])
         return calls
@@ -122,7 +139,7 @@ class SnapshotBudgetTests(unittest.TestCase):
         self.assertEqual([t for _, t in calls], [30, 10])
 
     def test_many_pages_stop_at_total_budget_without_partial_complete(self):
-        calls = self.run_budget(.1, .35)
+        calls = self.run_budget(0.1, 0.35)
         self.assertLessEqual(len(calls), 4)
         self.assertLess(calls[-1][1], calls[0][1])
 
@@ -136,8 +153,12 @@ class SnapshotBudgetTests(unittest.TestCase):
         calls = []
         clock = iter([0, 31])
         with self.assertRaises(P.InventoryUnresolved):
-            P.snapshot(71, query=lambda *a, **k: calls.append(a), budget_seconds=30,
-                       monotonic=lambda: next(clock))
+            P.snapshot(
+                71,
+                query=lambda *a, **k: calls.append(a),
+                budget_seconds=30,
+                monotonic=lambda: next(clock),
+            )
         self.assertEqual(calls, [])
 
 

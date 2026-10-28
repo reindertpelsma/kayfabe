@@ -503,5 +503,38 @@ class BoundParentDeathTests(GuardFixture):
         self.assertLess(destroyed[0][2],NOW+dt.timedelta(seconds=60))
 
 
+class CreationWindowTests(GuardFixture):
+    def checked_intent(self):
+        self.intent['created_window'] = dict(field='start_date', verified=True,
+            lower=NOW.timestamp(), upper=(NOW+dt.timedelta(hours=2)).timestamp())
+        return self.intent
+
+    def test_contract_older_than_intent_window_is_unresolved(self):
+        with self.assertRaises(G.Unresolved):
+            G.match(self.checked_intent(),self.snapshot([self.row(start_date=NOW.timestamp()-1)]))
+
+    def test_contract_after_intent_deadline_is_unresolved(self):
+        with self.assertRaises(G.Unresolved):
+            G.match(self.checked_intent(),self.snapshot([self.row(start_date=NOW.timestamp()+7201)]))
+
+    def test_missing_provider_creation_timestamp_is_unresolved(self):
+        with self.assertRaises(G.Unresolved):
+            G.match(self.checked_intent(),self.snapshot([self.row()]))
+
+    def test_malformed_provider_creation_timestamp_is_unresolved(self):
+        with self.assertRaises(G.Unresolved):
+            G.match(self.checked_intent(),self.snapshot([self.row(start_date='unknown')]))
+
+    def test_unverified_timestamp_semantics_never_bind(self):
+        intent=self.checked_intent();intent['created_window']['verified']=False
+        with self.assertRaises(G.Unresolved):
+            G.match(intent,self.snapshot([self.row(start_date=NOW.timestamp())]))
+
+    def test_unverified_precision_never_binds(self):
+        intent=self.checked_intent();intent['created_window']['verified']=None
+        with self.assertRaises(G.Unresolved):
+            G.match(intent,self.snapshot([self.row(start_date=NOW.timestamp())]))
+
+
 if __name__ == "__main__":
     unittest.main()
