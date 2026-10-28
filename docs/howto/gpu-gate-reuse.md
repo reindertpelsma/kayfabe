@@ -13,3 +13,5 @@ Fast-forwards probe before posting pending, so the original same-SHA status is a
 This transfers GitHub metadata for identical trees. It does not make the GPU provider or its verdict attested, and it does not accept build artifacts from the rented machine. No Worker configuration or deployment changes are needed.
 
 CODE READ 2026-10-28 (`gpu-vast.yml`): Site-only paths under root `site/**` are GPU exclusions, alongside documentation. Every file must match the configured skip list; adding a crate or other non-excluded file still runs the GPU gate. Names such as `scripts/sitemap.py` and nested `crates/site/` remain relevant. Root README.md matches `**/*.md`. The Site workflow supplies its own build/link checks.
+
+CODE READ 2026-10-28 (`gate_reuse.py`): complete verdict logs must name provision, cuda_host, merge_bar and cuda_guest exactly once each. Four distinct lines for the same stage are insufficient; incomplete identities take the existing gate path.

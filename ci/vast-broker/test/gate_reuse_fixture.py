@@ -126,7 +126,9 @@ if case == "logs-duplicate-stage":
         for i in range(1, 5)
     ]
 if case == "logs-missing-guest-stage":
-    lines[-1] = lines[-1].replace("cuda_guest", "provision").replace("duration_ms=1", "duration_ms=2")
+    lines[-1] = (
+        lines[-1].replace("cuda_guest", "provision").replace("duration_ms=1", "duration_ms=2")
+    )
 if case == "not-needed":
     status["description"] = "GPU broker NOT_NEEDED"
 if case == "api-error":

@@ -165,7 +165,9 @@ def summary_lines(text, parent):
         for index, pattern in enumerate(patterns):
             if re.fullmatch(pattern, line) and line not in groups[index]:
                 groups[index].append(line)
-    if any(not group for group in groups) or len(groups[-1]) != 4:
+    expected = ["provision", "cuda_host", "merge_bar", "cuda_guest"]
+    stages = [line.split("stage name=", 1)[1].split(" ", 1)[0] for line in groups[-1]]
+    if any(not group for group in groups) or sorted(stages) != sorted(expected):
         raise ValueError("missing original result lines")
     return [line for group in groups for line in group][:20]
 

@@ -46,7 +46,7 @@ add(
 add(
     "log-completeness",
     "gate_reuse.py",
-    "if any(not group for group in groups) or len(groups[-1]) != 4:",
+    "if any(not group for group in groups) or sorted(stages) != sorted(expected):",
     "if False:",
 )
 add(
