@@ -11,18 +11,23 @@ HELPER = Path(__file__).with_name("driver_inventory.sh")
 
 class InventoryTests(unittest.TestCase):
     def run_case(self, code, *, native=False):
-        with tempfile.TemporaryDirectory(dir="/data/sw5_resume_private/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fake = root / "nvidia-smi"
             fake.write_text("#!/bin/sh\necho mock-inventory\nexit " + str(code) + "\n")
             fake.chmod(0o700)
-            script = ('set -euo pipefail\nsource "$1"\nrecord_initial_inventory "$2"\n'
-                      'echo INVENTORY_RECORDED\n')
+            script = (
+                'set -euo pipefail\nsource "$1"\nrecord_initial_inventory "$2"\n'
+                "echo INVENTORY_RECORDED\n"
+            )
             if native:
-                script += 'nvidia-smi --query-gpu=driver_version\necho GUEST_ALLOWED\n'
-            result = subprocess.run(["bash", "-c", script, "inventory-test", str(HELPER), tmp],
-                                    env=dict(os.environ, PATH=tmp + ":" + os.environ["PATH"]),
-                                    capture_output=True, text=True)
+                script += "nvidia-smi --query-gpu=driver_version\necho GUEST_ALLOWED\n"
+            result = subprocess.run(
+                ["bash", "-c", script, "inventory-test", str(HELPER), tmp],
+                env=dict(os.environ, PATH=tmp + ":" + os.environ["PATH"]),
+                capture_output=True,
+                text=True,
+            )
             rcfile = root / "smi_initial_query.rc"
             return result, rcfile.read_text().strip() if rcfile.exists() else None
 
