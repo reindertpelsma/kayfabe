@@ -404,13 +404,29 @@ class FreshnessTests(unittest.TestCase):
         self.assertEqual(row["status"], "ASSET")
 
     def test_published_manual_pages_are_inventoried_not_dated(self):
-        self.write("docs/howto/page.md", "# Page\n\n[faq](FAQ.md)\n")
-        self.write("docs/FAQ.md", "# FAQ\n\n[page](page.md)\n")
+        self.write("docs/howto/page.md", "# Page\n\n[faq](../FAQ.md)\n")
+        self.write("docs/FAQ.md", "# FAQ\n\n[page](howto/page.md)\n")
         result = self.run_check()
         rows = {row["path"]: row for row in result["documents"]}
         self.assertEqual(rows["docs/howto/page.md"]["status"], "MANUAL")
         self.assertEqual(rows["docs/FAQ.md"]["status"], "MANUAL")
         self.assertEqual(result["new"], 0)
+
+    def test_manual_howto_requires_source_relative_links(self):
+        self.write("docs/FAQ.md", "# FAQ\n")
+        self.write("docs/howto/page.md", "# Page\n\n[faq](FAQ.md)\n")
+        result = self.run_check(1)
+        self.assertEqual(result["new"], 1)
+        self.assertEqual(result["violations"][0]["kind"], "broken-link")
+        self.assertEqual(result["violations"][0]["path"], "docs/howto/page.md")
+
+    def test_manual_faq_requires_source_relative_links(self):
+        self.write("docs/howto/page.md", "# Page\n")
+        self.write("docs/FAQ.md", "# FAQ\n\n[page](page.md)\n")
+        result = self.run_check(1)
+        self.assertEqual(result["new"], 1)
+        self.assertEqual(result["violations"][0]["kind"], "broken-link")
+        self.assertEqual(result["violations"][0]["path"], "docs/FAQ.md")
 
     def test_evidence_log_status_word_is_not_document_metadata(self):
         self.write("docs/reference/run.log", "STATUS: invalid evidence output\n")
