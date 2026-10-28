@@ -19,7 +19,9 @@ class Modes(unittest.TestCase):
             output.mkdir(parents=True)
             sentinel = output / "index.html"
             sentinel.write_bytes(b"existing output")
-            with patch.object(module, "version_plan") as plan:
+            with patch.object(
+                module, "version_plan", side_effect=AssertionError("mode guard must precede planning")
+            ) as plan:
                 with self.assertRaisesRegex(ValueError, "portable.*deploy"):
                     module.build(repo, {}, [], portable=True, deploy_candidate=True)
                 plan.assert_not_called()
@@ -35,7 +37,9 @@ class Modes(unittest.TestCase):
         }
         with patch.dict(os.environ, context, clear=True), patch.object(
             sys, "argv", ["build.py", "--tools-dir", "/unused", "--portable", "--deploy-candidate"]
-        ), patch.object(module, "tools", return_value={}), patch.object(module, "version_plan"):
+        ), patch.object(module, "tools", return_value={}), patch.object(
+            module, "version_plan", side_effect=AssertionError("CLI must reject conflicting modes")
+        ):
             with self.assertRaisesRegex(ValueError, "portable.*deploy"):
                 module.main()
 
@@ -51,6 +55,7 @@ class WorkflowModes(unittest.TestCase):
         self.assertIn("-p 'test_modes.py'", self.build)
 
     def test_portable_crawl_precedes_a_fresh_pages_build_and_upload(self):
+        self.assertIn("--portable", self.build)
         portable = self.build.index("--portable")
         crawl = self.build.index("python3 site/check_portable.py", portable)
         pages = self.build.index("python3 site/build.py", crawl)
