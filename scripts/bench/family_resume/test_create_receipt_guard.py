@@ -494,7 +494,7 @@ class BoundParentDeathTests(GuardFixture):
         try:
             G.watch(self.root,self.ref,inventory=inventory,credit=credit,now=lambda:clock[0],
                     pause=lambda n:clock.__setitem__(0,clock[0]+dt.timedelta(seconds=n)),
-                    parent_alive=lambda _:calls[0]<1,ready=lambda _:None,publish=publish,
+                    parent_alive=lambda _:clock[0] < NOW + dt.timedelta(seconds=20),ready=lambda _:None,publish=publish,
                     capture=capture,destroy=lambda iid:events.append(("destroy",iid,clock[0])))
         except StopFake:pass
         destroyed=[v for v in events if v[0]=="destroy"]
