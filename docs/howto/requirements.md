@@ -6,13 +6,13 @@ This page lists only what the repository's evidence states. Where the repository
 
 ### Operating system and CPU
 
-- **Linux on x86-64 with KVM** (the host OS is Linux only).  The device is a QEMU device, and every recorded run used `/dev/kvm` with `-cpu host`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/host_preflight.sh, docs/design/THE_ARCHITECTURE_v3.md section 0 ("Host OS is Linux only") -->
+- **Linux on x86-64 with KVM** (the host OS is Linux only).  The device is a QEMU device (only QEMU is supported today; independence from one hypervisor is a goal, see [Goals and plans](goals.md)), and every recorded run used `/dev/kvm` with `-cpu host`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/host_preflight.sh, docs/design/THE_ARCHITECTURE_v3.md section 0 ("Host OS is Linux only") -->
 - The CPU needs hardware virtualisation (`vmx` or `svm`). <!-- src: scripts/bench/host_preflight.sh -->
 - Hosts that are themselves KVM guests (nested virtualisation) work, and most hardware results come from such rented hosts. A VM exit costs about 10 to 40 times as much on them as on bare metal. <!-- src: docs/STATUS_DETAIL.md section 4 and AGENTS.md "Bench traps" --> Results on non-nested hardware: the author's RTX 4070 host runs the Windows results in the README. <!-- src: README.md -->
 - Intel and AMD (EPYC 7452) hosts appear in the recorded results. <!-- src: docs/design/V3_APP_MATRIX.md, docs/STATUS_DETAIL.md -->
 - **Host kernel version:** the recorded rented hosts ran Linux 6.8.0-59. A minimum or maximum supported kernel is **not documented yet**. <!-- src: docs/design/V3_DRIVER_MATRIX.md (SW3 GA104 cell) -->
 - **arm64:** no run on arm64 is documented. CI only cross-checks that the workspace builds for aarch64. <!-- src: .github/workflows/ci.yml (aarch64 job) -->
-- **An IOMMU is not required** for kayfabe's isolation: the guest never drives the physical GPU. See [FAQ](FAQ.md). <!-- src: docs/FAQ.md -->
+- **An IOMMU is not required** for kayfabe's isolation: the guest never drives the physical GPU. See [FAQ](../FAQ.md). <!-- src: docs/FAQ.md -->
 
 ### NVIDIA driver on the host
 
@@ -39,7 +39,8 @@ What has been run (the README's list; revisions and boxes are in the repository'
 | Ampere GA106 (RTX 3060) | yes; the usual bench GPU | not documented yet |
 | Ampere GA104 | yes (exact cell: kayfabe `714ec29d3`, 595.91.07) | "only has the GPU" per the README; display not documented yet |
 | Turing TU116 | yes | not documented yet |
-| Blackwell GB205 | yes | not documented yet |
+| Blackwell GB205 | yes | an idle ten-minute run passed once, with two fixes that are not merged yet; no apps run; without the fixes the driver crashes the guest <!-- src: branch claude/blackwell-fixes-20261024, one run (n=1) --> |
+| Blackwell GB202 | not documented yet | **open:** one run crashed within seconds, not yet explained; a run on another machine did not repeat it <!-- src: branches codex/bw6b-20261024 and claude/bw11-20261026 --> |
 | Blackwell GB206 | passed at earlier revisions | **open: Code 43** |
 
 <!-- src: README.md "GPUs:" paragraph; docs/STATUS_DETAIL.md section 0; traces/sw3_die_sweep_20261024/README.md -->
@@ -57,12 +58,14 @@ What has been run (the README's list; revisions and boxes are in the repository'
 - **Guest RAM** must be a shared memfd (`memory-backend-memfd,share=on`); with ordinary anonymous RAM every store-backed path refuses. <!-- src: scripts/fastguest/run_fast_guest.sh -->
 - **Host RAM and disk:** the bench's own host checks demand at least 16 GB RAM, 8 cores and 100 GB free disk, but those are limits for a build-and-test box, not product requirements. The harness defaults for a Windows guest are 8192 MB and 8 vCPUs, with an 80 GB disk. A product minimum is **not documented yet**. <!-- src: scripts/bench/host_preflight.sh, scripts/bench/windows/win_vm.sh -->
 
+- **CPU-window admission:** each CPU window permits at most 8192 live guest placements across RAM and store, plus its separate boot seed. Further placements are refused by name; successful unmap returns capacity. <!-- src: crates/kf-mem/src/cpuwin.rs, commit a61ed3c6e (default placement budget) -->
+
 ### Privileges
 
 - The design runs the host side from an unprivileged process using only resource-manager controls the host driver marks non-privileged. <!-- src: ARCHITECTURE.md, README.md -->
 - The provided launch scripts, however, run as root: they open `/dev/nvidia*`, create a tap network and take a lock. <!-- src: scripts/bench/display/interactive.sh -->
-- A recorded, end-to-end run without root is **not documented yet**.
-- **No host patches are required.** An optional patch to the host's `nvidia-uvm` exists as research; it is not part of the stock path. <!-- src: docs/STATUS_DETAIL.md section 0 --> Four of the 65 CUDA applications need unified-memory demand paging and fail without it. <!-- src: README.md -->
+- **One run without root is recorded**, on one host: a user whose only group was `kvm` (no capabilities) ran the 30-arm Linux suite 30 of 30, the GPU gates 9 of 9 and a Windows 11 guest running Unigine Heaven, with no VFIO rebind and no kernel module, driver or udev change [measured, kayfabe `0a746117`, RTX 4070, driver 595.91.07]. It relied on NVIDIA's default mode 0666 for `/dev/nvidia*`, and the user needed permission to open `/dev/kvm`. The record is on the branch `claude/rootless-audit-20261016` (`traces/rootless_audit_20261016/REPORT.txt`), not on master; a repeatable test on master is still to be added. See [Security model](security.md). <!-- src: branch claude/rootless-audit-20261016 commit 32d7319b2, traces/rootless_audit_20261016/REPORT.txt -->
+- **No host patches are required.** An optional patch to the host's `nvidia-uvm` exists as research; it is not part of the stock path. <!-- src: docs/STATUS_DETAIL.md section 0 --> Four of the 65 CUDA applications need unified-memory demand paging and fail without it. Optional enhancements (a guest helper module, patched guest or host drivers) are planned and never required. <!-- src: README.md; docs/design/V3_COOPERATIVE_TIERS.md section 1, docs/design/V3_HOST_PATCH_LIST.md section 1 -->
 
 ## Build host
 
