@@ -124,6 +124,10 @@ metadata: `docs/**`, `site/**` and `**/*.md` are skip paths, including root READ
 Workflow changes and any `ci/vast-broker/**` change request the GPU gate. Unknown or truncated
 metadata requests a run; renames must have both paths in skip paths.
 
+CODE READ (2026-10-28, `.github/workflows/site.yml`): CI builds and crawls portable output,
+including a real nested-tag fixture, before rebuilding the Pages artifact. Portable output cannot
+also be a deploy candidate; it never contains the deployment head slot.
+
 ## Look and feel
 
 <!-- src: .github/workflows/site.yml; site/build.py; site/deployment_slots.py; site/check_slots.mjs -->

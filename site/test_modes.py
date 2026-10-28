@@ -20,7 +20,9 @@ class Modes(unittest.TestCase):
             sentinel = output / "index.html"
             sentinel.write_bytes(b"existing output")
             with patch.object(
-                module, "version_plan", side_effect=AssertionError("mode guard must precede planning")
+                module,
+                "version_plan",
+                side_effect=AssertionError("mode guard must precede planning"),
             ) as plan:
                 with self.assertRaisesRegex(ValueError, "portable.*deploy"):
                     module.build(repo, {}, [], portable=True, deploy_candidate=True)

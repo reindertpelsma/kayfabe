@@ -654,6 +654,8 @@ def metadata(output, plan):
 
 
 def build(repo, binaries, releases, root_ref="latest", portable=False, deploy_candidate=False):
+    if portable and deploy_candidate:
+        raise ValueError("portable output cannot be a deploy candidate")
     plan = version_plan(repo, releases, root_ref)
     output = repo / "site/public"
     if output.exists():

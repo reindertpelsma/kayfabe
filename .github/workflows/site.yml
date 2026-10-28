@@ -98,6 +98,14 @@ jobs:
           python3 -m unittest discover -s site -p 'test_deploy*.py'
           npm ci --prefix site --ignore-scripts --no-audit --no-fund
           node --test site/test_slots_dom.mjs
+          python3 -m unittest discover -s site -p 'test_modes.py'
+          python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" --portable \
+            --releases-json "$RUNNER_TEMP/site-releases.json" --root-ref "$ROOT_REF"
+          python3 site/check_portable.py
+          node site/check_slots.mjs site/public false
+          SITE_PORTABLE_TOOLS="$RUNNER_TEMP/site-tools" \
+            python3 -m unittest discover -s site -p 'test_portable.py'
+          # Rebuild Pages last: portable output must never be the deployment artifact.
           candidate=()
           if [[ "$DEPLOY_CANDIDATE" == true ]]; then candidate=(--deploy-candidate); fi
           python3 site/build.py --tools-dir "$RUNNER_TEMP/site-tools" \

@@ -19,3 +19,7 @@ CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): Site reuse binds every C
 ## Optional publication instrumentation
 
 CODE READ 2026-10-28 (`.github/workflows/site.yml`, `site/build.py`, `site/deployment_slots.py`): ordinary local, PR and fork builds contain no publication slot or beacon. Only an upstream publication candidate gets one neutral head comment. The build checks its position with a real DOM parser. The protected deploy job validates its runtime input and replaces only that comment's bytes; it never parses or reserializes pages. Empty, absent or invalid input removes the comment and publishes without instrumentation. Valid input with no matching slots fails. Conditional footer text is supplied by the deployment workflow, so it is absent from ordinary built files.
+
+## Browse a local copy
+
+CODE READ 2026-10-28 (`site/build.py`, `.github/workflows/site.yml`): build with `--portable` for a copy under a URL prefix or opened from disk. Internal links use relative paths and explicit filenames. The version selector opens the chosen version's index when browsing from disk. This mode cannot also be a deploy candidate. CI checks portable output before rebuilding the regular Pages artifact; see [build instructions](../../site/README.md).
