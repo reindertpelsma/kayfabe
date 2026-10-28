@@ -44,6 +44,12 @@ These are **goals**, not promises. Kayfabe is a research project with no release
 
 **Status today:** none of these exist. There is no installer, no stable interface, no public binary and no security audit. You build from source with the repository's scripts. See [Running the QEMU device](installing.md). <!-- src: README.md status line and "Trying it"; docs/howto/installing.md; docs/howto/security.md -->
 
+## Optional enhancements
+
+**Goal:** optional cooperation stages on top of the stock path: a helper module in the guest, and patched guest or host drivers, for things such as doorbell writes without a VM exit and demand-paged unified memory. They are planned and optional, and the stock path never requires them. <!-- src: docs/design/V3_COOPERATIVE_TIERS.md section 1; docs/design/V3_HOST_PATCH_LIST.md section 1 (owner policy 2026-10-10) -->
+
+**Status today:** design only, nothing in the stock path depends on it; one research patch to the host's `nvidia-uvm` exists. <!-- src: docs/STATUS_DETAIL.md section 0 -->
+
 ## Where plans change
 
 The owner's rulings, with their dates, are kept in the repository. This page is rewritten when a ruling changes; an item here is only as current as the date of its source. The status of what works today is on the [introduction](index.md) and [Requirements](requirements.md). <!-- src: docs/OWNER_RULINGS.md; docs/STATUS_DETAIL.md -->

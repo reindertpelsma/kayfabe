@@ -38,7 +38,7 @@ These are the repository's own claims, with their limits. Each page of this manu
 | [Technical FAQ](technical-faq.md) | How it works and why it is designed this way |
 | [Goals and plans](goals.md) | What the project aims at later (other hypervisors, arm64, several GPUs in one guest), as goals with their status today |
 | [Credits and notices](credits.md) | Licences, trademarks, acknowledgements |
-| [FAQ](FAQ.md) | Common questions: vGPU, VFIO, GPUs and drivers, sharing, performance, security, the IOMMU and interrupts |
+| [FAQ](../FAQ.md) | Common questions: vGPU, VFIO, GPUs and drivers, sharing, performance, security, the IOMMU and interrupts |
 
 ## How to read the evidence labels
 
