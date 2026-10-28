@@ -620,3 +620,6 @@ class FrontpageClaims(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# Keep the existing CI discovery pattern inclusive without changing its Pages assertions.
+from test_portable import PortableURLs, PortableNavigation
