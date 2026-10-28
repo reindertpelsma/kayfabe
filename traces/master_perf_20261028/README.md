@@ -1,6 +1,6 @@
 # PF2 current-master performance evidence
 
-**STATUS: RESEARCH, preparation only, 2026-10-28.** No hardware results yet.
+**STATUS: RESEARCH, PARKED before host work, 2026-10-28.** No hardware results. The arm-A/B flags interpretation remains pending clarification; no run or merge is authorized by this preparation.
 
 The [preregistration](../../docs/design/MASTER_PERF_PREREG_20261028.md) fixes product revisions, the historical Heaven recipe, FIFO lease order, correctness acceptance and run order before execution. Draft PR #185 targets next.
 

@@ -2,6 +2,8 @@
 
 **STATUS: RESEARCH, preregistration, 2026-10-28.** PF1 task PF2. No new performance result is asserted here. Evidence will live in `traces/master_perf_20261028/`; the report and raw logs stay private until sanitized results are ready.
 
+**PARKED by coordinator before host execution, 2026-10-28.** No PF2 lock acquisition, host build, VM boot, GPU operation or performance result. The arm-A/B interpretation below is a proposal pending clarification: retain the standard Windows functional flags without performance overrides, or unset every KF3 environment flag? No profile has been tested or accepted. Resume requires a fresh FIFO handoff after the correctness lanes and resolution of that configuration question; this preparation does not authorize a run or merge.
+
 ## Question and hypotheses
 
 **CODE READ at master `2108fb38d7288c82dfb7f5b257228e28fb36a13a`:** `kf-chan/src/user_lazy.rs` enables the GP_PUT cache and lazy private-USERD observation by default; the observation interval is 16, bounded by ring capacity. The production Pointer lifecycle replaces the earlier scan-off experiment. Therefore the historical 2026-10-17 labels do not establish current-master performance. This code read does not establish a new fps number.
