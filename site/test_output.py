@@ -193,16 +193,14 @@ class LandingAndDocsIndex(unittest.TestCase):
 
     def test_landing_has_the_required_blocks(self):
         for text in [
-            "Status: research",
-            "No installer yet",
+            "Where it stands",
+            "What it is for",
+            "What is different",
+            "Try it",
+            "Follow along",
+            "What does not exist yet",
+            "There is no installer yet",
             "Windows is not stable",
-            "What works today",
-            "Try it, or help",
-            "Contribute and community",
-            "How fast, with the numbers",
-            "Who it is for",
-            "Works today",
-            "Not yet",
             "VFIO passthrough",
             "NVIDIA vGPU",
             "API forwarding",
@@ -212,7 +210,6 @@ class LandingAndDocsIndex(unittest.TestCase):
         for banned in ["loads nothing from", "other hosts", "code you have to trust"]:
             self.assertNotIn(banned, self.landing)
         self.assertEqual(self.landing.count("<h1"), 1)
-        self.assertIn("<svg", self.landing)
         self.assertRegex(self.landing, r'<img[^>]+alt="[^"]+"')
         self.assertIn('class="skip-link"', self.landing)
 
@@ -221,21 +218,29 @@ class LandingAndDocsIndex(unittest.TestCase):
 
         visible = re.sub(r"<!--.*?-->", "", self.landing, flags=re.S)
         self.assertEqual(claims_guard.find(visible), [])
-        self.assertGreaterEqual(self.landing.count("<!-- src:"), 30)
+        self.assertGreaterEqual(self.landing.count("<!-- src:"), 28)
         # Every section on the page keeps its source next to it.
         for section in re.findall(r"<section.*?</section>", self.landing, flags=re.S):
             if "hero-search" in section and "<h2" not in section.split("</h2>")[0]:
                 continue
             self.assertIn("<!-- src:", section, section[:80])
 
+    def test_landing_first_screen_is_plain(self):
+        import claims_guard
+
+        hero = re.search(r'<section class="hero">.*?</section>', self.landing, flags=re.S)[0]
+        text = re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", "", hero, flags=re.S))
+        self.assertEqual(claims_guard.jargon(text), [])
+        self.assertIn("Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.", text)
+        self.assertIn("How it is isolated", self.landing)
+
     def test_landing_keeps_the_honest_parts(self):
         for text in [
-            "27 to 31%",
-            "experimental build (unmerged, Heaven only)",
-            "not on master",
+            "benchmarked again on current master",
+            "The record is on a branch",
             "Your licences",
-            "use nvkvm-pv",
-            "one guest per GPU",
+            "something that works today, use it",
+            "one VM per card",
         ]:
             self.assertIn(text, re.sub(r"<[^>]+>", "", self.landing).replace("\n", " "))
         self.assertNotIn("paguro", self.landing.lower())

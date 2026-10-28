@@ -1,6 +1,7 @@
 """Small local tests; temporary git tags stand in for published releases."""
 
 import glob
+import re
 import importlib.util
 import io
 import os
@@ -532,10 +533,6 @@ class LandingRender(unittest.TestCase):
         self.assertIn("1.0 MiB", landing)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -568,27 +565,42 @@ class FrontpageClaims(unittest.TestCase):
         import tomllib
 
         data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
-        self.assertTrue(data["tagline_src"].strip() and data["intro_src"].strip())
-        for name in ["status", "screenshot", "audiences", "speed", "compare", "today",
-                     "games", "path", "honest", "start", "community"]:
+        self.assertTrue(data["tagline_src"].strip() and data["lede_src"].strip() and data["status_src"].strip())
+        for name in ["screenshot", "uses", "different", "where", "licence", "start", "community"]:
             self.assertTrue(data[name].get("src", "").strip(), name)
-        for table in ("pitch", "audiences"):
-            for item in data[table].get("items", data[table].get("cards")):
+        for item in data["uses"]["items"] + data["different"]["items"]:
+            self.assertTrue(item["src"].strip(), item)
+        for group in data["where"]["groups"]:
+            for item in group["items"]:
                 self.assertTrue(item["src"].strip(), item)
-        for row in data["today"]["rows"]:
-            self.assertTrue(row["src"].strip(), row)
         for text in self.landing_source().split("\n"):
-            if text.startswith(("src =", "note_src =", "licence_src =", "tagline_src =", "intro_src =")):
+            if re.match(r"\w*src = ", text):
                 self.assertNotIn("--", text)
 
-    def test_status_band_says_what_it_must(self):
+    def test_first_screen_blocks_use_plain_words(self):
+        import tomllib
+
+        data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
+        texts = [data["tagline"], data["lede"], data["status"], data["different"]["isolated"]]
+        texts += [i["title"] + " " + i["text"] for i in data["uses"]["items"]]
+        texts += [i["name"] + " " + i["text"] for i in data["different"]["items"]]
+        self.assertEqual(claims_guard.jargon(" ".join(texts)), [])
+        self.assertEqual(
+            data["tagline"],
+            "Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.",
+        )
+        readme = (ROOT / "README.md").read_text().split("<img alt=")[0]
+        self.assertEqual(claims_guard.jargon(readme), [])
+
+    def test_the_straight_section_says_what_it_must(self):
         data = self.landing_source()
         for text in [
-            "Research project, one maintainer",
-            "No installer yet",
+            "research project with one maintainer",
+            "There is no installer yet",
             "Windows is not stable",
-            "Sleep and wake fail",
-            "Not security audited",
+            "Sleep and wake do not survive",
+            "A security audit",
+            "non-goal",
         ]:
             self.assertIn(text, data)
 
@@ -596,3 +608,7 @@ class FrontpageClaims(unittest.TestCase):
         top = "\n".join((ROOT / "README.md").read_text().splitlines()[:15]).lower()
         for text in ["research", "no installer", "sleep", "audit", "build"]:
             self.assertIn(text, top)
+
+
+if __name__ == "__main__":
+    unittest.main()

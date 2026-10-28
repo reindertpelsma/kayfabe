@@ -318,6 +318,7 @@ def scan(root: Path, today: date, max_age: int) -> dict:
             row["status"] = "ASSET"
         elif is_manual(name):
             row["status"] = "MANUAL"
+            text = path.read_text(encoding="utf-8")
         else:
             text = path.read_text(encoding="utf-8")
             opening = status.opening_status(text)
@@ -348,17 +349,6 @@ def scan(root: Path, today: date, max_age: int) -> dict:
                                 "message": "link an existing successor in the STATUS paragraph",
                             }
                         )
-            for line, destination in links(text):
-                target = local_target(root, path, destination)
-                if target is not None and broken_destination(root, target, destination):
-                    violations.append(
-                        {
-                            "path": name,
-                            "line": line,
-                            "kind": "broken-link",
-                            "message": f"relative link does not resolve: {destination}",
-                        }
-                    )
             row["dead_references"] = dead_references(root, path, text, index)
             if row["status"] == "LIVE" and row["age"] is not None and row["age"] > max_age:
                 if row["dead_references"]:
@@ -370,6 +360,18 @@ def scan(root: Path, today: date, max_age: int) -> dict:
                             "references": row["dead_references"],
                             "message": "old LIVE status with dead literal references: "
                             + ", ".join(row["dead_references"]),
+                        }
+                    )
+        if row["status"] not in {"ARCHIVED", "ASSET"}:
+            for line, destination in links(text):
+                target = local_target(root, path, destination)
+                if target is not None and broken_destination(root, target, destination):
+                    violations.append(
+                        {
+                            "path": name,
+                            "line": line,
+                            "kind": "broken-link",
+                            "message": f"relative link does not resolve: {destination}",
                         }
                     )
         row["findings"] = sorted({v["kind"] for v in violations if v["path"] == name})

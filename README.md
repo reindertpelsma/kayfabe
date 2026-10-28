@@ -1,16 +1,10 @@
 # kayfabe
 
-**STATUS: RESEARCH, 2026-10-21.** The scope is spelled out under "Status" below.
+**STATUS: RESEARCH, 2026-10-21.** One maintainer, no installer (you build it from source), no public binary, no stable interface, no security audit yet. Windows is not stable: sleep/wake fails and some apps make the GPU driver reset. Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer experiments, the Blackwell display work and further performance work live on branches.
 
-**One NVIDIA card. Your Linux desktop keeps it. The VM gets NVIDIA's real driver.**
+**Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.**
 
-Kayfabe shares an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it. It is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest loads NVIDIA's real, unmodified driver (Windows or Linux);
-kayfabe reads what that driver asks for and has the real host GPU do the work, from an **unprivileged** host process that talks to the host driver
-as an ordinary client. Written in Rust.
-
-**Status: research, 2026-10-21.** One maintainer. It runs real applications, but there is no installer (you build it from source), no public binary, no stable interface, and no security audit yet.
-Windows is not stable: sleep/wake fails and some apps make the GPU driver reset.
-Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer experiments, the Blackwell display work and further performance work live on branches.
+With kayfabe, Windows or Linux in a virtual machine uses NVIDIA's own driver and your real graphics card, for games, video and CUDA, while your computer keeps using the same card. No special hardware, no licence server, and nothing in your NVIDIA driver is patched. Kayfabe is a QEMU device that presents a virtual NVIDIA GPU to the VM; the real work runs on your real card. The VM reaches your GPU the way any normal program does, through your NVIDIA driver, so the driver's usual separation between programs applies. That is the design, and it has not been audited ([how it is isolated](docs/howto/security.md#what-the-isolation-is-made-of)). Written in Rust.
 
 Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) | [FAQ](docs/FAQ.md) | [goals and plans](docs/howto/goals.md) | [what works today](#what-runs-today)
 
@@ -21,23 +15,14 @@ Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) 
 
 | | host keeps the GPU | safe for untrusted guests | guest driver | needs |
 |---|---|---|---|---|
-| VFIO passthrough | no, one VM owns it | yes | stock | any GPU |
-| NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | data-centre GPU, licence |
+| VFIO passthrough | no, one VM owns it | depends on the IOMMU and trust model; see [FAQ](docs/FAQ.md) | stock | any GPU |
+| NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | [supported GPU](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html), licence |
 | API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | possible, but fragile for multi-tenant VMs | a custom guest module | any NVIDIA GPU |
-| **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
+| **kayfabe** | **yes** | **designed for hostile guests; safety not established or audited** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
-- **Speed today, measured.** The production path is well below native on Direct3D 11 and about two thirds of native on OpenGL; the experimental build is close but unmerged. On the same RTX 4070, Unigine Heaven 4.0 in a Windows guest (1920x1080 windowed, Ultra, 260 s runs, Heaven's own score):
-
-  | | Direct3D 11 | OpenGL |
-  |---|---|---|
-  | native Windows (VFIO, measured 2026-10-15) | 330 fps | 342 fps |
-  | kayfabe, production path | 89 to 102 fps | 212 to 233 fps |
-  | kayfabe, experimental build | 296 to 299 fps | 338 to 362 fps |
-
-  Other window sizes and quality settings give different numbers (an older run at 1280x720, High, measured 271 fps in OpenGL).
-  The experimental build skips reading the guest's command buffers once a channel is set up. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
+- **Windows speed is being benchmarked again on current master.** Windows runs real 3D applications (see below); the results will be posted here.
 
 - **Linux guests run CUDA at host speed** for large work (rented RTX 3060 box that is itself a VM, older revisions; [details](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)):
 
@@ -59,13 +44,13 @@ Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) 
 | app | result |
 |---|---|
 | Minecraft Java and Bedrock | in a world, multiplayer works fine; no freezes in the latest session (revision `89fc8a222`, 2026-10-21, 15+ minutes beside Unigine Heaven). Earlier revisions froze apps for seconds when several ran at once; the relay handoff fixes the measured cause (Linux: 0 of 26 stalled pairs against 3 of 12 before) |
-| Unigine Heaven, Direct3D 9, Direct3D 11 and OpenGL | pass; fps in the table above |
-| GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision, need a new benchmark to confirm fps with performance fixes) |
+| Unigine Heaven, Direct3D 9, Direct3D 11 and OpenGL | pass |
+| GravityMark | Direct3D 12 and Vulkan pass |
 | Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
 | CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
 | SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
 | Blender on Windows | Renders sample files properly, needs more testing |
-| 3DMark demo on Steam | Steel Nomad (full, DX12) scores 2050 to 2991, i.e. 20 to 30 fps, depending on revision and what else is running (latest run 2227 with Minecraft, OBS and a video playing at the same time); native VFIO on the same GPU scores about 3800 to 3960 (38 to 40 fps). Result files are not committed yet |
+| 3DMark demo on Steam | Steel Nomad (full, DX12) runs to the end. Result files are not committed yet |
 | OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used (OBS log: `obs_nvenc_h264_tex`; the host GPU's encoder showed 21% load attributed to the VM process). MP4 video playback has no issues that I noticed. Result is not commited yet |
 | Office 365 | No issues so far |
 
@@ -73,7 +58,7 @@ Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmo
 
 **Linux guest** (NVIDIA's stock driver, unmodified, nothing to set): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
 and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with
-outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
+outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). Four workloads need unified-memory demand paging and fail correctness checks. One recorded failure printed SUCCESS with a wrong result.
 
 **GPUs:** all of the above on the owner's RTX 4070 (AD104). Linux guests also passed on GA106 (RTX 3060), TU116, AD104 (RTX 4000 Ada), GB205 and, more recently, AD102
 (Linux guest driver 590); Windows desktops run on AD106 and AD103 with a borrowed display page, GA104 only has the GPU, and GB206 under Windows is still open
