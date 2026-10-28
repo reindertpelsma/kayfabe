@@ -13,9 +13,17 @@ class ProviderTests(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(P, "provider inventory adapter missing")
 
-    def pages(self, *, changed_owner=False, incomplete=False, duplicate=False):
+    def pages(self, *, changed_owner=False, incomplete=False, duplicate=False, last_owner=None):
         events = []
-        users = iter([dict(id=71, credit=40), dict(id=72 if changed_owner else 71, credit=40)])
+        users = iter(
+            [
+                dict(id=71, credit=40),
+                dict(
+                    id=(last_owner if last_owner is not None else 72 if changed_owner else 71),
+                    credit=40,
+                ),
+            ]
+        )
 
         def query(args, **kwargs):
             events.append(args)
@@ -56,14 +64,19 @@ class ProviderTests(unittest.TestCase):
 
     def test_projection_preserves_creation_timestamp(self):
         query, _ = self.pages()
-        self.assertEqual(P.snapshot(71, query=query)['rows'][0]['start_date'], 1234.125)
+        self.assertEqual(P.snapshot(71, query=query)["rows"][0]["start_date"], 1234.125)
 
     def test_second_page_preserves_creation_timestamp(self):
         query, _ = self.pages()
-        self.assertEqual(P.snapshot(71, query=query)['rows'][1]['start_date'], 1234.125)
+        self.assertEqual(P.snapshot(71, query=query)["rows"][1]["start_date"], 1234.125)
 
     def test_changed_account_is_unresolved(self):
         query, _ = self.pages(changed_owner=True)
+        with self.assertRaises(P.InventoryUnresolved):
+            P.snapshot(71, query=query)
+
+    def test_another_changed_account_is_unresolved(self):
+        query, _ = self.pages(last_owner=71.0)
         with self.assertRaises(P.InventoryUnresolved):
             P.snapshot(71, query=query)
 
@@ -108,6 +121,41 @@ class ProviderTests(unittest.TestCase):
 
     def test_timeout_create_transport_has_one_http_attempt(self):
         self.create_command(timeout=True)
+
+    def test_terminal_empty_page_with_nonzero_total_is_unresolved(self):
+        self.truncated_terminal(1, [])
+
+    def test_terminal_partial_page_with_larger_total_is_unresolved(self):
+        self.truncated_terminal(2, [dict(id=42)])
+
+    def truncated_terminal(self, total, rows):
+        def query(args, **kwargs):
+            if args[:2] == ["show", "user"]:
+                return dict(id=71)
+            return dict(
+                success=True,
+                instances=rows,
+                instances_found=len(rows),
+                total_instances=total,
+                next_token=None,
+            )
+
+        with self.assertRaises(P.InventoryUnresolved):
+            P.snapshot(71, query=query)
+
+    def test_inventory_projection_omits_arbitrary_secret_fields(self):
+        def query(args, **kwargs):
+            if args[:2] == ["show", "user"]:
+                return dict(id=71)
+            return dict(
+                success=True,
+                instances_found=1,
+                total_instances=1,
+                next_token=None,
+                instances=[dict(id=42, jupyter_token="FAKE_SECRET_JUPYTER")],
+            )
+
+        self.assertNotIn("FAKE_SECRET_JUPYTER", str(P.snapshot(71, query=query)))
 
 
 class SnapshotBudgetTests(unittest.TestCase):
@@ -160,6 +208,41 @@ class SnapshotBudgetTests(unittest.TestCase):
                 monotonic=lambda: next(clock),
             )
         self.assertEqual(calls, [])
+
+    def test_exact_expired_clock_issues_no_api_call(self):
+        calls = []
+        clock = iter([0, 30])
+        with self.assertRaises(P.InventoryUnresolved):
+            P.snapshot(
+                71,
+                query=lambda *a, **k: calls.append(a),
+                budget_seconds=30,
+                monotonic=lambda: next(clock),
+            )
+        self.assertEqual(calls, [])
+
+    def test_slow_final_owner_query_cannot_claim_complete(self):
+        self.slow_final(31)
+
+    def test_another_slow_final_owner_query_cannot_claim_complete(self):
+        self.slow_final(60)
+
+    def slow_final(self, delay):
+        clock = [0]
+        owners = [0]
+
+        def query(args, **kwargs):
+            if args[:2] == ["show", "user"]:
+                owners[0] += 1
+                clock[0] += delay if owners[0] == 2 else 1
+                return dict(id=71)
+            clock[0] += 1
+            return dict(
+                success=True, instances_found=0, total_instances=0, instances=[], next_token=None
+            )
+
+        with self.assertRaises(P.InventoryUnresolved):
+            P.snapshot(71, query=query, budget_seconds=30, monotonic=lambda: clock[0])
 
 
 if __name__ == "__main__":
