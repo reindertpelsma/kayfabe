@@ -4,9 +4,10 @@
 requested an archived reference and preparation only. The proposed experiment in
 [PREREGISTRATION.md](PREREGISTRATION.md) requires a separate execution go-ahead.
 
-MEASURED from archived VF1 text, re-extracted on 2026-10-28: both selected
-SPECviewperf 15.x iterations completed all nine selected workloads and all 150
-subtests, including `enscape-01/06_SanMiguelFullUltraHQ` twice. This is an actual
+MEASURED from archived VF1 text, re-extracted on 2026-10-28: across two selected
+SPECviewperf 15.x iterations, 18 workloads and 150 subtests completed in total
+(nine workloads and 75 subtests per iteration), including
+`enscape-01/06_SanMiguelFullUltraHQ` twice. This is an actual
 archived workload-completion record, not the owner's assertion alone and not a
 Heaven result. It does not mean every workload shipped in SPECviewperf 15 was run.
 [reference.json](reference.json) gives the status-only extraction;
@@ -47,8 +48,8 @@ and unchanged during that session; that establishes preservation, not later
 identity. No stable physical-device identifier was compared in this preparation.
 
 UNKNOWN: VF1 `TdrDelay`, `TdrDdiDelay` and other TDR registry overrides. A bounded
-search of its archived textual evidence found no registry readback. Thus this
-The VF1 archive supplies **no default-TDR registry control**. ENS12
+search of its archived textual evidence found no registry readback, so the VF1
+archive supplies **no default-TDR registry control**. ENS12
 A7416/A7417/A7418 do archive absent `TdrDelay`/`TdrDdiDelay` readbacks; their planned
 reboot was skipped because the keys were already absent. Native GPU capacity and
 desktop configuration also differ from kayfabe. Do not silently turn this historical

@@ -33,8 +33,8 @@ consistent with recovery rather than its initiating cause. These are relayed
 timing findings, not an independently calibrated millisecond causal measurement
 by this preparation. Independently re-read QEMU timestamps establish 7418's
 2665.007 ms request-to-resume interval, but do not establish cross-clock offsets.
-7417 already defeats a universal assertion that every 153 follows a long split.
-Absence in retained history does not prove that an unreleased request was absent.
+7417 shows why post-TDR recovery gaps cannot be treated as initiating delays;
+retained history does not alone exclude an unseen/unreleased pre-TDR request.
 
 CODE READ: archived `h1c.py` requires both apply-end and release timestamps and
 selects by release time. It excludes requests never released; its rows are not an
