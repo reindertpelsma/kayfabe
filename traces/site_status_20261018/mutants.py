@@ -82,8 +82,9 @@ add("site-pr-reuse", "site_policy.py", 'name != "push"', "False")
 add(
     "site-foreign-source",
     "site_policy.py",
+    'or run["path"] != ".github/workflows/site.yml"'
     '\n            or run["repository"]["full_name"] != REPO',
-    "\n            or False",
+    'or run["path"] != ".github/workflows/site.yml"\n            or False',
 )
 add(
     "site-other-workflow",
