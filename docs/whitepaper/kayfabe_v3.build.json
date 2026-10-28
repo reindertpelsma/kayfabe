@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "3400bdb901c77658f9c2964cd2607aa9bb769f7a",
+  "source_commit": "4f1ff3e1e2a73d51ef547c4cd1a0416c7cfa588e",
   "inputs": [
     {
       "path": "docs/whitepaper/fig_v3_evidence_ladder.tex",
@@ -74,8 +74,8 @@
     },
     {
       "path": "docs/whitepaper/v3_rules_product.tex",
-      "git_blob": "76b230b4113c2e9f4a59dac85f62115925cd4a6e",
-      "sha256": "b8fe456597196f690f9aac17955ff3c88883cc004100f55c118d58181b9608e5"
+      "git_blob": "461a5318002fb3b5e223b5dc10837b8b9fa4ac6b",
+      "sha256": "21ca42708826407278f52902626fd355fe06d3ee063c8f0a1828c961dacbff9c"
     },
     {
       "path": "docs/whitepaper/v3_uncomfortable.tex",
@@ -83,7 +83,7 @@
       "sha256": "eadd8faa7eb048c2cc56af470297cb39a89952a19e5db2438ff69bdd72947737"
     }
   ],
-  "pdf_sha256": "284c69d232cda4682c4cdcfdfc84d65afab6b417b2890bfb92d00c6245278558",
+  "pdf_sha256": "9f7502a5c6c9f293595e40cc74caa8516ecf618a73149e206ad0e1ad8a7f7a81",
   "engine": "XeTeX 3.141592653-2.6-0.999997 (TeX Live 2025/Debian)",
   "passes": 2
 }

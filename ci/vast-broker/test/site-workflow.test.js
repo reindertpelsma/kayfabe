@@ -88,7 +88,11 @@ for (const exists of [true, false])
     const location = { pathname: '/docs/master/design/overview.html', href: '' };
     const requests = [];
     runInNewContext(script, {
-      document: { getElementById: () => select },
+      URL,
+      document: {
+        currentScript: { src: 'https://kayfabe.dev/docs/master/theme/versions.js' },
+        getElementById: () => select,
+      },
       location,
       Option: class {
         constructor(label, value) {
@@ -100,6 +104,7 @@ for (const exists of [true, false])
         requests.push({ url, ...init });
         return url.endsWith('versions.json')
           ? {
+              ok: true,
               json: async () => [
                 { version: 'master', label: 'master (unreleased)' },
                 { version: 'v1.0', label: 'v1.0 (latest)' },
@@ -113,5 +118,10 @@ for (const exists of [true, false])
     select.value = 'v1.0';
     await select.onchange();
     assert.equal(requests.at(-1).method, 'HEAD');
-    assert.equal(location.href, exists ? '/docs/v1.0/design/overview.html' : '/docs/v1.0/');
+    assert.equal(
+      location.href,
+      exists
+        ? 'https://kayfabe.dev/docs/v1.0/design/overview.html'
+        : 'https://kayfabe.dev/docs/v1.0/index.html',
+    );
   });
