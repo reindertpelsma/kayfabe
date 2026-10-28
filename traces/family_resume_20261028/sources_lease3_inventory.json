@@ -1,0 +1,301 @@
+[
+  {
+    "name": "collect_capture.py",
+    "sha256": "fe8a0ee3354715736d6aa0dcf7e889da116b366130a825a5034f6803e623b217",
+    "bytes": 1423,
+    "archived_source": "operator_sources/fe8a0ee33547_collect_capture.py.txt",
+    "published_sha256": "fe8a0ee3354715736d6aa0dcf7e889da116b366130a825a5034f6803e623b217",
+    "published_bytes": 1423,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "completed.json",
+    "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "bytes": 3
+  },
+  {
+    "name": "console_pin.py",
+    "sha256": "66612c2e7c952b3ab4b58acd09b600a044d0639e627c8c1a6983a8f6a2b3c9a5",
+    "bytes": 4854,
+    "archived_source": "operator_sources/66612c2e7c95_console_pin.py.txt",
+    "published_sha256": "66612c2e7c952b3ab4b58acd09b600a044d0639e627c8c1a6983a8f6a2b3c9a5",
+    "published_bytes": 4854,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "derived.tar",
+    "sha256": "90922a7e54e0c64100f1bc23785cca7f19252fc04f6db3caed5b2643dc08ce8d",
+    "bytes": 40960
+  },
+  {
+    "name": "die_binding.py",
+    "sha256": "1f24294e199ee3947b11be6fd5bced2d24c2b0a2323bc9a60be1375fe444f5fb",
+    "bytes": 3610,
+    "archived_source": "operator_sources/1f24294e199e_die_binding.py.txt",
+    "published_sha256": "1f24294e199ee3947b11be6fd5bced2d24c2b0a2323bc9a60be1375fe444f5fb",
+    "published_bytes": 3610,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "driver_inventory.sh",
+    "sha256": "6cfaa4690bc5afe3ebfcb0049bd8d355de234649e55dea56c8ac80479120a9e0",
+    "bytes": 538,
+    "archived_source": "operator_sources/6cfaa4690bc5_driver_inventory.sh.txt",
+    "published_sha256": "6cfaa4690bc5afe3ebfcb0049bd8d355de234649e55dea56c8ac80479120a9e0",
+    "published_bytes": 538,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "fake_lifecycle.py",
+    "sha256": "c20e82d2108b9cdb169f3a7750fb3fb514e0917388f47e7bde39ea0767b87628",
+    "bytes": 9008,
+    "archived_source": "operator_sources/c20e82d2108b_fake_lifecycle.py.txt",
+    "published_sha256": "c20e82d2108b9cdb169f3a7750fb3fb514e0917388f47e7bde39ea0767b87628",
+    "published_bytes": 9008,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "final_capture.py",
+    "sha256": "94abbfa9189b759f5d2048a8f6124866c58480908ac73928852c658c5511db59",
+    "bytes": 3151,
+    "archived_source": "operator_sources/94abbfa9189b_final_capture.py.txt",
+    "published_sha256": "94abbfa9189b759f5d2048a8f6124866c58480908ac73928852c658c5511db59",
+    "published_bytes": 3151,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "final_xids.py",
+    "sha256": "5a2d68fd657b5f19470ba749cba31270bc882f4b32b65cdac100d9ffbc996ba0",
+    "bytes": 793,
+    "archived_source": "operator_sources/5a2d68fd657b_final_xids.py.txt",
+    "published_sha256": "5a2d68fd657b5f19470ba749cba31270bc882f4b32b65cdac100d9ffbc996ba0",
+    "published_bytes": 793,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "framebuffer.json",
+    "sha256": "131e490ede5d344e5a8539d4a5335ccc70db7eacb397b876cffc72578b1331bf",
+    "bytes": 5
+  },
+  {
+    "name": "guard_hooks.sh",
+    "sha256": "a83f6650d73a82922ae593dc23807448a485606ced45001da483305c550e20f8",
+    "bytes": 422,
+    "archived_source": "operator_sources/a83f6650d73a_guard_hooks.sh.txt",
+    "published_sha256": "a83f6650d73a82922ae593dc23807448a485606ced45001da483305c550e20f8",
+    "published_bytes": 422,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "instruments.tar",
+    "sha256": "97699cff6b1e7af3f24c1415248e26ee27525f3a61b3bcb805937d74c13a0601",
+    "bytes": 133120
+  },
+  {
+    "name": "lease_guard.py",
+    "sha256": "a6371daffb1b490d8e9e51642b7735be5142c64d964c46e4dc5e45525677ecea",
+    "bytes": 1662,
+    "archived_source": "operator_sources/a6371daffb1b_lease_guard.py.txt",
+    "published_sha256": "a6371daffb1b490d8e9e51642b7735be5142c64d964c46e4dc5e45525677ecea",
+    "published_bytes": 1662,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "lifecycle.py",
+    "sha256": "d8d3be428d2b358c0d9434a48dee3684187005738264d905abd91e3b8393af39",
+    "bytes": 1803,
+    "archived_source": "operator_sources/d8d3be428d2b_lifecycle.py.txt",
+    "published_sha256": "d8d3be428d2b358c0d9434a48dee3684187005738264d905abd91e3b8393af39",
+    "published_bytes": 1803,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "mirror_status.py",
+    "sha256": "8df3b8a5c5721c4242f460405ed925d80b2d26c42c281394d5047f555eb455d6",
+    "bytes": 2429,
+    "archived_source": "operator_sources/8df3b8a5c572_mirror_status.py.txt",
+    "published_sha256": "8df3b8a5c5721c4242f460405ed925d80b2d26c42c281394d5047f555eb455d6",
+    "published_bytes": 2429,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "network_guard.py",
+    "sha256": "12bcb8420f42325703b15f2a9c847c1ec9fe294804dadb94c851a349f67ca9d1",
+    "bytes": 2672,
+    "archived_source": "operator_sources/12bcb8420f42_network_guard.py.txt",
+    "published_sha256": "12bcb8420f42325703b15f2a9c847c1ec9fe294804dadb94c851a349f67ca9d1",
+    "published_bytes": 2672,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "operate.py",
+    "sha256": "31dd0c566ab2eda8c9a991ff933878ea7cb01540361651b9bbb156b9d49e4c67",
+    "bytes": 7695,
+    "archived_source": "operator_sources/31dd0c566ab2_operate.py.txt",
+    "published_sha256": "90ba594e09571aacdd0fbccc551579269e259b6ac4d8701ef877c3999d1a9347",
+    "published_bytes": 7693,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "operator_backend.py",
+    "sha256": "bce29d6d7decbbcff86ed69bcceff417a2af9a3a6da39eddbf1c7125d136af5c",
+    "bytes": 11510,
+    "archived_source": "operator_sources/bce29d6d7dec_operator_backend.py.txt",
+    "published_sha256": "f4c662f2aace9bb2248722bf681a30bd8144d1860ecbebb96d8b1672815f1890",
+    "published_bytes": 11483,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "pending_die.py",
+    "sha256": "c9991be83a0ba38b0fc026d4ef867f20e6a1fe7ae03cee0b02206066f4bb6e62",
+    "bytes": 614,
+    "archived_source": "operator_sources/c9991be83a0b_pending_die.py.txt",
+    "published_sha256": "c9991be83a0ba38b0fc026d4ef867f20e6a1fe7ae03cee0b02206066f4bb6e62",
+    "published_bytes": 614,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "precreate_watchdog.py",
+    "sha256": "f2cb4f0d4f7a01b8705fbd188e1573414bc251a344b2898810fa510ee4f25e1b",
+    "bytes": 5070,
+    "archived_source": "operator_sources/f2cb4f0d4f7a_precreate_watchdog.py.txt",
+    "published_sha256": "f2cb4f0d4f7a01b8705fbd188e1573414bc251a344b2898810fa510ee4f25e1b",
+    "published_bytes": 5070,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "prepare_binding.py",
+    "sha256": "ca03e9ca461521821a21533d22833e144eb5d91bbc225787b4c52cee7ce9e55f",
+    "bytes": 838,
+    "archived_source": "operator_sources/ca03e9ca4615_prepare_binding.py.txt",
+    "published_sha256": "ca03e9ca461521821a21533d22833e144eb5d91bbc225787b4c52cee7ce9e55f",
+    "published_bytes": 838,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "provider_retry.py",
+    "sha256": "763be1d59d997c8dc1fd09d29b6ecfa7aa057d5714c79f014c809b85c9a45ff1",
+    "bytes": 3304,
+    "archived_source": "operator_sources/763be1d59d99_provider_retry.py.txt",
+    "published_sha256": "763be1d59d997c8dc1fd09d29b6ecfa7aa057d5714c79f014c809b85c9a45ff1",
+    "published_bytes": 3304,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "pull.py",
+    "sha256": "98dd24a73a4225c3a287877dfaafd037ac6ea97141d34d7ae0f27701bf772bd6",
+    "bytes": 1853,
+    "archived_source": "operator_sources/98dd24a73a42_pull.py.txt",
+    "published_sha256": "98dd24a73a4225c3a287877dfaafd037ac6ea97141d34d7ae0f27701bf772bd6",
+    "published_bytes": 1853,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "quiesce.py",
+    "sha256": "0812d516b9b8716908e654c0f5b5bd79623ab4f22d78f74b6c95f76e220992b9",
+    "bytes": 2719,
+    "archived_source": "operator_sources/0812d516b9b8_quiesce.py.txt",
+    "published_sha256": "0812d516b9b8716908e654c0f5b5bd79623ab4f22d78f74b6c95f76e220992b9",
+    "published_bytes": 2719,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "readiness.py",
+    "sha256": "c421ab2b4dd3acda78be96255b8ddc6815f8d695ef12a43dfae3992761f757b9",
+    "bytes": 5802,
+    "archived_source": "operator_sources/c421ab2b4dd3_readiness.py.txt",
+    "published_sha256": "c421ab2b4dd3acda78be96255b8ddc6815f8d695ef12a43dfae3992761f757b9",
+    "published_bytes": 5802,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "ready.py",
+    "sha256": "c39728aac16233f5d3e4e2206e5c0a4aa9032aaa88e79517478a043917ff4944",
+    "bytes": 5830,
+    "archived_source": "operator_sources/c39728aac162_ready.py.txt",
+    "published_sha256": "87989092a2bbb67feb573e4086f82e391459f8ad5d7f1399404083fafc515780",
+    "published_bytes": 5852,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "round_budget.py",
+    "sha256": "c8962f2d6bfdc79568a5436e2758e6723893167524d2f6007d981e3426f71863",
+    "bytes": 2915,
+    "archived_source": "operator_sources/c8962f2d6bfd_round_budget.py.txt",
+    "published_sha256": "c8962f2d6bfdc79568a5436e2758e6723893167524d2f6007d981e3426f71863",
+    "published_bytes": 2915,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "run_box.sh",
+    "sha256": "b6fc6fd0986245eeffe3512493e4247042eb505788f6713f63532d1f17137d44",
+    "bytes": 6590,
+    "archived_source": "operator_sources/b6fc6fd09862_run_box.sh.txt",
+    "published_sha256": "b6fc6fd0986245eeffe3512493e4247042eb505788f6713f63532d1f17137d44",
+    "published_bytes": 6590,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "store_plan.py",
+    "sha256": "c194b40529ec235ecc4ec4ac602f3ed122e379b6a045d3ed5109fc186acc21f2",
+    "bytes": 303,
+    "archived_source": "operator_sources/c194b40529ec_store_plan.py.txt",
+    "published_sha256": "c194b40529ec235ecc4ec4ac602f3ed122e379b6a045d3ed5109fc186acc21f2",
+    "published_bytes": 303,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "test_console_pin.py",
+    "sha256": "30c1c608cce1bb061ab817b1d1c1d513dcb774888ec6e189f05e6b1fb691e084",
+    "bytes": 6362,
+    "archived_source": "operator_sources/30c1c608cce1_test_console_pin.py.txt",
+    "published_sha256": "30c1c608cce1bb061ab817b1d1c1d513dcb774888ec6e189f05e6b1fb691e084",
+    "published_bytes": 6362,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "test_console_pin_types.py",
+    "sha256": "9e094a934ab6a262355037b359d778242ff5cfc7f287b85426af5656cffef645",
+    "bytes": 2379,
+    "archived_source": "operator_sources/9e094a934ab6_test_console_pin_types.py.txt",
+    "published_sha256": "9e094a934ab6a262355037b359d778242ff5cfc7f287b85426af5656cffef645",
+    "published_bytes": 2379,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "test_cost_watch.py",
+    "sha256": "6f7d2fa37687517da37a118336d522823a258fa358793eef62fb740ff3bda4d9",
+    "bytes": 2814,
+    "archived_source": "operator_sources/6f7d2fa37687_test_cost_watch.py.txt",
+    "published_sha256": "6f7d2fa37687517da37a118336d522823a258fa358793eef62fb740ff3bda4d9",
+    "published_bytes": 2814,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "test_precreate_watchdog.py",
+    "sha256": "0c3b4cac1f5b329b676a36e96db9322a4abac582c9ddf4f8bfc6bda9f240d7e1",
+    "bytes": 6572,
+    "archived_source": "operator_sources/0c3b4cac1f5b_test_precreate_watchdog.py.txt",
+    "published_sha256": "0c3b4cac1f5b329b676a36e96db9322a4abac582c9ddf4f8bfc6bda9f240d7e1",
+    "published_bytes": 6572,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "test_profile.py",
+    "sha256": "089367d079941a0ceeb8bd761f6b64d310bce47ff59ce908bfc78164525ea31e",
+    "bytes": 1682,
+    "archived_source": "operator_sources/089367d07994_test_profile.py.txt",
+    "published_sha256": "581068d1b9ef6a5e0fb97767dd6c3ebd2fa6136cbf3833207d3582f1f1ea38da",
+    "published_bytes": 1682,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  },
+  {
+    "name": "test_wiring.py",
+    "sha256": "e6f752ec4d08034e1c56ba725901ef7148dbda2aa518ef8f7b0ff34ca978c3f5",
+    "bytes": 3778,
+    "archived_source": "operator_sources/e6f752ec4d08_test_wiring.py.txt",
+    "published_sha256": "e6f752ec4d08034e1c56ba725901ef7148dbda2aa518ef8f7b0ff34ca978c3f5",
+    "published_bytes": 3778,
+    "privacy_note": "Executed raw sha256/bytes above; archived_source may redact local paths."
+  }
+]

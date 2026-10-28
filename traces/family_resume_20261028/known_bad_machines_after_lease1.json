@@ -1,0 +1,58 @@
+[
+  {
+    "machine_id": 150531,
+    "instance_id": 57296911,
+    "reason": "provider_host_error",
+    "utc": "2026-10-23T00:46:20.609095+00:00",
+    "source": "own exact-id teardown/API absence already verified; owner03:15 retry grant"
+  },
+  {
+    "machine_id": 145861,
+    "instance_id": 57142142,
+    "reason": "historical_provider_startup_failure"
+  },
+  {
+    "machine_id": 152912,
+    "instance_id": 57143789,
+    "reason": "historical_provider_startup_failure"
+  },
+  {
+    "machine_id": 69146,
+    "instance_id": 57425378,
+    "reason": "provider_boot_timeout",
+    "utc": "2026-10-23T21:31:20.164581+00:00",
+    "source": "B1b own exact-id teardown/API absence verified; controller23:40 B1c grant"
+  },
+  {
+    "machine_id": 39248,
+    "instance_id": 57431305,
+    "reason": "host_identity_pin_mismatch",
+    "utc": "2026-10-23T22:24:37.786592+00:00",
+    "source": "B1f console_pin.PinMismatch before SSH; own exact-id teardown/API absence verified; controller00:50 B1g grant"
+  },
+  {
+    "machine_id": 54516,
+    "instance_id": 57565088,
+    "reason": "provider_host_error",
+    "utc": "2026-10-24T21:11:01.886994+00:00"
+  },
+  {
+    "machine_id": 39235,
+    "instance_id": 57729990,
+    "reason": "native_qualification_refused_HUBCLIENT_HSCE0_under_frozen_policy",
+    "scope": "TU106595.91.07 qualification; no physical hardware defect inferred",
+    "utc": "2026-10-25T22:45:25.889975+00:00"
+  },
+  {
+    "machine_id": 13058,
+    "reason": "Turing supply used up; no reuse",
+    "source": "/root/night/families/REPORT.md:129"
+  },
+  {
+    "machine_id": 30498,
+    "host_id": 70221,
+    "instance_id": 58115039,
+    "reason": "post-SSH initial nvidia-smi no devices; kernel RmInitAdapter failed; no native qualification",
+    "utc": "2026-10-28T16:06:59+00:00"
+  }
+]

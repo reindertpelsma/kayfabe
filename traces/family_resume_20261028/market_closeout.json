@@ -1,0 +1,8 @@
+{
+  "utc": "2026-10-28T16:53:51.337803+00:00",
+  "query": "verified=true vms_enabled=true num_gpus=1 inet_down>=200 disk_space>=180 reliability>=0.95 geolocation notin [CU,IR,KP,SY,CN,HK,MO]",
+  "offers_observed": 22,
+  "turing_marketing_candidates": [],
+  "limit": "Marketing-name search only; no actual RM binding without a lease.",
+  "third_create_result": "UNRUN; missing contract receipt; no new allocation observed; no retry"
+}
