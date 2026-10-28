@@ -18,7 +18,7 @@ VFIO gives the whole card to one VM. While it runs, the host cannot use that car
 <!-- src: https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html; https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html (supported workstation and data-centre cards); https://open-iov.org/index.php/System_Overview; https://open-iov.org/index.php/Install_and_First_Run; https://open-iov.org/index.php/Open-IOV:About (retrieved 2026-10-28) -->
 NVIDIA vGPU shares a card between VMs. It needs a GPU on [NVIDIA's supported list](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html), plus vGPU software and a licence. Supported cards include workstation and data-centre models.
 
-Open-IOV is a community project using stock NVIDIA guest drivers without a vGPU licence, with its own host module bound to the GPU.
+Open-IOV is a community project using stock NVIDIA guest drivers without a vGPU licence, with its own host module.
 
 ### API forwarding
 
