@@ -1,0 +1,43 @@
+[
+  {
+    "mutant": "no-live",
+    "failed": 2,
+    "killers": [
+      "latency::runtime::live_export_tests::ens12_late_completed_split_reaches_stderr_without_shutdown",
+      "latency::runtime::live_export_tests::ens12_live_pending_export_does_not_hide_later_release_and_resume"
+    ]
+  },
+  {
+    "mutant": "no-rate-limit",
+    "failed": 3,
+    "killers": [
+      "latency::runtime::live_export_tests::ens12_live_poll_replays_do_not_spend_another_dump",
+      "latency::runtime::live_export_tests::ens12_live_poll_waits_a_full_period_and_does_not_catch_up",
+      "latency::runtime::live_export_tests::ens12_concurrent_probes_share_one_dump_credit_per_period"
+    ]
+  },
+  {
+    "mutant": "no-session-cap",
+    "failed": 2,
+    "killers": [
+      "latency::runtime::live_export_tests::ens12_live_hostile_increasing_clock_cannot_extend_the_session_budget",
+      "latency::runtime::live_export_tests::ens12_live_session_is_terminal_after_its_last_credit"
+    ]
+  },
+  {
+    "mutant": "no-exit-registration",
+    "failed": 2,
+    "killers": [
+      "ens12_live_device_registers_one_latency_callback_after_threads_start",
+      "ens12_normal_qemu_exit_registers_latency_without_gatelog"
+    ]
+  },
+  {
+    "mutant": "no-exit-callback",
+    "failed": 2,
+    "killers": [
+      "ens12_exit_callback_flushes_latency_and_contains_stderr_panics",
+      "ens12_exit_callback_uses_the_idempotent_dump_without_changing_guest_state"
+    ]
+  }
+]

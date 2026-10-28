@@ -1,0 +1,76 @@
+{
+  "status": "PARKED before any ENS12 GPU arm, at owner checkpoint",
+  "tested_source": "5c98bbb197c9e0f6d1a17aeaa40c322831d7cd9d",
+  "base_source": "2196a9ad1103052dcc4cd1ce2bf53529b574f030",
+  "source_archive_sha256": "1fb99db50b5383d054468e7194f9bddb7f92bf31fa75fad7177f0a43607e0e4c",
+  "qemu_sha256": "f5ed6ff76de967f79e343703a5ee299b7e436fc617d332eb1046ef817faffeed",
+  "cargo_suite": {
+    "passed": 2627,
+    "failed": 0,
+    "existing_ignored": 14,
+    "targets": 82,
+    "packages": [
+      "kf-trap",
+      "kf-core",
+      "kf-chan",
+      "kf-qemu",
+      "kf-host",
+      "kf-mem"
+    ],
+    "mode": "release, locked, j2, test-threads=1",
+    "log_sha256": "8ef0918f7544fae48af95be192841041261f841af59355d882729145d584b9f3"
+  },
+  "build_log_sha256": "c5cd8ea95a6c4ecd716f9f1bd933203a8093973c670c5845aea4860d8b16f3e6",
+  "standalone_production_latency": {
+    "passed": 52,
+    "failed": 0
+  },
+  "exit_composition": {
+    "passed": 4,
+    "failed": 0
+  },
+  "expected_red": [
+    {
+      "commit": "72ceafe35",
+      "failed": 2
+    },
+    {
+      "commit": "1d69ba531",
+      "failed": 4
+    }
+  ],
+  "mutation_result": {
+    "mutants": 5,
+    "survived": 0,
+    "killers_per_mutant": [
+      2,
+      3,
+      2,
+      2,
+      2
+    ]
+  },
+  "gates": {
+    "claims_new": 0,
+    "clippy_new": 0
+  },
+  "initial_invalid_parallel_test_run": {
+    "result": "FAILED: one process-wide RSS assertion with concurrent tests",
+    "handling": "preserved original failure log; complete suite rerun serially, no test changes"
+  },
+  "hardware": {
+    "arm_A": 0,
+    "arm_B": 0,
+    "GPU_calls": 0,
+    "lock_acquisitions": 0,
+    "HA": "UNTESTED",
+    "HB": "UNTESTED",
+    "H1": "UNTESTED"
+  },
+  "raw_local_log_sha256": {
+    "expected-red.log": "926edd47878d7ce62e492bb5be103bee419fc0a15e7ab5f511f08139f61868f2",
+    "exit-red.log": "9307cd5ea97ffd335f8a73d6d27724987f9abd79301767b4c3afb9820f79e468",
+    "latency-green.log": "4cebf2c7360c128f06820c24729c4067fa7bed1b8ee582d2ff2986fe0947f3d3",
+    "exit-green.log": "8b7d11fc45caaa9785edc329ab082f1e822157207910ab41dde2261416a9e800"
+  }
+}
