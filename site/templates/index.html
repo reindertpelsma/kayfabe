@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% block title %}{{ section.extra.page_title }}{% endblock %}
+{% block description %}{{ section.description }}{% endblock %}
 {% block content %}
 {%- set x = section.extra -%}
 {%- set kf = load_data(path="data/site.json", required=false) -%}
@@ -10,173 +12,85 @@
     <h1>kayfabe</h1>
     <!-- src: {{ x.tagline_src }} -->
     <p class="tagline">{{ x.tagline }}</p>
-    <!-- src: {{ x.intro_src }} -->
-    <p class="lede">{{ x.intro | markdown(inline=true) | safe }}</p>
+    <!-- src: {{ x.lede_src }} -->
+    <p class="lede">{{ x.lede }}</p>
     <p class="actions">
-      <a class="button" href="/docs/">Read the documentation</a>
-      <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">Source on GitHub</a>
+      <a class="button" href="/docs/">Read the manual</a>
+      <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">
+        View the source</a>
     </p>
-    <div role="search">
-      <form action="{{ docs }}" method="get">
-        <label for="hero-search">Search the documentation</label>
-        <input id="hero-search" name="search" type="search" />
-        <button>Search</button>
-      </form>
+    <!-- src: {{ x.screenshot.src }} -->
+    <figure class="shot">
+      <img src="/screenshot-windows-desktop.jpg" width="1600" height="692"
+        decoding="async" alt="{{ x.screenshot.alt }}" />
+      <figcaption>{{ x.screenshot.caption }}</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="wrap" aria-labelledby="uses-h">
+  <h2 id="uses-h">{{ x.uses.heading }}</h2>
+  <!-- src: {{ x.uses.src }} -->
+  <div class="scenes">
+    {% for s in x.uses.items %}
+    <div>
+      <!-- src: {{ s.src }} -->
+      <h3>{{ s.title }}</h3>
+      <p>{{ s.text }}</p>
     </div>
+    {% endfor %}
   </div>
 </section>
 
-<section class="wrap status" aria-labelledby="status-h">
-  <!-- src: {{ x.status.src }} -->
-  <div class="callout warn">
-    <h2 id="status-h">{{ x.status.heading }}</h2>
-    <p><strong>{{ x.status.lead }}</strong></p>
-    <p>{{ x.status.more }}</p>
-    <p class="small">{{ x.status.dated }}
-      <a href="https://github.com/reindertpelsma/kayfabe#readme">See the README for the current status.</a>
-      The manual's <a href="{{ docs }}index.html">introduction</a> repeats it.</p>
-  </div>
+<section class="wrap" aria-labelledby="diff-h">
+  <h2 id="diff-h">{{ x.different.heading }}</h2>
+  <!-- src: {{ x.different.src }} -->
+  <p>{{ x.different.text }} <a href="/how-it-differs/">Compare the options</a>.</p>
 </section>
 
-<section class="wrap" aria-labelledby="props-h">
-  <h2 id="props-h">What it is built around</h2>
-  <ul class="cards">
-    {% for p in x.properties %}
-    <li>
-      <!-- src: {{ p.src }} -->
-      <h3>{{ p.title }}</h3>
-      <p>{{ p.text }}</p>
-    </li>
+<section class="wrap" aria-labelledby="where-h">
+  <h2 id="where-h">{{ x.where.heading }}</h2>
+  <!-- src: {{ x.where.src }} -->
+  <ul class="plain">
+    {% for i in x.where.items %}
+    <li><!-- src: {{ i.src }} -->{{ i.text }}</li>
     {% endfor %}
   </ul>
-</section>
-
-<section class="wrap" aria-labelledby="path-h">
-  <h2 id="path-h">{{ x.path.heading }}</h2>
-  <!-- src: {{ x.path.src }} -->
-  <div class="path">
-    <figure>
-      <svg viewBox="0 0 380 590" role="img" aria-labelledby="path-t path-d" xmlns="http://www.w3.org/2000/svg">
-        <title id="path-t">Data path from a guest application to the GPU</title>
-        <desc id="path-d">Six steps from top to bottom. Inside the guest, which is treated as hostile: an application, then NVIDIA's stock driver. Inside one host QEMU process: the emulated NVIDIA GPU, a QEMU device, then kayfabe, which authors the host actions. Then the host's NVIDIA kernel driver, then the GPU.</desc>
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" class="arrowhead" />
-          </marker>
-        </defs>
-        <rect class="zone guest" x="6" y="6" width="368" height="172" rx="8" />
-        <text class="zone-label" x="20" y="28">Guest VM (treated as hostile)</text>
-        <rect class="node" x="30" y="42" width="320" height="46" rx="6" />
-        <text x="190" y="70" text-anchor="middle">Guest application</text>
-        <line class="edge" x1="190" y1="88" x2="190" y2="118" marker-end="url(#arrow)" />
-        <rect class="node" x="30" y="120" width="320" height="46" rx="6" />
-        <text x="190" y="148" text-anchor="middle">NVIDIA's stock driver, unmodified</text>
-
-        <line class="edge" x1="190" y1="178" x2="190" y2="214" marker-end="url(#arrow)" />
-
-        <rect class="zone host" x="6" y="216" width="368" height="172" rx="8" />
-        <text class="zone-label" x="20" y="238">Host: one QEMU process, kayfabe linked in</text>
-        <rect class="node" x="30" y="252" width="320" height="46" rx="6" />
-        <text x="190" y="280" text-anchor="middle">Emulated NVIDIA GPU (QEMU device)</text>
-        <line class="edge" x1="190" y1="298" x2="190" y2="328" marker-end="url(#arrow)" />
-        <rect class="node key" x="30" y="330" width="320" height="46" rx="6" />
-        <text x="190" y="358" text-anchor="middle">kayfabe: unprivileged host actions</text>
-
-        <line class="edge" x1="190" y1="388" x2="190" y2="424" marker-end="url(#arrow)" />
-        <rect class="node plain" x="30" y="426" width="320" height="46" rx="6" />
-        <text x="190" y="454" text-anchor="middle">Host NVIDIA kernel driver</text>
-        <line class="edge" x1="190" y1="472" x2="190" y2="508" marker-end="url(#arrow)" />
-        <rect class="node plain" x="30" y="510" width="320" height="46" rx="6" />
-        <text x="190" y="538" text-anchor="middle">GPU (the host keeps using it)</text>
-      </svg>
-    </figure>
-    <div>
-      <ol class="steps">
-        {% for s in x.path.steps %}<li>{{ s }}</li>{% endfor %}
-      </ol>
-      <p>{{ x.path.note }}</p>
-    </div>
-  </div>
-</section>
-
-<section class="wrap" aria-labelledby="compare-h">
-  <h2 id="compare-h">{{ x.compare.heading }}</h2>
-  <!-- src: {{ x.compare.src }} -->
-  <div class="table-scroll" role="region" aria-labelledby="compare-h" tabindex="0">
-    <table>
-      <thead>
-        <tr>{% for c in x.compare.columns %}<th scope="col">{% if c %}{{ c }}{% else %}<span class="visually-hidden">approach</span>{% endif %}</th>{% endfor %}</tr>
-      </thead>
-      <tbody>
-        {% for row in x.compare.rows %}
-        <tr{% if row.highlight %} class="highlight"{% endif %}>
-          {% for cell in row.cells %}{% if loop.first %}<th scope="row">{{ cell | markdown(inline=true) | safe }}</th>{% else %}<td>{{ cell | markdown(inline=true) | safe }}</td>{% endif %}{% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="wrap" aria-labelledby="shot-h">
-  <h2 id="shot-h">What it looks like</h2>
-  <!-- src: {{ x.screenshot.src }} -->
-  <figure class="shot">
-    <img src="{{ get_url(path='screenshot-windows-desktop.jpg') | replace(from="https://kayfabe.dev", to="") }}" width="1600" height="692" loading="lazy" decoding="async" alt="{{ x.screenshot.alt }}" />
-    <figcaption>{{ x.screenshot.caption }}</figcaption>
-  </figure>
-</section>
-
-<section class="wrap" aria-labelledby="today-h">
-  <h2 id="today-h">{{ x.today.heading }}</h2>
-  <!-- src: {{ x.today.src }} -->
-  <p>{{ x.today.intro }}</p>
-  <ul>
-    {% for item in x.today.items %}<li>{{ item | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>{% endfor %}
-  </ul>
+  <p><a href="/works-today/">What works today</a> ·
+    <a href="/benchmarks/">Benchmarks and their limits</a></p>
 </section>
 
 <section class="wrap" aria-labelledby="start-h">
   <h2 id="start-h">{{ x.start.heading }}</h2>
   <!-- src: {{ x.start.src }} -->
-  <p>{{ x.start.text | markdown(inline=true) | safe }}</p>
-  <div class="codeblock"><pre class="copyable"><code>{{ x.start.command }}</code></pre></div>
-  <ul>
-    <li><a href="{{ docs }}requirements.html">Requirements</a>: what the repository's evidence covers.</li>
-    <li><a href="{{ docs }}building.html">Building from source</a>: the exact steps the build scripts perform.</li>
-    <li><a href="{{ docs }}installing.html">Running the QEMU device</a>: there is no installer; how the device is provisioned and started today.</li>
-  </ul>
-</section>
-
-<section class="wrap" aria-labelledby="download-h">
-  <h2 id="download-h">Download</h2>
+  <p>{{ x.start.text }}</p>
+  <p><a href="{{ docs }}requirements.html">Requirements</a> ·
+    <a href="{{ docs }}building.html">Build guide</a> ·
+    <a href="https://github.com/reindertpelsma/kayfabe/issues">Questions and bugs</a> ·
+    <a href="/security/">Security</a></p>
   {% if kf and kf.release %}
   {% set r = kf.release %}
-  <!-- Shown only because the build was given a published GitHub release with assets. -->
-  <p>Latest GitHub release: <a href="{{ r.url }}">{{ r.name }}</a> ({{ r.tag }}{% if r.prerelease %}, pre-release{% endif %}, published {{ r.date }}).
-    The artifacts are hosted by GitHub, not by this site.</p>
-  {% if r.assets %}
-  <ul class="assets">
-    {% for a in r.assets %}
-    <li><a href="{{ a.url }}">{{ a.name }}</a> ({{ a.size }}){% if a.sha256 %}<br /><span class="small">SHA-256 <code>{{ a.sha256 }}</code></span>{% endif %}</li>
-    {% endfor %}
-  </ul>
+  <!-- src: build release list; site/build.py release_summary -->
+  <details>
+    <summary>Release files</summary>
+    <p><a href="{{ r.url }}">{{ r.name }}</a>
+      ({{ r.tag }}{% if r.prerelease %}, pre-release{% endif %},
+      published {{ r.date }}).</p>
+    <ul class="assets">
+      {% for a in r.assets %}
+      <li><a href="{{ a.url }}">{{ a.name }}</a> ({{ a.size }})
+        {% if a.sha256 %}<br /><span class="small">SHA-256 <code>{{ a.sha256 }}</code></span>
+        {% endif %}</li>
+      {% endfor %}
+    </ul>
+  </details>
   {% endif %}
-  <p class="small">Read the status above and the manual before you run anything from a release.</p>
-  {% else %}
-  <p>No release yet: build from source. The source is at
-    <a href="https://github.com/reindertpelsma/kayfabe">github.com/reindertpelsma/kayfabe</a>.</p>
-  {% endif %}
-</section>
-
-<section class="wrap" aria-labelledby="community-h">
-  <h2 id="community-h">{{ x.community.heading }}</h2>
-  <!-- src: {{ x.community.src }} -->
-  <ul>
-    <li><a href="https://github.com/reindertpelsma/kayfabe">The repository</a>: source, history and the design documents.</li>
-    <li><a href="https://github.com/reindertpelsma/kayfabe/issues">Issues</a>: questions, bugs and documentation gaps.</li>
-    <li><a href="{{ docs }}credits.html">Credits and notices</a>: licences, acknowledgements and related projects.</li>
-    <li><a href="/security/">Reporting a suspected vulnerability</a>: privately, through GitHub.</li>
-  </ul>
+  <div role="search">
+    <form action="{{ docs }}" method="get">
+      <label for="hero-search">Search the documentation</label>
+      <input id="hero-search" name="search" type="search" />
+      <button>Search</button>
+    </form>
+  </div>
 </section>
 {% endblock %}

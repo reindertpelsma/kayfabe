@@ -1,0 +1,241 @@
+\section{Architecture v3: where authority and progress live}
+\label{sec:architecture}
+
+The implementation baseline is the cover revision. CODE statements below name implementation
+paths; DOC statements describe requirements or published designs. The test descriptions name
+what could exercise an invariant. Unless a dated result is given in Section~\ref{sec:results},
+their pass state at this baseline is UNVERIFIED: no product test was run for this edition.
+
+\subsection{Planes and traps}
+
+\doc The product is the \code{kf-*} tree linked into the VMM process. A BAR0 write
+records demand through bounded token and ring state. Workers service channel demand; a
+register drainer services privileged register operations. BAR1 and BAR2 memory accesses do not
+trap. There is no separate isolate process or product IPC plane. Confinement applies to the
+whole hypervisor process.\src{architecture}\src{corecode}\src{trapcode}
+
+\attack{No host mapping or blocking operation runs on a vCPU or under a lock it takes.}
+{The trap crate's unit tests, core composition tests and source restrictions constrain the
+reachable trap path. Hardware trap timing checks a separate latency property.\src{trapcode}}
+{A nonblocking-looking call can acquire a lock held by slow host work. A mock host that never
+blocks cannot demonstrate the production lock discipline. The old paper records that failure
+mode; the restriction must be checked transitively.\src{old}}
+
+\subsection{Hostile input and authored operations}
+
+\doc Guest root and guest userspace are untrusted. Host memory operations are constructed
+from admitted ownership, extent, permission and kind information; guest control messages are
+not replayed to the host. Host GPU facts come from unprivileged queries or generated open
+interfaces. This is the intended authority boundary, with the host driver and GPU trusted.
+\src{security}\src{architecture}\src{hostcode}
+
+\attack{No guest-chosen raw address or privilege request creates new host authority.}
+{Hostile range/ownership tests, channel privilege tests and the physical-operand hardware
+oracle exercise different pieces of this claim.\src{security}\src{physevidence}}
+{Checking a decoder cannot establish that every caller uses it. A guest-declared OS identity
+also cannot prove a safe mapping scope. Whole-path reachability and multiple-VM fault effects
+remain separate review obligations.\src{rulings}\src{security}}
+
+\subsection{Derive, never capture}
+
+\doc The architecture prefers facts read from the host's own unprivileged interface,
+computed virtual-device state and rules generated from pinned open headers. A device identity
+is not permission to copy another die's answer. Request validation and field-level virtual
+support still apply when an answer comes from the host. Published measured exceptions belong
+to exact die/driver coverage, not an invisible default table.\src{architecture}\src{constants}
+
+\attack{Every guest-visible field has a source and a defined unsupported case; an unknown die
+never silently inherits a neighbour's observation.}
+{The constants strategy requires source tags, derivation oracles, wrong-answer mutations and
+same-die native acceptance. It explicitly separates the implemented baseline from table
+consumers on branches.\src{constants}\src{provenance}}
+{A source tag proves provenance only if its source actually supports the field. A boot that
+never exercises an optional feature cannot verify that feature, and agreement between a few
+dies is not a mechanism for a family rule.\src{constants}}
+
+\subsection{Seven axes, not one compatibility version}
+
+\doc The design separates guest kernel, guest driver, host driver, GPU architecture,
+GPU die, VMM and guest OS. An architecture supplies family mechanisms; a die supplies actual
+inventory and capability facts. The guest ABI controls decoding; the host ABI controls authored
+calls. The VMM supplies memory, interrupts and lifecycle events. These are distinct axes even
+when a test holds several fixed.\src{design}\src{constants}\src{driverdesign}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lXX@{}}
+\toprule Axis & Boundary to inspect & Counterexample worth testing \\
+\midrule
+Guest kernel & DMA addressing / virtual IOMMU & IOVA mistaken for guest physical address \\
+Guest driver & versioned decode / accepted replies & layout changes within a branch \\
+Host driver & authored RM ABI & successful syscall with failed in-band status \\
+Architecture & class / register / MMU family & different engine or boot protocol \\
+Die & runtime facts / measured exceptions & floor-swept or unmeasured die \\
+VMM & memory, IRQ, reset adapter & reset origin or wake semantics differ \\
+Guest OS & driver protocol and scheduling & Windows registration / recovery path \\
+\bottomrule
+\end{tabularx}
+\end{center}
+The counterexamples are proposed attacks, not claims that each has occurred at the baseline.
+A matrix that changes one axis at a time is evidence for those cells, not the full Cartesian
+product.\src{driverdesign}\src{constants}
+
+\attack{Guest and host ABI choices remain independent, and OS or VMM identity never grants
+extra memory authority.}
+{The driver matrix tests named host/guest cells; versioned decoder oracles check layouts.
+Portability beyond QEMU and x86-64 still needs real adapter evidence.\src{driverdesign}
+\src{requirements}}
+{A layout may change within a driver branch, and a cross-build cannot exercise mapping,
+interrupt or reset semantics. Passing one axis with the others fixed is not the full grid.}
+
+\subsection{Crate map and the frozen predecessor}
+
+\doc The following is a functional map from \code{ARCHITECTURE.md}, not a generated
+claim about every dependency edge.\src{architecture}
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}p{42mm}X@{}}
+\toprule Crates & Responsibility \\
+\midrule
+\code{kf-trap}, \code{kf-core} & bounded demand publication and plane composition \\
+\code{kf-gsp}, \code{kf-rm} & firmware-facing protocol and resource-manager model \\
+\code{kf-chip}, \code{kf-abi} & host facts, family rules and versioned generated layouts \\
+\code{kf-host} & one in-process host RM session and authored verbs \\
+\code{kf-mem}, \code{kf-cuda} & backing store, VA manager, GPU walk and diff protocol \\
+\code{kf-chan} & channel birth, translated work, relay and completions \\
+\code{kf-qemu} + C device & QEMU memory, lifecycle, interrupt and device adapter \\
+\code{kf-disp}, \code{kf-broker} & emulated display and VMM-neutral broker protocol \\
+\code{kf-oprom}, \code{kf-gop-image} & generated boot-display container and build \\
+\code{kf-harness} & real-GPU tests without QEMU \\
+\code{kf-census}, \code{kf-crec}, \code{kf-trace} & offline tools and historical oracles \\
+\code{kf-arch}, \code{kf-linux-raw}, \code{kf-util} & vocabulary, audited OS calls, utilities \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\doc The older \code{kayfabe-*} crates remain frozen; the raw-client grader depends on
+part of that tree. Product \code{kf-*} crates do not depend on it. Unsafe code is confined to
+named adapter crates and \code{*_unsafe.rs} files. A crate inventory is a source-level fact;
+it says nothing about whether a feature has a production caller.\src{rules}\src{architecture}
+
+\attack{Product crates retain their dependency and unsafe boundaries; the frozen grader tree
+never becomes a hidden product dependency.}
+{Workspace manifests and CI boundary checks enforce structural restrictions. Reached-path
+oracles and real adapter tests address behaviour separately.\src{rules}\src{architecture}}
+{A legal dependency graph can still contain an unused implementation or a production-only
+blocking path. Source structure does not establish reachability or hardware correctness.}
+
+\subsection{Channel kinds and the meaning of completion}
+
+\doc Passthrough creates a host twin for user work and lets the real engine execute its
+commands. Translated channels rewrite kernel copy work into an owned address window and submit
+it to the real engine. Emulated channels execute only work whose meaning belongs entirely to
+the VMM. The three kinds differ in authority and completion, not simply speed.\src{kinds}
+
+\attack{No CPU executor substitutes for GPU work; no completion is forged for work submitted
+to hardware.}
+{The channel suites and real-engine gates check actual execution, content and notification.
+The translated-plane design separates address arithmetic from execution.\src{translated}}
+{An application can report success without checking its GPU error or result. A harness must
+validate the output and completion path, not merely the process exit.\src{status}}
+
+\subsection{Memory store and VA manager}
+
+\doc Guest video memory is one host allocation with offsets corresponding to guest
+framebuffer offsets. Guest system memory comes from the VMM's shared backing. A GPU walk
+reads guest tables and diffs them against confirmed host placements. Host maps/unmaps apply
+the changes, invalidate, and acknowledge runs. A refused map remains a difference.
+The committed-placement record is not an adopted guest page table.\src{architecture}
+\src{diffcode}\src{memcode}
+
+\attack{Only acknowledged host placements become committed state. Old backing remains owned
+until the relevant invalidation acknowledges its retirement.}
+{The diff model, apply tests and hardware walk gate compare emitted runs, acknowledgements
+and resulting translations. The retirement experiment adds explicit delayed-free tests.
+\src{diffcode}\src{applycode}\src{retirementpr}}
+{A software model can assume host RM ordering that hardware does not provide. Table roots,
+shared subtrees, root withdrawal and failed host invalidation require separate schedules.
+Whole-space scanning is not equivalent to remapping every unchanged leaf.\src{latency}}
+
+\subsection{Mirrored scheduling groups}
+
+\readcode Host group/member construction preserves a guest TSG grouping, and twin lifetime follows
+the trusted object model.
+The late-joiner design documents why a newly added channel cannot silently miss earlier
+scheduling state. Address-space mirroring and TSG mirroring are separate concerns: preserving
+one does not prove the other.\src{tsgcode}\src{latejoin}\src{kinds}
+
+\attack{Channels in one guest scheduling group retain the corresponding host grouping and
+required state as members arrive and leave.}
+{Grouping tests and the video-engine validation exercise group creation and related channel
+use.\src{tsgcode}\src{video}}
+{A test with all channels present at initial configuration misses late arrival. Reused handles
+and reset generations can make a correct group lookup refer to the wrong life.\src{latejoin}}
+
+\subsection{User-ring lifecycle: Scan, Pointer and Window}
+
+\doc A registration is a guest request that arms a later software action in its
+command stream; that action can move the ring source. Windows user-work can therefore require
+software intervention around registration and ring
+migration. In Scan mode the worker inspects command packets. Pointer mode forwards admitted
+GP references without reading the pushbuffer. Window mode restores scanning across the
+registration boundary. An anchor is an observed producer position selected as that boundary.
+The clean anchor must have been observed before the registration reply;
+a later convenient cursor cannot retroactively establish that boundary.\src{lifecycle}
+
+\attack{Doorbell-covered entries appear once, in order and bit-exact; Pointer reads no
+pushbuffer; a validated descriptor is the snapshot actually published.}
+{Real-turn model, property and threaded stress suites cover mode transitions, ring migration,
+packet continuation, poisoned bytes above PUT and registration at different positions.
+\src{lifecycle}\src{turncode}}
+{Finite model schedules can omit a real host lock holder, DMA ordering or guest mutation.
+A normal-user experiment cannot certify a hostile user that rewrites its own memory.
+The boundary remains native USER privilege plus admitted mappings.\src{rulings}}
+\input{fig_v3_lifecycle}
+
+\subsection{Lazy observation: a stale view must only delay}
+
+\readcode Pointer mode caches a previously loaded PUT within the same ring generation and
+reduces private USERD observations. Scan and Window remain fresh. Low credits, waits, split
+segments and a full guest ring force observations. A stale GET may reduce available credit;
+it must never increase credit or release a marker gate early. Mode changes and migration
+invalidate cached state.\src{lifecycle}\src{lazycode}
+
+\attack{No idle decision relies on cached PUT, and no stale observation is the sole missing
+wake for a wait that can already be satisfied.}
+{The lazy-turn suites compare forwarding identity with observation enabled and disabled,
+exercise small rings, and test forced observations and generation changes.\src{lifecycle}}
+{A counter of fewer reads is not proof of liveness. Combined performance arms cannot attribute
+speed to each optimisation separately. Hardware completion and holder-release timing remain
+outside the pure predicate model.\src{lifecycle}}
+
+\subsection{Relay, handoff and interrupts}
+
+\readcode The relay has explicit progress obligations. If a storage, row or page-table holder
+prevents progress, release must arrange another attempt; repeatedly trying a busy lock is not
+an event-delivery proof. The baseline includes the relay handoff fix cited by the README and
+a later merged lost-wake correction. Experimental split-latency instrumentation keeps that
+relay design rather than introducing an attempt limit.\src{readme}\src{turncode}\src{latency}
+
+\attack{Registering a waiter concurrently with completion or lock release cannot lose the
+last wake. An interrupt invites a check; it does not manufacture a completed fence.}
+{Relay interleaving tests, completion tests and the live regressions cited in the README
+exercise parts of this claim. The later probe experiment explicitly diagnoses missing wakes.
+\src{readme}\src{probepr}}
+{Host events are GPU-wide, so an interrupt can be unrelated to this channel. Observing a marker
+late does not timestamp when the GPU wrote it. A worker busy elsewhere can delay observation
+without a lost physical event.\src{faq}\src{latency}}
+
+\subsection{Display and the broker}
+
+\doc An emulated display engine accepts the stock driver's display protocol; a separate
+broker presents owned frame copies and handles input. The display contract requires guest flips to
+complete according to guest semantics while copies select the newest frame independently.
+The broker owns cursor composition, including inversion. Its absence or silence must not
+freeze guest display progress.\src{architecture}\src{display}\src{rulings}
+
+\attack{Guest flip completion is independent of a stalled viewer; frames and credits remain
+bounded; the broker never receives arbitrary guest memory as an owned frame.}
+{Display engine tests, plane-output oracles, socket simulations and pacing models exercise
+flip order, slow brokers and pixel formats.\src{display}\src{planes}\src{pacing}}
+{A fake broker cannot establish compositor, DMA-buffer or colour behaviour on every desktop.
+Correct pixels do not prove correct flip latency, and a correct cursor does not prove safe
+frame ownership.\src{pacing}\src{security}}

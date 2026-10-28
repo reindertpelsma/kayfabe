@@ -1,5 +1,7 @@
 # docs/ — a map
 
+**STATUS: LIVE, 2026-10-27.** The map of what is published and what is internal.
+
 - **The user manual** is `docs/howto/` plus `docs/FAQ.md`. It is the only part of `docs/` that is
   published (https://kayfabe.dev; see `site/README.md`). `docs/howto/SUMMARY.md` is its navigation,
   and `docs/FAQ.md` is appended last by the site build.

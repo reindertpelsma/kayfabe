@@ -674,3 +674,5 @@ pub fn served_chain(
     )));
     Box::new(kf_gsp::PolicyChain::new(chain))
 }
+
+mod alias_index;

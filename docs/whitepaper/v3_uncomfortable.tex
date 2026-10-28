@@ -1,0 +1,358 @@
+\clearpage
+\section{The uncomfortable part: a plausible explanation still needs a test}
+\label{sec:uncomfortable}
+
+\subsection{The hypothesis, confidence and falsifier in one place}
+
+\begin{quote}
+\textbf{INFERRED hypothesis:} making a guest address-map edit effective on the host delays
+work that depends on it; completion then arrives too late for Windows' recovery machinery.
+\textbf{Documented reference:} the default scheduler preemption wait is two seconds, not two
+seconds from every submission. \textbf{UNVERIFIED analysis:} one note places a 2.43-second apply
+beside a 2.529-second completion gap, but the analysis is not in the repository.
+\textbf{Falsifier:} identify the same affected task and show that its long gap occurred after
+host publication with no corresponding mapping wait, or that it had already completed while
+only observation or guest notification was late.\src{mskeys}\src{walknarrow}\src{latency}
+\end{quote}
+
+The later campaign uses the Enscape rendering workload in a graphics benchmark sequence.
+It is a workload name, not an internal subsystem. No SPEC score or proprietary workload image
+is needed for the failure argument. Individual Windows workloads did complete in the earlier
+matrix, as Section~\ref{sec:results} shows; the question is whether mixed use stays correct and
+responsive with the full mapping configuration.\src{rmcost}\src{winmatrix}
+
+\input{fig_v3_stall}
+
+\subsection{What is observed, what is reported and what is not inspectable}
+
+\reported The earlier Windows matrix contains seven completed workload configurations and
+an Edge recovery failure. A later README session reports a clean mixed Minecraft/Heaven
+interval. These are different workloads and revisions from the later sparse-mapping case;
+neither makes the later case impossible.\src{winmatrix}\src{readme}
+
+\unverified An experimental note attributes roughly \textbf{93--94\%} of mapping walks in
+two evidence-set boots to one privileged copy channel. Its supporting memo and producing
+analysis are not in the repository. The exact count pairs and boot identifiers are confined
+to the companion's evidence qualification, labelled UNVERIFIED. The proportion is not a
+measured attribution in this paper.\src{latency}
+
+\unverified The \textbf{2.43 s / 2.529 s} pair and a longer-watchdog arm without a recovery
+before its time limit are likewise supplied analysis without a public raw trace. They support
+a question about lateness, not the conclusion that completion was proven late rather than
+lost. Matching periodic walk and completion intervals does not establish packet identity,
+clock origin or when the GPU actually finished.\src{walknarrow}
+
+\doc The experimental implementation records native publication and first CPU observation of
+a marker. It explicitly lacks a GPU timestamp for the marker write. Publication-to-observed
+marker therefore combines hardware execution and observation delay. A worker stuck elsewhere
+can make an already finished operation look slow. An engine-wide interrupt can also precede
+observation and refer to unrelated work.\src{latency}
+
+\textbf{Acceptance gap:} none of the indexed receipts establishes a full-profile,
+default-watchdog, sparse-mapping-enabled Windows pass for the failing mixed workload.
+The implementation notes retain pending hardware acceptance and an off-by-default experiment.
+A longer observation window, a passing CPU model or a fast isolated renderer cannot fill this
+gap. This is a limit of the indexed evidence, not proof that no unrecorded run exists.
+\src{sparse}\src{budget}\src{latency}
+
+\subsection{Earlier failures are not one root cause}
+
+\begin{description}[itemsep=0.7em]
+\item[An uncleared translation trigger.] \doc A historical Windows failure left the guest
+  waiting for an invalidate acknowledgement. The project's ruling permits completion over
+  absent guest leaves, while keeping refused host unmap or invalidate distinct. A later
+  reservation-edge defect was the emulator's mapping failure, not malformed guest tables.
+  This is a documented predecessor, not evidence for every later reset.\src{rulings}
+\item[A fetch cursor used as an execution witness.] \doc The event-loop investigation
+  found that GET could advance beyond a dependency before the following work ran.
+  A processed reference replaced that proof. ``Fetched, therefore finished'' was too strong.
+  \src{eventloop}
+\item[A relay wake with no remaining holder.] \doc The consumed-ring contention record
+  describes a real protocol defect: a worker used a notification, failed to acquire a busy
+  slot, and could leave no pending wake. Behavioural tests exposed cases that source-shape
+  guards missed. Its recovery does not prove that every Windows reset was a lost wake.
+  \src{owed}
+\item[Expensive failed sparse admission.] \doc The first implementation could clone and
+  restore the whole reservation tree on failure, return an uncounted hard error, and retry
+  the same failed acknowledgement. Later work introduced local undo and explicit decline
+  tracking. These code mechanisms are independently inspectable; the claimed Windows timing
+  decomposition remains unverified without its analysis.\src{admission}\src{rmcost}
+\item[The mapping gate alone blocks observation.] \doc Tests documented on the original
+  gate still harvested a published marker and wrote GET before the PUT admission check.
+  They contradict that narrow explanation. They do not establish timely scheduling,
+  notification, or an absence of waiting before publication.\src{walknarrow}
+\end{description}
+
+A missing wake and excessive mapping work can both exist. Fixing either does not eliminate
+the other, and a failure that appears after an optimisation is not necessarily caused by that
+optimisation. A useful chronology preserves the workload, changed variable and rejected
+prediction, rather than reusing a broad name such as ``the Windows hang''.
+
+\subsection{A latency budget needs a cost model}
+
+For a strictly serial refresh, a useful accounting model is
+\[
+ T_{\rm barrier}=T_{\rm queue}+T_{\rm walk}(P)
+  +\sum_{i=1}^{M}T_{{\rm map},i}
+  +\sum_{j=1}^{R}T_{{\rm reservation},j}
+  +T_{\rm repair}+T_{\rm invalidate}+T_{\rm release}.
+\]
+This is an \textbf{INFERRED measurement plan}, not a fitted or measured bound. $P$ is the table
+work actually visited, $M$ the ordinary map/unmap calls and $R$ the reservation-layout calls.
+The stages must be timed without overlap before they can be added. Shared batches must not
+be charged once per waiting ticket and then summed as if they were independent work.
+\src{latency}\src{rmcost}
+
+\doc Finite object and walker caps bound storage or admitted work. They do not give a
+wall-time bound for a native driver call. A slice allowance bounds optional work that may
+start; already started replacement may need several calls to repair ownership, and ordinary
+mapping or teardown can lie outside that allowance. A claimed 100-ms slice is therefore not
+an upper bound on every barrier.\src{rmcost}\src{budget}\src{walknarrow}
+
+\unmeasured There is no established worst-case barrier bound, expressed in guest layout and
+host load, for the cover revision. Nor is there a measured bound on possible serialization
+inside the shared host driver. The most important victim may be the host's own desktop, not
+another guest. Those missing bounds determine whether benign large workloads or a hostile
+layout can deny useful service.\src{security}\src{latency}
+
+\subsection{Could the design acknowledge early, or avoid the walk?}
+
+\inferred Early acknowledgement would remove a CPU-visible wait only if later GPU accesses
+remain correct. If a stale host mapping still points to old memory, the access may succeed
+with wrong data instead of faulting. Fault/replay can help only where a replayable fault path
+actually exists and the old mapping has been safely removed. The stock path does not provide
+the general managed-memory demand-fault service.\src{uvmdesign}\src{applycode}
+
+A second possible architecture would let hardware use validated guest page tables directly,
+or a separately isolated translation context. This paper claims no such host interface exists
+for the current implementation. The open question is whether a public, unprivileged host
+interface could preserve privilege, ownership, revocation and hostile mutation while deleting
+the software walk. A speculative mention of hardware translation facilities is not an
+implementation plan or an acceptance result.
+
+\doc A split currently asks for a fresh post-admission walk so later commands do not inherit
+an older snapshot. Tickets already pending for one target can share a submission. A channel
+that waits for each answer before requesting the next supplies no concurrent work to coalesce.
+Cheaper batching can therefore leave the serial bottleneck intact.\src{latency}
+
+\subsection{Sparse coverage trades resource cost against compatibility}
+
+\doc Selective sparse reservations preserve the difference between absorbed sparse access
+and a faulting invalid address. A blanket sparse address space would weaken the negative
+controls. The experiment stays off by default; a small native oracle is not a full Windows
+workload pass.\src{sparse}\src{sparsepr}
+
+\doc Finite budgets and permanent host-owned exclusions protect host resources. A declined
+sparse request can nevertheless leave the guest with invalid coverage where it expected
+sparse semantics. Counting that deficit is necessary, but does not make the guest compatible.
+On interval-tracker overflow, a conservative upper bound must remain visibly uncertain rather
+than becoming a false zero.\src{budget}
+
+\doc The latest experimental continuation moves optional geometry out of the mandatory split
+release path and rotates target identities. Mandatory repair still completes. Under continuous
+mandatory work, optional coverage can remain unhonoured. The design has not established a
+hard total-apply deadline or a Windows cure.\src{latency}
+
+\inferred Increasing the budget alone could hide the first capacity cliff while increasing
+memory and teardown cost. A better representation might coalesce live sparse coverage, but
+release-before-reserve can create a forbidden hole in unchanged memory. The useful question
+is which native replacement primitive, if any, preserves continuity without stopping the GPU.
+\src{admission}\src{budget}
+
+\subsection{Mapping lifetime and a concurrently mutating guest}
+
+\doc Mirrored tables create two obligations: a new mapping must have the intended meaning,
+and the old backing must remain owned while hardware may still use it. The retirement
+proposal delays free until host invalidation acknowledges. Failure retains ownership rather
+than fabricating a successful retirement.\src{retirementpr}
+
+\doc A live GPU walk is not an atomic snapshot of guest memory. The rulings record an example
+where a recycled table was read at the wrong level during a transition; an apparent malformed
+leaf was not a stable declaration. That illustrates a time-of-check/time-of-use problem,
+not proof that the guest has stopped changing its tables.\src{rulings}
+
+\inferred A safety argument must specify allowed observations during change. The current
+experimental contract permits old backing, new backing, sparse absorption or a fault for a
+changed address, while unchanged addresses stay accessible. A host-target gate does not
+certify a range unchanged; a bounded range certificate would also need root generations,
+aliases, publication revalidation and an explicit overflow fallback.\src{sparse}
+\src{walknarrow}\src{latency}
+
+\doc Narrowing by the host object being mutated avoids an assumption that distinct guest
+roots cannot share table pages. It also cannot remove shared-engine contention or a
+host-driver-wide serialization point. Those are different dependencies that need different
+observations.\src{walknarrow}
+
+\subsection{Pointer forwarding and relay progress still have a proof cost}
+
+\doc Pointer mode avoids inspecting ordinary command bytes after setup; a live registration
+restores scanning over the required boundary. Its anchor must be an observed producer position
+before the registration reply. Choosing a convenient later cursor would change the proof.
+The native USER channel and its restricted mappings still carry execution authority.
+\src{lifecycle}\src{rulings}
+
+\doc Lazy observation saves reads but delays guest-visible GET. Small rings, waits, low
+credits and mode transitions must force enough observation to prevent false capacity or a
+missed wake. A large benchmark ring does not exercise the worst backpressure case.
+The fast scratch runs combined two changes, so their separate benefit remains unmeasured.
+\src{lifecycle}\src{winperf}
+
+\doc The repository also contains a retry-set relay alternative: recheck outstanding state
+on every loop and spin when no dependable wake source exists. It explores returning slot
+credit at software-read progress rather than hardware-fetch progress. Its checkpoint records
+unresolved model expectations and no hardware run. Simpler loop structure is a candidate to
+test, not a result that the new semantics are correct.\src{alternativerelay}
+
+A release notification, doorbell or interrupt can be only a hint if durable state still
+preserves the work. If a worker consumes the final hint and parks while work remains, a
+last-resort timer may hide the defect. A holder/waiter protocol must survive release before,
+during and after waiter registration. Section~\ref{sec:questions} poses that as a standalone
+concurrency problem.\src{owed}\src{rules}
+
+\subsection{Per-die coverage, borrowed data and a supported fallback}
+
+\doc The project's public source rule prefers computed virtual state and pinned open
+interfaces, then safe host queries, then exact-die/driver measurements where necessary.
+A family rule needs both observed agreement and a mechanism. An unmeasured die gets a defined
+refusal or reduced mode, not a neighbouring die's unlabelled row.\src{constants}
+\src{provenance}
+\input{fig_v3_evidence_ladder}
+
+\doc The requirements describe borrowed display pages for some Windows dies. This paper has
+not established those pages' measurement origin; they are compatibility/provenance debt,
+not a clean implementation of derive-never-capture. No page bytes are reproduced here.
+A source-tagged table existing on a branch does not prove every baseline consumer uses it.
+The coverage strategy explicitly separates such branches from the baseline.\src{requirements}
+\src{constants}
+
+\inferred A reduced mode should pass useful applications with withheld optional features.
+Booting alone does not establish the fallback. Likewise, a native reference capture establishes
+what one driver on one die accepted; it does not prove an unchanged answer is valid for every
+architecture, SKU or driver branch.\src{constants}
+
+\subsection{The host is a victim, and quotas are not isolation}
+
+\doc The GPU MMU, channel privilege, Kayfabe's checks and the trusted host driver form the
+address boundary. There is no independent security audit. Confining the whole VMM and using
+separate Unix credentials are deployment requirements/recommendations, not consequences of
+an ordinary host request being non-privileged.\src{security}\src{faq}
+
+\unmeasured A guest that faults a channel, hangs shared execution or occupies the host driver
+can affect the host's display session. The indexed evidence does not bound that effect.
+A useful victim keeps a live host context, data and UI workload across the event; starting a
+new test after recovery is weaker. The test also needs an equivalent native-client control
+and host responsiveness measurements, not just guest error logs.\src{security}\src{readme}
+
+\doc Engine-wide notifications can wake unrelated registered clients. The project accepts
+spurious interrupt work and timing leakage rather than dropping a real completion wake.
+That does not establish a useful bound under an interrupt-heavy neighbour. The dated security
+review also lists incomplete limits for GPU time, encoder sessions, host apertures and driver
+request rate; it has not been repeated at this pin.\src{faq}\src{security}
+
+\inferred A fixed framebuffer budget can bound one allocation without guaranteeing fair
+scheduling or limiting a request stream. Per-VM video-memory, scheduling and call-rate policies
+need explicit service guarantees and adversarial tests. The hardware privilege boundary must
+also be tested separately from Unix credentials and host request permissions.
+
+\subsection{Lifecycle, maintenance and unmeasured scope}
+
+\begin{description}[itemsep=0.5em]
+\item[Several GPUs.] \reported A Linux thin guest used two distinct GPUs, separately and
+  concurrently. CUDA/UVM across devices, peer access and a Windows display device choice are
+  outside that result.\src{status}\src{rulings}
+\item[Suspend and reset.] \reported Linux S3 passed three cycles in one boot at
+  \code{559db30c}, on a physical RTX 4070 with host 595.91.07 and guest 580.159.04; Windows
+  wake failures remain documented. Reboot scrubbing, driver reset and unload/reload are
+  different lifetimes. No cold-boot pass proves arbitrary repeated reload or kill-during-work
+  recovery.\src{sleep}\src{reset}\src{gaps}
+\item[Other hosts.] \doc QEMU is the implemented VMM adapter. A cross-build does not test
+  another CPU's memory mapping, interrupt or reset semantics. Other VMMs and arm64 require
+  real adapter evidence.\src{rulings}\src{requirements}
+\item[Windows breadth.] \unverified The Linux Blackwell cell does not qualify Windows.
+  No complete Windows Blackwell result at the pin is indexed here. Multi-head/hot-plug and
+  display continuity across repeated reboots also need their own qualification.
+  \src{requirements}\src{gaps}
+\item[Snapshot and migration.] \unverified This paper establishes no live snapshot/restore
+  or VM-migration contract for in-flight GPU state. Preserve this as out of scope until a
+  protocol accounts for device state, host objects, outstanding work and destination identity.
+\item[Driver-release cost.] \unmeasured The driver matrix shows tested compatibility cells,
+  not a ledger of engineering time per release. This paper supplies no estimate of how often
+  layouts change, how much work each release costs, or what share of constants still needs
+  hand maintenance. Those require a change/cost record of their own.\src{driverdesign}
+\end{description}
+
+\subsection{Performance evidence must not move with the prose}
+
+\doc The Linux baseline document explains why an otherwise attractive older comparison
+could not run with its host driver. A later usable comparison already contained Windows work.
+Its before/after delta therefore cannot price all Windows overhead.\src{linuxperf}
+
+The distances in Section~\ref{sec:distances} are a more general warning: even a merged result
+can be hundreds of product paths away from the paper's subject. A repeated timing sample is
+not another boot, another die or another host. A ratio from nested KVM is a result for that
+configuration, and the control needs its own spread. Missing and failed samples must remain
+in the denominator.\src{old}\src{linuxperf}
+
+\subsection{Licences and release are not settled by a running VM}
+
+\doc The source offers Apache-2.0 OR GPL-2.0-or-later with exceptions. Some nvproxy-derived
+files remain Apache-only, and the credits say the linked QEMU binary is not yet distributable
+under the GPL. The broker has a separate notice; vendor drivers and OS binaries are not
+supplied by Kayfabe. These are repository notices, not a legal opinion.\src{license}
+\src{credits}\src{notices}
+
+\doc NVIDIA's current driver agreement contains platform-use conditions and restrictions
+concerning commercial hosting, technical restrictions, and GeForce/Titan datacentre deployment.
+Their applicability depends on the actual software, hardware, agreement and deployment.
+This paper determines neither that every VM use is prohibited nor that an open-source
+emulator grants permission. Calling a project an alternative to vendor vGPU licensing does
+not settle whether any restriction is bypassed. A release needs qualified review of the
+actual arrangement.\src{nvidialicense}
+
+\doc The public provenance policy is draft wording awaiting review. It does not claim a
+clean-room process and does not permit closed-binary material as public implementation data.
+Guest event tracing, such as Windows' own scheduling events, is distinct from analysing a
+closed binary; neither a private analysis memo nor an unreviewed summary becomes evidence by
+calling it a trace. No such findings or values are included here.\src{provenance}\src{latency}
+
+\subsection{Test independence and the research stack}
+
+\doc The predecessor records specific instrument failures: a configuration the mutation tool
+never read, a test baseline that omitted relevant suites, a count substituted for workload
+content, and an independent-looking tracker with the same missing transition as production.
+Those incidents justify planted failures and independent invariants. They do not establish
+that today's tests are unsound, or that multiple reviewers make an oracle independent.
+\src{old}
+
+\unverified This paper has not audited oracle independence for all current suites. The
+implementation triplets name what each test could miss, and the research questions ask what
+would expose a correlated model error. A green test on an unexercised path remains weak
+regardless of who wrote the test.\src{rules}\src{owed}
+
+The full PR and historical-gap inventories are in the companion index. The following ten
+proposals bear directly on this argument; they are open research/integration work, not ten
+new verified product features. Their current base branches and heads are in that snapshot.
+The companion also separates the older stacks from the newer next-branch policy.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lXX@{}}
+\toprule PR & Claim or proposed change & Question it bears on \\
+\midrule
+140 & Retain backing until invalidation acknowledges & Q\ref{q:retirement}: retirement event \\
+146 & Preserve sparse mapping semantics & Q\ref{q:sparse}: finite sparse coverage \\
+99 & Combined descriptor/mapping candidate & Q\ref{q:worst}: barrier cost and integration \\
+169 & Diagnose a consumed completion wake & Q\ref{q:interrupt}: packet/notification identity \\
+82 & Expose invalidate snapshot drift & Q\ref{q:race}: concurrent table changes \\
+75 & Root-move/withdrawal contracts & Q\ref{q:root}: lifetime identity \\
+73 & Native privilege stamps for kernel authority & Q\ref{q:privilege}: privilege evidence \\
+74 & Split all-space walks at the ABI boundary & Q\ref{q:worst}: workload-dependent cost \\
+19 & Require a fresh GPU-walk completion event & Q\ref{q:clock}: fresh completion observation \\
+88 & Bound trap-side doorbell batches & Q\ref{q:worst}: who waits behind work \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Their falsifiers are not substitutes for exact final-tree acceptance. A passing parent and a
+passing branch elsewhere do not qualify a merge. The project's batch policy makes that
+boundary explicit; refreshing an inventory does not perform the integration review.
+\src{rules}

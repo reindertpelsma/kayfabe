@@ -1998,6 +1998,7 @@ static void kf3_class_init(ObjectClass *klass, const void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
     ResettableClass *rc = RESETTABLE_CLASS(klass);
+    dc->hotpluggable = false;
     k->realize = kf3_dev_realize;
     k->exit = kf3_dev_exit;
     rc->phases.hold = kf3_reset_hold;   /* ★ ABI 28: the device reset … */

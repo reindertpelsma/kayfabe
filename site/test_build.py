@@ -1,6 +1,7 @@
 """Small local tests; temporary git tags stand in for published releases."""
 
 import glob
+import re
 import importlib.util
 import io
 import os
@@ -11,6 +12,8 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+
+import claims_guard
 
 
 def builder():
@@ -502,7 +505,7 @@ class LandingRender(unittest.TestCase):
 
     def test_without_release_it_says_build_from_source(self):
         landing, docs = self.render(None)
-        self.assertIn("No release yet: build from source", landing)
+        self.assertIn("Build from source", landing)
         self.assertNotIn("/releases/download/", landing)
         self.assertIn('data-kf="docs-index"', docs)
         self.assertIn('href="/docs/master/index.html">Intro', docs)
@@ -528,6 +531,87 @@ class LandingRender(unittest.TestCase):
         self.assertIn("releases/download/v1.0.0/k.tar.gz", landing)
         self.assertIn("cd" * 32, landing)
         self.assertIn("1.0 MiB", landing)
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class FrontpageClaims(unittest.TestCase):
+    # FALSIFIER: the frontpage copy or the README contains a phrase the evidence does not support,
+    # or a frontpage statement has no `src` comment, or the status band loses an honest item.
+    def landing_source(self):
+        return (Path(__file__).parent / "content/_index.md").read_text()
+
+    def test_frontpage_has_no_banned_claim(self):
+        text = self.landing_source() + (Path(__file__).parent / "templates/index.html").read_text()
+        self.assertEqual(claims_guard.find(text), [])
+
+    def test_readme_has_no_banned_claim(self):
+        self.assertEqual(claims_guard.find((ROOT / "README.md").read_text(), readme=True), [])
+
+    def test_guard_catches_each_banned_phrase(self):
+        for phrase in [
+            "near-native speed",
+            "it is secure",
+            "a clean-room design",
+            "anti-cheat compatible",
+            "multi-tenant ready",
+            "works with any NVIDIA GPU",
+            "seamless",
+        ]:
+            self.assertTrue(claims_guard.find(phrase, readme=True), phrase)
+
+    def test_every_frontpage_section_carries_a_source(self):
+        import tomllib
+
+        data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
+        self.assertTrue(data["tagline_src"].strip() and data["lede_src"].strip())
+        for name in ["screenshot", "uses", "different", "where", "start"]:
+            self.assertTrue(data[name].get("src", "").strip(), name)
+        for item in data["uses"]["items"] + data["where"]["items"]:
+            self.assertTrue(item["src"].strip(), item)
+        for text in self.landing_source().split("\n"):
+            if re.match(r"\w*src = ", text):
+                self.assertNotIn("--", text)
+
+    def test_first_screen_blocks_use_plain_words(self):
+        import tomllib
+
+        data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
+        texts = [data["tagline"], data["lede"]]
+        texts += [i["title"] + " " + i["text"] for i in data["uses"]["items"]]
+        self.assertEqual(claims_guard.jargon(" ".join(texts)), [])
+        self.assertEqual(
+            data["tagline"],
+            "Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.",
+        )
+        readme = (ROOT / "README.md").read_text().split("<img alt=")[0]
+        self.assertEqual(claims_guard.jargon(readme), [])
+
+    def test_the_straight_section_says_what_it_must(self):
+        data = self.landing_source()
+        for text in [
+            "There is no installer yet",
+            "Windows is not stable",
+            "Not security audited",
+            "Build from source",
+        ]:
+            self.assertIn(text, data)
+
+    def test_detail_pages_keep_sources_and_candid_limits(self):
+        for name in ["works-today", "how-it-differs", "benchmarks"]:
+            source = (ROOT / "site/content" / (name + ".md")).read_text()
+            self.assertIn('template = "detail.html"', source)
+            self.assertIn("<!-- src:", source)
+        works = (ROOT / "site/content/works-today.md").read_text()
+        for claim in ["research project with one maintainer", "non-goal",
+                      "result files are not committed", "not merged yet"]:
+            self.assertIn(claim, works)
+
+    def test_readme_opens_with_the_honest_status(self):
+        top = "\n".join((ROOT / "README.md").read_text().splitlines()[:15]).lower()
+        for text in ["research", "no installer", "sleep", "audit", "build"]:
+            self.assertIn(text, top)
 
 
 if __name__ == "__main__":

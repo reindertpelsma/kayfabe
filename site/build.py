@@ -2,6 +2,7 @@
 """Build every docs version and landing with this checkout's pinned tooling/configs."""
 
 import argparse
+import claims_guard
 import hashlib
 from html import escape, unescape
 from html.parser import HTMLParser
@@ -118,11 +119,39 @@ def snapshot(repo, ref, destination):
 
 def manual_source(source, destination):
     """Keep the author-written mdBook order; publish only the manual and FAQ."""
-    shutil.copytree(source / "docs/howto", destination)
+    manual = source / "docs/howto"
+    shutil.copytree(manual, destination)
+    published = {
+        page.resolve(): page.relative_to(manual).as_posix()
+        for page in manual.rglob("*")
+        if page.is_file()
+    }
     summary = (destination / "SUMMARY.md").read_text()
     if (source / "docs/FAQ.md").is_file():
-        shutil.copy2(source / "docs/FAQ.md", destination / "FAQ.md")
+        published[(source / "docs/FAQ.md").resolve()] = "FAQ.md"
         summary = summary.rstrip() + "\n\n- [FAQ](FAQ.md)\n"
+    pattern = (
+        r"(?P<code>(?P<ticks>`+)(?!`)(.*?)(?P=ticks)(?!`))|"
+        r"(?P<prefix>!?\[[^\]\n]*\]\()(?P<target>[^)\s]+)(?P<suffix>\))"
+    )
+    for page, output in published.items():
+        if page.suffix != ".md":
+            continue
+
+        def rewrite(match):
+            if match["code"] is not None:
+                return match[0]
+            target = urlsplit(match["target"])
+            if target.scheme or target.netloc or not target.path:
+                return match[0]
+            mapped = published.get((page.parent / unquote(target.path)).resolve())
+            if mapped is None:
+                return match[0]
+            relative = posixpath.relpath(mapped, posixpath.dirname(output) or ".")
+            target = target._replace(path=quote(relative))
+            return match["prefix"] + target.geturl() + match["suffix"]
+
+        (destination / output).write_text(re.sub(pattern, rewrite, page.read_text(), flags=re.S))
     (destination / "SUMMARY.md").write_text(summary)
     return re.findall(r"\]\(([^)]+\.md)\)", summary)
 
@@ -515,6 +544,13 @@ def page_url(path):
     return "/" + (path[:-10] if path.endswith("index.html") else path)
 
 
+def check_public_copy(text, page):
+    """Keep the detailed manual outside the main-site prose rules."""
+    if str(page).startswith("docs/"):
+        return None
+    return claims_guard.enforce_page(text, str(page))
+
+
 def metadata(output, plan):
     """Apply one URL policy to both generators and emit the combined sitemap."""
     description = "Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, "
@@ -525,10 +561,14 @@ def metadata(output, plan):
             '<body><h1>Page not found</h1><a href="/">Home</a></body></html>'
         )
     sitemap = []
+    copy_reviews = {}
     for page in sorted(output.rglob("*.html")):
         relative = page.relative_to(output)
         text = page.read_text()
         title = check_page(text, relative.as_posix())
+        review = check_public_copy(text, relative.as_posix())
+        if review is not None:
+            copy_reviews[relative.as_posix()] = review
         if "</head>" not in text.lower():
             body = re.sub(r"<title>.*?</title>", "", text, flags=re.I | re.S)
             text = (
@@ -586,7 +626,8 @@ def metadata(output, plan):
         text = text.replace("</head>", tags + "\n</head>")
         page.write_text(text)
         if not noindex and (
-            url in ["/", "/docs/", "/about/", "/security/"]
+            url in ["/", "/docs/", "/about/", "/security/", "/works-today/",
+                    "/how-it-differs/", "/benchmarks/"]
             or (plan["latest"] != "master" and url.startswith(version_url(plan["latest"])))
         ):
             sitemap.append("https://kayfabe.dev" + url)
@@ -597,6 +638,7 @@ def metadata(output, plan):
         + "</urlset>\n"
     )
     (output / "robots.txt").write_text("Sitemap: https://kayfabe.dev/sitemap.xml\n")
+    return copy_reviews
 
 
 def build(repo, binaries, releases, root_ref="latest"):
@@ -669,8 +711,13 @@ def build(repo, binaries, releases, root_ref="latest"):
             text = page.read_text()
             if 'name="search"' not in text:
                 page.write_text(text.replace("</main>", search_form(target) + "</main>"))
-        metadata(output, plan)
-    report = {**plan, "counts": counts, "broken_links": broken_links(output)}
+        copy_reviews = metadata(output, plan)
+    report = {
+        **plan,
+        "counts": counts,
+        "broken_links": broken_links(output),
+        "copy_review": copy_reviews,
+    }
     (repo / "site/build-report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(
         json.dumps(

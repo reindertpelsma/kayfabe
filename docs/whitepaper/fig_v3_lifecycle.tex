@@ -1,0 +1,18 @@
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=20mm]
+\node[concept] (scan) {Scan\\inspect packets};
+\node[concept,right=of scan] (pointer) {Pointer\\forward references};
+\node[concept,right=of pointer] (window) {Window\\inspect registration span};
+\draw[flow] (scan) -- node[above=8mm,align=center,font=\scriptsize,text width=32mm]
+  {binding known; no registration} (pointer);
+\draw[flow] (pointer) -- node[above=8mm,align=center,font=\scriptsize,text width=32mm]
+  {registration live at the anchor} (window);
+\draw[flow] (window.south) -- ++(0,-15mm) -| (pointer.south);
+\node[below=18mm of pointer,align=center,font=\scriptsize,text width=60mm]
+  {return only when registration is gone and the relay is quiescent};
+\end{tikzpicture}
+\caption{Main lifecycle path; direct Scan-to-Window and teardown edges are omitted.
+  Registration and packet-boundary rules govern each transition.\src{lifecycle}}
+\label{fig:lifecycle}
+\end{figure}

@@ -177,6 +177,12 @@ main > section.hero {
   max-width: 42rem;
   margin: 0 0 1rem;
 }
+.hook {
+  font-size: 1.1rem;
+  color: var(--muted);
+  max-width: 42rem;
+  margin: 0 0 1rem;
+}
 .lede {
   max-width: 42rem;
   margin: 0 0 1.25rem;
@@ -430,6 +436,16 @@ pre {
 .docs-index ul {
   max-width: 44rem;
 }
+/* Detail pages keep images and tables inside a narrow viewport. */
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+.prose table {
+  display: block;
+  overflow-x: auto;
+  min-width: 0;
+}
 .prose h2,
 .docs-index h2 {
   margin-top: 2.25rem;
@@ -456,7 +472,95 @@ pre {
   gap: 0.5rem 1.5rem;
 }
 
+/* Frontpage */
+.statusline {
+  margin: 1.25rem 0 0;
+  max-width: 48rem;
+  color: var(--muted);
+}
+.scenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+  gap: 1.5rem;
+}
+.scenes p {
+  margin: 0;
+}
+ul.plain {
+  padding-left: 1.2rem;
+  max-width: 48rem;
+}
+ul.plain li {
+  margin-bottom: 0.6rem;
+}
+/* (older frontpage blocks, kept for the pages that still use them) */
+.hero .shot {
+  margin-top: 0.5rem;
+}
+.statuslist {
+  margin: 0 0 0.5rem;
+  padding-left: 1.2rem;
+}
+.statuslist li {
+  margin-bottom: 0.25rem;
+}
+.cards.who,
+.cards.pitch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cards.who dl {
+  margin: 0;
+}
+.cards.who dt {
+  margin-top: 0.6rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cards.who dd {
+  margin: 0.1rem 0 0;
+}
+.footnote {
+  max-width: 48rem;
+  margin: 1rem 0 0;
+}
+table.narrow {
+  min-width: 0;
+}
+table.today th[scope="row"] {
+  white-space: nowrap;
+  width: 1%;
+}
+.st {
+  display: inline-block;
+  padding: 0.05em 0.5em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.st-works {
+  background: var(--measured-bg);
+  color: var(--measured-fg);
+}
+.st-partly {
+  background: var(--gap-bg);
+  color: var(--gap-fg);
+  border-style: dashed;
+}
+.st-no {
+  background: var(--surface);
+  color: var(--muted);
+  border-style: dotted;
+}
+
 @media (max-width: 52rem) {
+  .cards.who,
+  .cards.pitch {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .path {
     grid-template-columns: minmax(0, 1fr);
   }

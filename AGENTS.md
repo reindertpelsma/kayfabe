@@ -52,6 +52,10 @@ is frozen (see *Layout*).
     DESIGN-ONLY / RESEARCH.
   - A correction is folded into its parent, **above** the text it corrects.
   - A supersession is recorded **in** the superseded text, not only in its successor.
+  - Every active Markdown document opens with a dated STATUS; `scripts/ci/doc_freshness.py`
+    enforces it and reports old LIVE documents with dead references (docs/CI_V3.md). A SUPERSEDED
+    document links its successor. Fix a finding; never re-record the baseline to bypass it. The
+    published manual (`docs/howto/`, `docs/FAQ.md`) is exempt.
 
 ## Branches and merging
 

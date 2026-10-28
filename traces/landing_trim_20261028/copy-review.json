@@ -1,0 +1,566 @@
+{
+  "before": {
+    "captured_utc": "2026-10-28T00:02:28.356Z",
+    "viewport": "1440x900",
+    "words_total": 1452,
+    "words_first_two_screens": 481,
+    "sections": 7,
+    "document_height": 4657,
+    "section_words": [
+      {
+        "heading": "kayfabe",
+        "words": 149,
+        "height": 969
+      },
+      {
+        "heading": "What it is for",
+        "words": 241,
+        "height": 427
+      },
+      {
+        "heading": "What is different",
+        "words": 320,
+        "height": 756
+      },
+      {
+        "heading": "Where it stands",
+        "words": 512,
+        "height": 1321
+      },
+      {
+        "heading": "Try it",
+        "words": 110,
+        "height": 350
+      },
+      {
+        "heading": "Download",
+        "words": 15,
+        "height": 76
+      },
+      {
+        "heading": "Follow along",
+        "words": 78,
+        "height": 194
+      }
+    ]
+  },
+  "after": {
+    "captured_utc": "2026-10-28T00:08:49.296Z",
+    "viewport": "1440x900",
+    "words_total": 245,
+    "words_first_two_screens": 245,
+    "sections": 5,
+    "document_height": 1876,
+    "section_words": [
+      {
+        "heading": "kayfabe",
+        "words": 54,
+        "height": 795
+      },
+      {
+        "heading": "What it is for",
+        "words": 50,
+        "height": 128
+      },
+      {
+        "heading": "What is different",
+        "words": 25,
+        "height": 76
+      },
+      {
+        "heading": "Where it stands",
+        "words": 54,
+        "height": 231
+      },
+      {
+        "heading": "Try it",
+        "words": 28,
+        "height": 179
+      }
+    ]
+  },
+  "copy_review": {
+    "404.html": {
+      "page": {
+        "words": 12,
+        "sentences": 2,
+        "average_sentence_words": 6.0,
+        "longest_sentence_words": 7,
+        "flesch_reading_ease": 80.9
+      },
+      "sections": [
+        {
+          "heading": "Page not found",
+          "words": 12,
+          "sentences": 2,
+          "average_sentence_words": 6.0,
+          "longest_sentence_words": 7,
+          "flesch_reading_ease": 80.9,
+          "blocks": 1,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    "about/index.html": {
+      "page": {
+        "words": 330,
+        "sentences": 25,
+        "average_sentence_words": 13.2,
+        "longest_sentence_words": 29,
+        "flesch_reading_ease": 68.08
+      },
+      "sections": [
+        {
+          "heading": "What it is",
+          "words": 91,
+          "sentences": 5,
+          "average_sentence_words": 18.2,
+          "longest_sentence_words": 26,
+          "flesch_reading_ease": 75.87,
+          "blocks": 2,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        },
+        {
+          "heading": "Why it exists",
+          "words": 76,
+          "sentences": 6,
+          "average_sentence_words": 12.667,
+          "longest_sentence_words": 22,
+          "flesch_reading_ease": 77.1,
+          "blocks": 1,
+          "max_paragraph_sentences": 6,
+          "list_depth": 0
+        },
+        {
+          "heading": "Where it stands",
+          "words": 56,
+          "sentences": 4,
+          "average_sentence_words": 14.0,
+          "longest_sentence_words": 29,
+          "flesch_reading_ease": 67.24,
+          "blocks": 1,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "Licence",
+          "words": 35,
+          "sentences": 3,
+          "average_sentence_words": 11.667,
+          "longest_sentence_words": 21,
+          "flesch_reading_ease": 35.46,
+          "blocks": 1,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        },
+        {
+          "heading": "Related projects",
+          "words": 22,
+          "sentences": 2,
+          "average_sentence_words": 11.0,
+          "longest_sentence_words": 14,
+          "flesch_reading_ease": 61.08,
+          "blocks": 1,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        },
+        {
+          "heading": "Talk to the project",
+          "words": 32,
+          "sentences": 3,
+          "average_sentence_words": 10.667,
+          "longest_sentence_words": 12,
+          "flesch_reading_ease": 50.6,
+          "blocks": 1,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        },
+        {
+          "heading": "About this site",
+          "words": 18,
+          "sentences": 2,
+          "average_sentence_words": 9.0,
+          "longest_sentence_words": 11,
+          "flesch_reading_ease": 84.9,
+          "blocks": 1,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "Why it exists: max_paragraph_sentences=6 > 3",
+        "Where it stands: max_paragraph_sentences=4 > 3",
+        "Licence: Flesch 35.46 < 50"
+      ]
+    },
+    "benchmarks/index.html": {
+      "page": {
+        "words": 282,
+        "sentences": 44,
+        "average_sentence_words": 6.409,
+        "longest_sentence_words": 18,
+        "flesch_reading_ease": 78.23
+      },
+      "sections": [
+        {
+          "heading": "Benchmarks",
+          "words": 17,
+          "sentences": 2,
+          "average_sentence_words": 8.5,
+          "longest_sentence_words": 12,
+          "flesch_reading_ease": 88.73,
+          "blocks": 1,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        },
+        {
+          "heading": "Windows: new measurements pending",
+          "words": 42,
+          "sentences": 4,
+          "average_sentence_words": 10.5,
+          "longest_sentence_words": 15,
+          "flesch_reading_ease": 65.25,
+          "blocks": 2,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        },
+        {
+          "heading": "Linux: large jobs and small launches",
+          "words": 163,
+          "sentences": 31,
+          "average_sentence_words": 5.258,
+          "longest_sentence_words": 18,
+          "flesch_reading_ease": 79.53,
+          "blocks": 24,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "Reading the numbers",
+          "words": 60,
+          "sentences": 7,
+          "average_sentence_words": 8.571,
+          "longest_sentence_words": 12,
+          "flesch_reading_ease": 78.29,
+          "blocks": 3,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "Linux: large jobs and small launches: blocks=24 > 5",
+        "Linux: large jobs and small launches: max_paragraph_sentences=4 > 3"
+      ]
+    },
+    "how-it-differs/index.html": {
+      "page": {
+        "words": 405,
+        "sentences": 41,
+        "average_sentence_words": 9.878,
+        "longest_sentence_words": 17,
+        "flesch_reading_ease": 75.24
+      },
+      "sections": [
+        {
+          "heading": "How it differs",
+          "words": 16,
+          "sentences": 1,
+          "average_sentence_words": 16.0,
+          "longest_sentence_words": 16,
+          "flesch_reading_ease": 100.71,
+          "blocks": 1,
+          "max_paragraph_sentences": 1,
+          "list_depth": 0
+        },
+        {
+          "heading": "Six approaches",
+          "words": 216,
+          "sentences": 22,
+          "average_sentence_words": 9.818,
+          "longest_sentence_words": 17,
+          "flesch_reading_ease": 78.19,
+          "blocks": 7,
+          "max_paragraph_sentences": 5,
+          "list_depth": 0
+        },
+        {
+          "heading": "How it is isolated",
+          "words": 52,
+          "sentences": 5,
+          "average_sentence_words": 10.4,
+          "longest_sentence_words": 15,
+          "flesch_reading_ease": 74.26,
+          "blocks": 2,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "What you need",
+          "words": 38,
+          "sentences": 4,
+          "average_sentence_words": 9.5,
+          "longest_sentence_words": 14,
+          "flesch_reading_ease": 65.84,
+          "blocks": 1,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "Licences and source",
+          "words": 83,
+          "sentences": 9,
+          "average_sentence_words": 9.222,
+          "longest_sentence_words": 17,
+          "flesch_reading_ease": 67.01,
+          "blocks": 3,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "Six approaches: blocks=7 > 5",
+        "Six approaches: max_paragraph_sentences=5 > 3",
+        "How it is isolated: max_paragraph_sentences=4 > 3",
+        "What you need: max_paragraph_sentences=4 > 3",
+        "Licences and source: max_paragraph_sentences=4 > 3"
+      ]
+    },
+    "index.html": {
+      "page": {
+        "words": 178,
+        "sentences": 25,
+        "average_sentence_words": 7.12,
+        "longest_sentence_words": 19,
+        "flesch_reading_ease": 81.74
+      },
+      "sections": [
+        {
+          "heading": "kayfabe",
+          "words": 53,
+          "sentences": 6,
+          "average_sentence_words": 8.833,
+          "longest_sentence_words": 19,
+          "flesch_reading_ease": 84.54,
+          "blocks": 4,
+          "max_paragraph_sentences": 1,
+          "list_depth": 0
+        },
+        {
+          "heading": "What it is for",
+          "words": 30,
+          "sentences": 3,
+          "average_sentence_words": 10.0,
+          "longest_sentence_words": 11,
+          "flesch_reading_ease": 86.71,
+          "blocks": 3,
+          "max_paragraph_sentences": 1,
+          "list_depth": 0
+        },
+        {
+          "heading": "What is different",
+          "words": 22,
+          "sentences": 3,
+          "average_sentence_words": 7.333,
+          "longest_sentence_words": 14,
+          "flesch_reading_ease": 84.03,
+          "blocks": 1,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        },
+        {
+          "heading": "Where it stands",
+          "words": 51,
+          "sentences": 10,
+          "average_sentence_words": 5.1,
+          "longest_sentence_words": 8,
+          "flesch_reading_ease": 82.22,
+          "blocks": 5,
+          "max_paragraph_sentences": 1,
+          "list_depth": 1
+        },
+        {
+          "heading": "Try it",
+          "words": 22,
+          "sentences": 3,
+          "average_sentence_words": 7.333,
+          "longest_sentence_words": 8,
+          "flesch_reading_ease": 60.96,
+          "blocks": 2,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    "security/index.html": {
+      "page": {
+        "words": 264,
+        "sentences": 22,
+        "average_sentence_words": 12.0,
+        "longest_sentence_words": 28,
+        "flesch_reading_ease": 61.67
+      },
+      "sections": [
+        {
+          "heading": "Security model",
+          "words": 53,
+          "sentences": 5,
+          "average_sentence_words": 10.6,
+          "longest_sentence_words": 18,
+          "flesch_reading_ease": 58.8,
+          "blocks": 2,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        },
+        {
+          "heading": "The model in four lines",
+          "words": 129,
+          "sentences": 10,
+          "average_sentence_words": 12.9,
+          "longest_sentence_words": 28,
+          "flesch_reading_ease": 61.92,
+          "blocks": 4,
+          "max_paragraph_sentences": 0,
+          "list_depth": 1
+        },
+        {
+          "heading": "What is not claimed",
+          "words": 49,
+          "sentences": 4,
+          "average_sentence_words": 12.25,
+          "longest_sentence_words": 18,
+          "flesch_reading_ease": 64.91,
+          "blocks": 1,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "Reporting a vulnerability",
+          "words": 33,
+          "sentences": 3,
+          "average_sentence_words": 11.0,
+          "longest_sentence_words": 19,
+          "flesch_reading_ease": 59.8,
+          "blocks": 1,
+          "max_paragraph_sentences": 3,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "What is not claimed: max_paragraph_sentences=4 > 3"
+      ]
+    },
+    "works-today/index.html": {
+      "page": {
+        "words": 689,
+        "sentences": 94,
+        "average_sentence_words": 7.33,
+        "longest_sentence_words": 20,
+        "flesch_reading_ease": 71.82
+      },
+      "sections": [
+        {
+          "heading": "What works today",
+          "words": 12,
+          "sentences": 2,
+          "average_sentence_words": 6.0,
+          "longest_sentence_words": 9,
+          "flesch_reading_ease": 80.9,
+          "blocks": 1,
+          "max_paragraph_sentences": 2,
+          "list_depth": 0
+        },
+        {
+          "heading": "Windows and Linux",
+          "words": 157,
+          "sentences": 14,
+          "average_sentence_words": 11.214,
+          "longest_sentence_words": 20,
+          "flesch_reading_ease": 65.59,
+          "blocks": 3,
+          "max_paragraph_sentences": 6,
+          "list_depth": 0
+        },
+        {
+          "heading": "Progress by GPU",
+          "words": 225,
+          "sentences": 43,
+          "average_sentence_words": 5.233,
+          "longest_sentence_words": 13,
+          "flesch_reading_ease": 67.67,
+          "blocks": 36,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "What is rough",
+          "words": 83,
+          "sentences": 8,
+          "average_sentence_words": 10.375,
+          "longest_sentence_words": 20,
+          "flesch_reading_ease": 79.09,
+          "blocks": 3,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "Sharing and unfinished work",
+          "words": 136,
+          "sentences": 17,
+          "average_sentence_words": 8.0,
+          "longest_sentence_words": 14,
+          "flesch_reading_ease": 71.19,
+          "blocks": 5,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        },
+        {
+          "heading": "Build and try it",
+          "words": 76,
+          "sentences": 10,
+          "average_sentence_words": 7.6,
+          "longest_sentence_words": 12,
+          "flesch_reading_ease": 82.24,
+          "blocks": 4,
+          "max_paragraph_sentences": 4,
+          "list_depth": 0
+        }
+      ],
+      "errors": [],
+      "warnings": [
+        "Windows and Linux: max_paragraph_sentences=6 > 3",
+        "Progress by GPU: blocks=36 > 5",
+        "Progress by GPU: max_paragraph_sentences=4 > 3",
+        "What is rough: max_paragraph_sentences=4 > 3",
+        "Sharing and unfinished work: max_paragraph_sentences=4 > 3",
+        "Build and try it: max_paragraph_sentences=4 > 3"
+      ]
+    }
+  },
+  "mutation_results": [
+    {
+      "mutant": "average gate",
+      "failing_tests": 2,
+      "killed": true
+    },
+    {
+      "mutant": "single sentence gate",
+      "failing_tests": 2,
+      "killed": true
+    },
+    {
+      "mutant": "build integration",
+      "failing_tests": 2,
+      "killed": true
+    }
+  ]
+}

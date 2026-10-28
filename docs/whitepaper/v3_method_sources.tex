@@ -1,0 +1,145 @@
+\section{Method and reproducible commands}
+
+This edition used source reads, Git comparisons, publication checks and XeLaTeX. It ran no
+Cargo or Clippy command, VM, real-GPU gate, provider operation or remote-host experiment.
+Every hardware result is carried from a dated source. Publication checks here do not turn
+those records into measurements of the cover revision.
+
+\subsection{Sources and code distance}
+
+\code{sources_v3.json} records repository revisions, paths and Git blobs, plus the three
+external primary sources checked on the publication date. Numeric citations link directly
+to those sources. The full mapping, historical evidence names, PR metadata and gap topics are
+in the \href{\repobase/blob/codex/whitepaper-v3-20261027/docs/whitepaper/kayfabe_v3_index.md}
+{companion index, \code{kayfabe_v3_index.md}}. That branch link moves with publication;
+the source revisions recorded inside it do not. External pages can change after checking.
+
+The following reconstructs repository-source identity and the result-distance calculation:
+\begin{verbatim}
+python3 - <<'PY'
+import json, subprocess
+from pathlib import Path
+p = Path('docs/whitepaper/sources_v3.json')
+for row in json.loads(p.read_text())['sources']:
+    ref = row['revision'] + ':' + row['path']
+    blob = subprocess.check_output(['git', 'rev-parse', ref], text=True)
+    assert blob.strip() == row['blob'], ref
+PY
+# PIN is the cover revision; RESULT is a runtime from the results table.
+git diff --name-only RESULT PIN -- crates qemu cuda
+git rev-list --left-right --count PIN...RESULT
+\end{verbatim}
+
+Changed paths include additions, removals and modifications. Commit counts cover the whole
+Git graph, not only the three product directories. Zero result-only commits means ancestor;
+it is not a passing-test status. A divergent result has commits absent from the pin.
+\code{result_distances_v3.json} preserves full runtime hashes and rerun status. No result in
+that file was rerun on hardware for this edition.
+
+\subsection{PR snapshot and historical gap index}
+
+\begin{verbatim}
+gh pr list --state open --limit 200 \
+  --json number,title,headRefName,headRefOid,baseRefName,isDraft,url
+gh pr list --state all --limit 250 \
+  --json number,headRefName,baseRefName,state,url
+\end{verbatim}
+
+The snapshot was refreshed after the revision work. It freezes each open PR's number, base,
+head, draft state and known parent PR: a parent is identified by an exact base-branch to
+PR-head-branch match, including merged parents. A branch base without such a match remains
+unknown. A recorded parent is metadata, not proof that the full dependency was reviewed.
+Live heads, draft states and bases will change after capture.
+
+The companion also preserves 101 historical gap topics. They include closed and superseded
+rows; the count is not a current defect count. Application gaps, capability gaps and postponed
+features are identified separately there. No template inventory occupies the main argument.
+
+\subsection{Build and verify the publication}
+
+\begin{verbatim}
+python3 -m unittest discover -s docs/whitepaper -p test_build_v3.py
+python3 scripts/ci/debt.py claims
+git diff --check
+# Commit TeX inputs before producing a publishable PDF.
+bash docs/whitepaper/build.sh v3
+python3 docs/whitepaper/build_v3.py --check
+pdfinfo docs/whitepaper/kayfabe_v3.pdf
+pdftotext -layout docs/whitepaper/kayfabe_v3.pdf -
+\end{verbatim}
+
+\readcode The v3 target runs XeLaTeX twice with halt-on-error and an input recorder. It checks
+for TeX errors, missing glyphs and undefined references. Recorded repository inputs must match
+committed blobs. A JSON receipt binds input hashes, source commit, compiler and output digest.
+A later PDF-only commit leaves the input blobs unchanged. This is a local publication check,
+not a signed attestation of a trusted compiler or host.
+
+\subsection{Reproducing hardware evidence is separate work}
+
+The following are repository entry points, not commands run for this paper. They require an
+authorised, exclusively leased test machine and configuration capture.\src{rules}
+\begin{verbatim}
+bash scripts/bench/v3_gates.sh
+KF_DEVICE=kf3 bash scripts/fastguest/fast_suite.sh <tag> 180
+bash scripts/bench/cuda_ladder.sh host <tag>
+bash scripts/bench/cuda_ladder.sh guest <tag>
+bash scripts/bench/perf_compare.sh <rev> \
+  --baseline <rev-or-result-dir> --lanes bare,fast --reps 3
+\end{verbatim}
+
+\doc The performance method requires source revision, actual die, drivers, nested status,
+placement, settings, flags, sample unit, failed runs and the control's spread. Changing a paper's
+source pin does not update a hardware receipt.\src{linuxperf}
+
+For the stall case, preregister completion, recovery and latency outcomes separately. Keep
+default-watchdog and longer-observation arms. Missing scheduler preemption timestamps,
+packet association, native GPU clocks or guest events remain missing observations. A capped
+trace ring cannot silently shrink a failure denominator.\src{latency}\src{msrecovery}
+
+\section{Glossary and historical names}
+
+\begin{description}[style=nextline,itemsep=0.25em]
+\item[ABI] Application binary interface: layouts and calling conventions.
+\item[BAR] PCI address window. Only BAR0 writes trap in this design.
+\item[CE / GR] Copy engine / graphics-compute engine in the source records.
+\item[GPFIFO / GP / pushbuffer] Ring of command references / one reference / command bytes.
+\item[GET / PUT] Fetch cursor / publication cursor; fetching does not establish execution.
+\item[IOVA / GPA] Device-visible I/O virtual address / guest physical address.
+\item[IRQ / MSI / DPC] Interrupt request / message-signalled interrupt / deferred Windows work.
+\item[MEM\_OP / split] Memory-operation command / ordering boundary for a required map refresh.
+\item[PTE / PDE / PDB] Page-table entry / page-directory entry / page-directory base.
+\item[RM / GSP] Resource manager / GPU System Processor.
+\item[TSG / USERD] Timeslice group / channel producer-consumer state memory.
+\item[USER] GPU channel privilege; distinct from host request permission and Unix credentials.
+\item[UVM] Unified virtual memory, including fault delivery and replay.
+\item[WDDM / TDR] Windows Display Driver Model / timeout detection and recovery.
+\item[ogkm] NVIDIA's open GPU kernel modules, used as pinned reference sources.
+\end{description}
+
+\subsection{Decoding old file names}
+
+These are lookup aids for historical sources, not extra concepts required by the argument.
+\begin{description}[style=nextline,itemsep=0.25em]
+\item[v3 / pre-v3] Current \code{kf-*} product / frozen \code{kayfabe-*} predecessor.
+\item[M / B-prime / baton] Alternative relay-handoff designs.\src{alternativerelay}
+\item[ENS5 / ENS6 / ENS7] Sparse-admission undo / host-call churn and slices /
+framebuffer-scaled sparse budgets.\src{admission}\src{rmcost}\src{budget}
+\item[ENS8 / ENS10 / ENS11] Consumed-ring wakes / mapping scope / split-latency continuation.
+\src{owed}\src{walknarrow}\src{latency}
+\item[T-space] Address space reserved for privileged rewritten work.\src{rulings}
+\item[Boot labels and candidate numbers] Harness identifiers, not release versions or grades.
+The companion records the few identifiers needed to find the unverified analysis.
+\end{description}
+
+\section{Change record}
+
+The predecessor describes the earlier multi-process architecture and remains superseded.
+The first v3 edition replaced that model, pinned the source, introduced explicit limitations
+and added the committed-input publication gate.\src{old}\src{architecture}
+
+This cold-reader revision states the stall hypothesis before the internals, distinguishes
+CODE from DOC and REPORTED from UNVERIFIED, restores positive Windows results and native
+performance denominators, and makes host-plus-guest performance an explicit missing result.
+It replaces generic concept boxes with four mechanism diagrams plus the lifecycle diagram.
+The full inventories move to the companion; 36 questions now state their own experimental
+setup and decision. Neither this revision nor its Git-distance table qualifies new hardware.

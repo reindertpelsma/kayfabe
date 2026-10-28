@@ -1,4 +1,4 @@
-STATUS: LIVE-DESIGN, 2026-10-22 — Round 3 BASE runner and GitHub-only build provenance supersede the earlier inline client; hosted deployment/identity and release execution remain unverified.
+STATUS: LIVE, 2026-10-22 — Round 3 BASE runner and GitHub-only build provenance supersede the earlier inline client; hosted deployment/identity and release execution remain unverified.
 
 [SUPERSEDED IN PART 2026-10-23, jose round, branch claude/vast-broker-jose-20261023] GitHub
 OIDC is verified by jose; run tokens are jose HS256 JWTs (the v1/v2 HMAC token syntax below is
