@@ -1,8 +1,27 @@
 # Kayfabe v3 companion index
 
-**STATUS: RESEARCH, 2026-10-27 — companion to [kayfabe_v3.pdf](kayfabe_v3.pdf).** The implementation pin remains `12c4008705f17033a803e56d4d479bf1275cdb94`. Source keys and historical campaign labels live here so the argument can use plain words.
+**STATUS: RESEARCH, 2026-10-28 — companion to [kayfabe_v3.pdf](kayfabe_v3.pdf).** The implementation pin remains `12c4008705f17033a803e56d4d479bf1275cdb94`. Source keys and historical campaign labels live here so the argument can use plain words.
 
 This file is an index, not a hardware qualification or a current defect list. The publication task ran no hardware. [Source identities](sources_v3.json), [result distances](result_distances_v3.json), [PR metadata](pr_snapshot_v3.json) and [historical gap topics](gap_topics_v3.json) are machine-readable companions.
+
+## Owner corrections to the pinned questions, 2026-10-28
+
+<!-- src: owner, 2026-10-28, forwarded whitepaper answers; docs/OWNER_RULINGS.md §AP -->
+
+**STATUS: ANSWERED IN PART, 2026-10-28; by design.** The owner's answers below refine the questions in the pinned PDF; the [dated ruling](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28) and corrections in the parent design documents govern those points.
+The PDF and its implementation pin remain the historical edition; this fold-in adds no hardware result.
+
+| Question | Owner answer / remaining scope | Parent |
+| --- | --- | --- |
+| Q1 | By design: edited leaves may be old/new/unmapped before refresh; unedited valid VAs stay valid; refreshed edits reflect refresh-start state or later; coalesce requests; deferred invalid-to-valid invalidate is within contract | [Architecture §4.2](../design/THE_ARCHITECTURE_v3.md#42-the-diff) |
+| Q5/Q6 | By design: park only if every pending completion is epoll-servable; consuming an eventfd must preserve the final wake; native-call tail measurements remain open | [Architecture §2.4](../design/THE_ARCHITECTURE_v3.md#24-the-wakeup-protocol) |
+| Q7 | By design: channels/TSGs are the resource boundary, with privilege and mapping obligations; cross-client operation evidence remains open | [Channel kinds §1](../design/the_three_channel_kinds.md#1-the-three-kinds) |
+| Q8 | Owner design clarification: “nesting cost is VFIO-guest only”; no measured overhead follows | [Owner ruling §AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28) |
+| Q9 | By design: byte oracle, assertions and cleanup; exit zero alone is insufficient | [Owner ruling §AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28) |
+| Q13/Q32 | Owner scope: families rather than dies; per-die derivation and provenance obligations remain | [Owner ruling §AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28) |
+| Q23 | By design: clocks are measurement only | [Owner ruling §AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28) |
+| Q24 | By design: weak completion doorbells prompt inspection of operation-owned completion state | [Channel kinds §1.2](../design/the_three_channel_kinds.md#12-passthrough-completion-interrupts-every-vm-that-armed-the-event-is-woken-2026-10-08-owner) |
+| Q4/Q25 | CODE READ at `7dcedefea`: the master `kf-mem` search and apply representation do not establish sparse zero/absorbing placement; [the source check](../OWNER_RULINGS.md#code-checks-accompanying-the-fold-in) distinguishes sparse walker detection and simulator tests | [Code checks](../OWNER_RULINGS.md#code-checks-accompanying-the-fold-in) |
 
 ## Evidence qualification
 
