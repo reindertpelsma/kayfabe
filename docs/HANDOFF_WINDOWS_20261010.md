@@ -50,7 +50,7 @@ Diverged duplicate: `claude/tdr-opus-base-20261010` carries a second port of the
 7. Feature gaps beyond the TDR hunt (ranked P0/P1/P2, with the MPO-policy owner decision, 2026-10-10): `docs/design/V3_FEATURE_GAPS.md`. Every app-matrix failure becomes a gap row there.
 
 ## 5. Running resources and traps
-- Host `root@172.22.1.20`: GPU is shared by agents through `flock -o /tmp/kayfabe-fastguest.lock`; one QEMU at a time; runners switch IOMMU group 11 to
+- Host the trusted test host: GPU is shared by agents through `flock -o /tmp/kayfabe-fastguest.lock`; one QEMU at a time; runners switch IOMMU group 11 to
   identity and restore `DMA-FQ` (check `cat /sys/kernel/iommu_groups/11/type`); `rm -f /tmp/kf-stop-winprod` after any stop; use
   `pgrep qemu-system-x86`. Disk: keep >100 GB free (per-run overlays are 4-18 GB; overlays for runs <= 283 were deleted 2026-10-10; `dumps/` holds ~115 GB).
 - Vast: one Windows 11 KVM instance (RTX 4060 Ti) for the baseline; cap about $6; destroy when done (`vastai show instances`); own ids only;

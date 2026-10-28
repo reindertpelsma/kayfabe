@@ -114,7 +114,7 @@ For Windows, the recorded way to get a visible desktop is the one in [Windows gu
 
 - A broker package or a service unit.
 - A recipe for a broker with `display-broker` under a sandboxed QEMU (container) end to end.
-- Display with guest drivers other than the ones named above, on Linux.
+- Current supported display coverage beyond the named Linux guest driver. The branch `codex/sweep-integrate-20261018`, not merged, reports earlier AD102 broker runs with Linux 590.48.01 and 595.91.07 [reported in `traces/sweep_integrate_20261018/MATRIX.md` on that branch, historical revisions `9d6f210ba` and `6265b980f`]. Those historical runs do not establish current-master display compatibility.
 - HDR.
 
 Verified on: the Linux desktop at kayfabe `0e64a960` (host 595.91.07, RTX 4070, GNOME Wayland, 2026-10-08) and the Windows 11 desktop in the README's screenshot (2026-10-21). Not verified end to end: the broker build and the launchers were read from the repository, not run for this page.

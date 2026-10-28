@@ -9,7 +9,7 @@ This file is an index, not a hardware qualification or a current defect list. Th
 - **REPORTED:** public repository records can be inspected, but were not reproduced here.
 - **UNVERIFIED, analysis not in the repository:** the supplied Windows mapping analysis attributes 297,495 of 318,747 walks (93.3%) to one channel in boot 7321 and 461,389 of 490,686 (94.0%) in boot 7391. These are harness boot identifiers, not product versions. The memo and producing command are unavailable in the public tree; arithmetic does not validate the counts. The [experimental note](https://github.com/reindertpelsma/kayfabe/blob/2196a9ad1/docs/design/ENS11_SPLIT_LATENCY_20261027.md) reports the attribution.
 - **UNVERIFIED, analysis not in the repository:** supplied boot 7391 analysis at `64c50ad4` gives a 2.43 s apply and a 2.529 s completion gap. The [scope note](https://github.com/reindertpelsma/kayfabe/blob/2196a9ad1/docs/design/V3_WALK_GATE_NARROWING.md) calls it supplied evidence. No shared-clock alignment, packet identity or causal conclusion is established here.
-- **Runtime unknown:** the experimental Heaven FPS summaries are committed, but their stated source runtime cannot be resolved. The paper removes that hash as a reproducible runtime citation. Dataset revisions are not substituted for the missing runtime.
+- **Runtime unknown:** the Heaven FPS summaries from the research build that preceded the port of lazy observation and Pointer forwarding are committed, but their stated source runtime cannot be resolved. The paper removes that hash as a reproducible runtime citation. Dataset revisions are not substituted for the missing runtime. This is separate from merge status: both mechanisms are on master and default on in Pointer mode, and the research-build records are not a measurement of master.
 - **UNMEASURED:** the host-plus-guest coexistence screenshot supplies no concurrent throughput, host responsiveness or fault-containment measurement.
 
 ## Result distance and rerun status
@@ -29,14 +29,14 @@ Paths count the endpoint diff under `crates/`, `qemu/` and `cuda/`. Commit count
 | Linux 100 processes | `4c48ca0cdebff4fbb5caa7d7383206ef1f4495e9` | 639 | 2114 | 0 |
 | Linux headless graphics | `d06833f0db5e8534837767efe17ff7ae7715dd95` | 641 | 2197 | 0 |
 | VFIO native control (QEMU) | `666ea966f5ae57be54bf9a84ad77f42897f3f41e` | 132 | 822 | 0 |
-| Production FPS subset | `0a74611734dc91c78c86ff39ed9f06d866072ac4` | 130 | 821 | 0 |
+| Earlier-code FPS subset (before the port) | `0a74611734dc91c78c86ff39ed9f06d866072ac4` | 130 | 821 | 0 |
 | Linux matmul | `b5c9f71759b3818dac90b7ea056c1b1ad256987e` | 307 | 1518 | 0 |
 | Linux llama.cpp | `9d82f2598d267732c87476da27f501aaabe2c4af` | 382 | 1754 | 0 |
 | Linux eager decoding | `e5ff45ff85ea77e5d10837ac9bf9d33c3dd7ece0` | 801 | 2485 | 0 |
 | Linux suspend/resume | `559db30cc6694fc1d4e571f1dc08e5abd2bf7bd5` | 169 | 938 | 0 |
 | Host-call cost study | `6d95870c7c2c26cca07f0382152dd480715fd172` | 150 | 629 | 162 |
 | Supplied long-wait analysis | `64c50ad472d4402a5bd7e7a3b07a628254a6565a` | 135 | 35 | 182 |
-| Experimental Heaven | Unknown | — | — | — |
+| Research-build Heaven (before the port) | Unknown | — | — | — |
 
 ## Open PR snapshot
 
@@ -224,7 +224,7 @@ The main paper selects ten proposals that affect its argument. The following res
 
 ## Numeric citations and immutable source identities
 
-Every repository link names its own revision. Experimental sources outside the cover pin remain separate; a source document is not automatically an implementation or raw data. Some cited upstream documents contain private infrastructure references. They were not edited for this paper; publication-hygiene follow-up is listed in the lane report without repeating the private values.
+Every repository link names its own revision. Experimental sources outside the cover pin remain separate; a source document is not automatically an implementation or raw data. Some cited sources contain addresses or paths of the project's own test machines. Their lookup keys are `rulings`, `handoff`, `translated`, `display`, `pacing`, `driverdesign`, `constants`, `flags`, `reset`, `linuxperf`, `rmcost`, `latency`, `windowsperfmethod`, `llamahost` and `llamaguest`. Each points at an immutable pinned revision, so the text cannot be edited without changing the pin, and this paper does not repeat the values. In the current tree, the test host's network address has been replaced by generic wording in `docs/OWNER_RULINGS.md` and in the handoff and design documents that carried it. Absolute work-directory paths remain in several handoff documents; the owner tracks that follow-up.
 
 | Citation | Lookup key | Source / revision | Purpose |
 |---|---|---|---|
@@ -304,6 +304,7 @@ Every repository link names its own revision. Experimental sources outside the c
 | [74] | `linuxmerge` | [traces/merge_bar_20261008/README.md](https://github.com/reindertpelsma/kayfabe/blob/12c4008705f17033a803e56d4d479bf1275cdb94/traces/merge_bar_20261008/README.md) / `12c4008705f17033a803e56d4d479bf1275cdb94` | Large-matmul ladder record |
 | [75] | `llamahost` | [traces/v3_candidates/cand2_20261004/apps_host/llama_bench.host.log](https://github.com/reindertpelsma/kayfabe/blob/12c4008705f17033a803e56d4d479bf1275cdb94/traces/v3_candidates/cand2_20261004/apps_host/llama_bench.host.log) / `12c4008705f17033a803e56d4d479bf1275cdb94` | Host llama.cpp prompt and generation benchmark, two internal repetitions |
 | [76] | `llamaguest` | [traces/v3_candidates/cand2_20261004/apps_guest/workspace/apps/results/cand2/llama_bench.guest.log](https://github.com/reindertpelsma/kayfabe/blob/12c4008705f17033a803e56d4d479bf1275cdb94/traces/v3_candidates/cand2_20261004/apps_guest/workspace/apps/results/cand2/llama_bench.guest.log) / `12c4008705f17033a803e56d4d479bf1275cdb94` | Guest llama.cpp prompt and generation benchmark |
+| [83] | `rootlessaudit` | [traces/rootless_audit_20261016/REPORT.txt](https://github.com/reindertpelsma/kayfabe/blob/32d7319b23e7bd51d11ff1de3f99d4df86801400/traces/rootless_audit_20261016/REPORT.txt) / `32d7319b23e7bd51d11ff1de3f99d4df86801400` | Scoped non-root run on one host; report on the unmerged branch `claude/rootless-audit-20261016` |
 | [77] | `mskeys` | [Microsoft: TDR registry keys](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/tdr-registry-keys) / checked 2026-10-27 | TdrDelay is a scheduler preemption wait, default two seconds. |
 | [78] | `msrecovery` | [Microsoft: Timeout detection and recovery](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/timeout-detection-and-recovery) / checked 2026-10-27 | Scheduling, preemption and engine/adapter recovery; application effects. |
 | [79] | `nvidialicense` | [NVIDIA: Driver License Agreement](https://www.nvidia.com/en-us/drivers/geforce-license/) / checked 2026-10-27 | Deployment-specific permissions and restrictions; not a legal conclusion. |

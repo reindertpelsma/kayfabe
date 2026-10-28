@@ -3,7 +3,7 @@ title = "Benchmarks"
 description = "Speed depends on the work. These results have limits; they are not a promise for your machine."
 template = "detail.html"
 [extra]
-src = "README.md Linux CUDA table; docs/design/V3_LINUX_PERF_BASELINE_6692e621.md; prior landing sources below"
+src = "README.md Linux CUDA table; docs/design/V3_LINUX_PERF_BASELINE_6692e621.md"
 +++
 
 ## Windows: new measurements pending
@@ -30,7 +30,7 @@ These older results come from separate campaigns on rented RTX 3060 hosts. Each 
 <!-- src: README.md Linux CUDA table; docs/design/V3_LINUX_PERF_BASELINE_6692e621.md -->
 Creating a CUDA context took about eight times longer in the guest. The full 65-program run took 1,193 seconds in the guest and 1,075 on the host. Sixty-one programs passed with equal output. Four need unified-memory paging, which is not supported yet.
 
-<!-- src: README.md Linux CUDA note; prior landing Where it stands -->
+<!-- src: README.md Linux CUDA note -->
 The same set has not been run on the author's RTX 4070 without a cloud VM in between. Do not treat these older results as a current hardware comparison.
 
 ## Reading the numbers

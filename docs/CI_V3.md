@@ -198,7 +198,8 @@ proposed owner action. Non-Markdown files are inventoried as ASSET; archive file
 are inventoried as ARCHIVED. Neither receives a fabricated prose status. Report
 recommendations are inferences, never automatic document edits or archive moves.
 
-When an entire document no longer applies, move its contents to `archive/` and
+**Proposal, not adopted; this paragraph does not authorise any move.** When an entire
+document no longer applies, move its contents to `archive/` and
 leave a one-line SUPERSEDED pointer at the original path. Link the preserved
 archive document, or the authoritative replacement when one exists. This keeps
 incoming file links working. Verify the pointer and relative paths during the

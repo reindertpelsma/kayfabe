@@ -684,6 +684,15 @@
       "description": "Guest llama.cpp prompt and generation benchmark",
       "number": 76,
       "url": "https://github.com/reindertpelsma/kayfabe/blob/12c4008705f17033a803e56d4d479bf1275cdb94/traces/v3_candidates/cand2_20261004/apps_guest/workspace/apps/results/cand2/llama_bench.guest.log"
+    },
+    {
+      "key": "rootlessaudit",
+      "revision": "32d7319b23e7bd51d11ff1de3f99d4df86801400",
+      "path": "traces/rootless_audit_20261016/REPORT.txt",
+      "blob": "1e9d11114f60470ab03e663fc195f8cd24e68fcc",
+      "description": "Scoped non-root run report on an unmerged branch (claude/rootless-audit-20261016)",
+      "number": 83,
+      "url": "https://github.com/reindertpelsma/kayfabe/blob/32d7319b23e7bd51d11ff1de3f99d4df86801400/traces/rootless_audit_20261016/REPORT.txt"
     }
   ],
   "external_sources": [

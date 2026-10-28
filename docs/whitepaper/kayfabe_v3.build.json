@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "1faac5a69c9d5587d2d1b098b005500d2eab97b8",
+  "source_commit": "3400bdb901c77658f9c2964cd2607aa9bb769f7a",
   "inputs": [
     {
       "path": "docs/whitepaper/fig_v3_evidence_ladder.tex",
@@ -44,18 +44,18 @@
     },
     {
       "path": "docs/whitepaper/v3_citations.tex",
-      "git_blob": "a9a2a1dba0406ae04645d766d3b8b9b758074c43",
-      "sha256": "af73c128953cee0a6e4be45bf3ccc45b9c6e8b4ea0bacf33a575f8e0ff2d3a41"
+      "git_blob": "376184435b1f19ed3c141081aa8e36a71e3c4771",
+      "sha256": "c96709901a36521a8abe00c2d27a5ef908f2b993b06ae3386d2bb454ef901642"
     },
     {
       "path": "docs/whitepaper/v3_distance_table.tex",
-      "git_blob": "58a9a6fcfbddb8a9fa084a3f5124e7ff8cd7a5f4",
-      "sha256": "f6a70f8f35b4ab9c5f90c4ca3a689bcb126ad4e5223c22f178942376730ce2d0"
+      "git_blob": "c1df4fc6ca06e88a856422abd86c5f34f6cf9a9b",
+      "sha256": "527c8d798d100ec552953f7d5bb54dd2aa87095afbba77aed5a1f4d8b4ebbe7f"
     },
     {
       "path": "docs/whitepaper/v3_evidence.tex",
-      "git_blob": "7ca73adea86372cae9f314299dfaa5db738b4552",
-      "sha256": "a0c11f05d81e0353589447b5b266c6eee3c1f7a89fffcbaf89a31916bc7d282f"
+      "git_blob": "25835c89203c2c96b223171e89d1dcae5018c88b",
+      "sha256": "a83ad32f104bd6ee698c3b2bb8898369a592b6b6e15545f1b41fdafbebf90934"
     },
     {
       "path": "docs/whitepaper/v3_method_sources.tex",
@@ -74,8 +74,8 @@
     },
     {
       "path": "docs/whitepaper/v3_rules_product.tex",
-      "git_blob": "7011fa349e8c7d6164b1e68dc401366808a7624a",
-      "sha256": "2dc9839ad2c034238f09a584dc7d6064f6b37394349c4b3e4e8973fd65e2f528"
+      "git_blob": "76b230b4113c2e9f4a59dac85f62115925cd4a6e",
+      "sha256": "b8fe456597196f690f9aac17955ff3c88883cc004100f55c118d58181b9608e5"
     },
     {
       "path": "docs/whitepaper/v3_uncomfortable.tex",
@@ -83,7 +83,7 @@
       "sha256": "eadd8faa7eb048c2cc56af470297cb39a89952a19e5db2438ff69bdd72947737"
     }
   ],
-  "pdf_sha256": "10f9129cc41077830da8453eae9d93e88200b2772bf982ae4c788413957764eb",
+  "pdf_sha256": "284c69d232cda4682c4cdcfdfc84d65afab6b417b2890bfb92d00c6245278558",
   "engine": "XeTeX 3.141592653-2.6-0.999997 (TeX Live 2025/Debian)",
   "passes": 2
 }

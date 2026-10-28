@@ -1,5 +1,7 @@
 # Doorbell baseline and ioeventfd prerequisites
 
+**STATUS: RESEARCH, 2026-09-28; the production fast path it specified was built on 2026-09-30 (update below).**
+
 > ★ **UPDATED 2026-09-30 — the production fast path is BUILT on `v3-ioeventfd`:
 > `docs/design/V3_DOORBELL_IOEVENTFD.md`.** Read that document for the design, its tests and the
 > nested measurements; this one stays the mechanism probe and the acceptance criteria it was built
@@ -91,7 +93,7 @@ ready work is handled immediately and eventfd readiness interrupts the wait.
 
 ## Non-nested baseline protocol
 
-Read-only SSH to the documented physical RTX 4070 host `172.22.1.20` failed with **Network is
+Read-only SSH to the documented physical RTX 4070 host the trusted test host failed with **Network is
 unreachable** on 2026-09-28, including a direct retry from the main session. No workload, desktop,
 module or configuration was changed. Do not substitute another Vast KVM VM and label it non-nested.
 

@@ -6,9 +6,11 @@ description = "Share one NVIDIA GPU between a Linux desktop and Windows or Linux
 [extra]
 page_title = "kayfabe: one GPU for your desktop and your VMs"
 tagline = "Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it."
-tagline_src = "README.md opening promise"
+tagline_src = "README.md opening line"
 lede = "Run a Windows app or a Linux CUDA job without giving up your desktop."
 lede_src = "README.md opening paragraph and What runs today"
+status = "Research project. Windows is not stable and there is no installer yet. Build from source."
+status_src = "README.md status line; docs/howto/building.md"
 
 [extra.screenshot]
 src = "README.md screenshot; traces/20261021_131847.jpg (downscaled copy)"
@@ -36,8 +38,8 @@ src = "docs/howto/technical-faq.md What do the gates and 30 arms mean"
 
 [extra.different]
 heading = "What is different"
-text = "The host keeps the card. The VM uses NVIDIA's own driver, with no driver patch or vGPU licence server."
-src = "README.md comparison table and Nothing is patched"
+text = "The host keeps the card. The VM uses NVIDIA's own driver, with no driver patch or vGPU licence server. Kayfabe runs as an ordinary program on the host driver."
+src = "README.md comparison table and Nothing is patched; docs/howto/security.md What the isolation is made of"
 
 [extra.where]
 heading = "Where it stands"

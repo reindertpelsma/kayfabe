@@ -558,6 +558,10 @@ class FrontpageClaims(unittest.TestCase):
             "multi-tenant ready",
             "works with any NVIDIA GPU",
             "seamless",
+            "it is a guarantee",
+            "one VM cannot block another",
+            "the four failures fail loudly",
+            "a Steel Nomad score of 12345",
         ]:
             self.assertTrue(claims_guard.find(phrase, readme=True), phrase)
 

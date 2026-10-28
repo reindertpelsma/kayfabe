@@ -38,7 +38,7 @@ Row numbers are the original entry numbers of the recovered §T.
 
 | # | Directive (short) | Source dates | Verdict | Reason |
 |---|---|---|---|---|
-| T.1a | 172.22.1.20 (RTX 4070) is trusted hardware; the 2026-10-04 rules: destructive VFIO and display changes need no permission, no firmware changes or bricking | 2026-10-04, correction 2026-10-07 | **KEEP** | Dated within v3; no later ruling or v3 document states it; useful. Its ⚠ about "temporarily borrow" is kept as an open point for the owner (see Unsure, below). |
+| T.1a | the trusted test host (RTX 4070) is trusted hardware; the 2026-10-04 rules: destructive VFIO and display changes need no permission, no firmware changes or bricking | 2026-10-04, correction 2026-10-07 | **KEEP** | Dated within v3; no later ruling or v3 document states it; useful. Its ⚠ about "temporarily borrow" is kept as an open point for the owner (see Unsure, below). |
 | T.1b | Kiosk PCs (172.18.30.21-32): not trusted, no keys on them, leave them booting | 2026-08-31 | DROP | v1/v2-era bench rule (2026-08-31). The kiosk machines' addresses are not recorded elsewhere in the repo (`docs/STATUS_AND_HANDOFF.md`), so the filter cannot tell it applies. The general "untrusted, no secrets" is already `OWNER_RULINGS.md` §F and `scripts/bench/box/README.md`. |
 | T.1c | Vast boxes: absolutely not trusted | 2026-10-07 | DROP | Duplicate of §F ("Boxes: untrusted ... no secrets") and `scripts/bench/box/README.md`. |
 | T.2 | Outside repos are untrusted; clone them, do not web-fetch | 2026-10-01, 2026-10-04 | **KEEP** | v3-era; not stated elsewhere; useful. Its "do not build or run it" clause was cut from the How-to-apply, because the quotes support only "untrusted" and "clone, not web-fetch". |

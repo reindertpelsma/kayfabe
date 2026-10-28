@@ -95,7 +95,7 @@
       "rerun_at_pin_for_this_edition": false
     },
     {
-      "result": "Production FPS subset",
+      "result": "Earlier-code FPS subset (before the port)",
       "revision": "0a74611734dc91c78c86ff39ed9f06d866072ac4",
       "changed_product_paths": 130,
       "pin_only_commits": 821,
@@ -153,7 +153,7 @@
   ],
   "missing": [
     {
-      "result": "Experimental Heaven",
+      "result": "Research-build Heaven (before the port)",
       "reason": "Stated runtime does not resolve"
     }
   ]
