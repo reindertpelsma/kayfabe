@@ -3,11 +3,14 @@
 
 import argparse
 import claims_guard
+from portable import prepare_portable
 import hashlib
 from html import escape, unescape
 from html.parser import HTMLParser
 import io
 import json
+import os
+from deployment_slots import candidate_context, prepare_output
 from pathlib import Path
 import re
 import posixpath
@@ -360,6 +363,15 @@ def docs_build(source, version, plan, work, output, binaries):
         header.read_text()
         .replace("@@VERSIONS@@", version_links(plan, version))
         .replace("@@CURRENT@@", escape(version, quote=True))
+        .replace(
+            "@@OPTIONS@@",
+            "".join(
+                '<option value="{}">{}</option>'.format(
+                    escape(v, quote=True), escape(version_label(v, plan))
+                )
+                for v in plan["versions"]
+            ),
+        )
     )
     destination = output / "docs" / version
     subprocess.run(
@@ -641,7 +653,9 @@ def metadata(output, plan):
     return copy_reviews
 
 
-def build(repo, binaries, releases, root_ref="latest"):
+def build(repo, binaries, releases, root_ref="latest", portable=False, deploy_candidate=False):
+    if portable and deploy_candidate:
+        raise ValueError("portable output cannot be a deploy candidate")
     plan = version_plan(repo, releases, root_ref)
     output = repo / "site/public"
     if output.exists():
@@ -652,6 +666,7 @@ def build(repo, binaries, releases, root_ref="latest"):
         work = Path(temporary)
         landings = {}
         data = site_data(plan, repo)
+        data["deploy_candidate"] = deploy_candidate
         for number, version in enumerate(plan["refs"]):
             folder = work / str(number)
             folder.mkdir()
@@ -712,9 +727,13 @@ def build(repo, binaries, releases, root_ref="latest"):
             if 'name="search"' not in text:
                 page.write_text(text.replace("</main>", search_form(target) + "</main>"))
         copy_reviews = metadata(output, plan)
+        prepare_output(output, deploy_candidate)
+        if portable:
+            prepare_portable(output)
     report = {
         **plan,
         "counts": counts,
+        "portable": portable,
         "broken_links": broken_links(output),
         "copy_review": copy_reviews,
     }
@@ -738,10 +757,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tools-dir", type=Path, required=True)
     parser.add_argument("--releases-json", type=Path)
+    parser.add_argument("--deploy-candidate", action="store_true")
     parser.add_argument("--root-ref", choices=["latest", "master"], default="latest")
+    parser.add_argument(
+        "--portable", action="store_true",
+        help="Relative URLs and explicit index.html for HTTP prefixes and file browsing",
+    )
     args = parser.parse_args()
     releases = json.loads(args.releases_json.read_text()) if args.releases_json else []
-    build(SITE.parent, tools(args.tools_dir.resolve()), releases, args.root_ref)
+    build(
+        SITE.parent,
+        tools(args.tools_dir.resolve()),
+        releases,
+        args.root_ref,
+        deploy_candidate=args.deploy_candidate and candidate_context(os.environ),
+        portable=args.portable,
+    )
 
 
 if __name__ == "__main__":

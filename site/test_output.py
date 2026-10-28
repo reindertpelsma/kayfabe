@@ -151,8 +151,8 @@ def is_foreign(url):
     return bool(parts.netloc) and parts.netloc != "kayfabe.dev" or url.startswith("//")
 
 
-class SelfContained(unittest.TestCase):
-    # FALSIFIER: any built page, stylesheet or script makes the browser fetch from another host.
+class UninstrumentedOutput(unittest.TestCase):
+    # FALSIFIER: ordinary build output gains external resources; deploy analytics is separate.
     def test_no_third_party_resources_in_html(self):
         for path in OUTPUT.rglob("*.html"):
             for tag, url in Pages(path.read_text()).resources:
