@@ -532,3 +532,7 @@ its schedule, verify owner stop and bundle metadata, then do hosted acceptance: 
 V2 instance-row check, the box Access pair (set before renting) and one watched rental. The payload
 script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental today posts
 `payload_missing` and FAILs. Mocks prove no hosted, provider or hardware behaviour.
+
+## Same-tree gate reuse
+
+CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).

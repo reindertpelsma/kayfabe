@@ -33,10 +33,10 @@ async function client(
       'utf8',
     );
     const script = (id) =>
-      yaml
-        .split('  ' + id + ':\n')[1]
+      (id === 'pending' ? yaml.split('        id: status\n')[1] : yaml.split('  ' + id + ':\n')[1])
         .split(/\n  [\w-]+:\n/)[0]
         .split('        run: |\n')[1]
+        .split(/^      - /m)[0]
         .split('\n')
         .map((x) => (x.startsWith('          ') ? x.slice(10) : x))
         .join('\n');

@@ -6,6 +6,8 @@ as a vulnerability. Labels: OWNER = stated by the owner on 2026-10-25; CODE READ
 
 ## 1. Who is trusted
 
+CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): proposed master-push gate reuse requires full tree equality, a successful GitHub Actions GPU status, a successful CI check from the GitHub Actions app, a completed trusted GPU workflow on the original SHA, and complete original result logs. The original named job prints that evidence and never contacts the Worker on reuse. Release checks independently revalidate provenance. No arbitrary actor status, path-policy skip, tag or PR event can create reused release evidence. This remains an unattested test tripwire, not build provenance.
+
 OWNER: the security boundary is (a) the Worker pins `ref=master` and the master workflow identity
 through GitHub OIDC (immutable subject); (b) the repository owner must trigger or approve the run for
 a SHA; (c) a per-run scoped token (HS256, bound to run, nonce and SHA) plus spend limits in the

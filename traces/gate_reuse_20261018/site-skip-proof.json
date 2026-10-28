@@ -1,0 +1,453 @@
+{
+  "method": "Actual trigger-policy.mjs and Github source in orchestration V8; simulated read-only API, no dev-box build",
+  "expected_red": [
+    {
+      "test": "site GPU skip policy 0 site build",
+      "actual": true,
+      "expected": false,
+      "passes": false
+    },
+    {
+      "test": "site GPU skip policy 0 site templates",
+      "actual": true,
+      "expected": false,
+      "passes": false
+    },
+    {
+      "test": "site GPU skip policy 0 site tests",
+      "actual": true,
+      "expected": false,
+      "passes": false
+    },
+    {
+      "test": "site GPU skip policy 0 mixed crate",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 mixed script",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 scripts sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 tools sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 nested crate site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 nested script site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root README",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root contributing",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 uncertain site count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 uncertain template count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 site build",
+      "actual": true,
+      "expected": false,
+      "passes": false
+    },
+    {
+      "test": "site GPU skip policy 1 site templates",
+      "actual": true,
+      "expected": false,
+      "passes": false
+    },
+    {
+      "test": "site GPU skip policy 1 site tests",
+      "actual": true,
+      "expected": false,
+      "passes": false
+    },
+    {
+      "test": "site GPU skip policy 1 mixed crate",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 mixed script",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 scripts sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 tools sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 nested crate site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 nested script site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root README",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root contributing",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 uncertain site count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 uncertain template count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    }
+  ],
+  "green": [
+    {
+      "test": "site GPU skip policy 0 site build",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 site templates",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 site tests",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 site deep static",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 mixed crate",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 mixed script",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 scripts sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 tools sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 nested crate site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 nested script site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root README",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 root contributing",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 uncertain site count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 0 uncertain template count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 site build",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 site templates",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 site tests",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 site deep static",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 mixed crate",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 mixed script",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 scripts sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 tools sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root sitemap prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root sitegen prefix",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 nested crate site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 nested script site",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root README",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 root contributing",
+      "actual": false,
+      "expected": false,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 uncertain site count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    },
+    {
+      "test": "site GPU skip policy 1 uncertain template count",
+      "actual": true,
+      "expected": true,
+      "passes": true
+    }
+  ],
+  "mutants": [
+    {
+      "mutant": "site-pattern-removed",
+      "kills": 8,
+      "tests": [
+        "site GPU skip policy 0 site build",
+        "site GPU skip policy 0 site templates",
+        "site GPU skip policy 0 site tests",
+        "site GPU skip policy 0 site deep static",
+        "site GPU skip policy 1 site build",
+        "site GPU skip policy 1 site templates",
+        "site GPU skip policy 1 site tests",
+        "site GPU skip policy 1 site deep static"
+      ]
+    },
+    {
+      "mutant": "site-prefix-unanchored",
+      "kills": 12,
+      "tests": [
+        "site GPU skip policy 0 scripts sitemap prefix",
+        "site GPU skip policy 0 tools sitegen prefix",
+        "site GPU skip policy 0 root sitemap prefix",
+        "site GPU skip policy 0 root sitegen prefix",
+        "site GPU skip policy 0 nested crate site",
+        "site GPU skip policy 0 nested script site",
+        "site GPU skip policy 1 scripts sitemap prefix",
+        "site GPU skip policy 1 tools sitegen prefix",
+        "site GPU skip policy 1 root sitemap prefix",
+        "site GPU skip policy 1 root sitegen prefix",
+        "site GPU skip policy 1 nested crate site",
+        "site GPU skip policy 1 nested script site"
+      ]
+    },
+    {
+      "mutant": "site-nested-anywhere",
+      "kills": 4,
+      "tests": [
+        "site GPU skip policy 0 nested crate site",
+        "site GPU skip policy 0 nested script site",
+        "site GPU skip policy 1 nested crate site",
+        "site GPU skip policy 1 nested script site"
+      ]
+    },
+    {
+      "mutant": "site-depth-one",
+      "kills": 4,
+      "tests": [
+        "site GPU skip policy 0 site templates",
+        "site GPU skip policy 0 site deep static",
+        "site GPU skip policy 1 site templates",
+        "site GPU skip policy 1 site deep static"
+      ]
+    },
+    {
+      "mutant": "root-md-requires-slash",
+      "kills": 4,
+      "tests": [
+        "site GPU skip policy 0 root README",
+        "site GPU skip policy 0 root contributing",
+        "site GPU skip policy 1 root README",
+        "site GPU skip policy 1 root contributing"
+      ]
+    },
+    {
+      "mutant": "any-skipped-file-hides-mixed",
+      "kills": 4,
+      "tests": [
+        "site GPU skip policy 0 mixed crate",
+        "site GPU skip policy 0 mixed script",
+        "site GPU skip policy 1 mixed crate",
+        "site GPU skip policy 1 mixed script"
+      ]
+    }
+  ]
+}

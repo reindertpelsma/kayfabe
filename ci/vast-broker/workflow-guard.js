@@ -1,3 +1,4 @@
+import { reuseReplayStep } from './reuse-bootstrap.js';
 import { runnerBootstrap, sweepBootstrap } from './workflow-bootstrap.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
@@ -128,9 +129,15 @@ function endpointBoundary(filename, text, jobs) {
     outside = text;
   if (primary) {
     const parts = primary.body.split(/(?=^      - )/m),
-      steps = parts.slice(1);
-    if (steps.length !== 1 || !/^        id: broker\s*$/m.test(steps[0]))
-      fail('secrets require the sole broker step');
+      allSteps = parts.slice(1),
+      steps = allSteps.filter((step) => /^        id: broker\s*$/m.test(step)),
+      replay = allSteps.length === 2 && allSteps[0].trim() === reuseReplayStep.trim();
+    if (
+      steps.length !== 1 ||
+      !(allSteps.length === 1 || replay) ||
+      (replay && !/^        if: needs.pending.outputs.reused != 'true'$/m.test(steps[0]))
+    )
+      fail('secrets require the sole broker step and an exact read-only replay');
     const header = parts[0];
     if (/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(header))
       fail('secrets cannot enter job env or outputs');
@@ -245,7 +252,24 @@ export function checkWorkflows(workflows) {
     errors.push('GPU permissions must be exactly id-token/write');
   for (const job of gpu.filter((x) => ['pending', 'report'].includes(x.id))) {
     if (
-      JSON.stringify(Object.entries(job.grants)) !== JSON.stringify([['statuses', 'write']]) ||
+      ![
+        { statuses: 'write' },
+        ...(job.id === 'pending'
+          ? [
+              {
+                statuses: 'write',
+                contents: 'read',
+                'pull-requests': 'read',
+                actions: 'read',
+                checks: 'read',
+              },
+            ]
+          : []),
+      ].some(
+        (expected) =>
+          JSON.stringify(Object.entries(job.grants).sort()) ===
+          JSON.stringify(Object.entries(expected).sort()),
+      ) ||
       /X-GH-Token|WORKER_URL|id-token:/.test(job.body)
     )
       errors.push('Status writer must not send its token to Worker');
