@@ -129,6 +129,18 @@ if case == "logs-missing-guest-stage":
     lines[-1] = (
         lines[-1].replace("cuda_guest", "provision").replace("duration_ms=1", "duration_ms=2")
     )
+# Valid evidence includes both CUDA modes for this exact original revision.
+lines.insert(3, lines[2].replace("mode=host", "mode=guest"))
+if case == "logs-no-guest-start":
+    lines = [line for line in lines if "mode=guest" not in line]
+if case == "logs-no-host-start":
+    lines = [line for line in lines if "mode=host" not in line]
+if case == "logs-conflicting-final":
+    lines.append("[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=4")
+if case == "logs-duplicate-final":
+    lines.append("[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4")
+if case == "logs-schema-overflow":
+    lines += [lines[0].replace("machine=42", "machine=" + str(i)) for i in range(100, 125)]
 if case == "not-needed":
     status["description"] = "GPU broker NOT_NEEDED"
 if case == "api-error":
