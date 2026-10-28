@@ -1,10 +1,7 @@
 name: Site
 on:
   pull_request:
-    paths:
-      - 'site/**'
-      - 'docs/**'
-      - '.github/workflows/site.yml'
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [master]
     tags: ['v*']
@@ -27,7 +24,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+      deploy: ${{ steps.paths.outputs.deploy }}
+      known: ${{ steps.paths.outputs.known }}
+    steps:
+      - name: Decide site paths through the API without checking out source
+        id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLICY_REF: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          # Publication events keep master tooling even when the triggering tag is old.
+          if [[ "$GITHUB_EVENT_NAME" != pull_request &&
+            ( "$GITHUB_EVENT_NAME" != push || "$GITHUB_REF" != refs/heads/master ) ]]; then
+            POLICY_REF=$(gh api repos/reindertpelsma/kayfabe/commits/master --jq '.sha')
+          fi
+          [[ "$POLICY_REF" =~ ^[0-9a-f]{40}$ ]]
+          temporary=$(mktemp -d)
+          trap 'find "$temporary" -depth -delete' EXIT
+          source_origin=https://raw.githubusercontent.com/reindertpelsma/kayfabe
+          if curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \
+            -o "$temporary/site_policy.py" \
+            "$source_origin/$POLICY_REF/ci/vast-broker/site_policy.py"; then
+            python3 -I "$temporary/site_policy.py" policy
+          else
+            # Before the helper lands (or on source/API failure), build conservatively.
+            printf 'run=1\ndeploy=0\nknown=0\n' >> "$GITHUB_OUTPUT"
+            [[ "$GITHUB_EVENT_NAME" != push || "$GITHUB_REF" != refs/heads/master ]]
+          fi
   build:
+    needs: policy
+    if: ${{ !cancelled() && needs.policy.outputs.run == '1' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -36,7 +70,10 @@ jobs:
         with:
           # Tag workflows still fetch master scripts/configs, never run tagged tooling.
           # PRs review the candidate tooling without any deployment permission.
-          ref: ${{ github.event_name == 'pull_request' && github.sha || 'master' }}
+          ref: >-
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha ||
+                github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+                github.sha || 'master' }}
           fetch-depth: 0
           persist-credentials: false
       - name: Snapshot published release metadata
@@ -60,11 +97,12 @@ jobs:
         with:
           path: site/public
   deploy:
-    needs: build
+    needs: [policy, build]
     if: >-
       ${{ github.event_name != 'pull_request' &&
           (github.ref == 'refs/heads/master' ||
-           startsWith(github.ref, 'refs/tags/v')) }}
+           startsWith(github.ref, 'refs/tags/v')) &&
+          needs.policy.outputs.deploy == '1' }}
     runs-on: ubuntu-24.04
     permissions:
       pages: write

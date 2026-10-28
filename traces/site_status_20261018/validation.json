@@ -1,0 +1,28 @@
+{
+  "utc": "2026-10-27T23:44:48.312822+00:00",
+  "base": "e54bab5550f09d740d222d667ad497dc8c640ebe",
+  "expected_red_commits": ["d7ea9b768", "a6115621b", "ef542cc72", "bc39d25fa", "2d9042221"],
+  "full_local_node_before_final_push_pin": {
+    "tests": 2447,
+    "pass": 2447,
+    "fail": 0,
+    "skipped": 0
+  },
+  "additional_focused": {
+    "tests": 101,
+    "pass": 101,
+    "fail": 0
+  },
+  "site_units": {
+    "tests": 76,
+    "skipped": 2,
+    "fail": 0
+  },
+  "mutants": 27,
+  "minimum_named_killers": 2,
+  "final_push_pin": "two pure V8 expected-red cases, four pure V8 passing checkout controls; final full source awaits hosted CI",
+  "final_hosted_ci": "pending push",
+  "worker_runtime_changed": false,
+  "deployment_or_rental": "not performed",
+  "disk_note": "Final local builds paused when shared free space fell below4GiB; completed WK1 temporary Node downloads removed, retained worktree/dependency cleanup not retried."
+}
