@@ -127,17 +127,20 @@ class PortableNavigation(unittest.TestCase):
         harness = r"""
 const vm=require('node:vm'),fs=require('node:fs');
 (async()=>{
-const protocol=process.argv[1],missing=process.argv[2]==='true',current=process.argv[4],target=process.argv[5];
+const protocol=process.argv[1],missing=process.argv[2]==='true';
+const current=process.argv[4],target=process.argv[5];
 const calls=[]; const prefix=protocol==='file:'?'file:///bundle/':'https://example.test/x/y/';
 const select={dataset:{current},value:current,hidden:false,options:[{value:'master'},{value:'v1'}],
  replaceChildren(...options){this.options=options;}};
 const location={protocol,pathname:new URL(prefix+'docs/'+current+'/deep/chapter.html').pathname,
  href:prefix+'docs/'+current+'/deep/chapter.html'};
-const context={URL,document:{currentScript:{src:prefix+'docs/'+current+'/theme/versions.js'},getElementById:()=>select},
+const context={URL,document:{
+ currentScript:{src:prefix+'docs/'+current+'/theme/versions.js'},getElementById:()=>select},
  location,Option:function(label,value){this.value=value;},fetch:async(url,opts)=>{
  calls.push([String(url),opts?.method||'GET']);
  if(protocol==='file:')throw Error('offline fetch forbidden');
- return opts?{ok:!missing}:{ok:true,json:async()=>[{label:'master',version:'master'},{label:'v1',version:'v1'}]};}};
+ return opts?{ok:!missing}:{ok:true,json:async()=>[
+  {label:'master',version:'master'},{label:'v1',version:'v1'}]};}};
 vm.runInNewContext(fs.readFileSync(process.argv[3],'utf8'),context);
 await new Promise(r=>setTimeout(r,10));
 if(typeof select.onchange!=='function')throw Error('navigation disappeared');
