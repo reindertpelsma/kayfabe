@@ -80,8 +80,14 @@ shared its implementation's mistake. Those incidents justify checking the instru
 replaying guest requests. The host driver remains loaded, and its ordinary client interface
 provides memory and execution resources. Three different permissions matter: the host driver's
 non-privileged request interface; the GPU channel's USER execution privilege; and the Unix UID
-of the VMM process. None implies the other two. A complete rootless launch is not documented;
-the supplied launch scripts use root.\src{architecture}\src{security}\src{faq}
+of the VMM process. None implies the other two. A scoped non-root run is recorded: the Linux 30-arm suite, the nine GPU gates and a
+Windows Heaven Direct3D 11 benchmark ran as a throwaway user whose only group was \code{kvm}
+(no capabilities), on one Ubuntu 26.04 host with kernel 7.0.0-34, host driver 595.91.07 and an
+RTX 4070, at revision \code{0a746117}. The record is a report on the unmerged branch
+\code{claude/rootless-audit-20261016} (commit \code{32d7319b2}, file
+\code{traces/rootless\_audit\_20261016/REPORT.txt}); it is not part of this paper's pin. The
+supplied launch scripts still start as root, and the heavy application lanes and a desktop on
+the NVIDIA card were not tested.\src{rootlessaudit}\src{architecture}\src{security}
 
 \subsection{Other approaches, without invented comparisons}
 

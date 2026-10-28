@@ -87,25 +87,32 @@ owns the physical GPU through VFIO, so it does not measure simultaneous host use
 VFIO native & 330.05 median [329.48, 330.18] & $n=3$, 2026-10-15;
 QEMU \code{666ea966} without the emulated device. Not repeated with every later arm.
 \src{windowsperfdata} \\
-Production-path records & about 89--102 / 27--31\% & The later control summary pools
+Earlier code, scan on, before the port & about 89--102 / 27--31\% & The later control summary pools
 samples at different revisions and host states; no pooled $n$ is inferred.
 An inspectable \code{0a7461173} subset is $n=3$: median 97.65, range 96.04--102.44.
+That revision does not contain the lazy-observation commits.
 \src{winperf}\src{windowsperfdata} \\
-Experimental scan-off + lazy reads & about 296.5--299.2 / 90--91\% & Three public FPS
-records from 2026-10-16/17. The stated runtime revision does not resolve. Runtime provenance
-is UNVERIFIED; this is unmerged research, Heaven only.\src{experimentdata}
+Research build before the port: scan off after setup + lazy reads & about 296.5--299.2 / 90--91\% & Three public FPS
+records from 2026-10-16/17, measured on a research build. The stated runtime revision does not
+resolve, so its runtime provenance is UNVERIFIED. Heaven only.\src{experimentdata}
 \src{experimentb}\src{experimentc} \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-\reported The experimental FPS values are inspectable in committed summaries. They do not
-supply a reproducible source runtime or an integrated acceptance pass. The research skips
-ordinary command-buffer inspection after setup and combines two observation optimisations;
-it cannot attribute their gains separately. The fractions above are arithmetic against the
-330.05 reference, not new measurements. Different quality settings, host pressure or window
-sizes change the denominator; the 18--21 fps matrix rows must not be silently mixed into
-this table.\src{experimentdata}\src{winperf}\src{winmatrix}
+\doc The two mechanisms in the last row were later ported. Pointer forwarding and lazy
+observation are on master and default on in Pointer mode; Scan and Window still inspect fresh
+state.\src{lazycode}\src{lifecycle} The 296--299 fps records were measured on the earlier
+research build, not on master, and speed on current master needs a new measurement, which is
+pending. The unresolved runtime hash is a separate problem from this merge status.
+
+\reported The research-build FPS values are inspectable in committed summaries. They do not
+supply a reproducible source runtime or an integrated acceptance pass. The research build
+skipped ordinary command-buffer inspection after setup and combined two observation
+optimisations; it cannot attribute their gains separately. The fractions above are arithmetic
+against the 330.05 reference, not new measurements. Different quality settings, host pressure
+or window sizes change the denominator; the 18--21 fps matrix rows must not be silently mixed
+into this table.\src{experimentdata}\src{winperf}\src{winmatrix}
 
 \subsection{Linux speed: large batches and many small launches}
 
