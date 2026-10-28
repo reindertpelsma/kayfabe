@@ -1,0 +1,66 @@
+{
+  "base": "26a7d3441de55e0c9e3bcc5c833a0beb1cd2646f",
+  "source_head": "4150f6990c689edbc6fdec177348a7de5e3906eb",
+  "original_heads": {
+    "A": "07d9ce69b7393f685c5f8ab09ca0b8e353ff326b",
+    "B": "9c15f06741a4e2763ec61652f852a73600a98721"
+  },
+  "red_commits": [
+    "1344badfa73705130dfc7d2ab1e5b1ab9480e939",
+    "9781d2bf84853a4439ff55678bfb35f62bbd3ab5",
+    "9b2652ab9624f9e6ca95e7a49d73a4512a2a35ea",
+    "7541fccc266e5fdc4da274be2723959015ffa63d",
+    "fcf8d883895ed76f90b3737b5fcd7ebfe94f450c"
+  ],
+  "node": {
+    "initial": 2593,
+    "final": 2679,
+    "passed": 2679,
+    "skipped": 0,
+    "failed": 0
+  },
+  "workerd": {
+    "passed": 105,
+    "skipped": 0,
+    "failed": 0
+  },
+  "site": {
+    "passed": 129,
+    "skipped": 0,
+    "failed": 0,
+    "pinned_render": true,
+    "broken_internal_links": 0
+  },
+  "documentation_freshness": {
+    "tests": 111,
+    "new_findings": 0
+  },
+  "claims": {
+    "new": 0,
+    "debt_modified": false
+  },
+  "publication": "source signoff at4150f6990; one final batch publication authorized",
+  "provider_calls": 0,
+  "worker_changes": 0,
+  "workflow_dispatches": 0,
+  "mutations": {
+    "total": 69,
+    "minimum_named_killers": 2,
+    "groups": {
+      "gate": 22,
+      "site": 27,
+      "extra": 20
+    }
+  },
+  "source_review": {
+    "head": "4150f6990c689edbc6fdec177348a7de5e3906eb",
+    "findings": [
+      "F1",
+      "F2",
+      "F3",
+      "F4"
+    ],
+    "resolved": true,
+    "scope": "source only; no live workflow signoff"
+  }
+}

@@ -73,11 +73,13 @@ master/staging pages. Directory URLs end in `/`; mdBook chapter URLs retain thei
 
 ## Workflow and publication
 
-`site.yml` builds on PR changes to site/docs, master pushes, `v*` tag pushes, release publication,
+CODE READ (`.github/workflows/site.yml`): it evaluates every PR and builds changes to site/docs/workflow inputs, relevant
+master pushes, `v*` tag pushes, release publication,
 manual dispatch, and a weekly fallback. A tag push makes its manual available immediately; publishing
 release assets updates the root and latest docs. Non-PR builds explicitly check out master with full
 tag history, even when the workflow was triggered at a tag, so they use the reviewed master tools.
-PRs instead build the candidate merge commit, with only `contents: read`, and upload an artifact.
+PRs instead build the exact candidate head, with only `contents: read`, and upload an artifact.
+Master pushes check out their exact SHA; publication events use master tooling.
 Only the separate master/tag deploy job has `pages: write` and `id-token: write`, in `github-pages`.
 Concurrency uses `pages` without cancellation. All actions are SHA pinned.
 
@@ -91,10 +93,9 @@ secrets are changed by the build scripts.
 
 CODE READ (2026-10-26): the existing heavy `ci.yml` has no docs/site path exclusion. Its stable, other
 CPU jobs and broker jobs still run. The GPU gate uses two trusted-BASE decisions over complete PR
-metadata: `docs/**` and `**/*.md` are skip paths, so docs-only and site-Markdown-only PRs skip GPU.
-Site Python/HTML/CSS/TOML/assets, workflow changes and any `ci/vast-broker/**` change are relevant and
-request the GPU gate. Unknown or truncated metadata requests a run; renames must have both paths in skip paths. This PR
-does not change those policies.
+metadata: `docs/**`, `site/**` and `**/*.md` are skip paths, including root README.md.
+Workflow changes and any `ci/vast-broker/**` change request the GPU gate. Unknown or truncated
+metadata requests a run; renames must have both paths in skip paths.
 
 ## Look and feel
 
@@ -110,3 +111,7 @@ page as an HTML comment, so every statement keeps its source. New claims need a 
 The frontpage and the README must not contain the phrases listed in `claims_guard.py` ("near-native", "secure", "clean-room",
 "anti-cheat compatible", "multi-tenant ready", "works with any GPU", hype words). `test_build.py` checks the sources and
 `test_output.py` the rendered landing; a new banned phrase goes in that list with its reason.
+
+## Proposed always-reported Site status
+
+CODE READ 2026-10-27 (`.github/workflows/site.yml`, `site-status.yml`, `ci/vast-broker/site_policy.py`): PRs always get the custom `site` status. A read-only API decision skips an unrelated change; needed/uncertain changes build the exact PR head. The separate API-only reporter supports fork PRs without giving their code a status-writing token. Master deployment requires confirmed Site/docs/workflow changes, while existing publication events keep master tooling. See [status behavior](../docs/howto/site-status.md).

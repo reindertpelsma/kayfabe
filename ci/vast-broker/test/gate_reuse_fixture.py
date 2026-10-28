@@ -1,0 +1,313 @@
+import importlib.util
+import json
+import contextlib
+import html
+import io
+import os
+import tempfile
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, ROOT / (name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+case, variant = sys.argv[1:]
+sha, parent, old, tree = (c * 40 for c in "abcd")
+if variant == "fast-forward":
+    parent = sha
+repo = "reindertpelsma/kayfabe"
+url = "https://github.com/" + repo + "/actions/runs/123"
+status = {
+    "context": "gpu-vast",
+    "state": "success",
+    "description": "GPU broker GRACE",
+    "creator": {"login": "github-actions[bot]", "id": 41898282},
+    "target_url": url,
+}
+run = {
+    "id": 123,
+    "path": ".github/workflows/gpu-vast.yml",
+    "head_sha": parent,
+    "head_branch": "next",
+    "event": "pull_request_target",
+    "status": "completed",
+    "conclusion": "success",
+    "repository": {"full_name": repo},
+    "head_repository": {"full_name": repo},
+}
+commit = lambda value, t, parents: {
+    "sha": value,
+    "commit": {"tree": {"sha": t}},
+    "parents": [{"sha": p} for p in parents],
+}
+checks = {
+    "total_count": 1,
+    "check_runs": [
+        {
+            "name": "CI",
+            "head_sha": parent,
+            "status": "completed",
+            "conclusion": "success",
+            "app": {"slug": "github-actions", "id": 15368},
+        }
+    ],
+}
+data = {
+    "/commits/" + sha: commit(sha, tree, [old, parent] if variant == "merge" else [old]),
+    "/commits/" + parent: commit(parent, tree, []),
+    "/commits/" + old: commit(old, "e" * 40, []),
+    "/commits/"
+    + sha
+    + "/pulls?per_page=100": (
+        [] if variant == "merge" else [{"head": {"sha": parent, "repo": {"full_name": repo}}}]
+    ),
+    "/commits/" + parent + "/statuses?per_page=100": [status],
+    "/commits/" + parent + "/check-runs?per_page=100": checks,
+    "/actions/runs/123": run,
+}
+lines = [
+    "RENTAL machine=42 host=43 instance=44 gpu=RTX_3060 price=0.200000",
+    "[untrusted] [Worker] selection profile=check die=GA106 reason=DEFAULT_ORDER ignored=0",
+    "[untrusted] [box] CUDA_LADDER_STARTED=2026-10-27T21:59:04+00:00 mode=host reps=1 "
+    "rungs=cup2,cup3,cup8,cup8bench rev=" + parent[:8],
+    "[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4",
+] + [
+    "[untrusted] [box] stage name=" + name + " rc=0 duration_ms=1 result=PASS"
+    for name in ["provision", "cuda_host", "merge_bar", "cuda_guest"]
+]
+# Valid evidence includes both CUDA modes for this exact original revision.
+lines.insert(3, lines[2].replace("mode=host", "mode=guest"))
+event, ref = "push", "refs/heads/master"
+if case == "tree":
+    data["/commits/" + parent]["commit"]["tree"]["sha"] = "f" * 40
+if case in ["status-failure", "status-pending"]:
+    status["state"] = case.split("-")[1]
+if case == "creator-id":
+    status["creator"]["id"] = 1
+if case == "creator-login":
+    status["creator"]["login"] = "someone"
+if case == "ci-pending":
+    checks["check_runs"][0]["status"] = "in_progress"
+if case == "ci-failed":
+    checks["check_runs"][0]["conclusion"] = "failure"
+if case == "ci-forged":
+    checks["check_runs"][0]["app"]["id"] = 1
+if case == "ci-missing":
+    checks["check_runs"] = []
+    checks["total_count"] = 0
+if case == "ci-truncated":
+    checks["total_count"] = 101
+if case == "run-failed":
+    run["conclusion"] = "failure"
+if case == "run-sha":
+    run["head_sha"] = old
+if case == "run-path":
+    run["path"] = ".github/workflows/evil.yml"
+if case == "fork":
+    run["head_repository"]["full_name"] = "elsewhere/repo"
+if case == "tag":
+    ref = "refs/tags/v1"
+if case == "pr":
+    event = "pull_request_target"
+if case == "logs-missing":
+    lines = []
+if case == "logs-fail":
+    lines[4] = lines[4].replace("PASS", "FAIL")
+if case == "logs-revision":
+    lines[2] = lines[2].replace(parent[:8], old[:8])
+if case == "logs-duplicate-stage":
+    lines[5:] = [
+        "[untrusted] [box] stage name=provision rc=0 duration_ms=" + str(i) + " result=PASS"
+        for i in range(1, 5)
+    ]
+if case == "logs-missing-guest-stage":
+    lines[-1] = (
+        lines[-1].replace("cuda_guest", "provision").replace("duration_ms=1", "duration_ms=2")
+    )
+if case == "logs-no-guest-start":
+    lines = [line for line in lines if "mode=guest" not in line]
+if case == "logs-no-host-start":
+    lines = [line for line in lines if "mode=host" not in line]
+if case == "logs-conflicting-final":
+    lines.append("[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=FAIL stages=4")
+if case == "logs-duplicate-final":
+    lines.append("[untrusted] [box] KF_FINAL_SUMMARY_BEGIN verdict=PASS stages=4")
+if case == "logs-schema-overflow":
+    lines += [lines[0].replace("machine=42", "machine=" + str(i)) for i in range(100, 125)]
+if case == "not-needed":
+    status["description"] = "GPU broker NOT_NEEDED"
+if case == "api-error":
+    data.clear()
+
+
+ci_check = checks["check_runs"][0] if checks["check_runs"] else None
+ci_run = {
+    "id": 321,
+    "head_sha": parent,
+    "path": ".github/workflows/ci.yml",
+    "repository": {"full_name": repo},
+    "status": "completed",
+    "conclusion": "success",
+    "check_suite_id": 654,
+}
+data["/actions/runs/321"] = ci_run
+if ci_check:
+    ci_check.update(
+        id=987,
+        check_suite={"id": 654},
+        details_url="https://github.com/" + repo + "/actions/runs/321/job/987",
+    )
+if case == "ci-other-workflow":
+    ci_run["path"] = ".github/workflows/unrelated.yml"
+if case == "ci-run-pending":
+    ci_run["status"] = "in_progress"
+if case == "ci-run-head":
+    ci_run["head_sha"] = old
+if case == "ci-suite":
+    ci_run["check_suite_id"] = 1
+if case in {"ci-ambiguous-failed", "ci-ambiguous-pending", "ci-multiple-success"}:
+    duplicate = json.loads(json.dumps(ci_check))
+    if case == "ci-ambiguous-failed":
+        duplicate["conclusion"] = "failure"
+    if case == "ci-ambiguous-pending":
+        duplicate["status"] = "in_progress"
+    # Legitimate push+PR runs: distinct job, suite and run of the same intended workflow.
+    duplicate.update(
+        id=988,
+        check_suite={"id": 655},
+        details_url="https://github.com/" + repo + "/actions/runs/322/job/988",
+    )
+    data["/actions/runs/322"] = {**ci_run, "id": 322, "check_suite_id": 655}
+    checks["check_runs"].append(duplicate)
+    checks["total_count"] = 2
+
+child_runs = {
+    "total_count": 1,
+    "workflow_runs": [
+        {
+            "id": 456,
+            "head_sha": sha,
+            "head_branch": "master",
+            "event": "push",
+            "path": ".github/workflows/gpu-vast.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "repository": {"full_name": repo},
+            "head_repository": {"full_name": repo},
+        }
+    ],
+}
+data["/actions/workflows/gpu-vast.yml/runs?head_sha=" + sha + "&event=push&per_page=100"] = (
+    child_runs
+)
+if case == "release-child-missing":
+    child_runs.update(total_count=0, workflow_runs=[])
+if case == "release-child-pending":
+    child_runs["workflow_runs"][0]["status"] = "in_progress"
+if case == "release-child-failed":
+    child_runs["workflow_runs"][0]["conclusion"] = "failure"
+if case == "release-child-foreign":
+    child_runs["workflow_runs"][0]["repository"]["full_name"] = "other/repo"
+if case == "release-child-workflow":
+    child_runs["workflow_runs"][0]["path"] = ".github/workflows/unrelated.yml"
+
+commit_reads = 0
+
+
+def get(path):
+    global commit_reads
+    value = json.loads(json.dumps(data[path]))
+    if path == "/commits/" + sha:
+        commit_reads += 1
+        # A SHA cannot have two trees; inject inconsistent API responses for FF negatives.
+        if variant == "fast-forward" and case in {"tree", "release-tree"} and commit_reads == 1:
+            value["commit"]["tree"]["sha"] = tree
+    return value
+
+
+if case.startswith("release"):
+    module = load("release_gate")
+    child = {
+        "sha": sha,
+        "statuses": [{**status, "description": "reused: same tree verified on " + parent[:7]}],
+    }
+    if case == "release-forged":
+        child["statuses"][0]["creator"] = {"id": 1, "login": "other"}
+    if case == "release-forged-id":
+        child["statuses"][0]["creator"] = {"id": 1, "login": "github-actions[bot]"}
+    if case == "release-forged-login":
+        child["statuses"][0]["creator"] = {"id": 41898282, "login": "other"}
+    if case == "release-lost-parent":
+        status["state"] = "failure"
+    if case == "release-tree":
+        data["/commits/" + parent]["commit"]["tree"]["sha"] = old
+    if variant == "fast-forward":
+        data["/commits/" + parent + "/statuses?per_page=100"].insert(0, child["statuses"][0])
+    expected = case == "release-valid"
+    assert module.verify(sha, child, lambda _: run, get=get) == expected
+else:
+    module = load("gate_reuse")
+    proof = module.find_reuse(sha, event, ref, get, lambda _: "\n".join(lines))
+    assert bool(proof) == (case in {"valid", "ci-multiple-success", "prepare-pending"}), (
+        case,
+        proof,
+    )
+    if proof:
+        assert proof["parent"] == parent and proof["tree"] == tree
+        assert proof["url"] == url and proof["description"] == status["description"]
+        rendered = module.render(proof)
+        for line in lines:
+            assert line in rendered, line
+        for value in [parent, tree, url, "creator", "CI", "same tree"]:
+            assert value in rendered
+
+if case == "valid":
+    module.api = lambda *_: (_ for _ in ()).throw(AssertionError("replay contacted API"))
+    module.original_logs = module.api
+    with tempfile.NamedTemporaryFile(mode="w+") as summary:
+        os.environ.update(
+            {
+                "GITHUB_REPOSITORY": repo,
+                "REUSE_PROOF": json.dumps(proof),
+                "GITHUB_STEP_SUMMARY": summary.name,
+            }
+        )
+        sys.argv = ["gate_reuse.py", "replay"]
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            module.main()
+        summary.seek(0)
+        assert module.render(proof) in output.getvalue()
+        assert html.escape(module.render(proof)) in summary.read()
+
+if case == "prepare-pending":
+    writes = []
+    module.api = lambda path, body: writes.append((path, body))
+    module.find_reuse = lambda *_: proof
+    with tempfile.NamedTemporaryFile(mode="w+") as output:
+        os.environ.update(
+            {
+                "GITHUB_REPOSITORY": repo,
+                "TARGET_SHA": sha,
+                "GITHUB_RUN_ID": "456",
+                "GITHUB_EVENT_NAME": "push",
+                "GITHUB_REF": "refs/heads/master",
+                "GITHUB_OUTPUT": output.name,
+            }
+        )
+        sys.argv = ["gate_reuse.py", "prepare"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            module.main()
+        required = [body for path, body in writes if body["context"] == "gpu-vast"]
+        assert not any(body["state"] == "success" for body in required), writes
+        if parent != sha:
+            assert [body["state"] for body in required] == ["pending"], writes
+        output.seek(0)
+        assert "reused=true" in output.read()
