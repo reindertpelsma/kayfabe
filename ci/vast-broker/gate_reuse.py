@@ -74,6 +74,44 @@ def candidates(sha, commit, get):
     return list(dict.fromkeys(found))
 
 
+def ci_passed(sha, get):
+    checks = get("/commits/" + sha + "/check-runs?per_page=100")
+    if checks["total_count"] != len(checks["check_runs"]) or checks["total_count"] > 100:
+        return False
+    matches = [check for check in checks["check_runs"] if check["name"] == "CI"]
+    if not matches:
+        return False
+    # Push and PR CI may both exist. Every qualifying record must be complete,
+    # successful, and bound through its job/check suite to the intended workflow.
+    for check in matches:
+        if (
+            check["head_sha"] != sha
+            or check["status"] != "completed"
+            or check["conclusion"] != "success"
+            or check["app"]["slug"] != "github-actions"
+            or check["app"]["id"] != 15368
+        ):
+            return False
+        match = re.fullmatch(
+            "https://github.com/" + REPO + r"/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)",
+            check["details_url"],
+        )
+        if not match or check["id"] != int(match[2]):
+            return False
+        run = get("/actions/runs/" + match[1])
+        if (
+            run["id"] != int(match[1])
+            or run["head_sha"] != sha
+            or run["path"] != ".github/workflows/ci.yml"
+            or run["repository"]["full_name"] != REPO
+            or run["status"] != "completed"
+            or run["conclusion"] != "success"
+            or run["check_suite_id"] != check["check_suite"]["id"]
+        ):
+            return False
+    return True
+
+
 def metadata(parent, tree, get):
     _, candidate_tree = commit_tree(parent, get)
     if candidate_tree != tree:
@@ -125,17 +163,7 @@ def metadata(parent, tree, get):
         )
     ):
         return None
-    checks = get("/commits/" + parent + "/check-runs?per_page=100")
-    if checks["total_count"] != len(checks["check_runs"]) or checks["total_count"] > 100:
-        return None
-    check = next(c for c in checks["check_runs"] if c["name"] == "CI")
-    if (
-        check["head_sha"] != parent
-        or check["status"] != "completed"
-        or check["conclusion"] != "success"
-        or check["app"]["slug"] != "github-actions"
-        or check["app"]["id"] != 15368
-    ):
+    if not ci_passed(parent, get):
         return None
     return {
         "parent": parent,

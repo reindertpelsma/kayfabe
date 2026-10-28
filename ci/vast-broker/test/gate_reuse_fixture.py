@@ -149,14 +149,21 @@ if case == "api-error":
 
 ci_check = checks["check_runs"][0] if checks["check_runs"] else None
 ci_run = {
-    "id": 321, "head_sha": parent, "path": ".github/workflows/ci.yml",
-    "repository": {"full_name": repo}, "status": "completed", "conclusion": "success",
+    "id": 321,
+    "head_sha": parent,
+    "path": ".github/workflows/ci.yml",
+    "repository": {"full_name": repo},
+    "status": "completed",
+    "conclusion": "success",
     "check_suite_id": 654,
 }
 data["/actions/runs/321"] = ci_run
 if ci_check:
-    ci_check.update(id=987, check_suite={"id": 654},
-                    details_url="https://github.com/" + repo + "/actions/runs/321/job/987")
+    ci_check.update(
+        id=987,
+        check_suite={"id": 654},
+        details_url="https://github.com/" + repo + "/actions/runs/321/job/987",
+    )
 if case == "ci-other-workflow":
     ci_run["path"] = ".github/workflows/unrelated.yml"
 if case == "ci-run-pending":
@@ -172,8 +179,11 @@ if case in {"ci-ambiguous-failed", "ci-ambiguous-pending", "ci-multiple-success"
     if case == "ci-ambiguous-pending":
         duplicate["status"] = "in_progress"
     # Legitimate push+PR runs: distinct job, suite and run of the same intended workflow.
-    duplicate.update(id=988, check_suite={"id": 655},
-                     details_url="https://github.com/" + repo + "/actions/runs/322/job/988")
+    duplicate.update(
+        id=988,
+        check_suite={"id": 655},
+        details_url="https://github.com/" + repo + "/actions/runs/322/job/988",
+    )
     data["/actions/runs/322"] = {**ci_run, "id": 322, "check_suite_id": 655}
     checks["check_runs"].append(duplicate)
     checks["total_count"] = 2

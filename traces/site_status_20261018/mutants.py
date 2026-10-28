@@ -67,9 +67,9 @@ add(
     "or False",
 )
 add("site-pending-status", "site_policy.py", 'status["state"] != "success"', "False")
-add("site-failed-ci", "site_policy.py", 'and ci["conclusion"] == "success"', "and True")
-add("site-pending-ci", "site_policy.py", 'and ci["status"] == "completed"', "and True")
-add("site-forged-ci", "site_policy.py", 'and ci["app"]["id"] == 15368', "and True")
+add("site-failed-ci", "site_policy.py", 'or ci["conclusion"] != "success"', "or False")
+add("site-pending-ci", "site_policy.py", 'or ci["status"] != "completed"', "or False")
+add("site-forged-ci", "site_policy.py", 'or ci["app"]["id"] != 15368', "or False")
 add("site-wrong-run-sha", "site_policy.py", 'or run["head_sha"] != parent', "or False")
 add(
     "site-failed-run",

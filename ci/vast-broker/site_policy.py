@@ -133,6 +133,44 @@ def decide(event, name, ref, sha, get=api):
     return unknown
 
 
+def ci_passed(sha, get):
+    cis = get("/commits/" + sha + "/check-runs?per_page=100")
+    if cis["total_count"] != len(cis["check_runs"]) or cis["total_count"] > 100:
+        return False
+    matches = [ci for ci in cis["check_runs"] if ci["name"] == "CI"]
+    if not matches:
+        return False
+    # Push and PR CI may both exist. Every qualifying record must be complete,
+    # successful, and bound through its job/ci suite to the intended workflow.
+    for ci in matches:
+        if (
+            ci["head_sha"] != sha
+            or ci["status"] != "completed"
+            or ci["conclusion"] != "success"
+            or ci["app"]["slug"] != "github-actions"
+            or ci["app"]["id"] != 15368
+        ):
+            return False
+        match = re.fullmatch(
+            "https://github.com/" + REPO + r"/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)",
+            ci["details_url"],
+        )
+        if not match or ci["id"] != int(match[2]):
+            return False
+        run = get("/actions/runs/" + match[1])
+        if (
+            run["id"] != int(match[1])
+            or run["head_sha"] != sha
+            or run["path"] != ".github/workflows/ci.yml"
+            or run["repository"]["full_name"] != REPO
+            or run["status"] != "completed"
+            or run["conclusion"] != "success"
+            or run["check_suite_id"] != ci["check_suite"]["id"]
+        ):
+            return False
+    return True
+
+
 def find_reuse(sha, name, ref, get=api):
     if name != "push" or ref != "refs/heads/master" or not re.fullmatch(SHA, sha):
         return None
@@ -184,20 +222,7 @@ def find_reuse(sha, name, ref, get=api):
                     )
                 ):
                     continue
-                checks = get("/commits/" + parent + "/check-runs?per_page=100")
-                if (
-                    checks["total_count"] != len(checks["check_runs"])
-                    or checks["total_count"] > 100
-                ):
-                    continue
-                ci = next(c for c in checks["check_runs"] if c["name"] == "CI")
-                if (
-                    ci["head_sha"] == parent
-                    and ci["status"] == "completed"
-                    and ci["conclusion"] == "success"
-                    and ci["app"]["slug"] == "github-actions"
-                    and ci["app"]["id"] == 15368
-                ):
+                if ci_passed(parent, get):
                     return {"parent": parent, "tree": tree, "url": status["target_url"]}
             except Exception:
                 continue
