@@ -104,8 +104,9 @@ Local, PR and fork output contains no publication slot, beacon or privacy text. 
 publication build adds one neutral head comment, using the layout or a verified byte splice for
 other page families. Every page has a stable footer element. A pinned jsdom build check validates
 that the slot is directly inside the head and that a dummy replacement adds only the expected nodes.
-The protected deployment job validates its runtime HTML variable, then replaces that exact slot in
-bytes. It never parses pages, checks out source or executes a downloaded helper. Valid input adds
+The protected deployment job validates its runtime HTML variable, accepting only canonical comments
+and the approved script, then replaces that exact slot in bytes. It never parses pages, checks out
+source or executes a downloaded helper. Valid input adds
 the beacon and fixed privacy JavaScript from the workflow. That script adds one privacy sentence
 only when the beacon element exists, waiting for the footer when needed. Empty, absent or invalid
 input removes the slot and deploys without a beacon or privacy text; valid input with zero slots

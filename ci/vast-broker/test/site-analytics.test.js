@@ -11,10 +11,14 @@ test('PR build has no environment and no analytics variable reference', () => {
 test('deploy executes only fixed inline Python and no helper or page parser', () => {
   assert.match(block('deploy'), /python3 -I - <<'PY'/);
   assert.doesNotMatch(block('deploy'), /checkout|curl|TOOLING_REF|deploy_analytics\.py/);
-  assert.doesNotMatch(block('deploy'), /getpos|Tokens\(text\)|Tokens\(changed|positions/);
+  assert.doesNotMatch(block('deploy'), /Tokens\(text\)|Tokens\(changed|positions/);
 });
 test('deploy only tokenizes the variable and replaces neutral slot bytes', () => {
   assert.match(block('deploy'), /Tokens\(snippet\)/);
+  assert.deepEqual(
+    [...block('deploy').matchAll(/(?<!class )Tokens\(([^)]*)\)/g)].map((match) => match[1]),
+    ['snippet'],
+  );
   assert.match(block('deploy'), /kf-slot-a/);
   assert.match(block('deploy'), /\.replace\(slot, replacement\)/);
   assert.doesNotMatch(block('deploy'), /\.decode\("utf-8"\)|write_text/);
