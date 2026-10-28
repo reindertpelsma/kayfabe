@@ -1,10 +1,44 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-28 (§AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AP. Whitepaper answers: translation barriers, progress and evidence, 2026-10-28
+
+**STATUS: LIVE, 2026-10-28; owner design clarifications, not hardware qualification.**
+
+Source: the owner's whitepaper answers, forwarded by the coordinator on 2026-10-28 in resume-plan item 2; question numbers refer to the [v3 paper's companion index](whitepaper/kayfabe_v3_index.md).
+
+<!-- src: owner, 2026-10-28, forwarded whitepaper answers and resume-plan item 2 -->
+
+1. **Q1, by design: translation-barrier contract.** Until a refresh, edited leaves may resolve to old backing, new backing or no mapping; unedited valid VAs remain valid throughout.
+   After a refresh, edited VAs reflect the state when that refresh started or a later state.
+   Refreshes coalesce: the last refresh only has to observe all changes preceding its own start, so refresh spam must not accumulate a backlog of distinct refresh obligations.
+   The driver may skip or defer an invalidate on an invalid-to-valid transition for TLB batching within this contract; no exception to the contract is needed.
+2. **Q5/Q6, by design: worker parking.** A worker may park only if every pending completion can be serviced through its epoll sources.
+   Consuming an eventfd notification must not lose the final wake for outstanding work; waiter registration, rechecking the work condition and the releasing producer's notification must cover release before, during and after registration.
+3. **Q7, by design: GPU isolation boundary.** Channels and TSGs are the resource boundary; their privilege and permitted address-space mappings still constrain what work can access, as required by §Q, §AB and §AI.
+   This does not settle which cross-client operations need additional ownership checks.
+4. **Q8, owner design clarification:** “nesting cost is VFIO-guest only”.
+   By design, this clarification supplies no timing data or equivalence between paths.
+5. **Q9, by design: correctness oracle.** Require checked output bytes, assertions and cleanup; a process exit status of zero alone is insufficient.
+6. **Q13/Q32, owner scope clarification:** support is organised by families rather than a list of individually qualified dies, while per-die facts still follow §A.7 and the provenance requirements in §AF–§AH.
+7. **Q23, by design (owner, 2026-10-28):** clocks in this question are measurement instruments, not completion or progress conditions.
+8. **Q24, by design:** completion notifications are weak doorbells; a wake prompts inspection of the operation's own completion state and does not identify or prove that operation's completion.
+
+### Code checks accompanying the fold-in
+
+<!-- src: CODE READ, 7dcedefea093de078188efd5f712561bde746362, paths and symbols below -->
+
+**CODE READ at `7dcedefea`:** `crates/kf-mem/src/apply.rs` computes unchanged overlaps in `unchanged_pairs` and subtracts kept intervals before unmapping in `apply_entry`; its `same_mapping` comparison excludes leaf size.
+**CODE READ at `7dcedefea`:** `crates/kf-mem/src/sim.rs::apply_and_commit` arms an unchanged-translation guard, `SimRm::check_guard` checks it after host calls, and `check` rejects transients, including declared re-makes.
+**CODE READ at `7dcedefea`:** `crates/kf-mem/src/sim/tests.rs` covers a one-page edit within a 16-page row, identical translations across leaf-size changes, and exact partial changes inside a large leaf.
+**CODE READ at `7dcedefea`:** `apply.rs::keep_only_what_stays_exact` retains a re-make fallback for a rigid mapping; the tests deliberately plant such an invalid ledger shape, so these source checks are not a universal hardware proof.
+**CODE READ at `7dcedefea`:** searching `crates/kf-mem/src` for `sparse`/`SPARSE` finds only the test-only simulator and a test format fixture in `refusal_dump.rs`; `apply.rs::DiffRun` has no dedicated sparse run representation.
+**CODE READ at `7dcedefea`:** sparse detection and counting do exist outside that crate in `cuda/walk/kf_walk.cu` (`kf_slot_sparse`, `kf_par_decode_slot`, `kf_par_chunks`), so the search does not establish that the product has no sparse-related code or describe experimental branches.
 
 ## A. Standing principles
 

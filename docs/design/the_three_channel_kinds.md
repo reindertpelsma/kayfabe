@@ -1,6 +1,6 @@
 # The three channel kinds — passthrough, translated, emulated
 
-**STATUS: LIVE, 2026-10-09.** The three kinds are implemented in v3 (`ARCHITECTURE.md`, *channel kinds*;
+**STATUS: LIVE, 2026-10-28 (owner clarifications Q7/Q24; earlier implementation records retain their dates).** The three kinds are implemented in v3 (`ARCHITECTURE.md`, *channel kinds*;
 `kf-chan`), and §1.1 and §1.2 carry their own LIVE status lines. ⊘ *Superseded status line, kept as
 history: "DESIGN, 2026-09-19 (w803). Owner ruling. Not yet implemented."* — the text below §1.2 is
 that 2026-09-19 design ruling; where it and the code disagree, `ARCHITECTURE.md` and
@@ -26,6 +26,9 @@ where you can't know per entry if its privileged/unprivileged allowed like phys,
 channel mode might be a solution."* CeUtils is exactly that channel — see §2.
 
 ## 1. The three kinds
+
+> **CORRECTION / STATUS: LIVE, 2026-10-28 — owner answer Q7, by design ([§AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28)).** Channels and TSGs are the GPU resource isolation boundary, subject to their privilege and permitted address-space mappings.
+> A Unix UID is not a substitute for those mapping and ownership obligations; cross-client behaviour remains an evidence question.
 
 | | **Passthrough** | **Translated** | **Emulated** |
 |---|---|---|---|
@@ -58,6 +61,9 @@ the engine's progress whether or not another doorbell comes (`KF3_RELAY_GET_REFR
 Passthrough" for it, never plain "Passthrough", when `GP_GET`, USERD or the doorbell path is the subject.
 
 ### 1.2 Passthrough completion interrupts: every VM that armed the event is woken (2026-10-08, owner)
+
+> **CORRECTION / STATUS: LIVE, 2026-10-28 — owner answer Q24, by design ([§AP](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28)).** A completion notification is a weak doorbell: inspect the operation's own completion state after waking.
+> The notification alone neither identifies that operation nor proves it completed.
 
 **STATUS: LIVE, 2026-10-09 — `kf_chan::ptnsi`, owner ruling §X; branch
 `claude/passthrough-nsi-nogate-20261008`.**
