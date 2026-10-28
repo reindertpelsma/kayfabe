@@ -1,26 +1,80 @@
 [
-  { "name": "site build", "files": ["site/build.py"], "run": false },
+  {
+    "name": "site build",
+    "files": ["site/build.py"],
+    "run": false
+  },
   {
     "name": "site templates",
     "files": ["site/templates/index.html", "site/static/site.css"],
     "run": false
   },
-  { "name": "site tests", "files": ["site/test_build.py", "site/test_output.py"], "run": false },
-  { "name": "mixed crate", "files": ["site/build.py", "crates/kf-core/src/lib.rs"], "run": true },
+  {
+    "name": "site tests",
+    "files": ["site/test_build.py", "site/test_output.py"],
+    "run": false
+  },
+  {
+    "name": "site deep static",
+    "files": ["site/static/assets/site.css"],
+    "run": false
+  },
+  {
+    "name": "mixed crate",
+    "files": ["site/build.py", "crates/kf-core/src/lib.rs"],
+    "run": true
+  },
   {
     "name": "mixed script",
     "files": ["site/static/a.js", "scripts/fastguest/run.sh"],
     "run": true
   },
-  { "name": "scripts sitemap prefix", "files": ["scripts/sitemap.py"], "run": true },
-  { "name": "tools sitegen prefix", "files": ["tools/sitegen.py"], "run": true },
-  { "name": "root sitemap prefix", "files": ["sitemap.py"], "run": true },
-  { "name": "root sitegen prefix", "files": ["sitegen.py"], "run": true },
-  { "name": "nested crate site", "files": ["crates/site/src/lib.rs"], "run": true },
-  { "name": "nested script site", "files": ["scripts/site/build.py"], "run": true },
-  { "name": "root README", "files": ["README.md"], "run": false },
-  { "name": "root contributing", "files": ["CONTRIBUTING.md"], "run": false },
-  { "name": "uncertain site count", "files": ["site/build.py"], "uncertain": true, "run": true },
+  {
+    "name": "scripts sitemap prefix",
+    "files": ["scripts/sitemap.py"],
+    "run": true
+  },
+  {
+    "name": "tools sitegen prefix",
+    "files": ["tools/sitegen.py"],
+    "run": true
+  },
+  {
+    "name": "root sitemap prefix",
+    "files": ["sitemap.py"],
+    "run": true
+  },
+  {
+    "name": "root sitegen prefix",
+    "files": ["sitegen.py"],
+    "run": true
+  },
+  {
+    "name": "nested crate site",
+    "files": ["crates/site/src/lib.rs"],
+    "run": true
+  },
+  {
+    "name": "nested script site",
+    "files": ["scripts/site/build.py"],
+    "run": true
+  },
+  {
+    "name": "root README",
+    "files": ["README.md"],
+    "run": false
+  },
+  {
+    "name": "root contributing",
+    "files": ["CONTRIBUTING.md"],
+    "run": false
+  },
+  {
+    "name": "uncertain site count",
+    "files": ["site/build.py"],
+    "uncertain": true,
+    "run": true
+  },
   {
     "name": "uncertain template count",
     "files": ["site/templates/index.html"],

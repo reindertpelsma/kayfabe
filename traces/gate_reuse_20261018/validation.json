@@ -18,5 +18,17 @@
   "worker_runtime_changed": false,
   "hosted_ci": "pending push",
   "mutants": 22,
-  "minimum_named_killers": 2
+  "minimum_named_killers": 2,
+  "addendum2": {
+    "expected_red_commit": "921cecd4b",
+    "initial_cases": 30,
+    "initial_fail": 6,
+    "initial_controls": 24,
+    "current_v8_cases": 32,
+    "current_v8_pass": 32,
+    "additional_mutants": 6,
+    "minimum_named_killers": 4,
+    "method": "Actual trigger/Github modules in orchestration V8 with simulated API; final Node suite hosted due dev-box disk floor",
+    "rentals": "none"
+  }
 }

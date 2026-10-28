@@ -80,7 +80,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PATH_SKIP_PATTERNS: >-
-            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ["**/*.md","docs/**","site/**","traces/**","archive/**","LICENSE*",
             ".github/ISSUE_TEMPLATE/**"]
         run: |
           set +x
@@ -117,7 +117,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PATH_SKIP_PATTERNS: >-
-            ["**/*.md","docs/**","traces/**","archive/**","LICENSE*",
+            ["**/*.md","docs/**","site/**","traces/**","archive/**","LICENSE*",
             ".github/ISSUE_TEMPLATE/**"]
         run: |
           set +x
