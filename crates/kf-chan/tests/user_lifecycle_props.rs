@@ -24,6 +24,7 @@ use kf_chan::user_gate::MARK_TAG;
 use kf_chan::user_lifecycle::{Lifecycle, LifecycleMode, MarkerLatch, Mode};
 use kf_chan::user_scan::Scan;
 use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 use support::*;
 
 // ------------------------------------------------------------------------------------------------
@@ -1310,22 +1311,37 @@ fn b_the_monotone_entry_counter_survives_the_u32_boundary() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// soak (seconds by default; KF3_STRESS_SECS for longer)
+// Run until both 512 seeds and the duration have completed; each seed has at least 2,000 entries.
+// Keep the two-second default and KF3_STRESS_SECS override, without truncating minimum coverage.
 
-fn stress_secs() -> f64 {
-    std::env::var("KF3_STRESS_SECS")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(2.0)
+fn soak_duration(value: Option<&str>) -> Option<Duration> {
+    value
+        .or(Some("2"))
+        .map(|seconds| Duration::from_secs_f64(seconds.parse().unwrap_or(2.0)))
+}
+
+fn soak_seeds(
+    duration: Option<Duration>,
+    mut elapsed: impl FnMut() -> Duration,
+) -> impl Iterator<Item = u64> {
+    let mut completed = 0;
+    std::iter::from_fn(move || {
+        if completed < 512 || duration.is_some_and(|budget| elapsed() < budget) {
+            completed += 1;
+            Some(completed)
+        } else {
+            None
+        }
+    })
 }
 
 #[test]
 fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(stress_secs());
+    let started = Instant::now();
+    let duration = soak_duration(std::env::var("KF3_STRESS_SECS").ok().as_deref());
     let mut total = 0u64;
-    let mut seed = 0u64;
-    while std::time::Instant::now() < deadline {
-        seed += 1;
+    let mut streams = 0u64;
+    for seed in soak_seeds(duration, || started.elapsed()) {
         let mut rng = Rng::new(0x50AC + seed);
         let n = 2000 + rng.below(3000) as usize;
         let mut stream = gen_stream(&mut rng, n, true, false);
@@ -1368,10 +1384,133 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
             "seed {seed}: private ring drained"
         );
         assert_eq!(relay.life.counts().pointer_pb_read_violation, 0);
+        assert_eq!(
+            out.forwarded.len(),
+            stream.len(),
+            "seed {seed}: every entry relayed"
+        );
         total += out.forwarded.len() as u64;
+        streams += 1;
     }
-    println!("soak: {total} entries over {seed} streams");
+    println!("soak: {total} entries over {streams} streams");
     assert!(total > 100_000);
+}
+
+// Exercise the real soak in an isolated process, including its invariants and actual counts.
+// A consumed scheduling budget must never choose a shorter seed prefix for this coverage.
+fn soak_counts_with_expired_budget(seconds: &str) -> (u64, u64) {
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env("KF3_STRESS_SECS", seconds)
+        .output()
+        .expect("run the actual soak with its scheduling budget already consumed");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        output.status.success(),
+        "budget={seconds}: {stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let counts = stdout
+        .lines()
+        .find_map(|line| line.split_once("soak: ").map(|(_, counts)| counts))
+        .expect("actual soak counts");
+    let words: Vec<_> = counts.split_whitespace().collect();
+    let entries: u64 = words[0].parse().unwrap();
+    let streams: u64 = words[3].parse().unwrap();
+    assert_eq!(streams, 512, "the full deterministic seed set must run");
+    assert!(
+        entries >= 1_000_000,
+        "every scheduled stream must be fully relayed"
+    );
+    println!("soak coverage proof: budget={seconds} entries={entries} streams={streams}");
+    (entries, streams)
+}
+
+#[test]
+fn soak_zero_elapsed_budget_cannot_truncate_the_seed_set() {
+    soak_counts_with_expired_budget("0");
+}
+
+#[test]
+fn soak_already_expired_nanosecond_budget_cannot_truncate_entries() {
+    soak_counts_with_expired_budget("0.000000001");
+}
+
+#[test]
+fn soak_explicit_live_budget_extends_past_all_minimum_seeds() {
+    let mut elapsed = [
+        Duration::ZERO,
+        Duration::from_secs(239),
+        Duration::from_secs(240),
+    ]
+    .into_iter();
+    let seeds: Vec<_> = soak_seeds(soak_duration(Some("240")), || {
+        elapsed
+            .next()
+            .expect("stop when the explicit budget expires")
+    })
+    .collect();
+    assert_eq!(seeds.len(), 514);
+    assert!(seeds.into_iter().eq(1..=514));
+}
+
+#[test]
+fn soak_explicit_subsecond_budget_extends_then_stops_at_its_deadline() {
+    let mut elapsed = [Duration::ZERO, Duration::from_nanos(1)].into_iter();
+    let seeds: Vec<_> = soak_seeds(soak_duration(Some("0.000000001")), || {
+        elapsed.next().expect("a deadline is exclusive")
+    })
+    .collect();
+    assert_eq!(seeds.len(), 513);
+    assert!(seeds.into_iter().eq(1..=513));
+}
+
+#[test]
+fn soak_expired_budget_stops_after_the_complete_minimum() {
+    for (value, elapsed) in [
+        (None, Duration::from_secs(2)),
+        (Some("0"), Duration::from_nanos(1)),
+        (Some("0.000000001"), Duration::from_nanos(1)),
+    ] {
+        let seeds: Vec<_> = soak_seeds(soak_duration(value), || elapsed)
+            .take(515)
+            .collect();
+        assert_eq!(seeds.len(), 512);
+        assert!(seeds.into_iter().eq(1..=512));
+    }
+}
+
+#[test]
+fn soak_explicit_invalid_duration_retains_the_existing_two_second_fallback() {
+    assert_eq!(soak_duration(Some("invalid")), Some(Duration::from_secs(2)));
+}
+
+#[test]
+fn soak_default_duration_retains_the_existing_two_second_budget() {
+    assert_eq!(soak_duration(None), Some(Duration::from_secs(2)));
+}
+
+#[test]
+fn soak_default_live_budget_extends_minimum_until_two_seconds() {
+    let mut elapsed = [
+        Duration::ZERO,
+        Duration::from_secs(1),
+        Duration::from_secs(2),
+    ]
+    .into_iter();
+    let seeds: Vec<_> = soak_seeds(soak_duration(None), || {
+        elapsed
+            .next()
+            .expect("stop at the default two-second deadline")
+    })
+    .collect();
+    assert_eq!(seeds.len(), 514);
+    assert!(seeds.into_iter().eq(1..=514));
 }
 
 // ------------------------------------------------------------------------------------------------
