@@ -1,0 +1,9 @@
+# SHAPE 5c: legacy mode, the compute channel on the legacy ASYNC subcontext (thread=1)
+tsg engine=gr vas=0
+chan g engine=gr thread=0 objs=3d+cmp
+chan c engine=gr thread=1 objs=cmp
+bindtsg
+schedtsg
+work g,c
+work g,c
+bench g,c iters=300

@@ -1,0 +1,8 @@
+# baseline: ONE TSG(GR), legacy subcontext (no hContextShare), one GR channel with 3D+compute+copy classes
+info
+tsg engine=gr vas=0
+chan g engine=gr objs=3d+cmp+ce
+bindtsg
+schedtsg
+work g
+work g

@@ -1,0 +1,5 @@
+# SHAPE 2e: COPY0 TSG with an ASYNC ctxshare (source says: ASYNC only for GR/GRCE/SW -> object alloc refused)
+tsg engine=ce0 vas=0
+ctx S flags=sync vas=0
+ctx A flags=async vas=0
+chan k ctx=A engine=ce0 objs=ce

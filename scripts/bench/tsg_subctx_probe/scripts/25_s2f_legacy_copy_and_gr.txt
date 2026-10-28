@@ -1,0 +1,11 @@
+# SHAPE 2f (legacy subcontext): GR channel (thread 0) + GR channel with copy class (thread 0) + compute on legacy ASYNC (thread 1)
+tsg engine=gr vas=0
+chan g engine=gr thread=0 objs=3d+cmp
+chan k engine=gr thread=0 objs=ce
+chan c engine=gr thread=1 objs=cmp
+bindtsg
+schedtsg
+work g
+work k
+work c
+work g,k,c
