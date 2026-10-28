@@ -289,6 +289,7 @@ mod mapping_unsafe;
 pub mod memtype;
 pub mod page_size;
 pub mod scratch;
+pub mod refresh_stack_unsafe;
 mod signal_unsafe;
 mod sysconf_unsafe;
 mod thread_time_unsafe;
