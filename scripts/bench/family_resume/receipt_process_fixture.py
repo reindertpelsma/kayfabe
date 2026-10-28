@@ -129,6 +129,7 @@ def creator(root, mode):
 
             O.approval_gate.require_go = lambda *args: {"fixture_only": True}
             O.P.create_once = lambda offer, label: invoke(label)
+            O.P.snapshot = lambda owner, **kwargs: dict(owner_id=owner, complete=True, rows=[])
 
             class LiveFakeWatch:
                 def poll(self):
