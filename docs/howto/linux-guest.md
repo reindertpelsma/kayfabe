@@ -68,12 +68,12 @@ For testing, a guest with no disk and no services exists: a kernel and initrd th
 
 ## More than one GPU
 
-One kayfabe device is created per host GPU. `KF3_GPUS=0,1` makes the thin-guest harness add one `kf3-gpu,gpu-minor=<m>` per listed host minor. A guest with two distinct host GPUs passed the thin suite, one at a time and concurrently. CUDA inside a two-GPU guest, UVM across two GPUs and peer access were not measured. <!-- src: scripts/fastguest/run_fast_guest.sh, docs/STATUS_DETAIL.md section 3 -->
+One kayfabe device is created per host GPU. `KF3_GPUS=0,1` makes the thin-guest harness add one `kf3-gpu,gpu-minor=<m>` per listed host minor. A thin guest with two distinct host GPUs passed copy-engine checks serially and concurrently [measured in `docs/design/V3_MULTI_GPU_AUDIT.md` section 7, revision `74fced87`, lease 52664396, two RTX 3060s on one host]. The full 30-arm regression was a separate single-device run. CUDA inside a two-GPU guest, UVM across two GPUs and peer access were not measured. <!-- src: scripts/fastguest/run_fast_guest.sh, docs/STATUS_DETAIL.md section 3 -->
 
 ## Not documented yet
 
 - A supported way to build a guest image on other distributions.
-- Guest kernels other than those recorded (the thin guest ran 6.8.0-59; the full guest 6.8.0-139 in one driver-matrix walk).
+- A supported guest-kernel range. Recorded examples include the thin guest on 6.8.0-59 and the full guest on 6.8.0-139. The branch `codex/sweep-integrate-20261018`, not merged, also records 6.8.0-147-generic in a GB202 desktop attempt whose presentation failed [measured at revision `24906bf33`, lease 56788212; `traces/sweep_integrate_20261018/phase2_blackwell_56788212/B2_RESULT.md` on that branch]. That extends the record; it is not a support promise.
 - The proprietary (closed) guest module.
 - A guest-side guide for container runtimes.
 

@@ -1,6 +1,6 @@
 # V3 sweep and install — every driver pair on every GPU family, tested on the binary users install
 
-**STATUS: DESIGN, 2026-10-02; revised the same day after an adversarial review.** Nothing in this
+**STATUS: DESIGN-ONLY, 2026-10-02; revised the same day after an adversarial review.** Nothing in this
 document is built. Branch `v3-sweep`, cut from master `d88639f9`; not merged. The review raised 2 blockers,
 10 majors and 14 minors; each was re-read against the cited files before acting, none was rejected, and
 the fixes are folded into the sections they correct. The main changes: written PASS rules for every row
@@ -1299,7 +1299,7 @@ Around the runner:
   - Every vast box is a VM, so its guests are nested, and nested boxes cannot show bare-host coherency
     bugs (`V3_DRIVER_MATRIX.md:808-818`).
   - Which physical host or hosts may the sweep drive through the manual `--ssh` path, and may it do so
-    unattended? `172.22.1.20` was unreachable on 2026-09-30, and the RTX 3050 kiosk's address is not in the
+    unattended? the trusted test host was unreachable on 2026-09-30, and the RTX 3050 kiosk's address is not in the
     repository (`STATUS_AND_HANDOFF.md:97-99`).
 - **Q7 — Where unattended sweeps run, and what outlives that machine.**
   - Proposed: from the dev host, which has the vast CLI and ssh. ⊘ *Corrected 2026-10-02: the first draft

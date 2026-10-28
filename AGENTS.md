@@ -61,7 +61,7 @@ is frozen (see *Layout*).
 
 - **Open PRs against `next`**, not `master`. `next` requires only `CI`. Master requires `CI` and
   `gpu-vast`, so the real-GPU gate runs once, on the batch PR `next` -> master (merge commit), on the
-  exact final tree. Merge commits (or squash for docs/site PRs that cite no revision); rebase is off.
+  exact final tree. Merge commits (or squash for docs/site PRs that cite no revision). We do not use rebase merges.
   Read master as one line per PR/batch with `git log --first-parent master`.
 - Break-glass: the owner may bypass the required `gpu-vast` check on one PR (rare, e.g. a broken gate
   runner); no other exceptions.

@@ -795,21 +795,22 @@ message, typos kept, and `…` joins fragments of one message. The audit's messa
 repo, so the date and time are the citation. An entry's date is the day the owner said it: ask whether
 its reason still holds before relying on it (see the top of this file).
 
-1. **172.22.1.20 (RTX 4070) is trusted hardware.** *(Recovered; the owner's wording was relayed by the
-   coordinator.)*
-   - Owner, 2026-10-07 (the correction of an earlier reading, relayed by the coordinator): *"172.22.1.20
+1. **The trusted test host (RTX 4070) is trusted hardware.** *(Recovered; the owner's wording was relayed by the
+   coordinator. 2026-10-28 hygiene edit: the host's network address in the quotations below is replaced by "the
+   trusted test host"; nothing else in the ruling changed.)*
+   - Owner, 2026-10-07 (the correction of an earlier reading, relayed by the coordinator): *"the trusted test host
      is trusted (our own pc hardware at home with a different ssd for claude), the kiosk pcs not, and
      vast absolutely not"*.
    - Owner, 2026-10-04 15:17: *"you may use VFIO or any other destructive chane, incl display
      restart). Just no firmware changes on metal ofc or bricking hardware but those are very rare
-     anyways."* And: *"so you do not need permission for most stuff to do on 172.22.1.20."*
-   - **How to apply:** on 172.22.1.20, driver, VFIO and display changes, including destructive ones,
+     anyways."* And: *"so you do not need permission for most stuff to do on the trusted test host."*
+   - **How to apply:** on the trusted test host, driver, VFIO and display changes, including destructive ones,
      need no permission. Firmware changes and anything that could brick hardware are forbidden. Vast
      boxes follow §F and `scripts/bench/box/README.md`.
    - ✔ **Confirmed by the owner, 2026-10-08:** *"you have full permission to do whatever is needed on
-     172.22.1.20. no need to ask"*, *"yes no secrets on them. 172.22.1.20 is trusted"*, and about vast
+     the trusted test host. no need to ask"*, *"yes no secrets on them. the trusted test host is trusted"*, and about vast
      boxes *"you can do whatever you want on vast boxes, on those I care the least, if it breaks we just
-     rerent"*. So no permission is needed on 172.22.1.20, and vast boxes may be wedged or re-rented
+     rerent"*. So no permission is needed on the trusted test host, and vast boxes may be wedged or re-rented
      freely; the §F and box-README rules still hold (no secrets on a box, only instance ids this
      session rented, no instance key printed). The 2026-10-04 "I temporarily borrow this machine"
      remark is superseded by the 10-07 and 10-08 statements; pushing work that matters (§F) stays
@@ -978,7 +979,7 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
 - **`raw_control_native`:** under review, see the handoff; production code must not call it.
 - **§T (recovered directives):** later rulings always win over recovered ones; keep only what is useful
   and does not conflict; **avoid directions from the v1/v2 kayfabe architecture** altogether.
-- **Disks:** the 13 GB `base.qcow2` original under `/data/paguro-work.old` is deleted ("fully
+- **Disks:** the 13 GB `base.qcow2` original under the old work directory `paguro-work.old` is deleted ("fully
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
@@ -1395,12 +1396,20 @@ Owner, 2026-10-25 ("we dont make SaaS"):
 Recorded 2026-10-27 from the owner's instructions of 2026-10-22 (roadmap order) and 2026-10-27 (the goals page), so the
 public page `docs/howto/goals.md` has a repository source for each item. These are goals, not commitments.
 
-1. **Hypervisor independence is a goal, not implemented.** The core is VMM-agnostic by design (`design/THE_ARCHITECTURE_v3.md`
-   version-axis table, row V; `design/THE_DESIGN.md`), and only QEMU is supported today. The long-term goal is to run
-   under other hypervisors, which needs a shim for each.
-2. **Order after the families (owner, 2026-10-22):** all GPU families first, Blackwell included. Then multi-GPU
-   guests (several kf3 devices in one guest, on Windows too, and choosing which GPU serves the display), and arm64
-   (see §K for the aarch64 rulings already made). Neither is started before the family matrix is green.
-3. **What is measured for multi-GPU** stays as `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two
-   distinct GPUs. CUDA in a two-GPU guest, UVM across GPUs, peer access (refused by name) and Windows or display
-   with several GPUs are not measured.
+Each item below is labelled: **owner priority** (what the owner said), **design fact** (read from the source) or
+**measured status** (what a record shows). ⊘ *Correction 2026-10-28:* an earlier version of item 2 ended with "Neither is
+started before the family matrix is green". The recorded instruction is a priority order, not a start embargo, and the
+sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (item 3).
+
+1. **Hypervisor independence is a goal, not implemented.** *(Owner priority, 2026-10-27: the goal. Design fact: the
+   core is VMM-agnostic by design, see `design/THE_ARCHITECTURE_v3.md` version-axis table, row V, and
+   `design/THE_DESIGN.md`; the `kf-core` crate has no QEMU dependency and reaches the hypervisor through its `Vmm`
+   and `HostOps` traits. Measured status: only QEMU is supported today, and a second hypervisor needs a shim that
+   does not exist.)*
+2. **Priority order after the families.** *(Owner priority, 2026-10-22.)* All GPU families first, Blackwell included.
+   Then multi-GPU guests (several kf3 devices in one guest, on Windows too, and choosing which GPU serves the
+   display) and arm64 (see §K for the aarch64 rulings already made) as the next priorities.
+3. **Implementation status of those two.** *(Measured status.)* What is measured for multi-GPU stays as
+   `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two distinct GPUs. CUDA in a two-GPU guest, UVM
+   across GPUs, peer access (refused by name) and Windows or display with several GPUs are not measured. Existing
+   two-GPU thin tests and the aarch64 cross-builds do not establish full support.

@@ -8,7 +8,7 @@ The question (owner, via the coordinator): the first broker of run 3001 (`/opt/n
 dma-buf, but both later brokers (`broker-20261017-145100.log`, the previous cursor branch's `a07a9ba0` build; `broker-20261017-145951.log`, the `badf2d7`+ptr_serial TRACE build)
 log `presenting through wl_shm: the display refused every dma-buf layout offered`. The goal is zero-copy dma-buf presentation after ANY broker restart.
 
-## 1. What the logs say (MEASURED; host `172.22.1.20`, read-only: the three broker logs and `qemu.log` of `boundary-kayfabe-3001`)
+## 1. What the logs say (MEASURED on the trusted test host, run 3001, 2026-10-17, read-only: the three broker logs and `qemu.log` of `boundary-kayfabe-3001`)
 
 * **The display refused nothing.** In both later logs the sequence is `QUERY_FORMAT XR24 LINEAR -> YES`, `probing whether this display can import XR24 modifier 0x0 (one frame is dropped to find out)`,
   `this display CAN import XR24 modifier 0x0 — proven by import, not by advertisement`, and only then the wl_shm line. There is no `ATTACH ... refused`, no `this display ADVERTISED ... and then refused`,

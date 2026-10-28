@@ -156,7 +156,7 @@ Decode and analyse exactly as for VFIO:
 
 ## 8. Results on the bench
 
-Bench host 172.22.1.20, RTX 4070, 2026-10-09, binary built at `9cebeea9` (runs `rtoff`, `rton`,
+Bench host the trusted test host, RTX 4070, 2026-10-09, binary built at `9cebeea9` (runs `rtoff`, `rton`,
 `rtcap`, `rtobs`; record and files: `traces/kf3_read_trace_20261009/README.md`):
 
 - **Off:** 30/30; `read_exits` 0 at every mid-run heartbeat, as in another revision's suite
