@@ -54,6 +54,10 @@ in the document stay available and version changes open the selected index. The
 no-JavaScript links work in either mode. No release packaging or publication job
 is added by this build option.
 
+Portable mode does not rewrite or check resource URLs in inline `<style>` blocks,
+quoted `@import` rules, or CSS escape syntax. The generated site currently has no
+internal resource URLs in those forms.
+
 Check portable output with `python3 site/check_portable.py`. This starts a loopback
 server under `/x/y/`, checks all local HTML/CSS targets plus the selector/TOC/search
 resources over HTTP, and verifies the corresponding `file://` targets exist. To

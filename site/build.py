@@ -758,7 +758,10 @@ def main():
     )
     args = parser.parse_args()
     releases = json.loads(args.releases_json.read_text()) if args.releases_json else []
-    build(SITE.parent, tools(args.tools_dir.resolve()), releases, args.root_ref, portable=args.portable)
+    build(
+        SITE.parent, tools(args.tools_dir.resolve()), releases, args.root_ref,
+        portable=args.portable,
+    )
 
 
 if __name__ == "__main__":
