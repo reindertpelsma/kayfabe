@@ -76,8 +76,8 @@ master/staging pages. Directory URLs end in `/`; mdBook chapter URLs retain thei
 CODE READ (`.github/workflows/site.yml`): it evaluates every PR and builds changes to site/docs/workflow inputs, relevant
 master pushes, `v*` tag pushes, release publication,
 manual dispatch, and a weekly fallback. A tag push makes its manual available immediately; publishing
-release assets updates the root and latest docs. Non-PR builds explicitly check out master with full
-tag history, even when the workflow was triggered at a tag, so they use the reviewed master tools.
+release assets updates the root and latest docs. Tag and other publication builds explicitly check out
+master with full tag history, so they use the reviewed master tools.
 PRs instead build the exact candidate head, with only `contents: read`, and upload an artifact.
 Master pushes check out their exact SHA; publication events use master tooling.
 Only the separate master/tag deploy job has `pages: write` and `id-token: write`, in `github-pages`.
