@@ -68,7 +68,11 @@ fi
 
 mkdir -p "$OUT" || die "cannot create $OUT"
 ROOT=$(mktemp -d) || die "mktemp"
-trap 'qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1; umount "$ROOT/mnt" 2>/dev/null; rm -rf "$ROOT"' EXIT
+NBD_ATTACHED=0
+trap 'if [ "$NBD_ATTACHED" = 1 ]; then
+    qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1
+fi
+umount "$ROOT/mnt" 2>/dev/null; rm -rf "$ROOT"' EXIT
 
 # ── 1. borrow the kernel and the modules from the fat guest ───────────────────────────────
 # ⊘ Taken FROM THE IMAGE rather than built here: the modules must match the kernel they will be
@@ -174,7 +178,19 @@ fi
 if [ "${SKIP_NBD:-0}" != "1" ]; then
 modprobe nbd max_part=8 2>/dev/null
 mkdir -p "$ROOT/mnt"
-qemu-nbd --read-only --connect=/dev/nbd0 -f qcow2 "$IMG" || die "qemu-nbd could not attach $IMG"
+# Defer a signal until the attach result establishes whether cleanup owns NBD.
+nbd_signal=0
+trap 'nbd_signal=130' INT
+trap 'nbd_signal=143' TERM
+if qemu-nbd --read-only --connect=/dev/nbd0 -f qcow2 "$IMG"; then
+    NBD_ATTACHED=1
+    nbd_status=0
+else
+    nbd_status=$?
+fi
+trap - INT TERM
+[ "$nbd_signal" = 0 ] || exit "$nbd_signal"
+[ "$nbd_status" = 0 ] || die "qemu-nbd could not attach $IMG"
 
 # ⊘⊘⊘ RACE, MEASURED w824. `qemu-nbd --connect` RETURNS BEFORE THE KERNEL HAS ENUMERATED THE
 # PARTITIONS, and `sleep 1` + one `partprobe` was not enough on this box. Clean A/B on
@@ -308,7 +324,15 @@ else
     echo "== firmware: ⊘ NONE at /lib/firmware/nvidia in the image - RmInitAdapter will fail 0x61"
 fi
 
-umount "$ROOT/mnt"; qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1
+umount "$ROOT/mnt"
+nbd_signal=0
+trap 'nbd_signal=130' INT
+trap 'nbd_signal=143' TERM
+if qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1; then
+    NBD_ATTACHED=0
+fi
+trap - INT TERM
+[ "$nbd_signal" = 0 ] || exit "$nbd_signal"
 fi   # ⊘ end of the qcow2 path — skipped entirely under KF_FROM_HOST=1
 
 # ── 2. the initrd ─────────────────────────────────────────────────────────────────────────
