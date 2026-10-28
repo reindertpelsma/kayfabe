@@ -53,10 +53,15 @@ class ProcessTests(unittest.TestCase):
                 if p.exists():
                     proc = json.loads(p.read_text())
                     stat = Path("/proc", str(proc["pid"]), "stat")
-                    if stat.exists():
+                    try:
                         born = int(stat.read_text().rpartition(")")[2].split()[19])
-                        if born == proc["starttime"]:
+                    except (FileNotFoundError, ProcessLookupError):
+                        born = None
+                    if born == proc["starttime"]:
+                        try:
                             os.killpg(proc["pid"], signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
 
     def test_empty_response_parent_exit_independent_watch(self):
         self.fixture("empty")
