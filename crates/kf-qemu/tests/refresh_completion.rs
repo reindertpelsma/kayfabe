@@ -27,7 +27,8 @@ fn duplicate_is_not_a_second_completion(gated: bool) {
     }
     assert_eq!(inbox.finish_split(ticket, Ok(())), None);
     assert_eq!(
-        inbox.split_result(ticket), None,
+        inbox.split_result(ticket),
+        None,
         "a duplicate apply ACK must not recreate a consumed completion"
     );
 }
@@ -41,7 +42,8 @@ fn canceled_is_not_resurrected(gated: bool) {
         assert_eq!(gate.value(), Some(0), "reset must drop its unreleased gate");
     }
     assert_eq!(
-        inbox.split_result(ticket), None,
+        inbox.split_result(ticket),
+        None,
         "a late ACK from an ended life must not create a completion"
     );
 }
