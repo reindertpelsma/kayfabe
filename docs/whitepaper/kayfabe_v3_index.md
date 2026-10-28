@@ -9,7 +9,7 @@ This file is an index, not a hardware qualification or a current defect list. Th
 <!-- src: owner, 2026-10-28, forwarded whitepaper answers; docs/OWNER_RULINGS.md §AP -->
 
 **STATUS: ANSWERED IN PART, 2026-10-28; by design.** The owner's answers below refine the questions in the pinned PDF; the [dated ruling](../OWNER_RULINGS.md#ap-whitepaper-answers-translation-barriers-progress-and-evidence-2026-10-28) and corrections in the parent design documents govern those points.
-The PDF and its implementation pin remain the historical edition; this fold-in adds no hardware result.
+The PDF's implementation analysis remains pinned to the historical edition; this fold-in adds no hardware result.
 
 | Question | Owner answer / remaining scope | Parent |
 | --- | --- | --- |
