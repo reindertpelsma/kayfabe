@@ -50,7 +50,7 @@ The project's history page (written 2026-09-06) describes it this way: nvkvm-pv 
 ### Is there something similar?
 
 [Caraxes](https://github.com/silasmue/Caraxes) and [Open-IOV](https://open-iov.org/index.php/Main_Page) also work toward running stock NVIDIA guest drivers without a vendor vGPU licence. Their documented host requirements differ; the [credits](howto/credits.md#related-projects) describe those requirements and link to their own documentation. No speed or security comparison with either project is recorded here.
-<!-- src: https://github.com/silasmue/Caraxes README and docs/vfio/quickstart.md; https://open-iov.org/index.php/System_Overview and https://open-iov.org/index.php/Install_and_First_Run (retrieved 2026-10-28); docs/howto/credits.md Acknowledgements -->
+<!-- src: https://github.com/silasmue/Caraxes README and docs/vfio/quickstart.md; https://open-iov.org/index.php/System_Overview and https://open-iov.org/index.php/Install_and_First_Run (retrieved 2026-10-28); docs/howto/credits.md Related projects -->
 
 ### Is there an installer or a download?
 

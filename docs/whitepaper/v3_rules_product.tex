@@ -100,8 +100,8 @@ performance comparison with virtio-gpu, Venus or virgl, and this paper supplies 
 
 \doc Public project documentation checked on 2026-10-28 corrects the comparison in the
 pinned credits. Caraxes serves a synthetic NVIDIA device over vfio-user and retains the host
-driver. Its quickstart's example run sets \code{CARAXES\_DMA=register}, which needs a binary
-with \code{cap\_sys\_admin} set using sudo; setup also uses sudo for the network device and
+driver. Its quickstart's example run sets \code{CARAXES_DMA=register}, which needs a binary
+with \code{cap_sys_admin} set using sudo; setup also uses sudo for the network device and
 the guest driver's module options. The same quickstart separately describes submission as an
 unprivileged host-driver client; this does not make the documented run sudo-free.
 \url{https://github.com/silasmue/Caraxes/blob/HEAD/docs/vfio/quickstart.md}
