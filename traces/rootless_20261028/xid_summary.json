@@ -1,0 +1,22 @@
+{
+  "run": "Z1-d9cfef0f",
+  "native_source_matched_xids": 5,
+  "guest_unadmitted_xids": 4,
+  "guest_pid": 531897,
+  "guest_arm": "--defer-liveness",
+  "live_stop_utc": "2026-10-27T23:54:13Z",
+  "guest_xid_times": [
+    "2026-10-27T23:54:12.811579+00:00",
+    "2026-10-27T23:54:15.846592+00:00",
+    "2026-10-27T23:54:18.849770+00:00",
+    "2026-10-27T23:54:21.885592+00:00"
+  ],
+  "guest_fault_lines": [
+    "2026-10-27T23:54:12.811579+00:00 kernel: NVRM: Xid (PCI:0000:01:00): 31, pid=531897, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-27T23:54:15.846592+00:00 kernel: NVRM: Xid (PCI:0000:01:00): 31, pid=531897, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-27T23:54:18.849770+00:00 kernel: NVRM: Xid (PCI:0000:01:00): 31, pid=531897, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-27T23:54:21.885592+00:00 kernel: NVRM: Xid (PCI:0000:01:00): 31, pid=531897, name=qemu-system-x86, channel 0x0000001d, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ"
+  ],
+  "guest_proof_accepted": false,
+  "classification": "Unadmitted after inspection/observer refusal; no product-fault attribution or retrospective waiver."
+}

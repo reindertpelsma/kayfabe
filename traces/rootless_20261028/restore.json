@@ -1,0 +1,9 @@
+{
+  "utc": "2026-10-27T23:56:33.322340+00:00",
+  "qemu_count": 0,
+  "cuInit": 0,
+  "gdm": "active",
+  "devnull_char": true,
+  "user_absent": true,
+  "shared_lock_held_for_health_check": true
+}

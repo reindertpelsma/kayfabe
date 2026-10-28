@@ -1,0 +1,33 @@
+{
+  "run": "Z1-d9cfef0f",
+  "product_revision": "858ca1e8ad4a2b264656b8e499d820856bcc7310",
+  "operator_revision": "d9cfef0fae8aa136d010db638419931cc6db08d1",
+  "host_gpu": "RTX4070 AD104",
+  "host_driver": "595.91.07 open",
+  "guest_driver": "595.91.07 open",
+  "kernel": "7.0.0-34-generic",
+  "native_gates": "9/9 + gate10 PASS",
+  "native_bare": "30/30 PASS",
+  "rootless_native_gates": "9/9 + gate10 PASS",
+  "rootless_full_suite": "REFUSED / UNPROVEN",
+  "qemu_starts": 7,
+  "accepted_arms": 0,
+  "legacy_scoreboard_passes_rejected": 6,
+  "inspector_exit_code": 2,
+  "early_refusals_not_propagated_by_legacy_harness": true,
+  "two_vm": "UNRUN after STOP",
+  "runtime_rental_usd": 0,
+  "retained_transfer_liability_usd": 0,
+  "rental_ids": [],
+  "new_hardware_claims": [
+    "rootless native gates9+10",
+    "seven sampled QEMU starts with zero effective/permitted/bounding caps"
+  ],
+  "not_claimed": [
+    "rootless full30",
+    "two-VM concurrent correctness",
+    "throughput ratios",
+    "fairness",
+    "isolation"
+  ]
+}

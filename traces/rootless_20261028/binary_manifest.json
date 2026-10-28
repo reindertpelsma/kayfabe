@@ -1,0 +1,55 @@
+{
+  "revision": "d9cfef0fae8aa136d010db638419931cc6db08d1",
+  "product_base": "858ca1e8ad4a2b264656b8e499d820856bcc7310",
+  "driver": "595.91.07",
+  "qemu": {
+    "path": "kf3-bins/d9cfef0f/qemu-system-x86_64",
+    "sha256": "88c6381460e1b1da99824497dd5019bc55e6d9a3131c3d9eee6c3daf837a549a"
+  },
+  "gates": {
+    "kf-gate1": {
+      "path": "cargo-target/release/kf-gate1",
+      "sha256": "a4884302af05e217ab5e69592ab5b37aae585bca1e2cb4f4ecf07ce826bcd552"
+    },
+    "kf-gate2": {
+      "path": "cargo-target/release/kf-gate2",
+      "sha256": "dcbb4fdd673437ad7c73de3e643a83f3725728c9bdebec7e1824826452f5aacf"
+    },
+    "kf-gate3": {
+      "path": "cargo-target/release/kf-gate3",
+      "sha256": "48697568f22fb93c87255568e6f3974f74d97ab0132a6d9f3a9206326a017744"
+    },
+    "kf-gate4": {
+      "path": "cargo-target/release/kf-gate4",
+      "sha256": "2401d719057a2ad43291409d2225619c3b6937c9575906cd535b5b94415d6b31"
+    },
+    "kf-gate5": {
+      "path": "cargo-target/release/kf-gate5",
+      "sha256": "1a036da196d82fcda94557b8eeb2f00e18062752119503cd85ac8cd6ec4fede7"
+    },
+    "kf-gate6": {
+      "path": "cargo-target/release/kf-gate6",
+      "sha256": "2628af0cc253f52b6fbdc67d002c19c95098082352b965f2888aedcdb4b8d4f9"
+    },
+    "kf-gate7": {
+      "path": "cargo-target/release/kf-gate7",
+      "sha256": "a52a17578afc48d30cae7433a14ecbcc3c08259469e517f7ba2551b962b0c67c"
+    },
+    "kf-gate8": {
+      "path": "cargo-target/release/kf-gate8",
+      "sha256": "be3cff9f27d57f2ca27095672f3f54f62e03e7bb8f75141109b375ff9384800b"
+    },
+    "kf-gate9": {
+      "path": "cargo-target/release/kf-gate9",
+      "sha256": "8f054b3896d6f6a58db4bb68f1d343622d2e0b5e35f1bfc919659842f2a261bf"
+    },
+    "kf-micro-reserve-probe": {
+      "path": "cargo-target/release/kf-micro-reserve-probe",
+      "sha256": "1b348ff869431bbe2f29e3fd0654c6e08aceeb8f4e72a5588ff3615918cc5786"
+    }
+  },
+  "raw_client": {
+    "path": "cargo-target/release/kayfabe-rm-ladder",
+    "sha256": "c05cd9c8e4526d93ae00bb3412abfb42cad1e118deaa8e09a776cbabe838de42"
+  }
+}
