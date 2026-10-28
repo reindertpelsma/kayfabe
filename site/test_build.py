@@ -505,7 +505,7 @@ class LandingRender(unittest.TestCase):
 
     def test_without_release_it_says_build_from_source(self):
         landing, docs = self.render(None)
-        self.assertIn("No release yet: build from source", landing)
+        self.assertIn("Build from source", landing)
         self.assertNotIn("/releases/download/", landing)
         self.assertIn('data-kf="docs-index"', docs)
         self.assertIn('href="/docs/master/index.html">Intro', docs)
@@ -569,14 +569,11 @@ class FrontpageClaims(unittest.TestCase):
         import tomllib
 
         data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
-        self.assertTrue(data["tagline_src"].strip() and data["lede_src"].strip() and data["status_src"].strip())
-        for name in ["screenshot", "uses", "different", "where", "licence", "start", "community"]:
+        self.assertTrue(data["tagline_src"].strip() and data["lede_src"].strip())
+        for name in ["screenshot", "uses", "different", "where", "start"]:
             self.assertTrue(data[name].get("src", "").strip(), name)
-        for item in data["uses"]["items"] + data["different"]["items"]:
+        for item in data["uses"]["items"] + data["where"]["items"]:
             self.assertTrue(item["src"].strip(), item)
-        for group in data["where"]["groups"]:
-            for item in group["items"]:
-                self.assertTrue(item["src"].strip(), item)
         for text in self.landing_source().split("\n"):
             if re.match(r"\w*src = ", text):
                 self.assertNotIn("--", text)
@@ -585,9 +582,8 @@ class FrontpageClaims(unittest.TestCase):
         import tomllib
 
         data = tomllib.loads(self.landing_source().split("+++")[1])["extra"]
-        texts = [data["tagline"], data["lede"], data["status"], data["different"]["isolated"]]
+        texts = [data["tagline"], data["lede"]]
         texts += [i["title"] + " " + i["text"] for i in data["uses"]["items"]]
-        texts += [i["name"] + " " + i["text"] for i in data["different"]["items"]]
         self.assertEqual(claims_guard.jargon(" ".join(texts)), [])
         self.assertEqual(
             data["tagline"],
@@ -599,14 +595,22 @@ class FrontpageClaims(unittest.TestCase):
     def test_the_straight_section_says_what_it_must(self):
         data = self.landing_source()
         for text in [
-            "research project with one maintainer",
             "There is no installer yet",
             "Windows is not stable",
-            "Sleep and wake do not survive",
-            "A security audit",
-            "non-goal",
+            "Not security audited",
+            "Build from source",
         ]:
             self.assertIn(text, data)
+
+    def test_detail_pages_keep_sources_and_candid_limits(self):
+        for name in ["works-today", "how-it-differs", "benchmarks"]:
+            source = (ROOT / "site/content" / (name + ".md")).read_text()
+            self.assertIn('template = "detail.html"', source)
+            self.assertIn("<!-- src:", source)
+        works = (ROOT / "site/content/works-today.md").read_text()
+        for claim in ["research project with one maintainer", "non-goal",
+                      "result files are not committed", "not merged yet"]:
+            self.assertIn(claim, works)
 
     def test_readme_opens_with_the_honest_status(self):
         top = "\n".join((ROOT / "README.md").read_text().splitlines()[:15]).lower()

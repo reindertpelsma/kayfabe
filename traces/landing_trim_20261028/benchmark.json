@@ -1,0 +1,874 @@
+[
+  {
+    "url": "https://tailscale.com/",
+    "captured_utc": "2026-10-28T00:01:10.524Z",
+    "sha256": "ecf639c2bac16f0ca91926d7027add61e082abae136494a7ecf2fc1c4449b98f",
+    "viewport": "1440x900",
+    "words_total": 583,
+    "words_first_two_screens": 214,
+    "sections": 5,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 1021,
+      "sentences": 91,
+      "average_sentence_words": 11.22,
+      "longest_sentence_words": 32,
+      "flesch_reading_ease": 59.47
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 35.76,
+        "average_sentence_words": 9.429,
+        "longest_sentence_words": 29,
+        "blocks": 7,
+        "max_paragraph_sentences": 1,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 40.17,
+        "average_sentence_words": 4.167,
+        "longest_sentence_words": 10,
+        "blocks": 6,
+        "max_paragraph_sentences": 1,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 38.71,
+        "average_sentence_words": 10.667,
+        "longest_sentence_words": 17,
+        "blocks": 4,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 62.94,
+        "average_sentence_words": 12.028,
+        "longest_sentence_words": 32,
+        "blocks": 24,
+        "max_paragraph_sentences": 6,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://login.tailscale.com/start",
+      "https://tailscale.com/contact/sales",
+      "https://tailscale.com/use-cases/business-vpn"
+    ]
+  },
+  {
+    "url": "https://asahilinux.org/",
+    "captured_utc": "2026-10-28T00:01:17.951Z",
+    "sha256": "748ce3a2941a65241ec13c8b6da5ea98c0ba6894adb9d8793952c2f1af033477",
+    "viewport": "1440x900",
+    "words_total": 174,
+    "words_first_two_screens": 80,
+    "sections": 2,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 103,
+      "sentences": 20,
+      "average_sentence_words": 5.15,
+      "longest_sentence_words": 17,
+      "flesch_reading_ease": 38.98
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": -10.38,
+        "average_sentence_words": 1,
+        "longest_sentence_words": 1,
+        "blocks": 9,
+        "max_paragraph_sentences": 0,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 41.55,
+        "average_sentence_words": 14,
+        "longest_sentence_words": 14,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 17.45,
+        "average_sentence_words": 6,
+        "longest_sentence_words": 6,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 42.67,
+        "average_sentence_words": 10.667,
+        "longest_sentence_words": 14,
+        "blocks": 3,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 45.25,
+        "average_sentence_words": 12.5,
+        "longest_sentence_words": 17,
+        "blocks": 1,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 28.34,
+        "average_sentence_words": 4.25,
+        "longest_sentence_words": 11,
+        "blocks": 4,
+        "max_paragraph_sentences": 1,
+        "list_depth": 1
+      }
+    ],
+    "detail_examples": [
+      "https://asahilinux.org/about",
+      "https://asahilinux.org/community",
+      "https://asahilinux.org/contribute"
+    ]
+  },
+  {
+    "url": "https://zed.dev/",
+    "captured_utc": "2026-10-28T00:01:26.698Z",
+    "sha256": "16ddc32534f1e446f339810ad8c43ea7c8b3d318e1a032a99cfe23f7922a1850",
+    "viewport": "1440x900",
+    "words_total": 2090,
+    "words_first_two_screens": 713,
+    "sections": 13,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 741,
+      "sentences": 169,
+      "average_sentence_words": 4.385,
+      "longest_sentence_words": 28,
+      "flesch_reading_ease": 54.65
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 57.73,
+        "average_sentence_words": 5.429,
+        "longest_sentence_words": 16,
+        "blocks": 14,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 45.87,
+        "average_sentence_words": 3,
+        "longest_sentence_words": 7,
+        "blocks": 10,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 37.47,
+        "average_sentence_words": 7.632,
+        "longest_sentence_words": 16,
+        "blocks": 17,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 61.57,
+        "average_sentence_words": 4.2,
+        "longest_sentence_words": 14,
+        "blocks": 5,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 63.7,
+        "average_sentence_words": 16,
+        "longest_sentence_words": 18,
+        "blocks": 2,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 58.52,
+        "average_sentence_words": 2.457,
+        "longest_sentence_words": 19,
+        "blocks": 81,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 51.77,
+        "average_sentence_words": 4.15,
+        "longest_sentence_words": 15,
+        "blocks": 19,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 53.01,
+        "average_sentence_words": 14.2,
+        "longest_sentence_words": 28,
+        "blocks": 3,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 45.26,
+        "average_sentence_words": 17,
+        "longest_sentence_words": 17,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 60.51,
+        "average_sentence_words": 5.25,
+        "longest_sentence_words": 10,
+        "blocks": 3,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 42.83,
+        "average_sentence_words": 5.75,
+        "longest_sentence_words": 10,
+        "blocks": 3,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 61.74,
+        "average_sentence_words": 5.667,
+        "longest_sentence_words": 12,
+        "blocks": 3,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 116.15,
+        "average_sentence_words": 6,
+        "longest_sentence_words": 6,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://delta.dev/",
+      "https://zed.dev/download",
+      "https://github.com/zed-industries/zed"
+    ]
+  },
+  {
+    "url": "https://immich.app/",
+    "captured_utc": "2026-10-28T00:01:33.837Z",
+    "sha256": "3539ac1e70c0e344ef321ec2e7a78703323448deef21655bd091a533fdd9dec3",
+    "viewport": "1440x900",
+    "words_total": 205,
+    "words_first_two_screens": 86,
+    "sections": 2,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 161,
+      "sentences": 30,
+      "average_sentence_words": 5.367,
+      "longest_sentence_words": 20,
+      "flesch_reading_ease": 53.73
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 46.82,
+        "average_sentence_words": 14.286,
+        "longest_sentence_words": 20,
+        "blocks": 4,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 52.97,
+        "average_sentence_words": 2.652,
+        "longest_sentence_words": 16,
+        "blocks": 21,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://immich.app/blog",
+      "https://immich.app/roadmap",
+      "https://immich.store/"
+    ]
+  },
+  {
+    "url": "https://syncthing.net/",
+    "captured_utc": "2026-10-28T00:01:41.141Z",
+    "sha256": "b0e1da6be8e9d70381115a3b8cc8158ebec91fcede2922a5516f35673c3cdf79",
+    "viewport": "1440x900",
+    "words_total": 372,
+    "words_first_two_screens": 359,
+    "sections": 2,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 341,
+      "sentences": 34,
+      "average_sentence_words": 10.029,
+      "longest_sentence_words": 30,
+      "flesch_reading_ease": 49.78
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 51.63,
+        "average_sentence_words": 17.667,
+        "longest_sentence_words": 30,
+        "blocks": 1,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 48.77,
+        "average_sentence_words": 9.29,
+        "longest_sentence_words": 26,
+        "blocks": 12,
+        "max_paragraph_sentences": 2,
+        "list_depth": 1
+      }
+    ],
+    "detail_examples": [
+      "https://syncthing.net/downloads/",
+      "https://syncthing.net/security/",
+      "https://syncthing.net/foundation/"
+    ]
+  },
+  {
+    "url": "https://caddyserver.com/",
+    "captured_utc": "2026-10-28T00:01:50.982Z",
+    "sha256": "c85efc7f086dacf281c7c72e943ece94253865b4c20ed1372bb8157591262887",
+    "viewport": "1440x900",
+    "words_total": 4779,
+    "words_first_two_screens": 80,
+    "sections": 13,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 1730,
+      "sentences": 133,
+      "average_sentence_words": 13.008,
+      "longest_sentence_words": 33,
+      "flesch_reading_ease": 38.42
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 32.71,
+        "average_sentence_words": 11.875,
+        "longest_sentence_words": 19,
+        "blocks": 4,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 36.52,
+        "average_sentence_words": 14.1,
+        "longest_sentence_words": 28,
+        "blocks": 6,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 48.91,
+        "average_sentence_words": 8.5,
+        "longest_sentence_words": 14,
+        "blocks": 10,
+        "max_paragraph_sentences": 6,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 34.89,
+        "average_sentence_words": 15.455,
+        "longest_sentence_words": 26,
+        "blocks": 7,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 32.31,
+        "average_sentence_words": 9.833,
+        "longest_sentence_words": 25,
+        "blocks": 7,
+        "max_paragraph_sentences": 7,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 36.79,
+        "average_sentence_words": 14.727,
+        "longest_sentence_words": 33,
+        "blocks": 5,
+        "max_paragraph_sentences": 4,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 31.63,
+        "average_sentence_words": 18.286,
+        "longest_sentence_words": 28,
+        "blocks": 5,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 41.34,
+        "average_sentence_words": 15.75,
+        "longest_sentence_words": 30,
+        "blocks": 6,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 38.22,
+        "average_sentence_words": 12.3,
+        "longest_sentence_words": 25,
+        "blocks": 5,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 50.06,
+        "average_sentence_words": 12.7,
+        "longest_sentence_words": 25,
+        "blocks": 5,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 34.17,
+        "average_sentence_words": 16,
+        "longest_sentence_words": 31,
+        "blocks": 5,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 46.46,
+        "average_sentence_words": 15.5,
+        "longest_sentence_words": 29,
+        "blocks": 1,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://caddyserver.com/sponsor",
+      "https://smallstep.com/certificates/",
+      "https://smallstep.com/"
+    ]
+  },
+  {
+    "url": "https://www.home-assistant.io/",
+    "captured_utc": "2026-10-28T00:02:00.563Z",
+    "sha256": "a5b32d02c4bbe604e1dd7884b5233489be112d13cebf597117719a17ec8edcc6",
+    "viewport": "1440x900",
+    "words_total": 1163,
+    "words_first_two_screens": 203,
+    "sections": 8,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 840,
+      "sentences": 101,
+      "average_sentence_words": 8.317,
+      "longest_sentence_words": 31,
+      "flesch_reading_ease": 56.49
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 45.33,
+        "average_sentence_words": 9.667,
+        "longest_sentence_words": 11,
+        "blocks": 2,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 87.68,
+        "average_sentence_words": 8,
+        "longest_sentence_words": 9,
+        "blocks": 2,
+        "max_paragraph_sentences": 0,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 60.45,
+        "average_sentence_words": 11.286,
+        "longest_sentence_words": 18,
+        "blocks": 7,
+        "max_paragraph_sentences": 1,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 52.84,
+        "average_sentence_words": 13.241,
+        "longest_sentence_words": 31,
+        "blocks": 22,
+        "max_paragraph_sentences": 2,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 55.46,
+        "average_sentence_words": 5.533,
+        "longest_sentence_words": 27,
+        "blocks": 56,
+        "max_paragraph_sentences": 3,
+        "list_depth": 1
+      }
+    ],
+    "detail_examples": [
+      "https://www.home-assistant.io/blog/2026/10/07/release-202610/",
+      "https://www.home-assistant.io/docs/",
+      "https://www.home-assistant.io/hardware/"
+    ]
+  },
+  {
+    "url": "https://podman.io/",
+    "captured_utc": "2026-10-28T00:02:08.141Z",
+    "sha256": "ae5980b149aa4ebfc68531cde8ac1fe193b4e71b1bc4f7eccd8c9cffd447992d",
+    "viewport": "1440x900",
+    "words_total": 735,
+    "words_first_two_screens": 194,
+    "sections": 5,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 607,
+      "sentences": 56,
+      "average_sentence_words": 10.839,
+      "longest_sentence_words": 34,
+      "flesch_reading_ease": 40.43
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 41.68,
+        "average_sentence_words": 11.071,
+        "longest_sentence_words": 27,
+        "blocks": 7,
+        "max_paragraph_sentences": 3,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 36.08,
+        "average_sentence_words": 11,
+        "longest_sentence_words": 14,
+        "blocks": 4,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 65.59,
+        "average_sentence_words": 11.778,
+        "longest_sentence_words": 20,
+        "blocks": 4,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 26.48,
+        "average_sentence_words": 18.5,
+        "longest_sentence_words": 34,
+        "blocks": 4,
+        "max_paragraph_sentences": 4,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 28.63,
+        "average_sentence_words": 4.706,
+        "longest_sentence_words": 18,
+        "blocks": 15,
+        "max_paragraph_sentences": 2,
+        "list_depth": 1
+      }
+    ],
+    "detail_examples": [
+      "https://podman.io/get-started",
+      "https://podman.io/community",
+      "https://blog.podman.io/"
+    ]
+  },
+  {
+    "url": "https://www.wireguard.com/",
+    "captured_utc": "2026-10-28T00:02:16.357Z",
+    "sha256": "3ba735a9ab49db806ea52c576d2effb7b03a7f443a69073dae73d35d6460cfa2",
+    "viewport": "1440x900",
+    "words_total": 2003,
+    "words_first_two_screens": 723,
+    "sections": 8,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 1612,
+      "sentences": 111,
+      "average_sentence_words": 14.523,
+      "longest_sentence_words": 61,
+      "flesch_reading_ease": 52.97
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 22.73,
+        "average_sentence_words": 1.857,
+        "longest_sentence_words": 3,
+        "blocks": 14,
+        "max_paragraph_sentences": 0,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 30.08,
+        "average_sentence_words": 17.667,
+        "longest_sentence_words": 26,
+        "blocks": 1,
+        "max_paragraph_sentences": 6,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 49.11,
+        "average_sentence_words": 22.5,
+        "longest_sentence_words": 40,
+        "blocks": 3,
+        "max_paragraph_sentences": 4,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 63.72,
+        "average_sentence_words": 10.462,
+        "longest_sentence_words": 36,
+        "blocks": 12,
+        "max_paragraph_sentences": 4,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 52.73,
+        "average_sentence_words": 22.269,
+        "longest_sentence_words": 61,
+        "blocks": 11,
+        "max_paragraph_sentences": 5,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 48.21,
+        "average_sentence_words": 19.5,
+        "longest_sentence_words": 29,
+        "blocks": 1,
+        "max_paragraph_sentences": 6,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 30.77,
+        "average_sentence_words": 26,
+        "longest_sentence_words": 38,
+        "blocks": 1,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 42.72,
+        "average_sentence_words": 20,
+        "longest_sentence_words": 22,
+        "blocks": 1,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 42.63,
+        "average_sentence_words": 12.417,
+        "longest_sentence_words": 24,
+        "blocks": 5,
+        "max_paragraph_sentences": 3,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 45.01,
+        "average_sentence_words": 8.125,
+        "longest_sentence_words": 17,
+        "blocks": 3,
+        "max_paragraph_sentences": 5,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://www.wireguard.com/install/",
+      "https://www.wireguard.com/quickstart/",
+      "https://www.wireguard.com/papers/wireguard.pdf"
+    ]
+  },
+  {
+    "url": "https://www.proxmox.com/en/",
+    "captured_utc": "2026-10-28T00:02:23.768Z",
+    "sha256": "4686daae3586a069c73e4907b58ee432db57d6b9f7b720ead6c73866f612dacf",
+    "viewport": "1440x900",
+    "words_total": 482,
+    "words_first_two_screens": 329,
+    "sections": 3,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 246,
+      "sentences": 40,
+      "average_sentence_words": 6.15,
+      "longest_sentence_words": 21,
+      "flesch_reading_ease": 47.21
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 44.87,
+        "average_sentence_words": 6.238,
+        "longest_sentence_words": 19,
+        "blocks": 15,
+        "max_paragraph_sentences": 4,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 43.63,
+        "average_sentence_words": 6.643,
+        "longest_sentence_words": 21,
+        "blocks": 13,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 75.47,
+        "average_sentence_words": 4.4,
+        "longest_sentence_words": 8,
+        "blocks": 5,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://www.proxmox.com/en/services/support-services/support",
+      "https://www.proxmox.com/en/partners/find-partner/explore",
+      "https://www.proxmox.com/en/services/training-courses/training"
+    ]
+  },
+  {
+    "url": "https://www.electronjs.org/",
+    "captured_utc": "2026-10-28T00:02:31.791Z",
+    "sha256": "ed2b9ea8d46b70ab87d095d6a07180547f70426af842b7d8dc9523288158eca6",
+    "viewport": "1440x900",
+    "words_total": 743,
+    "words_first_two_screens": 196,
+    "sections": 8,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 455,
+      "sentences": 31,
+      "average_sentence_words": 14.677,
+      "longest_sentence_words": 27,
+      "flesch_reading_ease": 42.45
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 37.46,
+        "average_sentence_words": 16.333,
+        "longest_sentence_words": 20,
+        "blocks": 6,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 11.42,
+        "average_sentence_words": 13,
+        "longest_sentence_words": 13,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 33.72,
+        "average_sentence_words": 16.333,
+        "longest_sentence_words": 26,
+        "blocks": 6,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 49.52,
+        "average_sentence_words": 19,
+        "longest_sentence_words": 21,
+        "blocks": 1,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 27.36,
+        "average_sentence_words": 15.5,
+        "longest_sentence_words": 19,
+        "blocks": 1,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 51.92,
+        "average_sentence_words": 7.667,
+        "longest_sentence_words": 20,
+        "blocks": 5,
+        "max_paragraph_sentences": 2,
+        "list_depth": 1
+      },
+      {
+        "flesch_reading_ease": 68.22,
+        "average_sentence_words": 17.5,
+        "longest_sentence_words": 27,
+        "blocks": 2,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 18.41,
+        "average_sentence_words": 12,
+        "longest_sentence_words": 12,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://openjsf.org/",
+      "https://www.npmjs.com/",
+      "https://www.electronjs.org/docs/latest/tutorial/native-code-and-electron"
+    ]
+  },
+  {
+    "url": "https://looking-glass.io/",
+    "captured_utc": "2026-10-28T00:02:39.240Z",
+    "sha256": "c13e86278ec89b515845fd010d7f20bfa1a81fae735d5103b4174568656e9514",
+    "viewport": "1440x900",
+    "words_total": 237,
+    "words_first_two_screens": 150,
+    "sections": 4,
+    "links_out_for_detail": true,
+    "page_readability": {
+      "words": 71,
+      "sentences": 6,
+      "average_sentence_words": 11.833,
+      "longest_sentence_words": 19,
+      "flesch_reading_ease": 31.58
+    },
+    "section_readability": [
+      {
+        "flesch_reading_ease": 39.33,
+        "average_sentence_words": 15,
+        "longest_sentence_words": 19,
+        "blocks": 1,
+        "max_paragraph_sentences": 2,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 13.38,
+        "average_sentence_words": 10,
+        "longest_sentence_words": 12,
+        "blocks": 3,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      },
+      {
+        "flesch_reading_ease": 57.23,
+        "average_sentence_words": 11,
+        "longest_sentence_words": 11,
+        "blocks": 1,
+        "max_paragraph_sentences": 1,
+        "list_depth": 0
+      }
+    ],
+    "detail_examples": [
+      "https://looking-glass.io/downloads",
+      "https://looking-glass.io/product",
+      "https://looking-glass.io/docs"
+    ]
+  }
+]

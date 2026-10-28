@@ -16,26 +16,27 @@
     <p class="lede">{{ x.lede }}</p>
     <p class="actions">
       <a class="button" href="/docs/">Read the manual</a>
-      <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">kayfabe on GitHub</a>
+      <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">
+        View the source</a>
     </p>
     <!-- src: {{ x.screenshot.src }} -->
     <figure class="shot">
-      <img src="{{ get_url(path='screenshot-windows-desktop.jpg') | replace(from="https://kayfabe.dev", to="") }}" width="1600" height="692" decoding="async" alt="{{ x.screenshot.alt }}" />
+      <img src="/screenshot-windows-desktop.jpg" width="1600" height="692"
+        decoding="async" alt="{{ x.screenshot.alt }}" />
       <figcaption>{{ x.screenshot.caption }}</figcaption>
     </figure>
-    <!-- src: {{ x.status_src }} -->
-    <p class="statusline">{{ x.status | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
   </div>
 </section>
 
 <section class="wrap" aria-labelledby="uses-h">
   <h2 id="uses-h">{{ x.uses.heading }}</h2>
+  <!-- src: {{ x.uses.src }} -->
   <div class="scenes">
     {% for s in x.uses.items %}
     <div>
       <!-- src: {{ s.src }} -->
       <h3>{{ s.title }}</h3>
-      <p>{{ s.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
+      <p>{{ s.text }}</p>
     </div>
     {% endfor %}
   </div>
@@ -44,37 +45,46 @@
 <section class="wrap" aria-labelledby="diff-h">
   <h2 id="diff-h">{{ x.different.heading }}</h2>
   <!-- src: {{ x.different.src }} -->
-  <p>{{ x.different.intro }}</p>
-  <ul class="plain">
-    {% for i in x.different.items %}<li><!-- src: {{ i.src }} --><strong>{{ i.name }}</strong> {{ i.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>
-    {% endfor %}
-  </ul>
-  <!-- src: {{ x.different.isolated_src }} -->
-  <p><strong>{{ x.different.isolated_heading }}.</strong> {{ x.different.isolated | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
+  <p>{{ x.different.text }} <a href="/how-it-differs/">Compare the options</a>.</p>
 </section>
 
 <section class="wrap" aria-labelledby="where-h">
   <h2 id="where-h">{{ x.where.heading }}</h2>
   <!-- src: {{ x.where.src }} -->
-  <p>{{ x.where.intro }}</p>
-  {% for g in x.where.groups %}
-  <h3>{{ g.title }}</h3>
   <ul class="plain">
-    {% for i in g.items %}<li><!-- src: {{ i.src }} -->{{ i.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</li>
+    {% for i in x.where.items %}
+    <li><!-- src: {{ i.src }} -->{{ i.text }}</li>
     {% endfor %}
   </ul>
-  {% endfor %}
-  <!-- src: {{ x.licence.src }} -->
-  <p class="small">{{ x.licence.text | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
+  <p><a href="/works-today/">What works today</a> ·
+    <a href="/benchmarks/">Benchmarks and their limits</a></p>
 </section>
 
 <section class="wrap" aria-labelledby="start-h">
   <h2 id="start-h">{{ x.start.heading }}</h2>
   <!-- src: {{ x.start.src }} -->
-  <p>{{ x.start.text | markdown(inline=true) | safe }}</p>
-  <div class="codeblock"><pre class="copyable"><code>{{ x.start.command }}</code></pre></div>
-  <p>{{ x.start.after }}</p>
-  <p>Start with the <a href="{{ docs }}index.html">manual</a>, the <a href="{{ docs }}FAQ.html">FAQ</a> and <a href="{{ docs }}goals.html">goals and plans</a>. The <a href="{{ docs }}requirements.html">requirements</a> page says which cards and drivers have been tried.</p>
+  <p>{{ x.start.text }}</p>
+  <p><a href="{{ docs }}requirements.html">Requirements</a> ·
+    <a href="{{ docs }}building.html">Build guide</a> ·
+    <a href="https://github.com/reindertpelsma/kayfabe/issues">Questions and bugs</a> ·
+    <a href="/security/">Security</a></p>
+  {% if kf and kf.release %}
+  {% set r = kf.release %}
+  <!-- src: build release list; site/build.py release_summary -->
+  <details>
+    <summary>Release files</summary>
+    <p><a href="{{ r.url }}">{{ r.name }}</a>
+      ({{ r.tag }}{% if r.prerelease %}, pre-release{% endif %},
+      published {{ r.date }}).</p>
+    <ul class="assets">
+      {% for a in r.assets %}
+      <li><a href="{{ a.url }}">{{ a.name }}</a> ({{ a.size }})
+        {% if a.sha256 %}<br /><span class="small">SHA-256 <code>{{ a.sha256 }}</code></span>
+        {% endif %}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
   <div role="search">
     <form action="{{ docs }}" method="get">
       <label for="hero-search">Search the documentation</label>
@@ -82,35 +92,5 @@
       <button>Search</button>
     </form>
   </div>
-</section>
-
-<section class="wrap" aria-labelledby="download-h">
-  <h2 id="download-h">Download</h2>
-  <!-- src: README.md "Trying it" (no installer, no public binary); the build report supplies any published release -->
-  {% if kf and kf.release %}
-  {% set r = kf.release %}
-  <!-- Shown only because the build was given a published GitHub release with assets. -->
-  <p>Latest GitHub release: <a href="{{ r.url }}">{{ r.name }}</a> ({{ r.tag }}{% if r.prerelease %}, pre-release{% endif %}, published {{ r.date }}).
-    The artifacts are hosted by GitHub, not by this site.</p>
-  {% if r.assets %}
-  <ul class="assets">
-    {% for a in r.assets %}
-    <li><a href="{{ a.url }}">{{ a.name }}</a> ({{ a.size }}){% if a.sha256 %}<br /><span class="small">SHA-256 <code>{{ a.sha256 }}</code></span>{% endif %}</li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  <p class="small">Read the status above and the manual before you run anything from a release.</p>
-  {% else %}
-  <p>No release yet: build from source. The source is at
-    <a href="https://github.com/reindertpelsma/kayfabe">github.com/reindertpelsma/kayfabe</a>.</p>
-  {% endif %}
-</section>
-
-<section class="wrap" aria-labelledby="community-h">
-  <h2 id="community-h">{{ x.community.heading }}</h2>
-  <!-- src: {{ x.community.src }} -->
-  <p>The code, the history and the design notes are in <a href="https://github.com/reindertpelsma/kayfabe">the repository</a>. Questions, bugs and gaps in the docs go to the <a href="https://github.com/reindertpelsma/kayfabe/issues">issue tracker</a>. Licences and acknowledgements are on <a href="{{ docs }}credits.html">Credits and notices</a>. To report a suspected vulnerability, see <a href="/security/">Security</a>; it goes through GitHub, privately.</p>
-  <!-- src: {{ x.community.licence_src }} -->
-  <p class="small">{{ x.community.licence }}</p>
 </section>
 {% endblock %}
