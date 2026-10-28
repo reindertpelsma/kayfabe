@@ -5,10 +5,12 @@ from functools import partial
 from html.parser import HTMLParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import posixpath
 from pathlib import Path
 import re
 import tempfile
 import threading
+from urllib.error import HTTPError
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import urlopen
 
@@ -65,12 +67,14 @@ def references(output):
     for sheet in sorted(output.rglob("*.css")):
         result.extend((sheet, url, None) for url in css_references(sheet.read_text()))
     # mdBook loads its TOC/search through JS; the custom selector loads this JSON.
-    for book in sorted((output / "docs").iterdir()):
-        if (book / "theme/versions.js").is_file():
-            script = book / "theme/versions.js"
-            result.append((script, "../../versions.json", None))
-            for resource in ("searchindex.js", "toc.js", "toc.html"):
-                result.append((book / "index.html", resource, None))
+    for script in sorted((output / "docs").rglob("theme/versions.js")):
+        book = script.parent.parent
+        json_path = posixpath.relpath(
+            "versions.json", script.parent.relative_to(output / "docs").as_posix()
+        )
+        result.append((script, json_path, None))
+        for resource in ("searchindex.js", "toc.js", "toc.html"):
+            result.append((book / "index.html", resource, None))
     return result
 
 
@@ -139,6 +143,8 @@ def check(output):
                             failures.append([target, "", "non-200 or redirect"])
                 except Exception as error:
                     failures.append([target, "", str(error)])
+                    if isinstance(error, HTTPError):
+                        error.close()
         finally:
             server.shutdown()
             worker.join()

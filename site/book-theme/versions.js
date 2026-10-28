@@ -1,13 +1,19 @@
 // Resolve from this script, not the origin root or the current chapter's depth.
 const select = document.getElementById("doc-version");
 const scriptURL = new URL(document.currentScript.src);
-const docsRoot = new URL("../../", scriptURL);
 const currentRoot = new URL("../", scriptURL);
+const docsRoot = new URL(
+  "../".repeat(select.dataset.current.split("/").length),
+  currentRoot,
+);
 const offline = location.protocol === "file:";
 select.value = select.dataset.current;
 if (offline) select.title = "Offline version changes open the version index";
 select.onchange = async () => {
-  const base = new URL(encodeURIComponent(select.value) + "/", docsRoot);
+  const base = new URL(
+    select.value.split("/").map(encodeURIComponent).join("/") + "/",
+    docsRoot,
+  );
   const index = new URL("index.html", base).href;
   if (offline) {
     location.href = index;

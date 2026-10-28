@@ -147,7 +147,16 @@ console.log(JSON.stringify({calls,href:location.href,hidden:select.hidden}));
 """
         return json.loads(
             subprocess.check_output(
-                ["node", "-e", harness, protocol, str(missing).lower(), str(script), current, target],
+                [
+                    "node",
+                    "-e",
+                    harness,
+                    protocol,
+                    str(missing).lower(),
+                    str(script),
+                    current,
+                    target,
+                ],
                 text=True,
             )
         )
@@ -170,8 +179,12 @@ console.log(JSON.stringify({calls,href:location.href,hidden:select.hidden}));
 
     def test_nested_tag_fetches_docs_json_from_actual_depth(self):
         result = self.run_js("https:", current="v1/nested", target="master")
-        self.assertEqual(result["calls"][0][0], "https://example.test/x/y/docs/versions.json")
-        self.assertEqual(result["href"], "https://example.test/x/y/docs/master/deep/chapter.html")
+        self.assertEqual(
+            result["calls"][0][0], "https://example.test/x/y/docs/versions.json"
+        )
+        self.assertEqual(
+            result["href"], "https://example.test/x/y/docs/master/deep/chapter.html"
+        )
 
     def test_file_nested_target_has_real_path_components(self):
         result = self.run_js("file:", target="v1/nested")
@@ -258,7 +271,7 @@ class PortableOutput(unittest.TestCase):
                 "-qm",
                 "Fixture",
             )
-            git("tag", "v1.0.0")
+            git("tag", "v1/nested")
             report = build.build(
                 repo,
                 build.tools(Path(os.environ["SITE_PORTABLE_TOOLS"])),
@@ -267,11 +280,11 @@ class PortableOutput(unittest.TestCase):
             )
             self.assertTrue(report["portable"])
             self.assertEqual(report["broken_links"], [])
-            self.assertEqual(report["versions"], ["master", "v1.0.0"])
+            self.assertEqual(report["versions"], ["master", "v1/nested"])
             crawl = check_portable.check(repo / "site/public")
             self.assertGreater(crawl["local_references"], 500)
             self.assertEqual(crawl["broken"], [])
             for version in report["versions"]:
                 text = (repo / "site/public/docs" / version / "index.html").read_text()
                 self.assertIn('<option value="master">', text)
-                self.assertIn('<option value="v1.0.0">', text)
+                self.assertIn('<option value="v1/nested">', text)
