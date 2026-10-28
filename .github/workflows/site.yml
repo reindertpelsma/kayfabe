@@ -89,7 +89,9 @@ jobs:
           DEPLOY_CANDIDATE: >-
             ${{ '1' == needs.policy.outputs.deploy &&
                 github.repository == 'reindertpelsma/kayfabe' &&
-                !startsWith(github.event_name, 'pull_request') }}
+                !startsWith(github.event_name, 'pull_request') &&
+                ('refs/heads/master' == github.ref ||
+                 startsWith(github.ref, 'refs/tags/v')) }}
         run: |
           set -euo pipefail
           python3 -m unittest discover -s site -p 'test_build.py'
