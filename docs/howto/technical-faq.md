@@ -1,6 +1,6 @@
 # Technical FAQ
 
-How kayfabe works and why it is built this way, at the level a user or deployer needs. The full design lives in the repository's design documents, which are not part of this manual. Questions about the IOMMU, isolation and interrupts are in the [FAQ](FAQ.md). Each answer names its source. <!-- src: ARCHITECTURE.md, docs/FAQ.md -->
+How kayfabe works and why it is built this way, at the level a user or deployer needs. The full design lives in the repository's design documents, which are not part of this manual. Questions about the IOMMU, isolation and interrupts are in the [FAQ](../FAQ.md). Each answer names its source. <!-- src: ARCHITECTURE.md, docs/FAQ.md -->
 
 ## What is kayfabe, mechanically?
 

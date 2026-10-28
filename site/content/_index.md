@@ -56,7 +56,7 @@ src = "README.md comparison table (VFIO: no, one VM owns it)"
 
 [[extra.different.items]]
 name = "NVIDIA vGPU"
-text = "shares a card between VMs, but it needs a data-centre GPU and a licence, and the host does not use the card."
+text = "shares a supported GPU between VMs and needs a licence. The host does not use it."
 src = "README.md comparison table (vGPU row)"
 
 [[extra.different.items]]
@@ -82,12 +82,18 @@ src = "README.md comparison table; docs/howto/requirements.md; docs/howto/goals.
 [extra.where]
 heading = "Where it stands"
 intro = "kayfabe is a research project with one maintainer. It runs real programs, and it is not ready for your daily machine."
-src = "README.md STATUS line, 'What runs today' and 'Not finished'; docs/howto/index.md; the one-maintainer wording is the project's stated default (task direction), not written elsewhere in the repository"
+src = "README.md STATUS, What runs today and Not finished; docs/howto/index.md"
 
 [[extra.where.groups]]
 title = "What runs"
 [[extra.where.groups.items]]
-text = "Windows 11 with NVIDIA's own 580.88 driver, on an RTX 4070: a desktop next to your Linux one, Minecraft, Unigine Heaven, GravityMark in Direct3D 12 and Vulkan, 4K YouTube with hardware decoding, CUDA, and Blender renders with CUDA and OptiX. Windows needs three registry settings, listed in the [manual](@docs/windows-guest.html)."
+text = """
+Windows 11 with NVIDIA's own 580.88 driver, on an RTX 4070: a desktop next to your Linux one,
+Minecraft, Unigine Heaven, GravityMark in Direct3D 12 and Vulkan, 4K YouTube with hardware
+decoding, CUDA, and Blender renders with CUDA and OptiX. Windows needs three registry settings,
+listed in the [manual](@docs/windows-guest.html). These are separate demonstrations and reports,
+not a graded all-app pass. Edge failed the cited matrix video run after about seven minutes.
+"""
 src = "README.md 'What runs today' Windows table; traces/win11_userring_20261014/matrix-eb9f2aa3-20261014-2321.md (revision eb9f2aa3, latest session 89fc8a222); docs/howto/windows-guest.md"
 [[extra.where.groups.items]]
 text = "Linux VMs on NVIDIA's stock driver: a 30-test suite, a full desktop, suspend and resume, and 61 of 65 CUDA programs matching the bare machine (on a rented RTX 3060 inside a cloud VM). Linux VMs have run on Turing, Ampere, Ada and Blackwell cards, though not on every card in those families."

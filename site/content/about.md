@@ -14,7 +14,7 @@ Under the hood, kayfabe plays the part of the GPU's firmware processor, the GSP,
 ## Why it exists
 
 <!-- src: README.md comparison table; docs/FAQ.md -->
-Every common way of giving a VM an NVIDIA card takes something from you. VFIO hands the whole card to one VM. NVIDIA's vGPU needs a data-centre GPU and a licence. API forwarding leaves the card with the host, but the VM needs a custom kernel module. kayfabe tries to keep the card with the host, run NVIDIA's own driver in the VM, and ask for no licence server. The [home page](/#diff-h) lines the options up.
+Every common way of giving a VM an NVIDIA card takes something from you. VFIO hands the whole card to one VM. NVIDIA's vGPU needs a supported GPU and a licence. API forwarding leaves the card with the host, but the VM needs a custom kernel module. kayfabe tries to keep the card with the host, run NVIDIA's own driver in the VM, and ask for no licence server. The [home page](/#diff-h) lines the options up.
 
 ## Where it stands
 

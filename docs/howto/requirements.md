@@ -12,7 +12,7 @@ This page lists only what the repository's evidence states. Where the repository
 - Intel and AMD (EPYC 7452) hosts appear in the recorded results. <!-- src: docs/design/V3_APP_MATRIX.md, docs/STATUS_DETAIL.md -->
 - **Host kernel version:** the recorded rented hosts ran Linux 6.8.0-59. A minimum or maximum supported kernel is **not documented yet**. <!-- src: docs/design/V3_DRIVER_MATRIX.md (SW3 GA104 cell) -->
 - **arm64:** no run on arm64 is documented. CI only cross-checks that the workspace builds for aarch64. <!-- src: .github/workflows/ci.yml (aarch64 job) -->
-- **An IOMMU is not required** for kayfabe's isolation: the guest never drives the physical GPU. See [FAQ](FAQ.md). <!-- src: docs/FAQ.md -->
+- **An IOMMU is not required** for kayfabe's isolation: the guest never drives the physical GPU. See [FAQ](../FAQ.md). <!-- src: docs/FAQ.md -->
 
 ### NVIDIA driver on the host
 
@@ -57,6 +57,8 @@ What has been run (the README's list; revisions and boxes are in the repository'
 - **Host BAR1:** the sum, over the kayfabe devices on one card, of guest BAR1 + guest BAR2 + 1 MiB (PRAMIN window) + 16 MiB of headroom must not exceed the host's BAR1 aperture. With the common 256 MiB host aperture, a guest BAR1 of 256 MiB does not fit and the harness uses 128 MiB. The device refuses at start, by name, a configuration that does not fit. Whether a larger BAR1 (resizable BAR) is needed is **not documented yet**. <!-- src: crates/kf-qemu/src/cardbudget.rs, scripts/fastguest/run_fast_guest.sh -->
 - **Guest RAM** must be a shared memfd (`memory-backend-memfd,share=on`); with ordinary anonymous RAM every store-backed path refuses. <!-- src: scripts/fastguest/run_fast_guest.sh -->
 - **Host RAM and disk:** the bench's own host checks demand at least 16 GB RAM, 8 cores and 100 GB free disk, but those are limits for a build-and-test box, not product requirements. The harness defaults for a Windows guest are 8192 MB and 8 vCPUs, with an 80 GB disk. A product minimum is **not documented yet**. <!-- src: scripts/bench/host_preflight.sh, scripts/bench/windows/win_vm.sh -->
+
+- **CPU-window admission:** each CPU window permits at most 8192 live guest placements across RAM and store, plus its separate boot seed. Further placements are refused by name; successful unmap returns capacity. <!-- src: crates/kf-mem/src/cpuwin.rs, commit a61ed3c6e (default placement budget) -->
 
 ### Privileges
 

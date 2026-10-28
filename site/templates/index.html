@@ -14,6 +14,10 @@
     <p class="tagline">{{ x.tagline }}</p>
     <!-- src: {{ x.lede_src }} -->
     <p class="lede">{{ x.lede }}</p>
+    <!-- src: {{ x.status_src }} -->
+    <p class="statusline">
+      {{ x.status | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}
+    </p>
     <p class="actions">
       <a class="button" href="/docs/">Read the manual</a>
       <a class="button secondary" href="https://github.com/reindertpelsma/kayfabe">kayfabe on GitHub</a>
@@ -23,8 +27,6 @@
       <img src="{{ get_url(path='screenshot-windows-desktop.jpg') | replace(from="https://kayfabe.dev", to="") }}" width="1600" height="692" decoding="async" alt="{{ x.screenshot.alt }}" />
       <figcaption>{{ x.screenshot.caption }}</figcaption>
     </figure>
-    <!-- src: {{ x.status_src }} -->
-    <p class="statusline">{{ x.status | replace(from="@docs/", to=docs) | markdown(inline=true) | safe }}</p>
   </div>
 </section>
 
