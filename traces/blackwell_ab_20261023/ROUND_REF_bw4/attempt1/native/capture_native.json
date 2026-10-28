@@ -1,0 +1,386 @@
+{
+ "lease": 57486060,
+ "private": true,
+ "raw_location": "private dev-box capture dir",
+ "complete": true,
+ "bad": [],
+ "files": {
+  "GUEST_MANIFEST.txt": {
+   "bytes": 12965,
+   "sha256": "425c8219e2c6e912f7799e201f62b9906c907ef32f069785ca2086d3f8ad8324"
+  },
+  "evtx/0001_Windows_PowerShell.evtx": {
+   "bytes": 1118208,
+   "sha256": "542461e21d917894cc4ffa9e2284bb1916e88deb1e121129f8b860e9593253ae"
+  },
+  "evtx/0002_System.evtx": {
+   "bytes": 1118208,
+   "sha256": "29ebcaffb8bbb4dc5eab3371a66d9db003b63e19b9b2b33e6a04829b744b077b"
+  },
+  "evtx/0003_Security.evtx": {
+   "bytes": 1118208,
+   "sha256": "17d3508737b53d3355cf327081a56ac76fa622aa2088a776c25c5fe609342d82"
+  },
+  "evtx/0004_Application.evtx": {
+   "bytes": 69632,
+   "sha256": "0a40efe5383b1150d078c8837dc20a03c860b51e68216d1451e3597a5e75ba3b"
+  },
+  "evtx/0005_Setup.evtx": {
+   "bytes": 69632,
+   "sha256": "40db679c03bd7eddd93866883244a4f380cb9558738ce06da527333946b5cae2"
+  },
+  "evtx/0006_OpenSSH_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "a216e9ad1775520148a0be16cbc56f9f2746d49ed0a6959fc0dab40d3ecad8ea"
+  },
+  "evtx/0007_Microsoft-Windows-WMI-Activity_Operational.evtx": {
+   "bytes": 1118208,
+   "sha256": "438a5c5fd30a10d4c9264b534e31ba3f41a883d99c5156f9b239e574152f6189"
+  },
+  "evtx/0008_Microsoft-Windows-WinRM_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "ae9ba6bee8583b57f2edf14a17731eb225fb073a5cd61930d1a17025ccab6a94"
+  },
+  "evtx/0009_Microsoft-Windows-Winlogon_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "fdd6dd68260a7eeca5309e03caf005eb81b11433d6aa3c4139ede0bd8ea1e41a"
+  },
+  "evtx/0010_Microsoft-Windows-WinINet-Config_ProxyConfigChanged.evtx": {
+   "bytes": 69632,
+   "sha256": "9fa65cbf8b0a11a8cd08029b851984d5a65017207a6f1832c372a61f73a8aa74"
+  },
+  "evtx/0011_Microsoft-Windows-WindowsUpdateClient_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "a49daac83299904ddaf332ad5ee034ab0a65b8afa4568701a269043f72455018"
+  },
+  "evtx/0012_Microsoft-Windows-Windows_Firewall_With_Advanced_Security_Firewall.evtx": {
+   "bytes": 1118208,
+   "sha256": "ac0df8b17deade9862832b6672f882f735e70284b37be109ac0303745479bf0e"
+  },
+  "evtx/0013_Microsoft-Windows-Windows_Defender_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "b70226d8e015d1e66606fa42d199d7a8ba4a3d84305a63e6270af119fd4af012"
+  },
+  "evtx/0014_Microsoft-Windows-WebAuthN_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "341356fdf111387901543f0be387022b86dc176ed64abe14006394d5c7fa270d"
+  },
+  "evtx/0015_Microsoft-Windows-Wcmsvc_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "71f67af12bae85ccd1d3850f13cb864384b0036bdc50e9c0f557949787fd3f89"
+  },
+  "evtx/0016_Microsoft-Windows-VolumeSnapshot-Driver_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "ea3a662eb96fa0ddf82900cdc2d39ddb99b2793f3f7bf9dd4c38aa437de8aa9e"
+  },
+  "evtx/0017_Microsoft-Windows-UserPnp_DeviceInstall.evtx": {
+   "bytes": 69632,
+   "sha256": "0b8ce699cc939e27110612e6eaee9503250b6f507cb21efc0579661c6df3135c"
+  },
+  "evtx/0018_Microsoft-Windows-User_Profile_Service_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "31a1b36fe05b60c1b8fff7a5c9306fced7b039806bc9823b456531eb27c5d8e4"
+  },
+  "evtx/0019_Microsoft-Windows-UniversalTelemetryClient_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "499a2f0127a440044edcd022bafd7a694186a00d9bb781b4a9afd25464a0da31"
+  },
+  "evtx/0020_Microsoft-Windows-Time-Service_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "78b5e3f29640e69423b04b7c5a873e653a3fc69cc52479e9d5ab3111507e5ce0"
+  },
+  "evtx/0021_Microsoft-Windows-TerminalServices-LocalSessionManager_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "7dce7703173dc95c92c8e09cac32d227eb75ae39b49fc4beefd1b6bb03b17c94"
+  },
+  "evtx/0022_Microsoft-Windows-TaskScheduler_Maintenance.evtx": {
+   "bytes": 69632,
+   "sha256": "4376762bdc9f35eada864ccb123cf08bf39fe03365ff85a38503db13721d3ad2"
+  },
+  "evtx/0023_Microsoft-Windows-Store_Operational.evtx": {
+   "bytes": 1118208,
+   "sha256": "ca413307e57a9387e235015854beef336f5332dd1504ecd4aee2073968bded36"
+  },
+  "evtx/0024_Microsoft-Windows-StorageVolume_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "d189d9a201da59267496c26348b9fa631c89c6f90e1332a48b2a9c12ffdae7d9"
+  },
+  "evtx/0025_Microsoft-Windows-StorageSpaces-Driver_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "ed3a3c062586454b73f34864d52506a1d81e453c136a1c62ef8663c1c8e8945f"
+  },
+  "evtx/0026_Microsoft-Windows-Storage-Storport_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "2a622138a8867503cadba5239302fc76aa8d196daf8720430b442e9117773eea"
+  },
+  "evtx/0027_Microsoft-Windows-StateRepository_Operational.evtx": {
+   "bytes": 1118208,
+   "sha256": "3e9955edcf0b3d122479dc89203b5b72ab2e665864c4f7cd151d41475b8d4dcc"
+  },
+  "evtx/0028_Microsoft-Windows-SMBServer_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "9acb0be1f6e025bf922bb29decf5018ffb6532f3a5bcd1be36c81626e6ceb2f7"
+  },
+  "evtx/0029_Microsoft-Windows-SMBClient_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "ab896da6113330101d5a59b55300d4926820a2deb2799734ae4d47758002e137"
+  },
+  "evtx/0030_Microsoft-Windows-SmbClient_Connectivity.evtx": {
+   "bytes": 69632,
+   "sha256": "45b648f63c9dbdd3f74cb4d6225d6fefc21a30fad106d9941d89909a93d3f452"
+  },
+  "evtx/0031_Microsoft-Windows-ShellCommon-StartLayoutPopulation_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "677f8fe1a74b4835ed2d57bafaabea63e9513df2ce8390609b49763818e33fe9"
+  },
+  "evtx/0032_Microsoft-Windows-Shell-Core_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "1193706ec3ed3cf0a77bc855486acbc000e3f48fee77fa58a214a5eb7f037340"
+  },
+  "evtx/0033_Microsoft-Windows-Security-SPP-UX-Notifications_ActionCenter.evtx": {
+   "bytes": 69632,
+   "sha256": "5d67b64bfc862941ee141a0d0266ab44737a93484163cfe6cbc8e6b7874b75a7"
+  },
+  "evtx/0034_Microsoft-Windows-Security-Mitigations_KernelMode.evtx": {
+   "bytes": 69632,
+   "sha256": "1d507a11d138b580223ea460028ec52b27079ee880e89f557409e38b32b0a41e"
+  },
+  "evtx/0035_Microsoft-Windows-Resource-Exhaustion-Detector_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "9c569e995d41c98c063b08cd4d6518b7b7d359b5e06caecf23ebad68ce831ac4"
+  },
+  "evtx/0036_Microsoft-Windows-ReadyBoost_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "65dcdee0421681cb5a68f93891c484a585cb8a299a48e82e34c1212810f54a3a"
+  },
+  "evtx/0037_Microsoft-Windows-PushNotification-Platform_Operational.evtx": {
+   "bytes": 1118208,
+   "sha256": "364251b55fe8ee784060374150a69832b3686658008420f2de51f2a8853bfb2f"
+  },
+  "evtx/0038_Microsoft-Windows-Provisioning-Diagnostics-Provider_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "a3642c96d38575d0ee75b49c76a1defb4c7715e46be2082b8a9c46652d92828e"
+  },
+  "evtx/0039_Microsoft-Windows-Privacy-Auditing_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "90169646752a587c900a7ca8a5c654add6d1e244cac7589398dfa8ad2d204ea5"
+  },
+  "evtx/0040_Microsoft-Windows-PrintService_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "1fdb0df3fc96c8a9870fe11babaed4f1b64db8224cf4fc0615f1ad07a0173829"
+  },
+  "evtx/0041_Microsoft-Windows-PowerShell_Operational.evtx": {
+   "bytes": 7409664,
+   "sha256": "5fe3f4f69ba36017e1e996a4a702756fb9ede88bb122ac2e783dfd2bf5b9a724"
+  },
+  "evtx/0042_Microsoft-Windows-Perflib_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "4b9ad71fc6a362f27969f0755f21c8c25a7f8a9e45cbe8c6b1e8af97e37b3f08"
+  },
+  "evtx/0043_Microsoft-Windows-PCI_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "6937b532ff3d35f403276cc92058f3d411757b60ae6c4f0d030c43a9fe9d7712"
+  },
+  "evtx/0044_Microsoft-Windows-Partition_Diagnostic.evtx": {
+   "bytes": 69632,
+   "sha256": "0ac6df54ca4297743020a593542d1ddfdd97d769740aaa895b9ad259e432b025"
+  },
+  "evtx/0045_Microsoft-Windows-Ntfs_WHC.evtx": {
+   "bytes": 69632,
+   "sha256": "0d84f975f90b8cf381f2688fb94c187add7740dd032d55fb8e6003897732cb2a"
+  },
+  "evtx/0046_Microsoft-Windows-Ntfs_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "19ab3d99440c807906bec7e633f73fc172e5e08ef75f0c2dd704d53e278eb1f5"
+  },
+  "evtx/0047_Microsoft-Windows-NetworkProfile_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "aa1cad4fbd28d4e76c3df2bcb715b439dbde0d0185210f49272ff3035aaf9ca3"
+  },
+  "evtx/0048_Microsoft-Windows-NCSI_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "22fd60bf1b003f857e88187d64c75c7c16d8697cbb5d06e551678f224d20286f"
+  },
+  "evtx/0049_Microsoft-Windows-MUI_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "171ea2d811d45007fd39f55842ef2e119a2f1ac6bcda471303644c778cec2d02"
+  },
+  "evtx/0050_Microsoft-Windows-LiveId_Operational.evtx": {
+   "bytes": 1118208,
+   "sha256": "c2eb212e60f2beb011cdd4ed53285c5b9b871fe9d8a9bd0daa63a2a63097ffba"
+  },
+  "evtx/0051_Microsoft-Windows-Known_Folders_API_Service.evtx": {
+   "bytes": 69632,
+   "sha256": "d77bb4f82b5f7da2cf771e5cfe6eb1f8e4fa0dcf82952018776f6fcf1ae77072"
+  },
+  "evtx/0052_Microsoft-Windows-Kernel-WHEA_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "6ac9b795e2608c40b2d401b5bba395f0c3b789aaa4a656bc5f013eedf1c675a6"
+  },
+  "evtx/0053_Microsoft-Windows-Kernel-ShimEngine_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "037c92cf25fbd5817c192b29043e88d4c7295fa640ec1a0822ce52b94889b0b6"
+  },
+  "evtx/0054_Microsoft-Windows-Kernel-PnP_Device_Management.evtx": {
+   "bytes": 69632,
+   "sha256": "48097396f7166b6776e722e1fd48899e99fa647a1aea50794ff4f91261e3895f"
+  },
+  "evtx/0055_Microsoft-Windows-Kernel-PnP_Configuration.evtx": {
+   "bytes": 1118208,
+   "sha256": "0bc3779a184823d74808a25f7793be6745e0b2679bb7aaa9410c6a5532aa6f4e"
+  },
+  "evtx/0056_Microsoft-Windows-Kernel-EventTracing_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "acd6a3fcff56e42e50cf83fa0c9b09f2a7bab76ded3dbcd4a0b08c9391488d95"
+  },
+  "evtx/0057_Microsoft-Windows-Kernel-Dump_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "01a1be71923bda89c3b3caa684fae5b9415f516129a3503432e86eb860085e31"
+  },
+  "evtx/0058_Microsoft-Windows-Kernel-Cache_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "c495160add3cf6af435d5930da94ae1973c88deb78d02cb8238405832655f680"
+  },
+  "evtx/0059_Microsoft-Windows-Kernel-Boot_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "047b47d3328572f42c493fc6e9b6cec00d68629c4bf74b36b2233a178e016391"
+  },
+  "evtx/0060_Microsoft-Windows-HelloForBusiness_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "ff1522190e8655f20c6c2f0b458a35e5a31b27e03d053d2dd78979b71495b081"
+  },
+  "evtx/0061_Microsoft-Windows-GroupPolicy_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "a113711b5175dfe80ee32b4fef4c19bc5938dee4103edca7af8e3512d936a450"
+  },
+  "evtx/0062_Microsoft-Windows-DxgKrnl-Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "4267bb93ede7aea505acecb68d00cde0c6524824c5547d2f0fab9d4aae940980"
+  },
+  "evtx/0063_Microsoft-Windows-Diagnosis-PCW_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "7c77cb8b21c407a17472d29ba99651b0c3d26736c022bb692b8fc0f247ce249c"
+  },
+  "evtx/0064_Microsoft-Windows-Diagnosis-DPS_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "793ec8e691fe3fbc927e6ae5ee0130a9a2d1149123a8c317bbb6b1cf6269ee2d"
+  },
+  "evtx/0065_Microsoft-Windows-Dhcp-Client_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "2dc0a4bfb228b5b6ea0d90c3d939f3b00d7b11b6a2c688d57e9e6058c1b60446"
+  },
+  "evtx/0066_Microsoft-Windows-DeviceSetupManager_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "f35d83a8f133d8b681f6b301d1fc7ae01e2705db1b8c8e4373012bdbf57971eb"
+  },
+  "evtx/0067_Microsoft-Windows-DeviceSetupManager_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "60ead52d30879365d1b16b698f23a91e03de787cd4bef48dcce18f79d5fb3dba"
+  },
+  "evtx/0068_Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "763fcbb1e1dd81fc05d611ec69e020ed47b5b3091bd9cac272679990b4e09753"
+  },
+  "evtx/0069_Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "ed04cb90dc8491a708078c8a82f6651e1e757d2f7c7f331765a158a505adcb57"
+  },
+  "evtx/0070_Microsoft-Windows-Crypto-NCrypt_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "b32da0190f3acb6165f87f4e107f8ff9b6344dd9330778fd6dd83d5aa475e3c8"
+  },
+  "evtx/0071_Microsoft-Windows-Crypto-NCrypt_KeyMgmt.evtx": {
+   "bytes": 69632,
+   "sha256": "bd711fe20ac4ac4850147d2afb43348346a6361603e6ce371a7209b5e474b7f5"
+  },
+  "evtx/0072_Microsoft-Windows-Crypto-DPAPI_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "473ba5f53d305ce7c636eddc535c7aa3a223f0b1b7539300dfd5bf1204569c55"
+  },
+  "evtx/0073_Microsoft-Windows-Containers-Wcifs_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "481b7fa920521b4869b1dc1ff29be828568c21f1a5036d8dcc2017770315f563"
+  },
+  "evtx/0074_Microsoft-Windows-Containers-BindFlt_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "63d7af7e33e3f69cd378aad1e66fae73d27e65253488a7779211569d46ec0f8d"
+  },
+  "evtx/0075_Microsoft-Windows-CodeIntegrity_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "ca65512693b679195de0b70018a9f517551f9cc96670331bac84f26abbd5c37f"
+  },
+  "evtx/0076_Microsoft-Windows-CloudStore_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "53eb6b41c4a73b93f508482ee4309ca1e4ebce12b1012177fd3292ab40fcc2fb"
+  },
+  "evtx/0077_Microsoft-Windows-CloudFiles-Filter_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "d58563256bcd7dbe31485aae62deb78a5c219e07ca1024541b0f8579a86a6166"
+  },
+  "evtx/0078_Microsoft-Windows-Bits-Client_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "7cc377fb376c76234596bcbeff4f35d9311eb52da842ce7dccbb53013ff81bfa"
+  },
+  "evtx/0079_Microsoft-Windows-Biometrics_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "c23e6c73ac04f2cc804d9477a6b86684ad6d8dc258255be5ca8915f73633ae20"
+  },
+  "evtx/0080_Microsoft-Windows-Audio_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "8f699544df1f18b15704f33fbe18d97ac1a90d29e9b1b0111e0b0c4698b58980"
+  },
+  "evtx/0081_Microsoft-Windows-AppxPackaging_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "640f5b34eaaf086de2138c13838466b177876c5d3acce9b0216d5a20c152503c"
+  },
+  "evtx/0082_Microsoft-Windows-AppXDeploymentServer_Operational.evtx": {
+   "bytes": 1118208,
+   "sha256": "53cb30e7c28c71f4c19ad00f1790f81ff3aa5fd7f23428b99c2de5d274a7f5ee"
+  },
+  "evtx/0083_Microsoft-Windows-AppXDeployment_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "6d5e818108879f19636c92ba758cdf4bf1e47cbc0e982cc527762d1ea02bb79a"
+  },
+  "evtx/0084_Microsoft-Windows-AppXDeployment-Server_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "cf1b1de3018fa6b80a956e03dd9a9e6d0a3d9834346d17c599b8b3563fa416b0"
+  },
+  "evtx/0085_Microsoft-Windows-AppReadiness_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "613175108b84126f3a9002a95e36dc3356ad64011dbba744407db444ca5bbfbb"
+  },
+  "evtx/0086_Microsoft-Windows-AppReadiness_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "d7f226aeb568f5ff478e84cf5f28ca72590683d7feb15d8b2eb58c162c47f7e4"
+  },
+  "evtx/0087_Microsoft-Windows-AppModel-Runtime_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "7a429ef03af10dbb6478d1db1a4082afca22a08ea7b152136ebda4f145310061"
+  },
+  "evtx/0088_Microsoft-Windows-AppLocker_MSI_and_Script.evtx": {
+   "bytes": 69632,
+   "sha256": "848d0acf6994cf15d6b685beb704bae76b8e1d8f5c29d411f2db7788c0d0fdb8"
+  },
+  "evtx/0089_Microsoft-Windows-AppLocker_EXE_and_DLL.evtx": {
+   "bytes": 69632,
+   "sha256": "48a7e2ca69edf340d480660bba4a517c8db6edcd013233ae0b699879919cf980"
+  },
+  "evtx/0090_Microsoft-Windows-AppID_Operational.evtx": {
+   "bytes": 69632,
+   "sha256": "3f398d72d85187e5cc362e999c1489f9ae748dcaeb6deb2a3da8daadf1cd6319"
+  },
+  "evtx/0091_Microsoft-Client-Licensing-Platform_Admin.evtx": {
+   "bytes": 69632,
+   "sha256": "de31984d2ac47c2b868e238f064ea0924c2b0861fcd2f9748e8f39a406f39166"
+  },
+  "evtx/Application.txt": {
+   "bytes": 79436,
+   "sha256": "547f0274c7989e96213a2347e69cf7fc7c4eb3223a039592bd5f79b27d0bd7d1"
+  },
+  "evtx/System.txt": {
+   "bytes": 264408,
+   "sha256": "d201c322df651e942ea2e2eb484be416c801c47ae363cb62eb74e645660abf29"
+  }
+ },
+ "dump_files": 0
+}

@@ -1,0 +1,1 @@
+[{"utc":"2026-10-23T16:15:55.9630974Z","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"Virtualization-based security (policies: 0) is disabled."},{"utc":"2026-10-23T22:52:35.8715496Z","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"Virtualization-based security (policies: 0) is disabled."}]

@@ -1,0 +1,14 @@
+ubuntu
+/dev[PRIVATE_PATH]       117G  8.0G  109G   7% /
+crw-rw---- 1 root kvm 10, 232 Oct 27 02:
+38
+Mem:             198           0         196           0           0         195
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA106 [GeForce RTX 3060 Lite Hash Rate] [10de:2504] (rev a1)
+NVIDIA GeForce RTX 3060, 575.51.03, 12288 MiB, P8
+    Product Architecture                  : Ampere
+        Total                             : 12288 MiB
+    BAR1 Memory Usage
+        Total                             : 256 MiB
+0
+CUPROBE_OK roundtrip_equal True bytes 1048576
+Model name:                           Intel(R) Xeon(R) CPU E5-2698 v4 @ 2.20GHz

@@ -1,0 +1,13 @@
+{
+  "id": 56509993,
+  "machine_id": 152098,
+  "host_id": 702330,
+  "geolocation": "Chile, CL",
+  "gpu_name": "RTX 5090",
+  "driver_version": "595.91.07",
+  "dph_total": 0.7361111111111112,
+  "verification": "verified",
+  "is_vm_deverified": false,
+  "market_utc": "2026-10-24T21:07:56.945402+00:00",
+  "same_BW6_machine": true
+}

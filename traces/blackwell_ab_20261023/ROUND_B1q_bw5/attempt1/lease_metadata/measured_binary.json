@@ -1,0 +1,14 @@
+{
+  "source": "48b027267a0e05c9ffdb4a049d34f4d719fd1837",
+  "binary": "[PRIVATE_PATH]",
+  "binary_sha256": "4fbe887c8a1e1be0933cb25d39df4c3412de5d7ab16f09003f0b3c296553f054",
+  "utc": "2026-10-24T11:05:00.244453+00:00",
+  "tests_verified_before_arms": true,
+  "separate_target": true,
+  "verification": "kf-rm849/kf-qemu419/kf-disp324+5ignored; 13 mutants >=2 killers; clippy added0",
+  "cpu_evidence": "traces/blackwell_consttab_20261023/README.md",
+  "scope": "measured consttab page only, no B1 merge",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

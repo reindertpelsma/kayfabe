@@ -1,0 +1,7 @@
+{
+  "run": "WC1-round3b-TU116-57852545",
+  "startup1_controls": 172,
+  "startup2_controls": 172,
+  "same_control_id_set": true,
+  "limit": "Same observed control IDs; call counts may vary; exact values only in constants.json"
+}

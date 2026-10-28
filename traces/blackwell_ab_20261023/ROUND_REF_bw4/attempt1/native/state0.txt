@@ -1,0 +1,8 @@
+REF_STATE {"utc":"2026-10-24T08:25:00.7362254Z","boot":"2026-10-24T08:10:52.4548100Z","name":"NVIDIA GeForce RTX 5070","driver":"32.0.15.8088","ConfigManagerErrorCode":0,"status":"OK","tdr4101":0,"nvlddmkm_events":0,"pnp":"PCI\\VEN_10DE\u0026DEV_2F04\u0026SUBSYS_53231462\u0026REV_A1\\3\u0026267A616A\u00260\u002638"}
+REF_BAR1 BAR1 Memory Usage
+REF_BAR1 Total                             : 256 MiB
+REF_BAR1 Used                              : 228 MiB
+REF_BAR1 Free                              : 28 MiB
+REF_SMI_L GPU 0: NVIDIA GeForce RTX 5070 (UUID: GPU-UUID)
+NODIR C:\Windows\Minidump
+REF_STATE_DONE

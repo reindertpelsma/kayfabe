@@ -1,0 +1,12 @@
+DEFER_SCOPE=leaf-PTE, small-page table, GA10x MMU regime, ONE board, VIRT_READ, one copy engine — ⊘ NOT a statement about big/huge pages, about page-directory entries, about writes, or about any other MMU generation
+FAULT_MARK=defer_liveness_prime arm=PLAIN(rig-control) va=0x0000006000010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+FAULT_MARK=defer_liveness_prime arm=DEFER(the-question) va=0x0000006200010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+FAULT_MARK=defer_liveness_prime arm=DEFER+INVALIDATE(known-positive) va=0x0000006400010000 ⚠ THE HOST dmesg WILL CARRY AN Xid 31 FOR THIS CHANNEL AND IT IS THE POINT
+DEFER_PRIME_FAULTS=3/3
+DEFER_RIGCTL=PASS
+DEFER_NEGCTL=PASS
+DEFER_LIVENESS=B
+RUNGCTL_defer_liveness=PASS
+RUNG_defer_liveness=PASS
+[xid-watch] --- command output ends (rc=0) ---
+KF_XID_REFUSED arm=--defer-liveness

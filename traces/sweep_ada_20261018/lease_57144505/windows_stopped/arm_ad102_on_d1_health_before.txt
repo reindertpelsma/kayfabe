@@ -1,0 +1,9 @@
+S2_HEALTH {"utc":"2026-10-22T04:29:11.7170093Z","boot":"2026-10-22T04:25:15.5000000Z","system_log_readable":1,"events4101":0,"events153":2,"bugcheck1001":0,"driver":"32.0.15.8088","code":0,"dwm":1,"explorer":0}
+[{"TimeCreated":"\/Date(1792643118191)\/","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"Virtualization-based security (policies: 0) is disabled."},{"TimeCreated":"\/Date(1792666744572)\/","Id":153,"ProviderName":"Microsoft-Windows-Kernel-Boot","Message":"Virtualization-based security (policies: 0) is disabled."}]
+S2 desktop/driver/zero-4101-153-bugcheck guard failed
+At C:\kf\s2_health.ps1:12 char:120
++ ... ents.Count){throw 'S2 desktop/driver/zero-4101-153-bugcheck guard fai ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (S2 desktop/driv...ck guard failed:String) [], Ru
+   ntimeException
+    + FullyQualifiedErrorId : S2 desktop/driver/zero-4101-153-bugcheck guard failed

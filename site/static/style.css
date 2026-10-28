@@ -436,6 +436,16 @@ pre {
 .docs-index ul {
   max-width: 44rem;
 }
+/* Detail pages keep images and tables inside a narrow viewport. */
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+.prose table {
+  display: block;
+  overflow-x: auto;
+  min-width: 0;
+}
 .prose h2,
 .docs-index h2 {
   margin-top: 2.25rem;
