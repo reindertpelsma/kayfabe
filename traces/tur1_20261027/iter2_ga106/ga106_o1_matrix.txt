@@ -1,0 +1,71 @@
+=== cuda_callback rc=1 secs=16
+KFCUDA device NVIDIA GeForce RTX 3060
+CHECK callback FAIL callbacks=2 bad=1
+CHECK cuda_call FAIL cuModuleUnload(mod) rc=999
+=== cuda_occupancy rc=0 secs=4
+KFCUDA device NVIDIA GeForce RTX 3060
+CHECK occupancy_bounds ok grid=56 block=768 active=2
+CHECK occupancy ok callbacks=0 bad=0
+KFCUDA RESULT OK occupancy
+=== dxprobe_d3d11 rc=0 secs=3
+KFDX start api=d3d11 iters=200 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2504 luid=0x00000000_0x00005afb dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 3060"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x0000651c dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 3060"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=200 bad=0 ms=875
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+=== dxprobe_d3d12 rc=1 secs=32
+KFDX start api=d3d12 iters=200 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2504 luid=0x00000000_0x00005afb dedicated_mb=7853 software=0 name="NVIDIA GeForce RTX 3060"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x0000651c dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 3060"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc100
+KFDX vidmem budget_mb=7085 usage_mb=6
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+=== cup2 rc=0 secs=3
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+=== cup3 rc=0 secs=3
+
+=== cup8 rc=0 secs=14
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+=== events since boot
+
+TimeCreated            Id ProviderName
+-----------            -- ------------
+10/27/2026 4:12:33 AM 153 nvlddmkm
+10/27/2026 4:12:33 AM 153 nvlddmkm
+10/27/2026 4:12:32 AM 153 nvlddmkm
+10/27/2026 4:12:13 AM 153 nvlddmkm
+10/27/2026 4:12:13 AM 153 nvlddmkm
+10/27/2026 4:12:11 AM 153 nvlddmkm
+10/27/2026 4:11:53 AM 153 nvlddmkm
+10/27/2026 4:11:53 AM 153 nvlddmkm
+10/27/2026 4:11:52 AM 153 nvlddmkm
+10/27/2026 4:11:34 AM 153 nvlddmkm
+
+
+
+=== adapters
+
+
+Name                   : NVIDIA GeForce RTX 3060
+DriverVersion          : 32.0.15.8088
+Status                 : OK
+ConfigManagerErrorCode : 0

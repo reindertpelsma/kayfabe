@@ -1,0 +1,8 @@
+REF_STATE {"utc":"2026-10-24T21:21:18.6092976Z","boot":"2026-10-24T21:15:17.6390550Z","name":"NVIDIA GeForce RTX 5090","driver":"32.0.15.8088","ConfigManagerErrorCode":0,"status":"OK","tdr4101":0,"nvlddmkm_events":0,"pnp":"PCI\\VEN_10DE\u0026DEV_2B85\u0026SUBSYS_89E31043\u0026REV_A1\\3\u0026267A616A\u00260\u002638"}
+REF_BAR1 BAR1 Memory Usage
+REF_BAR1 Total                             : 32768 MiB
+REF_BAR1 Used                              : 32740 MiB
+REF_BAR1 Free                              : 28 MiB
+REF_SMI_L GPU 0: NVIDIA GeForce RTX 5090 (UUID: GPU-UUID)
+NODIR C:\Windows\Minidump
+REF_STATE_DONE

@@ -1,0 +1,11 @@
+{
+  "approved_native_xid_lines": [
+    "2026-10-23T15:27:03.048425+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:27:06.106001+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:27:09.116047+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:27:12.180000+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90752, name=kayfabe-rm-ladd, channel 0x00000004, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE0 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "2026-10-23T15:27:16.286022+0000 ubuntu kernel: NVRM: Xid (PCI:0000:00:07): 31, pid=90788, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "count": 5,
+  "rule": "owner decision1: source-matched controls only; all later changes fatal"
+}

@@ -1,0 +1,12 @@
+ITER_START 2026-10-27T01:22:20+00:00
+0
+UNIT_RC=0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 370 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+KF3_RC=0
+KF3_BUILT [PRIVATE_PATH] rev=67339dc0-dirty mtime=2026-10-27 01:23:19.082869874 +0000 (shared build dir [PRIVATE_PATH])
+started_win_boot
+ITER_DONE 2026-10-27T01:26:41+00:00

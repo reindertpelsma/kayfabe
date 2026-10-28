@@ -1,0 +1,11 @@
+0
+name, driver_version, memory.total [MiB], memory.used [MiB], pstate, temperature.gpu
+NVIDIA GeForce RTX 2060 SUPER, 595.91.07, 8192 MiB, 1 MiB, P8, 36
+        Total                                          : 8192 MiB
+    BAR1 Memory Usage
+        Total                                          : 256 MiB
+        Total                                          : 0 MiB
+20
+CUPROBE_OK roundtrip_equal True bytes 1048576
+20
+0

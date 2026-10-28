@@ -1,0 +1,10 @@
+{
+  "source": "618f0431815d037d4226b642ae37e76967353e90",
+  "binary": "[PRIVATE_PATH]",
+  "binary_sha256": "da88e850048abb8ef4ab3bbbe56b54358f0a837bf5489330223fbec7f5196c29",
+  "product_unchanged": "6e3fd3fd6d809ae2c2a3504cd8be1ecd29b2b31b",
+  "separate_target": true,
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

@@ -1,0 +1,23 @@
+{
+  "source": "007ba1eb03db9e21d351e465e95b46cbc3134a95",
+  "parents": [
+    "b85d02bae3ed085a10cd1c8376c1a842e86c571b",
+    "38fd948fd67d89ebf42827f56a3435355df592ae"
+  ],
+  "base": "cb80cbd29b7a05f904acd822f172485fd49938a9",
+  "branch": "claude/blackwell-fixes-20261024",
+  "binary": "[PRIVATE_PATH]",
+  "binary_sha256": "05d3d46f4e8429f5ffebacbd7ca9f5156f7d6f1141b4b10ce84732b174347448",
+  "route_log_line": "USER_RING_ROUTE_DECLINED family=",
+  "route_log_line_in_binary": true,
+  "tests_passed": true,
+  "test_passes": 2114,
+  "test_ignored": 4,
+  "test_log": "[PRIVATE_PATH]",
+  "build_log": "[PRIVATE_PATH]",
+  "utc": "2026-10-24T11:13:56.079299+00:00",
+  "scope": "relay-route fix b85d02bae + second-life fix 38fd948fd, merged on cb80cbd29",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

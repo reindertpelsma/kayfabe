@@ -1,0 +1,25 @@
+=== TDR (nvlddmkm 153) count since boot, and boot time
+
+Tuesday, October 27, 2026 2:13:09 AM
+133
+
+TimeCreated
+-----------
+10/27/2026 2:12:33 AM
+10/27/2026 2:12:06 AM
+10/27/2026 2:12:06 AM
+10/27/2026 2:12:04 AM
+
+
+
+
+
+Name                   : NVIDIA GeForce RTX 2060 SUPER
+Status                 : OK
+ConfigManagerErrorCode : 0
+
+
+
+
+name, driver_version, memory.used [MiB]
+NVIDIA GeForce RTX 2060 SUPER, 580.88, 61 MiB

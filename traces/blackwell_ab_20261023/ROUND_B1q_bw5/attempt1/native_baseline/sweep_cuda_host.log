@@ -1,0 +1,23 @@
+UNVERIFIED-HOST
+OBSERVATION; not PASS or attestation
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=286 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=282 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=372 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=8.608 med_ms=8.633 p90_ms=8.641 min_ms=8.589 max_ms=8.653 gflops=1990.117 batch_per_launch_ms=8.684 batch_gflops=1978.319 h2d_ms=2.584 d2h_med_ms=1.378 submit_med_ms=0.006 sync_med_ms=8.625 sync_cpu_med_ms=8.625 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.008 bad=0 maxerr=0
+CUDA_LADDER_STARTED=2026-10-24T11:02:53+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=6e3fd3fd
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=286 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=282 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=372 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=728 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=63.09
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=100.05
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=20.49
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.028 med_ms=0.007 p90_ms=0.007 min_ms=0.006 max_ms=0.008 gflops=1.210 batch_per_launch_ms=0.003 batch_gflops=3.146 h2d_ms=0.021 d2h_med_ms=0.006 submit_med_ms=0.003 sync_med_ms=0.004 sync_cpu_med_ms=0.004 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=8.608 med_ms=8.633 p90_ms=8.641 min_ms=8.589 max_ms=8.653 gflops=1990.117 batch_per_launch_ms=8.684 batch_gflops=1978.319 h2d_ms=2.584 d2h_med_ms=1.378 submit_med_ms=0.006 sync_med_ms=8.625 sync_cpu_med_ms=8.625 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.008 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-10-24T11:02:55+00:00
