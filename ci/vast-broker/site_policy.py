@@ -141,7 +141,7 @@ def ci_passed(sha, get):
     if not matches:
         return False
     # Push and PR CI may both exist. Every qualifying record must be complete,
-    # successful, and bound through its job/ci suite to the intended workflow.
+    # successful, and bound through its job/check suite to the intended workflow.
     for ci in matches:
         if (
             ci["head_sha"] != sha

@@ -9,6 +9,25 @@ from pathlib import Path
 REPO = "reindertpelsma/kayfabe"
 
 
+def completed_replay(sha, get):
+    runs = get("/actions/workflows/gpu-vast.yml/runs?head_sha=" + sha + "&event=push&per_page=100")
+    if runs["total_count"] != len(runs["workflow_runs"]) or not 0 < runs["total_count"] <= 100:
+        return False
+    for run in runs["workflow_runs"]:
+        if (
+            run["head_sha"] != sha
+            or run["head_branch"] != "master"
+            or run["event"] != "push"
+            or run["path"] != ".github/workflows/gpu-vast.yml"
+            or run["repository"]["full_name"] != REPO
+            or run["head_repository"]["full_name"] != REPO
+            or run["status"] != "completed"
+            or run["conclusion"] != "success"
+        ):
+            return False
+    return True
+
+
 def verify(sha, status, get_run, *, get=None):
     try:
         if not re.fullmatch("[0-9a-f]{40}", sha) or status["sha"] != sha:
@@ -25,7 +44,7 @@ def verify(sha, status, get_run, *, get=None):
             reused = re.fullmatch(
                 r"reused: same tree verified on ([0-9a-f]{7})", latest["description"]
             )
-            if not reused or get is None:
+            if not reused or get is None or not completed_replay(sha, get):
                 return False
             # Isolated Python deliberately ignores sys.path. Load only the sibling module
             # from the same trusted master checkout, never from environment/package paths.

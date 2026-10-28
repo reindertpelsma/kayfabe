@@ -266,15 +266,18 @@ def main():
         proof = find_reuse(sha, os.environ["GITHUB_EVENT_NAME"], os.environ["GITHUB_REF"])
         if proof:
             print(render(proof), end="")
-            api(
-                "/statuses/" + sha,
-                {
-                    "state": "success",
-                    "context": "gpu-vast",
-                    "description": "reused: same tree verified on " + proof["parent"][:7],
-                    "target_url": proof["url"],
-                },
-            )
+            # Probe before any same-SHA overwrite. Existing FF success is original
+            # completed evidence; new copied success belongs only to the final report.
+            if proof["parent"] != sha:
+                api(
+                    "/statuses/" + sha,
+                    {
+                        "state": "pending",
+                        "context": "gpu-vast",
+                        "description": "GPU replay pending",
+                        "target_url": run_url,
+                    },
+                )
             # A separate context preserves the parent's original evidence while linking forward.
             api(
                 "/statuses/" + proof["parent"],

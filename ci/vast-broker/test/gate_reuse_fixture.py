@@ -190,14 +190,23 @@ if case in {"ci-ambiguous-failed", "ci-ambiguous-pending", "ci-multiple-success"
 
 child_runs = {
     "total_count": 1,
-    "workflow_runs": [{
-        "id": 456, "head_sha": sha, "head_branch": "master", "event": "push",
-        "path": ".github/workflows/gpu-vast.yml", "status": "completed",
-        "conclusion": "success", "repository": {"full_name": repo},
-        "head_repository": {"full_name": repo},
-    }],
+    "workflow_runs": [
+        {
+            "id": 456,
+            "head_sha": sha,
+            "head_branch": "master",
+            "event": "push",
+            "path": ".github/workflows/gpu-vast.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "repository": {"full_name": repo},
+            "head_repository": {"full_name": repo},
+        }
+    ],
 }
-data["/actions/workflows/gpu-vast.yml/runs?head_sha=" + sha + "&event=push&per_page=100"] = child_runs
+data["/actions/workflows/gpu-vast.yml/runs?head_sha=" + sha + "&event=push&per_page=100"] = (
+    child_runs
+)
 if case == "release-child-missing":
     child_runs.update(total_count=0, workflow_runs=[])
 if case == "release-child-pending":
@@ -246,7 +255,10 @@ if case.startswith("release"):
 else:
     module = load("gate_reuse")
     proof = module.find_reuse(sha, event, ref, get, lambda _: "\n".join(lines))
-    assert bool(proof) == (case in {"valid", "ci-multiple-success", "prepare-pending"}), (case, proof)
+    assert bool(proof) == (case in {"valid", "ci-multiple-success", "prepare-pending"}), (
+        case,
+        proof,
+    )
     if proof:
         assert proof["parent"] == parent and proof["tree"] == tree
         assert proof["url"] == url and proof["description"] == status["description"]
@@ -280,11 +292,16 @@ if case == "prepare-pending":
     module.api = lambda path, body: writes.append((path, body))
     module.find_reuse = lambda *_: proof
     with tempfile.NamedTemporaryFile(mode="w+") as output:
-        os.environ.update({
-            "GITHUB_REPOSITORY": repo, "TARGET_SHA": sha, "GITHUB_RUN_ID": "456",
-            "GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/master",
-            "GITHUB_OUTPUT": output.name,
-        })
+        os.environ.update(
+            {
+                "GITHUB_REPOSITORY": repo,
+                "TARGET_SHA": sha,
+                "GITHUB_RUN_ID": "456",
+                "GITHUB_EVENT_NAME": "push",
+                "GITHUB_REF": "refs/heads/master",
+                "GITHUB_OUTPUT": output.name,
+            }
+        )
         sys.argv = ["gate_reuse.py", "prepare"]
         with contextlib.redirect_stdout(io.StringIO()):
             module.main()

@@ -13,3 +13,5 @@ On a master push, the status reporter can immediately copy a successful GitHub A
 The owner adds `site` as a required master check after reviewing and merging the workflows. This change does not modify repository protection or Pages settings. The status is a test result, not release provenance. API outages or incomplete evidence may require rerunning the Site/status workflow; no success is inferred from missing evidence.
 
 CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): PR file pagination rechecks the head, base SHA and changed-file count after the last page. A concurrent synchronize or base update leaves a conservative build decision and cannot report the older head as not needed.
+
+CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): Site reuse binds every CI record through its job and check suite to the intended ci.yml workflow on the same SHA. All legitimate push/PR duplicates must pass; ambiguity takes the ordinary build path.

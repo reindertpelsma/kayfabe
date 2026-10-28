@@ -38,9 +38,12 @@ print('d'*40)
         `#!/usr/bin/env python3
 import os,sys
 a=sys.argv[1:]
-assert a[-1]=='https://raw.githubusercontent.com/reindertpelsma/kayfabe/'+os.environ['EXPECTED']+'/ci/vast-broker/site_policy.py'
+origin='https://raw.githubusercontent.com/reindertpelsma/kayfabe/'
+assert a[-1]==origin+os.environ['EXPECTED']+'/ci/vast-broker/site_policy.py'
 assert '--proto' in a and '=https' in a and '--max-time' in a and '--max-filesize' in a
-source="import os,sys\\nassert sys.flags.isolated==1\\nopen(os.environ['GITHUB_OUTPUT'],'w').write('run=1\\\\ndeploy=1\\\\nknown=1\\\\n')\\n"
+source=("import os,sys\\nassert sys.flags.isolated==1\\n"
+        "open(os.environ['GITHUB_OUTPUT'],'w').write("
+        "'run=1\\\\ndeploy=1\\\\nknown=1\\\\n')\\n")
 open(a[a.index('-o')+1],'w').write(source)
 `,
         { mode: 0o700 },
