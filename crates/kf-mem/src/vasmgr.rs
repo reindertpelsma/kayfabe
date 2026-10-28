@@ -1740,7 +1740,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 (kf_host::diag::snapshot(), kf_host::diag::thread_cpu_ns())
             });
             let cost_before = kf_host::diag::snapshot();
+            let g_before = kf_host::diag::refresh_costs().map(|c| (c, std::time::Instant::now()));
             let a = apply_entry(&space.target, &e.runs, &cfg);
+            let g_costs = g_before.and_then(|(before, start)| {
+                let ns = ns_since(start);
+                kf_host::diag::refresh_cost_delta(before).map(|c| (ns, c))
+            });
             if space.target.sparse_twin() {
                 self.deferred_layout.insert(key);
             }
@@ -1852,9 +1857,22 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
             // ★ V3_BATCHED_MAP: runs vs the verbs they cost (a batch / a range is ONE verb).
-            if a.mapped.saturating_add(a.unmapped) >= 1000 {
+            let g_summary = g_costs
+                .filter(|(g_ns, _)| *g_ns > 500_000_000)
+                .map(|(g_ns, c)| {
+                    format!(
+                        " G walk={} space={key:?} scope=target_apply target_apply_ns={g_ns} \
+                        mark_calls={} mark_ns={} stitch_calls={} stitch_ns={} apply_refused={} \
+                        signal_debug=true",
+                        batch.id, c[0], c[1], c[2], c[3], a.refused,
+                    )
+                })
+                .unwrap_or_default();
+            if a.mapped.saturating_add(a.unmapped) >= 1000 || !g_summary.is_empty() {
                 eprintln!(
-                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) carrying {} runs), {} fallback(s){}",
+                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map \
+                    verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) \
+                    carrying {} runs), {} fallback(s){}{}",
                     a.mapped,
                     a.unmapped,
                     apply_ns / 1_000_000,
@@ -1868,7 +1886,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     a.first_batch_fallback
                         .as_deref()
                         .map(|w| format!(" (first: {w})"))
-                        .unwrap_or_default()
+                        .unwrap_or_default(),
+                    g_summary
                 );
             } else if let Some(w) = &a.first_batch_fallback {
                 eprintln!("kf3: mem batch fallback {key:?}: {w}");

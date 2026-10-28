@@ -532,6 +532,7 @@ impl MappedRegion {
         cache: CachePolicy,
         page: HostPageSize,
     ) -> Result<Self, RawError> {
+        let _g_cost = crate::refresh_stack_unsafe::cost(crate::refresh_stack_unsafe::Cost::Stitch);
         let backing = Backing::SharedFile { fd, offset: 0 };
         cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
         let mut total = 0u64;

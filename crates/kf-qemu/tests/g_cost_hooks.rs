@@ -4,8 +4,13 @@ const SPARSE: &str = include_str!("../../kf-host/src/sparse.rs");
 const VA: &str = include_str!("../../kf-mem/src/vasmgr.rs");
 #[test]
 fn g_whole_reservations_mark_includes_reindex() {
-    let body = SPARSE.split("pub(crate) fn mark(").nth(1).unwrap()
-        .split("    /// Turn queued").next().unwrap();
+    let body = SPARSE
+        .split("pub(crate) fn mark(")
+        .nth(1)
+        .unwrap()
+        .split("    /// Turn queued")
+        .next()
+        .unwrap();
     assert!(body.find("Cost::Mark").unwrap() < body.find("let end").unwrap());
     assert!(body.contains("self.reindex(va, end)"));
 }
@@ -13,8 +18,13 @@ fn g_whole_reservations_mark_includes_reindex() {
 fn g_stitch_scope_includes_nested_mmaps_without_an_anywhere_counter() {
     let stitch = RAW.split("pub fn stitch(").nth(1).unwrap();
     assert!(stitch.find("Cost::Stitch").unwrap() < stitch.find("Mapping::anywhere").unwrap());
-    let anywhere = RAW.split("fn anywhere(").nth(1).unwrap()
-        .split("impl Drop for Mapping").next().unwrap();
+    let anywhere = RAW
+        .split("fn anywhere(")
+        .nth(1)
+        .unwrap()
+        .split("impl Drop for Mapping")
+        .next()
+        .unwrap();
     assert!(!anywhere.contains("Cost::"));
 }
 #[test]
@@ -25,5 +35,6 @@ fn g_delta_brackets_actual_apply_and_summary_has_matching_denominator() {
     assert!(before < apply && apply < after);
     assert!(VA.contains("target_apply_ns="));
     assert!(VA.contains("g_ns > 500_000_000"));
-    assert!(VA.contains("mark_calls=")); assert!(VA.contains("stitch_calls="));
+    assert!(VA.contains("mark_calls="));
+    assert!(VA.contains("stitch_calls="));
 }

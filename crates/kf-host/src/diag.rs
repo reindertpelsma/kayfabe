@@ -514,3 +514,9 @@ pub fn refresh_stack_arm() -> Option<RefreshStack> {
         }
     }
 }
+
+/// G counters use the existing E11 owner/flag; returned arrays are per-apply deltas only.
+pub use kf_linux_raw::refresh_stack_unsafe::{
+    Cost as RefreshCost, cost as refresh_cost, cost_delta as refresh_cost_delta,
+    costs as refresh_costs,
+};

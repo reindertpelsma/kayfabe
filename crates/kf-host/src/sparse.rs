@@ -938,6 +938,7 @@ impl Reservations {
     }
 
     pub(crate) fn mark(&mut self, va: u64, len: u64, live: bool) {
+        let _g_cost = crate::diag::refresh_cost(crate::diag::RefreshCost::Mark);
         let end = va.saturating_add(len);
         let start_key = self.key(va).unwrap_or(va);
         for b in self
