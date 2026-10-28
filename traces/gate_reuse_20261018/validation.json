@@ -1,0 +1,34 @@
+{
+  "utc": "2026-10-27T23:00:44.603471+00:00",
+  "base": "e54bab5550f09d740d222d667ad497dc8c640ebe",
+  "node": {
+    "tests": 2454,
+    "pass": 2454,
+    "fail": 0,
+    "skipped": 0
+  },
+  "initial_red": {
+    "tests": 52,
+    "fail": 52
+  },
+  "existing_release_controls": 17,
+  "expected_red_commits": ["64644bcda", "82ef087a6", "22c36ae5a", "8fdb176b9"],
+  "read_only_example_probe": "PASS",
+  "live_workflow_dispatch": "not performed",
+  "worker_runtime_changed": false,
+  "hosted_ci": "pending push",
+  "mutants": 22,
+  "minimum_named_killers": 2,
+  "addendum2": {
+    "expected_red_commit": "921cecd4b",
+    "initial_cases": 30,
+    "initial_fail": 6,
+    "initial_controls": 24,
+    "current_v8_cases": 32,
+    "current_v8_pass": 32,
+    "additional_mutants": 6,
+    "minimum_named_killers": 4,
+    "method": "Actual trigger/Github modules in orchestration V8 with simulated API; final Node suite hosted due dev-box disk floor",
+    "rentals": "none"
+  }
+}

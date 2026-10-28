@@ -48,6 +48,7 @@ is frozen (see *Layout*).
   `*_unsafe.rs`.
 - User-visible behaviour change updates docs/howto/ in the same PR; never put design notes into docs/howto/.
 - **Doc hygiene** (paid for repeatedly):
+  - An unmarked sentence is a claim of fact. Mark design intent and anything not measured.
   - Every design doc opens with a dated `STATUS` line: LIVE / SUPERSEDED / ANSWERED /
     DESIGN-ONLY / RESEARCH.
   - A correction is folded into its parent, **above** the text it corrects.

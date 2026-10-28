@@ -17,7 +17,8 @@ const rejected = (text, extra) =>
 const injectBroker = (text, line) => {
   const start = text.indexOf('  gpu:\n'),
     end = text.indexOf('  report:\n', start),
-    at = text.indexOf('          set -euo pipefail', start);
+    broker = text.indexOf('        id: broker', start),
+    at = text.indexOf('          set -euo pipefail', broker);
   assert.ok(at > start && at < end, 'broker fixture scope');
   return text.slice(0, at) + line + '\n' + text.slice(at);
 };
