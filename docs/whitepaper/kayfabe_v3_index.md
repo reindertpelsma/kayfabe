@@ -23,6 +23,10 @@ The PDF and its implementation pin remain the historical edition; this fold-in a
 | Q24 | By design: weak completion doorbells prompt inspection of operation-owned completion state | [Channel kinds §1.2](../design/the_three_channel_kinds.md#12-passthrough-completion-interrupts-every-vm-that-armed-the-event-is-woken-2026-10-08-owner) |
 | Q4/Q25 | CODE READ at `7dcedefea`: the master `kf-mem` search and apply representation do not establish sparse zero/absorbing placement; [the source check](../OWNER_RULINGS.md#code-checks-accompanying-the-fold-in) distinguishes sparse walker detection and simulator tests | [Code checks](../OWNER_RULINGS.md#code-checks-accompanying-the-fold-in) |
 
+## Project-description correction, 2026-10-28
+
+CODE READ: the current paper's product section corrects the pinned credits using public project pages retrieved on 2026-10-28. Caraxes's [quickstart](https://github.com/silasmue/Caraxes/blob/HEAD/docs/vfio/quickstart.md) example uses `CARAXES_DMA=register`, requiring a binary with `cap_sys_admin` set with sudo; it also uses sudo for networking and guest-driver options. Its separate description of submission as an unprivileged client does not describe the complete documented run. Open-IOV's [overview](https://open-iov.org/index.php/System_Overview) says its module binds the GPU and leaves the distribution NVIDIA module unbound; the [install guide](https://open-iov.org/index.php/Install_and_First_Run) requires root or sudo and also describes a path using the distribution driver. Neither page establishes whether the host can keep using the card. These are source readings, with no speed or security comparison. The implementation pin and historical source identities below are unchanged.
+
 ## Evidence qualification
 
 - **REPORTED:** public repository records can be inspected, but were not reproduced here.

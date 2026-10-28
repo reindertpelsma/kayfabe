@@ -246,7 +246,7 @@ class LandingAndDocsIndex(unittest.TestCase):
         works = (OUTPUT / "works-today/index.html").read_text()
         different = (OUTPUT / "how-it-differs/index.html").read_text()
         for claim in ["VFIO passthrough", "NVIDIA vGPU", "API forwarding",
-                      "gVisor with nvproxy", "virtio-gpu", "How it is isolated"]:
+                      "CUDA container", "gVisor with nvproxy", "virtio-gpu", "How it is isolated"]:
             self.assertIn(claim, different)
         for claim in ["result files are not committed", "not merged yet", "non-goal"]:
             self.assertIn(claim, works)
@@ -261,10 +261,9 @@ class LandingAndDocsIndex(unittest.TestCase):
                       "No all-app pass exists", "Not measured yet"]:
             self.assertIn(claim, text)
         self.assertIn('id="not-measured-yet"', works)
-        for claim in ["Caraxes", "Open-IOV", "patched Cloud Hypervisor", "vgsp.ko"]:
-            self.assertIn(claim, different)
-        for url in ["https://github.com/silasmue/Caraxes", "https://open-iov.org/"]:
-            self.assertIn(url, different)
+        self.assertIn("How the options differ", different)
+        self.assertIn("Open-IOV", different)
+        self.assertNotIn("Caraxes", different)
         self.assertNotIn("coordinator", works.lower() + different.lower())
         self.assertNotIn("task direction", works.lower() + different.lower())
 

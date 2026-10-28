@@ -12,7 +12,7 @@ src = "README.md What runs today; docs/howto/requirements.md GPU table"
 Windows 11 was tested in a matrix on 14 October 2026, at revision `eb9f2aa3`, on the author's RTX 4070 with NVIDIA's 580.88 driver. Seven of nine rows passed: Unigine Heaven in Direct3D 11 and OpenGL, windowed and fullscreen, GravityMark in Direct3D 12 and Vulkan, and Minecraft. A pass means the program finished with no host Xid and no GPU reset. Edge video failed after about 7.3 minutes, and the idle row was not run.
 
 <!-- src: README.md Windows table (CUDA, Blender and Edge rows); docs/howto/windows-guest.md -->
-The README also reports CUDA in the guest, Blender renders with CUDA and OptiX, and one 4K YouTube playback in Edge that ran to the end. Those are separate observations, not part of that matrix. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs three registry settings, listed in the [Windows guide](/@docs/windows-guest.html).
+The README also reports CUDA in the guest, Blender renders with CUDA and OptiX, and one 4K YouTube playback in Edge that ran to the end. Those are separate observations, not part of that matrix. No all-app pass exists. Only Windows driver 580.88 is covered, and it needs [three registry settings](/@docs/windows-guest.html).
 
 <!-- src: README.md Linux guest; docs/howto/linux-guest.md -->
 Linux guests have run a full desktop, display planes, suspend and resume, and a 30-test suite. On a rented RTX 3060, 61 of 65 CUDA programs gave the same output as the host. These include PyTorch and llama.cpp. The four failures need memory paging that is not supported yet. One failure printed SUCCESS with a wrong result.
@@ -25,7 +25,7 @@ The screenshot shows Windows 11 on the right, with Minecraft Bedrock, Unigine He
 ## Progress by GPU
 
 <!-- src: docs/howto/requirements.md GPU table; README.md GPUs; traces/sw3_die_sweep_20261024/README.md -->
-These are recorded stages, not a promise that every card or application works. A passed Linux test does not imply a Windows desktop. See [Requirements](/@docs/requirements.html#gpu) for revisions and driver coverage.
+These are recorded stages, not a promise that every card or application works. A passed Linux test does not imply a Windows desktop. The [requirements](/@docs/requirements.html#gpu) list revisions and driver coverage.
 
 | Family / die | Linux evidence | Windows evidence |
 |---|---|---|
@@ -56,7 +56,7 @@ Windows is not stable. Sleep and wake do not survive, and Edge can make the driv
 SolidWorks, OBS recording and 3DMark runs are reported in the README. Their result files are not committed yet, so treat them as claims.
 
 <!-- src: branch claude/rootless-audit-20261016 commit 32d7319b2, traces/rootless_audit_20261016/REPORT.txt; docs/howto/security.md -->
-One audit on one machine ran the Linux suite and a Windows benchmark as a normal user, without root. The record is on a branch. The launch scripts still start as root. See the [security model](/@docs/security.html).
+The launch scripts still use root; a [run without sudo](/@docs/security.html) is recorded on one host.
 
 ## Sharing and unfinished work
 
@@ -64,7 +64,7 @@ One audit on one machine ran the Linux suite and a Windows benchmark as a normal
 The test suite boots 30 short-lived VMs in a row, one for each test. There is no GPU to rebind between runs. We recommend one VM per card at a time.
 
 <!-- src: README.md 'Not finished'; traces/windows_code43_walls_20261007/README.md run54 (a88764b3, 2026-10-08); docs/FAQ.md 'Can several VMs share one GPU?' -->
-There is no security audit. Two VMs have booted together on one card, but sharing performance is untested. Nobody has measured what one VM's GPU fault does to the other VMs. Read the [sharing FAQ](/@docs/FAQ.html#can-several-vms-share-one-gpu).
+There is no security audit. Two VMs have booted together on one card, but sharing performance is untested. Nobody has measured what one VM's GPU fault does to the other VMs. The [sharing FAQ](/@docs/FAQ.html#can-several-vms-share-one-gpu) describes the limits.
 
 <!-- src: README.md 'Trying it' and STATUS line; docs/howto/goals.md 'An installer and a stable interface'; docs/howto/credits.md (LICENSE exception 2) -->
 There is no installer, public binary or stable interface. Build from source. An installer is planned, with no date.
@@ -73,7 +73,7 @@ There is no installer, public binary or stable interface. Build from source. An 
 Only QEMU on Linux x86-64 is supported today. Proxmox and libvirt integration do not exist yet. Other hypervisors and host platforms are goals, not current features.
 
 <!-- src: docs/design/V3_VIOMMU_NEED_RESEARCH_20261013.md summary item 3; docs/FAQ.md 'Do games with anti-cheat work?' (owner direction 2026-10-28) -->
-No game with kernel anti-cheat is recorded. Products such as Vanguard and FACEIT refuse VMs. Working around that is a non-goal. See the [anti-cheat FAQ](/@docs/FAQ.html#do-games-with-anti-cheat-work).
+No game with kernel anti-cheat is recorded. Products such as Vanguard and FACEIT refuse VMs. Working around that is a [non-goal](/@docs/FAQ.html#do-games-with-anti-cheat-work).
 
 ## Not measured yet
 
