@@ -8,6 +8,8 @@ from html import escape, unescape
 from html.parser import HTMLParser
 import io
 import json
+import os
+from deployment_slots import candidate_context, prepare_output
 from pathlib import Path
 import re
 import posixpath
@@ -641,7 +643,7 @@ def metadata(output, plan):
     return copy_reviews
 
 
-def build(repo, binaries, releases, root_ref="latest"):
+def build(repo, binaries, releases, root_ref="latest", deploy_candidate=False):
     plan = version_plan(repo, releases, root_ref)
     output = repo / "site/public"
     if output.exists():
@@ -652,6 +654,7 @@ def build(repo, binaries, releases, root_ref="latest"):
         work = Path(temporary)
         landings = {}
         data = site_data(plan, repo)
+        data["deploy_candidate"] = deploy_candidate
         for number, version in enumerate(plan["refs"]):
             folder = work / str(number)
             folder.mkdir()
@@ -712,6 +715,7 @@ def build(repo, binaries, releases, root_ref="latest"):
             if 'name="search"' not in text:
                 page.write_text(text.replace("</main>", search_form(target) + "</main>"))
         copy_reviews = metadata(output, plan)
+        prepare_output(output, deploy_candidate)
     report = {
         **plan,
         "counts": counts,
@@ -738,10 +742,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tools-dir", type=Path, required=True)
     parser.add_argument("--releases-json", type=Path)
+    parser.add_argument("--deploy-candidate", action="store_true")
     parser.add_argument("--root-ref", choices=["latest", "master"], default="latest")
     args = parser.parse_args()
     releases = json.loads(args.releases_json.read_text()) if args.releases_json else []
-    build(SITE.parent, tools(args.tools_dir.resolve()), releases, args.root_ref)
+    build(
+        SITE.parent,
+        tools(args.tools_dir.resolve()),
+        releases,
+        args.root_ref,
+        deploy_candidate=args.deploy_candidate and candidate_context(os.environ),
+    )
 
 
 if __name__ == "__main__":

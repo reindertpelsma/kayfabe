@@ -99,14 +99,17 @@ metadata requests a run; renames must have both paths in skip paths.
 
 ## Look and feel
 
-<!-- src: .github/workflows/site.yml; site/deploy_analytics.py; site/test_output.py; site/test_deploy_analytics.py -->
-Local and PR build output loads no resources from other hosts (`test_output.py`). Deployment adds
-Cloudflare Web Analytics as the one external-resource exception, using the Pages environment variable
-`WEB_ANALYTICS_SNIPPET`; its value is read at runtime and never stored in the repository. Empty or unset
-means no injection. The deploy job transforms the existing archive once, using the exact build tooling
-revision, and uploads a separately named deployment artifact. It neither rebuilds nor executes files
-from the site archive. The transformer also checks the upstream repository, event, ref, deploy job
-and `github-pages` context; local, PR and fork contexts leave the archive unchanged.
+<!-- src: .github/workflows/site.yml; site/build.py; site/deployment_slots.py; site/check_slots.mjs -->
+Local, PR and fork output contains no publication slot, beacon or privacy text. The upstream
+publication build adds one neutral head comment, using the layout or a verified byte splice for
+other page families. Every page has a stable footer element. A pinned jsdom build check validates
+that the slot is directly inside the head and that a dummy replacement adds only the expected nodes.
+The protected deployment job validates its runtime HTML variable, then replaces that exact slot in
+bytes. It never parses pages, checks out source or executes a downloaded helper. Valid input adds
+the beacon and fixed privacy JavaScript from the workflow. That script adds one privacy sentence
+only when the beacon element exists, waiting for the footer when needed. Empty, absent or invalid
+input removes the slot and deploys without a beacon or privacy text; valid input with zero slots
+fails. The actual variable is never stored in source or fixtures.
 No frameworks or web fonts: system fonts, one small stylesheet (`static/style.css`) for the Zola
 pages, `book-theme/kayfabe.css` layered on mdBook's CSS for the manual, and two optional scripts (a copy button on the
 landing's command, and the version dropdown). Both follow `prefers-color-scheme` and `prefers-reduced-motion`. After
