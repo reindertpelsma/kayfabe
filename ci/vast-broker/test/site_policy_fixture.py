@@ -134,6 +134,36 @@ elif case.startswith("reuse-"):
             },
         }
     )
+    ci_check = data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"][0] if data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"] else None
+    ci_run = {
+        "id": 321, "head_sha": before, "path": ".github/workflows/ci.yml",
+        "repository": {"full_name": repo}, "status": "completed", "conclusion": "success",
+        "check_suite_id": 654,
+    }
+    data["/actions/runs/321"] = ci_run
+    if ci_check:
+        ci_check.update(id=987, check_suite={"id": 654},
+                        details_url="https://github.com/" + repo + "/actions/runs/321/job/987")
+    if case == "reuse-ci-other-workflow":
+        ci_run["path"] = ".github/workflows/unrelated.yml"
+    if case == "reuse-ci-run-pending":
+        ci_run["status"] = "in_progress"
+    if case == "reuse-ci-run-head":
+        ci_run["head_sha"] = sha
+    if case == "reuse-ci-suite":
+        ci_run["check_suite_id"] = 1
+    if case in {"reuse-ci-ambiguous-failed", "reuse-ci-ambiguous-pending", "reuse-ci-multiple-success"}:
+        duplicate = json.loads(json.dumps(ci_check))
+        if case == "reuse-ci-ambiguous-failed":
+            duplicate["conclusion"] = "failure"
+        if case == "reuse-ci-ambiguous-pending":
+            duplicate["status"] = "in_progress"
+        # Legitimate push+PR runs: distinct job, suite and run of the same intended workflow.
+        duplicate.update(id=988, check_suite={"id": 655},
+                         details_url="https://github.com/" + repo + "/actions/runs/322/job/988")
+        data["/actions/runs/322"] = {**ci_run, "id": 322, "check_suite_id": 655}
+        data["/commits/" + before + "/check-runs?per_page=100"]["check_runs"].append(duplicate)
+        data["/commits/" + before + "/check-runs?per_page=100"]["total_count"] = 2
     if variant == "pr":
         data["/commits/" + sha]["parents"] = []
         data["/commits/" + sha + "/pulls?per_page=100"] = [{"head": {"sha": before}}]
@@ -164,7 +194,7 @@ elif case.startswith("reuse-"):
     if case == "reuse-tag":
         reference = "refs/tags/v1"
     proof = m.find_reuse(sha, event_name, reference, get)
-    assert bool(proof) == (case == "reuse-valid"), proof
+    assert bool(proof) == (case in {"reuse-valid", "reuse-ci-multiple-success"}), proof
 else:
     run = {
         "id": 123,
