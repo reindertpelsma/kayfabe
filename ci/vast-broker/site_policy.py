@@ -89,6 +89,16 @@ def pr_files(number, sha, get):
         files.extend(rows)
     if len(files) != count:
         raise ValueError("PR file count")
+    # The files endpoint follows a mutable PR. A synchronize or base update during
+    # pagination must not authorize skipping the event's older immutable head.
+    current = get("/pulls/" + str(number))
+    if (
+        current["head"]["sha"] != sha
+        or current["base"].get("sha") != pr["base"].get("sha")
+        or current["base"]["repo"]["full_name"] != REPO
+        or current["changed_files"] != count
+    ):
+        raise ValueError("PR changed during pagination")
     return files
 
 

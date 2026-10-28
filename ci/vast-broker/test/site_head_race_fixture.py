@@ -73,7 +73,9 @@ else:
         source, payload = "workflow_run", {"action": "completed", "workflow_run": {"id": 123}}
     else:
         raise AssertionError(mode)
-    module.report_status(payload, source, "456", get, lambda path, body: writes.append((path, body)))
+    module.report_status(
+        payload, source, "456", get, lambda path, body: writes.append((path, body))
+    )
     assert writes, "must leave a visible non-passing status on uncertainty"
     assert all(path == "/statuses/" + sha for path, _ in writes), writes
     assert any(body["state"] == "success" for _, body in writes) == stable, writes

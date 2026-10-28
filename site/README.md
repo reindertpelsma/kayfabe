@@ -73,7 +73,7 @@ master/staging pages. Directory URLs end in `/`; mdBook chapter URLs retain thei
 
 ## Workflow and publication
 
-`site.yml` evaluates every PR and builds changes to site/docs/workflow inputs, confirmed relevant
+CODE READ (`.github/workflows/site.yml`): it evaluates every PR and builds changes to site/docs/workflow inputs, confirmed relevant
 master pushes, `v*` tag pushes, release publication,
 manual dispatch, and a weekly fallback. A tag push makes its manual available immediately; publishing
 release assets updates the root and latest docs. Non-PR builds explicitly check out master with full
