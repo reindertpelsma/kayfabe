@@ -15,3 +15,7 @@ The owner adds `site` as a required master check after reviewing and merging the
 CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): PR file pagination rechecks the head, base SHA and changed-file count after the last page. A concurrent synchronize or base update leaves a conservative build decision and cannot report the older head as not needed.
 
 CODE READ 2026-10-28 (`ci/vast-broker/site_policy.py`): Site reuse binds every CI record through its job and check suite to the intended ci.yml workflow on the same SHA. All legitimate push/PR duplicates must pass; ambiguity takes the ordinary build path.
+
+## Publication analytics
+
+CODE READ 2026-10-28 (`.github/workflows/site.yml`, `site/deploy_analytics.py`): ordinary builds remain free of analytics, including local and PR builds with the snippet variable set. Only the upstream `github-pages` deploy job reads `WEB_ANALYTICS_SNIPPET` and transforms the built Pages archive; an empty or unset value leaves it unchanged. Each HTML page receives the snippet once inside its existing head. Repeating the transformation leaves already-instrumented output unchanged. Deployment downloads the transformer from the exact tooling revision recorded by the build, without checking out source or rebuilding the site. The published [About page](https://kayfabe.dev/about/#privacy) describes Cloudflare Web Analytics privacy.

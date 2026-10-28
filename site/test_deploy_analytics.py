@@ -12,7 +12,7 @@ import unittest
 HERE = Path(__file__).resolve().parent
 SCRIPT = HERE / "deploy_analytics.py"
 SNIPPET = '<script defer src="https://analytics.invalid/beacon.js"></script>'
-PAGE = '<!doctype html><html><head><title>Fixture</title></head><body>Hi</body></html>'
+PAGE = "<!doctype html><html><head><title>Fixture</title></head><body>Hi</body></html>"
 TRUSTED = {
     "GITHUB_ACTIONS": "true",
     "GITHUB_REPOSITORY": "reindertpelsma/kayfabe",
@@ -74,9 +74,7 @@ class Analytics(unittest.TestCase):
         self.assertEqual(self.impl.inject(text, SNIPPET), text)
 
     def test_comments_and_script_text_cannot_forge_head_end(self):
-        text = PAGE.replace(
-            "<title>", '<!-- </head> --><script>let s = "</head>";</script><title>'
-        )
+        text = PAGE.replace("<title>", '<!-- </head> --><script>let s = "</head>";</script><title>')
         result = self.impl.inject(text, SNIPPET)
         self.assertEqual(result.count(SNIPPET), 1)
         self.assertIn("</title>\n" + SNIPPET, result)
@@ -87,15 +85,32 @@ class Analytics(unittest.TestCase):
         self.assertIn("</TITLE>\n" + SNIPPET, result)
         self.assertLess(result.index(SNIPPET), result.index("</HEAD>"))
 
+    def test_self_closing_metadata_keeps_a_valid_head(self):
+        text = PAGE.replace("<title>", '<meta charset="utf-8"/><link href="/x.css"/><title>')
+        result = self.impl.inject(text, SNIPPET)
+        self.assertIn("</title>\n" + SNIPPET, result)
+
     def test_invalid_heads_fail_before_archive_replacement(self):
-        for text in ["<html><body>x</body></html>", "<head></head><head></head>",
-                     "<head><title>x</head>", "<body><head></head></body>"]:
+        for text in [
+            "<html><body>x</body></html>",
+            "<head></head><head></head>",
+            "<head><title>x</head>",
+            "<body><head></head></body>",
+        ]:
             with self.subTest(text=text):
                 archive(self.path, {"ok.html": PAGE, "bad.html": text})
                 before = self.path.read_bytes()
                 with self.assertRaises(ValueError):
                     self.impl.transform(self.path, SNIPPET, TRUSTED)
                 self.assertEqual(self.path.read_bytes(), before)
+
+    def test_missing_head_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.impl.inject("<html><body>Missing head</body></html>", SNIPPET)
+
+    def test_unclosed_title_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.impl.inject("<html><head><title>Bad</head></html>", SNIPPET)
 
     def test_snippet_in_body_is_rejected(self):
         text = PAGE.replace("Hi", SNIPPET)
@@ -118,10 +133,14 @@ class Analytics(unittest.TestCase):
         self.assertEqual(contents(self.path)["style.css"], "body{}")
 
     def test_each_untrusted_context_is_noop(self):
-        for key, value in [("GITHUB_ACTIONS", "false"), ("GITHUB_REPOSITORY", "fork/repo"),
-                           ("GITHUB_JOB", "build"), ("GITHUB_EVENT_NAME", "pull_request"),
-                           ("GITHUB_REF", "refs/heads/next"),
-                           ("SITE_DEPLOY_ENVIRONMENT", "preview")]:
+        for key, value in [
+            ("GITHUB_ACTIONS", "false"),
+            ("GITHUB_REPOSITORY", "fork/repo"),
+            ("GITHUB_JOB", "build"),
+            ("GITHUB_EVENT_NAME", "pull_request"),
+            ("GITHUB_REF", "refs/heads/next"),
+            ("SITE_DEPLOY_ENVIRONMENT", "preview"),
+        ]:
             with self.subTest(key=key):
                 before = self.path.read_bytes()
                 self.impl.transform(self.path, SNIPPET, {**TRUSTED, key: value})
@@ -139,19 +158,30 @@ class Analytics(unittest.TestCase):
         self.assertFalse(self.impl.eligible({**TRUSTED, "GITHUB_EVENT_NAME": "workflow_run"}))
 
     def cli(self, context, snippet):
-        environment = {k: v for k, v in os.environ.items()
-                       if not k.startswith(("GITHUB_", "SITE_", "WEB_ANALYTICS_"))}
+        environment = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("GITHUB_", "SITE_", "WEB_ANALYTICS_"))
+        }
         environment.update(context)
         if snippet is not None:
             environment["WEB_ANALYTICS_SNIPPET"] = snippet
-        result = subprocess.run(["python3", str(SCRIPT), str(self.path)], env=environment,
-                                capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            ["python3", str(SCRIPT), str(self.path)],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn(SNIPPET, result.stdout + result.stderr)
 
     def test_cli_local_pr_and_fork_outputs_stay_beacon_free(self):
-        for context in [{}, {**TRUSTED, "GITHUB_EVENT_NAME": "pull_request"},
-                        {**TRUSTED, "GITHUB_REPOSITORY": "fork/repo"}]:
+        for context in [
+            {},
+            {**TRUSTED, "GITHUB_EVENT_NAME": "pull_request"},
+            {**TRUSTED, "GITHUB_REPOSITORY": "fork/repo"},
+        ]:
             self.cli(context, SNIPPET)
             self.assertNotIn(SNIPPET, self.path.read_bytes().decode(errors="replace"))
 

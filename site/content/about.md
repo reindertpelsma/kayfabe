@@ -37,3 +37,8 @@ The code is at [github.com/reindertpelsma/kayfabe](https://github.com/reindertpe
 ## About this site
 
 The manual's source is in `docs/howto/`. Every page has a "View and edit source on GitHub" link.
+
+## Privacy
+
+<!-- src: https://developers.cloudflare.com/speed/observatory/rum-beacon/#privacy-information; https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/ (retrieved 2026-10-28) -->
+Published pages use [Cloudflare Web Analytics](https://developers.cloudflare.com/web-analytics/data-metrics/data-origin-and-collection/) without cookies or cross-site tracking.

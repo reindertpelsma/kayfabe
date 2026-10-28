@@ -31,8 +31,8 @@ repeat a build without network access: both cached archives are SHA-256 checked 
 `site/build-report.json` records version/page counts and every broken local link (page, target,
 reason). A rendering error, missing title or link into internal docs fails the build. Other missing
 files/anchors are reported without failing. The output tests check SEO (canonical, noindex, Open Graph and plain-text Twitter cards, sitemap), search, version
-links, the landing's blocks, the manual's breadcrumbs, edit links and previous/next links, and that no built page,
-stylesheet or script fetches anything from another host.
+links, the landing's blocks, the manual's breadcrumbs, edit links and previous/next links, and that ordinary build output contains no external resources; deployment analytics is tested
+separately with synthetic HTML.
 The broker's workflow tests check the Pages permission boundary and dropdown behavior.
 
 Master pins one toolchain; PR, master and tag builds render every eligible version and fail on any render failure.
@@ -99,9 +99,15 @@ metadata requests a run; renames must have both paths in skip paths.
 
 ## Look and feel
 
-The site loads nothing from other hosts (maintainer note, enforced by `test_output.py`; it is deliberately not stated
-in the published copy).
-No frameworks, no web fonts, no external requests: system fonts, one small stylesheet (`static/style.css`) for the Zola
+<!-- src: .github/workflows/site.yml; site/deploy_analytics.py; site/test_output.py; site/test_deploy_analytics.py -->
+Local and PR build output loads no resources from other hosts (`test_output.py`). Deployment adds
+Cloudflare Web Analytics as the one external-resource exception, using the Pages environment variable
+`WEB_ANALYTICS_SNIPPET`; its value is read at runtime and never stored in the repository. Empty or unset
+means no injection. The deploy job transforms the existing archive once, using the exact build tooling
+revision, and uploads a separately named deployment artifact. It neither rebuilds nor executes files
+from the site archive. The transformer also checks the upstream repository, event, ref, deploy job
+and `github-pages` context; local, PR and fork contexts leave the archive unchanged.
+No frameworks or web fonts: system fonts, one small stylesheet (`static/style.css`) for the Zola
 pages, `book-theme/kayfabe.css` layered on mdBook's CSS for the manual, and two optional scripts (a copy button on the
 landing's command, and the version dropdown). Both follow `prefers-color-scheme` and `prefers-reduced-motion`. After
 each mdBook render `build.py` adds a skip link, breadcrumbs, an "View and edit source on GitHub" link (master branch, the
