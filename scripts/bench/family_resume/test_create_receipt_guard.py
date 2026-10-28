@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+import stat
 
 try:
     import create_receipt_guard as G
@@ -93,7 +95,7 @@ class GuardFixture(unittest.TestCase):
 
         def publish(value):
             self.events.append(("state", value))
-            if value["state"] == "UNRESOLVED" and clock[0] >= NOW + dt.timedelta(hours=2):
+            if clock[0] >= NOW + dt.timedelta(hours=2):
                 raise StopFake(value)
 
         def destroy(iid):
@@ -145,6 +147,36 @@ class IntentTests(GuardFixture):
         (self.root / "intent.json").write_text(json.dumps(value))
         with self.assertRaises(G.Unresolved):
             G.load(self.ref)
+
+    def test_second_intent_tamper_is_refused(self):
+        (self.root / "intent.json").chmod(0o600)
+        value = dict(self.intent, owner_id=72)
+        (self.root / "intent.json").write_text(json.dumps(value))
+        with self.assertRaises(G.Unresolved):
+            G.load(self.ref)
+
+    def test_file_and_directory_fsync_before_armed_empty(self):
+        self.fsync_order("empty")
+
+    def test_file_and_directory_fsync_before_armed_timeout(self):
+        self.fsync_order("timeout")
+
+    def fsync_order(self, mode):
+        original = os.fsync
+        seen = []
+
+        def sync(fd):
+            seen.append("directory" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file")
+            original(fd)
+
+        root = self.root / "fsync"
+        root.mkdir()
+        with patch.object(G.os, "fsync", side_effect=sync):
+            ref = G.prepare(root, self.offer, self.plan, 71, self.snapshot(), SOURCE)
+            self.assertIn("file", seen)
+            self.assertIn("directory", seen)
+            self.root, self.ref, self.intent = root, ref, G.load(ref)
+            self.run_watch(mode=mode)
 
     def test_two_labels_differ_despite_same_timestamp(self):
         other = self.root / "other"
@@ -369,8 +401,12 @@ class BoundDeadlineTests(GuardFixture):
     def known_failure(self, mode):
         self.root = self.root / "short"
         self.root.mkdir()
-        plan = dict(self.plan, seconds=60, capture_lead_seconds=20,
-                    deadline_utc=(NOW + dt.timedelta(seconds=60)).isoformat())
+        plan = dict(
+            self.plan,
+            seconds=60,
+            capture_lead_seconds=20,
+            deadline_utc=(NOW + dt.timedelta(seconds=60)).isoformat(),
+        )
         self.ref = G.prepare(self.root, self.offer, plan, 71, self.snapshot(), SOURCE)
         self.intent = G.load(self.ref)
         self.issue("success")
@@ -378,27 +414,47 @@ class BoundDeadlineTests(GuardFixture):
         calls = [0]
         events = []
         states = []
+
         def inventory():
             calls[0] += 1
-            if calls[0] > 1 and mode == "inventory": raise OSError(SECRET)
+            if calls[0] > 1 and mode == "inventory":
+                raise OSError(SECRET)
             row = self.row()
-            if calls[0] > 1 and mode == "metadata": row['dph_total'] = None
+            if calls[0] > 1 and mode == "metadata":
+                row["dph_total"] = None
             return self.snapshot([row])
+
         def credit():
-            if calls[0] > 1 and mode == "credit": raise ValueError(SECRET)
+            if calls[0] > 1 and mode == "credit":
+                raise ValueError(SECRET)
             return 40
+
         def capture(iid):
             events.append(("capture", iid, clock[0]))
             raise OSError("fake unavailable capture")
+
         def publish(value):
             states.append(value)
-            if clock[0] >= NOW + dt.timedelta(seconds=100): raise StopFake()
-        def pause(seconds): clock[0] += dt.timedelta(seconds=seconds)
+            if clock[0] >= NOW + dt.timedelta(seconds=100):
+                raise StopFake()
+
+        def pause(seconds):
+            clock[0] += dt.timedelta(seconds=seconds)
+
         try:
-            G.watch(self.root, self.ref, inventory=inventory, credit=credit,
-                    now=lambda:clock[0], pause=pause, parent_alive=lambda _: True,
-                    ready=lambda _: None, publish=publish, capture=capture,
-                    destroy=lambda iid: events.append(("destroy", iid, clock[0])))
+            G.watch(
+                self.root,
+                self.ref,
+                inventory=inventory,
+                credit=credit,
+                now=lambda: clock[0],
+                pause=pause,
+                parent_alive=lambda _: True,
+                ready=lambda _: None,
+                publish=publish,
+                capture=capture,
+                destroy=lambda iid: events.append(("destroy", iid, clock[0])),
+            )
         except StopFake:
             pass
         destroyed = [e for e in events if e[0] == "destroy"]
@@ -406,9 +462,45 @@ class BoundDeadlineTests(GuardFixture):
         self.assertEqual({e[1] for e in destroyed}, {42})
         self.assertLessEqual(destroyed[0][2], NOW + dt.timedelta(seconds=60))
         self.assertEqual(events[0][0], "capture")
-        self.assertEqual(states[-1]['state'], "UNRESOLVED")
-        self.assertEqual(states[-1]['liability_usd'], 1.23)
-        self.assertFalse(states[-1].get('absence_verified', False))
+        self.assertEqual(states[-1]["state"], "UNRESOLVED")
+        self.assertEqual(states[-1]["liability_usd"], 1.23)
+        self.assertFalse(states[-1].get("absence_verified", False))
+
+
+class BoundParentDeathTests(GuardFixture):
+    def test_bound_dead_parent_inventory_failure_retires_without_waiting_cutoff(self):
+        self.dead_after_bound("inventory")
+
+    def test_bound_dead_parent_credit_failure_retires_without_waiting_cutoff(self):
+        self.dead_after_bound("credit")
+
+    def dead_after_bound(self, mode):
+        clock = [NOW]
+        calls = [0]
+        events = []
+        self.issue("success")
+        def inventory():
+            calls[0] += 1
+            if calls[0] > 1 and mode == "inventory": raise OSError("fake inventory down")
+            return self.snapshot([self.row()])
+        def credit():
+            if calls[0] > 1 and mode == "credit": raise ValueError("fake credit down")
+            return 40
+        def publish(value):
+            if clock[0] >= NOW + dt.timedelta(seconds=120): raise StopFake()
+        def capture(iid):
+            events.append(("capture",iid,clock[0]))
+            raise OSError("fake capture unavailable")
+        try:
+            G.watch(self.root,self.ref,inventory=inventory,credit=credit,now=lambda:clock[0],
+                    pause=lambda n:clock.__setitem__(0,clock[0]+dt.timedelta(seconds=n)),
+                    parent_alive=lambda _:calls[0]<1,ready=lambda _:None,publish=publish,
+                    capture=capture,destroy=lambda iid:events.append(("destroy",iid,clock[0])))
+        except StopFake:pass
+        destroyed=[v for v in events if v[0]=="destroy"]
+        self.assertTrue(destroyed,'known ownership was forgotten after creator death')
+        self.assertEqual({v[1] for v in destroyed},{42})
+        self.assertLess(destroyed[0][2],NOW+dt.timedelta(seconds=60))
 
 
 if __name__ == "__main__":
