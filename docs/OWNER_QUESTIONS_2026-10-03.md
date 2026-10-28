@@ -76,7 +76,7 @@ module by default on Turing and later since the R560 driver.
 boxes hide host coherency bugs (the 2026-09-26 `CACHE_SNOOP` case). The doorbell-helper decision
 (`OWNER_RULINGS.md` §I) waits on the same host.
 
-- *Recommendation: name one physical machine* (the RTX 3050 kiosk PC, or `172.22.1.20` once it is
+- *Recommendation: name one physical machine* (the RTX 3050 kiosk PC, or the trusted test host once it is
   reachable) *and give ssh access.* Task H4 never changes its packages or driver, so it can run
   unattended. That one host unblocks both the sweep's non-nested row and the doorbell baseline.
 

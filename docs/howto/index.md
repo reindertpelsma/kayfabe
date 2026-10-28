@@ -20,7 +20,7 @@ Nothing is patched: no host or guest driver or kernel is modified, and the guest
 These are the repository's own claims, with their limits. Each page of this manual repeats the evidence for what it describes. <!-- src: README.md "What runs today" -->
 
 - **Windows 11 guest** (Pro and Enterprise LTSC, NVIDIA's stock 580.88 driver): desktop, games, benchmarks, video decode, CUDA and professional applications on an RTX 4070 (AD104). A few registry settings are required: see [Windows guest](windows-guest.md). <!-- src: README.md -->
-- **Linux guest** (NVIDIA's stock driver, nothing to set): a 30-arm test suite, a desktop with display planes, suspend/resume, and 61 of 65 CUDA applications with outputs equal to bare metal on a rented RTX 3060. The 4 failures use unified (UVM) memory paging and fail loudly. See [Linux guest](linux-guest.md). <!-- src: README.md -->
+- **Linux guest** (NVIDIA's stock driver, nothing to set): a 30-arm test suite, a desktop with display planes, suspend/resume, and 61 of 65 CUDA applications with outputs equal to bare metal on a rented RTX 3060. The 4 failures use unified (UVM) memory paging and fail the checks; one of them printed SUCCESS with a wrong result, so check numerical output and host faults, not only the exit status. See [Linux guest](linux-guest.md). <!-- src: README.md -->
 - **GPUs:** the families from Turing to Blackwell have been run in some form. The detail is on [Requirements](requirements.md).
 
 ## Pages
@@ -44,6 +44,8 @@ These are the repository's own claims, with their limits. Each page of this manu
 
 - **[measured]** means a run on named hardware at a named revision.
 - **[inferred]** means reasoning, not a measurement.
+- **By design** marks intended behaviour that no run or audit has confirmed. **Not measured yet** means no measurement exists; the project keeps one list of those on the site's [What works today](https://kayfabe.dev/works-today/#not-measured-yet) page.
+- A sentence with none of these marks is a claim of fact and names its source or its evidence.
 - **not documented yet** means the repository does not state a verified answer. The manual does not guess.
 - Every page ends with a **Verified on** line. Where the repository's evidence does not cover a page end to end, it says **Not verified end to end**.
 

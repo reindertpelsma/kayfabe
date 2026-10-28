@@ -54,9 +54,13 @@ From the README's comparison: <!-- src: README.md "Why it is interesting" -->
 | | host keeps the GPU | guest driver | needs |
 |---|---|---|---|
 | VFIO passthrough | no, one VM owns it | stock | any GPU |
-| NVIDIA vGPU | the VMs share it, the host does not | the vendor's vGPU driver | a data-centre GPU and a licence |
+| NVIDIA vGPU | the VMs share it, the host does not | the vendor's vGPU driver | a GPU on [NVIDIA's supported list](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html) (workstation and data-centre cards), vGPU software and a licence |
 | API forwarding (nvkvm-pv, virtio-nvgpu) | yes | a custom guest module | any NVIDIA GPU |
 | kayfabe | yes | stock, unmodified | goal: any NVIDIA GPU; tested on consumer cards, Turing to Blackwell; the open host driver |
+
+## What does running as an ordinary process change?
+
+To the host driver, kayfabe is a GPU client that also holds `/dev/kvm`, so no host kernel patch or custom host driver is needed. By design, a bug in kayfabe is meant to stay inside that one process, several VMs rely on the host driver's multi-process support, and a compromised kayfabe has the reach of an ordinary GPU-container tenant plus `/dev/kvm`. None of this is audited, and driver and KVM bugs still apply. The reasons, sources and limits are in the [FAQ](../FAQ.md#why-does-it-matter-that-kayfabe-is-an-ordinary-unprivileged-gpu-process). What has not been measured is on the site's [list](https://kayfabe.dev/works-today/#not-measured-yet). <!-- src: docs/howto/security.md "What the isolation is made of"; docs/FAQ.md -->
 
 ## What does the guest see?
 
