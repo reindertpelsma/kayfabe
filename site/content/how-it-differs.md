@@ -15,14 +15,14 @@ VFIO gives the whole card to one VM. While it runs, the host cannot use that car
 
 ### NVIDIA vGPU
 
-<!-- src: https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html; https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html (supported workstation and data-centre cards); https://open-iov.org/index.php/System_Overview and https://open-iov.org/index.php/Install_and_First_Run (retrieved 2026-10-28) -->
+<!-- src: https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html; https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html (supported workstation and data-centre cards); https://open-iov.org/index.php/System_Overview; https://open-iov.org/index.php/Install_and_First_Run; https://open-iov.org/index.php/Open-IOV:About (retrieved 2026-10-28) -->
 NVIDIA vGPU shares a card between VMs. It needs a GPU on [NVIDIA's supported list](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html), plus vGPU software and a licence. Supported cards include workstation and data-centre models.
 
 Open-IOV is a community project using stock NVIDIA guest drivers without a vGPU licence, with its own host module bound to the GPU.
 
 ### API forwarding
 
-<!-- src: https://github.com/reindertpelsma/nvkvm-pv README; https://github.com/nestrilabs/virtio-nvgpu/blob/dev/README.md; docs/PROJECT_HISTORY.md section 3 -->
+<!-- src: https://github.com/reindertpelsma/nvkvm-pv README and docs/faq.md (matching driver versions); https://github.com/nestrilabs/virtio-nvgpu/blob/dev/README.md; docs/PROJECT_HISTORY.md section 3 -->
 API forwarding leaves the card with the host. Examples include nvkvm-pv and virtio-nvgpu. They use custom guest drivers and support Linux guests. nvkvm-pv needs matching host and guest NVIDIA driver versions.
 
 ### CUDA container
