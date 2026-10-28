@@ -279,3 +279,72 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod g_tests {
+    use super::*;
+    use crate::{CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam};
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    struct Enabled(std::sync::MutexGuard<'static, ()>);
+    impl Enabled {
+        fn new() -> Self {
+            let guard = SERIAL.lock().unwrap();
+            ON.store(true, Relaxed); ARMED.store(true, Relaxed);
+            VA.store(crate::current_thread_id().raw(), Relaxed);
+            Self(guard)
+        }
+    }
+    impl Drop for Enabled {
+        fn drop(&mut self) {
+            ON.store(false, Relaxed); ARMED.store(false, Relaxed); VA.store(0, Relaxed);
+        }
+    }
+    #[test]
+    fn g_cost_delta_excludes_previous_apply_and_other_threads() {
+        let _enabled = Enabled::new();
+        drop(cost(Cost::Mark));
+        let before = costs();
+        drop(cost(Cost::Mark));
+        std::thread::spawn(|| { drop(cost(Cost::Mark)); drop(cost(Cost::Stitch)); })
+            .join().unwrap();
+        let delta = cost_delta(before);
+        assert_eq!(delta[0], 1); assert!(delta[1] > 0);
+        assert_eq!(delta[2..], [0, 0]);
+        let next = costs();
+        assert_eq!(cost_delta(next), [0; 4]);
+    }
+    #[test]
+    fn g_cost_scope_counts_error_returns_and_rejects_other_thread_costs() {
+        let _enabled = Enabled::new();
+        fn early() -> Result<(), ()> { let _scope = cost(Cost::Mark); Err(()) }
+        let before = costs();
+        assert!(early().is_err()); assert!(early().is_err());
+        std::thread::spawn(|| drop(cost(Cost::Mark))).join().unwrap();
+        let delta = cost_delta(before);
+        assert_eq!(delta[0], 2); assert!(delta[1] > 0);
+        assert_eq!(delta[2..], [0, 0]);
+        ON.store(false, Relaxed);
+        assert!(cost(Cost::Mark).is_none()); assert!(cost(Cost::Stitch).is_none());
+    }
+    #[test]
+    fn g_actual_stitch_counts_once_including_nested_anywhere() {
+        let _enabled = Enabled::new();
+        let ram = SharedRam::create(8192).unwrap();
+        let before = costs();
+        let view = MappedRegion::stitch(ram.as_backing_fd(), &[(4096, 4096), (0, 4096)],
+            HostProt::ReadWrite, CachePolicy::WriteBack, HostPageSize::query()).unwrap();
+        let delta = cost_delta(before);
+        assert_eq!(delta[0..2], [0, 0]); assert_eq!(delta[2], 1); assert!(delta[3] > 0);
+        drop(view);
+    }
+    #[test]
+    fn g_actual_stitch_error_is_timed_without_mapping_success() {
+        let _enabled = Enabled::new();
+        let ram = SharedRam::create(4096).unwrap();
+        let before = costs();
+        assert!(MappedRegion::stitch(ram.as_backing_fd(), &[(0, 0)],
+            HostProt::ReadWrite, CachePolicy::WriteBack, HostPageSize::query()).is_err());
+        let delta = cost_delta(before);
+        assert_eq!(delta[0..2], [0, 0]); assert_eq!(delta[2], 1); assert!(delta[3] > 0);
+    }
+}
