@@ -1469,9 +1469,13 @@ fn soak_explicit_subsecond_budget_extends_then_stops_at_its_deadline() {
 }
 
 #[test]
-fn soak_absent_or_expired_budget_stops_after_the_complete_minimum() {
-    for value in [None, Some("0"), Some("0.000000001")] {
-        let seeds: Vec<_> = soak_seeds(soak_duration(value), || Duration::from_nanos(1))
+fn soak_expired_budget_stops_after_the_complete_minimum() {
+    for (value, elapsed) in [
+        (None, Duration::from_secs(2)),
+        (Some("0"), Duration::from_nanos(1)),
+        (Some("0.000000001"), Duration::from_nanos(1)),
+    ] {
+        let seeds: Vec<_> = soak_seeds(soak_duration(value), || elapsed)
             .take(515)
             .collect();
         assert_eq!(seeds.len(), 512);
@@ -1482,7 +1486,29 @@ fn soak_absent_or_expired_budget_stops_after_the_complete_minimum() {
 #[test]
 fn soak_explicit_invalid_duration_retains_the_existing_two_second_fallback() {
     assert_eq!(soak_duration(Some("invalid")), Some(Duration::from_secs(2)));
-    assert_eq!(soak_duration(None), None);
+}
+
+#[test]
+fn soak_default_duration_retains_the_existing_two_second_budget() {
+    assert_eq!(soak_duration(None), Some(Duration::from_secs(2)));
+}
+
+#[test]
+fn soak_default_live_budget_extends_minimum_until_two_seconds() {
+    let mut elapsed = [
+        Duration::ZERO,
+        Duration::from_secs(1),
+        Duration::from_secs(2),
+    ]
+    .into_iter();
+    let seeds: Vec<_> = soak_seeds(soak_duration(None), || {
+        elapsed
+            .next()
+            .expect("stop at the default two-second deadline")
+    })
+    .collect();
+    assert_eq!(seeds.len(), 514);
+    assert!(seeds.into_iter().eq(1..=514));
 }
 
 // ------------------------------------------------------------------------------------------------
