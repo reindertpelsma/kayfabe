@@ -13,7 +13,7 @@ This page only summarises. The full, sourced text is [Security model in the manu
 <!-- src: docs/howto/security.md "The threat model" -->
 - The guest is hostile. Guest userspace and guest root are both untrusted.
 - Host actions are authored, never forwarded: every call kayfabe makes on the host GPU is built by kayfabe from a few verbs, using the host driver's unprivileged interface. Nothing the guest sends is replayed to the host.
-- The host process is meant to run unprivileged. In one audit on one machine, the Linux test suite and a Windows benchmark ran as an ordinary user, not root; the record is on the branch `claude/rootless-audit-20261016`, and the launch scripts in the repository still start as root.
+- The host process is meant to run unprivileged. In one audit on one machine, the Linux test suite and a Windows benchmark ran as an ordinary user, not root. The record is on the branch `claude/rootless-audit-20261016`. The launch scripts in the repository still start as root.
 - Confining the VMM, as an ordinary user and ideally in a container or sandbox, is an extra layer we recommend. kayfabe is linked into the VMM, so you confine the whole hypervisor process.
 
 ## What is not claimed

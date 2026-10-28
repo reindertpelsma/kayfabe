@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} · kayfabe{% endblock %}
+{% block description %}{{ page.description }}{% endblock %}
+{% block content %}
+{%- set kf = load_data(path="data/site.json", required=false) -%}
+{%- set docs = "/docs/" -%}
+{%- if kf and kf.docs_url -%}{%- set docs = kf.docs_url -%}{%- endif -%}
+<article class="wrap prose">
+  <h1>{{ page.title }}</h1>
+  <!-- src: {{ page.extra.src }} -->
+  <p>{{ page.description }}</p>
+  {{ page.content | replace(from="/@docs/", to=docs) | safe }}
+  <p><a href="/">Back to kayfabe</a></p>
+</article>
+{% endblock %}

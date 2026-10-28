@@ -183,7 +183,7 @@ class LandingAndDocsIndex(unittest.TestCase):
     def test_download_block_matches_the_release_list(self):
         release = self.report["release"]
         if release is None:
-            self.assertIn("No release yet: build from source", self.landing)
+            self.assertIn("Build from source", self.landing)
             self.assertNotIn("/releases/download/", self.landing)
         else:
             self.assertNotIn("No release yet", self.landing)
@@ -197,13 +197,8 @@ class LandingAndDocsIndex(unittest.TestCase):
             "What it is for",
             "What is different",
             "Try it",
-            "Follow along",
-            "What does not exist yet",
             "There is no installer yet",
             "Windows is not stable",
-            "VFIO passthrough",
-            "NVIDIA vGPU",
-            "API forwarding",
             "Apache-2.0 OR GPL-2.0-or-later",
         ]:
             self.assertIn(text, self.landing)
@@ -218,7 +213,7 @@ class LandingAndDocsIndex(unittest.TestCase):
 
         visible = re.sub(r"<!--.*?-->", "", self.landing, flags=re.S)
         self.assertEqual(claims_guard.find(visible), [])
-        self.assertGreaterEqual(self.landing.count("<!-- src:"), 28)
+        self.assertGreaterEqual(self.landing.count("<!-- src:"), 15)
         # Every section on the page keeps its source next to it.
         for section in re.findall(r"<section.*?</section>", self.landing, flags=re.S):
             if "hero-search" in section and "<h2" not in section.split("</h2>")[0]:
@@ -232,18 +227,37 @@ class LandingAndDocsIndex(unittest.TestCase):
         text = re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", "", hero, flags=re.S))
         self.assertEqual(claims_guard.jargon(text), [])
         self.assertIn("Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.", text)
-        self.assertIn("How it is isolated", self.landing)
+        self.assertIn('href="/how-it-differs/"', self.landing)
 
     def test_landing_keeps_the_honest_parts(self):
-        for text in [
-            "benchmarked again on current master",
-            "The record is on a branch",
-            "Your licences",
-            "something that works today, use it",
-            "one VM per card",
-        ]:
-            self.assertIn(text, re.sub(r"<[^>]+>", "", self.landing).replace("\n", " "))
+        for text in ["There is no installer yet", "Windows is not stable",
+                     "Not security audited", "Build from source", "one VM per card"]:
+            self.assertIn(text, re.sub(r"<[^>]+>", "", self.landing))
+        self.assertEqual(self.landing.count("<section"), 5)
         self.assertNotIn("paguro", self.landing.lower())
+
+    def test_detail_pages_are_linked_sourced_and_in_the_sitemap(self):
+        sitemap = (OUTPUT / "sitemap.xml").read_text()
+        for name in ["works-today", "how-it-differs", "benchmarks"]:
+            self.assertIn(f'href="/{name}/"', self.landing)
+            html = (OUTPUT / name / "index.html").read_text()
+            self.assertIn("<!-- src:", html)
+            self.assertIn(f"https://kayfabe.dev/{name}/", sitemap)
+        works = (OUTPUT / "works-today/index.html").read_text()
+        different = (OUTPUT / "how-it-differs/index.html").read_text()
+        for claim in ["VFIO passthrough", "NVIDIA vGPU", "API forwarding",
+                      "gVisor with nvproxy", "virtio-gpu", "How it is isolated"]:
+            self.assertIn(claim, different)
+        for claim in ["result files are not committed", "not merged yet", "non-goal"]:
+            self.assertIn(claim, works)
+
+    def test_public_copy_checks_pass_and_manual_is_excluded(self):
+        import claims_guard
+
+        for page, report in self.report["copy_review"].items():
+            self.assertFalse(page.startswith("docs/"))
+            self.assertEqual(report["errors"], [], page)
+            self.assertEqual(claims_guard.page_review((OUTPUT / page).read_text())["errors"], [])
 
     def test_docs_index_follows_summary_order(self):
         summary = (SITE.parent / "docs/howto/SUMMARY.md").read_text()
