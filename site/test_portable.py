@@ -122,18 +122,18 @@ class PortableURLs(unittest.TestCase):
 
 
 class PortableNavigation(unittest.TestCase):
-    def run_js(self, protocol, missing=False):
+    def run_js(self, protocol, missing=False, current="master", target="v1"):
         script = Path(__file__).with_name("book-theme") / "versions.js"
         harness = r"""
 const vm=require('node:vm'),fs=require('node:fs');
 (async()=>{
-const protocol=process.argv[1],missing=process.argv[2]==='true';
+const protocol=process.argv[1],missing=process.argv[2]==='true',current=process.argv[4],target=process.argv[5];
 const calls=[]; const prefix=protocol==='file:'?'file:///bundle/':'https://example.test/x/y/';
-const select={dataset:{current:'master'},value:'master',hidden:false,options:[{value:'master'},{value:'v1'}],
+const select={dataset:{current},value:current,hidden:false,options:[{value:'master'},{value:'v1'}],
  replaceChildren(...options){this.options=options;}};
-const location={protocol,pathname:new URL(prefix+'docs/master/deep/chapter.html').pathname,
- href:prefix+'docs/master/deep/chapter.html'};
-const context={URL,document:{currentScript:{src:prefix+'docs/master/theme/versions.js'},getElementById:()=>select},
+const location={protocol,pathname:new URL(prefix+'docs/'+current+'/deep/chapter.html').pathname,
+ href:prefix+'docs/'+current+'/deep/chapter.html'};
+const context={URL,document:{currentScript:{src:prefix+'docs/'+current+'/theme/versions.js'},getElementById:()=>select},
  location,Option:function(label,value){this.value=value;},fetch:async(url,opts)=>{
  calls.push([String(url),opts?.method||'GET']);
  if(protocol==='file:')throw Error('offline fetch forbidden');
@@ -141,13 +141,13 @@ const context={URL,document:{currentScript:{src:prefix+'docs/master/theme/versio
 vm.runInNewContext(fs.readFileSync(process.argv[3],'utf8'),context);
 await new Promise(r=>setTimeout(r,10));
 if(typeof select.onchange!=='function')throw Error('navigation disappeared');
-select.value='v1';await select.onchange();
+select.value=target;await select.onchange();
 console.log(JSON.stringify({calls,href:location.href,hidden:select.hidden}));
 })().catch(e=>{console.error(e);process.exit(1)});
 """
         return json.loads(
             subprocess.check_output(
-                ["node", "-e", harness, protocol, str(missing).lower(), str(script)],
+                ["node", "-e", harness, protocol, str(missing).lower(), str(script), current, target],
                 text=True,
             )
         )
@@ -167,6 +167,16 @@ console.log(JSON.stringify({calls,href:location.href,hidden:select.hidden}));
             self.run_js("https:", True)["href"],
             "https://example.test/x/y/docs/v1/index.html",
         )
+
+    def test_nested_tag_fetches_docs_json_from_actual_depth(self):
+        result = self.run_js("https:", current="v1/nested", target="master")
+        self.assertEqual(result["calls"][0][0], "https://example.test/x/y/docs/versions.json")
+        self.assertEqual(result["href"], "https://example.test/x/y/docs/master/deep/chapter.html")
+
+    def test_file_nested_target_has_real_path_components(self):
+        result = self.run_js("file:", target="v1/nested")
+        self.assertEqual(result["calls"], [])
+        self.assertEqual(result["href"], "file:///bundle/docs/v1/nested/index.html")
 
     def test_file_navigation_never_fetches_or_disappears(self):
         result = self.run_js("file:")
