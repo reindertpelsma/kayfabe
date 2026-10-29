@@ -548,6 +548,7 @@ impl MappedRegion {
                 .checked_add(len)
                 .ok_or(RawError::LengthOverflow { offset: total, len })?;
         }
+        crate::refresh_stack_unsafe::stitch_count(true, pieces.len() as u64);
         // The reservation: kernel-chosen address, `PROT_NONE`, released on every early return.
         let map = Mapping::anywhere(
             total,
@@ -579,6 +580,7 @@ impl MappedRegion {
             // (the region is not returned until every piece is placed); (d) lengths and file
             // offsets are host-page-aligned (checked above / by `decode_backing`).
             let target = unsafe { map.base.as_ptr().add(start).cast::<libc::c_void>() };
+            crate::refresh_stack_unsafe::stitch_count(false, 1);
             // SAFETY: as argued in (a)-(d) directly above.
             let ret = unsafe {
                 libc::mmap(

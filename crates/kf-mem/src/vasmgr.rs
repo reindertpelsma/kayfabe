@@ -1740,12 +1740,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 (kf_host::diag::snapshot(), kf_host::diag::thread_cpu_ns())
             });
             let cost_before = kf_host::diag::snapshot();
+            let h_before = kf_host::diag::refresh_stitch_counts();
             let g_before = kf_host::diag::refresh_costs().map(|c| (c, std::time::Instant::now()));
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let g_costs = g_before.and_then(|(before, start)| {
                 let ns = ns_since(start);
                 kf_host::diag::refresh_cost_delta(before).map(|c| (ns, c))
             });
+            let h_counts = h_before.and_then(kf_host::diag::refresh_stitch_delta);
             if space.target.sparse_twin() {
                 self.deferred_layout.insert(key);
             }
@@ -1860,11 +1862,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             let g_summary = g_costs
                 .filter(|(g_ns, _)| *g_ns > 500_000_000)
                 .map(|(g_ns, c)| {
+                    let h_summary = h_counts
+                        .map(|h| {
+                            format!(
+                                " stitch_fixed_mmap_calls={} stitch_pieces_offered={}",
+                                h[0], h[1],
+                            )
+                        })
+                        .unwrap_or_default();
                     format!(
                         " G walk={} space={key:?} scope=target_apply target_apply_ns={g_ns} \
-                        mark_calls={} mark_ns={} stitch_calls={} stitch_ns={} apply_refused={} \
+                        mark_calls={} mark_ns={} stitch_calls={} stitch_ns={}{} apply_refused={} \
                         signal_debug=true",
-                        batch.id, c[0], c[1], c[2], c[3], a.refused,
+                        batch.id, c[0], c[1], c[2], c[3], h_summary, a.refused,
                     )
                 })
                 .unwrap_or_default();

@@ -199,6 +199,24 @@ pub fn cost_delta(before: [u64; 4]) -> Option<[u64; 4]> {
     costs().map(|after| std::array::from_fn(|i| after[i].saturating_sub(before[i])))
 }
 
+/// H: fixed mmap attempts and geometry-valid pieces offered, never reservation calls.
+static STITCH_COUNTS: [AtomicU64; 2] = [const { AtomicU64::new(0) }; 2];
+/// Called before the fixed mmap, or once after stitch's existing geometry validation.
+/// `piece=true` adds offered pieces; false adds actual attempted MAP_FIXED calls.
+pub fn stitch_count(piece: bool, count: u64) {
+    if cost_owner() {
+        STITCH_COUNTS[usize::from(piece)].fetch_add(count, Relaxed);
+    }
+}
+/// Same owning VA/active-refresh admission as G; array order is fixed calls, offered pieces.
+pub fn stitch_counts() -> Option<[u64; 2]> {
+    cost_owner().then(|| std::array::from_fn(|i| STITCH_COUNTS[i].load(Relaxed)))
+}
+/// Per-target delta; missing ownership is absent evidence, never a zero count.
+pub fn stitch_delta(before: [u64; 2]) -> Option<[u64; 2]> {
+    stitch_counts().map(|after| std::array::from_fn(|i| after[i].saturating_sub(before[i])))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,12 +443,23 @@ mod g_tests {
         let _enabled = Enabled::new();
         let ram = SharedRam::create(8192).unwrap();
         let before = stitch_counts().unwrap();
-        let view = MappedRegion::stitch(ram.as_backing_fd(), &[(4096, 4096), (0, 4096)],
-            HostProt::ReadWrite, CachePolicy::WriteBack, HostPageSize::query()).unwrap();
+        let view = MappedRegion::stitch(
+            ram.as_backing_fd(),
+            &[(4096, 4096), (0, 4096)],
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .unwrap();
         assert_eq!(stitch_delta(before).unwrap(), [2, 2]);
         drop(view);
         let next = stitch_counts().unwrap();
-        std::thread::spawn(|| { stitch_count(false, 9); stitch_count(true, 9); }).join().unwrap();
+        std::thread::spawn(|| {
+            stitch_count(false, 9);
+            stitch_count(true, 9);
+        })
+        .join()
+        .unwrap();
         assert_eq!(stitch_delta(next).unwrap(), [0, 0]);
     }
     #[test]
@@ -439,11 +468,20 @@ mod g_tests {
         let file = std::fs::File::open("/dev/zero").unwrap();
         use std::os::fd::AsFd;
         let before = stitch_counts().unwrap();
-        let result = MappedRegion::stitch(file.as_fd(), &[(0, 4096), (4096, 4096)],
-            HostProt::ReadWrite, CachePolicy::WriteBack, HostPageSize::query());
-        assert!(matches!(result, Err(crate::RawError::Syscall {
-            call: "mmap", errno: Some(libc::EACCES),
-        })));
+        let result = MappedRegion::stitch(
+            file.as_fd(),
+            &[(0, 4096), (4096, 4096)],
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        );
+        assert!(matches!(
+            result,
+            Err(crate::RawError::Syscall {
+                call: "mmap",
+                errno: Some(libc::EACCES),
+            })
+        ));
         assert_eq!(stitch_delta(before).unwrap(), [1, 2]);
     }
     #[test]
@@ -452,8 +490,16 @@ mod g_tests {
         let ram = SharedRam::create(4096).unwrap();
         let before = stitch_counts().unwrap();
         for pieces in [&[][..], &[(0, 0)][..], &[(1, 4096)][..]] {
-            assert!(MappedRegion::stitch(ram.as_backing_fd(), pieces, HostProt::ReadWrite,
-                CachePolicy::WriteBack, HostPageSize::query()).is_err());
+            assert!(
+                MappedRegion::stitch(
+                    ram.as_backing_fd(),
+                    pieces,
+                    HostProt::ReadWrite,
+                    CachePolicy::WriteBack,
+                    HostPageSize::query()
+                )
+                .is_err()
+            );
         }
         assert_eq!(stitch_delta(before).unwrap(), [0, 0]);
     }
@@ -461,13 +507,45 @@ mod g_tests {
     fn h_counts_exclude_other_threads_and_disabled_admission() {
         let _enabled = Enabled::new();
         let before = stitch_counts().unwrap();
-        std::thread::spawn(|| { stitch_count(false, 7); stitch_count(true, 8); }).join().unwrap();
+        std::thread::spawn(|| {
+            stitch_count(false, 7);
+            stitch_count(true, 8);
+        })
+        .join()
+        .unwrap();
         assert_eq!(stitch_delta(before).unwrap(), [0, 0]);
         ON.store(false, Relaxed);
-        stitch_count(false, 3); stitch_count(true, 4);
-        assert!(stitch_counts().is_none()); assert!(stitch_delta(before).is_none());
+        stitch_count(false, 3);
+        stitch_count(true, 4);
+        assert!(stitch_counts().is_none());
+        assert!(stitch_delta(before).is_none());
         ON.store(true, Relaxed);
         assert_eq!(stitch_delta(before).unwrap(), [0, 0]);
     }
-
+    #[test]
+    fn h_unmappable_device_preserves_enodev_and_counts_failed_attempt() {
+        let _enabled = Enabled::new();
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/null")
+            .unwrap();
+        use std::os::fd::AsFd;
+        let before = stitch_counts().unwrap();
+        let result = MappedRegion::stitch(
+            file.as_fd(),
+            &[(0, 4096)],
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        );
+        assert!(matches!(
+            result,
+            Err(crate::RawError::Syscall {
+                call: "mmap",
+                errno: Some(libc::ENODEV),
+            })
+        ));
+        assert_eq!(stitch_delta(before).unwrap(), [1, 1]);
+    }
 }

@@ -520,3 +520,8 @@ pub use kf_linux_raw::refresh_stack_unsafe::{
     Cost as RefreshCost, cost as refresh_cost, cost_delta as refresh_cost_delta,
     costs as refresh_costs,
 };
+
+/// H count pair uses the same owning-VA admission and target-apply window as G.
+pub use kf_linux_raw::refresh_stack_unsafe::{
+    stitch_counts as refresh_stitch_counts, stitch_delta as refresh_stitch_delta,
+};
