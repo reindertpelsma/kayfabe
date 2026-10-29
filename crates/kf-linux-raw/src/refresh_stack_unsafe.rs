@@ -420,4 +420,54 @@ mod g_tests {
         assert_eq!(delta[2], 1);
         assert!(delta[3] > 0);
     }
+    #[test]
+    fn h_stitch_counts_actual_fixed_attempts_and_validated_pieces() {
+        let _enabled = Enabled::new();
+        let ram = SharedRam::create(8192).unwrap();
+        let before = stitch_counts().unwrap();
+        let view = MappedRegion::stitch(ram.as_backing_fd(), &[(4096, 4096), (0, 4096)],
+            HostProt::ReadWrite, CachePolicy::WriteBack, HostPageSize::query()).unwrap();
+        assert_eq!(stitch_delta(before).unwrap(), [2, 2]);
+        drop(view);
+        let next = stitch_counts().unwrap();
+        std::thread::spawn(|| { stitch_count(false, 9); stitch_count(true, 9); }).join().unwrap();
+        assert_eq!(stitch_delta(next).unwrap(), [0, 0]);
+    }
+    #[test]
+    fn h_failed_fixed_attempt_keeps_errno_and_counts_offered_pieces() {
+        let _enabled = Enabled::new();
+        let file = std::fs::File::open("/dev/zero").unwrap();
+        use std::os::fd::AsFd;
+        let before = stitch_counts().unwrap();
+        let result = MappedRegion::stitch(file.as_fd(), &[(0, 4096), (4096, 4096)],
+            HostProt::ReadWrite, CachePolicy::WriteBack, HostPageSize::query());
+        assert!(matches!(result, Err(crate::RawError::Syscall {
+            call: "mmap", errno: Some(libc::EACCES),
+        })));
+        assert_eq!(stitch_delta(before).unwrap(), [1, 2]);
+    }
+    #[test]
+    fn h_invalid_inputs_have_no_attempt_or_validated_piece_count() {
+        let _enabled = Enabled::new();
+        let ram = SharedRam::create(4096).unwrap();
+        let before = stitch_counts().unwrap();
+        for pieces in [&[][..], &[(0, 0)][..], &[(1, 4096)][..]] {
+            assert!(MappedRegion::stitch(ram.as_backing_fd(), pieces, HostProt::ReadWrite,
+                CachePolicy::WriteBack, HostPageSize::query()).is_err());
+        }
+        assert_eq!(stitch_delta(before).unwrap(), [0, 0]);
+    }
+    #[test]
+    fn h_counts_exclude_other_threads_and_disabled_admission() {
+        let _enabled = Enabled::new();
+        let before = stitch_counts().unwrap();
+        std::thread::spawn(|| { stitch_count(false, 7); stitch_count(true, 8); }).join().unwrap();
+        assert_eq!(stitch_delta(before).unwrap(), [0, 0]);
+        ON.store(false, Relaxed);
+        stitch_count(false, 3); stitch_count(true, 4);
+        assert!(stitch_counts().is_none()); assert!(stitch_delta(before).is_none());
+        ON.store(true, Relaxed);
+        assert_eq!(stitch_delta(before).unwrap(), [0, 0]);
+    }
+
 }
