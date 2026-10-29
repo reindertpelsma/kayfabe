@@ -1,0 +1,30 @@
+{
+  "stage": "closed; no new leases",
+  "approved_source": "7dcedefea093de078188efd5f712561bde746362",
+  "known_runtime_estimate_usd": 0.25930887201333336,
+  "known_transfer_allowance_usd": 0.3046875,
+  "known_nonruntime_margin_usd": 1.0,
+  "known_retained_usd": 1.5639963720133332,
+  "third_create_reservation_usd": 1.23078125,
+  "conservative_total_with_third_reservation_usd": 2.794777622013333,
+  "stage_cap_usd": 4,
+  "shared_daily_cap_usd": 12,
+  "reserve_usd": 8,
+  "settled_invoice": false,
+  "created_ids": [
+    58115039,
+    58117397
+  ],
+  "destroyed_api_absent_ids": [
+    58115039,
+    58117397
+  ],
+  "third_contract_id": null,
+  "third_allocation_observed": false,
+  "watchdogs_gone": [
+    3148505,
+    3184668,
+    3214541
+  ],
+  "GB205_original_STOP_sha256": "754610ff6b458926f57cf098041ac604a7cd754ad342115f68403f51befb4d17"
+}
