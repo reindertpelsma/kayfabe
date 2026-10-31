@@ -33,6 +33,11 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
 | `evidence/` | dated run logs, each naming its GPU and driver |
 
+> **2026-10-31 correction:** `kayfabe-mmu` is archived (`archive/crates/kayfabe-mmu`, not built), so the
+> Rust half below no longer runs. The committed corpus (`corpus/rust_leaves.txt`, `real_leaves.txt`) is now
+> a frozen expected-output; `./kf_tests` still compares the kernel against it, but nothing regenerates or
+> cross-checks it against a Rust decoder any more.
+
 The Rust half of the differential is
 `crates/kayfabe-mmu/tests/walk_kernel_differential.rs`, and the report ABI's own seam test is
 `crates/kayfabe-mmu/tests/walk_report_seam.rs` against `kayfabe-mmu/src/walkreport.rs`.
@@ -45,6 +50,9 @@ make check          # invariants, build, PTX-only check, known-positive
 make kf_bench && ./kf_bench          # the cost measurement (see THE WALK'S ACTUAL COST)
 ./run_on_box.sh tag # from a workstation, against a disposable CUDA container
 ```
+
+> **2026-10-31 correction:** the `cargo test -p kayfabe-mmu` line below cannot run (crate archived); only the
+> `kf_real_tables.py` step still works.
 
 The real-driver corpus is regenerated locally, with no GPU:
 

@@ -477,7 +477,7 @@ impl RmBackend for LoopbackRm {
             ExportRequest {
                 source: ExportSource::Fabricated,
                 len,
-                prot: kayfabe_vmm::Prot::ReadWrite,
+                prot: kayfabe_isolate::Prot::ReadWrite,
             },
         )?;
         let fd = self

@@ -41,6 +41,8 @@ or maintained. History was preserved (`git mv`), so `git log --follow` works.
 | `crates/kayfabe-qemu-raw`, `-vmm-qemu`, `-vmm-kvm` | the old `nvkvm-gpu` QEMU device and VMM adapters |
 | `crates/kayfabe-crec` | the old C-reference replay (v3's is `crates/kf-crec`) |
 | `crates/kayfabe-device` (moved 2026-10-31) | the old register-plane device, 49 734 lines; see the STATUS note below |
+| `crates/kayfabe-mmu`, `-gsp`, `-mocks`, `-trace`, `-completion`, `-vmm` (moved 2026-10-31, third pass) | the old GMMU walker and walk shadow, GSP queue FSM, mock adapters, C-trace replay, completion plane and VMM port; see the STATUS note below |
+| `crates/kayfabe-chips-modules` (moved 2026-10-31, third pass) | the `ga10x`/`ad10x`/`gb20x`/`gh100` chip modules and their tests, cut out of `kayfabe-chips` (which keeps `host_classes`); a plain directory, not a crate |
 | `tests/` | `kayfabe-tests`, the old conformance suite |
 | `fuzz/` | `kayfabe-fuzz`, cargo-fuzz targets over the old core |
 | `qemu/hw/misc/nvkvm/` | the old device's C QOM overlay |
@@ -61,7 +63,29 @@ clippy-debt entries for it were removed, and its claim-ledger debt entries were 
 The kf-abi and kayfabe-abi truncated-row gates still read its files through
 `archive/crates/kayfabe-device`.
 
-**STATUS: LIVE, 2026-10-31 (second pass).** ⊘ Refinement, folded above the text it refines: six of
+**STATUS: LIVE, 2026-10-31 (third pass).** ⊘ Correction, folded above the text it corrects: the
+"sixteen crates stay" claim below no longer holds, and the owner decision the second pass asked for was
+delegated and carried out. `kayfabe-chips` is cut down to `host_classes`, the only part of it that
+anything live uses (`kayfabe-isolate-host`: `DerivedHostClasses`, `pinned_host_classes`, `CLASSLIST_V2_SIZE`,
+`NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2`, `decode_classlist`; MEASURED by grepping every `kayfabe_chips::`
+path under `crates/`, `scripts/`, tests, benches and fuzz). Its `ga10x`, `ad10x`, `gb20x` and `gh100` modules
+(3 995 lines) and their tests moved to `archive/crates/kayfabe-chips-modules/` (a plain directory with
+the original `lib.rs` kept beside them; not a workspace member). With them gone, `kayfabe-mocks`, `-gsp`,
+`-trace`, `-completion` and `-mmu` have no live dependent (`cargo tree -i` on each reports the package is
+not in the workspace; before the move the only dependents were `chips`, `gsp`, `trace` and, as a
+dev-dependency, `mmu`'s own tests), and moved to `archive/crates/`. `kayfabe-vmm` followed: its only live
+contribution was the two-variant `Prot` enum, which now lives in `kayfabe-isolate`
+(`kayfabe_isolate::Prot`; same variants, order and derives, so `isolate-host`'s wire codes are unchanged).
+None of the moved code builds or tests any more. Each crate last built at `1651d3411` (the tip of PR #218,
+`cargo check --workspace --all-targets` clean). The ten `kayfabe-*` crates that stay are `kayfabe-rm-ladder`
+and its closure (`abi`, `arch`, `chips`, `cuda`, `doorbell`, `isolate`, `isolate-host`, `linux-raw`, `util`).
+A citation of `crates/kayfabe-{mmu,gsp,mocks,trace,completion,vmm}/...` or of
+`crates/kayfabe-chips/{src/{ga10x,ad10x,gb20x,gh100}.rs,tests/{ga10x_gmmu,gb20x_doorbell_and_regs,boot_sequence_read_gate}.rs}`
+resolves to `archive/crates/kayfabe-X/...` and `archive/crates/kayfabe-chips-modules/{src,tests}/...`.
+The tests that went with them, and whether anything in `kf-*` still covers the contract, are listed in the
+pull request that moved them (coverage NEEDS-OWNER items are named there).
+
+**STATUS: LIVE, 2026-10-31 (second pass).** **[SUPERSEDED by the third pass above: the owner decision named below was made, `chips` was cut and the five crates and `vmm` moved.]** ⊘ Refinement, folded above the text it refines: six of
 the sixteen crates below link **0 bytes** into the release `kayfabe-rm-ladder` (MEASURED, `nm -S -C`,
 `docs/design/V3_RAW_CLIENT.md` §2.2): `mmu`, `gsp`, `mocks`, `trace`, `completion`, `cuda`. Zero linked
 bytes is not zero use: five of the six are **compiled** unconditionally by a live crate and `cuda` under the ladder's `cuda-window` feature,
@@ -82,7 +106,7 @@ differential oracle, would go with it). The ladder's declarations of `kayfabe-ch
 `classgen::FAMILIES` table), `arch` 167 (`ids`), `vmm` 46 (the two-variant `Prot` enum). `vmm` is a
 single-enum inline candidate (its live users are `kayfabe-isolate` and `isolate-host`); none was moved.
 
-Sixteen `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm raw-client grader behind the
+**[SUPERSEDED 2026-10-31, third pass: ten stay, not sixteen; see above.]** Sixteen `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm raw-client grader behind the
 thin-guest suite (`scripts/fastguest/`) and the bare-metal baseline — and the dependency closure it
 actually has (`abi`, `arch`, `chips`, `completion`, `cuda`, `doorbell`, `gsp`, `isolate`,
 `isolate-host`, `linux-raw`, `mmu`, `mocks`, `trace`, `util`, `vmm`). Every one of them is reached

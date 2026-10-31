@@ -33,15 +33,9 @@ members = [
     "crates/kayfabe-arch",
     "crates/kayfabe-chips",
     "crates/kayfabe-abi",
-    "crates/kayfabe-mmu",
-    "crates/kayfabe-vmm",
     "crates/kayfabe-cuda",
     "crates/kayfabe-isolate",
     "crates/kayfabe-isolate-host",
-    "crates/kayfabe-completion",
-    "crates/kayfabe-gsp",
-    "crates/kayfabe-trace",
-    "crates/kayfabe-mocks",
     "crates/kayfabe-linux-raw",
 ]
 
@@ -80,14 +74,8 @@ kayfabe-cuda = { path = "crates/kayfabe-cuda" }
 kayfabe-arch = { path = "crates/kayfabe-arch" }
 kayfabe-chips = { path = "crates/kayfabe-chips" }
 kayfabe-abi = { path = "crates/kayfabe-abi" }
-kayfabe-mmu = { path = "crates/kayfabe-mmu" }
-kayfabe-vmm = { path = "crates/kayfabe-vmm" }
 kayfabe-isolate = { path = "crates/kayfabe-isolate" }
 kayfabe-isolate-host = { path = "crates/kayfabe-isolate-host" }
-kayfabe-completion = { path = "crates/kayfabe-completion" }
-kayfabe-gsp = { path = "crates/kayfabe-gsp" }
-kayfabe-trace = { path = "crates/kayfabe-trace" }
-kayfabe-mocks = { path = "crates/kayfabe-mocks" }
 kayfabe-linux-raw = { path = "crates/kayfabe-linux-raw" }
 
 [workspace.lints.rust]
