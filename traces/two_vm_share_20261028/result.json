@@ -1,0 +1,11 @@
+{
+  "run": "Z1-d9cfef0f",
+  "status": "UNRUN",
+  "reason": "Earlier rootless inspection/host observer STOP; no new GPU experiment after live observer STOP.",
+  "solo_runs": 0,
+  "paired_runs": 0,
+  "throughput": "NOT MEASURED",
+  "fairness": "NOT MEASURED",
+  "hostile_kernel_probe": "UNRUN",
+  "windows": "OUT OF SCOPE"
+}
