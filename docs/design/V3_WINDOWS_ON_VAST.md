@@ -15,6 +15,8 @@ Owner ruling, 2026-10-31 (given to this task, not yet in `docs/OWNER_RULINGS.md`
 
 CODE READ, 2026-10-31, `origin/next` at `e1dbdbd41`, plus the named unmerged branches.
 
+**Update, 2026-10-31 (draft PR `claude/windows-lane-rebase-20261031`, supersedes #163 and #165; nothing here has run on hardware).** The two "not on `next`" rows below (`windows_lane.sh` with `WINVM_INSTALL_CACHE`, and `WINVM_KF3_DISPLAY=off`) are re-applied on top of the Vast options of section 3 in that PR, with tests in `scripts/ci/test_win_vm_vast.py` and `scripts/bench/tests/`. `WINVM_INSTALL_CACHE` is a QEMU `cache=` mode for the base disk of the two install-time boots of one VM (`unsafe` in the lane), not an image cache: it saves, shares and restores nothing between VMs, so the four constraints of section 5.4 do not apply to it and none of them is weakened. Its one hazard is that a host crash during an `unsafe` install can corrupt the qcow2, so a crashed install is deleted and redone, not resumed. Owner question 8 stays open until the owner answers it.
+
 | Piece | Where | State |
 |---|---|---|
 | Unattended install, check boot, driver stage, `run` boot loop | `scripts/bench/windows/win_vm.sh` (846 lines) with `autounattend.xml.in`, `firstlogon.ps1`, `check.ps1`, `gsp_on.ps1`, `collect.ps1` | on `next` |
