@@ -5150,4 +5150,180 @@ mod device_reset_from_every_phase {
             assert!(d.write(OFF_FW_RESUME, 1).contains("E15"));
         }
     }
+
+    /// ★ 2026-10-31 — **the SWGEN0 drain gate** ([`GspFsm::deliver_events`], `events_outstanding`).
+    ///
+    /// Ported from the retired `kayfabe-completion` `DeliveryPlane` tests
+    /// (`drain_gate_batches_across_procs_without_serializing`,
+    /// `batch_outstanding_tracks_the_drain_gate_state`, `successive_batches_carry_distinct_monotonic_ids`),
+    /// whose contract lives here now: ONE os-event batch outstanding on the shared status queue,
+    /// the whole registered set riding it, opened only by the guest's `IRQSCLR`, and every message
+    /// carrying the next transport `seqNum` (the stream the guest's `rpcRecvPoll` checks; a gap is
+    /// `Bad sequence number`). Before this module the gate was compared only for
+    /// reset-equivalence, never driven.
+    ///
+    /// ⊘ Nothing in production calls `deliver_events` today: v3 wakes the guest per registration,
+    /// from the host event that fired (`kf_rm::osevent`; `docs/design/the_interrupt_arming_model.md`,
+    /// "arm-directed beats broadcast"). The gate is kept and pinned so that the day a caller exists
+    /// it cannot overrun the status ring, and so a guest that never takes the interrupt can only
+    /// starve its OWN wakeups (the safe direction).
+    mod os_event_batches {
+        use super::*;
+
+        fn ev(n: u32) -> PostEvent {
+            PostEvent {
+                client: 0xc1d0_000c,
+                event: 0x100 + n,
+                notify_index: n,
+            }
+        }
+
+        /// A `Running` device whose status ring the guest has fully drained.
+        fn running() -> Dev {
+            let mut d = drive(BootPhase::Running, false, None);
+            d.guest_drains_status();
+            assert!(!d.fsm.events_outstanding, "no batch has been posted yet");
+            d
+        }
+
+        fn stat_wp(d: &mut Dev) -> u32 {
+            d.ram.get32(REGION + STAT_OFF + 16)
+        }
+
+        fn stat_seq_at(d: &mut Dev, slot: u64) -> u32 {
+            let mut buf = vec![0u8; ELEM as usize];
+            d.ram
+                .read(REGION + STAT_OFF + ELEM + (slot % COUNT) * ELEM, &mut buf)
+                .expect("mapped");
+            peek_seq_num(&d.fsm.abi.element, &buf).expect("an element")
+        }
+
+        fn deliver(d: &mut Dev, events: &[PostEvent]) -> EventDelivery {
+            d.fsm.deliver_events(&mut d.ram, events)
+        }
+
+        #[test]
+        fn a_posted_batch_closes_the_gate_and_only_the_guests_irqsclr_opens_it() {
+            let mut d = running();
+            let wp0 = stat_wp(&mut d);
+            assert_eq!(
+                deliver(&mut d, &[ev(1), ev(2), ev(3)]),
+                EventDelivery::Delivered {
+                    posted: 3,
+                    short: None
+                },
+                "ONE batch carries every registered event (no per-process serialisation)"
+            );
+            assert!(d.fsm.events_outstanding);
+            let wp1 = stat_wp(&mut d);
+            assert_eq!(wp1, (wp0 + 3) % COUNT as u32);
+
+            // closed: nothing more is emitted however often it is asked, and the ring does not move
+            for _ in 0..100 {
+                assert_eq!(deliver(&mut d, &[ev(4)]), EventDelivery::Gated);
+            }
+            assert_eq!(stat_wp(&mut d), wp1, "a closed gate posts nothing");
+
+            // the guest draining the RING is not the opener: only the edge clear is (`C:4441`)
+            d.guest_drains_status();
+            assert_eq!(deliver(&mut d, &[ev(4)]), EventDelivery::Gated);
+            assert_eq!(stat_wp(&mut d), wp1);
+
+            d.write(OFF_IRQ_CLEAR, 1);
+            assert!(!d.fsm.events_outstanding, "IRQSCLR opens the gate");
+            assert_eq!(
+                deliver(&mut d, &[ev(4)]),
+                EventDelivery::Delivered {
+                    posted: 1,
+                    short: None
+                }
+            );
+            // a clear with no batch outstanding changes nothing and opens nothing it should not
+            d.guest_drains_status();
+            d.write(OFF_IRQ_CLEAR, 1);
+            d.write(OFF_IRQ_CLEAR, 1);
+            assert!(!d.fsm.events_outstanding);
+        }
+
+        /// The retired `BatchId` was the drain key and had to be distinct and monotonic. The live
+        /// key is the status stream's transport `seqNum`: one per message, never reused, never
+        /// skipped, across batches.
+        #[test]
+        fn every_message_of_every_batch_carries_the_next_sequence_number() {
+            let mut d = running();
+            let next = d.fsm.stat_seq;
+            let wp0 = u64::from(stat_wp(&mut d));
+            deliver(&mut d, &[ev(1), ev(2), ev(3), ev(4)]);
+            d.guest_drains_status();
+            d.write(OFF_IRQ_CLEAR, 1);
+            deliver(&mut d, &[ev(5), ev(6)]);
+            let seqs: Vec<u32> = (0..6).map(|i| stat_seq_at(&mut d, wp0 + i)).collect();
+            let want: Vec<u32> = (0..6).map(|i| next + i).collect();
+            assert_eq!(seqs, want, "consecutive across the two batches");
+            assert_eq!(d.fsm.stat_seq, next + 6);
+        }
+
+        /// A batch the ring cannot hold is cut at the ring's capacity (a guest registering many
+        /// events cannot make the device emit past what the guest has consumed), the elements that
+        /// DID land are still announced (the gate closes), and the next batch finds the gate shut.
+        #[test]
+        fn a_batch_the_ring_cuts_short_still_closes_the_gate_and_never_overruns_it() {
+            let mut d = running();
+            let events: Vec<PostEvent> = (0..200).map(ev).collect();
+            let EventDelivery::Delivered { posted, short } = deliver(&mut d, &events) else {
+                panic!("some of the batch must land");
+            };
+            assert!(
+                posted > 0 && posted < COUNT as usize,
+                "bounded by the ring, not by the guest's registrations: {posted}"
+            );
+            assert!(
+                matches!(short, Some(GspFault::QueueFull { .. })),
+                "back-pressure by name: {short:?}"
+            );
+            assert!(d.fsm.events_outstanding, "what landed is announced");
+            assert_eq!(deliver(&mut d, &events), EventDelivery::Gated);
+
+            // opened but the guest has consumed nothing: the first post is refused, NOTHING lands,
+            // and a gate is not closed over an empty batch
+            d.write(OFF_IRQ_CLEAR, 1);
+            assert!(matches!(
+                deliver(&mut d, &[ev(1)]),
+                EventDelivery::Failed {
+                    fault: GspFault::QueueFull { .. }
+                }
+            ));
+            assert!(!d.fsm.events_outstanding);
+
+            d.guest_drains_status();
+            assert_eq!(
+                deliver(&mut d, &[ev(1)]),
+                EventDelivery::Delivered {
+                    posted: 1,
+                    short: None
+                }
+            );
+        }
+
+        #[test]
+        fn nothing_registered_or_not_yet_running_leaves_the_gate_open() {
+            let mut d = running();
+            assert_eq!(deliver(&mut d, &[]), EventDelivery::NoneRegistered);
+            assert!(!d.fsm.events_outstanding);
+
+            let mut cold = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            assert_eq!(deliver(&mut cold, &[ev(1)]), EventDelivery::NotRunning);
+            assert!(!cold.fsm.events_outstanding);
+        }
+
+        /// A life that ends takes its outstanding batch with it: the queue it was posted into is gone.
+        #[test]
+        fn a_new_life_does_not_inherit_a_closed_gate() {
+            let mut d = running();
+            deliver(&mut d, &[ev(1)]);
+            assert!(d.fsm.events_outstanding);
+            d.fsm.device_reset();
+            assert!(!d.fsm.events_outstanding);
+        }
+    }
 }

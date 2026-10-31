@@ -90,6 +90,14 @@ cross-check now live in `crates/kf-cuda/tests/gmmu_ver2/` (an ogkm-derived, test
 GB202 token and `Arch`-level host-class contracts in `crates/kf-trap/src/tokenindex.rs` and
 `crates/kf-chip/tests/family_from_arch.rs`, and the surviving part of the completion plane in
 `crates/kf-chan/src/completions.rs`.
+**2026-10-31 (completion plane, corrects the line above):** the six `kayfabe-completion` tests first listed
+as "not portable" do have live homes; the coverage table is in the completion-plane pull request. The
+wrap compare of the host fence is `kf_chan::host::reached` (`host.rs`, `mod fence_order`) and the stage
+machine that consumes it is `swmethod.rs` (`mod fires_once_at_its_fence`); the guest-influenced reference
+word (the one the retired #12 jump guard existed for) is `kf_chan::user_gate::Marks` (`user_gate.rs`, tests
+from `a_stale_or_backwards_reference_is_not_progress_...`); the 32-bit wire receipt model is
+`user_ring.rs` `reference_wrap`; the arm table is `kf_rm::osevent::OsEventLog`; and the SWGEN0 drain gate
+is `kf_gsp::GspFsm::deliver_events` (`boot.rs`, `os_event_batches`; no production caller today).
 
 **STATUS: LIVE, 2026-10-31 (second pass).** **[SUPERSEDED by the third pass above: the owner decision named below was made, `chips` was cut and the five crates and `vmm` moved.]** ⊘ Refinement, folded above the text it refines: six of
 the sixteen crates below link **0 bytes** into the release `kayfabe-rm-ladder` (MEASURED, `nm -S -C`,

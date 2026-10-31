@@ -384,3 +384,71 @@ mod model {
         );
     }
 }
+
+/// 2026-10-31 — the stage machine fires once, at or after its fence, across the 32-bit wrap
+/// (ported from the retired `fence_arm_fires_at_or_after_target_exactly_once`; the arm table is
+/// gone, the in-order fence the pump retires against is what carries the contract).
+#[cfg(test)]
+mod fires_once_at_its_fence {
+    use super::*;
+
+    fn splitmix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    #[test]
+    fn start_comes_once_never_before_the_fence_and_resume_comes_once() {
+        let call = SwCall {
+            sub: 5,
+            value: 1,
+            method: 0x200,
+            data: 9,
+        };
+        let mut rng = 0x6665_6e63_6531_u64;
+        // fence numbers on and around the wrap
+        let mut seqs = vec![0u32, 1, 2, u32::MAX, u32::MAX - 1, u32::MAX - 100, 1 << 31];
+        for _ in 0..200 {
+            seqs.push(splitmix(&mut rng) as u32);
+        }
+        for seq in seqs {
+            // the engine's released fence starts short of `seq` and advances by random steps (it
+            // may skip past the exact value), the way a completion stream does
+            let behind = 1 + splitmix(&mut rng) % 1000;
+            let mut done_abs = i64::from(seq) - behind as i64;
+            let seq_abs = i64::from(seq);
+            let mut s = SwSuspend::new(call, Some(7), seq, Some(5));
+            let (mut starts, mut resumes) = (0, 0);
+            let mut action_polls = 0;
+            for _ in 0..4000 {
+                let step = s.step(done_abs as u32, || {
+                    action_polls += 1;
+                    // the action reports done on its third poll
+                    (action_polls >= 3).then_some(Ok(()))
+                });
+                match step.expect("no refusal in this schedule") {
+                    SwStep::Wait => assert!(done_abs < seq_abs, "waited past its fence"),
+                    SwStep::Start { gate } => {
+                        assert!(
+                            done_abs >= seq_abs,
+                            "started before its fence: seq {seq:#x}"
+                        );
+                        assert_eq!(gate, Some(5));
+                        starts += 1;
+                    }
+                    SwStep::Running => {}
+                    SwStep::Resume { retires } => {
+                        assert_eq!(retires, Some(7));
+                        resumes += 1;
+                        break;
+                    }
+                }
+                done_abs += (splitmix(&mut rng) % 400) as i64;
+            }
+            assert_eq!((starts, resumes), (1, 1), "seq {seq:#x}");
+        }
+    }
+}
