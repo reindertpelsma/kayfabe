@@ -380,6 +380,16 @@ pub struct HugePageReport {
     pub len: u64,
 }
 
+/// What [`MappedRegion::advise`] may ask of the kernel. Closed on purpose: each variant has its
+/// own soundness argument at the one `madvise` block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionAdvice {
+    /// `MADV_NOHUGEPAGE`: never back this range with transparent huge pages (`VM_NOHUGEPAGE`).
+    NoHugePage,
+    /// `MADV_DONTNEED`: drop the pages now; the next touch faults in a fresh zero page.
+    DontNeed,
+}
+
 /// A host mapping the **guest** may be writing while we look at it.
 ///
 /// The access surface is deliberately *copies only*: [`read_into`] and [`write_from`], no
@@ -758,6 +768,77 @@ impl MappedRegion {
         // `n == src.len()`. Non-overlap and alignment as in `read_into`.
         unsafe {
             core::ptr::copy_nonoverlapping(src.as_ptr(), self.map.base.as_ptr().add(start), n);
+        }
+        Ok(())
+    }
+
+    /// ★ **Advise the kernel about a page-aligned sub-range of this anonymous mapping** —
+    /// [`RegionAdvice::NoHugePage`] (keep the pages 4 KiB, so a physical-contiguity census of
+    /// them means something) or [`RegionAdvice::DontNeed`] (give the pages back, so the next
+    /// touch faults a fresh zero page). Added 2026-10-31 for the refresh-stress arm
+    /// (`V3_RAW_CLIENT.md` §4.2): both are needed to *build* memory whose frames are scattered.
+    ///
+    /// ⊘ Only the two variants of [`RegionAdvice`] can be expressed, and the soundness argument
+    /// is written at the block. `DontNeed` requires a `ReadWrite` region (a read-only mapping is
+    /// refused): on private anonymous memory the next access reads zeros, on a shared file
+    /// mapping the file's bytes, and no address ever becomes invalid.
+    ///
+    /// ⚠ `DontNeed` on pages a driver has PINNED does not free them; it only unmaps this
+    /// process's view. The refresh-stress arm calls it before any pin.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`], [`RawError::Misaligned`], [`RawError::OutOfRange`],
+    /// [`RawError::LengthOverflow`], [`RawError::TooLargeForHost`], [`RawError::NotWritable`]
+    /// (`DontNeed` on a read-only region), [`RawError::Syscall`] (the kernel's `errno`).
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn advise(
+        &self,
+        offset: HostOffset,
+        len: u64,
+        advice: RegionAdvice,
+    ) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("madvise (advising a host mapping)");
+        if len == 0 {
+            return Err(RawError::ZeroLength { what: "advice" });
+        }
+        let page = HostPageSize::query();
+        geometry::require_aligned(offset.get(), page, "advice offset")?;
+        geometry::require_aligned(len, page, "advice length")?;
+        if advice == RegionAdvice::DontNeed && self.prot != HostProt::ReadWrite {
+            return Err(RawError::NotWritable);
+        }
+        let (start, len_host) = bounds::checked_span(self.map.len_bytes(), offset, len, "advice")?;
+        let (flag, call) = match advice {
+            RegionAdvice::NoHugePage => (libc::MADV_NOHUGEPAGE, "madvise(MADV_NOHUGEPAGE)"),
+            RegionAdvice::DontNeed => (libc::MADV_DONTNEED, "madvise(MADV_DONTNEED)"),
+        };
+
+        // SAFETY: (a) `self.map.base` is the `Mapping` type invariant, a live mapping of
+        // exactly `len_bytes()` bytes owned by this object until `Drop`; (b)
+        // `start + len_host <= len_bytes()` is proved above by `checked_span` (overflow
+        // checked first), so `base.add(start)` is in bounds of that allocation and the whole
+        // advised range lies inside this mapping; (c) offset and length are host-page-aligned
+        // (checked above), as `madvise` requires; (d) `flag` is one of exactly two advices
+        // chosen by the closed `match` above. `MADV_NOHUGEPAGE` only sets a VMA flag.
+        // `MADV_DONTNEED` on a private anonymous (or private file) mapping drops the pages and
+        // the next access reads zeros (or the file's bytes): it can change CONTENT but never
+        // makes any address invalid, so no reference into this region exists to dangle - none
+        // is ever handed out (the type's copies-only surface) - and a concurrent `read_into` /
+        // `write_from` sees either the old or the zero page, which is the same race the type
+        // already documents for a guest writing the bytes. The region is required `ReadWrite`
+        // for that variant, so a caller cannot use it to discard what it could not have
+        // written. The kernel takes `mmap_lock` itself. The return value is checked below.
+        let rc = unsafe {
+            libc::madvise(
+                self.map.base.as_ptr().add(start).cast::<libc::c_void>(),
+                len_host,
+                flag,
+            )
+        };
+        if rc != 0 {
+            return Err(last_syscall_error(call));
         }
         Ok(())
     }
