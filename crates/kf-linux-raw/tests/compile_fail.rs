@@ -49,6 +49,9 @@ const REQUIRED_ROWS: &[&str] = &[
     "no_wide_volatile_load.rs",
     "offset_arithmetic.rs",
     "page_size_literal.rs",
+    "ram_segment_cannot_be_forged.rs",
+    "ram_segment_fields_are_private.rs",
+    "ram_segment_has_no_address.rs",
     "region_is_not_sync.rs",
     "view_outlives_region.rs",
 ];

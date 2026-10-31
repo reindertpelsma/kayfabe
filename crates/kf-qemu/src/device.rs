@@ -1092,7 +1092,7 @@ impl Device {
             walker,
             fb_length,
             // ★ P1+P2 §2.6: through the vIOMMU seam.
-            Box::new(move |gpa, len| ram.dma_to_file_range(gpa, len)),
+            Box::new(move |gpa, len| ram.gpu_ram_offset(gpa, len)),
         )
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
@@ -1887,6 +1887,11 @@ impl Device {
         win.host_span(usize::try_from(rel).ok()?, usize::try_from(len).ok()?)
     }
 
+    /// ★ ABI 31: the verbs the layout guard holds a RAM block's owner with. `false` if already set.
+    pub fn set_ram_hold(&self, hold: crate::raw_unsafe::CMrHold) -> bool {
+        self.ram.set_mr_hold(std::sync::Arc::new(hold))
+    }
+
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
         self.ram.del(gpa);
@@ -2041,6 +2046,17 @@ impl Device {
                     "kf3: mem t={:.3}s [{prewarmed}/{}] {line}",
                     self.born.elapsed().as_secs_f64(),
                     crate::mem::PREWARM_SPARES
+                );
+            }
+            // ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): the VMM's RAM layout moved (a block was added,
+            // removed or resized) — bring the block objects in line, taking down a removed block's
+            // GPU-VA slices first. Never while a walk is in flight.
+            if !m.in_flight()
+                && let Some(line) = crate::mem::resync_ram(&m, &self.mem, self.rm)
+            {
+                eprintln!(
+                    "kf3: mem t={:.3}s {line}",
+                    self.born.elapsed().as_secs_f64()
                 );
             }
             let mut ready = ReadyTokens::new();
@@ -2808,7 +2824,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} absent_cleared={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} carve_clipped={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} sysmem_leaf_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -2846,6 +2862,7 @@ impl Device {
             self.mem.pramin.kept.load(o),
             self.mem.pramin.kept_now.load(o),
             crate::mem::WINDOW_ADVICE_REFUSED.load(o),
+            kf_mem::cpuwin::SYSMEM_LEAF_REFUSED.load(o),
             self.mem.pramin_trap.inline_opens.load(o),
             self.mem.pramin_trap.reaped.load(o),
             mc.cache_ops.load(o),

@@ -1,7 +1,9 @@
 //! Compile the repository-owned C seam and compare every carried Rust field's layout.
 //! This uses the actual QEMU header, needs no QEMU build, and never opens a GPU.
 
-use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3Frame, Kf3Identity, Kf3InputOps, Kf3Pointer, Kf3Region};
+use kf_qemu::ffi_unsafe::{
+    KF3_ABI, Kf3Frame, Kf3Identity, Kf3InputOps, Kf3Pointer, Kf3RamOps, Kf3Region,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{align_of, offset_of, size_of};
 use std::process::Command;
@@ -60,6 +62,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         "Kf3Frame",
         "Kf3Pointer",
         "Kf3InputOps",
+        "Kf3RamOps",
     ];
     let declared: Vec<_> = rust
         .split("#[repr(C)]")
@@ -126,6 +129,8 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         missing_pointer => "missing_pointer", close => "close", resize_hint => "resize_hint",
         cursor_define => "cursor_define", cursor_hide => "cursor_hide",
         cursor_move => "cursor_move", cursor_absolute => "cursor_absolute"]);
+    // ★ ABI 31 (V3_GUEST_MEMORY.md): the layout guard's two hold verbs
+    layout!(Kf3RamOps, [mr_ref => "mr_ref", mr_unref => "mr_unref"]);
     {
         use kf_broker::Button as B;
         use kf_qemu::raw_unsafe::button_abi;
@@ -274,6 +279,10 @@ fn c_type(rust: &str) -> String {
     if let Some(pointee) = t.strip_prefix("*const") {
         return format!("const {} *", c_type(pointee));
     }
+    // A nullable borrowed struct (`Option<&Kf3RamOps>`): C's `const Kf3RamOps *`.
+    if let Some(pointee) = t.strip_prefix("Option<&").and_then(|s| s.strip_suffix('>')) {
+        return format!("const {} *", c_type(pointee));
+    }
     // A nullable C callback: `Option<path::XFn>` is kf3.h's `Kf3XFn`.
     if let Some(alias) = t.strip_prefix("Option<").and_then(|s| s.strip_suffix('>')) {
         return format!("Kf3{}", alias.rsplit("::").next().unwrap());
@@ -289,7 +298,7 @@ fn c_type(rust: &str) -> String {
         "usize" => "size_t",
         "c_void" | "()" => "void",
         "c_char" => "char",
-        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3Pointer" | "Kf3InputOps" => t,
+        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3Pointer" | "Kf3InputOps" | "Kf3RamOps" => t,
         other => panic!("the mirror cannot spell the Rust FFI type `{other}` in C — add it"),
     }
     .to_string()
@@ -369,6 +378,9 @@ fn seam() -> Seam {
         let Some(path) = p.strip_prefix("Option<").and_then(|s| s.strip_suffix('>')) else {
             continue;
         };
+        if path.starts_with('&') {
+            continue; // a nullable borrowed struct, not a callback
+        }
         let alias = path.rsplit("::").next().unwrap();
         let c = c_type(p);
         if rust_callbacks.insert(c.clone()) {

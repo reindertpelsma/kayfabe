@@ -62,7 +62,7 @@ Add the device to a QEMU command line built from the binary in `kf3-bins/<rev>/`
 -object memory-backend-memfd,id=ram0,size=<N>M,share=on
 -machine q35,accel=kvm,memory-backend=ram0 -m <N> -cpu host
 ```
-Guest RAM must be a shared memfd. With plain `-m` every store-backed path refuses. Use `-vga none` when the device provides the display. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/display/interactive.sh -->
+Use a shared memfd for guest RAM: it is the tested configuration. With plain `-m` the device still starts, but the paths that need a file offset refuse by name and the file-less mapping has not been run on a GPU (`requirements.md`). Use `-vga none` when the device provides the display. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/display/interactive.sh -->
 
 ### Device properties
 

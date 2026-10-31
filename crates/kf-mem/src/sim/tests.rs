@@ -1462,7 +1462,6 @@ fn refresh(m: &SimMirror<'_>, runs: &[DiffRun], c: &mut BTreeMap<u64, Committed>
     rm.ext = paused_ext;
 }
 
-#[allow(clippy::too_many_lines)]
 fn run_seed(
     seed: u64,
     steps: usize,
@@ -1471,9 +1470,29 @@ fn run_seed(
     fault: Option<(u64, bool)>,
     ext: Option<ExtFault>,
 ) -> Result<Stats, String> {
+    run_seed_ram(seed, steps, batching, low, fault, ext, None)
+}
+
+/// [`run_seed`] over guest RAM carried by `ram` (one host object per segment, NO file: the stitch
+/// is unavailable) when given; the single whole-RAM object otherwise.
+#[allow(clippy::too_many_lines)]
+fn run_seed_ram(
+    seed: u64,
+    steps: usize,
+    batching: bool,
+    low: bool,
+    fault: Option<(u64, bool)>,
+    ext: Option<ExtFault>,
+    ram: Option<crate::ramobj::RamObjects>,
+) -> Result<Stats, String> {
     let mut st = Stats::default();
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let sim = fresh();
+    {
+        let mut rm = sim.0.borrow_mut();
+        rm.no_fd = ram.is_some();
+        rm.ram_segs = ram;
+    }
     sim.0.borrow_mut().fail_unmaps = fault.map(|(every, after)| UnmapFault {
         every,
         after,
@@ -1981,4 +2000,667 @@ fn a_run_whose_rows_fit_a_budget_alone_but_not_together_places_nothing_and_leave
 
 fn kf_mem_budget() -> u64 {
     crate::batch::REFRESH_PLACEMENT_BUDGET
+}
+
+// ── ★ 2026-10-31: guest RAM that is NOT one file (`V3_GUEST_MEMORY.md` §5) ─────────────────────
+//
+// The VMM offers `translate(gpa, len)` and no file: the host holds ONE OBJECT PER HOST SEGMENT, the
+// stitch (batched map) is unavailable, and every guest-RAM row goes through the per-run path — cut at
+// every object edge, one host map per object, never one map across an edge. Same model host RM, same
+// invariants (`check`), same walker commit.
+
+use crate::ramobj::{RamObjects, RamSegment};
+
+fn frag_seg(ram_page: u64, pages: u64, obj: u32, obj_page: u64) -> RamSegment {
+    RamSegment {
+        ram_off: ram_page * P,
+        len: pages * P,
+        obj,
+        obj_off: obj_page * P,
+    }
+}
+
+/// Guest RAM pages `[0, 8192)` in five host objects (object ids are the model's; offsets inside the
+/// objects are NOT the RAM offsets, so a wrong resolution cannot hide).
+fn frag_ram() -> RamObjects {
+    RamObjects::new(&[
+        frag_seg(0, 40, 0x7001, 0),
+        frag_seg(40, 60, 0x7002, 3),
+        frag_seg(100, 1900, 0x7003, 0),
+        frag_seg(2000, 2100, 0x7004, 17),
+        frag_seg(4100, 4092, 0x7005, 0),
+    ])
+    .expect("table")
+}
+
+/// A fresh space whose guest RAM is `ram` with no file.
+fn fresh_frag(ram: RamObjects) -> Sim {
+    let sim = fresh();
+    {
+        let mut rm = sim.0.borrow_mut();
+        rm.ram_segs = Some(ram);
+        rm.no_fd = true;
+    }
+    sim
+}
+
+/// The mirror-owned maps, `(page, pages, object, object page)`.
+fn mirror_maps(sim: &Sim) -> Vec<(u64, u64, u32, u64)> {
+    let mut v: Vec<(u64, u64, u32, u64)> = sim
+        .0
+        .borrow()
+        .maps
+        .iter()
+        .filter(|m| m.owner == Owner::Mirror)
+        .map(|m| ((m.va - BASE) / P, m.len / P, m.obj, m.off / P))
+        .collect();
+    v.sort_unstable();
+    v
+}
+
+/// ★ A row across a host-object edge is mapped one piece per object, in the unreserved range (4 KiB
+/// grain) and in the reservation (one map per object), and unmapped whole.
+#[test]
+fn a_row_across_a_host_object_edge_is_mapped_one_piece_per_object() {
+    // RAM pages 30..50 cross the edge at RAM page 40 (object 0x7001 → 0x7002).
+    for (at, label) in [(4u64, "NV01 range"), (40, "reservation")] {
+        for low in [false, true] {
+            let sim = fresh_frag(frag_ram());
+            let m = SimMirror::new(&sim, true, low);
+            let mut c = BTreeMap::new();
+            map_ram(&m, &mut c, &[(at, 20, 30)]);
+            ok(&sim, &c, &BTreeMap::new());
+            let maps = mirror_maps(&sim);
+            if label == "reservation" {
+                // One host map per object: 10 pages of 0x7001 from its page 30, 10 of 0x7002 from
+                // its page 3 (RAM page 40 is that object's page 3).
+                assert_eq!(
+                    maps,
+                    vec![(at, 10, 0x7001, 30), (at + 10, 10, 0x7002, 3)],
+                    "{label} low={low}"
+                );
+            } else {
+                // 4 KiB grain outside a reservation: every page in the object that carries it.
+                assert_eq!(maps.len(), 20, "{label} low={low}");
+                for (i, &(pg_, n, obj, opg)) in maps.iter().enumerate() {
+                    let ram_pg = 30 + i as u64;
+                    let want = if ram_pg < 40 {
+                        (0x7001, ram_pg)
+                    } else {
+                        (0x7002, ram_pg - 40 + 3)
+                    };
+                    assert_eq!((pg_, n, obj, opg), (at + i as u64, 1, want.0, want.1));
+                }
+            }
+            assert!(sim.0.borrow().violations.is_empty());
+            // Unmapping the committed row takes every piece down.
+            unmap_pages(&m, &mut c, &[at]);
+            ok(&sim, &c, &BTreeMap::new());
+            let rm = sim.0.borrow();
+            assert!(
+                rm.maps.is_empty() && rm.resv.is_empty(),
+                "{label} low={low}"
+            );
+            assert_eq!(m.bv.leftovers(), 0);
+        }
+    }
+}
+
+/// The model itself refuses (and records) a host map that reaches past its object's end — the
+/// guard that makes the cut a tested property rather than a convention.
+#[test]
+fn the_model_refuses_a_host_map_across_an_object_end() {
+    let sim = fresh_frag(frag_ram());
+    let mut rm = sim.0.borrow_mut();
+    // Object 0x7001 carries 40 pages; 20 pages from its page 30 reach 10 pages past its end.
+    assert_eq!(
+        rm.map(pg(40), 20 * P, 0x7001, 30 * P, Owner::Mirror),
+        Err(false)
+    );
+    assert_eq!(rm.violations.len(), 1, "{:?}", rm.violations);
+    assert!(rm.maps.is_empty());
+    // Exactly to the end is fine.
+    assert_eq!(
+        rm.map(pg(40), 10 * P, 0x7001, 30 * P, Owner::Mirror),
+        Ok(())
+    );
+}
+
+/// A row inside ONE object stays one map (no cut).
+#[test]
+fn a_row_inside_one_host_object_is_one_map() {
+    let sim = fresh_frag(frag_ram());
+    let m = SimMirror::new(&sim, false, false);
+    let mut c = BTreeMap::new();
+    map_ram(&m, &mut c, &[(40, 12, 2100)]);
+    ok(&sim, &c, &BTreeMap::new());
+    assert_eq!(mirror_maps(&sim), vec![(40, 12, 0x7004, 2100 - 2000 + 17)]);
+    assert_eq!(sim.0.borrow().n.rm_map, 1);
+}
+
+/// A row across THREE objects (the middle one whole) in the reservation: three maps.
+#[test]
+fn a_row_across_three_host_objects_is_three_maps() {
+    let ram = RamObjects::new(&[
+        frag_seg(0, 6, 0x7001, 0),
+        frag_seg(6, 4, 0x7002, 9),
+        frag_seg(10, 100, 0x7003, 1),
+    ])
+    .expect("table");
+    let sim = fresh_frag(ram);
+    let m = SimMirror::new(&sim, false, false);
+    let mut c = BTreeMap::new();
+    map_ram(&m, &mut c, &[(40, 10, 3)]); // RAM pages 3..13
+    ok(&sim, &c, &BTreeMap::new());
+    assert_eq!(
+        mirror_maps(&sim),
+        vec![(40, 3, 0x7001, 3), (43, 4, 0x7002, 9), (47, 3, 0x7003, 1)]
+    );
+    unmap_pages(&m, &mut c, &[40]);
+    assert!(sim.0.borrow().maps.is_empty());
+}
+
+/// ★ A row that touches a hole in the host objects is refused BY NAME, whole: nothing placed, the
+/// pieces before the hole rolled back. (A leaf the VMM's layout does not carry is refused earlier,
+/// by `desired_from_leaves`; this is the second line: the objects themselves.)
+#[test]
+fn a_row_across_a_hole_in_the_host_objects_is_refused_whole() {
+    let ram = RamObjects::new(&[frag_seg(0, 100, 0x7001, 0), frag_seg(200, 100, 0x7002, 0)])
+        .expect("table");
+    // 4 pages from RAM page `back`: 98..102 runs into the hole; 296..300 is inside the second
+    // object (placed); 150..154 is wholly in the hole.
+    for back in [98u64, 296, 150] {
+        let sim = fresh_frag(ram.clone());
+        let m = SimMirror::new(&sim, false, false);
+        let mut c = BTreeMap::new();
+        let runs = [map_run(pg(40), 4 * P, true, back * P, false)];
+        let out = apply_and_commit(&m, &runs, &mut c);
+        let placed = back >= 200;
+        assert_eq!(
+            out.refused,
+            usize::from(!placed),
+            "back={back}: {:?}",
+            out.first_refusal
+        );
+        if placed {
+            assert_eq!(mirror_maps(&sim), vec![(40, 4, 0x7002, back - 200)]);
+        } else {
+            assert!(c.is_empty(), "nothing committed");
+            assert!(
+                sim.0.borrow().maps.is_empty(),
+                "nothing placed or left behind"
+            );
+            let why = out.first_refusal.expect("named");
+            assert!(
+                why.contains("host-object edge") || why.contains("no host object"),
+                "{why}"
+            );
+        }
+        assert!(sim.0.borrow().violations.is_empty());
+        // The placed row is ours (one ledger entry); a refused row left nothing.
+        assert_eq!(m.bv.leftovers(), usize::from(placed), "back={back}");
+    }
+}
+
+/// ★ No file = the batched map is not attempted: it falls back BY NAME to the per-run path. Nothing
+/// is refused, no descriptor is built and no stitch syscall is made; every row is placed. The
+/// control (a file) batches as before.
+#[test]
+fn without_a_file_the_batch_path_falls_back_by_name_to_the_per_run_path() {
+    for low in [false, true] {
+        // The control: one whole-RAM object and a file.
+        let sim = fresh();
+        let m = SimMirror::new(&sim, true, low);
+        let mut c = BTreeMap::new();
+        // Inside the static reservation, so the control batches without a low-range reservation.
+        let rows = scattered(36, 24);
+        let runs: Vec<DiffRun> = rows
+            .iter()
+            .map(|&(p, n, b)| map_run(pg(p), n * P, true, b * P, false))
+            .collect();
+        let with_fd = apply_and_commit(&m, &runs, &mut c);
+        ok(&sim, &c, &BTreeMap::new());
+        let control_translation: Vec<_> = (0..PAGES)
+            .map(|i| sim.0.borrow().translate(pg(i), Owner::Mirror))
+            .collect();
+        assert_eq!(with_fd.batch_no_fd, 0);
+        assert!(with_fd.batches >= 1, "low={low}: the control batches");
+
+        // No file, fragmented objects: same walk, same result, per run.
+        let sim = fresh_frag(frag_ram());
+        let m = SimMirror::new(&sim, true, low);
+        let mut c = BTreeMap::new();
+        let out = apply_and_commit(&m, &runs, &mut c);
+        assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+        assert_eq!(out.mapped, 24);
+        assert_eq!((out.batches, out.batch_fallbacks), (0, 0), "low={low}");
+        assert!(out.batch_no_fd >= 1, "named, counted apart: {out:?}");
+        let rm = sim.0.borrow();
+        assert_eq!(
+            (rm.n.rm_desc, rm.n.mmap, rm.n.munmap),
+            (0, 0, 0),
+            "no descriptor, no stitch"
+        );
+        drop(rm);
+        ok(&sim, &c, &BTreeMap::new());
+        // ★ Identical guest-visible translation.
+        let frag_translation: Vec<_> = (0..PAGES)
+            .map(|i| sim.0.borrow().translate(pg(i), Owner::Mirror))
+            .collect();
+        assert_eq!(frag_translation, control_translation, "low={low}");
+        assert!(sim.0.borrow().violations.is_empty());
+    }
+}
+
+/// ★ The same walks over a file-backed RAM and over fragmented file-less RAM end with the same
+/// guest-visible translation at every step (map, remap inside a row, partial unmap, retire).
+#[test]
+fn file_backed_and_fragmented_ram_give_identical_translations_through_every_step() {
+    for low in [false, true] {
+        let a = fresh();
+        let b = fresh_frag(frag_ram());
+        let ma = SimMirror::new(&a, true, low);
+        let mb = SimMirror::new(&b, true, low);
+        let (mut ca, mut cb) = (BTreeMap::new(), BTreeMap::new());
+        let snap = |s: &Sim| -> Vec<_> {
+            (0..PAGES)
+                .map(|i| s.0.borrow().translate(pg(i), Owner::Mirror))
+                .collect()
+        };
+        // Rows with backing across the edges at RAM pages 40, 100, 2000 and 4100.
+        let steps: Vec<Vec<(u64, u64, u64)>> = vec![
+            vec![(4, 16, 30)],
+            vec![(40, 12, 94)],
+            scattered(24, 6),
+            vec![(70, 20, 1995)],
+            vec![(60, 5, 4097)],
+        ];
+        for rows in &steps {
+            map_ram(&ma, &mut ca, rows);
+            map_ram(&mb, &mut cb, rows);
+            ok(&a, &ca, &BTreeMap::new());
+            ok(&b, &cb, &BTreeMap::new());
+            assert_eq!(snap(&a), snap(&b), "low={low} after {rows:?}");
+        }
+        // Remap one page inside the first row; unmap another row whole.
+        let ra = remap_inside(&ca, 4, &[9], 3000);
+        let rb = remap_inside(&cb, 4, &[9], 3000);
+        let oa = apply_and_commit(&ma, &ra, &mut ca);
+        let ob = apply_and_commit(&mb, &rb, &mut cb);
+        assert_eq!(
+            (oa.refused, ob.refused),
+            (0, 0),
+            "{:?} {:?}",
+            oa.first_refusal,
+            ob.first_refusal
+        );
+        unmap_pages(&ma, &mut ca, &[40]);
+        unmap_pages(&mb, &mut cb, &[40]);
+        ok(&a, &ca, &BTreeMap::new());
+        ok(&b, &cb, &BTreeMap::new());
+        assert_eq!(snap(&a), snap(&b), "low={low} after remap+unmap");
+        assert_eq!(ma.retire(), 0);
+        assert_eq!(mb.retire(), 0);
+        assert!(a.0.borrow().maps.is_empty() && b.0.borrow().maps.is_empty());
+        assert_eq!((ma.bv.leftovers(), mb.bv.leftovers()), (0, 0));
+    }
+}
+
+/// ★★★ THE PROPERTY on fragmented, file-less RAM: random walker diffs through the real apply +
+/// `BatchedVas` code against the model host RM, with the stitch unavailable (every batch answers
+/// `NO_RAM_FD`), every guest-RAM row cut at the object edges, unmap refusals injected, and a row
+/// map failing in the MIDDLE of a multi-piece row (the pieces already placed are rolled back).
+/// After every host call: no unchanged VA transiently unmapped; after every step: [`check`], and
+/// the model reports no map reaching past its object.
+#[test]
+fn property_fragmented_ram_against_the_host_rm_model() {
+    type Case = (bool, Option<(u64, bool)>, Option<ExtFault>);
+    let cases: [Case; 5] = [
+        (false, None, None),
+        (true, None, None),
+        (false, Some((5, false)), None),
+        (true, Some((7, true)), None),
+        (
+            true,
+            None,
+            Some(ExtFault {
+                map_every: 7,
+                ..ExtFault::default()
+            }),
+        ),
+    ];
+    for (low, fault, ext) in cases {
+        let mut failures = Vec::new();
+        let mut total = Stats::default();
+        for seed in 1..=150u64 {
+            match run_seed_ram(seed, 60, true, low, fault, ext, Some(frag_ram())) {
+                Ok(s) => total.sum(s),
+                Err(e) => failures.push(format!("seed {seed}: {e}")),
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "low={low} fault={fault:?} ext={ext:?}: {} of 150 seeds failed; first: {}",
+            failures.len(),
+            failures[0]
+        );
+        assert_eq!(total.batches, 0, "no file: the stitch is never reached");
+        if fault.is_none() && ext.is_none() {
+            // (Injected unmap/map refusals produce their own range fallbacks.)
+            assert_eq!(total.fallbacks, 0, "no file is not a refusal: {total:?}");
+        }
+        assert!(
+            total.ranges > 50 && total.retires > 5,
+            "the property run did not exercise unmaps: {total:?}"
+        );
+    }
+}
+
+// ── ★ 2026-10-31: the LAYOUT GUARD — the VMM's RAM layout moves under the mapping ──────────────
+//
+// A model hypervisor (`guestmem::testvmm`) owns the blocks; the `RamObjectBook` keeps one host
+// object per block in step with it under a layout guard; the model host RM maps rows from those
+// objects. Guest RAM is numbered by guest-physical address (`RamPlan::by_gpa`), which is also the
+// sim's identity `ram_offset`, so the numbers a walk produces are the numbers the book serves.
+
+use crate::guestmem::testvmm::TestVmm;
+use crate::guestmem::{GuestMemory, LayoutGuard};
+use crate::ramobj::{RamObjectBook, RamObjectHost, Retiring, SyncError, SyncReport};
+
+/// Host RM objects of the model: ids are made up (disjoint from the sim's own); a freed object may
+/// back no mapping — "removal unmaps its slices FIRST" is a tested property, not a convention.
+struct SimObjects<'s> {
+    sim: &'s Sim,
+    next: u32,
+    live: Vec<u32>,
+}
+
+impl<'s> SimObjects<'s> {
+    fn new(sim: &'s Sim) -> Self {
+        Self {
+            sim,
+            next: 0x6000,
+            live: Vec::new(),
+        }
+    }
+}
+
+impl RamObjectHost for SimObjects<'_> {
+    fn alloc(&mut self, segment: &kf_linux_raw::RamSegment<'_>) -> Result<u32, String> {
+        let mut b = [0u8; 1];
+        segment
+            .read_into(kf_linux_raw::HostOffset::ZERO, &mut b)
+            .map_err(|e| e.to_string())?;
+        self.next += 1;
+        self.live.push(self.next);
+        Ok(self.next)
+    }
+
+    fn free(&mut self, obj: u32) {
+        let mut rm = self.sim.0.borrow_mut();
+        if rm.maps.iter().any(|m| m.obj == obj) {
+            rm.violations.push(format!(
+                "object {obj:#x} freed while a mapping still reads it"
+            ));
+        }
+        drop(rm);
+        self.live.retain(|o| *o != obj);
+    }
+}
+
+/// A host that runs a hook after its first allocation (the VMM moving its layout mid-pin).
+struct HookHost<'a, 's> {
+    inner: &'a mut SimObjects<'s>,
+    on_alloc: Option<Box<dyn FnOnce() + 'a>>,
+}
+
+impl RamObjectHost for HookHost<'_, '_> {
+    fn alloc(&mut self, segment: &kf_linux_raw::RamSegment<'_>) -> Result<u32, String> {
+        let r = self.inner.alloc(segment);
+        if let Some(f) = self.on_alloc.take() {
+            f();
+        }
+        r
+    }
+
+    fn free(&mut self, obj: u32) {
+        self.inner.free(obj);
+    }
+}
+
+fn gm_vmm() -> TestVmm {
+    let v = TestVmm::new();
+    v.add(0, 40 * P); // RAM pages 0..40
+    v.add(40 * P, 60 * P); // 40..100, adjacent to the first
+    v.add(120 * P, 80 * P); // 120..200, after a hole
+    v
+}
+
+/// Bring the book in line, take down the GPU slices of a retiring block through the sim mirror,
+/// and hand the sim the new table.
+fn gm_sync(
+    sim: &Sim,
+    m: &SimMirror<'_>,
+    c: &mut BTreeMap<u64, Committed>,
+    book: &mut RamObjectBook,
+    vmm: &TestVmm,
+    host: &mut SimObjects<'_>,
+) -> Result<SyncReport, SyncError> {
+    let r = {
+        let mut unmap = |t: &Retiring| -> Result<(), String> {
+            let pages: Vec<u64> = c
+                .iter()
+                .filter(|(_, x)| x.ram && x.off < t.ram_off + t.len && t.ram_off < x.off + x.len)
+                .map(|(&va, _)| (va - BASE) / P)
+                .collect();
+            if !pages.is_empty() {
+                unmap_pages(m, c, &pages);
+            }
+            Ok(())
+        };
+        book.sync(vmm, &|b| Some(b.gpa), host, &mut unmap)
+    };
+    sim.0.borrow_mut().ram_segs = Some(book.objects().expect("table"));
+    r
+}
+
+fn gm_fresh() -> Sim {
+    let sim = fresh();
+    {
+        let mut rm = sim.0.borrow_mut();
+        rm.ram_segs = Some(RamObjects::default());
+        rm.no_fd = true;
+    }
+    sim
+}
+
+fn translation(sim: &Sim, pages: std::ops::Range<u64>) -> Vec<Option<(bool, u64)>> {
+    pages
+        .map(|i| sim.0.borrow().translate(pg(i), Owner::Mirror))
+        .collect()
+}
+
+/// ★ A block removed by the VMM: its GPU slices are unmapped FIRST (including the part of a row
+/// that began in the block before it), then its object is freed; the other blocks keep their
+/// objects, their numbers and their mappings; a row onto the removed block is refused by name.
+#[test]
+fn removing_a_ram_block_takes_down_its_slices_then_frees_its_object() {
+    let sim = gm_fresh();
+    let vmm = gm_vmm();
+    let m = SimMirror::new(&sim, false, false);
+    let mut c = BTreeMap::new();
+    let mut host = SimObjects::new(&sim);
+    let mut book = RamObjectBook::new();
+    let r = gm_sync(&sim, &m, &mut c, &mut book, &vmm, &mut host).expect("first sync");
+    assert_eq!((r.added, r.kept, r.removed), (3, 0, 0));
+    let objs: Vec<u32> = book.blocks().iter().map(|b| b.obj).collect();
+    // A row across the A|B edge (RAM pages 30..50), one inside B (60..65), one inside C (130..140).
+    map_ram(&m, &mut c, &[(4, 20, 30), (30, 5, 60), (50, 10, 130)]);
+    ok(&sim, &c, &BTreeMap::new());
+    assert!(sim.0.borrow().violations.is_empty());
+    let before_c = translation(&sim, 50..60);
+    assert!(before_c.iter().all(Option::is_some));
+    assert!(translation(&sim, 4..24).iter().all(Option::is_some));
+
+    // The VMM frees block B (RAM pages 40..100).
+    vmm.remove(40 * P);
+    let r = gm_sync(&sim, &m, &mut c, &mut book, &vmm, &mut host).expect("resync");
+    assert_eq!((r.added, r.kept, r.removed), (0, 2, 1));
+    assert!(
+        sim.0.borrow().violations.is_empty(),
+        "{:?}",
+        sim.0.borrow().violations
+    );
+    // B's object is gone; A's and C's stay.
+    assert_eq!(host.live, vec![objs[0], objs[2]]);
+    // Both rows that touched B are gone — the one across the edge as a WHOLE row, with its part in
+    // A — and the row in C is untouched, as is every page it maps.
+    assert!(!c.contains_key(&pg(4)) && !c.contains_key(&pg(30)));
+    assert!(c.contains_key(&pg(50)));
+    assert_eq!(translation(&sim, 50..60), before_c);
+    assert!(translation(&sim, 4..24).iter().all(Option::is_none));
+    ok(&sim, &c, &BTreeMap::new());
+    // A row onto the removed block is refused by name, whole; one onto a kept block still works.
+    let out = apply_and_commit(&m, &[map_run(pg(70), 5 * P, true, 60 * P, false)], &mut c);
+    assert_eq!(out.refused, 1);
+    assert!(!c.contains_key(&pg(70)));
+    map_ram(&m, &mut c, &[(70, 5, 10)]);
+    ok(&sim, &c, &BTreeMap::new());
+    assert_eq!(m.retire(), 0);
+    assert!(sim.0.borrow().violations.is_empty());
+}
+
+/// ★ The layout moves between translate and the end of the descriptor call: refused by name, what
+/// the call made is freed, nothing is mapped from it; the next refresh (a new sync) succeeds.
+#[test]
+fn a_layout_change_during_descriptor_creation_is_refused_by_name_and_places_nothing() {
+    let sim = gm_fresh();
+    let vmm = gm_vmm();
+    let m = SimMirror::new(&sim, false, false);
+    let mut c = BTreeMap::new();
+    let mut host = SimObjects::new(&sim);
+    let mut book = RamObjectBook::new();
+    // While the first object is being made the VMM frees the third block (the hot-unplug race).
+    let e = {
+        let mut unmap = |_: &Retiring| -> Result<(), String> { Ok(()) };
+        let mut hooked = HookHost {
+            inner: &mut host,
+            on_alloc: Some(Box::new(|| vmm.remove(120 * P))),
+        };
+        book.sync(&vmm, &|b| Some(b.gpa), &mut hooked, &mut unmap)
+            .expect_err("refused")
+    };
+    assert_eq!(e, SyncError::LayoutChanged);
+    assert!(e.to_string().starts_with("LAYOUT_CHANGED"));
+    assert!(host.live.is_empty(), "leaked {:?}", host.live);
+    assert!(book.blocks().is_empty());
+    sim.0.borrow_mut().ram_segs = Some(book.objects().expect("table"));
+    // With no object, a row is refused by name: nothing placed.
+    let out = apply_and_commit(&m, &[map_run(pg(4), 3 * P, true, 10 * P, false)], &mut c);
+    assert_eq!(out.refused, 1);
+    assert!(sim.0.borrow().maps.is_empty() && c.is_empty());
+    // The next refresh sees two blocks and builds them.
+    let r = gm_sync(&sim, &m, &mut c, &mut book, &vmm, &mut host).expect("retry");
+    assert_eq!(r.added, 2);
+    map_ram(&m, &mut c, &[(4, 20, 30)]);
+    ok(&sim, &c, &BTreeMap::new());
+    // Block C was removed: a row onto it is refused.
+    let out = apply_and_commit(&m, &[map_run(pg(40), 3 * P, true, 130 * P, false)], &mut c);
+    assert_eq!(out.refused, 1);
+    assert!(sim.0.borrow().violations.is_empty());
+}
+
+/// A resize retires the block's object (its slices first) and builds one over the new length; the
+/// base does not move, so the bytes of the old range are the same bytes.
+#[test]
+fn a_resized_block_is_rebuilt_and_its_old_slices_are_taken_down_first() {
+    let sim = gm_fresh();
+    let vmm = TestVmm::new();
+    vmm.add_resizeable(0, 40 * P, 80 * P);
+    vmm.fill(0, |i| (i % 251) as u8);
+    let m = SimMirror::new(&sim, false, false);
+    let mut c = BTreeMap::new();
+    let mut host = SimObjects::new(&sim);
+    let mut book = RamObjectBook::new();
+    gm_sync(&sim, &m, &mut c, &mut book, &vmm, &mut host).expect("first");
+    map_ram(&m, &mut c, &[(4, 10, 5)]);
+    let old_obj = book.blocks()[0].obj;
+    vmm.resize(0, 70 * P);
+    let r = gm_sync(&sim, &m, &mut c, &mut book, &vmm, &mut host).expect("resize");
+    assert_eq!((r.added, r.removed, r.kept), (1, 1, 0));
+    assert!(
+        c.is_empty(),
+        "the row on the old object was taken down first"
+    );
+    assert!(sim.0.borrow().violations.is_empty());
+    assert_ne!(book.blocks()[0].obj, old_obj);
+    assert_eq!(book.blocks()[0].len, 70 * P);
+    // A row beyond the OLD length now maps (it could not before).
+    map_ram(&m, &mut c, &[(4, 10, 55)]);
+    ok(&sim, &c, &BTreeMap::new());
+    // And the model memory did not move under the resize.
+    let g = vmm.lock_layout().expect("layout");
+    let mut b = [0u8; 4];
+    g.translate(8, 4)
+        .expect("t")
+        .read_into(&mut b)
+        .expect("read");
+    assert_eq!(b, [8, 9, 10, 11]);
+}
+
+/// The book-driven fragmented layout (numbers = guest-physical addresses, no file) and the
+/// single-object memfd shape give the same guest-visible translation through every step: map across
+/// the A|B edge, remap inside a row, unmap, retire.
+#[test]
+fn block_objects_by_gpa_and_the_single_object_give_identical_translations() {
+    for low in [false, true] {
+        let a = fresh();
+        let b = gm_fresh();
+        let vmm = gm_vmm();
+        let ma = SimMirror::new(&a, true, low);
+        let mb = SimMirror::new(&b, true, low);
+        let (mut ca, mut cb) = (BTreeMap::new(), BTreeMap::new());
+        let mut host = SimObjects::new(&b);
+        let mut book = RamObjectBook::new();
+        gm_sync(&b, &mb, &mut cb, &mut book, &vmm, &mut host).expect("sync");
+        let steps: Vec<Vec<(u64, u64, u64)>> = vec![
+            vec![(4, 16, 30)],
+            vec![(40, 12, 88)],
+            vec![
+                (24, 1, 3),
+                (25, 1, 77),
+                (26, 1, 150),
+                (27, 1, 19),
+                (28, 1, 99),
+                (29, 1, 133),
+            ],
+            vec![(70, 20, 125)],
+            vec![(60, 5, 195)],
+        ];
+        for rows in &steps {
+            map_ram(&ma, &mut ca, rows);
+            map_ram(&mb, &mut cb, rows);
+            ok(&a, &ca, &BTreeMap::new());
+            ok(&b, &cb, &BTreeMap::new());
+            assert_eq!(
+                translation(&a, 0..PAGES),
+                translation(&b, 0..PAGES),
+                "low={low} after {rows:?}"
+            );
+        }
+        let ra = remap_inside(&ca, 4, &[9], 3000 % 190);
+        let rb = remap_inside(&cb, 4, &[9], 3000 % 190);
+        let oa = apply_and_commit(&ma, &ra, &mut ca);
+        let ob = apply_and_commit(&mb, &rb, &mut cb);
+        assert_eq!((oa.refused, ob.refused), (0, 0));
+        unmap_pages(&ma, &mut ca, &[40]);
+        unmap_pages(&mb, &mut cb, &[40]);
+        assert_eq!(
+            translation(&a, 0..PAGES),
+            translation(&b, 0..PAGES),
+            "low={low} after remap+unmap"
+        );
+        assert_eq!((ma.retire(), mb.retire()), (0, 0));
+        assert!(b.0.borrow().violations.is_empty());
+    }
 }

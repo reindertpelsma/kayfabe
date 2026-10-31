@@ -150,6 +150,10 @@ pub struct Applied {
     /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
     /// run still got its own verdict).
     pub batch_fallbacks: usize,
+    /// ★ 2026-10-31: batched maps NOT attempted because the VMM's guest RAM has no file
+    /// ([`crate::ledger::NO_RAM_FD`]) — the optional stitch capability is absent and the runs went
+    /// one by one. Not in `batch_fallbacks`: nothing was refused.
+    pub batch_no_fd: usize,
     /// ★ 2026-10-09: runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
     /// (a page the diff names with the same mapping is never unmapped nor re-mapped).
     pub kept_runs: usize,
@@ -229,6 +233,17 @@ impl Applied {
     }
 
     fn fallback(&mut self, why: String) {
+        // ★ 2026-10-31: no file behind guest RAM = the stitch capability is absent. Named once in
+        // the log, counted apart, never a refusal.
+        if why == crate::ledger::NO_RAM_FD {
+            static LOGGED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("kf-mem: {why}");
+            }
+            self.batch_no_fd = self.batch_no_fd.saturating_add(1);
+            return;
+        }
         // A target that does not batch at all is not a fallback — it is the per-run path.
         if why != crate::ledger::NOT_BATCHED {
             self.batch_fallbacks = self.batch_fallbacks.saturating_add(1);
@@ -1039,17 +1054,21 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                     placed[i].push((d.va, d.len));
                 }
                 Ok(Mapped::HeldByHost) => {
-                    // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
-                    eprintln!(
-                        "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)",
-                        d.va, d.len
-                    );
                     out.held = out.held.saturating_add(1);
                     held_any[i] = true;
                     // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
+                    // ★ 2026-10-31: BOTH lines are bounded now. The first was one line per leaf, and a
+                    // guest chooses how many held leaves it writes (a BAR sysmem leaf is held:
+                    // `CpuWindow::map`), so it was a guest-reachable unbounded emit.
                     static HELD_LOGGED: std::sync::atomic::AtomicU32 =
                         std::sync::atomic::AtomicU32::new(0);
                     if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                        // Rare (a host-RM placement in the twin's VAS at the guest's VA, or a CPU
+                        // window declining a sysmem leaf): named per leaf.
+                        eprintln!(
+                            "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there, or a BAR window declined a sysmem leaf)",
+                            d.va, d.len
+                        );
                         eprintln!(
                             "kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA",
                             d.va, d.len, d.ram

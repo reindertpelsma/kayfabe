@@ -1,0 +1,11 @@
+error[E0451]: fields `base`, `len` and `_guard` of struct `RamSegment` are private
+  --> tests/ui/ram_segment_fields_are_private.rs:8:9
+   |
+ 7 |     let _forged = RamSegment {
+   |                   ---------- in this type
+ 8 |         base: unimplemented!(),
+   |         ^^^^ private field
+ 9 |         len: usize::MAX,
+   |         ^^^ private field
+10 |         _guard: std::marker::PhantomData,
+   |         ^^^^^^ private field
