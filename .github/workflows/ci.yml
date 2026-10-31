@@ -1044,6 +1044,12 @@ jobs:
       # (run `scripts/ci/no_gpu_uuids.py --shrink`), so the count only goes down.
       - name: "GPU-UUID ratchet (no new board identifier in traces/ or docs/)"
         run: python3 scripts/ci/no_gpu_uuids.py
+      # The public tree must build, test and be reviewed without the private repository
+      # (docs/design/V3_PROVENANCE.md section 2). The gate fails on the repository's name anywhere
+      # outside the two policy documents; three older mentions are listed in the script as
+      # shrink-only debt.
+      - name: "No-private-reference gate (the public tree never depends on the private repository)"
+        run: python3 scripts/ci/no_private_refs.py
       # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
       # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
       - name: "Section-number gate (no two design-doc sections share a number)"
