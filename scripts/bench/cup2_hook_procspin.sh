@@ -7,9 +7,12 @@
 #    that call), that it must be hanging in a forever spin loop until the end on a semaphore,
 #    not in a syscall or something else."
 #
-# ## ⊘ WHY THIS IS NOT `cup2_hook_gdbspin.sh`
+# ## ⊘ WHY THIS IS NOT A TWO-SAMPLE PTRACE HOOK
 #
-# That hook takes TWO samples ~20 s apart and single-steps with ptrace. Two samples cannot
+# (2026-10-31: the earlier ptrace single-step hook, `cup2_hook_gdbspin.sh`, and its probe were
+# removed from the tree; the probe decoded a layout read out of a closed library, which
+# docs/design/V3_PROVENANCE.md section 2 does not allow in this repository.)
+# That hook took TWO samples ~20 s apart and single-stepped with ptrace. Two samples cannot
 # distinguish "spinning" from "sampled twice while running". **A spin is a DISTRIBUTION.**
 # This hook samples every thread of the process N times and reports the histogram, so
 # "userspace" is a rate and not an anecdote.
