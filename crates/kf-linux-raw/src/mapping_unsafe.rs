@@ -1633,21 +1633,17 @@ mod tests {
             assert!(r.is_err(), "{b:#x}+{l:#x}");
         }
         // SAFETY: refused before any use.
-        assert!(matches!(
-            unsafe { MappedRegion::adopt_foreign(base, 0, HostProt::ReadWrite) },
-            Err(RawError::ZeroLength { .. })
-        ));
+        let zero_len = unsafe { MappedRegion::adopt_foreign(base, 0, HostProt::ReadWrite) };
+        assert!(matches!(zero_len, Err(RawError::ZeroLength { .. })));
         // SAFETY: refused before any use.
-        assert!(matches!(
-            unsafe {
-                MappedRegion::adopt_foreign(
-                    u64::MAX - page_bytes + 1,
-                    2 * page_bytes,
-                    HostProt::ReadWrite,
-                )
-            },
-            Err(RawError::LengthOverflow { .. })
-        ));
+        let wraps = unsafe {
+            MappedRegion::adopt_foreign(
+                u64::MAX - page_bytes + 1,
+                2 * page_bytes,
+                HostProt::ReadWrite,
+            )
+        };
+        assert!(matches!(wraps, Err(RawError::LengthOverflow { .. })));
     }
 
     /// ★★★★★ **The fault-in must be NON-DESTRUCTIVE, and this is the property the whole

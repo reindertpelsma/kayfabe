@@ -283,9 +283,8 @@ fn hostile_ranges_never_panic_or_allocate_unboundedly() {
         for &n in &vals {
             let _ = t.resolve(o, n);
             let _ = t.cuts(o, n);
-            match t.split(o, n) {
-                Ok(v) => assert!(v.len() <= t.segments().len()),
-                Err(_) => {}
+            if let Ok(v) = t.split(o, n) {
+                assert!(v.len() <= t.segments().len());
             }
         }
     }

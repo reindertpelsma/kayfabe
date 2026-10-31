@@ -2314,7 +2314,8 @@ fn file_backed_and_fragmented_ram_give_identical_translations_through_every_step
 /// the model reports no map reaching past its object.
 #[test]
 fn property_fragmented_ram_against_the_host_rm_model() {
-    let cases: [(bool, Option<(u64, bool)>, Option<ExtFault>); 5] = [
+    type Case = (bool, Option<(u64, bool)>, Option<ExtFault>);
+    let cases: [Case; 5] = [
         (false, None, None),
         (true, None, None),
         (false, Some((5, false)), None),

@@ -1769,7 +1769,24 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          # ★★ `kf-linux-raw` 97 -> 103 and `kf-qemu` 86 -> 89, 2026-10-31 (`claude/guestram-step3-optional-fd-20261031`,
+          # `docs/design/V3_GUEST_MEMORY.md` §5: guest RAM that is not a file, described to the host RM as an
+          # `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over VMM-mapped blocks).
+          #   kf-linux-raw `mapping_unsafe.rs` (+6): `MappedRegion::adopt_foreign` (`unsafe fn`, +1) — takes an
+          #   address as an INTEGER, stores it and never dereferences it; the caller's contract is that
+          #   `[base, base+len)` stays mapped read-write until the RM object described from it is freed. Its
+          #   disposition (`Foreign`) makes `Drop` a no-op, so it can never `munmap` the VMM's memory, and
+          #   `reprotect`/`request_huge_pages` refuse. The other 5 are test-only calls of it (one to take the
+          #   owner's address, four adopt calls) in
+          #   `a_foreign_region_never_unmaps_reprotects_or_advises_the_vmms_memory`.
+          #   kf-qemu `raw_unsafe.rs` (+3): `RawRegion::describe_range` (+1) — the one `adopt_foreign` call, after
+          #   `span` bounds-checked `[off, off+len)` inside the region QEMU keeps mapped until unregistration;
+          #   `BackendFd::borrow_held` (+1) — `BorrowedFd::borrow_raw` on the descriptor `adopt` guarantees open
+          #   while the block is registered, tied to the registry's borrow, never closed; `test_aligned_ram` (+1,
+          #   test-only) — `alloc_zeroed` of a non-zero layout, leaked.
+          #   ⊘ No new power: no guest pointer reaches any of these; the descriptor ioctl pins pages and keeps no
+          #     address, and nothing here maps, unmaps or re-protects memory the VMM owns.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:103 kf-cuda:78 kf-qemu:89 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
