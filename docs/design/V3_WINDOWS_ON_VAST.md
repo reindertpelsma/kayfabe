@@ -61,6 +61,8 @@ A failed arm is repeatable: step 12 onward starts from a fresh child overlay of 
 
 ## 3. Old-host assumptions and the change each needs
 
+**Implementation note, 2026-10-31 (draft PR on this branch; nothing here has run on hardware).** Items 1 to 5 of 3.1 and rows 1, 2 and 5 of 3.2 are implemented as opt-in edits, with the old behaviour as the default. Names differ from the proposals below: the GPU-lock wait is `WINVM_LOCK_WAIT_S` (default 7200, not 120), the install wait is `WINVM_INSTALL_WAIT_S` (default 14400, not 4200; the Vast lane sets 120 and 4200), `run --env-file FILE` accepts `KF3_NAME=digits` (not only `[01]`, because some flags are counts), `desktop-prep` is a separate sub-command (`desktop_prep.ps1`, password on stdin) and `firstlogon.ps1` is left as it is, `signin.py` reads `KF_GUEST_USER` with the default `vast` (as `appmatrix/winapps.py` does; the Vast lane sets `kf`), and per-VM identity is `WINVM_VM_IDENTITY=1` (off by default, because an installed VM must not change identity silently). `WINVM_DRY_RUN=1` prints the QEMU command line. `wait_ssh` also lengthens its per-attempt `timeout` with `WINVM_SSH_CONNECT_TIMEOUT`: the fixed 20 s would have cut a 100 s connect short. Tests: `scripts/ci/test_win_vm_vast.py`. Table: `scripts/bench/windows/README.md`.
+
 ### 3.1 The five that matter most
 
 1. **Unbounded GPU-lock wait.** `win_vm.sh:705-707` takes `/tmp/kayfabe-fastguest.lock` with `flock -w 7200`. A stale holder (a leftover `vx -b` job, a Linux suite) silently burns two of the three lease hours. Proposed:
