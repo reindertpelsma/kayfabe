@@ -179,6 +179,7 @@ vx 'grep -aE "^KVM_TESTS|RC=|SUMMARY|FAST_SUITE_PASS|^EXIT" /root/prov/<tag>.log
   written to `/root/jobs/NAME.{sh,log,rc}`. Both scripts write their own logs under `/root/prov/`.
   The verdict is in those log lines. `merge_check.sh` always exits 0, and `provision_full.sh` exits 0
   only when READY (since 2026-09-27).
+- **A lease whose subject is the Windows guest: `windows_lane.sh`** (2026-10-31, from draft PR #165, not yet run on hardware in this form). Use it instead of `provision_full.sh` plus a separate `win_vm.sh install`: `vput scripts/bench/box/windows_lane.sh /root/windows_lane.sh` (with `provision_box.sh`), then `vx -b winlane 'KAYFABE_BRANCH=<branch> HOST_DRIVER=595.91.07 bash /root/windows_lane.sh'`. The log is `/root/prov/winlane.log`: `STAGE <name> START|EXIT rc=N` lines, `WINLANE_TIMING`, and a last `WINLANE_EXIT rc=N`. It runs no Linux suites, installs Windows with `WINVM_INSTALL_CACHE=unsafe` (this VM's install-time disk cache mode only; `WINLANE_INSTALL_CACHE=` turns it off) and never restores another VM's image. Details: `scripts/bench/windows/README.md`.
 - ⊘ **`vwait NAME` cannot see a dead job.** It asks `pgrep -f 'jobs/NAME.sh'` on the box, and that
   pattern also matches the `bash -c` that execd runs the question in. A job that died without
   writing its `.rc` (killed, OOM, box rebooted) therefore reads "running" until `vwait`'s limit (24 h

@@ -54,8 +54,12 @@ class DeviceProps(unittest.TestCase):
             self.assertIn("WINVM_KF3_DISPLAY", r.stderr)
 
     def test_the_run_command_signs_the_gop_only_when_displayed(self):
+        # next's --dry-run gate sits beside the display=off gate: off never signs, dry-run names the
+        # path without signing, and only a real displayed run builds and signs the GOP
         text = SCRIPT.read_text()
-        self.assertIn('[ "${WINVM_KF3_DISPLAY:-on}" = off ] || gop=$(gop_signed)', text)
+        self.assertIn('if [ "${WINVM_KF3_DISPLAY:-on}" = off ]; then gop=""', text)
+        self.assertIn("elif dry_run; then gop=", text)
+        self.assertIn("else gop=$(gop_signed); fi", text)
         self.assertIn('dev=$(kf3_device_props "$gop" "${WINVM_KF3_DISPLAY:-on}")', text)
 
 

@@ -161,6 +161,67 @@ class WinVmVast(unittest.TestCase):
         self.assertTrue(dev.startswith("kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi="))
         self.assertTrue(dev.endswith(",id=kf0,guest-driver=580.65.06"))
 
+    # -- headless device (WINVM_KF3_DISPLAY) and the install-time disk cache (WINVM_INSTALL_CACHE) -----
+    def sys_drive(self, argv):
+        drives = [a for a in argv if a.startswith("file=") and "id=sys," in a]
+        self.assertEqual(len(drives), 1, argv)
+        return drives[0]
+
+    def test_display_off_is_headless_and_never_names_a_gop(self):
+        r, argv, _ = self.dry("run", WINVM_KF3_DISPLAY="off")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        dev = [a for a in argv if a.startswith("kf3-gpu,")][0]
+        self.assertEqual(dev, "kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0")
+        self.assertNotIn("gop", " ".join(a for a in argv if a.startswith("kf3-gpu,")))
+        self.assertFalse((self.tmp / "root/secureboot").exists(), "no GOP is built or signed for a headless device")
+
+    def test_display_on_is_the_default_and_other_values_are_refused(self):
+        _, argv, _ = self.dry("run", WINVM_KF3_DISPLAY="on")
+        _, old, _ = self.dry("run")
+        self.assertEqual(argv, old)
+        for bad in ("OFF", "1", "no", "off;x"):
+            with self.subTest(bad=bad):
+                r, argv, _ = self.dry("run", WINVM_KF3_DISPLAY=bad)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn("WINVM_KF3_DISPLAY", r.stderr)
+                self.assertEqual(argv, [])
+
+    def test_install_cache_unset_leaves_the_install_drive_as_it_was(self):
+        r, argv, _ = self.dry("install")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("cache=", self.sys_drive(argv))
+
+    def test_install_cache_reaches_only_the_install_system_disk(self):
+        r, argv, _ = self.dry("install", WINVM_INSTALL_CACHE="unsafe")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.sys_drive(argv).endswith(",discard=unmap,cache=unsafe"))
+        self.assertEqual(sum("cache=" in a for a in argv), 1, "the ISOs and the unattend CD keep the default")
+
+    def test_install_cache_is_never_read_by_run(self):
+        r, argv, _ = self.dry("run", WINVM_INSTALL_CACHE="unsafe")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse([a for a in argv if "cache=" in a], argv)
+
+    def test_install_cache_is_a_qemu_mode_and_nothing_else(self):
+        for good in ("unsafe", "writeback", "none"):
+            with self.subTest(good=good):
+                r, argv, _ = self.dry("install", WINVM_INSTALL_CACHE=good)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn(f"cache={good}", self.sys_drive(argv))
+        for bad in ("fast", "unsafe,file=/etc/passwd", "unsafe,readonly=off", "x=1"):
+            with self.subTest(bad=bad):
+                r = self.sh("status", WINVM_INSTALL_CACHE=bad)
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertIn("WINVM_INSTALL_CACHE", r.stderr)
+
+    def test_install_cache_does_not_touch_identity_or_secrets(self):
+        r, a1, _ = self.dry("install", WINVM_INSTALL_CACHE="unsafe", WINVM_VM_IDENTITY="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        _, a2, _ = self.dry("install", WINVM_VM_IDENTITY="1")
+        strip = lambda a: [x.replace(",cache=unsafe", "") for x in a]  # noqa: E731
+        self.assertEqual(strip(a1), a2, "the per-VM identity is the same with and without the cache mode")
+        self.assertFalse((self.tmp / "root/kfwin/secrets/win_password").exists())
+
     # -- (1) (2) waits ------------------------------------------------------------------------------
     def test_lock_and_install_wait_are_configurable(self):
         r, _, _ = self.dry("run", WINVM_LOCK_WAIT_S="120")

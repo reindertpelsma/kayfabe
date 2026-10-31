@@ -46,8 +46,10 @@
 # WINVM_KF3_DISPLAY=off: a headless device (no display plane, no boot GOP) for a box without a
 # monitor; `run` only, default on (2026-10-27).
 # WINVM_INSTALL_CACHE=unsafe: the install-time boots only (install and its check boot) run the base
-# disk with that QEMU cache mode; unset keeps QEMU's default, and `run` never reads it. It is a
-# disk-write cache mode of THIS VM's disk, not an image cache: nothing is shared between VMs.
+# disk with that QEMU cache mode (none|off|writeback|writethrough|directsync|unsafe; anything else
+# is refused); unset keeps QEMU's default, and `run` never reads it. It is a disk-write cache mode
+# of THIS VM's disk, not an image cache: nothing is shared between VMs. After a host crash during
+# an install that used `unsafe`, delete the VM directory and install again; do not resume.
 # DIAGNOSTIC, default off (2026-10-09): WINVM_TRACE=1 [WINVM_GSP_OBSERVER=1] with KF3_BAR0_READ_TRACE=1
 # records each boot with the VFIO reference's tracer (docs/design/V3_BAR0_TRACE_MODE.md).
 #
@@ -1021,7 +1023,12 @@ main() {
     ""|-h|--help|help) ;;
     *) need_seconds WINVM_LOCK_WAIT_S "$LOCK_WAIT_S"
        need_seconds WINVM_INSTALL_WAIT_S "$INSTALL_WAIT_S"
-       need_seconds WINVM_SSH_CONNECT_TIMEOUT "$SSH_CONNECT_TIMEOUT" ;;
+       need_seconds WINVM_SSH_CONNECT_TIMEOUT "$SSH_CONNECT_TIMEOUT"
+       # a QEMU cache mode only: the value goes into a -drive option string, so no comma or "="
+       case "${WINVM_INSTALL_CACHE:-}" in
+         ""|none|off|writeback|writethrough|directsync|unsafe) ;;
+         *) die "WINVM_INSTALL_CACHE must be unset or a QEMU cache mode (unsafe, writeback, ...), not '$WINVM_INSTALL_CACHE'" ;;
+       esac ;;
   esac
   case "$sub" in
     install) cmd_install "$@" ;;
@@ -1038,7 +1045,7 @@ main() {
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
-    ""|-h|--help|help) sed -n '3,62p' "$0" | sed 's/^# \{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,64p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac
 }

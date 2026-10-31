@@ -14,7 +14,7 @@
 #   - no thin-guest image, no raw client, no Linux suites;
 #   - the install gets every core (WINVM_SMP, at most 16) and runs its disk with cache=unsafe
 #     (WINVM_INSTALL_CACHE; install-time boots only, the base image is sealed after a clean
-#     shutdown).
+#     shutdown); WINLANE_INSTALL_CACHE= (set, empty) turns that off.
 # What it does NOT do: restore a prebuilt Windows image. win_vm.sh never restores a VM from another
 # VM's state (the swtpm state, the harness ssh key and the Windows password are per VM), and the
 # private image store is write-restricted and its licence review is open (README of the store).
@@ -78,7 +78,7 @@ install_windows() {
   smp=$(nproc)
   [ "$smp" -le 16 ] || smp=16
   rev=$(git -C /root/kayfabe rev-parse --short=8 HEAD)
-  (cd /root/kayfabe && WINVM_SMP=$smp WINVM_INSTALL_CACHE=unsafe \
+  (cd /root/kayfabe && WINVM_SMP=$smp WINVM_INSTALL_CACHE=${WINLANE_INSTALL_CACHE-unsafe} \
     WINVM_SSH_CONNECT_TIMEOUT=100 WINVM_QEMU=/workspace/bench/kf3-bins/$rev/qemu-system-x86_64 \
     bash scripts/bench/windows/win_vm.sh install > /root/prov/win_install.log 2>&1)
 }
