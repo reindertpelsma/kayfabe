@@ -769,6 +769,25 @@ Implemented as `crates/kf-qemu/src/bar0trace.rs` (ABI 21's `kf3_set_read_trap`).
 closes at the next RPC's queue-head write, so each window lies inside the approved interval.
 
 
+> **Correction, 2026-10-31 (provenance fix; applies to the whole of "§S applied to `0x2081010d`"
+> below).** Three statements below rest on a closed-binary reading and are **withdrawn**: that
+> `paramSize 0` and the export flags come from "the control's export row in the pinned retail
+> driver", that the flags say the control is non-privileged, and that
+> its id is "generated" from that driver by `tools/windows-ctrl-export/derive.py` (the tool is
+> deleted; `crates/kf-abi/src/hoststub.rs` is now a hand-maintained, source-tagged table, and the
+> flags and row position are no longer carried; nothing branched on them, they were only logged).
+> What stands, publicly: the interface `0x208101` is OGKM 580.65.06 (`g_finn_rm_api.h:425`); the
+> message `0xd` and the declared params size `0` are measured (`run41-requests.log:95` and `run53-requests.log:526` in
+> `traces/windows_code43_walls_20261007/`; 5 of 5 real-GPU captures show request and reply
+> of 0 bytes, `docs/design/tier_checks/tier2_compute_host.md` item 8). The control's *per-control*
+> privilege is therefore **not known from any public source**; what OGKM shows is only the class
+> level (`NV2081_BINAPI` is allocated non-privileged under a Subdevice and forwards its controls to
+> the physical RM, `resource_list.h:460-470`, `binary_api.c:60-110`, per `tier2_compute_host.tsv`
+> row `ctl-2081010d`). The owner's decision (a)/(b)/(c) in the "For the owner" bullet below is still
+> open, but its premise "the retail flags say it is non-privileged" no longer holds: option (b)
+> should be judged on the class-level fact and a measurement of the host's answer (a Linux client
+> issuing it on an `NV2081_BINAPI` object), not on the flags. Behaviour is unchanged by this fix.
+
 **§S applied to `0x2081010d` (2026-10-07) — ASSUMED from the owner's 2026-10-07 statement that
 privileged non-compute actions can be stubbed; owner to confirm.** Owner, 2026-10-07 (relayed by the
 coordinator): *"Most actions that are not compute, privileged actions can be stubbed."* and *"All about

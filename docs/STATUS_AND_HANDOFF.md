@@ -1676,6 +1676,8 @@ answered, Windows takes a further path and a third GR channel dies on an unbound
 earlier. **Stopped for two owner decisions** (the inert-subchannel software method `0x200`; B).
 [Runs 44-46 and the stop](../traces/windows_code43_walls_20261007/README.md#stop-owner-decisions-are-needed-2026-10-07-after-run46).
 
+> **Correction, 2026-10-31 (provenance fix).** The paragraph below says the `0x2081010d` id is "confirmed by the pinned retail driver's export row" via `tools/windows-ctrl-export/derive.py` and that "the retail flags say the control is NON_PRIVILEGED". Both are withdrawn: the tool is deleted, `crates/kf-abi/src/hoststub.rs` is a hand-maintained table whose message `0xd` and params size `0` are `measured:` rows citing `traces/windows_code43_walls_20261007/run41-requests.log:95` and `run53-requests.log:526`, and the control's per-control privilege is unknown from public sources (`docs/OWNER_RULINGS.md` §S, correction above that entry). Behaviour is unchanged; the Windows path is UNVERIFIED on hardware after this change and rests on unit tests until a Windows run (owner ruling 2026-10-31: no merge to master before that).
+
 **Runs 38-43, 2026-10-07 (branch `claude/code43-stubs-20261007`; answers the next paragraph's
 "stopped for an owner decision" on the 13 queries, under the coordinator's relay of the owner's §S
 statement).** A bisect (runs 38-41) found the minimal set: `0x2081010d` alone moves StartDevice past

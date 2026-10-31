@@ -30,6 +30,7 @@ These are the repository's own claims, with their limits. Each page of this manu
 | [Requirements](requirements.md) | What GPU, driver, kernel, QEMU and CPU the repository's evidence covers |
 | [Building from source](building.md) | The exact steps the build scripts perform |
 | [Running the QEMU device](installing.md) | There is no installer: how the device is provisioned and started today, and its properties |
+| [Attach your GPU to a VM you already have](attach-to-existing-vm.md) | The QEMU arguments, libvirt notes and guest settings for a VM you already run |
 | [Linux guest](linux-guest.md) | Preparing and booting a Linux guest |
 | [Windows guest](windows-guest.md) | The guest settings and the Windows harness |
 | [Display and the broker](display.md) | Showing a guest's screen on the host |

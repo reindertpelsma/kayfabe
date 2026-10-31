@@ -5,6 +5,23 @@
 success or master-promotion claim. Borrowed RTX4070; host595.91.07 remains attached
 to its ordinary display driver. Only owned fresh-overlay Kayfabe VMs are used.
 
+> **Correction, 2026-10-31 (provenance fix; applies to the passages named below).** Four passages
+> of this file quote values read from the closed Windows driver: the `0x2081010d` export row
+> ("What is known about it (read ...)" under *Run41 result*: file offset, `paramSize`, flags), the
+> same row's RVA and flags in the run42 *product stub* section A, the *A (done)* paragraph's
+> "NON_PRIVILEGED" claim, and the whole "What it is (read)" bullet of *B* (`0x20801111`'s row,
+> flags and the proprietary-driver handlers). **None of those readings is a source for any shipped
+> value.** The bisect itself (runs 38-41), every `[measured]` statement and every trace log stand
+> unchanged. The shipped tables (`crates/kf-abi/src/hoststub.rs`, `sw_runlist.rs`) now carry only
+> `ogkm-...` and `measured:` rows with cited trace lines, the generators that read the driver are
+> deleted, and the dropped fields (export flags, row position, registration digest) were never
+> branched on. Public support that remains: `0x2081010d` has message `0xd` and a declared params
+> size of 0 (`run41-requests.log:95`, `run53-requests.log:526`); `0x20801111` is sent with 40
+> declared bytes (`run42-requests.log:71`); class `0xb297` is on the wire (`run53-requests.log:196-197`,
+> `../windows_pool_20261005/probe-b/qemu.log:1122`). The per-control privilege flags of both
+> controls are now **UNKNOWN** from public sources. The retail values still printed in the
+> `HOST-STUB` log lines of runs 42-52 are old output and are not cited by anything.
+
 > **Correction, 2026-10-07 (after run24; [analysis](#abort-point-analysis-against-the-vfio-reference)).**
 > The run sections below read "24 saved assertions unchanged" as weak evidence that
 > a wall might not matter. That inference is wrong. The kernel-RM assert journal
@@ -2066,6 +2083,8 @@ disconnected, display enabled, P8, Xid 5 (unchanged).
   space up to the death — no `UNMAP`, no retire, no root statement for it — and two submissions
   completing on the engine in between.
 
+> *Note 2026-10-31: the bullet "What is known about it (read, ...)" below is withdrawn as a source; see the correction at the top of this file.*
+
 **Bisect conclusion (measured over runs 38-41, 2026-10-07):** answering `0x2081010d` alone is
 sufficient; `0x2080a801` alone and `0x2080a630` alone are not; the ten early controls, the four
 with public layouts included, are not needed. **The minimal set is `{0x2081010d}`.**
@@ -2088,6 +2107,8 @@ or a channel holding a different mirror's rows than the walker fills (rows=0 rul
 retired" for this death).
 
 ## The product stub, the FECS-trace answer, and a death-mirror diagnostic (run42 setup)
+
+> *Note 2026-10-31: the generator named in this section and the retail row it read are withdrawn; the table is now hand-maintained with public sources only (correction at the top of this file).*
 
 **A. The bisect's result becomes the product (default on; `KF3_DIAG_ZERO_OK` and `diagzero.rs` are
 removed, and the runner's flag list loses it).**
@@ -2223,6 +2244,8 @@ values).
 
 Runs 38-43 used 6 of this loop's 10 runs.
 
+> *Note 2026-10-31: "the retail export row says the control is NON_PRIVILEGED" below is withdrawn; its privilege is unknown from public sources (correction at the top of this file).*
+
 **A (done).** Minimal set `{0x2081010d}` (runs 38-41), shipped as the generated, identity-gated
 `kf_rm::hoststub` (run42 verified it reproduces the bisect). §S entry in `docs/OWNER_RULINGS.md`:
 ASSUMED, owner to confirm; the retail export row says the control is NON_PRIVILEGED and its area is
@@ -2237,6 +2260,8 @@ Windows now runs well past StartDevice, but goes into TDR cycles (nvlddmkm event
 42, 43), and the guest stops answering the status script within 150 s, so ConfigManagerErrorCode
 and nvidia-smi were last measured in runs 39-40 (7eb96b98, c8fa737e; 2026-10-07): 43 / exit 9, abort at VFIO 2861. **No success is
 claimed.**
+
+> *Note 2026-10-31: the bullet "What it is (read)" under B is withdrawn as a source (export row, flags, proprietary-driver handlers); only the OGKM name of the neighbour `0x20801110` and the wire facts below it stand (correction at the top of this file).*
 
 **B: `0x20801111`, the software-runlist submit — the decision (data, 2026-10-07).**
 - What it is: no OGKM name or layout; neighbour `0x20801110` is public in OGKM 610.43.02

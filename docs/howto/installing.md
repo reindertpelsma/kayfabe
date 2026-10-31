@@ -137,7 +137,7 @@ The launchers stop a guest by asking it to power down (ACPI), then waiting, and 
 ## Not documented yet
 
 - A supported rootless installation guide. The branch `claude/rootless-audit-20261016` has [launch notes and permission checks](https://github.com/reindertpelsma/kayfabe/blob/32d7319b2/traces/rootless_audit_20261016/REPORT.txt) in sections 1, 2 and 7, with scripts under `scripts/bench/rootless/`. That audit is not merged, and its host-specific launchers are not a general installer. The scripts described here still run as root. See [Security model](security.md).
-- libvirt, systemd units, container images and sandbox profiles. The design leaves sandboxing the (single) QEMU process to the deployer: see [Security model](security.md).
+- libvirt, systemd units, container images and sandbox profiles. *(2026-10-31: [Attach your GPU to a VM you already have](attach-to-existing-vm.md) now holds an [untested] libvirt sketch and the permission checks; there is still no recorded libvirt run.)* The design leaves sandboxing the (single) QEMU process to the deployer: see [Security model](security.md).
 - A complete reference for the `KF3_*` environment variables.
 - Several VMs on one GPU as a supported configuration.
 
