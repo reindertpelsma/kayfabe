@@ -106,6 +106,7 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 
 ## Other things a Windows guest needs (not settings)
 
+- *(2026-10-31 note: `win_vm.sh` sets a fixed MAC and passes no `-uuid` or `-smbios`, so the harness does not set them (it restricts the network instead). The default `gpu-uuid=auto` is per-VM, but with no `-uuid` or `vm-id=` it is a random value on every boot. <!-- src: scripts/bench/windows/win_vm.sh, crates/kf-rm/src/gpuuid.rs -->)*
 - A **unique SMBIOS UUID, serial and MAC per VM**, and offline setup until after OOBE (Windows Autopilot once matched a default-identity VM to an unrelated company tenant); an explicit `gpu-uuid`. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - **Do not snapshot an image with a Windows update staged**: it crash-loops `dwm.exe`. Block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - You supply and license Windows. The scripts download Microsoft's evaluation image, the virtio drivers and NVIDIA's installer from their vendors, each pinned by SHA-256. See [Credits and notices](credits.md). <!-- src: scripts/bench/windows/win_vm.sh, docs/NOTICES.md -->
@@ -123,7 +124,7 @@ See also [Troubleshooting](troubleshooting.md) and [Display and the broker](disp
 
 ## Not documented yet
 
-- A Windows install on a machine without the harness (a plain ISO install onto a kayfabe-backed VM by hand).
+- A Windows install on a machine without the harness (a plain ISO install onto a kayfabe-backed VM by hand). *(2026-10-31: [Attach your GPU to a VM you already have](attach-to-existing-vm.md) covers the QEMU side for an existing VM, untested.)*
 - Windows 10, or other Windows 11 builds than the two above.
 - A successful guest run with another NVIDIA driver version. Windows 581.51 was attempted on AD102 and failed with Code 43 [measured in the sweep matrix, revision `24906bf33`, P19 profile; historical source `9d6f210ba`]. This is recorded on the branch `codex/sweep-integrate-20261018`, not merged: [matrix](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/MATRIX.md). Its same-board native Windows control passed, which is not a kayfabe guest pass.
 
