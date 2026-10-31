@@ -164,10 +164,13 @@ test('bench-data accepts GET only', async () => {
     assert.notEqual((await x.get(route(), { method })).status, 302);
 });
 for (const country of ['DE', 'CN', 'RU', 'XX', 'T1', 'US', null])
-  test('bench-data serves any country with a valid run token: ' + JSON.stringify(country), async () => {
-    const x = await harness();
-    assert.equal((await x.get(route(), { country })).status, 302);
-  });
+  test(
+    'bench-data serves any country with a valid run token: ' + JSON.stringify(country),
+    async () => {
+      const x = await harness();
+      assert.equal((await x.get(route(), { country })).status, 302);
+    },
+  );
 test('bench-data at most four URLs per object per run, counted per object', async () => {
   const x = await harness();
   for (let i = 0; i < 4; i++) assert.equal((await x.get()).status, 302, 'mint ' + i);
