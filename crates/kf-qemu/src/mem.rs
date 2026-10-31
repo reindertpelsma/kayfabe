@@ -60,7 +60,9 @@ use kf_linux_raw::{
     Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, RawError, ScratchTile,
 };
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
-use kf_mem::guestmem::{GuestMemory, LayoutEpoch, RamBlockSpec, RamLayout, TranslateError};
+use kf_mem::guestmem::{
+    GuestMemory, LayoutEpoch, LayoutGuard, RamBlockSpec, RamLayout, TranslateError,
+};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
 use kf_mem::ramobj::{RamObjectBook, RamObjectCell, RamObjectHost, RamPlan, Retiring, SyncError};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
@@ -230,10 +232,12 @@ impl RamMap {
             .map(|o| (first, o))
     }
 
-    /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM: the one path from a
-    /// device DMA address to a guest-memfd range.** The walker's sysmem leaves, the Translated
-    /// rewriter's sysmem operands (both the window arithmetic and the T-mode resolver), and sysmem
-    /// USERD and notifiers all go through here. Today a device DMA address IS a guest-physical
+    /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM for GPU-side addressing: the
+    /// one path from a device DMA address to a guest-memfd range.** The walker's sysmem leaves, the
+    /// Translated rewriter's sysmem operands (both the window arithmetic and the T-mode resolver), and
+    /// the host-RM USERD / notifier references go through here. ★ 2026-10-31: CPU READS and WRITES of
+    /// guest RAM no longer do: they go through [`RamMap::dma_to_gpa`] and `translate()` (§6 of
+    /// `V3_GUEST_MEMORY.md`); the two must change together when a vIOMMU lands. Today a device DMA address IS a guest-physical
     /// address, so this is [`RamMap::file_range`]'s offset; under a guest vIOMMU it does IOVA→GPA
     /// per run FIRST, splitting a run where the mapping is discontiguous and refusing — never
     /// reading through — an unmapped one (`V3_VIOMMU.md` §3). Until that lands kf3 refuses at
@@ -310,6 +314,166 @@ impl RamMap {
             return self.dma_to_file_range(gpa, len);
         }
         self.plan()?.ok()?.ram_offset(gpa, len)
+    }
+}
+
+/// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §6): **CPU reads and writes of guest RAM go through
+/// `translate()`** — one path for a gpa, a device DMA address (the vIOMMU seam) and a placed row's
+/// number, with or without a memfd, across RAM blocks, and never through a retained host pointer.
+/// Each access takes a SHORT layout guard (the registry read lock for the length of the copy), so a
+/// block removed meanwhile is a named refusal, never a dangling read.
+impl RamMap {
+    /// The most bytes one CPU copy of guest RAM moves (a defence: every caller copies a bounded
+    /// structure — a USERD, a GP entry, a few push-buffer words).
+    pub const CPU_COPY_MAX: usize = 1 << 20;
+
+    /// A guard for a SHORT bounded CPU copy: the registry read lock is kept until it drops.
+    ///
+    /// # Errors
+    /// The registry is poisoned or its blocks are not a layout, by name.
+    pub fn lock_layout_short(&self) -> Result<QemuLayoutGuard<'_>, TranslateError> {
+        let blocks = self.blocks.read().map_err(|_| TranslateError::NoLayout)?;
+        QemuLayoutGuard::take_locked(blocks, &self.generation)
+    }
+
+    /// ★ **THE vIOMMU SEAM for CPU access**: a device DMA address to the guest-physical address a CPU
+    /// access reads. Today a device DMA address IS a guest-physical address (kf3 refuses at realize
+    /// behind a vIOMMU), so this is the identity — but it is the ONE place that changes with
+    /// [`RamMap::dma_to_file_range`] (its GPU-side companion) when a vIOMMU lands
+    /// (`V3_VIOMMU.md` §3). `None` for a zero length or a range that wraps.
+    #[must_use]
+    pub fn dma_to_gpa(&self, dma: u64, len: u64) -> Option<u64> {
+        dma.checked_add(len).filter(|_| len != 0).map(|_| dma)
+    }
+
+    /// Copy guest RAM `[gpa, gpa + dst.len())` into `dst`, across blocks if need be.
+    ///
+    /// # Errors
+    /// A hole, an overflow, a layout that is not usable or a buffer past [`RamMap::CPU_COPY_MAX`], by
+    /// name. Nothing is partly read.
+    pub fn read_gpa(&self, gpa: u64, dst: &mut [u8]) -> Result<(), String> {
+        let len = dst.len();
+        let g = self.cpu_guard(gpa, len)?;
+        g.translate(gpa, len as u64)
+            .map_err(|e| format!("guest RAM {gpa:#x}+{len:#x}: {e}"))?
+            .read_into(dst)
+            .map_err(|e| format!("guest RAM {gpa:#x}+{len:#x}: {e}"))
+    }
+
+    /// Copy `src` into guest RAM at `gpa`, across blocks if need be.
+    ///
+    /// # Errors
+    /// As [`RamMap::read_gpa`].
+    pub fn write_gpa(&self, gpa: u64, src: &[u8]) -> Result<(), String> {
+        let len = src.len();
+        let g = self.cpu_guard(gpa, len)?;
+        g.translate(gpa, len as u64)
+            .map_err(|e| format!("guest RAM {gpa:#x}+{len:#x}: {e}"))?
+            .write_from(src)
+            .map_err(|e| format!("guest RAM {gpa:#x}+{len:#x}: {e}"))
+    }
+
+    fn cpu_guard(&self, gpa: u64, len: usize) -> Result<QemuLayoutGuard<'_>, String> {
+        if len == 0 || len > Self::CPU_COPY_MAX {
+            return Err(format!(
+                "guest RAM {gpa:#x}+{len:#x}: a CPU copy of 1..={} bytes only",
+                Self::CPU_COPY_MAX
+            ));
+        }
+        self.lock_layout_short()
+            .map_err(|e| format!("guest RAM {gpa:#x}+{len:#x}: {e}"))
+    }
+
+    /// The aligned 32-bit word at guest-physical `gpa` (`Relaxed` atomic: a cursor the guest writes
+    /// whole). `None` for a hole, an unaligned `gpa` or a word across a block edge.
+    #[must_use]
+    pub fn load_u32_gpa(&self, gpa: u64) -> Option<u32> {
+        let g = self.lock_layout_short().ok()?;
+        let t = g.translate(gpa, 4).ok()?;
+        match t.segments() {
+            [seg] => seg.load_u32(kf_linux_raw::HostOffset::ZERO).ok(),
+            _ => None,
+        }
+    }
+
+    /// Store the aligned 32-bit word `v` at guest-physical `gpa`. `false` as [`RamMap::load_u32_gpa`].
+    #[must_use]
+    pub fn store_u32_gpa(&self, gpa: u64, v: u32) -> bool {
+        let Ok(g) = self.lock_layout_short() else {
+            return false;
+        };
+        let Ok(t) = g.translate(gpa, 4) else {
+            return false;
+        };
+        match t.segments() {
+            [seg] => seg.store_u32(kf_linux_raw::HostOffset::ZERO, v).is_ok(),
+            _ => false,
+        }
+    }
+
+    /// [`RamMap::read_gpa`] for a device DMA address (through [`RamMap::dma_to_gpa`]).
+    ///
+    /// # Errors
+    /// As [`RamMap::read_gpa`]; an unmappable DMA range by name.
+    pub fn read_dma(&self, dma: u64, dst: &mut [u8]) -> Result<(), String> {
+        let gpa = self
+            .dma_to_gpa(dma, dst.len() as u64)
+            .ok_or_else(|| format!("DMA range {dma:#x}+{:#x} is not addressable", dst.len()))?;
+        self.read_gpa(gpa, dst)
+    }
+
+    /// The guest-physical address of the GPU-side RAM number `number` (what a placed sysmem row
+    /// carries as `Desired::off`: [`RamMap::gpu_ram_offset`]) and how many bytes follow it before the
+    /// numbering stops being contiguous. With a memfd a number is a FILE offset, so the answer ends at
+    /// the end of that block's file range; without one a number IS the guest-physical address
+    /// ([`RamPlan::by_gpa`]), contiguous everywhere guest RAM is.
+    #[must_use]
+    pub fn row_gpa(&self, number: u64) -> Option<(u64, u64)> {
+        let v = self.blocks.read().ok()?;
+        let Some(first) = v.iter().find_map(|x| x.fd) else {
+            return Some((number, u64::MAX));
+        };
+        v.iter()
+            .filter(|b| b.fd == Some(first))
+            .find(|b| number >= b.fd_off && number.saturating_sub(b.fd_off) < b.mem.len() as u64)
+            .and_then(|b| {
+                let into = number.saturating_sub(b.fd_off);
+                Some((
+                    b.gpa.checked_add(into)?,
+                    (b.mem.len() as u64).saturating_sub(into),
+                ))
+            })
+    }
+
+    /// Copy the guest RAM a placed row's bytes `[number, number + dst.len())` name into `dst`
+    /// (numbering as [`RamMap::row_gpa`]), piece by piece where the numbering is not contiguous.
+    ///
+    /// # Errors
+    /// A number no block carries, or any [`RamMap::read_gpa`] refusal, by name.
+    pub fn read_row(&self, number: u64, dst: &mut [u8]) -> Result<(), String> {
+        let mut done = 0usize;
+        while done < dst.len() {
+            let at = number.saturating_add(done as u64);
+            let (gpa, avail) = self
+                .row_gpa(at)
+                .ok_or_else(|| format!("guest-RAM row number {at:#x} is carried by no block"))?;
+            let left = dst.len().saturating_sub(done);
+            let take = usize::try_from(avail).map_or(left, |a| a.min(left));
+            let end = done.saturating_add(take);
+            let piece = dst
+                .get_mut(done..end)
+                .ok_or_else(|| "guest-RAM row piece out of range".to_owned())?;
+            self.read_gpa(gpa, piece)?;
+            done = end;
+        }
+        Ok(())
+    }
+
+    /// The aligned 32-bit word at placed-row number `number` (`None` as [`RamMap::load_u32_gpa`]).
+    #[must_use]
+    pub fn load_row_u32(&self, number: u64) -> Option<u32> {
+        let (gpa, avail) = self.row_gpa(number)?;
+        (avail >= 4).then(|| self.load_u32_gpa(gpa))?
     }
 }
 
@@ -5570,5 +5734,194 @@ mod guest_memory_tests {
             count.holds.load(Ordering::SeqCst),
             count.releases.load(Ordering::SeqCst)
         );
+    }
+
+    // ── ★ 2026-10-31: CPU access through translate() (`V3_GUEST_MEMORY.md` §6) ──────────────────
+
+    /// Fill every block of `ram` with a byte that names (block index, offset): `i * 0x40 + k % 0x40`
+    /// would repeat, so use `(gpa_of_byte * 7 + 3) & 0xff` — a function of the guest-physical address.
+    fn fill_by_gpa(ram: &RamMap) {
+        let blocks = ram.blocks.read().unwrap();
+        for b in blocks.iter() {
+            for k in 0..b.mem.len() {
+                let g = b.gpa + k as u64;
+                assert!(b.mem.store(k, (g * 7 + 3) & 0xff, 1));
+            }
+        }
+    }
+
+    fn model(gpa: u64, n: usize) -> Vec<u8> {
+        (0..n as u64).map(|k| ((gpa + k) * 7 + 3) as u8).collect()
+    }
+
+    #[test]
+    fn cpu_reads_and_writes_cross_block_edges_and_refuse_holes_by_name() {
+        let (ram, _) = fileless();
+        fill_by_gpa(ram);
+        // Inside one block, and across the BLK edge (blocks 0 and 1 are adjacent).
+        let mut a = [0u8; 40];
+        ram.read_gpa(0x100, &mut a).expect("inside");
+        assert_eq!(a.as_slice(), model(0x100, 40).as_slice());
+        let mut b = [0u8; 64];
+        ram.read_gpa(BLK - 32, &mut b).expect("across");
+        assert_eq!(b.as_slice(), model(BLK - 32, 64).as_slice());
+        // A write across the edge lands in both blocks and nowhere else.
+        ram.write_gpa(BLK - 4, &[0xEE; 8]).expect("write across");
+        let mut c = [0u8; 12];
+        ram.read_gpa(BLK - 8, &mut c).expect("read back");
+        assert_eq!(c[..4], model(BLK - 8, 4)[..]);
+        assert_eq!(c[4..12], [0xEE; 8]);
+        // Hole, past the end, zero length, oversize, wrap: named errors, nothing read.
+        for (gpa, n) in [
+            (2 * BLK - 4, 8usize),
+            (0x1_0000 + 2 * BLK - 1, 2),
+            (u64::MAX - 3, 8),
+            (1 << 40, 1),
+        ] {
+            let mut buf = vec![0xAAu8; n];
+            let e = ram.read_gpa(gpa, &mut buf).expect_err("unbacked");
+            assert!(e.contains("guest RAM"), "{e}");
+            assert!(buf.iter().all(|&x| x == 0xAA), "nothing partly read");
+        }
+        assert!(ram.read_gpa(0, &mut []).is_err());
+        let mut big = vec![0u8; RamMap::CPU_COPY_MAX + 1];
+        assert!(ram.read_gpa(0, &mut big).is_err());
+        assert!(ram.write_gpa(u64::MAX, &[1, 2]).is_err());
+    }
+
+    #[test]
+    fn the_dma_seam_is_the_identity_today_and_refuses_what_wraps() {
+        let (ram, _) = fileless();
+        assert_eq!(ram.dma_to_gpa(0x1234, 8), Some(0x1234));
+        assert_eq!(ram.dma_to_gpa(0x1234, 0), None);
+        assert_eq!(ram.dma_to_gpa(u64::MAX, 2), None);
+        fill_by_gpa(ram);
+        let mut b = [0u8; 16];
+        ram.read_dma(0x2000, &mut b).expect("dma read");
+        assert_eq!(b.as_slice(), model(0x2000, 16).as_slice());
+        assert!(ram.read_dma(u64::MAX - 2, &mut b).is_err());
+    }
+
+    #[test]
+    fn aligned_words_load_and_store_whole_and_everything_else_is_none() {
+        let (ram, _) = fileless();
+        assert!(ram.store_u32_gpa(0x40, 0xDEAD_BEEF));
+        assert_eq!(ram.load_u32_gpa(0x40), Some(0xDEAD_BEEF));
+        // The word is stored whole and little-endian.
+        let mut raw = [0u8; 4];
+        ram.read_gpa(0x40, &mut raw).expect("raw");
+        assert_eq!(raw, 0xDEAD_BEEFu32.to_le_bytes());
+        // Unaligned (the segment start is not 4-aligned), a hole, past the end, across the block edge.
+        assert_eq!(ram.load_u32_gpa(0x41), None);
+        assert!(!ram.store_u32_gpa(0x42, 1));
+        assert_eq!(ram.load_u32_gpa(2 * BLK), None);
+        assert_eq!(ram.load_u32_gpa(u64::MAX - 3), None);
+        assert_eq!(ram.load_u32_gpa(BLK - 2), None);
+        // The last aligned word of a block.
+        assert!(ram.store_u32_gpa(BLK - 4, 7));
+        assert_eq!(ram.load_u32_gpa(BLK - 4), Some(7));
+    }
+
+    #[test]
+    fn rows_are_numbered_by_file_offset_with_a_memfd_and_read_piece_by_piece() {
+        // Two blocks, NOT dense in the file: block at gpa 0x0 is file [0x8000, 0xC000), the block at
+        // gpa 0x4000 is file [0x2000, 0x6000) — gpa-adjacent, file-reversed.
+        let ram = Box::leak(Box::new(RamMap::default()));
+        assert!(ram.set_mr_hold(std::sync::Arc::new(Count::default())));
+        let (m0, fd) = test_owned_ram(BLK as usize);
+        let (m1, _) = test_owned_ram(BLK as usize);
+        ram.add(block(0, m0, Some(fd), 0x8000));
+        ram.add(block(BLK, m1, Some(fd), 0x2000));
+        for (gpa_base, m) in [(0u64, m0), (BLK, m1)] {
+            for k in 0..m.len() {
+                assert!(m.store(k, ((gpa_base + k as u64) * 7 + 3) & 0xff, 1));
+            }
+        }
+        // Number -> gpa, and the bytes left in that block's file range.
+        assert_eq!(ram.row_gpa(0x8010), Some((0x10, BLK - 0x10)));
+        assert_eq!(ram.row_gpa(0x2000), Some((BLK, BLK)));
+        assert_eq!(ram.row_gpa(0x6000), None, "past block 1's file range");
+        assert_eq!(ram.row_gpa(0x100), None, "no block carries it");
+        // A read inside one block.
+        let mut a = [0u8; 16];
+        ram.read_row(0x8010, &mut a).expect("row");
+        assert_eq!(a.as_slice(), model(0x10, 16).as_slice());
+        // A read across the END of block 0's file range continues at the NEXT number, which is a
+        // different block (here: nothing carries 0xC000), so it is refused by name, not read through.
+        let mut b = [0u8; 16];
+        let e = ram
+            .read_row(0xC000 - 8, &mut b)
+            .expect_err("numbering ends");
+        assert!(e.contains("carried by no block"), "{e}");
+        assert_eq!(ram.load_row_u32(0x8000 + 8), ram.load_u32_gpa(8));
+        assert_eq!(ram.load_row_u32(0xC000 - 2), None);
+    }
+
+    #[test]
+    fn without_a_memfd_a_row_number_is_the_guest_physical_address() {
+        let (ram, _) = fileless();
+        fill_by_gpa(ram);
+        assert_eq!(ram.row_gpa(0x1234), Some((0x1234, u64::MAX)));
+        // Across the A|B edge (adjacent in gpa AND in numbering): one contiguous read.
+        let mut b = [0u8; 48];
+        ram.read_row(BLK - 24, &mut b).expect("row");
+        assert_eq!(b.as_slice(), model(BLK - 24, 48).as_slice());
+        // Into the hole: refused by name.
+        assert!(ram.read_row(2 * BLK - 8, &mut b).is_err());
+        assert_eq!(ram.load_row_u32(0x1004), ram.load_u32_gpa(0x1004));
+        // The same numbers the GPU side uses.
+        assert_eq!(ram.gpu_ram_offset(0x1004, 4), Some(0x1004));
+    }
+
+    #[test]
+    fn a_short_guard_blocks_a_removal_for_its_life_and_a_removed_block_is_a_named_refusal() {
+        let (ram, count) = fileless();
+        {
+            let g = ram.lock_layout_short().expect("short guard");
+            assert!(g.translate(0, 8).is_ok());
+            // The registry read lock is kept: a block removal would wait.
+            assert!(ram.blocks.try_write().is_err());
+            // ...and no owner is held (the lock is the hold).
+            assert_eq!(count.holds.load(Ordering::SeqCst), 0);
+        }
+        assert!(ram.blocks.try_write().is_ok());
+        // After the removal the same access is refused by name, not read through a stale pointer.
+        let mut b = [0u8; 8];
+        assert!(ram.read_gpa(0x1_0000, &mut b).is_ok());
+        ram.del(0x1_0000);
+        let e = ram.read_gpa(0x1_0000, &mut b).expect_err("block removed");
+        assert!(e.contains("not backed by RAM"), "{e}");
+        assert_eq!(ram.load_u32_gpa(0x1_0000), None);
+        assert!(!ram.store_u32_gpa(0x1_0000, 1));
+    }
+
+    #[test]
+    fn the_translate_path_equals_the_legacy_file_path_on_a_memfd_layout() {
+        // Same bytes, two routes: `block_for`/`at_file_offset` (the retained-pointer path this
+        // replaces) and `read_row`. Dense layout: file offset = gpa.
+        let ram = Box::leak(Box::new(RamMap::default()));
+        assert!(ram.set_mr_hold(std::sync::Arc::new(Count::default())));
+        let (m0, fd) = test_owned_ram(BLK as usize);
+        let (m1, _) = test_owned_ram(BLK as usize);
+        ram.add(block(0, m0, Some(fd), 0));
+        ram.add(block(0x10_000, m1, Some(fd), 0x10_000));
+        for (g0, m) in [(0u64, m0), (0x10_000, m1)] {
+            for k in 0..m.len() {
+                assert!(m.store(k, ((g0 + k as u64) * 7 + 3) & 0xff, 1));
+            }
+        }
+        for (off, n) in [
+            (0u64, 64usize),
+            (BLK - 64, 64),
+            (0x10_000, 100),
+            (0x10_000 + BLK - 100, 100),
+        ] {
+            let mut new = vec![0u8; n];
+            ram.read_row(off, &mut new).expect("translate path");
+            let (mem, at) = ram.at_file_offset(off, n as u64).expect("legacy path");
+            let mut old = vec![0u8; n];
+            assert!(mem.read_into(at, &mut old));
+            assert_eq!(new, old, "{off:#x}+{n}");
+        }
     }
 }

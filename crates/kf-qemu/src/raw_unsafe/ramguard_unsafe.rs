@@ -6,11 +6,14 @@
 //! and a `MemoryRegion` cannot be finalized while somebody holds a reference on its owner
 //! (`memory_region_ref` = `object_ref(mr->owner)`). So:
 //!
-//! - [`QemuLayoutGuard::take`] is the ONLY way to make a guard. It is given the registry's READ
+//! - [`QemuLayoutGuard::take`] makes a guard for a LONG host call. It is given the registry's READ
 //!   guard (so the blocks it reads are registered right now, which is when taking a reference on
 //!   their owners is valid), takes a hold on every block's owner ([`MrHold::hold`]), then releases
 //!   the registry lock — a hot-unplug is never blocked behind a long host call, it just cannot free
-//!   the memory while the guard lives.
+//!   the memory while the guard lives. [`QemuLayoutGuard::take_locked`] makes one for a SHORT
+//!   bounded CPU copy: no owner is held, the registry read lock is kept until the guard drops (a
+//!   removal waits microseconds for the copy; `region_del` cannot complete, so the `MemoryRegion`
+//!   cannot be finalized meanwhile).
 //! - [`QemuLayoutGuard::translate`] makes each [`RamSegment`] from the address of a block THIS
 //!   guard holds ([`RamSegment::from_raw`], one `unsafe` block, borrowing `&self`), so a segment
 //!   cannot outlive the hold. Nothing here returns or stores an address as an integer.
@@ -87,13 +90,25 @@ impl MrHold for CMrHold {
     }
 }
 
+/// What keeps the blocks of a [`QemuLayoutGuard`] alive.
+enum Keep<'m> {
+    /// A hold on each block's owner ([`MrHold`]); the registry lock is NOT held. For long host calls
+    /// (an RM descriptor pins all of a block).
+    Held(Arc<dyn MrHold>),
+    /// The registry's READ lock itself, held for the guard's life: QEMU's `region_del` (which calls
+    /// `kf3_ram_del`, which needs the WRITE lock) cannot complete, so the `MemoryRegion` cannot be
+    /// finalized meanwhile. For short bounded CPU copies only: it blocks a block removal for as long
+    /// as the guard lives.
+    Locked(#[allow(dead_code)] RwLockReadGuard<'m, Vec<RamBlock>>),
+}
+
 /// ★ A hold on QEMU's guest-RAM blocks at one layout epoch. See the module docs.
 pub struct QemuLayoutGuard<'m> {
     generation: &'m AtomicU64,
     epoch: LayoutEpoch,
     layout: RamLayout,
     regions: Vec<RawRegion>,
-    hold: Arc<dyn MrHold>,
+    keep: Keep<'m>,
 }
 
 impl core::fmt::Debug for QemuLayoutGuard<'_> {
@@ -101,13 +116,38 @@ impl core::fmt::Debug for QemuLayoutGuard<'_> {
         f.debug_struct("QemuLayoutGuard")
             .field("epoch", &self.epoch)
             .field("blocks", &self.regions.len())
+            .field("locked", &matches!(self.keep, Keep::Locked(_)))
             .finish()
     }
 }
 
+/// The registered blocks as a layout, and their regions.
+fn read_blocks(blocks: &[RamBlock]) -> Result<(RamLayout, Vec<RawRegion>), TranslateError> {
+    let specs: Vec<RamBlockSpec> = blocks
+        .iter()
+        .map(|b| RamBlockSpec {
+            gpa: b.gpa,
+            len: b.mem.len() as u64,
+        })
+        .collect();
+    let layout = RamLayout::new(&specs).map_err(|e| {
+        use kf_mem::guestmem::LayoutError as L;
+        TranslateError::Inconsistent {
+            index: match e {
+                L::ZeroLength { index }
+                | L::GpaOverflow { index }
+                | L::Unsorted { index }
+                | L::Overlap { index } => index,
+                L::TooManyBlocks => usize::MAX,
+            },
+        }
+    })?;
+    Ok((layout, blocks.iter().map(|b| b.mem).collect()))
+}
+
 impl<'m> QemuLayoutGuard<'m> {
-    /// Take the guard: read the blocks the registry holds RIGHT NOW (`blocks` is its read guard),
-    /// hold each block's owner, release the registry lock.
+    /// Take the guard for a LONG host call: read the blocks the registry holds RIGHT NOW (`blocks`
+    /// is its read guard), hold each block's owner, release the registry lock.
     ///
     /// # Errors
     /// [`TranslateError::Inconsistent`] when the registered blocks are not a layout (overlap,
@@ -120,26 +160,7 @@ impl<'m> QemuLayoutGuard<'m> {
         // `add` and `del` bump the generation under the WRITE lock, so under this read guard the
         // generation and the blocks belong together.
         let epoch = LayoutEpoch::new(generation.load(Ordering::Acquire));
-        let specs: Vec<RamBlockSpec> = blocks
-            .iter()
-            .map(|b| RamBlockSpec {
-                gpa: b.gpa,
-                len: b.mem.len() as u64,
-            })
-            .collect();
-        let layout = RamLayout::new(&specs).map_err(|e| {
-            use kf_mem::guestmem::LayoutError as L;
-            TranslateError::Inconsistent {
-                index: match e {
-                    L::ZeroLength { index }
-                    | L::GpaOverflow { index }
-                    | L::Unsorted { index }
-                    | L::Overlap { index } => index,
-                    L::TooManyBlocks => usize::MAX,
-                },
-            }
-        })?;
-        let regions: Vec<RawRegion> = blocks.iter().map(|b| b.mem).collect();
+        let (layout, regions) = read_blocks(&blocks)?;
         // The blocks are registered (we hold the read lock), so their owners are alive: take the hold.
         for r in regions.iter().filter(|r| r.owner.is_some()) {
             hold.hold(r.owner);
@@ -150,15 +171,38 @@ impl<'m> QemuLayoutGuard<'m> {
             epoch,
             layout,
             regions,
-            hold,
+            keep: Keep::Held(hold),
+        })
+    }
+
+    /// Take the guard for a SHORT bounded CPU copy (USERD words, a few bytes of a pushbuffer): no
+    /// owner is held; the registry's read lock is kept until the guard drops, so a block removal
+    /// waits for the copy (microseconds) instead of racing it. ⊘ Never across a host RM call.
+    ///
+    /// # Errors
+    /// As [`QemuLayoutGuard::take`].
+    pub fn take_locked(
+        blocks: RwLockReadGuard<'m, Vec<RamBlock>>,
+        generation: &'m AtomicU64,
+    ) -> Result<Self, TranslateError> {
+        let epoch = LayoutEpoch::new(generation.load(Ordering::Acquire));
+        let (layout, regions) = read_blocks(&blocks)?;
+        Ok(QemuLayoutGuard {
+            generation,
+            epoch,
+            layout,
+            regions,
+            keep: Keep::Locked(blocks),
         })
     }
 }
 
 impl Drop for QemuLayoutGuard<'_> {
     fn drop(&mut self) {
-        for r in self.regions.iter().filter(|r| r.owner.is_some()) {
-            self.hold.release(r.owner);
+        if let Keep::Held(hold) = &self.keep {
+            for r in self.regions.iter().filter(|r| r.owner.is_some()) {
+                hold.release(r.owner);
+            }
         }
     }
 }
@@ -180,11 +224,13 @@ impl LayoutGuard for QemuLayoutGuard<'_> {
         let mut whole: Vec<RamSegment<'_>> = Vec::with_capacity(self.regions.len());
         for (index, r) in self.regions.iter().enumerate() {
             let base = NonNull::new(r.ptr).ok_or(TranslateError::Inconsistent { index })?;
-            // SAFETY: `r` is one of `self.regions`: the block's owner has a hold taken in `take`
-            // while the block was registered and released only in `drop`, so QEMU cannot finalize
-            // the `MemoryRegion` — and `call_rcu(reclaim_ramblock)` cannot run — for as long as
-            // `self` is borrowed; the segment borrows `self`. The block is mapped read-write for
-            // `r.len` bytes (`RawRegion::adopt`'s contract).
+            // SAFETY: `r` is one of `self.regions`, and `self.keep` keeps its block alive for as long
+            // as `self` is borrowed: either the block's owner has a hold taken in `take` while the
+            // block was registered and released only in `drop` (QEMU cannot finalize the
+            // `MemoryRegion`, so `call_rcu(reclaim_ramblock)` cannot run), or the registry's read
+            // lock is held (`take_locked`) so `region_del` cannot complete. The segment borrows
+            // `self`. The block is mapped read-write for `r.len` bytes (`RawRegion::adopt`'s
+            // contract).
             let seg = unsafe { RamSegment::from_raw(base, r.len, self) }
                 .map_err(|_| TranslateError::Inconsistent { index })?;
             whole.push(seg);

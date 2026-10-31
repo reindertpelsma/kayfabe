@@ -1170,6 +1170,50 @@ impl<'g> RamSegment<'g> {
         f(&region)
     }
 
+    /// Load the 32-bit word at `offset` (`Relaxed` atomic: a naturally aligned word the guest writes
+    /// whole, e.g. a USERD cursor). Both `offset` and the segment's own start must be 4-aligned.
+    ///
+    /// # Errors
+    /// [`RawError::Misaligned`] (`value` is the misalignment, never an address), else as
+    /// [`bounds::checked_span`].
+    pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+        self.require_word_aligned()?;
+        self.as_volatile().load_u32(offset)
+    }
+
+    /// Store the 32-bit word `value` at `offset` (`Relaxed` atomic). As [`RamSegment::load_u32`].
+    ///
+    /// # Errors
+    /// As [`RamSegment::load_u32`].
+    pub fn store_u32(&self, offset: HostOffset, value: u32) -> Result<(), RawError> {
+        self.require_word_aligned()?;
+        self.as_volatile().store_u32(offset, value)
+    }
+
+    /// The atomic accessors assume `offset` aligned means the address aligned; for a segment that is
+    /// true exactly when its start is 4-aligned.
+    fn require_word_aligned(&self) -> Result<(), RawError> {
+        let off_in_word = (self.base.as_ptr() as usize as u64) % 4;
+        if off_in_word == 0 {
+            Ok(())
+        } else {
+            Err(RawError::Misaligned {
+                what: "ram segment start (32-bit access)",
+                value: off_in_word,
+                required: 4,
+            })
+        }
+    }
+
+    /// A temporary foreign [`VolatileRegion`] over exactly this segment (its drop is a no-op).
+    fn as_volatile(&self) -> VolatileRegion {
+        VolatileRegion {
+            map: Mapping::adopt(self.base, self.len, Disposition::Foreign),
+            cache: CachePolicy::WriteBack,
+            prot: HostProt::ReadWrite,
+        }
+    }
+
     /// A temporary foreign [`MappedRegion`] over exactly this segment (its drop is a no-op).
     fn as_foreign(&self) -> MappedRegion {
         MappedRegion {
@@ -1310,6 +1354,8 @@ impl VolatileRegion {
     ///
     /// The returned reference borrows `&self`, so it cannot outlive the mapping — that is
     /// trybuild row 5 (use-after-`munmap`) held by lifetimes rather than by care.
+    // (A foreign `RamSegment` has no page-aligned base: its word accessors check the segment's
+    // start themselves before borrowing a region over it, which gives the same conclusion below.)
     fn word_at<T: AtomicWord>(&self, offset: HostOffset) -> Result<&T, RawError> {
         let size = size_of::<T>() as u64;
         let align = align_of::<T>() as u64;

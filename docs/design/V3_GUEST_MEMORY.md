@@ -21,6 +21,10 @@ Defaults for a memfd-backed QEMU are unchanged and no performance change is clai
    `LAYOUT_CHANGED` (§4, §5).
 5. The brief for this revision offered "QEMU RCU read lock + `MemoryRegion` reference" as the guard. The guard takes the
    `MemoryRegion` reference only; the RCU read lock is deliberately NOT taken, with evidence (§4).
+6. (PR 2 of this series) CPU reads and writes of guest RAM that needed a file offset (`at_file_offset`, `dma_to_file_range`
+   detours in `chan.rs`: Translated-channel reads, completion probes, USERD snapshots, the sysmem USERD relay) now go through
+   `translate()` with a short layout guard (§6). What remains file-bound is GPU-side or an aliased mapping, never a CPU access;
+   the table and the PRAMIN evidence are in §6.
 
 ## 1. The rule
 
@@ -154,12 +158,45 @@ discard to stay allowed: it refuses VFIO-like devices); this revision does not c
   apart (`Applied::batch_no_fd`) and places the rows per run. The stitch itself (`MappedRegion::stitch`,
   `HostRm::map_scattered_through`) is untouched: the owner's A/B (`KF3_NO_BATCHED_MAP=1` per run vs batched) decides its future.
 
-## 6. What still needs a file (and refuses by name without one)
+## 6. Who touches guest RAM, and how (inventory, 2026-10-31)
 
-Everything that numbers guest RAM by FILE offset: `RamMap::file_range`/`at_file_offset`/`dma_to_file_range` consumers in `chan.rs`
-(a Translated channel reading guest memory by gpa, sysmem USERD and notifiers), the T-space RAM window (`tspace.rs`), PRAMIN
-pointed at system memory (`ViewOps::place_pramin_ram`). The display and GSP-queue reads go through `block_for` (the VMM mapping,
-no file) and work. Moving the readers to `translate` is the next change (`claude/guestmem-cpu-translate-20261031`).
+Every consumer of guest RAM is exactly one of: a **CPU read**, a **CPU write**, an **RM-side reference** (object + offset
+handed to the host RM, no CPU access), a **GPU-VA mapping** (a map of a host object into a GPU VA space), or a **mapping
+aliased into a BAR window** (the guest CPU reaches guest RAM through a window of the device).
+
+| consumer (file) | kind | how it reaches guest RAM now |
+|---|---|---|
+| Translated channel: GPFIFO entries, push-buffer words, completion probes (`chan.rs` `Mem::read`, `read_ram_va`, `probe_read`, `probe_side`) | CPU read | `RamMap::read_row` / `load_row_u32`: placed-row number -> gpa -> `translate` (any numbering, any number of blocks, no file) |
+| device-DMA reads: `probe_operand`, PT-SNAP USERD snapshot, error-notifier dump | CPU read | `RamMap::read_dma` -> `dma_to_gpa` (THE vIOMMU seam for CPU access) -> `translate` |
+| sysmem USERD: relay `GP_PUT` in, `GP_GET` out (`UserdView::Ram`) | CPU read + CPU write, 4-byte words | `RamMap::load_u32_gpa` / `store_u32_gpa` per access (`Relaxed` atomic word); the view holds a gpa, never a host pointer, so a removed block is a named refusal |
+| sysmem USERD / error notifier adopted by the host-RM channel (`UserdAt::Ram`, `err_at`) | RM-side reference | unchanged: object + FILE offset of the whole-RAM object (needs the memfd object) |
+| GR-tier `GP_GET` word address (`windows(..).ram(off, 4)`), `Rows::dma_to_file_range` in the T-mode rewriter | GPU-VA address arithmetic | unchanged: file offset into the T-space window |
+| T-space RAM window (`tspace.rs`) | GPU-VA mapping (the whole-RAM object at `ram_base`) | unchanged: needs the whole-RAM object |
+| PRAMIN pointed at system memory (`ViewOps::place_pramin_ram`) | mapping aliased into the BAR0 PRAMIN window | unchanged: `mmap(MAP_FIXED)` of the memfd into the window; without a memfd refused by name and counted (`Repointed::refused`) |
+| BAR1/BAR2 sysmem leaves (`cpuwin`) | mapping aliased into a BAR window | REFUSED by name, counted (#212) |
+| display, GSP queue, MemoryList reads (`block_for`) | CPU read/write | unchanged: already file-less |
+
+**CPU access through `translate()`.** Each access takes a SHORT layout guard (`RamMap::lock_layout_short`, `QemuLayoutGuard::take_locked`):
+the registry read lock is kept for the length of one bounded copy (at most `RamMap::CPU_COPY_MAX`), so a block removal waits
+microseconds instead of racing it, and no owner hold is taken (a hold per 4-byte USERD access would be two atomic RMWs per block).
+The long guard of §4 is for the host RM call that pins all of a block.
+
+**The two that cannot read through `translate()` — and the evidence (NOT guessed):**
+- *BAR1/BAR2 sysmem leaves*: decided in #212 (ogkm: sysmem is CPU-mapped directly by `osMapSystemMemory`; BAR1/BAR2 never map it).
+- *PRAMIN -> sysmem* (an aliased mapping: the guest's own CPU reads and writes guest RAM through the window; no host-side
+  access can replace it). ogkm 580.65.06: `kbusSetBAR0WindowVidOffset_GM107` ALWAYS writes `_TARGET _VID_MEM`
+  (`kern_bus_gm107.c:4747`) and is the only window setter on the normal path; the target field is written with a derived
+  aperture only in the BAR2 self-test `kbusVerifyBar2_GM107` (`:4067-4208`), with a sysmem memdesc only when
+  `PDB_PROP_GPU_IS_ALL_INST_IN_SYSMEM` is set (registry `RMInstLoc*` overrides, `gpu_registry.c:309-333`; a non-default test
+  configuration) — its callers pass NULL (`kern_bus_gm107.c:360,651,678`); Hopper+ has no target field (`kern_bus_gh100.c:206`);
+  and `gpu_registry.c:337-343` says reflected BAR mappings deadlock Ampere+. So **in the open driver with default registry the
+  PRAMIN window never targets system memory.** What the evidence cannot settle: the closed Windows driver (no evidence is taken
+  from it) and hardware acceptance. **Decision: PRAMIN keeps its behaviour (NEEDS-OWNER)**; if the owner accepts the open-driver
+  evidence alone, refusing it by name is one arm in `PraminPool::repoint` plus the trait method (as #212 did for the BARs), and a
+  counter says whether it ever fires.
+
+What still needs the memfd after this change: the RM-side USERD / notifier reference, the T-space window and its address
+arithmetic, and PRAMIN -> sysmem (all GPU-side or aliased, none a CPU access). They refuse by name without one.
 
 ## 7. What this note does not claim
 
