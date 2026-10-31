@@ -433,6 +433,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         space,
         store,
         ram_obj: Some(desc),
+        ram_objs: None,
     });
     let guest = RefCell::new(Guest {
         ram_view: &ram_view,

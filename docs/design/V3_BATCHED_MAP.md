@@ -1,5 +1,25 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**STATUS: LIVE, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
+`v3-batchmap` (off master `ce2cb06d`). Verb choice read from ogkm-580.159.04 source; §7 holds the
+bench numbers and the revision they were measured at. Answers the follow-up `V3_BUILD.md` w829
+named (*"each scattered 4 KiB run is ONE host map call on the guest-RAM object … a batched verb is
+the next budget"*).
+
+**NOTE, 2026-10-31 (PR 3 of the guest-memory series, owner direction; `V3_GUEST_MEMORY.md` §5; DO NOT MERGE before the hardware A/B): the
+stitched batch is NO LONGER THE DEFAULT HOT PATH, memfd or not.** Guest RAM is carried by one host object per RAM block over the
+VMM's own mapping; every sysmem run is mapped as an offset + length slice of its block's object, one host map per run
+(`GpuMirror::map_batch` answers `NOT_BATCHED`). This section's mechanism (one descriptor over a stitched view of the memfd per
+batch) stays in the tree behind `KF3_STITCHED_MAP=1` (the A/B arm, needs a memfd) and as the named fallback for a memfd layout whose
+file offsets are not a numbering. `KF3_NO_BATCHED_MAP=1` still turns the stitched batch off inside that arm. The numbers in §7 were measured
+on the stitched path; the per-run path they are compared with in §1 is now the default and is UNMEASURED on this design. The A/B
+that decides whether the stitch is deleted is owed (see `V3_GUEST_MEMORY.md` §8).
+
+**NOTE, 2026-10-31 (owner direction; `V3_GUEST_MEMORY.md`): the stitch below needs a FILE behind guest RAM, and a file is now
+an OPTIONAL capability.** Where the VMM's RAM is not a file, `map_batch` answers `kf_mem::ledger::NO_RAM_FD`, the apply layer
+counts it apart (`batch_no_fd`) and places every row per run, one host object per RAM block. With a memfd nothing here changes.
+Whether the stitch is worth keeping is decided by the owner's A/B (`KF3_NO_BATCHED_MAP=1` vs batched); it is not removed.
+
 **★ CORRECTION (2026-10-10, branch `claude/held-hole-20261010`) — the HELD-hole of the D1-D3 code
 (Windows run 289: 14 leaves `HELD BY HOST`, 4 host Xid 31 `FAULT_PTE`) is a reservation-geometry defect;
 read this before §8.8.1/§8.8.3.** Host RM does not hold the range a micro reservation asks for: it
@@ -89,12 +109,6 @@ change inside a coalesced row transiently unmapped the unchanged pages (§8.2). 
 only touches what changed; outside any reservation one host mapping per guest leaf; batches only
 inside a VA-reserving `hDma` (guest reservation, or a micro reservation once §8.0 says so); range
 unmaps only over owned spans; no remap ever. Model-tested only; hardware verdict pending (§8.0).
-
-**STATUS: LIVE, 2026-09-26 — CODE + MEASURED on `vh` (RTX 3060 GA106, 580.159.04).** Branch
-`v3-batchmap` (off master `ce2cb06d`). Verb choice read from ogkm-580.159.04 source; §7 holds the
-bench numbers and the revision they were measured at. Answers the follow-up `V3_BUILD.md` w829
-named (*"each scattered 4 KiB run is ONE host map call on the guest-RAM object … a batched verb is
-the next budget"*).
 
 ## 1. The problem, measured
 

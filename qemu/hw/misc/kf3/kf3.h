@@ -70,7 +70,11 @@
 /* 30 (2026-10-15, claude/perf-fix-20261015, docs/design/V3_WINDOWS_PERF_20261015.md): kf3_realize gains
  * user_view_keep (the user-view-keep property: CPU views of the store each USER-ring channel keeps armed;
  * 0 = the default, 16) after channel_budget. */
-#define KF3_ABI 30
+/* 31 (2026-10-31, claude/guestmem-translate-only-20261031, docs/design/V3_GUEST_MEMORY.md): the layout guard.
+ * kf3_ram_add gains mr (the section's MemoryRegion *; opaque to Rust, whose guard holds its owner while a
+ * translated RAM address is in use), and kf3_ram_ops registers the two hold verbs (Kf3RamOps) before the
+ * memory listener is registered. */
+#define KF3_ABI 31
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -156,6 +160,15 @@ typedef struct Kf3InputOps {
     Kf3CurAbsoluteFn cursor_absolute;
 } Kf3InputOps;
 
+/* ★ ABI 31: how Rust holds a RAM block's owner while it uses the block's address — QEMU's own atomic
+ * reference count on mr->owner (memory_region_ref / memory_region_unref), callable from any thread. */
+typedef void (*Kf3MrRefFn)(void *mr);
+typedef void (*Kf3MrUnrefFn)(void *mr);
+typedef struct Kf3RamOps {
+    Kf3MrRefFn mr_ref;
+    Kf3MrUnrefFn mr_unref;
+} Kf3RamOps;
+
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
  * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1.
@@ -186,7 +199,9 @@ void kf3_shadow_seal(void *h);
 void kf3_bar0_write(void *h, uint64_t off, uint64_t val, uint32_t width);
 /* ★ w828: a BAR0 read exit (HOLE pages only: a read with a side effect). */
 uint64_t kf3_bar0_read(void *h, uint64_t off, uint32_t width);
-int32_t kf3_ram_add(void *h, uint64_t gpa, uint8_t *hva, uint64_t len, int32_t fd, uint64_t fd_off);
+int32_t kf3_ram_add(void *h, uint64_t gpa, uint8_t *hva, uint64_t len, int32_t fd, uint64_t fd_off, void *mr);
+/* ★ ABI 31: once, before the listener registers. */
+int32_t kf3_ram_ops(void *h, const Kf3RamOps *ops);
 int32_t kf3_bar_ram(void *h, uint32_t bar, uint64_t base, uint64_t len, void **ptr);
 void kf3_ram_del(void *h, uint64_t gpa);
 void kf3_status(void *h, char *buf, size_t len);

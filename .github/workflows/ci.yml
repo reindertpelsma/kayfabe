@@ -1775,7 +1775,28 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          # ★★ `kf-linux-raw` 97 -> 100 and `kf-qemu` 86 -> 89, 2026-10-31 (`claude/guestmem-translate-only-20261031`,
+          # `docs/design/V3_GUEST_MEMORY.md` §2, §4: a span of guest RAM as an OBJECT, held alive by a layout guard).
+          # This REPLACES the #213 numbers (103 / 89: `MappedRegion::adopt_foreign` took an address as an integer):
+          # the owner's rule is that no VMM address, integer or pointer, crosses from safe code into unsafe code.
+          #   kf-linux-raw `mapping_unsafe.rs` (+3, was +6 in #213): `RamSegment::from_raw` (`unsafe fn`, +1) — the ONE
+          #   constructor from an address; it stores a `NonNull` + length, never dereferences it, and borrows a
+          #   layout guard (`&'g G`) so the segment cannot outlive the hold; `slice`/`read_into`/`write_from` re-prove
+          #   every `(offset, len)` with `bounds::checked_span` and reuse the existing `HostSpan::within` and
+          #   `MappedRegion` copies (NO new unsafe block). The other 2 are test-only `unsafe { }` blocks in
+          #   `a_ram_segment_is_bounded_and_never_unmaps_the_vmms_memory` (one `from_raw` over a leaked buffer, one
+          #   pair of refused constructions).
+          #   kf-qemu `raw_unsafe.rs` (+1, was +3 in #213): `RawRegion::adopt_owned` (`unsafe fn`, +1) — `adopt` plus the
+          #   block's `MemoryRegion` as an opaque `Owner` token (no getter). The #213 `describe_range`, `borrow_held` and
+          #   test-only `alloc_zeroed` blocks are GONE (-3; the test helper is safe Rust now).
+          #   kf-qemu `raw_unsafe/ramguard_unsafe.rs` (+2, new file): the one `RamSegment::from_raw` call in
+          #   `QemuLayoutGuard::translate` (SAFETY: the guard holds the block's owner from `take` to `drop`), and the one
+          #   verb call in `CMrHold::call` (QEMU's `memory_region_ref`/`memory_region_unref`; `CMrHold::new` is
+          #   `pub(crate)` with one call site, the `kf3_ram_ops` FFI entry, which is a SAFE `extern "C" fn` taking
+          #   `Option<&Kf3RamOps>`, so it adds no block).
+          #   ⊘ No new power: no VMM address reaches safe code in any form; the RM pins pages and keeps no address; nothing
+          #     here maps, unmaps or re-protects memory the VMM owns.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:100 kf-cuda:78 kf-qemu:89 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

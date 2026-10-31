@@ -393,6 +393,7 @@ dependencies = [
  "kf-chip",
  "kf-cuda",
  "kf-host",
+ "kf-linux-raw",
  "kf-trap",
 ]
 

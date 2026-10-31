@@ -80,6 +80,11 @@
 //! | 4 | `Gpa` ⇄ [`HostOffset`] by `From`, `as`, or arithmetic | type shape + `tests/ui/offset_arithmetic.rs` |
 //! | 5 | an address-taking placement API (`map_fixed(addr, …)`) | [`Reservation::map_fixed_in`] takes an **offset**; `tests/ui/map_fixed_bare_address.rs` |
 //!
+//! ★ 2026-10-31: guest RAM the VMM maps is one more bounded object, [`RamSegment`]: private
+//! address, `unsafe` single constructor borrowing the VMM adapter's layout guard, `HostOffset` +
+//! [`bounds::checked_span`] on every slice and copy, and the RM descriptor verb gets a bounded
+//! [`MappedRegion`] for the length of a closure (`tests/ui/ram_segment_*.rs` pin refusals 1 and 3).
+//!
 //! **Refusal 5's compile-fail row is the weak one, and the honesty belongs here rather
 //! than in a footnote.** A compile-fail test can prove that *the free function does not
 //! exist today*; it cannot prove that a future one will not be added, and it cannot see a
@@ -312,8 +317,8 @@ pub use host_fd_unsafe::{
 };
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
-    Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, Reservation,
-    VolatileRegion, release_fence,
+    Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, RamSegment,
+    Reservation, VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
 pub use scratch::{

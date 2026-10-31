@@ -1054,7 +1054,7 @@ launcher still gets a named refusal.
 | `/dev/nvidiactl`, `/dev/nvidia<minor>` and `/dev/nvidia-uvm` openable by the invoking user | yes | the host RM open fails, by name |
 | host BAR1 ≥ guest BAR1 + BAR2 + 1 MiB + 16 MiB | yes; computes the largest guest BAR1 that fits | summed per card, refused by name (`crates/kf-qemu/src/cardbudget.rs:5-14`, `:24-27`; `device.rs:268-273`) |
 | card memory for `fb-mb` | yes, from `nvidia-smi` | `store of N MiB refused: NoMemory` |
-| guest RAM is a shared memfd | the launcher always passes one | **not checked at realize.** It fails at the first sysmem placement (`WindowOps::place_ram` and `MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`); task I5 moves it to realize |
+| guest RAM is a shared memfd | the launcher always passes one | **not checked at realize.** It fails at the first sysmem placement (`WindowOps::place_pramin_ram` (renamed 2026-10-31, PRAMIN only: a BAR1/BAR2 sysmem leaf is refused, never placed, `V3_P4_PORT_MAP.md` correction) and `MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`); task I5 moves it to realize |
 | host RAM ≥ guest RAM | yes | all guest RAM is pinned for the VM's life (`MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`) |
 | QEMU's cgroup has a memory limit (design only, 2026-10-03) | yes: computes guest RAM + scratch bound + overhead (§2.5) and reports whether the memory controller is delegated to the user | none. The design: kf3 logs one warning at realize when its own cgroup's `memory.max` is `max`. The scratch bound itself is logged per window (`kf3: <window> scratch: tile …`) |
 | glibc ≥ the manifest's floor | yes | the loader refuses |
