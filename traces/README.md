@@ -97,7 +97,7 @@ which **refuses** a wrapped or truncated file rather than replaying a hole.
 
 | | |
 |---|---|
-| part | NVIDIA GeForce RTX 3060 (GA106), `GPU-e28d7776-e4f9-704b-d392-d46f187343f8` |
+| part | NVIDIA GeForce RTX 3060 (GA106), `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002` (a placeholder: the board's real UUID was replaced 2026-10-31; placeholders start with `fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e`, see `scripts/ci/no_gpu_uuids.py`) |
 | host | vast.ai instance `46494693`, kernel `6.8.0-59-generic` |
 | driver | **NVIDIA open kernel modules 580.159.04**, rebuilt from source with the recorder |
 | source | `research_clones/ogkm-580.159.04`, git tag `b81d58e` (`version.mk: 580.159.04`) |
