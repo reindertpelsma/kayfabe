@@ -2446,6 +2446,19 @@ fn gm_sync(
     vmm: &TestVmm,
     host: &mut SimObjects<'_>,
 ) -> Result<SyncReport, SyncError> {
+    gm_sync_numbered(sim, m, c, book, vmm, host, &|b| Some(b.gpa))
+}
+
+/// [`gm_sync`] with the adapter's own numbering (file offsets, when a memfd backs the RAM).
+fn gm_sync_numbered(
+    sim: &Sim,
+    m: &SimMirror<'_>,
+    c: &mut BTreeMap<u64, Committed>,
+    book: &mut RamObjectBook,
+    vmm: &TestVmm,
+    host: &mut SimObjects<'_>,
+    number: &dyn Fn(&crate::guestmem::RamBlockSpec) -> Option<u64>,
+) -> Result<SyncReport, SyncError> {
     let r = {
         let mut unmap = |t: &Retiring| -> Result<(), String> {
             let pages: Vec<u64> = c
@@ -2458,7 +2471,7 @@ fn gm_sync(
             }
             Ok(())
         };
-        book.sync(vmm, &|b| Some(b.gpa), host, &mut unmap)
+        book.sync(vmm, number, host, &mut unmap)
     };
     sim.0.borrow_mut().ram_segs = Some(book.objects().expect("table"));
     r
@@ -2662,5 +2675,94 @@ fn block_objects_by_gpa_and_the_single_object_give_identical_translations() {
         );
         assert_eq!((ma.retire(), mb.retire()), (0, 0));
         assert!(b.0.borrow().violations.is_empty());
+    }
+}
+
+/// ★ THE DEFAULT HOT PATH against the A/B arm, over a memfd layout. Block objects (rows numbered by FILE
+/// offset, one host map per run, the batched map answering `NOT_BATCHED`) and the previous path (one
+/// whole-RAM object, the stitched batch) end every step with the same guest-visible translation —
+/// map across a block edge, scattered rows, remap inside a row, unmap, retire — and the default makes no
+/// descriptor and no stitch syscall after the objects exist.
+#[test]
+fn the_default_block_objects_and_the_stitch_arm_give_identical_translations_over_a_memfd_layout() {
+    // File pages: block A (gpa pages 0..40) at file page 200, B (40..100, adjacent) at 240 (dense with A),
+    // C (120..200, after a hole) at 400 (after a gap in the file).
+    let file = |b: &crate::guestmem::RamBlockSpec| match b.gpa / P {
+        0 => Some(200 * P),
+        40 => Some(240 * P),
+        120 => Some(400 * P),
+        _ => None,
+    };
+    for low in [false, true] {
+        let stitch = fresh(); // the arm: one whole-RAM object, file-offset rows
+        let blocks = gm_fresh(); // the default: block objects, the same file-offset rows
+        let vmm = gm_vmm();
+        let ms = SimMirror::new(&stitch, true, low);
+        let mb = SimMirror::new(&blocks, false, low); // Blocks mode: NOT_BATCHED, per run
+        let (mut cs, mut cb) = (BTreeMap::new(), BTreeMap::new());
+        let mut host = SimObjects::new(&blocks);
+        let mut book = RamObjectBook::new();
+        gm_sync_numbered(&blocks, &mb, &mut cb, &mut book, &vmm, &mut host, &file).expect("sync");
+        let after_build = blocks.0.borrow().n.rm_desc;
+        // Rows are file-page numbers: 230..250 crosses the A|B edge at file page 240.
+        let steps: Vec<Vec<(u64, u64, u64)>> = vec![
+            vec![(4, 16, 230)],
+            vec![(40, 12, 288)],
+            (0..12u64)
+                .map(|i| {
+                    (
+                        52 + i,
+                        1,
+                        [203, 277, 450, 219, 299, 433, 205, 281, 455, 221, 297, 431][i as usize],
+                    )
+                })
+                .collect(),
+            vec![(70, 20, 405)],
+            vec![(90, 5, 475)],
+        ];
+        for rows in &steps {
+            map_ram(&ms, &mut cs, rows);
+            map_ram(&mb, &mut cb, rows);
+            ok(&stitch, &cs, &BTreeMap::new());
+            ok(&blocks, &cb, &BTreeMap::new());
+            assert_eq!(
+                translation(&stitch, 0..PAGES),
+                translation(&blocks, 0..PAGES),
+                "low={low} after {rows:?}"
+            );
+        }
+        let rs = remap_inside(&cs, 4, &[9], 420);
+        let rb = remap_inside(&cb, 4, &[9], 420);
+        let (os, ob) = (
+            apply_and_commit(&ms, &rs, &mut cs),
+            apply_and_commit(&mb, &rb, &mut cb),
+        );
+        assert_eq!((os.refused, ob.refused), (0, 0));
+        unmap_pages(&ms, &mut cs, &[40]);
+        unmap_pages(&mb, &mut cb, &[40]);
+        assert_eq!(
+            translation(&stitch, 0..PAGES),
+            translation(&blocks, 0..PAGES),
+            "low={low} after remap+unmap"
+        );
+        // The default never stitches: no descriptor after the block objects, no mmap/munmap, no batch.
+        let rm = blocks.0.borrow();
+        assert_eq!(
+            rm.n.rm_desc, after_build,
+            "low={low}: no descriptor per batch"
+        );
+        assert_eq!(
+            (rm.n.mmap, rm.n.munmap),
+            (0, 0),
+            "low={low}: no stitch syscall"
+        );
+        assert!(rm.violations.is_empty(), "{:?}", rm.violations);
+        drop(rm);
+        // The arm does stitch (when it batches at all).
+        assert!(stitch.0.borrow().n.rm_total() > 0);
+        if low {
+            assert!(stitch.0.borrow().n.mmap > 0, "the arm stitched batches");
+        }
+        assert_eq!((ms.retire(), mb.retire()), (0, 0));
     }
 }

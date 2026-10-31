@@ -109,6 +109,23 @@ pub struct RamMap {
     /// ★ 2026-10-31: how the layout guard holds a RAM block's owner (QEMU: `memory_region_ref`),
     /// registered once by the device at realize. Without it no guard can be taken.
     hold: std::sync::OnceLock<std::sync::Arc<dyn MrHold>>,
+    /// ★ 2026-10-31: how the GPU-side map carries guest RAM ([`RamMode`]), decided once.
+    mode: std::sync::atomic::AtomicU8,
+}
+
+/// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): how the GPU-side map carries guest RAM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RamMode {
+    /// Not decided yet (before the first prewarm / mirror).
+    Undecided,
+    /// THE DEFAULT, with or without a memfd: one host object per RAM block over the VMM's own mapping,
+    /// every sysmem run mapped as an offset + length slice of its block's object, one host map per
+    /// run; no stitch, no memfd mapping in this path.
+    Blocks,
+    /// The previous path, kept in the tree for the owner's A/B (`KF3_STITCHED_MAP=1`) and as the named
+    /// fallback for a layout whose file offsets are not a numbering: ONE object over the whole memfd,
+    /// rows numbered by file offset, the batched map stitches pieces of the file.
+    Whole,
 }
 
 type PlanResult = Result<std::sync::Arc<RamPlan>, String>;
@@ -120,6 +137,7 @@ impl Default for RamMap {
             generation: AtomicU64::new(1),
             plan_cache: Mutex::new(None),
             hold: std::sync::OnceLock::new(),
+            mode: std::sync::atomic::AtomicU8::new(0),
         }
     }
 }
@@ -294,26 +312,87 @@ impl RamMap {
             return Some(r.clone());
         }
         let built: PlanResult = layout_of(&guard).and_then(|l| {
-            RamPlan::by_gpa(&l)
+            numbering_of(&guard)
+                .ok_or_else(|| {
+                    "guest RAM plan: the blocks do not share one memfd (no file numbering)"
+                        .to_owned()
+                })
+                .and_then(|bases| {
+                    RamPlan::new(&l, &bases).map_err(|e| format!("guest RAM plan: {e}"))
+                })
                 .map(std::sync::Arc::new)
-                .map_err(|e| format!("guest RAM plan: {e}"))
         });
         *cache = Some((generation, built.clone()));
         Some(built)
     }
 
     /// ★ 2026-10-31: the offset the GPU-side rows use for guest-physical `[gpa, gpa+len)` — the
-    /// numbering `Desired::off` carries (`kf_mem::ledger`). With a memfd it is the file offset,
-    /// exactly as before ([`RamMap::dma_to_file_range`]); WITHOUT one it is the block plan's number
-    /// ([`RamPlan::ram_offset`]: the guest-physical address itself, stable when another block is
-    /// added or removed), which names a position among the host objects of
-    /// [`MemPlane::sync_ram_objects`]. `None` for a range that is not wholly RAM.
+    /// number `Desired::off` carries (`kf_mem::ledger`). In [`RamMode::Blocks`] it is the block plan's
+    /// number ([`RamPlan::ram_offset`]): a FILE offset when a memfd backs the RAM (so a number also names
+    /// file bytes, and everything keyed by file offset — the T-space window, the host-RM USERD reference —
+    /// agrees with the rows), the guest-physical address itself when none does; a range across two
+    /// blocks that are adjacent in both guest-physical space and the numbering is one number and is cut
+    /// at the object edge by the map. In [`RamMode::Whole`] (and before the mode is decided) it is the
+    /// file offset of one block ([`RamMap::dma_to_file_range`]), exactly as before. `None` for a range
+    /// that is not wholly RAM.
     #[must_use]
     pub fn gpu_ram_offset(&self, gpa: u64, len: u64) -> Option<u64> {
-        if self.backing_fd().is_some() {
+        if self.backing_fd().is_some() && self.ram_mode() != RamMode::Blocks {
             return self.dma_to_file_range(gpa, len);
         }
         self.plan()?.ok()?.ram_offset(gpa, len)
+    }
+
+    /// The decided [`RamMode`].
+    #[must_use]
+    pub fn ram_mode(&self) -> RamMode {
+        match self.mode.load(Ordering::Acquire) {
+            1 => RamMode::Blocks,
+            2 => RamMode::Whole,
+            _ => RamMode::Undecided,
+        }
+    }
+
+    /// Decide the [`RamMode`] (once; the first decision stands). Returns the mode now in force.
+    pub fn set_ram_mode(&self, m: RamMode) -> RamMode {
+        let v = match m {
+            RamMode::Undecided => return self.ram_mode(),
+            RamMode::Blocks => 1,
+            RamMode::Whole => 2,
+        };
+        let _ = self
+            .mode
+            .compare_exchange(0, v, Ordering::AcqRel, Ordering::Acquire);
+        self.ram_mode()
+    }
+
+    /// Which mode the registered RAM gets. `stitch_arm` is the owner's A/B switch
+    /// (`KF3_STITCHED_MAP=1`): with a memfd it keeps the whole-object + stitch path. Otherwise the block
+    /// objects, unless a memfd backs the RAM and its file offsets are not a numbering (not sorted, one
+    /// file range over another, a second fd): then the whole-object path, by name, as before.
+    #[must_use]
+    pub fn choose_mode(&self, stitch_arm: bool) -> RamMode {
+        let filed = self.backing_fd().is_some();
+        if filed && stitch_arm {
+            return RamMode::Whole;
+        }
+        match self.plan() {
+            Some(Err(_)) if filed => RamMode::Whole,
+            _ => RamMode::Blocks,
+        }
+    }
+
+    /// The number of the block registered at `gpa` (what [`RamMap::plan`] numbers its first byte
+    /// with): its file offset with a memfd, its guest-physical address without. `None` for an unknown
+    /// block, or one that does not share the memfd.
+    #[must_use]
+    pub fn block_number(&self, gpa: u64) -> Option<u64> {
+        let v = self.blocks.read().ok()?;
+        let b = v.iter().find(|b| b.gpa == gpa)?;
+        match v.iter().find_map(|x| x.fd) {
+            None => Some(gpa),
+            Some(first) => (b.fd == Some(first)).then_some(b.fd_off),
+        }
     }
 }
 
@@ -474,6 +553,18 @@ impl RamMap {
     pub fn load_row_u32(&self, number: u64) -> Option<u32> {
         let (gpa, avail) = self.row_gpa(number)?;
         (avail >= 4).then(|| self.load_u32_gpa(gpa))?
+    }
+}
+
+/// The base number of each block, in registry order: file offsets when a memfd backs the RAM (every
+/// block must be on the SAME fd), guest-physical addresses when none does. `None`: mixed.
+fn numbering_of(blocks: &[RamBlock]) -> Option<Vec<u64>> {
+    match blocks.iter().find_map(|b| b.fd) {
+        None => Some(blocks.iter().map(|b| b.gpa).collect()),
+        Some(first) => blocks
+            .iter()
+            .map(|b| (b.fd == Some(first)).then_some(b.fd_off))
+            .collect(),
     }
 }
 
@@ -1545,6 +1636,20 @@ impl SpaceCalls {
 /// RM frees the whole VA block there. Fixed in `kf_mem::batch::BatchedVas` (no batch outside a
 /// guest reservation; ranges over owned spans only), proven against a host RM model
 /// (`kf_mem` `sim` tests); `V3_BATCHED_MAP.md` §8.
+/// ★★ 2026-10-31 — **the A/B switch of the hot-path RAM mapping** (`V3_GUEST_MEMORY.md` §5).
+/// DEFAULT (unset): guest RAM is carried by ONE host object per RAM block over the VMM's own mapping
+/// ([`RamMode::Blocks`]); every sysmem run is mapped as an offset + length slice of its block's
+/// object, one `NV_ESC_RM_MAP_MEMORY_DMA` per run; the stitched batch (a second mapping of the memfd,
+/// one descriptor per batch) is not used. `KF3_STITCHED_MAP=1` (with a memfd) selects the previous
+/// path ([`RamMode::Whole`]: one object over the whole memfd, file-offset rows, the batched map
+/// stitches pieces of the file) — a MEASUREMENT arm for the owner's hardware A/B, read once, never
+/// required to boot. Without a memfd the switch does nothing (there is no stitch to select).
+/// `KF3_NO_BATCHED_MAP=1` still turns the stitched batch off inside the stitch arm.
+fn stitch_arm() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_STITCHED_MAP").is_some_and(|v| v != "0"))
+}
+
 fn batching_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NO_BATCHED_MAP").is_none())
@@ -1761,6 +1866,11 @@ impl MapTarget for GpuMirror {
         let (Some(ram), true) = (self.ram, batching_enabled()) else {
             return Err(kf_mem::ledger::NOT_BATCHED.into());
         };
+        // ★ 2026-10-31: the DEFAULT hot path carries RAM as block objects and maps per run; the stitch
+        // is the A/B arm (`KF3_STITCHED_MAP=1`) and the named fallback only. Silent by design.
+        if ram.ram_mode() == RamMode::Blocks {
+            return Err(kf_mem::ledger::NOT_BATCHED.into());
+        }
         // ★ 2026-10-31: the stitch needs a FILE; without one the capability is absent, by name
         // (`NO_RAM_FD`, counted apart from refusals) and the rows go per run.
         let fd = ram
@@ -3161,7 +3271,12 @@ impl MemPlane {
             return Err(SyncError::Host(e));
         }
         let mut host = RmRamObjects(rm);
-        let report = book.sync(self.ram, &|b| Some(b.gpa), &mut host, unmap);
+        let report = book.sync(
+            self.ram,
+            &|b| self.ram.block_number(b.gpa),
+            &mut host,
+            unmap,
+        );
         match report {
             Ok(r) => {
                 match book.objects() {
@@ -3201,14 +3316,34 @@ impl MemPlane {
     /// # Errors
     /// By name.
     pub fn ensure_ram_objects(&self, rm: &HostRm) -> Result<(), String> {
+        if !self.ram.has_blocks() {
+            return Err("no guest RAM registered yet".to_owned());
+        }
+        // Decide HOW guest RAM is carried, once ([`RamMode`]).
+        if self.ram.ram_mode() == RamMode::Undecided {
+            let chosen = self.ram.choose_mode(stitch_arm());
+            let now = self.ram.set_ram_mode(chosen);
+            eprintln!(
+                "kf3: guest RAM is carried {} ({})",
+                match now {
+                    RamMode::Blocks => "as one host object per RAM block, mapped per run",
+                    _ => "as one host object over the whole memfd, stitched batches",
+                },
+                if stitch_arm() {
+                    "KF3_STITCHED_MAP=1"
+                } else {
+                    "default"
+                }
+            );
+        }
+        if self.ram.ram_mode() == RamMode::Whole {
+            return Ok(());
+        }
         if self.ram_objects_settled() {
             return match self.ram_refused.lock().ok().and_then(|r| r.clone()) {
                 Some(e) => Err(e),
                 None => Ok(()),
             };
-        }
-        if !self.ram.has_blocks() {
-            return Err("no guest RAM registered yet".to_owned());
         }
         self.sync_ram_objects(rm, &mut |t| {
             Err(format!(
@@ -3224,14 +3359,20 @@ impl MemPlane {
     /// space's host map reads. `None` while a memfd backs RAM.
     #[must_use]
     pub fn ram_objects(&self) -> Option<&'static RamObjectCell> {
-        (self.ram.backing_fd().is_none() && self.ram.has_blocks()).then_some(self.ram_cell)
+        (self.ram.ram_mode() == RamMode::Blocks && self.ram.has_blocks()).then_some(self.ram_cell)
     }
 
     /// Whether the first build has an outcome to remember yet (built, or refused by the host).
     #[must_use]
     pub fn ram_objects_settled(&self) -> bool {
-        self.ram_book.lock().is_ok_and(|b| b.epoch().is_some())
-            || self.ram_refused.lock().is_ok_and(|r| r.is_some())
+        match self.ram.ram_mode() {
+            RamMode::Undecided => false,
+            RamMode::Whole => true,
+            RamMode::Blocks => {
+                self.ram_book.lock().is_ok_and(|b| b.epoch().is_some())
+                    || self.ram_refused.lock().is_ok_and(|r| r.is_some())
+            }
+        }
     }
 
     /// Whether the VMM's RAM layout moved since the objects were built (the VA thread then calls
@@ -3545,22 +3686,23 @@ fn create_mirror(
     // measured p4b4: a ~22 s guest stall per boot.
     let vas_us = us(t_step);
     let t_step = std::time::Instant::now();
-    let ram_obj = if plane.ram.backing_fd().is_none() && plane.ram.has_blocks() {
-        // ★ 2026-10-31: RAM is not a file. One host object per RAM block (the rows are cut at
-        // their edges); the single-object handle stays absent, so a sysmem USERD or the T-space
-        // window — which need a file offset — are refused by name, as before.
-        if let Err(e) = plane.ensure_ram_objects(rm) {
-            eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
-        }
-        None
-    } else {
+    // ★ 2026-10-31: the DEFAULT carries guest RAM as one host object per RAM block (rows are cut at
+    // their edges, one host map per run); this also decides the mode ([`RamMode`]). The whole-RAM
+    // memfd object is made as well while a memfd exists: the T-space window and the host-RM USERD /
+    // notifier reference are GPU-side and keyed by file offset (they need it; no CPU path does).
+    if let Err(e) = plane.ensure_ram_objects(rm) {
+        eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
+    }
+    let ram_obj = if plane.ram.backing_fd().is_some() {
         match plane.guest_ram_object(rm) {
             Ok(o) => Some(o),
             Err(e) => {
-                eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
+                eprintln!("kf3: {key:?}: {e} — its sysmem USERD will be refused");
                 None
             }
         }
+    } else {
+        None
     };
     let ram_obj_us = us(t_step);
     // ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1), hardwired 2026-10-10 (§AB rule 2): a twin carries
@@ -3612,28 +3754,23 @@ fn create_mirror(
 /// `OnceLock` in [`MemPlane::guest_ram_object`] must never cache a "no RAM yet" refusal), else
 /// the log line. ⊘ Nothing here is guest-visible or guest-chosen: our space.
 pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<String> {
-    // ★ 2026-10-31: RAM with no file is carried by one host object per block instead
-    // ([`MemPlane::sync_ram_objects`]); the spare then holds no single-object handle.
+    // ★ 2026-10-31: guest RAM is carried by one host object per block ([`MemPlane::sync_ram_objects`]);
+    // the whole-RAM memfd object is made too while a memfd exists (T-space, host-RM USERD).
     let filed = plane.ram.backing_fd().is_some();
     if !filed && !plane.ram.has_blocks() {
         return None;
     }
     let t0 = std::time::Instant::now();
+    let blocks = plane.ensure_ram_objects(rm);
     let ram_obj = if filed {
         plane.guest_ram_object(rm)
     } else {
-        plane
-            .ensure_ram_objects(rm)
-            .and_then(|()| Err("guest RAM is carried by per-block objects (no fd)".to_owned()))
+        Err("guest RAM is carried by per-block objects (no fd)".to_owned())
     };
     // The block went away between the two lookups (QEMU re-rendering guest RAM): nothing was
     // cached, so try again next tick instead of spending a spare on a space with no RAM window.
-    let settled = if filed {
-        plane.guest_ram_object_settled()
-    } else {
-        plane.ram_objects_settled()
-    };
-    if ram_obj.is_err() && !settled {
+    let settled = plane.ram_objects_settled() && (!filed || plane.guest_ram_object_settled());
+    if (blocks.is_err() || (filed && ram_obj.is_err())) && !settled {
         return None;
     }
     let ram_obj_us = t0.elapsed().as_micros();
@@ -5923,5 +6060,136 @@ mod guest_memory_tests {
             assert!(mem.read_into(at, &mut old));
             assert_eq!(new, old, "{off:#x}+{n}");
         }
+    }
+
+    // ── ★ 2026-10-31 (PR 3): block objects are the hot-path mapping, with or without a memfd ────
+
+    /// Blocks on ONE memfd: gpa 0 -> file 0x8000.., gpa BLK (adjacent) -> file 0x8000+BLK.. (dense in
+    /// the file), a third after a hole at gpa 0x10000 -> file 0x20000.. (after a gap in the file).
+    fn filed_blocks() -> &'static RamMap {
+        let ram = Box::leak(Box::new(RamMap::default()));
+        assert!(ram.set_mr_hold(std::sync::Arc::new(Count::default())));
+        let (m0, fd) = test_owned_ram(BLK as usize);
+        let (m1, _) = test_owned_ram(BLK as usize);
+        let (m2, _) = test_owned_ram(BLK as usize);
+        ram.add(block(0, m0, Some(fd), 0x8000));
+        ram.add(block(BLK, m1, Some(fd), 0x8000 + BLK));
+        ram.add(block(0x1_0000, m2, Some(fd), 0x2_0000));
+        ram
+    }
+
+    #[test]
+    fn with_a_memfd_the_block_numbers_are_file_offsets_and_the_mode_defaults_to_blocks() {
+        let ram = filed_blocks();
+        assert_eq!(ram.ram_mode(), RamMode::Undecided);
+        // Undecided with a file: the legacy file offset (one block).
+        assert_eq!(ram.gpu_ram_offset(0x10, 8), Some(0x8010));
+        assert_eq!(ram.choose_mode(false), RamMode::Blocks, "the default");
+        assert_eq!(
+            ram.choose_mode(true),
+            RamMode::Whole,
+            "the A/B arm KF3_STITCHED_MAP=1"
+        );
+        assert_eq!(ram.set_ram_mode(RamMode::Blocks), RamMode::Blocks);
+        assert_eq!(
+            ram.set_ram_mode(RamMode::Whole),
+            RamMode::Blocks,
+            "the first decision stands"
+        );
+        // The numbers are the file offsets, so everything keyed by file offset agrees with the rows.
+        assert_eq!(ram.gpu_ram_offset(0x10, 8), Some(0x8010));
+        assert_eq!(ram.gpu_ram_offset(0x1_0004, 8), Some(0x2_0004));
+        assert_eq!(ram.block_number(0), Some(0x8000));
+        assert_eq!(ram.block_number(0x1_0000), Some(0x2_0000));
+        assert_eq!(ram.block_number(0x4321), None, "no such block");
+        // A range across two blocks that are adjacent in gpa AND in the file is ONE number (the map
+        // cuts it at the object edge); the legacy path could not number it.
+        assert_eq!(ram.gpu_ram_offset(BLK - 8, 16), Some(0x8000 + BLK - 8));
+        // Not adjacent in the numbering (the hole), or past the end: no number.
+        assert_eq!(ram.gpu_ram_offset(2 * BLK - 8, 16), None);
+        assert_eq!(ram.gpu_ram_offset(0x1_0000 + BLK - 8, 16), None);
+        // The rows read back through the same numbers.
+        assert_eq!(ram.row_gpa(0x8000 + BLK + 4), Some((BLK + 4, BLK - 4)));
+    }
+
+    #[test]
+    fn without_a_memfd_the_mode_is_blocks_whatever_the_arm_says_and_numbers_are_gpas() {
+        let (ram, _) = fileless();
+        assert_eq!(ram.choose_mode(false), RamMode::Blocks);
+        assert_eq!(
+            ram.choose_mode(true),
+            RamMode::Blocks,
+            "there is no stitch to select"
+        );
+        assert_eq!(ram.set_ram_mode(RamMode::Blocks), RamMode::Blocks);
+        assert_eq!(ram.gpu_ram_offset(BLK - 8, 16), Some(BLK - 8));
+        assert_eq!(ram.block_number(0x1_0000), Some(0x1_0000));
+    }
+
+    #[test]
+    fn a_file_layout_that_is_not_a_numbering_falls_back_to_the_whole_object_by_name() {
+        // File ranges that overlap (two gpa blocks over the same file bytes), blocks that run backwards
+        // in the file within gpa order is fine only if ranges are disjoint and increasing.
+        let overlapping = Box::leak(Box::new(RamMap::default()));
+        let (m0, fd) = test_owned_ram(BLK as usize);
+        let (m1, _) = test_owned_ram(BLK as usize);
+        overlapping.add(block(0, m0, Some(fd), 0x4000));
+        overlapping.add(block(0x10_000, m1, Some(fd), 0x4000 + BLK / 2));
+        assert_eq!(overlapping.choose_mode(false), RamMode::Whole);
+        assert_eq!(overlapping.block_number(0), Some(0x4000));
+        // Increasing in gpa order but BACKWARDS in the file: also not a numbering.
+        let backwards = Box::leak(Box::new(RamMap::default()));
+        let (a, fd) = test_owned_ram(BLK as usize);
+        let (b, _) = test_owned_ram(BLK as usize);
+        backwards.add(block(0, a, Some(fd), 0x8000));
+        backwards.add(block(0x10_000, b, Some(fd), 0x2000));
+        assert_eq!(backwards.choose_mode(false), RamMode::Whole);
+        // A block with no fd among filed ones: no common numbering.
+        let mixed = Box::leak(Box::new(RamMap::default()));
+        let (a, fd) = test_owned_ram(BLK as usize);
+        mixed.add(block(0, a, Some(fd), 0));
+        mixed.add(block(0x10_000, test_aligned_ram(BLK as usize), None, 0));
+        assert_eq!(mixed.choose_mode(false), RamMode::Whole);
+        assert_eq!(mixed.block_number(0x10_000), None);
+        // In Whole mode the rows are the legacy file offsets (one block each).
+        assert_eq!(mixed.set_ram_mode(RamMode::Whole), RamMode::Whole);
+        assert_eq!(mixed.gpu_ram_offset(0x10, 8), Some(0x10));
+        // And the plan reports why by name.
+        let why = mixed.plan().expect("registered").expect_err("no numbering");
+        assert!(why.contains("memfd"), "{why}");
+    }
+
+    #[test]
+    fn block_objects_over_a_memfd_layout_are_numbered_by_file_offset() {
+        // The book driven by the REAL registry with file-offset numbers: a row at a FILE offset
+        // resolves to the object of the block that file range belongs to.
+        let ram = filed_blocks();
+        assert_eq!(ram.set_ram_mode(RamMode::Blocks), RamMode::Blocks);
+        let mut host = FakeHost {
+            next: 0x900,
+            live: vec![],
+            mid_alloc: None,
+        };
+        let mut book = RamObjectBook::new();
+        let r = book
+            .sync(
+                ram,
+                &|b| ram.block_number(b.gpa),
+                &mut host,
+                &mut |_| Ok(()),
+            )
+            .expect("sync");
+        assert_eq!(r.added, 3);
+        let t = book.objects().expect("table");
+        // block 0 (file 0x8000..), block 1 (file 0x8000+BLK..), block 2 (file 0x20000..)
+        let by_file = |off: u64| t.resolve(off, 8);
+        assert_eq!(by_file(0x8008), Ok((0x901, 8)));
+        assert_eq!(by_file(0x8000 + BLK + 16), Ok((0x902, 16)));
+        assert_eq!(by_file(0x2_0010), Ok((0x903, 0x10)));
+        // A row across the 0|1 edge is cut there, never mapped across it.
+        assert_eq!(t.cuts(0x8000 + BLK - 8, 16), vec![0x8000 + BLK]);
+        assert!(by_file(0x4000).is_err(), "a file range no block carries");
+        // The same numbers the rows get from the registry.
+        assert_eq!(ram.gpu_ram_offset(BLK + 16, 8), Some(0x8000 + BLK + 16));
     }
 }

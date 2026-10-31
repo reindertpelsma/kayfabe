@@ -71,8 +71,11 @@ the guest as host event → eventfd → MSI.
   that the host confirmed it made. That record is kept in vidmem per VA-space object. The host
   applies the diff as batched maps and unmaps, with the TLB-defer flag and one invalidate, and
   acknowledges run by run (commit-on-ack). A refused map stays a difference and is retried.
-  `kf_cuda::diffmodel` is the spec; `kf-gate9` holds the GPU to it. VA-contiguous guest-RAM runs
-  are mapped as one OS descriptor ([`V3_BATCHED_MAP.md`](docs/design/V3_BATCHED_MAP.md)).
+  `kf_cuda::diffmodel` is the spec; `kf-gate9` holds the GPU to it. Guest RAM is carried by one host
+  OS descriptor per RAM block over the VMM's own mapping, and a sysmem run is mapped as an offset +
+  length slice of its block's object ([`V3_GUEST_MEMORY.md`](docs/design/V3_GUEST_MEMORY.md) §5; the
+  stitched batch of [`V3_BATCHED_MAP.md`](docs/design/V3_BATCHED_MAP.md), one descriptor per
+  VA-contiguous batch, is the previous design, kept behind `KF3_STITCHED_MAP=1` until the hardware A/B).
 - **A VA space is an object; its PDB is an attribute, per GPU**, and it may be absent (§4.3).
 
 ## Crates

@@ -6,6 +6,10 @@ and `kf3.c` / `kf3.h` against the QEMU 10.2.4 headers with `gcc -fsyntax-only` (
 run, the new C verbs were never called). NOT measured: any GPU, any VM, any QEMU without a memfd, the C hold verbs at run time.
 Defaults for a memfd-backed QEMU are unchanged and no performance change is claimed.
 
+**DO NOT MERGE before the hardware A/B (PR 3, `claude/guestmem-block-objects-20261031`): the default hot-path RAM mapping changed
+(§5, §8).** One host object per RAM block over the VMM's own mapping is now the ONLY path of the hot map route, memfd or not; the
+stitched batch is the A/B arm (`KF3_STITCHED_MAP=1`) and the named fallback, kept in the tree.
+
 **Correction folded 2026-10-31 (this revision, `claude/guestmem-translate-only-20261031`, over the #211/#212/#213 text):**
 1. `translate()` no longer returns `HostBlock { hva: u64, len: u64 }`. A VMM address as a plain integer in safe code is a
    pointer with the checks filed off; the owner's rule is that **no VMM address, integer or pointer, ever crosses from safe code
@@ -134,29 +138,40 @@ discard to stay allowed: it refuses VFIO-like devices); this revision does not c
 
 ## 5. The GPU side: numbers, one object per block, the book
 
-**With a memfd (unchanged by this revision):** the whole file is ONE host object (`MemPlane::guest_ram_object`), a sysmem row's
-`Desired::off` is a file offset, the batched map stitches pieces of the file (`MappedRegion::stitch`) into one object.
+**The default (PR 3), with or without a memfd** — `RamMode::Blocks`: guest RAM is carried by ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`
+per RAM block, over the VMM's own mapping of the block (no second mapping, no memfd view, no stitch, no reaper `munmap` in this
+path). A sysmem run is mapped into the GPU VA as an **offset + length slice of its block's object**; `translate` / the block plan
+find the block and the offset. One `NV_ESC_RM_MAP_MEMORY_DMA` per run (a run across two blocks is cut at the object edge, one map
+per piece, all or nothing). `GpuMirror::map_batch` answers `NOT_BATCHED`.
 
-**Without a file:**
-- *Numbering.* `Desired::off` of a guest-RAM row is the **number** of its first byte: its block's base number plus the offset
-  in the block. The base is chosen by the adapter and must not depend on the other blocks: `RamPlan::by_gpa` numbers a byte by
-  its own guest-physical address (a hole costs nothing, a layout change renumbers nothing). A range across two blocks has one
-  number only if the blocks are adjacent in both guest-physical space and numbering; otherwise it is refused by name where
-  leaves are classified.
-- *Objects.* `RamObjectBook` (`kf_mem::ramobj`) keeps ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` per block, each over the whole
-  block's segment (`HostRm::alloc_os_descriptor_ram`), on the VA thread. A row is mapped as an offset + length slice of its
-  block's object (`RamObjects::resolve`); a row across an object edge is cut there (`SpaceVerbs::ram_cuts`, one host map per
-  object, all or nothing); the model host RM records a violation for any map reaching past its object.
-- *Sync.* `RamObjectBook::sync(vmm, number, host, unmap)` takes ONE guard for `translate + descriptor creation`: it compares the
-  layout with the blocks that have an object; for each block that went (or changed length) it calls `unmap` — the caller takes
-  down every GPU-VA slice backed by its numbers (`kf-qemu`: `resync_ram` unmaps every mirror row overlapping the block, deferred,
-  one invalidate per mirror) — and only then frees the object; for each new block it translates the whole block under the same
-  guard, makes the object, and **re-checks the epoch after the host call**: a moved layout frees what the call made and the call
-  is `LAYOUT_CHANGED` (never retried silently); only then does it commit the table (`RamObjectCell`, read by every space) and the
-  epoch. The VA thread calls it when `MemPlane::ram_layout_moved()` (never while a walk is in flight).
-- *The stitch is optional.* `GpuMirror::map_batch` answers `kf_mem::ledger::NO_RAM_FD` without a file; the apply layer counts it
-  apart (`Applied::batch_no_fd`) and places the rows per run. The stitch itself (`MappedRegion::stitch`,
-  `HostRm::map_scattered_through`) is untouched: the owner's A/B (`KF3_NO_BATCHED_MAP=1` per run vs batched) decides its future.
+**The arm and the fallback** — `RamMode::Whole`: the previous path, untouched: ONE object over the whole memfd, rows numbered by file
+offset, the batched map stitches pieces of the file. Selected by `KF3_STITCHED_MAP=1` (the A/B switch: read once, never
+required to boot, does nothing without a memfd) or, by name, when the memfd's file offsets are not a numbering (not sorted, ranges
+overlapping, a second fd). `KF3_NO_BATCHED_MAP=1` turns the stitched batch off inside it.
+
+- *Numbering.* `Desired::off` of a guest-RAM row is the **number** of its first byte: its block's base number plus the offset in
+  the block. The base is chosen by the adapter and must not depend on the other blocks (so adding or removing a block never
+  renumbers another): with a memfd it is the block's **file offset** (so a number also names file bytes, and everything keyed by file
+  offset — the T-space window, the host-RM USERD reference, `dma_to_file_range` — agrees with the rows); without one it is the
+  **guest-physical address** (`RamPlan::by_gpa`). A range across two blocks has one number only if the blocks are adjacent in both
+  guest-physical space and numbering; otherwise it is refused by name where leaves are classified.
+- *Objects.* `RamObjectBook` (`kf_mem::ramobj`) keeps one object per block, each over the whole block's segment
+  (`HostRm::alloc_os_descriptor_ram`), on the VA thread. `RamObjects::resolve` gives a run its object and offset inside it; a row
+  across an object edge is cut there (`SpaceVerbs::ram_cuts`); the model host RM records a violation for any map reaching past
+  its object.
+- *Sync.* `RamObjectBook::sync(vmm, number, host, unmap)` takes ONE guard for `translate + descriptor creation`: for each block that
+  went (or changed length) it calls `unmap` — the caller takes down every GPU-VA slice backed by its numbers (`kf-qemu`:
+  `resync_ram` unmaps every mirror row overlapping the block, deferred, one invalidate per mirror) — and only then frees the
+  object; for each new block it translates the whole block under the same guard, makes the object, and **re-checks the epoch after
+  the host call**: a moved layout frees what the call made and the call is `LAYOUT_CHANGED` (never retried silently); only then does
+  it commit the table (`RamObjectCell`, read by every space) and the epoch. The VA thread calls it when `MemPlane::ram_layout_moved()`
+  (never while a walk is in flight).
+- *The whole-RAM memfd object still exists while a memfd does* (`MemPlane::guest_ram_object`): the T-space window and the host-RM
+  USERD / notifier reference are GPU-side, keyed by file offset, and need ONE object spanning all of RAM. It is made once, at
+  prewarm, next to the block objects: the same pages are pinned twice (a second pin of a pinned page; the RM accounting of that is
+  UNVERIFIED, §8). NEEDS-OWNER: re-pointing those two at block objects (a fixed-VA map of each block object into the T-space window).
+- *`NO_RAM_FD`* ([`kf_mem::ledger`]) is no longer reached in production (the default answers `NOT_BATCHED` before looking for a file);
+  it stays as the model's name for "no stitch here".
 
 ## 6. Who touches guest RAM, and how (inventory, 2026-10-31)
 
@@ -200,8 +215,25 @@ arithmetic, and PRAMIN -> sysmem (all GPU-side or aliased, none a CPU access). T
 
 ## 7. What this note does not claim
 
-- No performance change; nothing in this note was run on a GPU or a VM.
-- That an OS descriptor over an anonymous or hugetlb mapping works exactly like the one over the memfd view (same ioctl; never issued).
+- A performance result. The default path is the per-run path, which the stitch was built to beat (§7 of `V3_BATCHED_MAP.md`); whether it still matters on this design is the A/B in §8. Nothing in this note was run on a GPU or a VM.
+- That an OS descriptor over the VMM's own mapping (memfd-backed, anonymous or hugetlb) works exactly like the one over a memfd view (same ioctl; never issued over the VMM's mapping).
 - That QEMU re-adds anonymous RAM at the same addresses after a machine reset (UNSURE); a changed layout is now handled by the
   book rather than refused for ever, but the path has run only in the model.
 - That the C hold verbs behave as read from the source: they were compiled (syntax) against 10.2.4 and never run.
+
+## 8. The hardware A/B still owed (DO NOT MERGE before it)
+
+Question: does the stitched batch (a second mapping of the memfd, one descriptor per batch) beat the per-run block-object path on the
+map side? Two arms, the same QEMU binary revision (`kf3-bins/<rev>/`), the same Enscape production flags (lifecycle, lazy observe, mirror
+ON — the full perf configuration), alternate A/B/A/B, n >= 3 per arm, host RAM checked first, own PIDs only, a start marker and an exit line:
+- **A (default, this PR):** block objects, per run.
+- **B:** `KF3_STITCHED_MAP=1` (and, to separate the stitch from batching, B2: `KF3_STITCHED_MAP=1 KF3_NO_BATCHED_MAP=1`).
+Capture per arm: bpftrace on the QEMU pid per thread (`comm,tid`) of `mmap`/`munmap`/`ioctl` counts and latency histograms; the
+`kf3: mem[...]` lines (map verbs, batches, batched runs, fallbacks), `KF3_DIAG_LATENCY=1` refresh times, and the guest-visible result
+(frame rate, any 153/TDR). Also record `grep guest-RAM objects` (the object count and the double pin) and host RAM before/after the
+build of the objects. Decision rule, written before the run: the stitch is kept only if arm B's VA-thread time per refresh is lower than
+A's by more than the run-to-run spread; if equal or worse, the stitch (`MappedRegion::stitch`, `HostRm::map_scattered_through`, the
+reaper) and `RamMode::Whole` are removable in a later PR.
+Things the run must also show, because the model cannot: that an OS descriptor over the VMM's anonymous / hugetlb mapping behaves like
+the memfd one; that the double pin of a memfd-backed RAM is accepted by the RM; that the layout guard's `memory_region_ref/unref`
+verbs run (ABI 31); that a QMP `device_del` of a RAM backend while the VM runs does not stall (the reason there is no RCU lock).
