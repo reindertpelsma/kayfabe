@@ -24,26 +24,6 @@ export function benchObject(name) {
   if (key === undefined) refuse('NOT_FOUND', 404);
   return key;
 }
-// Export rule of the SPEC licence: the box's country is the one Cloudflare derived for the request
-// that asks (CF-IPCountry). The offer country on the record is host-supplied; when it names a
-// country it must be allowed too, and "UNKNOWN" is judged by the request country alone. The
-// existing denied-countries list always wins.
-export function benchCountry(env, cfg, request, record) {
-  const raw = env.BENCH_DATA_ALLOWED_COUNTRIES ?? DEFAULTS.benchDataAllowedCountries.join(',');
-  if (typeof raw !== 'string' || !/^[A-Z]{2}(,[A-Z]{2}){0,15}$/.test(raw))
-    refuse('UNAVAILABLE', 503, 'CONFIG_VAR:BENCH_DATA_ALLOWED_COUNTRIES');
-  const allowed = raw.split(','),
-    country = request.headers.get('CF-IPCountry') ?? '',
-    offer = record.country;
-  const denied = (c) => cfg.deniedCountries.includes(c) || !allowed.includes(c);
-  if (
-    !/^[A-Z]{2}$/.test(country) ||
-    denied(country) ||
-    (/^[A-Z]{2}$/.test(offer ?? '') && denied(offer))
-  )
-    refuse('COUNTRY_NOT_ALLOWED', 403, 'BENCH_DATA_COUNTRY_NOT_ALLOWED');
-  return country;
-}
 // At most N presigned URLs per run token per object; a mint counts when it is signed.
 export function benchBudget(record, name) {
   const used = record.benchMints?.[name] ?? 0;

@@ -25,7 +25,7 @@ import {allowedWorkflowRef} from './workflow-authority.js';
 // prettier-ignore
 import {mintBlob,checkBlobBudget} from './blobs.js';
 // prettier-ignore
-import {benchObject,benchCountry,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
+import {benchObject,benchBudget,benchCount,benchExpiry,benchUrl,benchRedirect} from './benchdata.js';
 import { offerPrice, providerId } from './policy.js';
 import { reportedProviderFault } from './provider-fault.js';
 // prettier-ignore
@@ -649,7 +649,6 @@ export function createService({
       await rejectExpiredCallback(r, cfg, vast);
       await readBounded(request, 0);
       const objectKey = benchObject(bench[2]),
-        country = benchCountry(env, cfg, request, r),
         used = benchBudget(r, bench[2]);
       await rate(r, cfg);
       const instance = await vast.inspect(r);
@@ -664,7 +663,6 @@ export function createService({
           event: 'bench_data_url',
           run: bench[1],
           object: bench[2],
-          country,
           expires: Math.floor(at / 1000) + expires,
         }),
       );

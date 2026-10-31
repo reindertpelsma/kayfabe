@@ -34,10 +34,9 @@ export const ALLOWED = new Set([
   'CREDIT_RESERVE_USD',
   'BLOB_REPO',
   'BLOB_ALLOWED_TAG_PREFIXES',
-  // Private R2 benchmark copy (public ids and the export allow-list; the key pair is a secret).
+  // Private R2 benchmark copy (public ids; the key pair is a secret).
   'R2_ACCOUNT_ID',
   'R2_BUCKET',
-  'BENCH_DATA_ALLOWED_COUNTRIES',
   // Owner-edited lists and retention (owner ruling 2026-10-24): edit the var and redeploy.
   'BAD_MACHINE_IDS',
   'BAD_MACHINE_IDS_EXTRA',

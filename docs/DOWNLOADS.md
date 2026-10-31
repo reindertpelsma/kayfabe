@@ -105,10 +105,10 @@ export, trademark clauses). Reading, not advice.
   release asset, shared Actions cache, container image or VM image that contains the copy.
 - A rented box gets the copy only for the run and the copy is deleted at teardown, before the
   box is released. Teardown logs record the deletion.
-- Export: SPEC's licence refers to the US export regulations. Fetch only to boxes in an
-  allow-list of host countries (US and other countries the owner approves for the licence).
-  The list lives in the Worker var `BENCH_DATA_ALLOWED_COUNTRIES` (default `US,CA`; the 2026-10-31
-  code replaces "the box-rental script"), and a box outside it never receives the copy.
+- Export: SPEC's licence refers to the US export regulations. Owner ruling 2026-11-01: the Worker
+  does not gate by country (a valid run token is the gate; the box's country is a rental preference
+  only). The copy is not secret (SPEC offers it for download without sign-in); it is private only so
+  that we do not distribute it.
 - Refresh on every new SPECviewperf release. The licence for a release ends when a later one
   is issued, so re-download, re-accept, re-pin, and remove the old copy.
 - Published numbers follow SPEC's Fair Use Rule: benchmark name and version, trademark line,
@@ -134,8 +134,7 @@ objects for SPECviewperf 15.0.0 are:
 
 How a rented box gets them: it calls the Vast CI Worker with its run token and the Worker answers
 with a redirect to a presigned URL that lives at most 20 minutes, only while the run is live, only
-for a box in the countries of the export allow-list (Worker var `BENCH_DATA_ALLOWED_COUNTRIES`,
-default `US,CA`), at most 4 URLs per object per run. The box never holds a Cloudflare credential.
+with a valid run token (no country gate), at most 4 URLs per object per run. The box never holds a Cloudflare credential.
 `scripts/bench/box/fetch_bench_data.sh <name> --sha256 <pin> --out <file>` downloads with resume
 into a `.part` file and renames only after the sha256 pin matches; with `--extract <dir>` it
 streams `zstd -d | tar -x` and never stores the 25 GB archive. The pins (the `.tar.zst` and

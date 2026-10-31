@@ -172,7 +172,6 @@
   "benchDataUrlsPerObject": 4,
   "benchDataMaxExpirySeconds": 1200,
   "benchDataMinExpirySeconds": 30,
-  "benchDataAllowedCountries": ["US", "CA"],
   "preferredCountries": ["US", "CA"],
   "maxInetUsdPerGb": 0.005,
   "lifecycleCacheMs": 60000,

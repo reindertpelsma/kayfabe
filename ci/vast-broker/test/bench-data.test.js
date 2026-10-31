@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, callbackToken } from './helpers.js';
 import { BENCH_OBJECTS } from '../src/benchdata.js';
-// FALSIFIER: a request without a live run token, for an unlisted object, from a country outside
-// the allow-list, after the run ended or past the per-object limit receives a redirect; or an
+// FALSIFIER: a request without a live run token, for an unlisted object, after the run ended or past the per-object limit receives a redirect; or an
 // allowed request gets a lifetime above 20 minutes, a lifetime past the run's deadline, a Location
 // outside the R2 endpoint, or any secret in a header or body.
 const account = '0123456789abcdef0123456789abcdef',
@@ -164,52 +163,11 @@ test('bench-data accepts GET only', async () => {
   for (const method of ['POST', 'PUT', 'DELETE'])
     assert.notEqual((await x.get(route(), { method })).status, 302);
 });
-for (const country of ['DE', 'CN', 'RU', 'XX', 'T1', 'us', 'USA', '', null])
-  test('bench-data country not allowed: ' + JSON.stringify(country), async () => {
-    const x = await harness();
-    const r = await x.get(route(), { country });
-    assert.equal(r.status, 403);
-    assert.equal(r.headers.get('Location'), null);
-    const body = await r.json();
-    assert.equal(body.reason, 'BENCH_DATA_COUNTRY_NOT_ALLOWED');
-  });
-for (const country of ['US', 'CA'])
-  test('bench-data default allow-list admits ' + country, async () => {
+for (const country of ['DE', 'CN', 'RU', 'XX', 'T1', 'US', null])
+  test('bench-data serves any country with a valid run token: ' + JSON.stringify(country), async () => {
     const x = await harness();
     assert.equal((await x.get(route(), { country })).status, 302);
   });
-test('bench-data allow-list is the owner var', async () => {
-  const x = await harness({ BENCH_DATA_ALLOWED_COUNTRIES: 'US' });
-  assert.equal((await x.get(route(), { country: 'CA' })).status, 403);
-  assert.equal((await x.get(route(), { country: 'US' })).status, 302);
-  const y = await harness({ BENCH_DATA_ALLOWED_COUNTRIES: 'US,DE' });
-  assert.equal((await y.get(route(), { country: 'DE' })).status, 302);
-});
-for (const bad of ['us', 'US;CA', 'US,', ',US', '["US"]', 'USA', ''])
-  test('bench-data malformed allow-list fails closed: ' + JSON.stringify(bad), async () => {
-    const x = await harness({ BENCH_DATA_ALLOWED_COUNTRIES: bad });
-    const r = await x.get(route(), { country: 'US' });
-    assert.equal(r.status, 503);
-    assert.equal(r.headers.get('Location'), null);
-  });
-test('bench-data denied countries still win over the allow-list', async () => {
-  const x = await harness({
-    BENCH_DATA_ALLOWED_COUNTRIES: 'US,CN',
-    DENIED_COUNTRIES: '["CN"]',
-  });
-  assert.equal((await x.get(route(), { country: 'CN' })).status, 403);
-  assert.equal((await x.get(route(), { country: 'US' })).status, 302);
-});
-test('bench-data offer country on the record must be allowed too', async () => {
-  const x = await harness();
-  const r = await x.h.storage.get('record:123-1');
-  r.country = 'DE';
-  await x.h.storage.put('record:123-1', r);
-  assert.equal((await x.get(route(), { country: 'US' })).status, 403);
-  r.country = 'UNKNOWN';
-  await x.h.storage.put('record:123-1', r);
-  assert.equal((await x.get(route(), { country: 'US' })).status, 302);
-});
 test('bench-data at most four URLs per object per run, counted per object', async () => {
   const x = await harness();
   for (let i = 0; i < 4; i++) assert.equal((await x.get()).status, 302, 'mint ' + i);
@@ -223,7 +181,7 @@ test('bench-data at most four URLs per object per run, counted per object', asyn
 });
 test('bench-data refused requests do not consume the per-object limit', async () => {
   const x = await harness();
-  for (let i = 0; i < 6; i++) await x.get(route(), { country: 'DE' });
+  for (let i = 0; i < 6; i++) assert.equal((await x.get(route('nope'))).status, 404);
   for (let i = 0; i < 4; i++) {
     x.h.time.value += 11000; // stay under the generic 20 requests / 10 s rate limit
     assert.equal((await x.get()).status, 302);
@@ -254,7 +212,7 @@ test('bench-data without R2 settings fails closed with no redirect', async () =>
     assert.ok(!seen.includes(secretKey) && !seen.includes(accessKey));
   }
 });
-test('bench-data logs run, object, country and expiry without any secret', async () => {
+test('bench-data logs run, object and expiry without any secret', async () => {
   const x = await harness();
   const lines = [],
     real = console.log;
@@ -265,10 +223,9 @@ test('bench-data logs run, object, country and expiry without any secret', async
     console.log = real;
   }
   const event = lines.map((l) => JSON.parse(l)).find((e) => e.event === 'bench_data_url');
-  assert.deepEqual(Object.keys(event).sort(), ['country', 'event', 'expires', 'object', 'run']);
+  assert.deepEqual(Object.keys(event).sort(), ['event', 'expires', 'object', 'run']);
   assert.equal(event.run, '123-1');
   assert.equal(event.object, name);
-  assert.equal(event.country, 'US');
   assert.equal(event.expires, Math.floor(x.h.time.value / 1000) + 1200);
   const all = lines.join('\n');
   for (const s of [secretKey, accessKey, x.token, 'X-Amz-Signature'])
@@ -282,7 +239,7 @@ test('bench-data URL is not stored in the ledger', async () => {
   assert.ok(!stored.includes(new URL(url).searchParams.get('X-Amz-Signature')));
   assert.ok(!stored.includes(secretKey));
 });
-test('bench-data public entrypoint forwards the country and the exact route', async () => {
+test('bench-data public entrypoint forwards the exact route', async () => {
   const { default: worker } = await import('../src/index.js');
   const x = await harness();
   const prefix = 'x'.repeat(40);
@@ -312,7 +269,7 @@ test('bench-data public entrypoint forwards the country and the exact route', as
   const ok = await ask(route());
   assert.equal(ok.status, 302);
   assert.equal(forwarded, 'US');
-  assert.equal((await ask(route(), x.token, 'DE')).status, 403);
+  assert.equal((await ask(route(), x.token, 'DE')).status, 302);
   forwarded = null;
   // A token for another run is stopped at the front door and never reaches the ledger.
   const other = callbackToken(await x.h.storage.get('record:123-1'), undefined, { run: '124' });

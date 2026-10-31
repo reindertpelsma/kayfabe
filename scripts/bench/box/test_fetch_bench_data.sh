@@ -179,8 +179,8 @@ rm -f "$T/truncate-once"
 
 : >"$T/server.log"
 run f5 specviewperf-15.0.0.SPEC_General_License.pdf --sha256 "$obj1_sha" --out "$T/out/lic"
-check "country refusal (403) exits 4" test "$rc" -eq 4
-check "403 message is clear" has "$T/f5.out" "country"
+check "403 refusal exits 4" test "$rc" -eq 4
+check "403 message is clear" has "$T/f5.out" "refused"
 check "403 makes exactly one Worker request" test "$(wc -l <"$T/server.log")" -eq 1
 check "403 output has no secrets" nosecrets f5
 run f6 specviewperf-15.0.0.SPECviewperf-Setup.exe --sha256 "$obj1_sha" --out "$T/out/exe"

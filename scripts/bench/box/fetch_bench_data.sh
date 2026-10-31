@@ -141,7 +141,7 @@ ask_worker() {
     case $code in
         302) location=${reply#* } ;;
         401) echo "fetch_bench_data: Worker refused the run token (401): run ended or token invalid" >&2; return 4 ;;
-        403) echo "fetch_bench_data: Worker refused this box's country (403): licensed copy is export-restricted" >&2; return 4 ;;
+        403) echo "fetch_bench_data: Worker refused the request (403)" >&2; return 4 ;;
         404) echo "fetch_bench_data: Worker does not know object $name (404)" >&2; return 4 ;;
         429) echo "fetch_bench_data: Worker URL limit for $name reached for this run (429)" >&2; return 4 ;;
         *) echo "fetch_bench_data: unexpected Worker answer (HTTP $code)" >&2; return 1 ;;

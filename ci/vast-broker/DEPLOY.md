@@ -304,11 +304,10 @@ in `src/benchdata.js`; any other name is 404, and nothing lists the bucket:
 
 Limits (defaults in `defaults.json`): the URL lives at most 1200 s and never past the run's next
 deadline (under 30 s left is a 401); at most 4 URLs per object per run, counted in the run
-record (the fifth is 429); the box's country is the request's `CF-IPCountry` and must be in
-`BENCH_DATA_ALLOWED_COUNTRIES` and not in `DENIED_COUNTRIES` (a missing or unknown country is 403),
-and a host country already recorded for the rental (the offer geolocation) must pass the same test.
+record (the fifth is 429); there is no country gate (owner ruling 2026-11-01: the run token is the gate; a box's country is a
+rental preference only).
 A presigned URL cannot be revoked, so the run-state check happens before signing and the lifetime
-is short. Each mint logs one event `bench_data_url` with `run`, `object`, `country` and the expiry
+is short. Each mint logs one event `bench_data_url` with `run`, `object` and the expiry
 epoch seconds; no URL, key or signature is logged or stored.
 
 Worker secrets (never in `wrangler.toml`, never in GitHub Actions, never in a box):
@@ -320,8 +319,6 @@ Public vars (in the deploy vars file; `deploy.mjs` allows them):
 - `R2_ACCOUNT_ID`: the 32-hex Cloudflare account id (the S3 endpoint is
   `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`).
 - `R2_BUCKET`: `kayfabe-bench-enam`.
-- `BENCH_DATA_ALLOWED_COUNTRIES`: optional, comma-separated ISO alpha-2 codes, default `US,CA`.
-  A malformed value fails closed (503 on this route only).
 
 Create the read-only token in the Cloudflare dashboard (Account > API Tokens > Create Custom
 Token, or R2 > Manage API tokens > Object Read only): permission group "Workers R2 Storage Bucket
