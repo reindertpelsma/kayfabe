@@ -4,10 +4,15 @@
 working display or demonstrate tone mapping.
 
 Windows J passes both checked SYSRAM registrations, then fails display
-initialization. Its [journal and pinned retail branch analysis](../windows-debug-capture/evidence/2026-10-05-startdevice-j.md)
-strongly suggest a zero-sized TMO buffer: Kayfabe advertises no window with the
-TMO capability, while this Windows path still requires a nonempty secondary
-buffer. The journal does not include that local size value. The
+initialization: its fresh live dump records `StartDevice` failing with
+`STATUS_INSUFFICIENT_RESOURCES` (`0xc000009a`), which is a generic status, not proof of
+exhausted RAM. The working hypothesis is an **inference** and is what this experiment tests:
+Kayfabe advertises no window with the TMO capability (`PRECOMP_WIN_PIPE_HDR_CAPA(i)`
+bit 20 `TMO_PRESENT`, public OGKM `clc773.h`), while this Windows path may still require a
+nonempty secondary buffer. No size value was captured. (2026-10-31: an earlier version linked
+offline analysis of the retail driver. That analysis was removed from the tree under
+`docs/design/V3_PROVENANCE.md` section 2; the hypothesis stands or falls on this
+experiment, not on it.) The
 [public source contract](../windows-debug-capture/evidence/display-tmo-20261005/README.md)
 identifies TMO as memory-backed tone mapping; advertising it in production would
 require the actual LUT/color-transform behavior.

@@ -12,6 +12,7 @@
     <link rel="icon" href="{{ get_url(path='icon.svg') | replace(from="https://kayfabe.dev", to="") }}" type="image/svg+xml" />
     <link rel="stylesheet" href="{{ get_url(path='style.css') | replace(from="https://kayfabe.dev", to="") }}" />
     <script src="{{ get_url(path='site.js') | replace(from="https://kayfabe.dev", to="") }}" defer></script>
+    {% if kf and kf.deploy_candidate %}<!-- kf-slot-a -->{% endif %}
   </head>
   <body{% block body_attrs %}{% endblock %}>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -20,6 +21,9 @@
         <a class="brand" href="/">kayfabe</a>
         <nav aria-label="Site">
           <ul>
+            <li><a href="/works-today/">What works today</a></li>
+            <li><a href="/how-it-differs/">How it differs</a></li>
+            <li><a href="/benchmarks/">Benchmarks</a></li>
             <li><a href="/docs/">Documentation</a></li>
             <li><a href="/about/">About</a></li>
             <li><a href="/security/">Security</a></li>
@@ -29,7 +33,7 @@
       </div>
     </header>
     <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
-    <footer class="site-footer">
+    <footer class="site-footer" id="kf-footer">
       <div class="wrap">
         <ul class="footer-links">
           <li><a href="https://github.com/reindertpelsma/kayfabe/blob/master/LICENSE">Licence: Apache-2.0 OR GPL-2.0-or-later</a></li>
@@ -37,14 +41,7 @@
           <li><a href="https://github.com/reindertpelsma/kayfabe">GitHub</a></li>
           <li><a href="/about/">About</a></li>
         </ul>
-        <p>
-          This site is documentation only. It is not a place to get code you have to trust: get the source
-          from the repository and read it.
-        </p>
-        <p>
-          Kayfabe is not affiliated with or endorsed by NVIDIA or Microsoft. This site loads nothing from
-          other hosts: no fonts, scripts, analytics or trackers.
-        </p>
+        <p>Kayfabe is not affiliated with or endorsed by NVIDIA or Microsoft.</p>
         <!-- src: LICENSE and README.md (licence); docs/howto/credits.md (Trademarks: not affiliated with or endorsed by NVIDIA or Microsoft) -->
       </div>
     </footer>

@@ -1,6 +1,6 @@
-STATUS: DRAFT 2026-10-23
-
 # External downloads: sources, terms status and caching rules
+
+**STATUS: RESEARCH, 2026-10-23.** Draft summary; the terms status is not final.
 
 Neutral summary of what the test tooling fetches from outside the project, who fetches it, and
 what the published terms allow. It is not legal advice. The research with verbatim clauses is in

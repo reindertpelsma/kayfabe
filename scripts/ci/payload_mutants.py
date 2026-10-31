@@ -89,8 +89,8 @@ CASES = [
         "hardware-refreshed-only-after-success",
         replace(
             '            result["hardware"] = hardware()\n'
-            '            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)',
-            '            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)\n'
+            "            rows = provision_rows(log, rc)",
+            "            rows = provision_rows(log, rc)\n"
             '            result["hardware"] = hardware()',
         ),
     ),
@@ -171,7 +171,7 @@ CASES = [
     (
         "non-ce-client-admitted",
         guard_replace(
-            'return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None', "return True"
+            'return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None', "return True"
         ),
         "native_xid_guard.py",
     ),
@@ -235,7 +235,7 @@ CASES += [
     (
         "native-ce-instance-hardcoded",
         guard_replace(
-            'return re.fullmatch(r"HUBCLIENT_CE[0-9]+", name) is not None',
+            'return re.fullmatch(r"HUBCLIENT_(?:CE|HSCE)[0-9]+", name) is not None',
             'return name == "HUBCLIENT_CE1"',
         ),
         "native_xid_guard.py",
@@ -295,7 +295,7 @@ CASES += [
     ("structured-arm-logs-omitted", replace('snapshot["diagnostics"] = events', "pass")),
     (
         "local-reader-rejects-arm-logs",
-        report_replace('            "diagnostics",\n', ''),
+        report_replace('            "diagnostics",\n', ""),
         "vast_report.py",
     ),
     (
@@ -340,7 +340,7 @@ CASES += [
     (
         "local-logs-leak-into-worker-wire-schema",
         report_replace(
-            '        **reference,\n    }',
+            "        **reference,\n    }",
             '        **reference,\n        "diagnostics": [],\n    }',
         ),
         "vast_report.py",
@@ -435,7 +435,7 @@ CASES += [
     ),
     (
         "summary-timeout-not-marked",
-        scoped("execute_stages", 'result="TIMEOUT" if rc == 124 else "FAIL"', 'result="FAIL"'),
+        scoped("execute_stages", 'result="TIMEOUT" if rc == 124 else verdict', "result=verdict"),
     ),
     (
         "kvm-totals-not-checked",

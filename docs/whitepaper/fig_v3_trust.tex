@@ -1,0 +1,30 @@
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\small,
+  box/.style={draw,align=center,text width=55mm,minimum height=12mm,inner sep=3mm},
+  flow/.style={-{Latex[length=2mm]},thick}]
+\node[box,fill=red!6] (guest) at (0,0)
+  {\textbf{Untrusted guest}\\User programs AND guest root\\own commands, tables, doorbell writes};
+\node[box,fill=green!5] (vmm) at (0,-2.5)
+  {\textbf{VMM + Kayfabe}\\Validate ownership and bounds.\\Construct host requests.};
+\node[box,fill=green!5] (driver) at (0,-5)
+  {\textbf{Trusted host driver}\\Non-privileged client interface\\builds real GPU page tables};
+\node[box,fill=blue!5] (gpu) at (7.4,-5)
+  {\textbf{GPU hardware}\\USER channels + restricted address spaces\\
+   privileged rewritten work separate};
+\node[box,fill=yellow!8] (host) at (7.4,0)
+  {\textbf{Host desktop / other clients}\\Share the physical GPU.\\
+   Fault and fairness effects unmeasured.};
+\draw[flow] (guest) -- (vmm);
+\draw[flow] (vmm) -- (driver);
+\draw[flow] (driver) -- (gpu);
+\draw[flow,dashed] (host) -- node[fill=white,align=center,text width=44mm]
+  {shared execution / recovery} (gpu);
+\draw[dashed,thick] (-3.8,-1.2) -- (10.8,-1.2);
+\node[anchor=west,font=\scriptsize] at (-3.8,-1.55) {Guest-to-host trust boundary};
+\end{tikzpicture}
+\caption{Three permission systems: host request permissions, GPU channel privilege and Unix
+  credentials. Host address isolation alone does not prove host-desktop fault containment.
+  \src{security}\src{rulings}}
+\label{fig:trust}
+\end{figure}

@@ -1,0 +1,3 @@
+
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion
+    UBR    REG_DWORD    0x6ce

@@ -1,0 +1,220 @@
+[
+  {
+    "mutant": "site-pr-head-reread",
+    "kills": 3,
+    "tests": [
+      "Site files binding policy head",
+      "Site files binding start head",
+      "Site files binding completion head"
+    ]
+  },
+  {
+    "mutant": "site-pr-base-reread",
+    "kills": 3,
+    "tests": [
+      "Site files binding policy base",
+      "Site files binding start base",
+      "Site files binding completion base"
+    ]
+  },
+  {
+    "mutant": "site-pr-count-reread",
+    "kills": 3,
+    "tests": [
+      "Site files binding policy count",
+      "Site files binding start count",
+      "Site files binding completion count"
+    ]
+  },
+  {
+    "mutant": "gpu-stage-count-only",
+    "kills": 6,
+    "tests": [
+      "reuse merge logs-duplicate-stage",
+      "reuse merge logs-missing-guest-stage",
+      "reuse associated-pr logs-duplicate-stage",
+      "reuse associated-pr logs-missing-guest-stage",
+      "reuse fast-forward logs-duplicate-stage",
+      "reuse fast-forward logs-missing-guest-stage"
+    ]
+  },
+  {
+    "mutant": "site-pattern-removed",
+    "kills": 8,
+    "tests": [
+      "site GPU skip policy 0 site build",
+      "site GPU skip policy 0 site templates",
+      "site GPU skip policy 0 site tests",
+      "site GPU skip policy 0 site deep static",
+      "site GPU skip policy 1 site build",
+      "site GPU skip policy 1 site templates",
+      "site GPU skip policy 1 site tests",
+      "site GPU skip policy 1 site deep static"
+    ]
+  },
+  {
+    "mutant": "site-prefix-unanchored",
+    "kills": 4,
+    "tests": [
+      "site GPU skip policy 0 nested crate site",
+      "site GPU skip policy 0 nested script site",
+      "site GPU skip policy 1 nested crate site",
+      "site GPU skip policy 1 nested script site"
+    ]
+  },
+  {
+    "mutant": "site-nested-anywhere",
+    "kills": 4,
+    "tests": [
+      "site GPU skip policy 0 nested crate site",
+      "site GPU skip policy 0 nested script site",
+      "site GPU skip policy 1 nested crate site",
+      "site GPU skip policy 1 nested script site"
+    ]
+  },
+  {
+    "mutant": "site-depth-one",
+    "kills": 4,
+    "tests": [
+      "site GPU skip policy 0 site templates",
+      "site GPU skip policy 0 site deep static",
+      "site GPU skip policy 1 site templates",
+      "site GPU skip policy 1 site deep static"
+    ]
+  },
+  {
+    "mutant": "root-md-requires-slash",
+    "kills": 4,
+    "tests": [
+      "site GPU skip policy 0 root README",
+      "site GPU skip policy 0 root contributing",
+      "site GPU skip policy 1 root README",
+      "site GPU skip policy 1 root contributing"
+    ]
+  },
+  {
+    "mutant": "site-any-skipped-file",
+    "kills": 4,
+    "tests": [
+      "site GPU skip policy 0 mixed crate",
+      "site GPU skip policy 0 mixed script",
+      "site GPU skip policy 1 mixed crate",
+      "site GPU skip policy 1 mixed script"
+    ]
+  },
+  {
+    "mutant": "GPU-CI-workflow",
+    "kills": 3,
+    "tests": [
+      "reuse merge ci-other-workflow",
+      "reuse associated-pr ci-other-workflow",
+      "reuse fast-forward ci-other-workflow"
+    ]
+  },
+  {
+    "mutant": "GPU-CI-ambiguity",
+    "kills": 6,
+    "tests": [
+      "reuse merge ci-ambiguous-failed",
+      "reuse merge ci-ambiguous-pending",
+      "reuse associated-pr ci-ambiguous-failed",
+      "reuse associated-pr ci-ambiguous-pending",
+      "reuse fast-forward ci-ambiguous-failed",
+      "reuse fast-forward ci-ambiguous-pending"
+    ]
+  },
+  {
+    "mutant": "GPU-CI-suite",
+    "kills": 3,
+    "tests": [
+      "reuse merge ci-suite",
+      "reuse associated-pr ci-suite",
+      "reuse fast-forward ci-suite"
+    ]
+  },
+  {
+    "mutant": "Site-CI-workflow",
+    "kills": 2,
+    "tests": [
+      "site policy pr reuse-ci-other-workflow",
+      "site policy push reuse-ci-other-workflow"
+    ]
+  },
+  {
+    "mutant": "Site-CI-ambiguity",
+    "kills": 4,
+    "tests": [
+      "site policy pr reuse-ci-ambiguous-failed",
+      "site policy pr reuse-ci-ambiguous-pending",
+      "site policy push reuse-ci-ambiguous-failed",
+      "site policy push reuse-ci-ambiguous-pending"
+    ]
+  },
+  {
+    "mutant": "Site-CI-suite",
+    "kills": 2,
+    "tests": [
+      "site policy pr reuse-ci-suite",
+      "site policy push reuse-ci-suite"
+    ]
+  },
+  {
+    "mutant": "gpu-complete-schema",
+    "kills": 15,
+    "tests": [
+      "reuse merge logs-revision",
+      "reuse merge logs-no-guest-start",
+      "reuse merge logs-no-host-start",
+      "reuse merge logs-conflicting-final",
+      "reuse merge logs-duplicate-final",
+      "reuse associated-pr logs-revision",
+      "reuse associated-pr logs-no-guest-start",
+      "reuse associated-pr logs-no-host-start",
+      "reuse associated-pr logs-conflicting-final",
+      "reuse associated-pr logs-duplicate-final",
+      "reuse fast-forward logs-revision",
+      "reuse fast-forward logs-no-guest-start",
+      "reuse fast-forward logs-no-host-start",
+      "reuse fast-forward logs-conflicting-final",
+      "reuse fast-forward logs-duplicate-final"
+    ]
+  },
+  {
+    "mutant": "gpu-ambiguous-rental",
+    "kills": 3,
+    "tests": [
+      "reuse merge logs-schema-overflow",
+      "reuse associated-pr logs-schema-overflow",
+      "reuse fast-forward logs-schema-overflow"
+    ]
+  },
+  {
+    "mutant": "prepare-premature-success",
+    "kills": 2,
+    "tests": [
+      "reuse merge prepare-pending",
+      "reuse associated-pr prepare-pending"
+    ]
+  },
+  {
+    "mutant": "release-incomplete-child",
+    "kills": 15,
+    "tests": [
+      "reuse merge release-child-missing",
+      "reuse merge release-child-pending",
+      "reuse merge release-child-failed",
+      "reuse merge release-child-foreign",
+      "reuse merge release-child-workflow",
+      "reuse associated-pr release-child-missing",
+      "reuse associated-pr release-child-pending",
+      "reuse associated-pr release-child-failed",
+      "reuse associated-pr release-child-foreign",
+      "reuse associated-pr release-child-workflow",
+      "reuse fast-forward release-child-missing",
+      "reuse fast-forward release-child-pending",
+      "reuse fast-forward release-child-failed",
+      "reuse fast-forward release-child-foreign",
+      "reuse fast-forward release-child-workflow"
+    ]
+  }
+]

@@ -14,7 +14,7 @@
 //! §14.32 reasoned that §14.31's `[IN]`-field trap does not apply here (true — this struct
 //! has no `[IN]` field), and concluded the probe *"is the cheap instrument that turns the
 //! `capsTbl[4..63]` zeros from ambiguous into positive"*. `[measured 2026-08-09, real GA106
-//! `GPU-d0913685`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`:
+//! `GPU-fa4e0001`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`:
 //!
 //! ```text
 //! info  R18 0x20802a0b    = refused Other(86) (no value measured)
@@ -256,7 +256,7 @@ impl CeCaps {
 
 /// The caps every present LCE on a GA10x part carries, GRCE aside.
 ///
-/// `[measured 2026-08-09, real GA106 `GPU-d0913685`,
+/// `[measured 2026-08-09, real GA106 `GPU-fa4e0001`,
 /// `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt` and
 /// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:62`, byte-identical]` — `0x03e2`,
 /// i.e. `SHARED | SYSMEM | P2P | BL_SIZE_GT_64K_SUPPORTED | SUPPORTS_NONPIPELINED_BL |
@@ -505,7 +505,7 @@ pub const CAPS_V2_TBL_OFF: usize = 4;
 ///   in `kceGetDeviceCaps_IMPL` at `kernel_ce.c:523-527`).
 ///
 /// ★★ The second arm is **corroborated at the boundary by an independent control**:
-/// `[measured 2026-08-09, real GA106 `GPU-d0913685`,
+/// `[measured 2026-08-09, real GA106 `GPU-fa4e0001`,
 /// `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` `0x20802a02` answers `NV_OK`
 /// for LCE0..LCE3 and refuses **`0x56`** for LCE4 — the same edge, from a control that
 /// shares no code with this one, against a `NV_CE_MAX_LCE_MASK = 0x1f` that permits five.
@@ -712,7 +712,7 @@ mod tests {
         .expect("four LCE rows project")
     }
 
-    /// ★★★ The pin. `[measured 2026-08-09, real GA106 `GPU-d0913685`]` — the whole 136-byte
+    /// ★★★ The pin. `[measured 2026-08-09, real GA106 `GPU-fa4e0001`]` — the whole 136-byte
     /// reply, from BOTH independent callers, byte for byte.
     ///
     /// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:62` (libcuda's `cuInit`) and
@@ -922,7 +922,7 @@ mod tests {
         }
     }
 
-    /// The four words `[measured 2026-08-09, real GA106 `GPU-d0913685`,
+    /// The four words `[measured 2026-08-09, real GA106 `GPU-fa4e0001`,
     /// `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt` and
     /// `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:62`]`, stated once more against
     /// the capture — so the projection is anchored to hardware and not only to its neighbour.

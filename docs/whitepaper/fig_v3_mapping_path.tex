@@ -1,0 +1,33 @@
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\small,
+  box/.style={draw,rounded corners,align=left,text width=65mm,inner sep=3mm},
+  flow/.style={-{Latex[length=2mm]},thick}]
+\node[box,fill=blue!5] (guest) at (0,0)
+  {\textbf{Guest driver}\\1. Write page tables in guest RAM / video memory.\\
+   Ordinary memory writes: no per-entry trap.};
+\node[box,fill=blue!5] (barrier) at (0,-2.8)
+  {2. Request current translations.\\BAR0 register write traps; command/control paths
+   reach their workers.};
+\node[box,fill=green!5] (walk) at (8,-2.8)
+  {\textbf{VA-manager thread + GPU walk}\\3. Re-read live guest tables.\\
+   Diff against confirmed host placements.};
+\node[box,fill=green!5] (host) at (8,-5.6)
+  {\textbf{Host driver / real GPU}\\4. Apply changed host maps and unmaps.\\
+   Invalidate; acknowledge actual results.};
+\node[box,fill=blue!5] (dependent) at (0,-5.6)
+  {5. Release the dependent operation.\\Old backing retires only when the required
+   host acknowledgement permits it.};
+\draw[flow] (guest) -- (barrier);
+\draw[flow] (barrier) -- (walk);
+\draw[flow] (walk) -- (host);
+\draw[flow] (host) -- (dependent);
+\draw[dashed] (-3.65,-1.3) -- (11.65,-1.3);
+\node[anchor=west,font=\scriptsize] at (0.2,-1.05)
+  {Table bytes alone do not tell the host that a refresh is complete.};
+\end{tikzpicture}
+\caption{The missing update path. Acknowledging step 2 before step 4 needs another way to
+  prevent stale access; it is not justified by recording the request.\src{architecture}
+  \src{translated}\src{latency}}
+\label{fig:mapping-path}
+\end{figure}

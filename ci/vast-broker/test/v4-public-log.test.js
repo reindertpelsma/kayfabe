@@ -161,6 +161,7 @@ test('V4 workflow now fetches the exact BASE controller bootstrap', async () => 
   const embedded = workflow
     .split('  gpu:\n')[1]
     .split('  report:\n')[0]
+    .split('        id: broker\n')[1]
     .split('        run: |\n')[1]
     .split('\n')
     .map((x) => (x.startsWith('          ') ? x.slice(10) : x))

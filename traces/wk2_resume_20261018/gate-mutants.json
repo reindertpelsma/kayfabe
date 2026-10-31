@@ -1,0 +1,216 @@
+{
+  "baseline": "PASS",
+  "mutants": [
+    {
+      "mutant": "tree-mismatch",
+      "kills": 6,
+      "tests": [
+        "reuse merge tree",
+        "reuse merge release-tree",
+        "reuse associated-pr tree",
+        "reuse associated-pr release-tree",
+        "reuse fast-forward tree",
+        "reuse fast-forward release-tree"
+      ]
+    },
+    {
+      "mutant": "non-success-status",
+      "kills": 9,
+      "tests": [
+        "reuse merge status-failure",
+        "reuse merge status-pending",
+        "reuse merge release-lost-parent",
+        "reuse associated-pr status-failure",
+        "reuse associated-pr status-pending",
+        "reuse associated-pr release-lost-parent",
+        "reuse fast-forward status-failure",
+        "reuse fast-forward status-pending",
+        "reuse fast-forward release-lost-parent"
+      ]
+    },
+    {
+      "mutant": "wrong-creator",
+      "kills": 6,
+      "tests": [
+        "reuse merge creator-id",
+        "reuse merge creator-login",
+        "reuse associated-pr creator-id",
+        "reuse associated-pr creator-login",
+        "reuse fast-forward creator-id",
+        "reuse fast-forward creator-login"
+      ]
+    },
+    {
+      "mutant": "pending-parent",
+      "kills": 3,
+      "tests": [
+        "reuse merge status-pending",
+        "reuse associated-pr status-pending",
+        "reuse fast-forward status-pending"
+      ]
+    },
+    {
+      "mutant": "pending-ci",
+      "kills": 6,
+      "tests": [
+        "reuse merge ci-pending",
+        "reuse merge ci-ambiguous-pending",
+        "reuse associated-pr ci-pending",
+        "reuse associated-pr ci-ambiguous-pending",
+        "reuse fast-forward ci-pending",
+        "reuse fast-forward ci-ambiguous-pending"
+      ]
+    },
+    {
+      "mutant": "tag-push",
+      "kills": 3,
+      "tests": [
+        "reuse merge tag",
+        "reuse associated-pr tag",
+        "reuse fast-forward tag"
+      ]
+    },
+    {
+      "mutant": "pr-event",
+      "kills": 3,
+      "tests": [
+        "reuse merge pr",
+        "reuse associated-pr pr",
+        "reuse fast-forward pr"
+      ]
+    },
+    {
+      "mutant": "wrong-ci-app",
+      "kills": 3,
+      "tests": [
+        "reuse merge ci-forged",
+        "reuse associated-pr ci-forged",
+        "reuse fast-forward ci-forged"
+      ]
+    },
+    {
+      "mutant": "wrong-run-revision",
+      "kills": 3,
+      "tests": [
+        "reuse merge run-sha",
+        "reuse associated-pr run-sha",
+        "reuse fast-forward run-sha"
+      ]
+    },
+    {
+      "mutant": "wrong-workflow",
+      "kills": 3,
+      "tests": [
+        "reuse merge run-path",
+        "reuse associated-pr run-path",
+        "reuse fast-forward run-path"
+      ]
+    },
+    {
+      "mutant": "log-completeness",
+      "kills": 6,
+      "tests": [
+        "reuse merge logs-duplicate-stage",
+        "reuse merge logs-missing-guest-stage",
+        "reuse associated-pr logs-duplicate-stage",
+        "reuse associated-pr logs-missing-guest-stage",
+        "reuse fast-forward logs-duplicate-stage",
+        "reuse fast-forward logs-missing-guest-stage"
+      ]
+    },
+    {
+      "mutant": "log-revision",
+      "kills": 3,
+      "tests": [
+        "reuse merge logs-revision",
+        "reuse associated-pr logs-revision",
+        "reuse fast-forward logs-revision"
+      ]
+    },
+    {
+      "mutant": "release-forged-child",
+      "kills": 2,
+      "tests": [
+        "reuse merge release-forged-id",
+        "reuse associated-pr release-forged-id"
+      ]
+    },
+    {
+      "mutant": "release-lost-parent",
+      "kills": 6,
+      "tests": [
+        "reuse merge release-lost-parent",
+        "reuse merge release-tree",
+        "reuse associated-pr release-lost-parent",
+        "reuse associated-pr release-tree",
+        "reuse fast-forward release-lost-parent",
+        "reuse fast-forward release-tree"
+      ]
+    },
+    {
+      "mutant": "replay-contacts-api",
+      "kills": 3,
+      "tests": [
+        "reuse merge valid",
+        "reuse associated-pr valid",
+        "reuse fast-forward valid"
+      ]
+    },
+    {
+      "mutant": "replay-script-guard",
+      "kills": 2,
+      "tests": [
+        "reuse guard refuses changed replay command prepare",
+        "reuse guard refuses changed replay command steal"
+      ]
+    },
+    {
+      "mutant": "broker-branch-guard",
+      "kills": 2,
+      "tests": [
+        "reuse guard refuses broker condition if: needs.pending.outputs.reused == 'true'",
+        "reuse guard refuses broker condition if: always()"
+      ]
+    },
+    {
+      "mutant": "pending-write-guard",
+      "kills": 2,
+      "tests": [
+        "reuse guard refuses write permission checks",
+        "reuse guard refuses write permission contents"
+      ]
+    },
+    {
+      "mutant": "report-reuses-failed-pending",
+      "kills": 2,
+      "tests": [
+        "reuse actual final report b PENDING_RESULT",
+        "reuse actual final report c PENDING_RESULT"
+      ]
+    },
+    {
+      "mutant": "report-reuses-failed-policy",
+      "kills": 2,
+      "tests": [
+        "reuse actual final report b POLICY_RESULT",
+        "reuse actual final report c POLICY_RESULT"
+      ]
+    },
+    {
+      "mutant": "report-reuses-failed-policy-check",
+      "kills": 2,
+      "tests": [
+        "reuse actual final report b POLICY_CHECK_RESULT",
+        "reuse actual final report c POLICY_CHECK_RESULT"
+      ]
+    },
+    {
+      "mutant": "report-reuses-failed-gpu",
+      "kills": 2,
+      "tests": [
+        "reuse actual final report b GPU_RESULT",
+        "reuse actual final report c GPU_RESULT"
+      ]
+    }
+  ]
+}

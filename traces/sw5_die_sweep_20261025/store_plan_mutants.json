@@ -1,0 +1,16 @@
+[
+  {
+    "mutant": "headroom_removed",
+    "killers": [
+      "test_eight_gib_turing_uses_four_gib",
+      "test_six_gib_turing_uses_four_gib"
+    ]
+  },
+  {
+    "mutant": "minimum_removed",
+    "killers": [
+      "test_five_gib_cannot_reserve_headroom",
+      "test_four_gib_cannot_reserve_headroom"
+    ]
+  }
+]

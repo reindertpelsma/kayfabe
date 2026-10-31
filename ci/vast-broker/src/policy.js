@@ -145,7 +145,7 @@ export function configuration(env) {
     passGrace: number('PASS_GRACE_MINUTES', DEFAULTS.passGraceMinutes, DEFAULTS.maxMinutes) * 60000,
     failGrace: number('FAIL_GRACE_MINUTES', DEFAULTS.failGraceMinutes, DEFAULTS.maxMinutes) * 60000,
     cronPeriod: DEFAULTS.cronPeriod,
-    dailyCount: number('DAILY_RENTALS', DEFAULTS.dailyCount, 20),
+    dailyCount: number('DAILY_RENTALS', DEFAULTS.dailyCount, 40),
     daily: number('DAILY_SPEND_USD', DEFAULTS.daily),
     rolling: number('ROLLING_SPEND_USD', DEFAULTS.rolling),
     gap: number('SHA_GAP_HOURS', DEFAULTS.gapHours, 720) * 3600000,
@@ -420,7 +420,7 @@ export function offerPrice(offer, cfg) {
 export function offerRejections(
   offer,
   cfg,
-  { profile = 'check', median = offer.dlperf, badMachines = [], reserved = [] } = {},
+  { profile = 'check', median = offer.dlperf, badMachines = [], badHosts = [], reserved = [] } = {},
 ) {
   const q = cfg.quality[profile],
     reasons = [],
@@ -452,7 +452,8 @@ export function offerRejections(
     badMachines.includes(offer.machine_id)
   )
     reasons.push('MACHINE');
-  if (cfg.badHosts.includes(offer.host_id)) reasons.push('BAD_HOST');
+  if (cfg.badHosts.includes(offer.host_id) || badHosts.includes(offer.host_id))
+    reasons.push('BAD_HOST');
   // Item 8: a machine is held from CREATING until its run has ended; no second run takes it.
   if (reserved.includes(offer.machine_id)) reasons.push('IN_USE');
   if (!die || !(profile === 'check' ? cfg.checkDies : cfg.sweepDies).includes(die))

@@ -91,7 +91,7 @@ Every property below is declared in `qemu/hw/misc/kf3/kf3.c`. Defaults are as de
 | `display-broker-uid` | `-1` | One more uid accepted as the broker. |
 | `display-broker-vram` | `auto` | GPU-copy path to the broker: `auto`, `on`, `off`. |
 | `display-max-fps` | `0` | Cap on the emulated vblank, 24 to 75 Hz; `0` means a 75 Hz cap. Refused outside 24..75 and without `display=on`. |
-| `dummy-bar` | off | Not documented yet. |
+| `dummy-bar` | off | A synthetic MMIO trap-floor probe: it adds lockless, BQL-held and ioeventfd test pages in the MSI-X BAR. It does not submit work to the GPU. [code reading: `qemu/hw/misc/kf3/kf3.c`, `docs/design/V3_DOORBELL_BASELINE.md`] |
 | `x-gsp-observer`, `x-gsp-observer-seconds` | unset, `300` | Diagnostic: record the guest driver's GSP traffic to a fresh file for 1 to 7200 s. |
 
 Properties are given as `-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0`, or for one property on an existing device `-global kf3-gpu.<property>=<value>`. <!-- src: scripts/fastguest/run_fast_guest.sh, scripts/bench/windows/win_vm.sh -->
@@ -136,10 +136,9 @@ The launchers stop a guest by asking it to power down (ACPI), then waiting, and 
 
 ## Not documented yet
 
-- A recipe that starts the device without root, and the host permissions it needs.
-- libvirt, systemd units, container images and sandbox profiles. The design leaves sandboxing the (single) QEMU process to the deployer: see [Security model](security.md).
+- A supported rootless installation guide. The branch `claude/rootless-audit-20261016` has [launch notes and permission checks](https://github.com/reindertpelsma/kayfabe/blob/32d7319b2/traces/rootless_audit_20261016/REPORT.txt) in sections 1, 2 and 7, with scripts under `scripts/bench/rootless/`. That audit is not merged, and its host-specific launchers are not a general installer. The scripts described here still run as root. See [Security model](security.md).
+- libvirt, systemd units, container images and sandbox profiles. *(2026-10-31: [Attach your GPU to a VM you already have](attach-to-existing-vm.md) now holds an [untested] libvirt sketch and the permission checks; there is still no recorded libvirt run.)* The design leaves sandboxing the (single) QEMU process to the deployer: see [Security model](security.md).
 - A complete reference for the `KF3_*` environment variables.
 - Several VMs on one GPU as a supported configuration.
-- What `dummy-bar` is for.
 
 Verified on: the scripts and properties above were read from the repository at master (`04773c348`). Their results are recorded in the repository for kayfabe `afb552ea` (gates 9/9, bare metal 30/30, thin 30/30, RTX 3060, 2026-09-30) and `714ec29d3` (GA104, 2026-10-24). Not verified end to end for this page: no script on it was run.

@@ -48,3 +48,29 @@ for (const [name, patch, expected] of [
     assert.ok(!JSON.stringify(lines).includes(sentinel));
     assert.ok(!JSON.stringify(lines).includes(env.WORKER_URL));
   });
+
+for (const field of ['run_attempt', 'status'])
+  test('run refusal logs only the fixed metadata field: ' + field, async () => {
+    const h = await setup();
+    h.cloud.run[field] = sentinel;
+    const lines = await capture(async () => {
+      const response = await h.call('/availability?profile=check', { method: 'GET' });
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), {
+        state: 'UNAUTHORIZED',
+        verdict: 'UNAVAILABLE',
+        log_tail_sanitised: '',
+        bytes_dropped: 0,
+      });
+    });
+    assert.deepEqual(lines, [
+      {
+        event: 'refused',
+        route: 'availability',
+        status: 401,
+        why: 'github:run:' + field,
+      },
+    ]);
+    assert.ok(!JSON.stringify(lines).includes(sentinel));
+    assert.ok(!JSON.stringify(lines).includes(env.WORKER_URL));
+  });

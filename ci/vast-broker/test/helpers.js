@@ -233,8 +233,8 @@ export class MockCloud {
           content: content.replace(/(.{60})/g, '$1\n'),
         });
       }
-      if (/\/actions\/runs\/\d+$/.test(u.pathname))
-        return Response.json(this.runs.get(u.pathname.split('/').at(-1)) ?? this.run);
+      const run = u.pathname.match(/\/actions\/runs\/(\d+)(?:\/attempts\/\d+)?$/);
+      if (run) return Response.json(this.runs.get(run[1]) ?? this.run);
       if (/\/commits\/[a-f0-9]+$/.test(u.pathname))
         return Response.json({ sha: this.run.head_sha });
       if (/\/pulls\/\d+\/files$/.test(u.pathname)) {

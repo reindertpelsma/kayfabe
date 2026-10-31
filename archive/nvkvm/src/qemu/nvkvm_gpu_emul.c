@@ -2976,7 +2976,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
                 qemu_log("nvkvm-gpu[%s] M8.2 alloc-reply class=0x%04x obj=0x%08x "
                          "reply_paramsSize=%u\n", s->chip->name, hc, robj, opsize);
                 /* M8 (cuCtxCreate SIGSEGV — root cause refined 2026-06-05): host-vs-guest gdb
-                 * proved the crash function (libcuda+0x466560) is reached IDENTICALLY on host
+                 * proved the crash function (libcuda+<offset-redacted>) is reached IDENTICALLY on host
                  * and guest (same control flow, vtable call returns NV_OK), but rbp is a VALID
                  * frame pointer on host and 0 on guest.  rbp is callee-saved; a callee corrupted
                  * the saved-rbp slot with zeros on the guest only.  strace pins the last ioctl
@@ -3004,7 +3004,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
                      * (2-day wall broken). The later M7 "forward host's real 16B caps" change
                      * (m2_gr_reply_valid -> psize=16) RE-OPENED the clobber: the guest copies
                      * 16B into libcuda's stack slot, zeroing a saved rbp -> SIGSEGV at libcuda
-                     * +0x300560 (mov -0x38(%rbp),%rax, rbp=0), exactly after c7c0. The captured
+                     * (rbp=0), exactly after c7c0. The captured
                      * caps are NOT needed for cuCtxCreate. Keep the M7 capture only as a diag. */
                     uint32_t cap_psize = (s->m2_gr_reply_valid && s->m2_gr_reply_obj == robj)
                                              ? s->m2_gr_reply_psize : 0u;
@@ -3018,7 +3018,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
                      * writes libcuda's OWN bytes back — restoring the saved rbp on its
                      * stack instead of zeroing it.  M8.1 set only paramsSize=0, leaving the
                      * element short -> the deserialize zero-padded the local buffer -> the
-                     * copyout cleared rbp -> cuCtxCreate SIGSEGV (libcuda+0x300560, rbp=0).
+                     * copyout cleared rbp -> cuCtxCreate SIGSEGV (libcuda+<offset-redacted>, rbp=0).
                      * Confirmed byte-exact host-vs-guest (host preserves c7c0 params bytes
                      * 8-15; guest zeroed them). Report semantic paramsSize=0 like native RM. */
                     uint32_t req_psize = opsize;
@@ -3105,7 +3105,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
                      * the RM sets SKIP_COPYOUT -> libcuda's 1464B ECC buffer is left untouched.  Our
                      * fake NV_OK instead copied 1464B of echoed/zero garbage over that buffer, so
                      * libcuda acted on bogus ECC state and later crashed (saved-rbp clobber ->
-                     * rbp=0 SIGSEGV at libcuda+0x466560).  Match the host: report NOT_SUPPORTED.
+                     * rbp=0 SIGSEGV at libcuda+<offset-redacted>).  Match the host: report NOT_SUPPORTED.
                      * (Found via the nvioctl_trace LD_PRELOAD host/guest diff: this was the ONLY
                      * control whose status diverged — host 0x56 vs guest 0x0.) */
                     stl_le_p(resp + 92, 0x56u);   /* NV_ERR_NOT_SUPPORTED */
@@ -3451,7 +3451,7 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
                  * copyout then overruns the caller's (often stack) buffer.  Watchpoint +
                  * host-vs-guest gdb pinned the crash: a kernel copy_to_user during a control
                  * inside cuCtxCreate's GR-object setup zeroes libcuda's saved-rbp stack slot
-                 * -> rbp=0 -> SIGSEGV at libcuda+0x466560.  Clamp reply paramsSize to the
+                 * -> rbp=0 -> SIGSEGV at libcuda+<offset-redacted>.  Clamp reply paramsSize to the
                  * request.  (The caller always allocates its full struct, so legitimate large
                  * controls — INTR_GET_KERNEL_TABLE, DEVICE_INFO_TABLE — request that size and
                  * are unaffected; the clamp only fires on a genuine over-size, which is a bug

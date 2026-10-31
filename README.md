@@ -1,38 +1,28 @@
 # kayfabe
 
+**STATUS: RESEARCH, 2026-10-21.** One maintainer, no installer (you build it from source), no public binary, no stable interface, no security audit yet. Windows is not stable: sleep/wake fails and some apps make the GPU driver reset. Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer experiments, the Blackwell display work and further performance work live on branches.
+
 **Share an NVIDIA GPU with virtual machines that run the stock NVIDIA driver, while the host keeps using it.**
 
-Kayfabe is a QEMU device that shows a guest an emulated NVIDIA GPU. The guest loads NVIDIA's real, unmodified driver (Windows or Linux);
-kayfabe reads what that driver asks for and has the real host GPU do the work, from an **unprivileged** host process that talks to the host driver
-as an ordinary client. Written in Rust.
+With kayfabe, Windows or Linux in a virtual machine uses NVIDIA's own driver and your real graphics card, for games, video and CUDA, while your computer keeps using the same card. No special hardware, no licence server, and nothing in your NVIDIA driver is patched. Kayfabe is a QEMU device that presents a virtual NVIDIA GPU to the VM; the real work runs on your real card. The VM reaches your GPU the way any normal program does, through your NVIDIA driver, so the driver's usual separation between programs applies. That is the design, and it has not been audited ([how it is isolated](docs/howto/security.md#what-the-isolation-is-made-of)). Written in Rust.
 
-**Status: research, 2026-10-21.** It runs real applications, but there is no installer, no stable interface, and no security audit yet.
-Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer experiments, the Blackwell display work and further performance work live on branches.
+Site: [kayfabe.dev](https://kayfabe.dev/) | [manual](https://kayfabe.dev/docs/) | [FAQ](docs/FAQ.md) | [goals and plans](docs/howto/goals.md) | [what works today](#what-runs-today)
 
 <img alt="windows desktop with apps while host keeps gpu" src="traces/20261021_131847.jpg" width="1000" height="432" />
 <i>Windows 11 on kayfabe: desktop and nvidia-smi under the stock 580.88 driver. On Windows, displayed using nvkvm broker on an Ubuntu desktop: Minecraft Bedrock/Windows only edition, Unigine Heaven benchmark, nvidia-smi in powershell, Big Buck Bunny Blender on Youtube in Edge. On Linux left screen: Blender, nvidia-smi showing a single gpu being used for all the apps in the screenshots and Firefox in background (host keeps gpu). There is no PCIe/DMA copy of frames for this windows desktop (i.e both screens are directly plugged in the GPU).</i>
 
 ## Why it is interesting
 
-| | host keeps the GPU | safe for untrusted guests | guest driver | needs |
+| | host keeps the GPU | isolation between guests | guest driver | needs |
 |---|---|---|---|---|
-| VFIO passthrough | no, one VM owns it | yes | stock | any GPU |
-| NVIDIA vGPU | no, VMs share it, the host does not | yes | vendor vGPU driver | data-centre GPU, licence |
-| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | possible, but fragile for multi-tenant VMs | a custom guest module | any NVIDIA GPU |
-| **kayfabe** | **yes** | **yes, by design (not yet audited)** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
+| VFIO passthrough | no, one VM owns it | depends on the IOMMU and trust model; see [FAQ](docs/FAQ.md) | stock | any GPU |
+| NVIDIA vGPU | no, VMs share it, the host does not | documented by NVIDIA for multi-tenant use ([overview](https://docs.nvidia.com/ai-enterprise/release-8/latest/infra-software/vgpu/overview.html)); not assessed here | vendor vGPU driver | a GPU on [NVIDIA's supported list](https://docs.nvidia.com/vgpu/gpus-supported-by-vgpu.html) (workstation and data-centre cards), vGPU software and licence |
+| API forwarding ([nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) / virtio-nvgpu) | yes | nvkvm-pv: default-deny by design; no external review, and its own audits list open findings (its `docs/faq.md`) | a custom guest module | any NVIDIA GPU |
+| **kayfabe** | **yes** | **designed for hostile guests; safety not established or audited** | **stock, unmodified** | any NVIDIA GPU is the goal; tested on consumer cards (Turing to Blackwell); the open NVIDIA host driver |
 
 - **Nothing is patched.** No host or guest driver or kernel is modified; the guest uses NVIDIA's own installer.
 - **The guest is treated as hostile.** Every host action is authored by kayfabe from a few unprivileged verbs, never forwarded from guest bytes.
-- **Near-native speed is within reach.** On the same RTX 4070, Unigine Heaven 4.0 in a Windows guest (1920x1080 windowed, Ultra, 260 s runs, Heaven's own score):
-
-  | | Direct3D 11 | OpenGL |
-  |---|---|---|
-  | native Windows (VFIO, measured 2026-10-15) | 330 fps | 342 fps |
-  | kayfabe, production path | 89 to 102 fps | 212 to 233 fps |
-  | kayfabe, experimental build | 296 to 299 fps | 338 to 362 fps |
-
-  Other window sizes and quality settings give different numbers (an older run at 1280x720, High, measured 271 fps in OpenGL).
-  The experimental build skips reading the guest's command buffers once a channel is set up. Details and limits: [`traces/perf_status_20261017/`](traces/perf_status_20261017/README.md).
+- **Windows speed is being benchmarked again on current master.** Windows runs real 3D applications (see below); the results will be posted here.
 
 - **Linux guests run CUDA at host speed** for large work (rented RTX 3060 box that is itself a VM, older revisions; [details](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)):
 
@@ -54,13 +44,13 @@ Master is the current working version (relay fix `89fc8a222`, 2026-10-21); newer
 | app | result |
 |---|---|
 | Minecraft Java and Bedrock | in a world, multiplayer works fine; no freezes in the latest session (revision `89fc8a222`, 2026-10-21, 15+ minutes beside Unigine Heaven). Earlier revisions froze apps for seconds when several ran at once; the relay handoff fixes the measured cause (Linux: 0 of 26 stalled pairs against 3 of 12 before) |
-| Unigine Heaven, Direct3D 9, Direct3D 11 and OpenGL | pass; fps in the table above |
-| GravityMark | Direct3D 12 and Vulkan pass (134 and 96 fps at that revision, need a new benchmark to confirm fps with performance fixes) |
+| Unigine Heaven, Direct3D 9, Direct3D 11 and OpenGL | pass |
+| GravityMark | Direct3D 12 and Vulkan pass |
 | Edge + YouTube 4K60, hardware decode (NVDEC) | 10:34 played to the end |
 | CUDA in the guest | works: `nvidia-smi` shows CUDA 13.0; matrix multiply (N=2048) about 1.9 TFLOPS; Blender 5.2 Cycles renders with CUDA and OptiX (OptiX 5.3 s against 3.4 s native, 1.57x slower; measured 2026-10-15 on branch `claude/perf-win-20261015`) |
 | SolidWorks 2026 (student edition) | installs, renders, passes its builtin Performance Test; loads and renders sample projects fine; evidence not yet committed |
-| Blender on Windows | Renders sample files properly, needs more testing |
-| 3DMark demo on Steam | Steel Nomad (full, DX12) scores 2050 to 2991, i.e. 20 to 30 fps, depending on revision and what else is running (latest run 2227 with Minecraft, OBS and a video playing at the same time); native VFIO on the same GPU scores about 3800 to 3960 (38 to 40 fps). Result files are not committed yet |
+| Blender on Windows | Recorded CUDA and OptiX renders, plus a later large-tile denoise reset [measured in VM 2990, revision `eb9f2aa3`, RTX 4070, guest 580.88]. [Report](https://github.com/reindertpelsma/kayfabe/blob/b746e1b60/traces/win11_apps_20261015/README.md) on `claude/win11-apps-20261015`, not merged; broader stability is open |
+| 3DMark demo on Steam | Steel Nomad (full, DX12) runs to the end. Later [branch records](https://github.com/reindertpelsma/kayfabe/blob/ca20742c1/traces/host_campaign_20261023/README.md) include valid completions and a failed control [measured in runs 5001 to 5008, binary revision `0d7ba743`, RTX 4070]. They are on `claude/host-campaign-20261023`, not merged; scores stay private under the [publication policy](docs/SPEC_RESULTS.md) |
 | OBS Studio on Windows | Recorded the desktop, Unigine Heaven and 3DMark Steel Nomad successfully, OBS reports NVENC was used (OBS log: `obs_nvenc_h264_tex`; the host GPU's encoder showed 21% load attributed to the VM process). MP4 video playback has no issues that I noticed. Result is not commited yet |
 | Office 365 | No issues so far |
 
@@ -68,7 +58,7 @@ Minecraft, Blender, Office, Edge, Steam, 3DMark, Unigine and SolidWorks run unmo
 
 **Linux guest** (NVIDIA's stock driver, unmodified, nothing to set): the 30-arm suite passes (also with the relay forced on); gates 9/9 on the real GPU; a desktop with display planes (overlay, YUV)
 and 3 of 3 suspend/resume cycles; **61 of 65 CUDA apps** (CUDA samples, PyTorch, Hugging Face generation, llama.cpp), 6 of 6 stream probes and 100 processes in one boot, with
-outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). The 4 failures use unified (UVM) memory paging and fail loudly.
+outputs equal to bare metal (earlier run, rented RTX 3060; [matrix](docs/design/V3_APP_MATRIX.md)). Four workloads need unified-memory demand paging and fail correctness checks. One recorded failure printed SUCCESS with a wrong result.
 
 **GPUs:** all of the above on the owner's RTX 4070 (AD104). Linux guests also passed on GA106 (RTX 3060), TU116, AD104 (RTX 4000 Ada), GB205 and, more recently, AD102
 (Linux guest driver 590); Windows desktops run on AD106 and AD103 with a borrowed display page, GA104 only has the GPU, and GB206 under Windows is still open
@@ -79,13 +69,13 @@ security model is designed but not audited, and what a guest-triggered GPU fault
 
 ## Trying it
 
-There is no user install path yet; it is still being built. Developers can build from source (`cargo build --workspace --release`; `cargo test` runs without a GPU)
+There is no user install path yet; an installer is planned, with no date. Developers can build from source (`cargo build --workspace --release`; `cargo test` runs without a GPU)
 and follow [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md) and [`scripts/bench/windows/README.md`](scripts/bench/windows/README.md).
 
 ## Learn more
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) (one page) | [`docs/design/`](docs/design/THE_ARCHITECTURE_v3.md) | [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md) |
-[`docs/OWNER_RULINGS.md`](docs/OWNER_RULINGS.md) | [`docs/FAQ.md`](docs/FAQ.md) | [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) | [`AGENTS.md`](AGENTS.md) (rules for contributors)
+[`docs/OWNER_RULINGS.md`](docs/OWNER_RULINGS.md) | [`docs/FAQ.md`](docs/FAQ.md) | [manual](https://kayfabe.dev/docs/) | [`docs/howto/goals.md`](docs/howto/goals.md) | [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) | [`AGENTS.md`](AGENTS.md) (rules for contributors)
 
 Dual-licensed **Apache-2.0 OR GPL-2.0-or-later** ([`LICENSE`](LICENSE) lists exceptions; a QEMU binary built from this tree is not yet distributable under the GPL).
 Provenance policy: [`docs/design/V3_PROVENANCE.md`](docs/design/V3_PROVENANCE.md). Security: not audited; report a suspected vulnerability to the owner privately through GitHub.

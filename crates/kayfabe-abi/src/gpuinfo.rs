@@ -60,8 +60,8 @@
 //!
 //! | source | GPU | `0x23` | `0x24` |
 //! |---|---|---|---|
-//! | `traces/rpctrace_ga106_boot1.bin` seq806 (GSP RPC reply) | `GPU-e28d7776-e4f9-704b-d392-d46f187343f8` | `0x19ece058` | `0xb91e2532` |
-//! | `rmladder --gpu-info-sweep`, 2026-08-08, run 1 | `GPU-d0913685-1ec0-805a-e319-43a901a0e1ff` | `0x4324d4e9` | `0x8708a4a8` |
+//! | `traces/rpctrace_ga106_boot1.bin` seq806 (GSP RPC reply) | `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002` | `0x19ece058` | `0xb91e2532` |
+//! | `rmladder --gpu-info-sweep`, 2026-08-08, run 1 | `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0003` | `0x4324d4e9` | `0x8708a4a8` |
 //! | the same sweep, run 2, same box | same | `0x4324d4e9` | `0x8708a4a8` |
 //!
 //! ⇒ **Stable across runs on one part, different between two parts.** Both are unnamed in

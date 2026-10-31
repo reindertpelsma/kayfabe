@@ -2,6 +2,16 @@
 import {refuse,numericId,budgetRefuse} from './policy.js';
 // prettier-ignore
 import {logChain} from './tokens.js';
+// One leg's estimated provider spend; previous legs remain separate durable cost receipts.
+export function rentalCost(record, at) {
+  return (
+    ((record.computeStoragePrice ?? record.price) * (at - record.started)) / 3600000 +
+    (record.bandwidthCost ?? 0)
+  );
+}
+export function costAttempt(record) {
+  return { attemptKey: record.key, attemptStarted: record.originalStarted ?? record.started };
+}
 export class Ledger {
   constructor(storage) {
     this.storage = storage;
@@ -11,6 +21,34 @@ export class Ledger {
   }
   put(key, value) {
     return this.storage.put(key, value);
+  }
+  async markProviderFault(record, reason, now) {
+    if (!Number.isSafeInteger(record.machineId) || record.machineId <= 0) return;
+    await this.storage.transaction(async (storage) => {
+      const machines = await storage.list({ prefix: 'bad-machine:', limit: 257 });
+      const key = 'bad-machine:' + record.machineId;
+      const host = Number.isSafeInteger(record.hostId) && record.hostId > 0;
+      // Retain at most the refusal sentinel (257); admission refuses above 256.
+      if (!machines.has(key) && machines.size >= 257) return;
+      await storage.put(key, { reason, at: now, ...(host ? { hostId: record.hostId } : {}) });
+      if (!host) return;
+      const other = [...machines].find(
+        ([k, r]) =>
+          k !== key &&
+          /^bad-machine:[1-9][0-9]*$/.test(k) &&
+          r?.hostId === record.hostId &&
+          ['PROVIDER_FAULT', 'KVM_DOMAIN_NOT_FOUND'].includes(r.reason),
+      );
+      if (!other) return;
+      const hosts = await storage.list({ prefix: 'bad-host:', limit: 257 });
+      const hostKey = 'bad-host:' + record.hostId;
+      if (!hosts.has(hostKey) && hosts.size >= 257) return;
+      await storage.put(hostKey, {
+        reason: 'PROVIDER_FAULT',
+        at: now,
+        machines: [Number(other[0].slice('bad-machine:'.length)), record.machineId],
+      });
+    });
   }
   async save(record) {
     await this.put('record:' + record.key, record);
@@ -84,15 +122,64 @@ export class Ledger {
   // All ledger admission checks and the intent writes share ONE transaction. The
   // service's preflight reads/queue are only early refusals, never this lock.
   // No provider operation belongs here: storage may retry the callback.
-  async reserve(record, { cfg, now, cost, credit }) {
+  async reserve(record, { cfg, now, cost, credit, retryNonce }) {
     await this.storage.transaction(async (storage) => {
       const ledger = new Ledger(storage);
       const previous = await ledger.get('cost:' + record.key);
-      if (previous)
+      if (retryNonce !== undefined) {
+        const prior = await ledger.granted(record.key),
+          spent = prior ? rentalCost(prior, prior.ended) : NaN;
+        if (
+          !previous ||
+          !prior ||
+          prior.nonce !== retryNonce ||
+          prior.verdict !== 'PROVIDER_FAULT' ||
+          prior.closed !== 'PROVIDER_FAULT' ||
+          !Number.isFinite(prior.ended) ||
+          !prior.id ||
+          (prior.providerRetries ?? 0) !== 0 ||
+          record.providerRetries !== 1 ||
+          record.nonce === prior.nonce ||
+          record.machineId === prior.machineId ||
+          !Number.isSafeInteger(prior.hostId) ||
+          prior.hostId <= 0 ||
+          !Number.isSafeInteger(record.hostId) ||
+          record.hostId <= 0 ||
+          record.hostId === prior.hostId ||
+          !['run', 'attempt', 'sha', 'branch', 'profile', 'runnerNonce'].every(
+            (key) => record[key] === prior[key],
+          ) ||
+          record.hardDeadline !== prior.hardDeadline ||
+          record.softDeadline !== prior.softDeadline ||
+          record.originalStarted !== prior.started ||
+          record.started < prior.ended ||
+          record.runBudgetUsd !== prior.runBudgetUsd ||
+          !Number.isFinite(spent) ||
+          spent < 0 ||
+          record.retryCostUsd !== spent ||
+          !Number.isFinite(prior.runBudgetUsd) ||
+          spent + cost > prior.runBudgetUsd ||
+          prior.hardDeadline <= now + cfg.softMargin ||
+          previous.ended !== prior.ended ||
+          (await ledger.get('cost:' + record.key + ':provider:0'))
+        )
+          refuse('NOT_ELIGIBLE', 409);
+        // Preserve real spend/count before replacing this run's current receipt. Every proof,
+        // cap check, archive and intent is one transaction; a racing replacement loses here.
+        await ledger.put('cost:' + record.key + ':provider:0', {
+          ...previous,
+          ...costAttempt(prior),
+          created: true,
+        });
+        await storage.delete('cost:' + record.key);
+        await storage.delete('ended:' + record.key);
+        if ((await ledger.get('id:' + prior.id)) === record.key)
+          await storage.delete('id:' + prior.id);
+      } else if (previous)
         budgetRefuse('cost-key', { started_at: previous.started, ended_at: previous.ended });
       const cached = await ledger.get('sha:' + record.sha),
         force = Number(record.attempt ?? record.key.split('-').at(-1)) > 1;
-      if (cached && (!force || now - cached.started < cfg.gap))
+      if (retryNonce === undefined && cached && (!force || now - cached.started < cfg.gap))
         budgetRefuse('sha-gap', { gap_ms: cfg.gap, elapsed_ms: Math.max(0, now - cached.started) });
       const open = await ledger.openRecords(),
         branch = open.filter((o) => o.branch === record.branch && o.sha !== record.sha);
@@ -107,14 +194,18 @@ export class Ledger {
       )
         refuse('BUSY', 409);
       const bad = await storage.list({ prefix: 'bad-machine:', limit: 257 });
+      const badHosts = await storage.list({ prefix: 'bad-host:', limit: 257 });
       if (
         bad.size > 256 ||
+        badHosts.size > 256 ||
+        badHosts.has('bad-host:' + record.hostId) ||
+        cfg.badHosts.includes(record.hostId) ||
         bad.has('bad-machine:' + record.machineId) ||
         cfg.badMachines.includes(record.machineId) ||
         open.some((o) => Number.isSafeInteger(o.machineId) && o.machineId === record.machineId)
       )
         refuse();
-      await ledger.budgets(cfg, now, cost, null, { credit });
+      await ledger.budgets(cfg, now, cost, null, { credit, sameAttempt: retryNonce !== undefined });
       await ledger.#writeReservation(record);
     });
   }
@@ -125,6 +216,7 @@ export class Ledger {
     await this.grant(record.key, record);
     await this.put('sha:' + record.sha, { key: record.key, started: record.started });
     await this.put('cost:' + record.key, {
+      ...costAttempt(record),
       profile: record.profile ?? 'check',
       started: record.started,
       ended: null,
@@ -142,6 +234,7 @@ export class Ledger {
       await ledger.save(record);
       const created = record.id ? true : record.closed === 'GONE' ? false : null;
       await ledger.put('cost:' + record.key, {
+        ...costAttempt(record),
         profile: record.profile ?? 'check',
         started: record.started,
         ended: now,
@@ -212,7 +305,8 @@ export class Ledger {
         check: { daily_usd: 0, count_today: 0 },
         sweep: { daily_usd: 0, count_today: 0 },
       },
-      rows = [];
+      rows = [],
+      counted = { check: new Set(), sweep: new Set() };
     let monthly = 0,
       outstanding = 0;
     for (const [key, stored] of entries) {
@@ -260,6 +354,19 @@ export class Ledger {
         (v.bandwidthCost ?? 0) < 0
       )
         refuse();
+      const attemptKey = v.attemptKey ?? key.slice(5),
+        attemptStarted = v.attemptStarted ?? v.started;
+      if (
+        (v.attemptKey !== undefined || v.attemptStarted !== undefined) &&
+        (typeof v.attemptKey !== 'string' ||
+          !attemptKey ||
+          attemptKey.length > 128 ||
+          !['cost:' + attemptKey, 'cost:' + attemptKey + ':provider:0'].includes(key) ||
+          !Number.isFinite(v.attemptStarted) ||
+          attemptStarted < 0 ||
+          attemptStarted > v.started)
+      )
+        refuse();
       const end = v.ended ?? now;
       if (end < v.started) refuse();
       const bandwidth = v.bandwidthCost ?? 0,
@@ -290,7 +397,10 @@ export class Ledger {
         (Math.max(0, end - Math.max(v.started, rolling)) * v.price) / 3600000 +
         remaining +
         (end >= rolling ? bandwidth : 0);
-      if (v.started >= day && !uncreated) profiles[profile].count_today++;
+      if (attemptStarted >= day && !uncreated && !counted[profile].has(attemptKey)) {
+        counted[profile].add(attemptKey);
+        profiles[profile].count_today++;
+      }
       outstanding += reserved;
       rows.push({
         key: key.slice(5),
@@ -337,7 +447,8 @@ export class Ledger {
       };
     if (Object.hasOwn(options, 'credit') && !Number.isFinite(options.credit))
       budgetRefuse('no-credit', values);
-    if (values.count_today >= cfg.dailyCount) budgetRefuse('daily-count', values);
+    if (!options.sameAttempt && values.count_today >= cfg.dailyCount)
+      budgetRefuse('daily-count', values);
     if (values.daily_usd + cost > values.daily_cap_usd) budgetRefuse('daily-usd', values);
     if (values.rolling_usd + cost > cfg.rolling) budgetRefuse('rolling-usd', values);
     if (Object.hasOwn(options, 'credit') && options.credit < values.credit_required_usd)

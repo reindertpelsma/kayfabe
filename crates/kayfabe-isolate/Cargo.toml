@@ -8,7 +8,6 @@ license.workspace = true
 [dependencies]
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
-kayfabe-vmm.workspace = true
 
 [dev-dependencies]
 # ★ Its ONLY job is the compile-fail row that makes `ARCHITECTURE.md` invariant 5

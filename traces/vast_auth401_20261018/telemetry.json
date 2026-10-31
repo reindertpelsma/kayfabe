@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "count": 7,
+  "possibly_truncated": false,
+  "events": [
+    {
+      "timestamp": 1793107580841,
+      "route": "other",
+      "run_key": null,
+      "method": null,
+      "http": null,
+      "kind": "scheduled"
+    },
+    {
+      "timestamp": 1793107580831,
+      "route": "other",
+      "run_key": null,
+      "method": "POST",
+      "http": 200,
+      "kind": "fetch"
+    },
+    {
+      "timestamp": 1793107554947,
+      "route": "stop",
+      "run_key": "40503100558-3",
+      "method": "POST",
+      "http": 404,
+      "kind": "fetch"
+    },
+    {
+      "timestamp": 1793107547849,
+      "route": "stop",
+      "run_key": "40503100558-3",
+      "method": "POST",
+      "http": 404,
+      "kind": "fetch"
+    },
+    {
+      "timestamp": 1793107547825,
+      "route": "availability",
+      "run_key": null,
+      "method": "GET",
+      "http": 401,
+      "kind": "fetch"
+    },
+    {
+      "timestamp": 1793107547231,
+      "route": "availability",
+      "run_key": null,
+      "method": "GET",
+      "http": 401,
+      "kind": "fetch"
+    },
+    {
+      "timestamp": 1793107547205,
+      "route": "availability",
+      "run_key": null,
+      "method": "GET",
+      "http": null,
+      "kind": "fetch",
+      "event": "refused",
+      "why": "github:run",
+      "refusal_route": "availability"
+    }
+  ]
+}

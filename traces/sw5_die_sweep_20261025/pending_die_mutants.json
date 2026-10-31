@@ -1,0 +1,16 @@
+[
+  {
+    "mutant": "scope_removed",
+    "killers": [
+      "test_blackwell_stays_outside_sw5",
+      "test_ga104_is_already_covered_by_sw3"
+    ]
+  },
+  {
+    "mutant": "completed_removed",
+    "killers": [
+      "test_completed_ad106_is_not_repeated",
+      "test_completed_ga102_is_not_repeated"
+    ]
+  }
+]

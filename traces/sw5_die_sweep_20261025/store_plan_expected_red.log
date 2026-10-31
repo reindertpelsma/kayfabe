@@ -1,0 +1,20 @@
+E
+======================================================================
+ERROR: test_store_plan (unittest.loader._FailedTest.test_store_plan)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_store_plan
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/unittest/loader.py", line 426, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/usr/lib/python3.14/unittest/loader.py", line 367, in _get_module_from_name
+    __import__(name)
+    ~~~~~~~~~~^^^^^^
+  File "scripts/bench/sw5/test_store_plan.py", line 5, in <module>
+    import store_plan
+ModuleNotFoundError: No module named 'store_plan'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

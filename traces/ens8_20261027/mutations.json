@@ -1,0 +1,95 @@
+[
+  {
+    "mutant": "baseline",
+    "layer": "hostidx",
+    "count": 0,
+    "killed_by": [],
+    "exit": 0
+  },
+  {
+    "mutant": "drop-reowe",
+    "layer": "hostidx",
+    "count": 11,
+    "killed_by": [
+      "hostidx::model::a_reused_host_slot_reowes_only_the_new_guest_identity",
+      "hostidx::model::contended_try_lock_completion_edge_with_no_later_pump",
+      "hostidx::model::contended_try_lock_doorbell_edge_with_no_later_pump",
+      "hostidx::model::exhaustive_one_worker_releases_every_finite_contention_without_a_timer",
+      "hostidx::model::exhaustive_two_workers_preserve_peer_wakes_through_slot_teardown",
+      "hostidx::model::hostile_unknown_host_tokens_cannot_grow_the_owed_set",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_completion_ring",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_doorbell_ring",
+      "hostidx::model::real_worker_completion_survives_a_slot_held_by_another_thread",
+      "hostidx::model::real_worker_doorbell_survives_a_slot_held_by_another_thread",
+      "hostidx::model::seeds_1_through_512_replay_identically_with_two_workers_and_peer_retirement"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "wrong-guest-token",
+    "layer": "hostidx",
+    "count": 10,
+    "killed_by": [
+      "hostidx::model::a_reused_host_slot_reowes_only_the_new_guest_identity",
+      "hostidx::model::contended_try_lock_completion_edge_with_no_later_pump",
+      "hostidx::model::contended_try_lock_doorbell_edge_with_no_later_pump",
+      "hostidx::model::exhaustive_one_worker_releases_every_finite_contention_without_a_timer",
+      "hostidx::model::exhaustive_two_workers_preserve_peer_wakes_through_slot_teardown",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_completion_ring",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_doorbell_ring",
+      "hostidx::model::real_worker_completion_survives_a_slot_held_by_another_thread",
+      "hostidx::model::real_worker_doorbell_survives_a_slot_held_by_another_thread",
+      "hostidx::model::seeds_1_through_512_replay_identically_with_two_workers_and_peer_retirement"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "reowe-never-cleared-spin",
+    "layer": "token",
+    "count": 7,
+    "killed_by": [
+      "hostidx::model::contended_try_lock_completion_edge_with_no_later_pump",
+      "hostidx::model::contended_try_lock_doorbell_edge_with_no_later_pump",
+      "hostidx::model::exhaustive_one_worker_releases_every_finite_contention_without_a_timer",
+      "hostidx::model::exhaustive_two_workers_preserve_peer_wakes_through_slot_teardown",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_completion_ring",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_doorbell_ring",
+      "hostidx::model::seeds_1_through_512_replay_identically_with_two_workers_and_peer_retirement"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "peer-owe-lost-on-teardown",
+    "layer": "hostidx",
+    "count": 4,
+    "killed_by": [
+      "hostidx::model::exhaustive_two_workers_preserve_peer_wakes_through_slot_teardown",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_completion_ring",
+      "hostidx::model::peer_slot_teardown_cannot_lose_a_live_doorbell_ring",
+      "hostidx::model::seeds_1_through_512_replay_identically_with_two_workers_and_peer_retirement"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "double-pump-claim",
+    "layer": "token",
+    "count": 4,
+    "killed_by": [
+      "hostidx::model::a_busy_rung_token_excludes_a_second_pump_owner",
+      "hostidx::model::a_busy_token_excludes_a_second_pump_owner",
+      "hostidx::model::exhaustive_two_workers_preserve_peer_wakes_through_slot_teardown",
+      "hostidx::model::seeds_1_through_512_replay_identically_with_two_workers_and_peer_retirement"
+    ],
+    "exit": 101
+  },
+  {
+    "mutant": "retired-host-identity-retained",
+    "layer": "hostidx",
+    "count": 2,
+    "killed_by": [
+      "hostidx::model::a_retired_slot_cannot_reowe_by_its_old_identity",
+      "hostidx::tests::a_retire_forgets_it_and_a_reused_host_token_follows_the_new_birth"
+    ],
+    "exit": 101
+  }
+]

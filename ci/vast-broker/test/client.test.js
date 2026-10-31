@@ -13,6 +13,7 @@ async function client(
   verified,
   policyResult = 'success',
   policyRun = '1',
+  brokerFields = {},
 ) {
   const p = spawnSync(
     'python3',
@@ -32,10 +33,10 @@ async function client(
       'utf8',
     );
     const script = (id) =>
-      yaml
-        .split('  ' + id + ':\n')[1]
+      (id === 'pending' ? yaml.split('        id: status\n')[1] : yaml.split('  ' + id + ':\n')[1])
         .split(/\n  [\w-]+:\n/)[0]
         .split('        run: |\n')[1]
+        .split(/^      - /m)[0]
         .split('\n')
         .map((x) => (x.startsWith('          ') ? x.slice(10) : x))
         .join('\n');
@@ -72,8 +73,8 @@ with open(os.environ['STATUS_LOG'],'a') as f:f.write(json.dumps(body)+'\\n')
       POLICY_CHECK_RESULT: 'success',
       POLICY_CHECK_RUN: policyRun,
       GPU_RESULT: forcedResult ?? (controller.status === 0 ? 'success' : 'failure'),
-      BROKER_STATE: fields.state,
-      BROKER_VERDICT: fields.verdict,
+      BROKER_STATE: brokerFields.state ?? fields.state,
+      BROKER_VERDICT: brokerFields.verdict ?? fields.verdict,
       BROKER_VERIFIED: verified ?? fields.verified,
     };
     const initial = spawnSync(
@@ -111,6 +112,16 @@ test('workflow posts success on exact head after runner independently scrubs hos
   assert.doesNotMatch(r.summary, /::error::/);
   assert.match(r.outputs, /^state=GRACE\nverdict=PASS\nverified=1\n$/);
 });
+for (const verified of ['0', '1'])
+  test('provider exhaustion stays infrastructure error, not commit FAIL ' + verified, async () => {
+    const r = await client('GRACE', 'FAIL', 200, false, 'failure', verified, 'success', '1', {
+      state: 'PROVIDER_FAULT',
+      verdict: 'PROVIDER_FAULT',
+    });
+    assert.equal(r.status, 1);
+    assert.equal(r.statuses.at(-1).state, 'error');
+    assert.match(r.statuses.at(-1).description, /provider fault.*no kayfabe verdict/);
+  });
 test('workflow posts failure when structured box verdict fails', async () => {
   const r = await client('GRACE', 'FAIL');
   assert.equal(r.status, 1);

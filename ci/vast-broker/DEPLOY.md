@@ -23,10 +23,14 @@ is no project linker), and `deploy.mjs` uploads only a bundle whose SHA-256 equa
 - **Pinned workflow.** `job_workflow_ref == workflow_ref` and it is exactly this repository's
   `gpu-vast.yml@refs/heads/master` (events `pull_request_target` and `push`) or
   `gpu-vast-sweep.yml@refs/heads/master` (event `workflow_dispatch`, sweep profile only).
-- **One run read.** `GET actions/runs/<id>` must match id, attempt, event and `in_progress`, name
+- **One exact attempt read.** `GET actions/runs/<id>/attempts/<attempt>` uses the signed
+  numeric run id and attempt. It must match id, attempt, event and `in_progress`, name
   this repository as both `repository` and `head_repository` (fork heads refuse: the safer
   choice), and have `triggering_actor.id == OWNER_GITHUB_ID`. That also covers an owner re-run
   of someone else's run.
+  There is no attempt-3 ceiling. Admission does not cache this read; the latest-run resource
+  can describe a previous attempt during a rerun. A 401 logs a fixed `github:run:<field>` code,
+  without the field value. See [rerun diagnosis](../../docs/howto/vast-rerun-auth.md).
 - **Tested commit.** The requested `tested_sha` must equal the run's `head_sha`. For `push` the
   OIDC `sha` must equal it too. MEASURED 2026-10-23 (read-only `gh api` on public
   `github/docs` `pull_request_target` runs, PR #46406): the
@@ -528,3 +532,7 @@ its schedule, verify owner stop and bundle metadata, then do hosted acceptance: 
 V2 instance-row check, the box Access pair (set before renting) and one watched rental. The payload
 script `scripts/ci/vast_payload.sh` is still absent (F14), so a real rental today posts
 `payload_missing` and FAILs. Mocks prove no hosted, provider or hardware behaviour.
+
+## Same-tree gate reuse
+
+CODE READ 2026-10-27 (`gate_reuse.py`, `release_gate.py`): master pushes may reuse a direct original hardware PASS from an identical parent/associated-PR tree, with GitHub Actions creator and CI/run checks. The existing named GPU job replays bounded original result lines and summary; missing evidence uses the existing gate. Release validation independently rechecks the original metadata. This is a workflow-only change with no Worker deployment. See [operator guidance](../../docs/howto/gpu-gate-reuse.md).

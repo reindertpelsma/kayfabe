@@ -23,6 +23,25 @@ class EvidenceError(Exception):
         super().__init__(name)
 
 
+class ProviderFault(EvidenceError):
+    """A rented host is unusable before kayfabe tests; never a product FAIL."""
+
+
+def require_provider_kvm(path):
+    if not path.exists():
+        raise ProviderFault("provider_kvm_missing")
+
+
+def provider_fault(text):
+    not_ready = re.search(r"^NOT_READY\b", text, re.M)
+    failed_driver = re.search(r"^DRIVER_RC=[1-9][0-9]*$", text, re.M)
+    unusable = re.search(r"GPU unusable|No devices were found", text, re.I)
+    initialization = re.search(r"RmInitAdapter failed|rm_init_adapter failed", text)
+    if not_ready and (unusable or (failed_driver and initialization)):
+        return "provider_gpu_unavailable"
+    return None
+
+
 def row(name, passed=0, failed=0, skipped=0):
     return {"name": name, "pass": passed, "fail": failed, "skip": skipped}
 
@@ -343,7 +362,11 @@ def final_summary(result, records):
     stage_rows, suite_rows, fail_rows = summary_lines(result, records)
     budget = SUMMARY_LIMIT - len(begin) - len(SUMMARY_END) - 2 - 64
     keep = {}
-    failed = {i for i, record in enumerate(records) if record.get("result") in ("FAIL", "TIMEOUT")}
+    failed = {
+        i
+        for i, record in enumerate(records)
+        if record.get("result") in ("FAIL", "TIMEOUT", "PROVIDER_FAULT")
+    }
     priority = (
         [("stage", i, s) for i, s in enumerate(stage_rows) if i in failed]
         + [("fail", i, s) for i, s in enumerate(fail_rows)]
@@ -372,7 +395,7 @@ def print_final_summary(result):
     print(final_summary(result, STAGE_RECORDS), flush=True)
 
 
-def watch_delta(text, rc):
+def watch_delta(text, rc, *, failed_provider=False):
     """Validate the existing watcher's instrument, process status and exact delta."""
     if int(only(r"^\[xid-watch\] host_dmesg_lines=([0-9]+) .*$", text, "host_xid")) < 2:
         raise EvidenceError("host_xid")
@@ -382,9 +405,13 @@ def watch_delta(text, rc):
     command_rc = int(
         only(r"^\[xid-watch\] --- command output ends \(rc=([0-9]+)\) ---$", text, "host_xid")
     )
-    if command_rc:
+    # Only an already-proved provider fault may have a failed wrapped command.
+    # Its wrapper must preserve that exact exit and positively prove a clean log.
+    # Instrument failure, an Xid stop and timeout are never this exception.
+    clean_failure = failed_provider and command_rc == rc and rc not in (0, 6, 7, 124)
+    if command_rc and not clean_failure:
         raise EvidenceError("host_xid")
-    if rc == 0 and before == after and "HOST Xid CLEAN" in text:
+    if (rc == 0 or clean_failure) and before == after and "HOST Xid CLEAN" in text:
         return []
     if rc != 6:
         raise EvidenceError("host_xid")
@@ -442,10 +469,19 @@ def run_bounded(command, soft_deadline_ms, output, progress_files):
     positions = {}
     pending = {}
     failure = False
+    provider_text = ""
+    provider_seen = False
+    provider_command = (
+        len(command) == 6
+        and command[0] == "bash"
+        and Path(command[1]).name == "host_xid_watch.sh"
+        and command[3:5] == ["--", "bash"]
+        and Path(command[5]).name == "provision_full.sh"
+    )
     child = None
 
     def forward(path):
-        nonlocal failure
+        nonlocal failure, provider_text, provider_seen
         try:
             with open(path, "rb") as log:
                 log.seek(positions.get(str(path), 0))
@@ -457,6 +493,16 @@ def run_bounded(command, soft_deadline_ms, output, progress_files):
             return
         decoded = data.decode("utf-8", errors="replace")
         print(decoded, end="", flush=True)
+        if provider_command:
+            provider_text = (provider_text + decoded)[-65536:]
+            # provision_full exits after driver status 8, but diagnostics and the
+            # watcher receipt can arrive in later chunks. Classification is final
+            # only after stage_grade checks the complete receipt and fault text.
+            provider_seen = (
+                provider_seen
+                or provider_fault(provider_text) is not None
+                or re.search(r"^DRIVER_RC=8$", provider_text, re.M) is not None
+            )
         value = pending.get(str(path), "") + decoded
         lines = value.split("\n")
         pending[str(path)] = lines.pop()[-65536:]
@@ -474,7 +520,10 @@ def run_bounded(command, soft_deadline_ms, output, progress_files):
                 if STOP or int(time.time() * 1000) >= soft_deadline_ms:
                     _stop(child)
                     return 124
-                if failure or (
+                # A known failed provider provision must finish its watcher receipt.
+                # Deadline, stop, and explicit Xid failure still stop immediately;
+                # stage_grade still requires complete, clean watcher evidence.
+                if (failure and not provider_seen) or (
                     os.environ.get("KF_PAYLOAD_XID_FAILED")
                     and Path(os.environ["KF_PAYLOAD_XID_FAILED"]).exists()
                 ):
@@ -590,9 +639,10 @@ def execute_stages(stages, soft, result, destination, runner=run_bounded):
             failure = "timeout" if rc == 124 else error.name
             result["suites"].append(row(failure, failed=1))
             append_arm_failure(result)
-            result["verdict"] = "FAIL"
+            verdict = "PROVIDER_FAULT" if isinstance(error, ProviderFault) else "FAIL"
+            result["verdict"] = verdict
             persist_result(destination, result)
-            record.update(result="TIMEOUT" if rc == 124 else "FAIL", reason=failure)
+            record.update(result="TIMEOUT" if rc == 124 else verdict, reason=failure)
             files = [*stage["progress"], stage["output"], *stage.get("detail", [])]
             record["first_fail"] = first_failing_line(files)
             record["failed_tests"], record["failed_total"] = failed_tests(files)
@@ -790,7 +840,13 @@ def watched(command, root, name):
 
 def stage_grade(root, tag, log, grade, rc):
     if rc not in (0, 6):
-        return grade(rc)
+        try:
+            return grade(rc)
+        except ProviderFault:
+            # Provider recovery must never bypass the unmatched-Xid safety stop.
+            if watch_delta(bounded_text(log), rc, failed_provider=True):
+                raise EvidenceError("host_xid") from None
+            raise
     text = bounded_text(log)
     try:
         delta = [xid_record_key(line) for line in watch_delta(text, rc)]
@@ -837,8 +893,9 @@ def main():
         subprocess.run(["df", "-h", "/"], check=True)
         free = shutil.disk_usage("/").free
         print("KF_PREFLIGHT_FREE_BYTES=" + str(free), flush=True)
-        if free < 60000000000 or not Path("/dev/kvm").exists():
+        if free < 60000000000:
             raise EvidenceError("preflight")
+        require_provider_kvm(Path("/dev/kvm"))
         if int(time.time() * 1000) >= soft:
             raise EvidenceError("timeout")
         branch = prepare_checkout(root, sha)
@@ -891,8 +948,12 @@ def main():
             )
 
         def provision_grade(rc):
+            log = bounded_text("/root/prov/prov.log")
+            fault = provider_fault(log)
+            if fault:
+                raise ProviderFault(fault)
             result["hardware"] = hardware()
-            rows = provision_rows(bounded_text("/root/prov/prov.log"), rc)
+            rows = provision_rows(log, rc)
             tags = {
                 s
                 for s in (root / "tools/drivermatrix/tags.txt").read_text().splitlines()
@@ -975,6 +1036,8 @@ def main():
         )
         return execute_stages(stages, soft, result, destination)
     except EvidenceError as error:
+        if isinstance(error, ProviderFault):
+            result["verdict"] = "PROVIDER_FAULT"
         result["suites"].extend(error.rows)
         result["suites"].append(row(error.name, failed=1))
         persist_result(destination, result)

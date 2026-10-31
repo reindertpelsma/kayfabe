@@ -1,5 +1,8 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+**STATUS: LIVE, 2026-10-22.** The newest UPDATE below is the resume point; the sections after
+it are dated checkpoints, kept as history.
+
 ## UPDATE 2026-10-22 — Vast broker callbacks, mock validation only
 
 [CODE READ: 2026-10-21 provider docs] BLOCKED: the documented Vast VM/onstart
@@ -524,7 +527,7 @@ cleared GPU-free primitive scope. Full trap/core/abi/rm/chan/qemu1899 PASS/0fail
 Evidence gravity-vulkan/user-scan. Runtime userrelay::enabled() remains false;
 source admission/native ordering/software migration integration still open.
 
-Exact4df9c0095 hardware on172.22.1.20: gates9/9+gate10, USERbirths12/12,
+Exact4df9c0095 hardware onthe trusted test host: gates9/9+gate10, USERbirths12/12,
 fast30/30/crash0/NOTRUN0/exit0. Five Xid31 match deliberate negative arms; no32.
 Linux desktop disposable child: Cinnamon/Xorg + NVIDIA580.159.04 RTX4070 gears
 ~60FPS, no hostXid; guest startup flip timeout and shared-data assertions mean
@@ -1202,7 +1205,7 @@ Windows verdict yet; Vulkan unfixed. Owner personal1380chain remains preserved.
 
 ## Latest checkpoint, 2026-10-11 21:39 UTC
 
-Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;
+Last confirmed public push89e8ddf8b, private1dc9c0e. Owner releasedthe trusted test host;
 manual1380 stopped UNCLEAN-kill21:33:57 after failed ACPI/QGA shutdown. Installed
 image + backing chain retained; writable personal child/firmware/KEEP.json in
 owner-state/manual1380. qcow2 check0 is not NTFS shutdown proof. User explicitly
@@ -1580,7 +1583,7 @@ Open: no VM-reset hook exists in kf3 (arms are cleared at fn 1, the guest RM's s
 - **New in master:** VMM-neutral input traits (`InputSink`, `CursorSink` in `kf-broker`; kf3 ABI 22 to 23), the native physical-operand oracle (`kf-phys-oracle`, `traces/phys_operand_oracle_20261008/`: a copy-engine physical operand is refused on a USER-privilege channel, measured; 3D/compute/video have no physical-operand method, by reading), `docs/design/the_three_channel_kinds.md` §1.1 (the relayed Passthrough sub-kind), the real-hardware control diff `traces/windows_code43_walls_20261007/vfio10-vs-run89-controls.txt` (⊘ its framing is partly wrong: the vfio-10 reference is a DisplayPort monitor while kayfabe's connector is DVI-D by design, so the DP cluster is not a signal; see the Windows lines below).
 - **Not in master (branches; each needs the merge bar):** Windows `claude/windows-display-20261008`, `claude/windows-walls-20261008`, `claude/windows-timeout-20261008`, `claude/windows-reenable-20261008`, `claude/windows-pass-20261008` (in progress); `claude/rawclient-ce-interrupt-20261008` (the `--ce-interrupt` arm: bare metal positive leg 50/50 at a median 47 us wake, but the negative control cannot be graded on a busy GPU: other tenants raise the GPU-wide notifier; run it on the quiet box, then in the guest); `claude/userd-iova-spike-20261008` (negative result, below); the nvkvm-pv branch `kf-broker-fixes-20261008` (sub-pixel remainder, host cursor under grab).
 - **Windows state (2026-10-08):** NVIDIA-enabled idle works; per-process channels run as Passthrough twins; D3D device creation still fails and the guest bugchecks 0x116 at the first D3D device work (a GPU-scheduler timeout). RULED OUT with falsifiers: lost CE interrupts, stale `GP_GET`, the preempt and its re-enable, the USERD relay, the USERD address (run 89: identity IOMMU, plain adoption, same hang), a second GSP event, subchannel binds, VA base, display control `0x007302a5`. Leading inference: the display flip/vblank path (kayfabe raises no guest vblank interrupt, `vblirq=0.0`; Linux works without one). The owner may connect a DVI-D monitor so a like-for-like real-hardware reference can be traced.
-- **USERD (urgent, to be discussed once Windows passes):** Windows' USERD is in guest system memory; the host's IOVA for it is 47-bit and RM refuses it (`NV_ERR_INVALID_ADDRESS`, address > 2^40). Measured: a separate one-page OS descriptor is refused as well (`userd-iova-spike`), probably the kernel's 47-bit DMA latch. Run 89 shows that an identity IOMMU domain for the GPU makes adoption work. Agreed packaging: adopt first; fall back only on exactly 0x1e AND a system-memory USERD (and, later, no host-kernel patch); fallback = the relay, with the twin's USERD in host-owned VRAM, done inline in the doorbell table (copy `GPPut` in; the owner assumes Windows never reads `GP_GET`, a poison experiment would test it); the VRAM-backed alias as the later host-independent fix. ⚠ The GPU's IOMMU group on 172.22.1.20 may currently be in identity mode (set by the Windows agents for their control runs): check `cat /sys/kernel/iommu_groups/<n>/type` (the group of `0000:01:00.0`); the default is `DMA-FQ`.
+- **USERD (urgent, to be discussed once Windows passes):** Windows' USERD is in guest system memory; the host's IOVA for it is 47-bit and RM refuses it (`NV_ERR_INVALID_ADDRESS`, address > 2^40). Measured: a separate one-page OS descriptor is refused as well (`userd-iova-spike`), probably the kernel's 47-bit DMA latch. Run 89 shows that an identity IOMMU domain for the GPU makes adoption work. Agreed packaging: adopt first; fall back only on exactly 0x1e AND a system-memory USERD (and, later, no host-kernel patch); fallback = the relay, with the twin's USERD in host-owned VRAM, done inline in the doorbell table (copy `GPPut` in; the owner assumes Windows never reads `GP_GET`, a poison experiment would test it); the VRAM-backed alias as the later host-independent fix. ⚠ The GPU's IOMMU group on the trusted test host may currently be in identity mode (set by the Windows agents for their control runs): check `cat /sys/kernel/iommu_groups/<n>/type` (the group of `0000:01:00.0`); the default is `DMA-FQ`.
 - **Owner decisions waiting:** `KF3_WIN_TWIN_DEFAPI_OBJECT` (conflicts with §U.1; meets §U.3), `KF3_ASYNC_PREEMPT`, `KF3_RELAY_GET_REFRESH`, the software-runlist flag, the USERD packaging above, §T items T.9 and T.10, `raw_control_native` behind a non-default feature, the colour mode-3 hardware test, the DVI-D reference session.
 
 **MASTER, 2026-10-08 (later the same day) — the candidate below was promoted: master is the code of `6692e621` plus docs.** ⊘ *The "MASTER CANDIDATE" paragraph after this one is history: its "NOT run" list was run.* The standing merge approval was met for the exact code commit `6692e621`:
@@ -1672,6 +1675,8 @@ scheduling, `KF3_SW_RUNLIST_HOST_OWNED`, default off, AWAITING OWNER CONFIRMATIO
 answered, Windows takes a further path and a third GR channel dies on an unbound subchannel; 0x116
 earlier. **Stopped for two owner decisions** (the inert-subchannel software method `0x200`; B).
 [Runs 44-46 and the stop](../traces/windows_code43_walls_20261007/README.md#stop-owner-decisions-are-needed-2026-10-07-after-run46).
+
+> **Correction, 2026-10-31 (provenance fix).** The paragraph below says the `0x2081010d` id is "confirmed by the pinned retail driver's export row" via `tools/windows-ctrl-export/derive.py` and that "the retail flags say the control is NON_PRIVILEGED". Both are withdrawn: the tool is deleted, `crates/kf-abi/src/hoststub.rs` is a hand-maintained table whose message `0xd` and params size `0` are `measured:` rows citing `traces/windows_code43_walls_20261007/run41-requests.log:95` and `run53-requests.log:526`, and the control's per-control privilege is unknown from public sources (`docs/OWNER_RULINGS.md` §S, correction above that entry). Behaviour is unchanged; the Windows path is UNVERIFIED on hardware after this change and rests on unit tests until a Windows run (owner ruling 2026-10-31: no merge to master before that).
 
 **Runs 38-43, 2026-10-07 (branch `claude/code43-stubs-20261007`; answers the next paragraph's
 "stopped for an owner decision" on the 13 queries, under the coordinator's relay of the owner's §S
@@ -1815,7 +1820,7 @@ the handler only resolves passthrough group members. Next: apply the authored
 host control to Translated members off the GSP lock. This handler change is now
 implemented;101 kf-qemu tests pass, zero new Clippy debt. Run19 at f6aa9d2e
 applies4000us on the actual owned host group; a06c0103 returns0 and watchdog
-hint e38498 disappears. Code43/smi9 persist. Next: kernel GR channels are
+hint site-053 disappears. Code43/smi9 persist. Next: kernel GR channels are
 acknowledged without birth, then GPU_PROMOTE_CTX refuses. Capture exact inline
 promotion entries before implementing a real owned unprivileged GR context.
 The default-off observer is implemented with16 records of at most16 entries;
@@ -1860,7 +1865,7 @@ drops that relation and returns INVALID_STATE before any host channel creation.
 The adjacent 0080170e query is FIFO latency-buffer sizing, also unsupported.
 Code43 persists; run14 retains the same24 saved assertions as run13. This is
 source-backed diagnosis, not a functional repair or proof tying either RPC to
-assertion1a103e6. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
+assertion site-018. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
 
 **Latest checkpoint, 2026-10-06:** product `74cd590c` implements GPU TMO and
 indexed CSC tables under the existing opt-in colour flag. The strict Linux
@@ -1872,8 +1877,8 @@ The owner clarified that broader table formats and chroma-correction controls
 must also gain real processing; this checkpoint is not the intended endpoint.
 Windows run13 at `74cd590c` still reports Code43, but reaches 8,330 display
 methods (zero UPDATEs/scanouts) rather than zero methods. Its fresh watchdog
-changes after the same first 17 assertions: `0x169d836` is replaced by
-`0x1a103e6`; no interpretation as an NV_STATUS or completed initialization.
+changes after the same first 17 assertions: `site-044` is replaced by
+`site-018`; no interpretation as an NV_STATUS or completed initialization.
 Product `8dde9b51` additionally executes variable tone segments and 65..1025
 sample tables; GPU fixtures pass, including exact compact extents and hostile
 header rejection. Product `00220cc6` adds real DIRECT8 input/output lookup; all eight SDR GPU
@@ -1914,8 +1919,8 @@ SDR rendering and working gamma do not establish a TMO buffer.
 
 Windows run 12 with implemented DIRECT10 surface-loading declarations still
 has Code 43 / smi exit 9 and zero display methods. Its fresh dump reaches
-`0x169d836`: the display-buffer precondition path, statically pointing to a
-zero-sized TMO descriptor with TMO absent (no live size captured). Do not
+`site-044`: the display-buffer precondition path; the leading hypothesis (an inference)
+is a zero-sized TMO descriptor with TMO absent (no live size captured). Do not
 reintroduce a fake TMO capability. Next Windows work needs a supported path
 avoiding TMO or real bounded TMO processing, with further walls possible.
 Complete dump records remain usable; outer NVCD is one byte short.
@@ -1961,7 +1966,7 @@ See [review and evidence](../traces/antigravity_review_20261006/README.md).
 The controlled O Windows run `boundary-kayfabe-10` completed: Code 43 /
 `nvidia-smi` exit 9 remains, but 455 RPCs (N: 365) now reach the probe's explicit
 display-method refusals. The fresh dump's first changed assertion moved from
-`0x16e9967` to `0x1a103e6`; the first 17 of 24 complete saved assertions match N.
+`site-011` to `site-018`; the first 17 of 24 complete saved assertions match N.
 Outer NVCD remains one byte short, so its checksum cannot be validated. The guest
 shut down cleanly, supervisor exit zero, RTX 4070 healthy, no VM or NBD attachment
 remains. Sanitized evidence is in the review directory; raw private controller
@@ -2261,7 +2266,7 @@ broker_lane.sh). Candidate procedure = `traces/v3_candidates/cand1_20261003/READ
     CeUtils timeout on the first boot after a stray QEMU was SIGKILLed on the same GPU (§4.9). It was
     **30/30** on the rerun at the same revision. `traces/v3_cifix/`.
   - **Open owner choices:** (1) build the guest doorbell helper now, or first measure a non-nested
-    host? Needs a physical host: `172.22.1.20` was still `Network is unreachable` from this workspace
+    host? Needs a physical host: the trusted test host was still `Network is unreachable` from this workspace
     on 2026-09-30, and the RTX 3050 kiosk PC's address is not recorded in the repo.
     (2) `GF100_DISP_SW` (X11 desktops): A = allocate a host object for it, which breaks the rule that
     kf-rm refuses unknown classes; B = keep refusing it, which leaves X11 partial. Recommendation: B
@@ -2335,7 +2340,7 @@ broker_lane.sh). Candidate procedure = `traces/v3_candidates/cand1_20261003/READ
   in the exact combined candidate above.
   Do not use those historical results to certify a new candidate. The fresh allowlist candidate
   starts from the published baseline, so it does not silently promote the other pending changes.
-- **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`
+- **Physical baseline access:** read-only SSH to the trusted test host reports `Network is unreachable`
   from this workspace on 2026-09-28. Prepare the protocol locally; do not label a Vast KVM VM as a
   non-nested host. No physical-host session or display was changed. The owner subsequently
   requested the nested Vast ioeventfd experiment; label its results as nested, not physical-host.

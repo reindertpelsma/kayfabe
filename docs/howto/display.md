@@ -23,7 +23,15 @@ The build in [Building from source](building.md) disables the GTK and SDL front 
 
 The broker is a small program that owns the window, the input and the clipboard, so the VMM does not have to. QEMU hands it finished frames over a unix socket and holds no connection to your display server at all. It was imported from the author's `nvkvm-pv` repository and is built from `broker/`. <!-- src: broker/README.md, broker/IMPORTED.md -->
 
-**Do you need it?** The broker's guarantee is that the VMM never touches your display server. That matters when the VMM is sandboxed (a container, `systemd-nspawn`, `bubblewrap`). If the VMM runs unconfined as your user, it can reach your display server anyway, and the broker only adds a socket hop. <!-- src: broker/README.md -->
+**Why a broker, and not QEMU's own window?** Kayfabe's QEMU is built without the GTK and SDL front ends on purpose (see above), so the broker is the way to get a desktop window; VNC stays as the second path. The reasons the repository records:
+
+- **No lock-in to one hypervisor.** The owner's direction of 2026-10-01 is that frames leave through a hypervisor-agnostic broker, not QEMU's SDL or GTK UI, and hypervisor independence is a goal ([Goals and plans](goals.md)). In the broker relay only about 230 lines in the QEMU device are QEMU-specific; the connection logic, the frame ring and the input policy are VMM-neutral Rust. <!-- src: docs/OWNER_RULINGS.md section C item 6, section AO; docs/design/V3_DISPLAY.md section 8.0 -->
+- **The VMM stays away from your display server.** QEMU holds no connection to it at all, which matters most when QEMU is confined (a container, `systemd-nspawn`, `bubblewrap`), the extra layer the [Security model](security.md) recommends. <!-- src: broker/README.md; docs/howto/security.md -->
+- **One display path to maintain.** Pointer grab, absolute or relative input, buttons, the wheel and re-sync are decided in one place (`kf-broker`); only a thin shim names the VMM, so a second hypervisor adds a shim rather than a second display path. <!-- src: docs/OWNER_RULINGS.md section V (owner, 2026-10-08) -->
+- **The broker owns the cursor and the pacing.** It draws the guest's cursor, including true inverting cursors, and kayfabe composes none; the design makes the broker the frame clock (not built yet), with kayfabe's clock as the fallback after 50 ms of silence. The display design notes record problems with QEMU's own front ends: SDL and GTK read a guest cursor with different conventions, GTK warps the host pointer under a grab, and GTK's window resizing re-modes the guest. <!-- src: docs/OWNER_RULINGS.md sections AJ, AK, AL; docs/design/V3_DISPLAY.md cursor-format and ui_info notes -->
+- **Frames are copied on the GPU into a frame kayfabe owns.** For a compositor on the same NVIDIA GPU the frame never crosses to the CPU, and the guest cannot change it after the copy; other compositors get a copy in host RAM, with shared memory as the last fallback. <!-- src: docs/OWNER_RULINGS.md section L -->
+
+The imported `broker/README.md` still says to use `-display sdl` for an unconfined QEMU. That advice is nvkvm-pv's and does not apply here: this QEMU has no SDL.
 
 Note that `broker/README.md` shows QEMU options of the `nvkvm-pv` project (`-display nvkvm-broker,socket=...`). **Kayfabe does not use those.** In kayfabe the socket is a property of the device: `display-broker=<absolute socket path>`.
 
@@ -106,7 +114,7 @@ For Windows, the recorded way to get a visible desktop is the one in [Windows gu
 
 - A broker package or a service unit.
 - A recipe for a broker with `display-broker` under a sandboxed QEMU (container) end to end.
-- Display with guest drivers other than the ones named above, on Linux.
+- Current supported display coverage beyond the named Linux guest driver. The branch `codex/sweep-integrate-20261018`, not merged, reports earlier AD102 broker runs with Linux 590.48.01 and 595.91.07 [reported in `traces/sweep_integrate_20261018/MATRIX.md` on that branch, historical revisions `9d6f210ba` and `6265b980f`]. Those historical runs do not establish current-master display compatibility.
 - HDR.
 
 Verified on: the Linux desktop at kayfabe `0e64a960` (host 595.91.07, RTX 4070, GNOME Wayland, 2026-10-08) and the Windows 11 desktop in the README's screenshot (2026-10-21). Not verified end to end: the broker build and the launchers were read from the repository, not run for this page.

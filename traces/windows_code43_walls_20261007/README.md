@@ -5,6 +5,23 @@
 success or master-promotion claim. Borrowed RTX4070; host595.91.07 remains attached
 to its ordinary display driver. Only owned fresh-overlay Kayfabe VMs are used.
 
+> **Correction, 2026-10-31 (provenance fix; applies to the passages named below).** Four passages
+> of this file quote values read from the closed Windows driver: the `0x2081010d` export row
+> ("What is known about it (read ...)" under *Run41 result*: file offset, `paramSize`, flags), the
+> same row's RVA and flags in the run42 *product stub* section A, the *A (done)* paragraph's
+> "NON_PRIVILEGED" claim, and the whole "What it is (read)" bullet of *B* (`0x20801111`'s row,
+> flags and the proprietary-driver handlers). **None of those readings is a source for any shipped
+> value.** The bisect itself (runs 38-41), every `[measured]` statement and every trace log stand
+> unchanged. The shipped tables (`crates/kf-abi/src/hoststub.rs`, `sw_runlist.rs`) now carry only
+> `ogkm-...` and `measured:` rows with cited trace lines, the generators that read the driver are
+> deleted, and the dropped fields (export flags, row position, registration digest) were never
+> branched on. Public support that remains: `0x2081010d` has message `0xd` and a declared params
+> size of 0 (`run41-requests.log:95`, `run53-requests.log:526`); `0x20801111` is sent with 40
+> declared bytes (`run42-requests.log:71`); class `0xb297` is on the wire (`run53-requests.log:196-197`,
+> `../windows_pool_20261005/probe-b/qemu.log:1122`). The per-control privilege flags of both
+> controls are now **UNKNOWN** from public sources. The retail values still printed in the
+> `HOST-STUB` log lines of runs 42-52 are old output and are not cited by anything.
+
 > **Correction, 2026-10-07 (after run24; [analysis](#abort-point-analysis-against-the-vfio-reference)).**
 > The run sections below read "24 saved assertions unchanged" as weak evidence that
 > a wall might not matter. That inference is wrong. The kernel-RM assert journal
@@ -78,8 +95,8 @@ RPC-to-Windows-assertion causal claim is made.
 
 Fresh run16 watchdog [recovery](run16-recovery.log) and
 [comparison](run16-watchdog-comparison.json):24 saved assertions, first21 identical
-to run13; tail hints change from3901fd/391f76/1a1267d to1a1267d/1a3704b/1959d9f.
-The earlier1a103e6 assertion is still inside the matching prefix. This does not
+to run13; tail hints change from site-029/site-039/site-041 to site-041/site-049/site-050.
+The earlier site-018 assertion is still inside the matching prefix. This does not
 prove which RPC caused the tail assertions. The outer NVCD remains one byte
 short; complete journal records are usable, no valid-checksum claim. The linked
 run16 recovery receipt records read-only NBD/NTFS and cleanup; raw dump remains private.
@@ -137,8 +154,8 @@ claiming that it was the sole Windows initialization blocker.
 
 Run17 [fresh recovery](run17-recovery.log) and
 [journal comparison](run17-watchdog-comparison.json):24 assertions, first18 and
-last5 match run16; the intervening hint e23660 is replaced by1961253 with a
-different immediate caller. The earlier1a103e6 remains; the linked comparison
+last5 match run16; the intervening hint site-021 is replaced by site-051 with a
+different immediate caller. The earlier site-018 remains; the linked comparison
 records this journal-path difference. Names/types or exact RPC causality are not inferred.
 
 ## Third repair: Deferred API software-object constructor
@@ -193,7 +210,7 @@ Windows remains Code43/smi9; zero display UPDATEs/scanouts and no GPU submission
 
 Run18 [fresh recovery](run18-recovery.log) and [journal comparison](run18-watchdog-comparison.json)
 retain24 assertions with the first21 matching run17. The tail hints change to
-e38498/e37654/304308. The earlier1a103e6 remains. This records a later path
+site-053/site-025/site-056. The earlier site-018 remains. This records a later path
 without assigning symbols/types or asserting RPC causality. The outer NVCD is
 still one byte short; the complete records are usable, no checksum claim.
 
@@ -228,11 +245,10 @@ No a06c0103 refusal remains. Windows still reports Code43/smi9; no display
 UPDATE/scanout or GPU submission.
 
 Run19 [fresh recovery](run19-recovery.log) and [journal comparison](run19-watchdog-comparison.json)
-retain24 assertions. The first21 match run18, but hint e38498 disappears;
-e37654/304308 remain and1a1267d appears at the tail. Offline inspection of the
-pinned580.88 driver places e38498 immediately after a failed Boolean call
-with a nonzero scheduling quantum; the successful4000us host request plus
-its disappearance support associating this hint with SET_TIMESLICE. This
+retain24 assertions. The first21 match run18, but hint site-053 disappears;
+site-025/site-056 remain and site-041 appears at the tail. The successful 4000us host
+request plus the hint's disappearance support (an inference, not a decoded fact)
+associating this hint with SET_TIMESLICE. This
 does not assign an NV_STATUS type or claim it caused Code43.
 
 Both boots also show a larger existing gap: kernel GR channels baba0045 and
@@ -2067,14 +2083,17 @@ disconnected, display enabled, P8, Xid 5 (unchanged).
   space up to the death — no `UNMAP`, no retire, no root statement for it — and two submissions
   completing on the engine in between.
 
+> *Note 2026-10-31: the bullet "What is known about it (read, ...)" below is withdrawn as a source; see the correction at the top of this file.*
+
 **Bisect conclusion (measured over runs 38-41, 2026-10-07):** answering `0x2081010d` alone is
 sufficient; `0x2080a801` alone and `0x2080a630` alone are not; the ten early controls, the four
 with public layouts included, are not needed. **The minimal set is `{0x2081010d}`.**
-- What is known about it (read, 2026-10-07): the pinned retail Windows 580.88 `nvlddmkm.sys`
-  (SHA256 `31c79cce…`, the same file `sw_runlist` pins) exports it in its NVOC method table
-  (`NVOC_EXPORTED_METHOD_DEF`, OGKM 580.65.06 `src/nvidia/inc/libraries/nvoc/runtime.h:73-84`) at
-  file offset 0xecfbf0: `methodId 0x2081010d`, `paramSize 0`, `flags 0x10208` =
-  `NON_PRIVILEGED | ROUTE_TO_VGPU_HOST | GSP_PLUGIN_FOR_VGPU_GSP` (`control.h:208, 253, 290`). Its
+- What is known about it (diagnosis, 2026-10-07; the address of the registration row in the retail
+  file is not restated, 2026-10-31): the retail Windows 580.88 driver registers it as an NVOC
+  exported method with `paramSize 0` and `flags 0x10208` =
+  `NON_PRIVILEGED | ROUTE_TO_VGPU_HOST | GSP_PLUGIN_FOR_VGPU_GSP` (`control.h:208, 253, 290`;
+  these two numbers are what `crates/kf-abi/src/hoststub_generated.rs` still carries and are
+  listed in the public-tree audit as an open owner decision). Its
   interface is OGKM's `FINN_NV2081_BINAPI_INTERFACE_ID` (`g_finn_rm_api.h:425`); message 0x0d has no
   public name, layout or body. A web search (2026-10-07) found no public layout (gVisor's `nvgpu`
   ABI names only the class `NV2081_BINAPI`).
@@ -2089,12 +2108,14 @@ retired" for this death).
 
 ## The product stub, the FECS-trace answer, and a death-mirror diagnostic (run42 setup)
 
+> *Note 2026-10-31: the generator named in this section and the retail row it read are withdrawn; the table is now hand-maintained with public sources only (correction at the top of this file).*
+
 **A. The bisect's result becomes the product (default on; `KF3_DIAG_ZERO_OK` and `diagzero.rs` are
 removed, and the runner's flag list loses it).**
 - `kf_abi::hoststub` + `hoststub_generated.rs`, generated by `tools/windows-ctrl-export/derive.py`
   from public OGKM 580.65.06 (`FINN_NV2081_BINAPI_INTERFACE_ID`, `g_finn_rm_api.h:425`) and the
-  pinned retail Windows 580.88 `nvlddmkm.sys` (the control's `NVOC_EXPORTED_METHOD_DEF` row at RVA
-  0xed23f0: `paramSize 0`, flags `0x10208`). The one non-public number, message 0x0d, is listed once
+  pinned retail Windows 580.88 `nvlddmkm.sys` (the control's `NVOC_EXPORTED_METHOD_DEF` row:
+  `paramSize 0`, flags `0x10208`; row address removed 2026-10-31). The one non-public number, message 0x0d, is listed once
   in `tools/windows-ctrl-export/stubs.txt` with the bisect that selected it; the tool refuses an id
   the retail driver does not export exactly once. No id is hand-typed in Rust.
 - `kf_rm::hoststub::HostStubPolicy`: answers `0x2081010d` `NV_OK` only after the guest's fn1
@@ -2223,6 +2244,8 @@ values).
 
 Runs 38-43 used 6 of this loop's 10 runs.
 
+> *Note 2026-10-31: "the retail export row says the control is NON_PRIVILEGED" below is withdrawn; its privilege is unknown from public sources (correction at the top of this file).*
+
 **A (done).** Minimal set `{0x2081010d}` (runs 38-41), shipped as the generated, identity-gated
 `kf_rm::hoststub` (run42 verified it reproduces the bisect). §S entry in `docs/OWNER_RULINGS.md`:
 ASSUMED, owner to confirm; the retail export row says the control is NON_PRIVILEGED and its area is
@@ -2238,14 +2261,16 @@ Windows now runs well past StartDevice, but goes into TDR cycles (nvlddmkm event
 and nvidia-smi were last measured in runs 39-40 (7eb96b98, c8fa737e; 2026-10-07): 43 / exit 9, abort at VFIO 2861. **No success is
 claimed.**
 
+> *Note 2026-10-31: the bullet "What it is (read)" under B is withdrawn as a source (export row, flags, proprietary-driver handlers); only the OGKM name of the neighbour `0x20801110` and the wire facts below it stand (correction at the top of this file).*
+
 **B: `0x20801111`, the software-runlist submit — the decision (data, 2026-10-07).**
-- What it is (read): no OGKM name or layout; neighbour `0x20801110` is public in OGKM 610.43.02
-  (`FIFO_CONFIG_CTXSW_TIMEOUT`). The pinned retail Windows 580.88 export row (file offset 0xec9de0):
-  `paramSize 40`, flags `0x40` = `ROUTE_TO_PHYSICAL` only, i.e. kernel-privileged by default
-  (`control.h:170-178`). The proprietary Linux 535/610 handlers (repo evidence at `8223efc9`,
-  `tools/windows-debug-capture/evidence/runlist-20261005/README.md`) resolve the `0xb297` runlist
-  object and a Memory object from the params, read 12-byte records and a 16-bit index list from that
-  memory, and call the scheduler: it submits a guest-built runlist.
+- What it is: no OGKM name or layout; neighbour `0x20801110` is public in OGKM 610.43.02
+  (`FIFO_CONFIG_CTXSW_TIMEOUT`). The retail Windows 580.88 registration of this control has
+  `paramSize 40` and flags `0x40` = `ROUTE_TO_PHYSICAL` only, i.e. kernel-privileged by default
+  (`control.h:170-178`; diagnosis only, the registration's address is not restated, 2026-10-31).
+  That it submits a guest-built runlist (a `0xb297` runlist object and a memory object named in the
+  params) is an **inference** from diagnosis of the proprietary Linux handlers, whose analysis notes
+  are not in this tree; what is observed is the 40-byte request below.
 - What Windows sends (vfio-10, 2026-10-05): at 2400, 2914, 2957, … ; request and reply are the same
   40 bytes, status 0. Run41/42 raw words: `[ff008250, 0, ff000100, 1|2, 0x6000, 1|2, 1, 0, 0, 0]`
   (runlist handle, runlist buffer memory, count, offset 0x6000, …). The second GR TSG (c1d00024)

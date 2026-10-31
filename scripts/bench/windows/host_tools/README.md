@@ -61,9 +61,8 @@ ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=30 -t 30 -c:v libx264 -pix_fmt yu
 
 ## Not copied (kept on the host, names only)
 
-Closed-driver analysis (standing rule: diagnosis only, nothing derived or referenced): `re/fn.py`, `tdropus/vdis.py`
-(PE function disassembler), `re/ghidra.zip` and `re/ghidra_12.1.4_PUBLIC/`, `re/img/`, `re/img2/` (module images
-carved from dumps). Secrets: `windows-desktop/secrets/`. Logs, dumps, `*.state`, `*.bundle`, venvs, `target*` dirs.
+Closed-driver analysis material is not part of this tree and is deliberately not listed (standing rule: diagnosis
+only, nothing derived or referenced). Secrets: `windows-desktop/secrets/`. Logs, dumps, `*.state`, `*.bundle`, venvs, `target*` dirs.
 
 ## Files
 

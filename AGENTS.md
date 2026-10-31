@@ -27,7 +27,9 @@ is frozen (see *Layout*).
   (the 30-arm raw client used by `scripts/fastguest/` and the bare-metal suite) and its
   dependency closure must keep building. Do not add features there, and never make a `kf-*`
   crate depend on it. Code *may* be copied from it when the code's shape fits v3
-  (`V3_BUILD.md`, *Rules*).
+  (`V3_BUILD.md`, *Rules*). 2026-10-31: the other pre-v3 crates (`core`, `fwd`, `rmrpc`, `rt`, `shell`,
+  `crec`, `qemu-raw`, `vmm-*`, and `device`) are under `archive/crates/` and do not build; a citation of
+  `crates/kayfabe-X` for one of them resolves to `archive/crates/kayfabe-X` (`archive/README.md`).
 - `qemu/hw/misc/kf3/` — the C QOM device. `cuda/walk/` — the walk kernel (`.cu` plus committed
   PTX). `scripts/bench/`, `scripts/fastguest/` — provisioning, gates, lanes. `traces/` —
   evidence. `third_party/` — pinned reference sources (submodules; not built). `archive/` — frozen.
@@ -48,10 +50,24 @@ is frozen (see *Layout*).
   `*_unsafe.rs`.
 - User-visible behaviour change updates docs/howto/ in the same PR; never put design notes into docs/howto/.
 - **Doc hygiene** (paid for repeatedly):
+  - An unmarked sentence is a claim of fact. Mark design intent and anything not measured.
   - Every design doc opens with a dated `STATUS` line: LIVE / SUPERSEDED / ANSWERED /
     DESIGN-ONLY / RESEARCH.
   - A correction is folded into its parent, **above** the text it corrects.
   - A supersession is recorded **in** the superseded text, not only in its successor.
+  - Every active Markdown document opens with a dated STATUS; `scripts/ci/doc_freshness.py`
+    enforces it and reports old LIVE documents with dead references (docs/CI_V3.md). A SUPERSEDED
+    document links its successor. Fix a finding; never re-record the baseline to bypass it. The
+    published manual (`docs/howto/`, `docs/FAQ.md`) is exempt.
+
+## Branches and merging
+
+- **Open PRs against `next`**, not `master`. `next` requires only `CI`. Master requires `CI` and
+  `gpu-vast`, so the real-GPU gate runs once, on the batch PR `next` -> master (merge commit), on the
+  exact final tree. Merge commits (or squash for docs/site PRs that cite no revision). We do not use rebase merges.
+  Read master as one line per PR/batch with `git log --first-parent master`.
+- Break-glass: the owner may bypass the required `gpu-vast` check on one PR (rare, e.g. a broken gate
+  runner); no other exceptions.
 
 ## Working rules — hypotheses, models, sessions
 

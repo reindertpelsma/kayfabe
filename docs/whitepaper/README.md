@@ -1,7 +1,23 @@
-# whitepaper
+# Whitepapers
 
-**`kayfabe_architecture.pdf` — the architecture paper.** Start there; it is the
-best single description of the project that exists.
+**STATUS: RESEARCH, 2026-10-27 — the v3 successor is [kayfabe_v3.pdf](kayfabe_v3.pdf).** It is pinned to `origin/next` at `12c4008705f17033a803e56d4d479bf1275cdb94`, with separately identified experimental sources. This writing task ran no GPU or VM. The cold-reader revision states the Windows stall hypothesis before the internals, restores the Windows positives and performance denominators, and separates reported results from unverified analysis. The PDF is 35 pages (about 29 pages of main text), with five mechanism diagrams and 36 standalone questions. Host-plus-guest throughput and host responsiveness remain unmeasured; coexistence has screenshot evidence only. Corrected 2026-10-28: pointer forwarding and lazy observation are on master and default on in Pointer mode; the earlier fps records were measured on research builds before that port, and speed on current master needs a new measurement (pending).
+
+⊘ *Correction 2026-10-28:* the first edition called the lazy-observation and pointer-lifecycle mechanism unmerged research. Both are on master and default on in Pointer mode, so the Windows speed rows are now labelled as records from earlier code and from a research build before that port; no new speed figure was measured.
+
+The [companion index](kayfabe_v3_index.md) carries the full source list, 101 historical gap topics and the end-of-revision snapshot of 87 open PRs, including bases and known stack parents. These are frozen metadata and historical topics, not current acceptance results. [Result distances](result_distances_v3.json) expose how far each retained hardware runtime is from the pin; none was rerun on hardware for this edition.
+
+Build the successor from committed sources:
+
+```sh
+bash docs/whitepaper/build.sh v3
+python3 docs/whitepaper/build_v3.py --check
+```
+
+The two-pass XeLaTeX publication gate rejects TeX errors, missing glyphs and undefined references. It requires recorded repository inputs to match committed Git blobs and writes a source/PDF hash receipt. See [publication checks](BUILD_GATES.md), [immutable source index](sources_v3.json) and [PR snapshot](pr_snapshot_v3.json). A receipt is local build evidence, not a signed attestation.
+
+**STATUS: SUPERSEDED, 2026-10-27 — `kayfabe_architecture.tex` / `.pdf`.** The old paper is retained below as history, with this supersession also recorded inside its text. It describes the pre-v3 tree. Its old counts and open verdicts are not the status of v3. The rebuilt archive uses Roman front matter so two fresh TeX passes settle its references; the historical body is preserved.
+
+## Historical paper
 
 It is pinned to Rust HEAD `5c367a38` (2026-08-20), with twelve further commits'
 worth of corrections applied in place at `56dc01f3` — including the two that
@@ -47,16 +63,17 @@ softened.
 
 ## Rebuilding
 
-Source and PDF in this directory are in sync — the committed PDF is built from the
-committed `.tex` (verified by checksum).
+For a publishable rebuild of the historical PDF and its new in-text notice, use the committed-input gate:
 
 ```sh
-./build.sh
+python3 docs/whitepaper/build_v3.py --legacy
+python3 docs/whitepaper/build_v3.py --legacy --check
 ```
 
 Needs **xelatex** (TeX Live) with fontspec and TikZ. Every diagram is native TikZ, so
 the output stays vector at any zoom. `lualatex` is deliberately not used. Two passes
-are required, which `build.sh` does for you.
+are required. The Python publication target records the inputs and checks the final log.
+The old default `build.sh` target remains available for historical compatibility.
 
 ## Reading order
 

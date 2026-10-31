@@ -1,0 +1,349 @@
+{
+  "run": "ENS8 CPU 2026-10-27",
+  "base": "899b0b5ba60884993c1e5a2970eea25ea311ea07",
+  "pr168": "https://github.com/reindertpelsma/kayfabe/pull/168",
+  "pr169_read_only": "6adec88f9a5f0b847084fbcc8f3d0365b49faa0a",
+  "expected_red_commit": "c980a5d45",
+  "expected_red": {
+    "behavior_fail": 2,
+    "original_guards_pass": 4,
+    "compile_errors_counted": false
+  },
+  "command": "CARGO_TARGET_DIR=/workspace/shared-target nice -n 19 cargo test --release -j2 -p kf-trap -p kf-core -p kf-chan -p kf-qemu --locked -- --test-threads=1",
+  "exit_code": 0,
+  "targets": [
+    {
+      "target": "kf_chan library",
+      "status": "ok",
+      "passed": 200,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/channel_formats_vs_ogkm.rs",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/dbfast_bench.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/dbfast_exhaust.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/dbfast_kvm.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/handoff_protocol.rs",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/notifiers_vs_ogkm.rs",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/relay_fairness.rs",
+      "status": "ok",
+      "passed": 35,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/ring.rs",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/tmode.rs",
+      "status": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/translated_rewrite.rs",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_consumption_model.rs",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_gate_rules.rs",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_lazy_model.rs",
+      "status": "ok",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_lazy_turn.rs",
+      "status": "ok",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_lifecycle_model.rs",
+      "status": "ok",
+      "passed": 63,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "target": "kf_chan Running tests/user_lifecycle_props.rs",
+      "status": "ok",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_lifecycle_stress.rs",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_loop_model.rs",
+      "status": "ok",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_loop_model_v2.rs",
+      "status": "ok",
+      "passed": 53,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "target": "kf_chan Running tests/user_loop_model_v3_pointer.rs",
+      "status": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_progress_model.rs",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_ring_model.rs",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_stream_model.rs",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_chan Running tests/user_turn_unit.rs",
+      "status": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_core library",
+      "status": "ok",
+      "passed": 50,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu library",
+      "status": "ok",
+      "passed": 388,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/bar0_trace_gate.rs",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/channel_budget_lazy.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/doorbell_no_put_poll.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/gop_rom_knobs.rs",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/gpu_uuid_property.rs",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/kf3_realize_discard.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/max_fps_property.rs",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_qemu Running tests/wire_mirror.rs",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_trap library",
+      "status": "ok",
+      "passed": 86,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_trap Running tests/doorbell_contract.rs",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_trap Running tests/hw_boundary_vs_ogkm.rs",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "kf_trap Running tests/memory_map.rs",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_chan",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_core",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_qemu",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests kf_trap",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "totals": {
+    "passed": 1206,
+    "failed": 0,
+    "ignored": 4
+  },
+  "latest_recovery_target": {
+    "passed": 18,
+    "new_behavioral_tests": 14,
+    "index_modes": [
+      "Vector",
+      "RunlistVector raw 0x10009 -> index 0x809"
+    ]
+  },
+  "exhaustive_states": [
+    166,
+    37624
+  ],
+  "seeded_replay": "1..512, each twice; 256-choice prefix plus bounded fair suffix",
+  "mutants": {
+    "runtime_production_source": 6,
+    "minimum_killers": 2,
+    "layers": [
+      "recovery callback/reverse map",
+      "production token claim/release"
+    ]
+  },
+  "gates": {
+    "clippy": "existing=288 new=0",
+    "claims": "existing=3758 new=0"
+  },
+  "hardware": "none",
+  "combined_branches": "merge dry-run only; no combined compilation/runtime validation"
+}

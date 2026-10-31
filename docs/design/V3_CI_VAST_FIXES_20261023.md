@@ -1,4 +1,4 @@
-STATUS: LIVE-DESIGN, 2026-10-23 — V1 offline security fixes from reviewed ffd1d1d51.
+STATUS: LIVE, 2026-10-23 — V1 offline security fixes from reviewed ffd1d1d51.
 
 [SUPERSEDED IN PART 2026-10-23 21:45, jose round] The box Access pair pass-through returns
 (Worker secrets BOX_ACCESS_ID/BOX_ACCESS_SECRET -> KF_ACCESS_ID/KF_ACCESS_SECRET, box protocol 7);

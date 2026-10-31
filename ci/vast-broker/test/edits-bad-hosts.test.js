@@ -45,9 +45,9 @@ const cfg = (extra = {}) =>
     BOOT_LIMIT_MINUTES: '40',
     ...extra,
   });
-test('item 6: badHosts defaults to an empty list', () => {
-  assert.deepEqual(DEFAULTS.badHosts, []);
-  assert.deepEqual(cfg().badHosts, []);
+test('item 6: badHosts defaults to the known failed-provider host', () => {
+  assert.deepEqual(DEFAULTS.badHosts, [224600]);
+  assert.deepEqual(cfg().badHosts, [224600]);
 });
 test('item 6: a listed host is rejected with all its machines', () => {
   const c = cfg({ BAD_HOST_IDS: '[4242, 77]' });

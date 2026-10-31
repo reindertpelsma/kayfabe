@@ -1,0 +1,33 @@
++ nvidia-smi --query-gpu=name,driver_version,memory.total,pstate,pcie.link.gen.current,pcie.link.width.current,temperature.gpu,power.draw --format=csv
+name, driver_version, memory.total [MiB], pstate, pcie.link.gen.current, pcie.link.width.current, temperature.gpu, power.draw [W]
+NVIDIA GeForce RTX 2060 SUPER, 575.51.03, 8192 MiB, P8, 1, 16, 33, 6.43 W
++ nvidia-smi -q
++ grep -iE 'BAR1|Total  |Persistence|Product Arch|Addressing|Display Mode'
++ head
+    Product Architecture                  : Turing
+    Display Mode                          : Requested functionality has been deprecated
+    Persistence Mode                      : Disabled
+    Addressing Mode                       : None
+        Total                             : 8192 MiB
+    BAR1 Memory Usage
+        Total                             : 256 MiB
+        Total                             : 0 MiB
++ dmesg
++ grep -ac 'NVRM: Xid'
+0
++ cat /proc/driver/nvidia/version
++ head -2
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+GCC version:  gcc version 12.3.0 (Ubuntu 12.3.0-1ubuntu1~22.04)
++ python3 [PRIVATE_PATH]
+CUPROBE_OK roundtrip_equal True bytes 1048576
++ dmesg
++ grep -ac 'NVRM: Xid'
+0
++ lsmod
++ grep -E '^nvidia|nouveau'
++ head
+nvidia_uvm           2093056  0
+nvidia_drm            139264  0
+nvidia_modeset       1560576  1 nvidia_drm
+nvidia              104640512  2 nvidia_uvm,nvidia_modeset

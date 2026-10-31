@@ -271,7 +271,7 @@ pub fn validate_evidence(rows: &[Row], exists: impl Fn(&str) -> bool) -> Result<
     Ok(())
 }
 
-fn parse_source(s: &str) -> Result<SourceTag, String> {
+pub(crate) fn parse_source(s: &str) -> Result<SourceTag, String> {
     if let Some(m) = s.strip_prefix("measured:") {
         let parts: Vec<&str> = m.split(',').collect();
         let [die, driver, date] = parts.as_slice() else {
@@ -795,7 +795,7 @@ mod tests {
     #[test]
     fn board_data_is_refused() {
         let uuid = format!(
-            "{}k\tGA106\t580\t4\t-\t0x1\tmeasured:GA106,580.159.04,2026-08-20\tGPU-1234abcd\n",
+            "{}k\tGA106\t580\t4\t-\t0x1\tmeasured:GA106,580.159.04,2026-08-20\tGPU-fa4e0004\n",
             hdr()
         );
         assert!(parse(&uuid).unwrap_err().contains("board data"));

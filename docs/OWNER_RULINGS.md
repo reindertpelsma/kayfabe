@@ -1,10 +1,44 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-28 (§AP records the whitepaper answers; §AM added 2026-10-18: the vidmem scrub policy; §S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
 citation: ask whether its reason still holds before relying on it.
+
+## §AP. Whitepaper answers: translation barriers, progress and evidence, 2026-10-28
+
+**STATUS: LIVE, 2026-10-28; owner design clarifications, not hardware qualification.**
+
+Source: the owner's whitepaper answers, forwarded by the coordinator on 2026-10-28 in resume-plan item 2; question numbers refer to the [v3 paper's companion index](whitepaper/kayfabe_v3_index.md).
+
+<!-- src: owner, 2026-10-28, forwarded whitepaper answers and resume-plan item 2 -->
+
+1. **Q1, by design: translation-barrier contract.** Until a refresh, edited leaves may resolve to old backing, new backing or no mapping; unedited valid VAs remain valid throughout.
+   After a refresh, edited VAs reflect the state when that refresh started or a later state.
+   Refreshes coalesce: the last refresh only has to observe all changes preceding its own start, so refresh spam must not accumulate a backlog of distinct refresh obligations.
+   The driver may skip or defer an invalidate on an invalid-to-valid transition for TLB batching within this contract; no exception to the contract is needed.
+2. **Q5/Q6, by design: worker parking.** A worker may park only if every pending completion can be serviced through its epoll sources.
+   Consuming an eventfd notification must not lose the final wake for outstanding work; waiter registration, rechecking the work condition and the releasing producer's notification must cover release before, during and after registration.
+3. **Q7, by design: GPU isolation boundary.** Channels and TSGs are the resource boundary; their privilege and permitted address-space mappings still constrain what work can access, as required by §Q, §AB and §AI.
+   This does not settle which cross-client operations need additional ownership checks.
+4. **Q8, owner design clarification:** “nesting cost is VFIO-guest only”.
+   By design, this clarification supplies no timing data or equivalence between paths.
+5. **Q9, by design: correctness oracle.** Require checked output bytes, assertions and cleanup; a process exit status of zero alone is insufficient.
+6. **Q13/Q32, owner scope clarification:** support is organised by families rather than a list of individually qualified dies, while per-die facts still follow §A.7 and the provenance requirements in §AF–§AH.
+7. **Q23, by design (owner, 2026-10-28):** clocks in this question are measurement instruments, not completion or progress conditions.
+8. **Q24, by design:** completion notifications are weak doorbells; a wake prompts inspection of the operation's own completion state and does not identify or prove that operation's completion.
+
+### Code checks accompanying the fold-in
+
+<!-- src: CODE READ, 7dcedefea093de078188efd5f712561bde746362, paths and symbols below -->
+
+**CODE READ at `7dcedefea`:** `crates/kf-mem/src/apply.rs` computes unchanged overlaps in `unchanged_pairs` and subtracts kept intervals before unmapping in `apply_entry`; its `same_mapping` comparison excludes leaf size.
+**CODE READ at `7dcedefea`:** `crates/kf-mem/src/sim.rs::apply_and_commit` arms an unchanged-translation guard, `SimRm::check_guard` checks it after host calls, and `check` rejects transients, including declared re-makes.
+**CODE READ at `7dcedefea`:** `crates/kf-mem/src/sim/tests.rs` covers a one-page edit within a 16-page row, identical translations across leaf-size changes, and exact partial changes inside a large leaf.
+**CODE READ at `7dcedefea`:** `apply.rs::keep_only_what_stays_exact` retains a re-make fallback for a rigid mapping; the tests deliberately plant such an invalid ledger shape, so these source checks are not a universal hardware proof.
+**CODE READ at `7dcedefea`:** searching `crates/kf-mem/src` for `sparse`/`SPARSE` finds only the test-only simulator and a test format fixture in `refusal_dump.rs`; `apply.rs::DiffRun` has no dedicated sparse run representation.
+**CODE READ at `7dcedefea`:** sparse detection and counting do exist outside that crate in `cuda/walk/kf_walk.cu` (`kf_slot_sparse`, `kf_par_decode_slot`, `kf_par_chunks`), so the search does not establish that the product has no sparse-related code or describe experimental branches.
 
 ## A. Standing principles
 
@@ -735,6 +769,25 @@ Implemented as `crates/kf-qemu/src/bar0trace.rs` (ABI 21's `kf3_set_read_trap`).
 closes at the next RPC's queue-head write, so each window lies inside the approved interval.
 
 
+> **Correction, 2026-10-31 (provenance fix; applies to the whole of "§S applied to `0x2081010d`"
+> below).** Three statements below rest on a closed-binary reading and are **withdrawn**: that
+> `paramSize 0` and the export flags come from "the control's export row in the pinned retail
+> driver", that the flags say the control is non-privileged, and that
+> its id is "generated" from that driver by `tools/windows-ctrl-export/derive.py` (the tool is
+> deleted; `crates/kf-abi/src/hoststub.rs` is now a hand-maintained, source-tagged table, and the
+> flags and row position are no longer carried; nothing branched on them, they were only logged).
+> What stands, publicly: the interface `0x208101` is OGKM 580.65.06 (`g_finn_rm_api.h:425`); the
+> message `0xd` and the declared params size `0` are measured (`run41-requests.log:95` and `run53-requests.log:526` in
+> `traces/windows_code43_walls_20261007/`; 5 of 5 real-GPU captures show request and reply
+> of 0 bytes, `docs/design/tier_checks/tier2_compute_host.md` item 8). The control's *per-control*
+> privilege is therefore **not known from any public source**; what OGKM shows is only the class
+> level (`NV2081_BINAPI` is allocated non-privileged under a Subdevice and forwards its controls to
+> the physical RM, `resource_list.h:460-470`, `binary_api.c:60-110`, per `tier2_compute_host.tsv`
+> row `ctl-2081010d`). The owner's decision (a)/(b)/(c) in the "For the owner" bullet below is still
+> open, but its premise "the retail flags say it is non-privileged" no longer holds: option (b)
+> should be judged on the class-level fact and a measurement of the host's answer (a Linux client
+> issuing it on an `NV2081_BINAPI` object), not on the flags. Behaviour is unchanged by this fix.
+
 **§S applied to `0x2081010d` (2026-10-07) — ASSUMED from the owner's 2026-10-07 statement that
 privileged non-compute actions can be stubbed; owner to confirm.** Owner, 2026-10-07 (relayed by the
 coordinator): *"Most actions that are not compute, privileged actions can be stubbed."* and *"All about
@@ -795,21 +848,22 @@ message, typos kept, and `…` joins fragments of one message. The audit's messa
 repo, so the date and time are the citation. An entry's date is the day the owner said it: ask whether
 its reason still holds before relying on it (see the top of this file).
 
-1. **172.22.1.20 (RTX 4070) is trusted hardware.** *(Recovered; the owner's wording was relayed by the
-   coordinator.)*
-   - Owner, 2026-10-07 (the correction of an earlier reading, relayed by the coordinator): *"172.22.1.20
+1. **The trusted test host (RTX 4070) is trusted hardware.** *(Recovered; the owner's wording was relayed by the
+   coordinator. 2026-10-28 hygiene edit: the host's network address in the quotations below is replaced by "the
+   trusted test host"; nothing else in the ruling changed.)*
+   - Owner, 2026-10-07 (the correction of an earlier reading, relayed by the coordinator): *"the trusted test host
      is trusted (our own pc hardware at home with a different ssd for claude), the kiosk pcs not, and
      vast absolutely not"*.
    - Owner, 2026-10-04 15:17: *"you may use VFIO or any other destructive chane, incl display
      restart). Just no firmware changes on metal ofc or bricking hardware but those are very rare
-     anyways."* And: *"so you do not need permission for most stuff to do on 172.22.1.20."*
-   - **How to apply:** on 172.22.1.20, driver, VFIO and display changes, including destructive ones,
+     anyways."* And: *"so you do not need permission for most stuff to do on the trusted test host."*
+   - **How to apply:** on the trusted test host, driver, VFIO and display changes, including destructive ones,
      need no permission. Firmware changes and anything that could brick hardware are forbidden. Vast
      boxes follow §F and `scripts/bench/box/README.md`.
    - ✔ **Confirmed by the owner, 2026-10-08:** *"you have full permission to do whatever is needed on
-     172.22.1.20. no need to ask"*, *"yes no secrets on them. 172.22.1.20 is trusted"*, and about vast
+     the trusted test host. no need to ask"*, *"yes no secrets on them. the trusted test host is trusted"*, and about vast
      boxes *"you can do whatever you want on vast boxes, on those I care the least, if it breaks we just
-     rerent"*. So no permission is needed on 172.22.1.20, and vast boxes may be wedged or re-rented
+     rerent"*. So no permission is needed on the trusted test host, and vast boxes may be wedged or re-rented
      freely; the §F and box-README rules still hold (no secrets on a box, only instance ids this
      session rented, no instance key printed). The 2026-10-04 "I temporarily borrow this machine"
      remark is superseded by the 10-07 and 10-08 statements; pushing work that matters (§F) stays
@@ -890,22 +944,19 @@ its reason still holds before relying on it (see the top of this file).
 - No Linux guest run allocated the class: 250 trace files carry `AllocClassNotPermitted` lines
   (class 5080 was not on the allowlist before 2026-10-07); class 20608 (`0x5080`) appears only in
   Windows runs 16 and 17.
-- A byte scan of the NVIDIA userspace (595.91.07 on the host; 610.43.02 CUDA compat) finds none of
-  the four control ids `0x50800101..104` in libcuda, OpenCL, NVENC, NVML, NVCUVID, the GL/EGL/GLX
-  cores, Vulkan SC, `nvidia-smi` or the MPS server; positive controls (`GPU_GET_GID_INFO`,
-  `GR_GET_INFO`, `BUS_GET_INFO_V2`) hit. 580.x Linux libraries were not scanned.
-- The same scan on the Windows 580.88 driver package (`DriverVer 32.0.15.8088`, `nv_dispi.inf_amd64_fe5f369669db2f36`
-  in the baseline Windows image, 103 files; read-only, static presence only): `nvcuda64.dll`,
-  `nvcuda32.dll`, `nvopencl*.dll`, `nvml.dll`, `nvcuvid*.dll` contain **none** of the four ids, so the
-  Windows CUDA user-mode path does not register deferred entries. **But the Windows graphics user-mode
-  driver does contain them:** `nvwgf2umx.dll` has `DEFERRED_API_V2` (`0x50800103`) x10 and
-  `nvdxdlkernels.dll` has all four plus `DMA_INVALIDATE_TLB` and `GPU_PROMOTE_CTX`. `nvlddmkm.sys`
-  (the positive control for this scan) has all four, `DMA_INVALIDATE_TLB` x7, `GPU_PROMOTE_CTX` x9
-  and `GR_CTXSW_ZCULL_BIND` x6. `REMOVE_API` (`0x50800102`) alone also appears in `NvPresent64.dll` x26,
-  `nvoglv64.dll`, `nvcudadebugger.dll` and others with no registration id beside it; that is not
-  taken as use of the class (inferred: an unrelated constant). The earlier statement that Windows
-  uses the class only from its kernel driver is therefore wrong for D3D; how the UMD's ids reach the
-  RM (through the kernel driver) and on which channel kind is not measured.
+- A byte scan of the NVIDIA userspace libraries (595.91.07 on the host; 610.43.02 CUDA compat) found none
+  of the four control ids `0x50800101..104` in the CUDA, compute, video, GL/EGL/GLX, Vulkan SC,
+  `nvidia-smi` or MPS components; positive controls (`GPU_GET_GID_INFO`, `GR_GET_INFO`,
+  `BUS_GET_INFO_V2`) hit. 580.x Linux libraries were not scanned. (Diagnosis only; per-file results
+  were removed from this ruling 2026-10-31 under `docs/design/V3_PROVENANCE.md` section 2.)
+- The same kind of scan on the Windows 580.88 driver package (`DriverVer 32.0.15.8088`, in the baseline
+  Windows image; read-only, static presence only) found none of the four ids in the Windows CUDA, OpenCL,
+  NVML and NVCUVID user-mode libraries, so the Windows CUDA user-mode path does not register deferred
+  entries. **But the Windows graphics user-mode components do contain them** (inferred from the scan, not
+  measured on the wire), as does the kernel driver. The earlier statement that Windows uses the class
+  only from its kernel driver is therefore wrong for D3D; how the user-mode ids reach the RM (through the
+  kernel driver) and on which channel kind is not measured. Occurrences of `REMOVE_API` (`0x50800102`)
+  alone in unrelated components are not taken as use of the class (inferred: an unrelated constant).
 - Of the eight commands the trigger can run, `DMA_INVALIDATE_TLB`, `GR_CTXSW_ZCULL_BIND`,
   `GR_CTXSW_PM_BIND`, `GR_CTXSW_PREEMPTION_BIND` are `NON_PRIVILEGED`; `GPU_PROMOTE_CTX`,
   `GPU_INITIALIZE_CTX`, `FIFO_UPDATE_CHANNEL_INFO` are `PRIVILEGED`; `GPU_EVICT_CTX` is kernel-only
@@ -978,7 +1029,7 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
 - **`raw_control_native`:** under review, see the handoff; production code must not call it.
 - **§T (recovered directives):** later rulings always win over recovered ones; keep only what is useful
   and does not conflict; **avoid directions from the v1/v2 kayfabe architecture** altogether.
-- **Disks:** the 13 GB `base.qcow2` original under `/data/paguro-work.old` is deleted ("fully
+- **Disks:** the 13 GB `base.qcow2` original under the old work directory `paguro-work.old` is deleted ("fully
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
@@ -1389,3 +1440,26 @@ Owner, 2026-10-25 ("we dont make SaaS"):
    custody and spend/abuse. See `ci/vast-broker/docs/THREAT_MODEL.md` ("Why a Worker (and when not)").
 5. **Budget:** the daily Vast budget is raised to **12 USD for 2026-10-25**; the **8 USD credit reserve is kept**.
    Per-lane stops live in the lane files.
+
+## §AO. Goals recorded for the public goals page: hypervisor independence, arm64, multi-GPU, 2026-10-27
+
+Recorded 2026-10-27 from the owner's instructions of 2026-10-22 (roadmap order) and 2026-10-27 (the goals page), so the
+public page `docs/howto/goals.md` has a repository source for each item. These are goals, not commitments.
+
+Each item below is labelled: **owner priority** (what the owner said), **design fact** (read from the source) or
+**measured status** (what a record shows). ⊘ *Correction 2026-10-28:* an earlier version of item 2 ended with "Neither is
+started before the family matrix is green". The recorded instruction is a priority order, not a start embargo, and the
+sentence was removed. Thin multi-GPU tests and aarch64 builds already exist (item 3).
+
+1. **Hypervisor independence is a goal, not implemented.** *(Owner priority, 2026-10-27: the goal. Design fact: the
+   core is VMM-agnostic by design, see `design/THE_ARCHITECTURE_v3.md` version-axis table, row V, and
+   `design/THE_DESIGN.md`; the `kf-core` crate has no QEMU dependency and reaches the hypervisor through its `Vmm`
+   and `HostOps` traits. Measured status: only QEMU is supported today, and a second hypervisor needs a shim that
+   does not exist.)*
+2. **Priority order after the families.** *(Owner priority, 2026-10-22.)* All GPU families first, Blackwell included.
+   Then multi-GPU guests (several kf3 devices in one guest, on Windows too, and choosing which GPU serves the
+   display) and arm64 (see §K for the aarch64 rulings already made) as the next priorities.
+3. **Implementation status of those two.** *(Measured status.)* What is measured for multi-GPU stays as
+   `STATUS_DETAIL.md` section 3 records it: a Linux thin guest with two distinct GPUs. CUDA in a two-GPU guest, UVM
+   across GPUs, peer access (refused by name) and Windows or display with several GPUs are not measured. Existing
+   two-GPU thin tests and the aarch64 cross-builds do not establish full support.

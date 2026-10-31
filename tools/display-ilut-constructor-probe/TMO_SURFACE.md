@@ -3,12 +3,12 @@
 **STATUS: RESEARCH, 2026-10-05.** Default-off child of M (`d2c7ca1b`). This probe does not
 implement tone mapping, LUT processing or working display initialization.
 
-M's [validated recovered Windows 580.88 journal](https://github.com/reindertpelsma/kayfabe/blob/f7ad0585/tools/windows-debug-capture/watchdog-m/evidence-m/README.md) advances past the first ILUT constructor and fails at the
-second TMO constructor. The [pinned dataflow audit](https://github.com/reindertpelsma/kayfabe/blob/d36f41ec/tools/windows-boundary-compare/M_DATAFLOW.md)
-documents the exact driver hash, product publication path and reviewed RVAs. Unlike ILUT's
+M's validated recovered Windows 580.88 journal advances past the first ILUT constructor and fails at the
+second TMO constructor. (2026-10-31: the earlier links to a dataflow audit of the retail driver were
+removed under `docs/design/V3_PROVENANCE.md` section 2.) Unlike ILUT's
 two-buffer descriptor, TMO requests one buffer. With TMO surface loading absent, the constructor
 requires empty pointer slots even though its caller fills the TMO backing-pointer array. No live
-pointer or exact inner guard was recovered; this is a source-derived discriminator, not a proven
+pointer or exact inner guard was recovered; this is a hypothesis from a private diagnosis (not published), not a proven
 fix or a reason to copy native capability bits.
 
 `KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE=1`, read once while constructing the display plane:

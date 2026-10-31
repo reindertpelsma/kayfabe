@@ -52,7 +52,7 @@ tests 38 OK. The pre-fix tests that asserted an exact-block reservation were cor
 (`eight_scattered` keeps its vidmem neighbour outside the 64 KiB unit; the leaf-bound test expects the aligned
 core through the reservation + the 4 KiB tail at grain).
 
-## 3. Hardware results (host 172.22.1.20, RTX 4070 595.91.07, Windows 11 production profile, zero flags)
+## 3. Hardware results (host the trusted test host, RTX 4070 595.91.07, Windows 11 production profile, zero flags)
 
 Runner: `tdrhunt/tdr-run15.sh N` (scripted sign-in, Edge, YouTube Shorts consent + play, 900 s hold).
 

@@ -1,0 +1,47 @@
+name: Documentation freshness
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'ARCHITECTURE.md'
+      - 'README*'
+      - 'scripts/ci/doc*.py'
+      - 'scripts/ci/test_doc*.py'
+      - 'scripts/ci/doc-freshness-debt.json'
+      - '.github/workflows/doc-freshness.yml'
+  push:
+    branches: [master, 'codex/doc-rot-*']
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Python status and freshness contracts
+        run: python3 -m unittest discover -s scripts/ci -p 'test_doc*.py' -v
+      - name: Generate report and enforce legacy ratchet
+        if: always()
+        run: |
+          python3 scripts/ci/doc_freshness.py --format markdown \
+            > "$RUNNER_TEMP/DOC_FRESHNESS.md"
+      - name: Publish report in job summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/DOC_FRESHNESS.md" ]; then
+            cat "$RUNNER_TEMP/DOC_FRESHNESS.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: DOC_FRESHNESS
+          path: ${{ runner.temp }}/DOC_FRESHNESS.md
+          if-no-files-found: error

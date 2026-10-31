@@ -93,10 +93,14 @@ Other sub-commands in the script's header: `scp-to`, `scp-from`, `sign` (export 
 | `--detach` | Run in the background. |
 | `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kayfabe runs). |
 | `--tag`, `--max-boots` | Name the run; limit restarts (default 12). |
+| `--env-file FILE` | Export the `KF3_*` flags listed in FILE (only `KF3_NAME=digits` lines and `#` comments are accepted). Added 2026-10-31; the sample `kf3_flags.sample.env` is not confirmed as the current production list. |
+| `--dry-run` | Print the QEMU command line and exit; start nothing. |
 
 <!-- src: scripts/bench/windows/README.md; scripts/bench/windows/win_vm.sh (cmd_run) -->
 
 The harness environment: `WINVM_ROOT` (default `/workspace/winvm`), `WINVM_NAME`, `WINVM_RAM_MB` (8192), `WINVM_SMP` (8), `WINVM_KF3_FB_MB` (8192), `WINVM_SSH_PORT` (2224), `WINVM_QEMU`. <!-- src: scripts/bench/windows/win_vm.sh header -->
+
+**Added 2026-10-31, opt-in, not yet run on hardware** (for a rented box; the defaults are the old behaviour): `WINVM_LOCK_WAIT_S` (7200, how long `run` waits for the GPU lock), `WINVM_INSTALL_WAIT_S` (14400, how long `install` waits), `WINVM_SSH_CONNECT_TIMEOUT` (8), `WINVM_VM_IDENTITY=1` (a random SMBIOS UUID, serial and MAC per VM, kept in the VM's directory), `WINVM_DRY_RUN=1`, and the sub-command `desktop-prep` (autologon and `OverlayTestMode=5` for the account in `KF_GUEST_USER`, default `kf`; for throwaway guests only, because the password is then stored in the guest registry). The table is in `scripts/bench/windows/README.md`. <!-- src: scripts/bench/windows/README.md -->
 
 The QEMU command it builds uses the `pc-q35-10.2` machine with SMM, Secure Boot firmware, the TPM, and the device `kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=<signed driver>,id=kf0`. Every guest reboot starts a fresh QEMU with the same firmware variables and the same TPM state; the harness restarts it for you. <!-- src: scripts/bench/windows/win_vm.sh -->
 
@@ -106,6 +110,8 @@ Rules the script enforces: every step logs `START` and `EXIT rc=` (a log with no
 
 ## Other things a Windows guest needs (not settings)
 
+- *(2026-10-31 note: `win_vm.sh` sets a fixed MAC and passes no `-uuid` or `-smbios`, so the harness does not set them (it restricts the network instead). The default `gpu-uuid=auto` is per-VM, but with no `-uuid` or `vm-id=` it is a random value on every boot. <!-- src: scripts/bench/windows/win_vm.sh, crates/kf-rm/src/gpuuid.rs -->)*
+- *(2026-10-31)* `win_vm.sh` gives each VM its own SMBIOS UUID, serial and MAC when `WINVM_VM_IDENTITY=1` is set before `install` (off by default; it has not run on hardware yet). Without it every VM has the same MAC and QEMU's default SMBIOS identity. <!-- src: scripts/bench/windows/README.md -->
 - A **unique SMBIOS UUID, serial and MAC per VM**, and offline setup until after OOBE (Windows Autopilot once matched a default-identity VM to an unrelated company tenant); an explicit `gpu-uuid`. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - **Do not snapshot an image with a Windows update staged**: it crash-loops `dwm.exe`. Block updates in test images. <!-- src: docs/WINDOWS_GUEST_SETUP.md -->
 - You supply and license Windows. The scripts download Microsoft's evaluation image, the virtio drivers and NVIDIA's installer from their vendors, each pinned by SHA-256. See [Credits and notices](credits.md). <!-- src: scripts/bench/windows/win_vm.sh, docs/NOTICES.md -->
@@ -123,8 +129,8 @@ See also [Troubleshooting](troubleshooting.md) and [Display and the broker](disp
 
 ## Not documented yet
 
-- A Windows install on a machine without the harness (a plain ISO install onto a kayfabe-backed VM by hand).
+- A Windows install on a machine without the harness (a plain ISO install onto a kayfabe-backed VM by hand). *(2026-10-31: [Attach your GPU to a VM you already have](attach-to-existing-vm.md) covers the QEMU side for an existing VM, untested.)*
 - Windows 10, or other Windows 11 builds than the two above.
-- Other NVIDIA driver versions in a Windows guest.
+- A successful guest run with another NVIDIA driver version. Windows 581.51 was attempted on AD102 and failed with Code 43 [measured in the sweep matrix, revision `24906bf33`, P19 profile; historical source `9d6f210ba`]. This is recorded on the branch `codex/sweep-integrate-20261018`, not merged: [matrix](https://github.com/reindertpelsma/kayfabe/blob/0bbf3c55f/traces/sweep_integrate_20261018/MATRIX.md). Its same-board native Windows control passed, which is not a kayfabe guest pass.
 
 Verified on: Windows 11 Pro 26200 with driver 580.88 on an RTX 4070 (kayfabe `eb9f2aa3`, 2026-10-14; further results up to master `89fc8a222`, 2026-10-21, in the README); LTSC 26100 on rented hosts. Not verified end to end: the `reg add` snippet is the repository's own text and is not a recorded run of exactly those lines. Settings 1 and 2 are the part that `gsp_on.ps1` applies and reads back in the harness.

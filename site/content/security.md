@@ -6,15 +6,16 @@ description = "A short summary of kayfabe's security model and how to report a v
 <!-- src: docs/howto/security.md, opening note -->
 > **Kayfabe has not been security audited.** The model is a design, and the repository's own review of it (a source reading, 2026-10-03) listed gaps. Do not run untrusted or multi-tenant guests on a machine you cannot afford to lose.
 
-This page only summarises. The full, sourced text is [Security model in the manual](/@docs/security.html).
+The [security model in the manual](/@docs/security.html) explains the design and its evidence.
 
-## The model in four lines
+## The model in five lines
 
-<!-- src: docs/howto/security.md "The threat model" -->
+<!-- src: docs/howto/security.md 'The threat model', 'What the isolation is made of', 'Deployment' -->
 - The guest is hostile. Guest userspace and guest root are both untrusted.
-- Host actions are authored, never forwarded: every call kayfabe makes on the host GPU is built by kayfabe from a few verbs, using the host driver's unprivileged interface. Nothing the guest sends is replayed to the host.
-- The host process is unprivileged by design. A recorded end-to-end run without root is not documented yet, and the launch scripts in the repository run as root.
-- Sandboxing is the deployer's job: kayfabe is linked into the VMM, so you confine the whole hypervisor process.
+- Kayfabe builds the requests it sends to the host driver and checks what the guest asks to map and run.
+- The launch scripts still use root; a run without sudo is recorded on one host.
+- By design, running the hypervisor as an ordinary user in a container or sandbox adds a layer of protection.
+- NVIDIA driver bugs and KVM bugs still apply. Enable the host IOMMU when you run untrusted guests.
 
 ## What is not claimed
 

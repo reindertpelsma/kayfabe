@@ -1,3 +1,4 @@
+import { reuseReplayStep } from './reuse-bootstrap.js';
 import { runnerBootstrap, sweepBootstrap } from './workflow-bootstrap.js';
 // Security-focused reader for the repository's indentation-based workflow subset.
 // Unsupported dynamic permissions/dependencies fail closed; this is not a YAML evaluator.
@@ -8,25 +9,80 @@ const pagesCondition =
 
 function pagesBoundary(text, jobs) {
   const build = jobs.find((j) => j.id === 'build'),
-    deploy = jobs.find((j) => j.id === 'deploy');
+    deploy = jobs.find((j) => j.id === 'deploy'),
+    policy = jobs.find((j) => j.id === 'policy');
   const same = (value, expected) =>
     JSON.stringify(Object.entries(value ?? {}).sort()) ===
     JSON.stringify(Object.entries(expected).sort());
   const condition = deploy?.body.match(/^    if: >-\n((?:      .*\n?)+)/m)?.[1] ?? '';
+  const expectedCondition = policy
+    ? pagesCondition.slice(0, -3) + " && needs.policy.outputs.deploy == '1' }}"
+    : pagesCondition;
+  const pr = text.split('  pull_request:\n')[1]?.split(/^  \S/m)[0] ?? '';
   if (
-    jobs.length !== 2 ||
+    jobs.length !== (policy ? 3 : 2) ||
     !build ||
     !deploy ||
+    (policy &&
+      (!same(policy.grants, { contents: 'read', 'pull-requests': 'read' }) ||
+        /\buses:|\bsecrets\./.test(policy.body) ||
+        /\bpaths(?:-ignore)?:/.test(pr))) ||
     !same(build.grants, { contents: 'read' }) ||
     !same(deploy.grants, { pages: 'write', 'id-token': 'write' }) ||
-    JSON.stringify(deploy.needs) !== JSON.stringify(['build']) ||
-    condition.replace(/\s/g, '') !== pagesCondition.replace(/\s/g, '') ||
+    JSON.stringify(deploy.needs) !== JSON.stringify(policy ? ['policy', 'build'] : ['build']) ||
+    condition.replace(/\s/g, '') !== expectedCondition.replace(/\s/g, '') ||
     !/^    environment:\n      name: github-pages\s*$/m.test(deploy.body) ||
     !/^  pull_request:/m.test(text) ||
     /pull_request_target:|\bsecrets\./.test(text) ||
     [...text.matchAll(/\buses:\s*(\S+)/g)].some((m) => !/@[0-9a-f]{40}$/.test(m[1]))
   )
-    return ['site.yml: requires read-only build and guarded, pinned Pages-only deploy'];
+    return ['site.yml: requires read-only path/build jobs and guarded, pinned Pages-only deploy'];
+  return [];
+}
+function siteStatusBoundary(text, jobs) {
+  const job = jobs[0];
+  const grants = {
+    contents: 'read',
+    'pull-requests': 'read',
+    actions: 'read',
+    checks: 'read',
+    statuses: 'write',
+  };
+  const events = text.split('on:\n')[1]?.split(/^\S/m)[0] ?? '';
+  const actual = job?.body
+    .split('    steps:\n')[1]
+    ?.split('\n')
+    .map((line) => (line.startsWith('      ') ? line.slice(6) : line))
+    .join('\n')
+    .trim();
+  const expected = [
+    '- name: Report Site metadata without running PR code',
+    '  env:',
+    '    GH_TOKEN: ${{ github.token }}',
+    '  run: |',
+    '    set -euo pipefail',
+    '    [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]',
+    '    temporary=$(mktemp -d)',
+    '    trap \'find "$temporary" -depth -delete\' EXIT',
+    '    source_origin=https://raw.githubusercontent.com/reindertpelsma/kayfabe',
+    "    curl --silent --fail --proto '=https' --max-time 20 --max-filesize 131072 \\",
+    '      -o "$temporary/site_policy.py" \\',
+    '      "$source_origin/$GITHUB_SHA/ci/vast-broker/site_policy.py"',
+    '    python3 -I "$temporary/site_policy.py" status',
+  ].join('\n');
+  if (
+    jobs.length !== 1 ||
+    job?.id !== 'status' ||
+    actual !== expected ||
+    JSON.stringify(Object.entries(job?.grants ?? {}).sort()) !==
+      JSON.stringify(Object.entries(grants).sort()) ||
+    JSON.stringify([...events.matchAll(/^  (\w+):/gm)].map((match) => match[1])) !==
+      JSON.stringify(['pull_request_target', 'workflow_run']) ||
+    !events.includes('    workflows: [Site]') ||
+    !events.includes('    types: [in_progress, completed]') ||
+    /\buses:|\bsecrets\.|\bid-token:|\bpages:/.test(text)
+  )
+    return ['site-status.yml: requires the exact API-only trusted status reporter'];
   return [];
 }
 function jobsIn(text) {
@@ -128,9 +184,15 @@ function endpointBoundary(filename, text, jobs) {
     outside = text;
   if (primary) {
     const parts = primary.body.split(/(?=^      - )/m),
-      steps = parts.slice(1);
-    if (steps.length !== 1 || !/^        id: broker\s*$/m.test(steps[0]))
-      fail('secrets require the sole broker step');
+      allSteps = parts.slice(1),
+      steps = allSteps.filter((step) => /^        id: broker\s*$/m.test(step)),
+      replay = allSteps.length === 2 && allSteps[0].trim() === reuseReplayStep.trim();
+    if (
+      steps.length !== 1 ||
+      !(allSteps.length === 1 || replay) ||
+      (replay && !/^        if: needs.pending.outputs.reused != 'true'$/m.test(steps[0]))
+    )
+      fail('secrets require the sole broker step and an exact read-only replay');
     const header = parts[0];
     if (/\b(?:WORKER_URL|WORKER_PATH|BROKER_BASE)\b/.test(header))
       fail('secrets cannot enter job env or outputs');
@@ -245,7 +307,24 @@ export function checkWorkflows(workflows) {
     errors.push('GPU permissions must be exactly id-token/write');
   for (const job of gpu.filter((x) => ['pending', 'report'].includes(x.id))) {
     if (
-      JSON.stringify(Object.entries(job.grants)) !== JSON.stringify([['statuses', 'write']]) ||
+      ![
+        { statuses: 'write' },
+        ...(job.id === 'pending'
+          ? [
+              {
+                statuses: 'write',
+                contents: 'read',
+                'pull-requests': 'read',
+                actions: 'read',
+                checks: 'read',
+              },
+            ]
+          : []),
+      ].some(
+        (expected) =>
+          JSON.stringify(Object.entries(job.grants).sort()) ===
+          JSON.stringify(Object.entries(expected).sort()),
+      ) ||
       /X-GH-Token|WORKER_URL|id-token:/.test(job.body)
     )
       errors.push('Status writer must not send its token to Worker');
@@ -273,6 +352,7 @@ export function checkWorkflows(workflows) {
     const jobs = jobsIn(text),
       map = new Map(jobs.map((j) => [j.id, j]));
     if (filename === 'site.yml') errors.push(...pagesBoundary(text, jobs));
+    if (filename === 'site-status.yml') errors.push(...siteStatusBoundary(text, jobs));
     let outsideJobs = text;
     for (const job of jobs) {
       outsideJobs = outsideJobs.replace(job.body, '');

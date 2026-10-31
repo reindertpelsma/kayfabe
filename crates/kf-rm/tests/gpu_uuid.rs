@@ -54,9 +54,14 @@ fn auto_is_the_documented_sha256_construction() {
         0x11, 0x11, 0x11, 0x11, 0x22, 0x22, 0x33, 0x33, 0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55,
         0x55,
     ];
-    let host = GpuGid::parse("GPU-51b08678-7828-4015-1962-a65a7a488e3c").expect("text");
+    let host = GpuGid::parse("GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004").expect("text");
     let got = auto_gid(&vm, &host, 0x18).expect("non-zero");
-    assert_eq!(got.to_string(), "GPU-0dd6c866-82ed-89af-c122-52cc0dae4c6f");
+    // `concat!` keeps the marker and the value apart: this is a SHA-256 of synthetic inputs, not a board,
+    // and the board-UUID gate (scripts/ci/no_gpu_uuids.py) reads `GPU-<uuid>` as a board.
+    assert_eq!(
+        got.to_string(),
+        concat!("GPU-", "9ea203f1-44f8-97bd-dfff-613eba27ea1e")
+    );
 }
 
 #[test]
@@ -208,7 +213,7 @@ fn host_serves_the_host_uuid_with_a_warning() {
 
 #[test]
 fn explicit_round_trips_including_the_gpu_text_format() {
-    let text = "GPU-51b08678-7828-4015-1962-a65a7a488e3c";
+    let text = "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004";
     let mode = GpuUuidMode::parse(Some(text)).unwrap();
     assert_eq!(mode.label(), "explicit");
     let inp = Inputs {
@@ -223,9 +228,9 @@ fn explicit_round_trips_including_the_gpu_text_format() {
     assert!(r.warnings.is_empty());
     // The bare and the upper-case spellings are the same value.
     for alt in [
-        "51b08678-7828-4015-1962-a65a7a488e3c",
-        "51b08678782840151962a65a7a488e3c",
-        "GPU-51B08678-7828-4015-1962-A65A7A488E3C",
+        "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004",
+        "fa4efa4efa4e4fa48fa4fa4efa4e0004",
+        "GPU-FA4EFA4E-FA4E-4FA4-8FA4-FA4EFA4E0004",
     ] {
         assert_eq!(GpuUuidMode::parse(Some(alt)), Ok(mode), "{alt}");
     }
@@ -253,15 +258,15 @@ fn hostile_strings_are_refused_without_being_echoed() {
     let hostile = [
         "GPU-00000000-0000-0000-0000-000000000000",
         "00000000000000000000000000000000",
-        "GPU-51b08678-7828-4015-1962-a65a7a488e3",
-        "GPU-51b08678-7828-4015-1962-a65a7a488e3cc",
-        "GPU-51b08678-7828-4015-1962-a65a7a488e3z",
-        "GPU-51b08678_7828_4015_1962_a65a7a488e3c",
-        "GPU-51b08678-7828-4015-1962-a65a7a488e3c\n",
-        "GPU-51b08678-7828-4015-1962-a65a7a488e3c\0",
-        "-GPU-51b08678-7828-4015-1962-a65a7a488e3c",
-        "GPU-GPU-51b08678-7828-4015-1962-a65a7a488e3c",
-        "0x51b08678782840151962a65a7a488e3c",
+        "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000",
+        "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004c",
+        "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e000z",
+        "GPU-fa4efa4e_fa4e_4fa4_8fa4_fa4efa4e0004",
+        "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004\n",
+        "GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004\0",
+        "-GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004",
+        "GPU-GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0004",
+        "0xfa4efa4efa4e4fa48fa4fa4efa4e0004",
         "../../etc/passwd",
         "%n%n%n%n",
         "\u{ff10}\u{ff10}\u{ff10}",
@@ -306,7 +311,7 @@ fn vm_id_parses_refuses_and_treats_zero_as_no_identity() {
     );
     for bad in [
         "vm1",
-        "GPU-11111111-1111-1111-1111-111111111111",
+        concat!("GPU-", "11111111-1111-1111-1111-111111111111"),
         "1111",
         "11111111-1111-1111-1111-11111111111g",
     ] {

@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-22T04:24:52.698272+00:00",
+  "own_id": 57144505,
+  "profile": "on",
+  "run": "ad102_on_d1",
+  "source": "7f6f7e7a76c141522a47dc79d024d9b3fd4d35e0",
+  "binary": "[PRIVATE_PATH]",
+  "binary_sha256": "4506161d6d2cb177de21a42695243d7af11c3633637221a666b52cf361eca8fa",
+  "harness_sha256": "20a768a970b97d98ca736a863136a187552e532319a749075c592670c2596baf",
+  "rpc_observer_sha256": "be45a303b43ca56a205b016d876a8c0c2f2d57686c4b66e58ffc3c2c887600e0",
+  "cell_attempt": 1,
+  "latest_start_utc": "2026-10-22T04:40:42.589188+00:00"
+}

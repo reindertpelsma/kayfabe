@@ -1,0 +1,7 @@
+{
+  "die": "GB202",
+  "source": "[PRIVATE_PATH]",
+  "host_verification": "UNVERIFIED-HOST",
+  "experiment_mode": "OBSERVATION",
+  "attestation": false
+}

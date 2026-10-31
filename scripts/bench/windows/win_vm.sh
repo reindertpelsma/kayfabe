@@ -14,7 +14,7 @@
 #                    prevented, OpenSSH keyed to the harness; then a check boot; then the disk is sealed
 #   win_vm.sh run [--overlay NAME] [--once] [--arm A|B] [--no-kf3] [--guest-driver V]
 #                 [--kf3-extra PROPS] [--tag TAG] [--ssh-port N] [--ssh-bind ADDR] [--detach]
-#                 [--no-rpc-trace]
+#                 [--no-rpc-trace] [--env-file FILE] [--dry-run]
 #                    boot the installed disk with kf3 (its signed GOP ROM, display on). kf3 has no
 #                    reset path, so every guest reboot is a fresh QEMU: -action reboot=shutdown and a
 #                    restart loop; the SAME OVMF vars and the SAME TPM state every time
@@ -22,6 +22,8 @@
 #   win_vm.sh scp-to SRC DST | scp-from SRC DST    (guest paths like C:/kf/x)
 #   win_vm.sh check [--kf3]       run check.ps1 in the running guest (WIN_* lines)
 #   win_vm.sh nv-install [--no-enable]   stage 2: the NVIDIA driver with GSP forced on (gsp_on.ps1)
+#   win_vm.sh desktop-prep        autologon for the harness account + DWM OverlayTestMode=5, read back
+#                                 (desktop_prep.ps1; the password goes to the guest on stdin, never argv)
 #   win_vm.sh collect TAG         collect.ps1 in the guest, evidence pulled to logs/evidence/TAG
 #   win_vm.sh shot [NAME]         screendump of the console, as PNG under logs/shots/
 #   win_vm.sh stop                graceful: guest shutdown, then QMP powerdown, then QMP quit
@@ -32,6 +34,15 @@
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
 # WINVM_SSH_BIND (127.0.0.1), WINVM_RAM_MB (8192), WINVM_SMP (8), WINVM_KF3_FB_MB (8192).
+# Opt-in knobs for a rented Vast box (2026-10-31, docs/design/V3_WINDOWS_ON_VAST.md section 3; the
+# defaults below are the old host workflow's, so setting nothing changes nothing):
+#   WINVM_LOCK_WAIT_S (7200)       how long `run` waits for the GPU lock; the Vast lane uses 120
+#   WINVM_INSTALL_WAIT_S (14400)   how long `install` waits for the install boot; the Vast lane uses 4200
+#   WINVM_SSH_CONNECT_TIMEOUT (8)  ssh/scp ConnectTimeout in seconds; a nested box may need 100
+#   WINVM_VM_IDENTITY=1 (off)      a random per-VM SMBIOS UUID + serial + MAC, kept in $VM/identity.env
+#                                  and reused on every boot (an existing identity.env is always used)
+#   WINVM_DRY_RUN=1 (off)          `run` / `install` print the QEMU command line (DRYRUN_QEMU) and exit
+#   KF_GUEST_USER (kf)             the account `desktop-prep` configures for autologon
 # DIAGNOSTIC, default off (2026-10-09): WINVM_TRACE=1 [WINVM_GSP_OBSERVER=1] with KF3_BAR0_READ_TRACE=1
 # records each boot with the VFIO reference's tracer (docs/design/V3_BAR0_TRACE_MODE.md).
 #
@@ -76,6 +87,12 @@ WIN_USER=kf
 MAC=52:54:00:4b:46:57
 QMP="python3 $HERE/qmp.py"
 QBIN=""
+# Opt-in lane knobs (docs/design/V3_WINDOWS_ON_VAST.md section 3). Every default is the old host workflow's.
+LOCK_WAIT_S=${WINVM_LOCK_WAIT_S:-7200}
+INSTALL_WAIT_S=${WINVM_INSTALL_WAIT_S:-14400}
+SSH_CONNECT_TIMEOUT=${WINVM_SSH_CONNECT_TIMEOUT:-8}
+DRY_RUN=${WINVM_DRY_RUN:-0}
+VM_UUID="" VM_SERIAL="" VM_MAC=""   # the per-VM identity (load_identity); empty = the fixed MAC, QEMU's SMBIOS
 export PATH="$HOME/.cargo/bin:$PATH"
 
 # ★ The media, each pinned by sha256 at its first fetch (2026-10-04, box vwin). Only official
@@ -108,6 +125,10 @@ log() {
   return 0
 }
 die() { log "REFUSED: $*" >&2; exit 2; }
+dry_run() { [ "$DRY_RUN" = 1 ]; }
+need_seconds() {  # NAME VALUE — a positive integer, so a typo cannot become an unbounded or zero wait
+  [[ "$2" =~ ^[1-9][0-9]{0,6}$ ]] || die "$1 must be a positive whole number of seconds, got '$2'"
+}
 # ⊘ The body runs in a subshell OUTSIDE any `||`/`if`: bash ignores `set -e` for everything called in
 # such a context, so `"$@" || rc=$?` reported rc=0 for a step whose python had died (measured on vwin,
 # 2026-10-04: the unattend ISO shipped without autounattend.xml and Setup stopped at its first page).
@@ -336,6 +357,91 @@ PY
 }
 
 # ------------------------------------------------------------------------------------------------
+# per-VM identity (opt-in): SMBIOS UUID, serial and MAC, random once, then the same on every boot
+# ------------------------------------------------------------------------------------------------
+# ⊘ Why: kf3's gpu-uuid=auto hashes QEMU's -uuid, and with none it is random on every QEMU start
+# (qemu/hw/misc/kf3/kf3.c, crates/kf-rm/src/gpuuid.rs); docs/howto/windows-guest.md asks for a unique
+# identity per VM. Off by default: switching an installed VM to a new identity changes what Windows
+# sees, so the old host workflow keeps the fixed MAC and QEMU's default SMBIOS. A VM that has an
+# identity.env always uses it, with or without WINVM_VM_IDENTITY.
+load_identity() {
+  local f=$VM/identity.env k v
+  VM_UUID="" VM_SERIAL="" VM_MAC=""
+  if [ ! -e "$f" ]; then
+    [ "${WINVM_VM_IDENTITY:-0}" = 1 ] || return 0
+    install -d -m 0700 "$VM"
+    python3 - > "$f.tmp" <<'PY'
+import secrets, uuid
+print("# win_vm.sh per-VM identity (non-secret). Generated once; reused on every boot of this VM.")
+print("VM_UUID=%s" % uuid.uuid4())
+print("VM_SERIAL=KF%s" % secrets.token_hex(5).upper())
+print("VM_MAC=52:54:00:%s" % ":".join("%02x" % b for b in secrets.token_bytes(3)))
+PY
+    chmod 0600 "$f.tmp"
+    mv "$f.tmp" "$f"
+    log "VM_IDENTITY_CREATED $f"
+  fi
+  while IFS='=' read -r k v; do
+    case "$k" in
+      ''|'#'*) ;;
+      VM_UUID) [[ "$v" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || die "$f: bad VM_UUID"; VM_UUID=$v ;;
+      VM_SERIAL) [[ "$v" =~ ^KF[0-9A-F]{10}$ ]] || die "$f: bad VM_SERIAL"; VM_SERIAL=$v ;;
+      VM_MAC) [[ "$v" =~ ^52:54:00:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$ ]] || die "$f: bad VM_MAC"; VM_MAC=$v ;;
+      *) die "$f: unknown key" ;;
+    esac
+  done < "$f"
+  if [ -z "$VM_UUID" ] || [ -z "$VM_SERIAL" ] || [ -z "$VM_MAC" ]; then
+    die "$f is incomplete (needs VM_UUID, VM_SERIAL, VM_MAC); delete it to get a new identity"
+  fi
+}
+log_identity() {
+  [ -z "$VM_UUID" ] || log "VM_IDENTITY uuid=$VM_UUID serial=$VM_SERIAL mac=$VM_MAC"
+  return 0
+}
+
+# ------------------------------------------------------------------------------------------------
+# run --env-file: the KF3_* flag set of a run, validated and exported
+# ------------------------------------------------------------------------------------------------
+# Only blank lines, '#' comments and KF3_NAME=digits lines are accepted; any other line refuses the
+# whole file (by line number, never by content). The list is NOT hard-coded here: it is the caller's
+# file (a sample is scripts/bench/windows/kf3_flags.sample.env, which must be confirmed against `next`).
+ENVFILE_SRC="" ENVFILE_SHA="" ENVFILE_N=0
+load_env_file() {
+  local f=$1 line n=0 lineno=0 pairs=()
+  [ -r "$f" ] || die "--env-file $f is not a readable file"
+  while IFS= read -r line || [ -n "$line" ]; do
+    lineno=$((lineno + 1))
+    line=${line%$'\r'}
+    if [[ "$line" =~ ^[[:space:]]*(#.*)?$ ]]; then continue; fi
+    [[ "$line" =~ ^(KF3_[A-Z0-9_]+)=([0-9]+)$ ]] || die "--env-file $f: line $lineno refused (only KF3_NAME=digits, '#' comments and blank lines are accepted)"
+    pairs+=("${BASH_REMATCH[1]}=${BASH_REMATCH[2]}")
+    n=$((n + 1))
+  done < "$f"
+  [ "$n" -gt 0 ] || die "--env-file $f holds no KF3_* flag"
+  local p
+  # shellcheck disable=SC2163  # `export NAME=value`, with the pair already validated above
+  for p in "${pairs[@]}"; do export "$p"; done
+  ENVFILE_SRC=$f
+  ENVFILE_SHA=$(sha256sum "$f" | cut -c1-16)
+  ENVFILE_N=$n
+}
+kf3_env_list() { env | grep -E '^KF3_[A-Za-z0-9_]*=' | LC_ALL=C sort || true; }
+log_kf3_env() {
+  local l
+  l=$(kf3_env_list | tr '\n' ' ')
+  if [ -n "$ENVFILE_SRC" ]; then
+    log "ENV_FILE $ENVFILE_SRC sha256=$ENVFILE_SHA flags=$ENVFILE_N"
+  fi
+  if [ -n "$l" ]; then log "KF3_ENV $l"; fi
+  return 0
+}
+
+# WINVM_DRY_RUN=1: print what would be started and start nothing (no QEMU, no lock, no signing, no disk)
+dry_emit() { printf 'DRYRUN_QEMU '; printf '%q ' "$@"; printf '\n'; }
+dry_rev() { kf3_rev 2>/dev/null || echo norev; }
+dry_qbin() { echo "${WINVM_QEMU:-$BENCH/kf3-bins/$(dry_rev)/qemu-system-x86_64}"; }
+
+# ------------------------------------------------------------------------------------------------
 # QEMU
 # ------------------------------------------------------------------------------------------------
 cpu_flags() {
@@ -346,6 +452,7 @@ cpu_flags() {
   esac
 }
 qemu_common() {
+  load_identity
   QA=(
     -name "$NAME,debug-threads=on"
     -object "memory-backend-memfd,id=ram0,size=${RAM_MB}M,share=on"
@@ -359,7 +466,7 @@ qemu_common() {
     -chardev "socket,id=chrtpm,path=$VM/run/swtpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm
     -device tpm-crb,tpmdev=tpm0
     -netdev "user,id=n0,restrict=on,hostfwd=tcp:$SSH_BIND:$SSH_PORT-:22"
-    -device "virtio-net-pci,netdev=n0,mac=$MAC"
+    -device "virtio-net-pci,netdev=n0,mac=${VM_MAC:-$MAC}"
     -device virtio-serial-pci,id=vser0
     -chardev "socket,id=qga0,path=$VM/run/qga.sock,server=on,wait=off"
     -device virtserialport,bus=vser0.0,chardev=qga0,name=org.qemu.guest_agent.0
@@ -369,6 +476,7 @@ qemu_common() {
     -qmp "unix:$VM/run/qmp.sock,server=on,wait=off" -qmp "unix:$VM/run/qmp-ev.sock,server=on,wait=off"
     -msg timestamp=on
   )
+  if [ -n "$VM_UUID" ]; then QA+=(-uuid "$VM_UUID" -smbios "type=1,serial=$VM_SERIAL"); fi
 }
 
 swtpm_start() {
@@ -470,17 +578,20 @@ shot_to() {  # FILE.png — the default graphic console (std VGA in install, kf3
 # ------------------------------------------------------------------------------------------------
 ssh_opts() {
   SSHO=(-i "$VM/secrets/ssh_ed25519" -o StrictHostKeyChecking=accept-new
-        -o "UserKnownHostsFile=$VM/run/known_hosts" -o ConnectTimeout=8 -o ServerAliveInterval=15
+        -o "UserKnownHostsFile=$VM/run/known_hosts" -o "ConnectTimeout=$SSH_CONNECT_TIMEOUT" -o ServerAliveInterval=15
         -o ServerAliveCountMax=4 -o BatchMode=yes -o LogLevel=ERROR)
 }
 gssh() { ssh_opts; timeout "${SSH_TIMEOUT:-900}" ssh -n -p "$SSH_PORT" "${SSHO[@]}" "$WIN_USER@127.0.0.1" "$@"; }
+gssh_in() { ssh_opts; timeout "${SSH_TIMEOUT:-900}" ssh -p "$SSH_PORT" "${SSHO[@]}" "$WIN_USER@127.0.0.1" "$@"; }  # no -n: stdin reaches the guest
 gscp_to() { ssh_opts; timeout "${SSH_TIMEOUT:-1800}" scp -q -r -P "$SSH_PORT" "${SSHO[@]}" "$1" "$WIN_USER@127.0.0.1:$2"; }
 gscp_from() { ssh_opts; timeout "${SSH_TIMEOUT:-1800}" scp -q -r -P "$SSH_PORT" "${SSHO[@]}" "$WIN_USER@127.0.0.1:$1" "$2"; }
 wait_ssh() {  # TIMEOUT_S
-  local t=$1 w=0
+  local t=$1 w=0 per=20
+  # one attempt may use the whole ConnectTimeout (default 8 s: the old 20 s bound)
+  [ "$SSH_CONNECT_TIMEOUT" -le 8 ] || per=$((SSH_CONNECT_TIMEOUT + 12))
   while [ "$w" -lt "$t" ]; do
     qemu_running || { log "QEMU exited while waiting for ssh"; return 1; }
-    if SSH_TIMEOUT=20 gssh 'echo KF_SSH_UP' 2>/dev/null | grep -q KF_SSH_UP; then
+    if SSH_TIMEOUT=$per gssh 'echo KF_SSH_UP' 2>/dev/null | grep -q KF_SSH_UP; then
       log "SSH_UP after ${w}s"
       return 0
     fi
@@ -531,8 +642,7 @@ guest_shutdown_and_wait() {  # TIMEOUT_S
 # ------------------------------------------------------------------------------------------------
 # install
 # ------------------------------------------------------------------------------------------------
-install_boot() {
-  if [ -e "$VM/logs/install_boot.done" ]; then log "install boot already completed ($(cat "$VM/logs/install_boot.done"))"; return 0; fi
+install_boot_qa() {
   qemu_common
   QA+=(-cpu "$(cpu_flags B)" -vga std -action panic=none
        -drive "file=$VM/disk/base.qcow2,if=none,id=sys,format=qcow2,discard=unmap"
@@ -541,11 +651,15 @@ install_boot() {
        -drive "file=$VIRTIO_ISO,if=none,id=cd1,media=cdrom,readonly=on" -device ide-cd,drive=cd1,bus=ide.1
        -drive "file=$VM/secrets/unattend.iso,if=none,id=cd2,media=cdrom,readonly=on" -device ide-cd,drive=cd2,bus=ide.2
        -serial "file:$VM/logs/install_b1_serial.log")
+}
+install_boot() {
+  if [ -e "$VM/logs/install_boot.done" ]; then log "install boot already completed ($(cat "$VM/logs/install_boot.done"))"; return 0; fi
+  install_boot_qa
   SHOT_EVERY=60 vm_start install 1
   # "Press any key to boot from CD or DVD": answered for the first boot only. Later in-QEMU reboots
   # let the prompt time out, so the installed disk boots.
   $QMP "$VM/run/qmp.sock" keys ret 30 >/dev/null 2>&1 || log "send-key failed (see the screenshots)"
-  vm_wait 14400
+  vm_wait "$INSTALL_WAIT_S"   # default 14400 (4 h); a 3 h Vast lease sets WINVM_INSTALL_WAIT_S
   log "INSTALL_BOOT_END rc=$BOOT_RC reason=$BOOT_REASON"
   [ "$BOOT_REASON" = guest-shutdown ] || { log "the install did not end in a guest shutdown"; return 1; }
   echo "$(ts) reason=$BOOT_REASON" > "$VM/logs/install_boot.done"
@@ -585,9 +699,18 @@ cmd_install() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --authorized-key) [ -r "${2:-}" ] || die "--authorized-key needs a readable file"; keys+=("$2"); shift 2 ;;
+      --dry-run) DRY_RUN=1; shift ;;
       *) die "install: unknown option $1" ;;
     esac
   done
+  if dry_run; then
+    # print the install boot's QEMU command line and its wait; start nothing (an identity.env may be written)
+    QBIN=$(dry_qbin)
+    install_boot_qa
+    dry_emit "$QBIN" "${QA[@]}"
+    echo "DRYRUN_INSTALL_WAIT_S $INSTALL_WAIT_S"
+    return 0
+  fi
   install -d -m 0700 "$WINVM_ROOT"
   if [ -e "$VM/installed" ]; then
     log "INSTALL_ALREADY_DONE $NAME ($(cat "$VM/installed")) — nothing to do; boot it with 'run'"
@@ -600,7 +723,9 @@ cmd_install() {
   # ★ The binary and the revision are resolved ONCE: a checkout updated under a running install or
   # run must not change which QEMU the next boot of it starts.
   QBIN=$(qemu_bin)
-  log "WINVM_INSTALL_START name=$NAME repo=$(kf3_rev) qemu=$QBIN host_driver=$(host_driver)"
+  log "WINVM_INSTALL_START name=$NAME repo=$(kf3_rev) qemu=$QBIN host_driver=$(host_driver) install_wait_s=$INSTALL_WAIT_S"
+  load_identity
+  log_identity
   step prereqs check_prereqs
   step fetch cmd_fetch
   step apparmor apparmor_swtpm
@@ -651,7 +776,7 @@ cmd_sign() {
 # run: the kf3 boot loop
 # ------------------------------------------------------------------------------------------------
 cmd_run() {
-  local argv=("$@") overlay=main once=0 arm=A kf3=1 extra="" gdrv="" tag="" detach=0 max_boots=12
+  local argv=("$@") overlay=main once=0 arm=A kf3=1 extra="" gdrv="" tag="" detach=0 max_boots=12 envfile=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --overlay) overlay=$2; shift 2 ;;
@@ -666,27 +791,35 @@ cmd_run() {
       --max-boots) max_boots=$2; shift 2 ;;
       --detach) detach=1; shift ;;
       --no-rpc-trace) export KF3_RPC_TRACE=0; shift ;;
+      --env-file) envfile=${2:?--env-file needs a file}; shift 2 ;;
+      --dry-run) DRY_RUN=1; shift ;;
       *) die "run: unknown option $1" ;;
     esac
   done
-  [ -e "$VM/installed" ] || die "$NAME is not installed (win_vm.sh install)"
+  [ -e "$VM/installed" ] || dry_run || die "$NAME is not installed (win_vm.sh install)"
   [[ "$overlay" =~ ^[A-Za-z0-9_.-]+$ ]] || die "--overlay must be a plain name"
   cpu_flags "$arm" >/dev/null
   [ -n "$tag" ] || tag="run_$(date -u +%Y%m%dT%H%M%SZ)"
-  if [ "$detach" = 1 ]; then
+  # refused here, before a --detach forks, when the file is bad; the child parses it again
+  [ -z "$envfile" ] || load_env_file "$envfile"
+  if [ "$detach" = 1 ] && ! dry_run; then
     local a fwd=()
     for a in "${argv[@]}"; do [ "$a" = --detach ] || fwd+=("$a"); done
     nohup setsid "$HERE/win_vm.sh" run "${fwd[@]}" --tag "$tag" > "$VM/logs/${tag}_run.out" 2>&1 < /dev/null &
     log "detached: tag=$tag, log logs/${tag}_run.log (stdout logs/${tag}_run.out)"
     return 0
   fi
-  LOGFILE=$VM/logs/${tag}_run.log
-  exec 7>"$VM/run/vm.lock"
-  flock -n 7 || die "$NAME is in use by another win_vm.sh"
-  QBIN=$(qemu_bin)
-  check_prereqs
+  if dry_run; then
+    QBIN=$(dry_qbin)
+  else
+    LOGFILE=$VM/logs/${tag}_run.log
+    exec 7>"$VM/run/vm.lock"
+    flock -n 7 || die "$NAME is in use by another win_vm.sh"
+    QBIN=$(qemu_bin)
+    check_prereqs
+  fi
   local disk=$VM/disk/$overlay.qcow2
-  if [ ! -e "$disk" ]; then
+  if [ ! -e "$disk" ] && ! dry_run; then
     qemu-img create -q -f qcow2 -F qcow2 -b base.qcow2 "$disk"
     log "OVERLAY_CREATED disk/$overlay.qcow2 over base.qcow2"
   fi
@@ -695,24 +828,35 @@ cmd_run() {
        -drive "file=$disk,if=none,id=sys,format=qcow2,discard=unmap" -device virtio-blk-pci,drive=sys,bootindex=0)
   local gop="" dev=""
   if [ "$kf3" = 1 ]; then
-    gop=$(gop_signed)
+    if dry_run; then gop="$SB/kf-gop.$(dry_rev).signed.efi"; else gop=$(gop_signed); fi
     dev="kf3-gpu,fb-mb=$KF3_FB_MB,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=$gop,id=kf0"
     [ -z "$gdrv" ] || dev+=",guest-driver=$gdrv"
     [ -z "$extra" ] || dev+=",$extra"
     QA+=(-vga none -device "$dev")
     # every command kf3's chain answers, logged with its id and result (kf-rm census, log only)
     export KF3_RPC_TRACE=${KF3_RPC_TRACE:-1}
-    exec 8>"$GPU_LOCK"
-    log "waiting for the GPU lock $GPU_LOCK (GPU work is strictly serial)"
-    flock -w 7200 8 || die "the GPU lock $GPU_LOCK was not free in 2 h"
+    if ! dry_run; then
+      exec 8>"$GPU_LOCK"
+      log "waiting for the GPU lock $GPU_LOCK (GPU work is strictly serial; up to ${LOCK_WAIT_S}s)"
+      flock -w "$LOCK_WAIT_S" 8 || die "the GPU lock $GPU_LOCK was not free in ${LOCK_WAIT_S}s$(lock_holder)"
+    fi
   else
     QA+=(-vga std)
+  fi
+  if dry_run; then
+    dry_emit "$QBIN" "${QA[@]}" -serial "file:$VM/logs/${tag}_b1_serial.log"
+    kf3_env_list | sed 's/^/DRYRUN_ENV /'
+    echo "DRYRUN_GPU_LOCK $GPU_LOCK wait_s=$LOCK_WAIT_S"
+    echo "DRYRUN_SSH_CONNECT_TIMEOUT $SSH_CONNECT_TIMEOUT"
+    return 0
   fi
   rm -f "$VM/run/stop-requested"
   local stopping=0
   trap 'stopping=1; touch "$VM/run/stop-requested"; log "signal: asking the guest to power down"; $QMP "$VM/run/qmp.sock" cmd system_powerdown >/dev/null 2>&1 || true' TERM INT
   log "WINVM_RUN_START tag=$tag repo_rev=$(kf3_rev) kf3=$([ "$kf3" = 1 ] && echo on || echo off) qemu=$QBIN host_driver=$(host_driver) overlay=$overlay arm=$arm guest_driver=${gdrv:-default} gop_efi=${gop:-none} sha256(gop_efi)=$([ -n "$gop" ] && sha256sum "$gop" | cut -c1-16 || echo -)"
   [ -z "$dev" ] || log "kf3 device: $dev"
+  log_identity
+  log_kf3_env
   local n=0 reason="" dm0
   while :; do
     n=$((n + 1))
@@ -751,6 +895,12 @@ cmd_run() {
 # ------------------------------------------------------------------------------------------------
 # conveniences
 # ------------------------------------------------------------------------------------------------
+lock_holder() {  # " (holder: ...)" when fuser can name who holds the GPU lock, else nothing
+  local h=""
+  if command -v fuser >/dev/null 2>&1; then h=$(fuser -v "$GPU_LOCK" 2>&1 | tail -1 || true); fi
+  if [ -n "$h" ]; then echo " (holder: $h)"; fi
+  return 0
+}
 cmd_ssh() { ssh_opts; exec ssh -p "$SSH_PORT" "${SSHO[@]}" "$WIN_USER@127.0.0.1" "$@"; }
 cmd_check() {
   local a=()
@@ -779,6 +929,24 @@ cmd_nv_install() {
   out=$VM/logs/nv_install_$(date -u +%Y%m%dT%H%M%SZ).txt
   step gsp-on gssh "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\gsp_on.ps1 -Inf C:\\kf\\nv\\Display.Driver\\nv_dispi.inf $noen" > "$out" 2>&1 || true
   tr -d '\r' < "$out" | grep -E '^GSP_ON|START|EXIT' | sed 's/^/  /'
+}
+# desktop-prep: the guest signs in by itself and DWM gets OverlayTestMode=5 (the owner's "desktop reached"
+# bar for a throwaway Vast box; docs/howto/windows-guest.md). Both take effect at the next boot of this
+# disk, so run it in the bind boot, before the parent is sealed. The password goes to the guest on ssh's
+# stdin (the script reads one line of it); it is never in an argument list, a log or this script's output.
+cmd_desktop_prep() {
+  local user=${KF_GUEST_USER:-$WIN_USER} out rc=0
+  [[ "$user" =~ ^[A-Za-z0-9_.-]{1,20}$ ]] || die "KF_GUEST_USER must be a plain account name (1-20 of A-Z a-z 0-9 _ . -)"
+  [ -s "$VM/secrets/win_password" ] || die "no $VM/secrets/win_password (was $NAME installed here?)"
+  LOGFILE=$VM/logs/desktop_prep.log
+  out=$VM/logs/desktop_prep_$(date -u +%Y%m%dT%H%M%SZ).txt
+  gssh 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null' >/dev/null
+  gscp_to "$HERE/desktop_prep.ps1" "C:/kf/desktop_prep.ps1"
+  step desktop-prep gssh_in "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\desktop_prep.ps1 -User $user -PasswordFromStdin" \
+    < "$VM/secrets/win_password" > "$out" 2>&1 || rc=$?
+  tr -d '\r' < "$out" | grep -E '^DESKTOP_PREP' | sed 's/^/  /'
+  tr -d '\r' < "$out" | grep -q '^DESKTOP_PREP_DONE fail=0' || { log "DESKTOP_PREP_FAILED (see $out, step rc=$rc)"; return 1; }
+  log "DESKTOP_PREP_OK user=$user (autologon and OverlayTestMode apply at the next boot of this disk)"
 }
 cmd_collect() {
   local tag=${1:?collect TAG}
@@ -812,6 +980,7 @@ cmd_stop() {
 }
 cmd_status() {
   echo "VM $VM installed=$([ -e "$VM/installed" ] && cat "$VM/installed" || echo no)"
+  echo "identity: $([ -e "$VM/identity.env" ] && grep -v '^#' "$VM/identity.env" | tr '\n' ' ' || echo 'default (fixed MAC, QEMU SMBIOS)')"
   echo "qemu (this VM): $(qemu_running && echo "running pid $(cat "$VM/run/qemu.pid")" || echo none)"
   echo "qemu (all, pgrep -x qemu-system-x86): $(pgrep -x qemu-system-x86 | tr '\n' ' ' || true)"
   echo "swtpm: $(pgrep -x swtpm | tr '\n' ' ' || true)"
@@ -826,6 +995,12 @@ main() {
   local sub=${1:-}
   shift || true
   case "$sub" in
+    ""|-h|--help|help) ;;
+    *) need_seconds WINVM_LOCK_WAIT_S "$LOCK_WAIT_S"
+       need_seconds WINVM_INSTALL_WAIT_S "$INSTALL_WAIT_S"
+       need_seconds WINVM_SSH_CONNECT_TIMEOUT "$SSH_CONNECT_TIMEOUT" ;;
+  esac
+  case "$sub" in
     install) cmd_install "$@" ;;
     run) cmd_run "$@" ;;
     ssh) cmd_ssh "$@" ;;
@@ -833,13 +1008,14 @@ main() {
     scp-from) gscp_from "${1:?SRC}" "${2:?DST}" ;;
     check) cmd_check "$@" ;;
     nv-install) cmd_nv_install "$@" ;;
+    desktop-prep) cmd_desktop_prep "$@" ;;
     collect) cmd_collect "$@" ;;
     shot) cmd_shot "$@" ;;
     stop) cmd_stop ;;
     status) cmd_status ;;
     sign) cmd_sign ;;
     fetch) cmd_fetch ;;
-    ""|-h|--help|help) sed -n '3,46p' "$0" | sed 's/^# \{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,57p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "unknown subcommand '$sub' (win_vm.sh help)" ;;
   esac
 }
