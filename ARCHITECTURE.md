@@ -102,7 +102,8 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 
 `crates/kayfabe-*` is the **frozen pre-v3 tree**. It is kept because `kayfabe-rm-ladder`, the
 30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, depends on it.
-No `kf-*` crate depends on a `kayfabe-*` crate.
+No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (including
+`kayfabe-device`, since 2026-10-31) are in `archive/crates/` and do not build (`archive/README.md`).
 
 ## Rules that shape the code
 

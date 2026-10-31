@@ -341,7 +341,7 @@ jobs:
         run: |
           pure="crates/kayfabe-completion \
                 crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
-                crates/kayfabe-abi crates/kayfabe-device \
+                crates/kayfabe-abi \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
                 crates/kayfabe-chips"
           if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|\blibc\b|O_NONBLOCK' $pure; then
@@ -395,7 +395,7 @@ jobs:
         run: |
           portable="crates/kayfabe-completion \
                     crates/kayfabe-mmu crates/kayfabe-gsp \
-                    crates/kayfabe-arch crates/kayfabe-abi crates/kayfabe-device \
+                    crates/kayfabe-arch crates/kayfabe-abi \
                     crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
                     crates/kayfabe-vmm \
                     crates/kayfabe-chips"
