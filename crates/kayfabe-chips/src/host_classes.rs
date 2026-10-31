@@ -256,7 +256,7 @@ const BLACKWELL_COMPUTE_B: u32 = 0xcec0;
 /// on real Blackwell silicon. That is more than any other profile in this module has.
 ///
 /// ⊘ **It is also all it is.** Mode 1 forwards ioctls; it emulates no register aperture,
-/// no GSP and no doorbell window. The 28/28 says nothing about [`crate::gb20x`]'s offsets
+/// no GSP and no doorbell window. The 28/28 says nothing about the archived `gb20x` module's offsets
 /// or its boot sequence, and the two halves must not be quoted for each other.
 ///
 /// ## ⊘ Where this DEPARTS from the module's selection rule, and why

@@ -9445,7 +9445,7 @@ impl RmBackend for HostRmBackend {
             ExportRequest {
                 source: ExportSource::Fabricated,
                 len,
-                prot: kayfabe_vmm::Prot::ReadWrite,
+                prot: kayfabe_isolate::Prot::ReadWrite,
             },
         )?;
         // ⊘ Borrowed only for the `mmap`. `Backing::SharedFile`'s own docs record that the
@@ -14818,7 +14818,7 @@ impl HostRmBackend {
             let mapped = self.map_guest_ram(GuestRamGrant::originated_by_the_vmm(
                 HALF,
                 HALF,
-                kayfabe_vmm::Prot::ReadWrite,
+                kayfabe_isolate::Prot::ReadWrite,
             ))?;
             let memory = match self.describe_guest_ram(mapped) {
                 Ok(m) => m,
@@ -15700,7 +15700,7 @@ impl HostRmBackend {
                     memory: self.stamp(vid),
                 },
                 len: BYTES,
-                prot: kayfabe_vmm::Prot::ReadWrite,
+                prot: kayfabe_isolate::Prot::ReadWrite,
             },
         ) {
             Ok(_) => DeviceExportOutcome::Succeeded,
@@ -15715,7 +15715,7 @@ impl HostRmBackend {
             ExportRequest {
                 source: ExportSource::Fabricated,
                 len: BYTES,
-                prot: kayfabe_vmm::Prot::ReadWrite,
+                prot: kayfabe_isolate::Prot::ReadWrite,
             },
         )?;
         let fd = self

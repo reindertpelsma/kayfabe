@@ -328,6 +328,157 @@ mod tests {
             "RC_TRIGGERED names the guest's chid"
         );
     }
+
+    // ---- 2026-10-31: the contracts of the retired GB202 doorbell tests ------------------------
+    //
+    // `kayfabe-chips-modules/tests/gb20x_doorbell_and_regs.rs` and the `Arch`-level half of
+    // `host_classes.rs` (both archived, `archive/crates/kayfabe-chips-modules/tests/`) asserted that
+    // an Ampere token DECODER REFUSES every GB202 token (bit 30) and that the three
+    // `kfifoGenerateWorkSubmitTokenHal_GA100`-bound generations decode alike. v3 has no token
+    // decoder to refuse with: the token is MASKED, not validated (`token.rs` header, `THE_DESIGN.md`
+    // §5.1), and the only exact-value consumer is the ioeventfd datamatch registration
+    // ([`GuestTokenFormat`]). The same contracts, restated where v3 enforces them:
+
+    /// ★ The family mismatch, restated. An Ampere-format datamatch value is NEVER a GB202 guest
+    /// token (they differ in exactly `RUNLIST_DOORBELL`, bit 30), over the whole 128 x 4096 field
+    /// space RM's encoder can write — so registering an ioeventfd with the wrong family's format
+    /// can only ever fail to match (the doorbell then takes the trapped path), never mis-route.
+    /// The converse arm: GB100's encoder writes no bit outside the Ampere mask, so for GB10x the
+    /// two formats COINCIDE — the quietly-accepted case the old test named, and why "Blackwell" is
+    /// two rows (`TOKEN_HALS`).
+    #[test]
+    fn an_ampere_format_never_predicts_a_gb202_token_and_gb100_coincides_with_it() {
+        use kf_chip::hwref::DieGroup as G;
+        let amp = GuestTokenFormat::for_die_group(G::Ga10x).expect("resolves");
+        let gb202 = GuestTokenFormat::for_die_group(G::Gb20x).expect("resolves");
+        let gb100 = GuestTokenFormat::for_die_group(G::Gb10x).expect("resolves");
+        let mut swept = 0u32;
+        for runlist in 0u32..128 {
+            for chid in 0u32..4096 {
+                let a = amp.value(runlist, chid).expect("fits the Ampere fields");
+                let g = gb202.value(runlist, chid).expect("fits the GB202 fields");
+                assert_ne!(
+                    a, g,
+                    "({runlist}, {chid}): the Ampere value is a GB202 token"
+                );
+                assert_eq!(
+                    a ^ g,
+                    1 << 30,
+                    "({runlist}, {chid}): they differ in bit 30 only"
+                );
+                assert_eq!(
+                    g & (1 << 30),
+                    1 << 30,
+                    "every GB202 token sets RUNLIST_DOORBELL"
+                );
+                assert_eq!(a & (1 << 30), 0, "no Ampere token does");
+                assert_eq!(
+                    gb100.value(runlist, chid),
+                    Some(a),
+                    "({runlist}, {chid}): GB100 writes no bit outside the Ampere mask"
+                );
+                swept += 1;
+            }
+        }
+        assert_eq!(
+            swept,
+            128 * 4096,
+            "NON-VACUITY: the whole field space was swept"
+        );
+    }
+
+    /// ★ Every token RM's GB202 encoder can produce reaches the slot of the channel that made it
+    /// (the retired `every_gb202_token_the_drivers_encoder_can_produce_round_trips`, 524 288
+    /// values: spot checks cannot pin the two field WIDTHS — a runlist masked to six bits agrees
+    /// on every small value and loses runlist 64 and up). A chid past the 2048 we declare names no
+    /// slot, from the channel side and from the doorbell side alike.
+    #[test]
+    fn every_gb202_token_reaches_its_channels_slot_over_the_whole_field_space() {
+        use kf_chip::hwref::DieGroup as G;
+        let f = GuestTokenFormat::for_die_group(G::Gb20x).expect("resolves");
+        let r = TokenIndex::RunlistVector;
+        let (mut slots, mut none) = (0u32, 0u32);
+        for runlist in 0u32..128 {
+            for chid in 0u32..4096 {
+                let token = f.value(runlist, chid).expect("fits");
+                let want = r.of_channel(runlist, chid);
+                assert_eq!(
+                    r.of_doorbell(token),
+                    want,
+                    "token {token:#010x} ({runlist}, {chid})"
+                );
+                match want {
+                    Some(i) => {
+                        assert!((i as usize) < r.table_len());
+                        assert_eq!(
+                            (r.runlist_of(i), r.chid_of(i)),
+                            (runlist, chid),
+                            "token {token:#010x}"
+                        );
+                        slots += 1;
+                    }
+                    None => {
+                        assert!(chid >= 1 << TokenIndex::CHID_BITS, "({runlist}, {chid})");
+                        none += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!((slots, none), (128 * 2048, 128 * 2048));
+    }
+
+    /// ⊘ What v3 deliberately does NOT do, pinned so it cannot change by accident: the retired
+    /// `bits_the_gb202_encoder_cannot_write_are_refused` made the decoder refuse a token with a
+    /// bit RM's encoder never sets (15:12, 29:23, 31, bit 30 cleared). The index MASKS instead —
+    /// "Masking is what the hardware does with undecoded bits, and it removes an error path"
+    /// (`token.rs`). A value that was not a token the guest could have produced still lands in
+    /// the slot its field bits name, or in none.
+    #[test]
+    fn bits_outside_the_token_fields_are_masked_and_not_refused() {
+        use kf_chip::hwref::DieGroup as G;
+        let f = GuestTokenFormat::for_die_group(G::Gb20x).expect("resolves");
+        let r = TokenIndex::RunlistVector;
+        let clean = f.value(3, 7).expect("fits");
+        let slot = r.of_doorbell(clean);
+        assert_eq!(slot, r.of_channel(3, 7));
+        assert!(slot.is_some(), "NON-VACUITY: the clean token names a slot");
+        for bad_bit in [12u32, 13, 14, 15, 23, 24, 28, 29, 31] {
+            assert_eq!(r.of_doorbell(clean | (1 << bad_bit)), slot, "bit {bad_bit}");
+        }
+        assert_eq!(
+            r.of_doorbell(clean & !(1 << 30)),
+            slot,
+            "RUNLIST_DOORBELL is not part of the index"
+        );
+    }
+
+    /// ★ The retired `the_ga100_bound_generations_decode_a_token_the_same_way_…`: the die groups
+    /// RM binds to `kfifoGenerateWorkSubmitTokenHal_GA100` (and TU102's, which names the same
+    /// fields) produce the SAME token for every channel, and nothing but the table row says so.
+    /// Held over the whole field space; GB202 is deliberately absent from the list (it is the
+    /// counterexample, above).
+    #[test]
+    fn the_ga100_bound_die_groups_produce_one_and_the_same_token() {
+        use kf_chip::hwref::DieGroup as G;
+        let base = GuestTokenFormat::for_die_group(G::Ga10x).expect("resolves");
+        for g in [G::Tu10x, G::Ga100, G::Ad10x, G::Gh100] {
+            assert_eq!(
+                GuestTokenFormat::for_die_group(g).expect("resolves"),
+                base,
+                "{g:?} writes a different token from GA10x"
+            );
+        }
+        assert_ne!(
+            GuestTokenFormat::for_die_group(G::Gb20x).expect("resolves"),
+            base,
+            "NON-VACUITY: the format comparison can tell two formats apart"
+        );
+        assert_eq!(
+            base.value(0x7F, 0xFFF),
+            Some(0x007F_0FFF),
+            "the Ampere mask, 22:16 | 11:0"
+        );
+    }
 }
 
 /// ★ The token fields, held to each die group's header (`kf_chip::hwref`,
