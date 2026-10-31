@@ -1,0 +1,39 @@
+[
+  {
+    "mutant": "forecast_reintroduced",
+    "run": 17,
+    "killers": [
+      "test_die_binding.DieBindingTests.test_actual_ga104_under_rtx3060_name",
+      "test_die_binding.DieBindingTests.test_marketing_name_cannot_override_native_tuple",
+      "test_die_binding.DieBindingTests.test_native_tuple_is_retained"
+    ]
+  },
+  {
+    "mutant": "scope_guard_removed",
+    "run": 17,
+    "killers": [
+      "test_die_binding.DieBindingTests.test_different_unknown_native_tuple_refused",
+      "test_die_binding.DieBindingTests.test_out_of_scope_blackwell_refused",
+      "test_die_binding.DieBindingTests.test_out_of_scope_ga107_refused",
+      "test_die_binding.DieBindingTests.test_unknown_native_tuple_refused"
+    ]
+  },
+  {
+    "mutant": "binding_guard_removed",
+    "run": 17,
+    "killers": [
+      "test_die_binding.DieBindingTests.test_inconsistent_driver_refused",
+      "test_die_binding.DieBindingTests.test_inconsistent_pci_binding_refused"
+    ]
+  },
+  {
+    "mutant": "ssh_console_guard_removed",
+    "run": 17,
+    "killers": [
+      "test_die_binding.DieBindingTests.test_console_absence_refused",
+      "test_die_binding.DieBindingTests.test_console_mismatch_refused",
+      "test_die_binding.DieBindingTests.test_different_ssh_pin_refused",
+      "test_die_binding.DieBindingTests.test_real_ssh_failure_refused"
+    ]
+  }
+]
