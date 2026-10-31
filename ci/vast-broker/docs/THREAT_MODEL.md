@@ -153,7 +153,7 @@ repository and can change.
 **What it is.** A PASS/FAIL signal from a machine the Worker rented. The Worker, the Vast host and the box are
 untrusted and unverifiable from GitHub's side, and attestation cannot cover them, so the check is a test
 tripwire, not build provenance and not a statement about the binaries. A success needs the verdict `PASS`,
-`verified = 1` and state `GRACE` or `NONE` (`gpu-vast.yml:260-264`), apart from the two non-GPU successes
+the Worker-check flag equal to 1 (the `BROKER_VERIFIED` variable) and state `GRACE` or `NONE` (`gpu-vast.yml:260-264`), apart from the two non-GPU successes
 below.
 
 **GitHub token permissions, per job** (workflow default is `permissions: {}`, `gpu-vast.yml:8`,
