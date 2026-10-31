@@ -7,6 +7,8 @@
 //! `kf_cuda::diffmodel`), and [`crate::apply`] applies that diff. What stays here is what every
 //! target needs: the [`Desired`] row, the leaf → row classification, and the [`MapTarget`] verbs.
 
+use crate::ramobj::RamObjectCell;
+
 /// One mapping a walk says the guest's tables currently express, as a slice of one of the two
 /// ground truths: the reserved store (`ram == false`, `off` = GPGA offset) or the guest-RAM
 /// object (`ram == true`, `off` = memfd file offset).
@@ -356,6 +358,13 @@ pub struct OwnView {
 /// What a target that cannot batch answers [`MapTarget::map_batch`] / [`MapTarget::unmap_range`].
 pub const NOT_BATCHED: &str = "this target does not batch";
 
+/// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): what [`MapTarget::map_batch`] answers when the VMM's
+/// guest RAM has NO file (the adapter's `RamMap::backing_fd()` is `None`). The batch
+/// path stitches pieces of a file into one host view; without a file the capability is absent and
+/// every row goes through the per-run path (one host map per run, per host RAM object). Not a
+/// refusal: counted apart ([`crate::apply::Applied::batch_no_fd`]) and named once in the log.
+pub const NO_RAM_FD: &str = "no fd-backed guest RAM: the batched map (stitch) is an optional capability and is unavailable; rows are placed per run (NO_RAM_FD)";
+
 /// ★ Cut walked leaves `(va, at, len, ap)` to `[0, extent)`: a leaf wholly above is dropped, a
 /// leaf crossing the end is shortened (its backing offset is unchanged — it starts at the same
 /// VA). Returns the kept leaves and the bytes cut.
@@ -377,7 +386,7 @@ pub fn clip_leaves(leaves: &[(u64, u64, u64, u8)], extent: u64) -> (Vec<(u64, u6
     (out, cut)
 }
 
-/// ★ The GPU VA-space target: one host VA space, the store object, and the guest-RAM object.
+/// ★ The GPU VA-space target: one host VA space, the store object, and the guest-RAM object(s).
 #[derive(Debug, Clone, Copy)]
 pub struct HostVas<'rm> {
     /// The in-process host RM session.
@@ -386,11 +395,36 @@ pub struct HostVas<'rm> {
     pub space: kf_host::VaSpace,
     /// The store (guest VRAM) object.
     pub store: u32,
-    /// The guest-RAM object, if one is registered.
+    /// The guest-RAM object, if one is registered: ONE object over the whole of guest RAM (a
+    /// memfd), `Desired::off` a file offset into it.
     pub ram_obj: Option<u32>,
+    /// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): guest RAM that is NOT one file — one host object per
+    /// host segment, `Desired::off` a RAM offset ([`crate::ramobj::RamObjects`]), the table held in
+    /// a cell a layout change replaces. Wins over `ram_obj` when set;
+    /// a guest-RAM row inside ONE object maps from it, a row across an object edge is refused by
+    /// name here (the batch layer cuts such rows first: [`crate::batch::SpaceVerbs::ram_cuts`]).
+    pub ram_objs: Option<&'rm RamObjectCell>,
 }
 
 impl HostVas<'_> {
+    /// ★ The host object and the offset inside it that row `d` is backed by, by name when none.
+    ///
+    /// # Errors
+    /// A guest-RAM row with no RAM object, or one the objects do not carry whole.
+    pub(crate) fn backing_of(&self, d: &Desired) -> Result<(u32, u64), String> {
+        if !d.ram {
+            return Ok((self.store, d.off));
+        }
+        if let Some(t) = self.ram_objs {
+            return t
+                .resolve(d.off, d.len)
+                .map_err(|e| format!("map {:#x}+{:#x}: guest RAM: {e}", d.va, d.len));
+        }
+        self.ram_obj
+            .map(|o| (o, d.off))
+            .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))
+    }
+
     /// ★★★ Place VA-contiguous guest-RAM `rows` through ONE host object stitched from `ram_fd`
     /// (the guest memfd; `Desired::off` is a memfd offset) — [`kf_host::HostRm::map_scattered`].
     /// Returns the object's handle, which the caller must track and free (`crate::batch`).
@@ -479,17 +513,12 @@ impl MapTarget for HostVas<'_> {
         true
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let obj = if d.ram {
-            self.ram_obj
-                .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
-        } else {
-            self.store
-        };
+        let (obj, off) = self.backing_of(d)?;
         match self.rm.map_kind(
             self.space,
             obj,
             kf_host::MapBacking::SharedSlice,
-            d.off,
+            off,
             d.len,
             Some(d.va),
             defer,

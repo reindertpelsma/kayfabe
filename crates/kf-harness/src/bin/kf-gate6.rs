@@ -139,6 +139,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         space,
         store,
         ram_obj: None,
+        ram_objs: None,
     };
     let pubd = publish(&mut walk, 0, tree.root, &target, STORE_BYTES, &|_, _| None)?;
     let ap = &pubd.applied;

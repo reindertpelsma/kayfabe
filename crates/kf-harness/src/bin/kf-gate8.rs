@@ -404,6 +404,7 @@ fn phase(
             space: sp,
             store,
             ram_obj: None,
+            ram_objs: None,
         }),
         port: &port,
         busy_at_op: RefCell::new(vec![]),

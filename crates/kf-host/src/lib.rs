@@ -86,6 +86,9 @@ pub const IMPOSSIBLE_CONVERSION: u32 = 0x4B66;
 pub const NOT_ON_THIS_RUNG: u32 = 0x4B46;
 /// An offset or length outside the object it names.
 pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
+/// ★ 2026-10-31: [`HostRm::alloc_os_descriptor_ram`] was handed a guest-RAM segment that is not
+/// whole host pages (the RM pins whole pages).
+pub const RAM_SEGMENT_UNALIGNED: u32 = 0x4B4A;
 
 /// ★ The largest display slot a session allocates or exports — a hard cap above
 /// `kf_disp::vramslot::SLOT_MAX` (36 MiB, derived there; kf-qemu's tests pin `SLOT_MAX <=` this).
@@ -2033,6 +2036,28 @@ impl HostRm {
         status_check(out.status)?;
         self.remember(out.h_object_new, self.device);
         Ok(out.h_object_new)
+    }
+
+    /// ★★★ 2026-10-31 (`docs/design/V3_GUEST_MEMORY.md` §5): [`HostRm::alloc_os_descriptor`] over a
+    /// [`kf_linux_raw::RamSegment`] — one OS descriptor over ALL of a guest-RAM segment the VMM
+    /// already maps. The caller holds the VMM's layout guard (the segment borrows it), so the
+    /// pages cannot be freed from under the pin; the RM keeps the pinned page array and no address.
+    ///
+    /// No address and no unvalidated offset crosses here: the segment hands the call a bounded
+    /// region for the length of the call ([`kf_linux_raw::RamSegment::with_region`]).
+    ///
+    /// # Errors
+    /// [`RAM_SEGMENT_UNALIGNED`] for a segment that is not whole host pages; otherwise as
+    /// [`HostRm::alloc_os_descriptor`].
+    pub fn alloc_os_descriptor_ram(
+        &self,
+        segment: &kf_linux_raw::RamSegment<'_>,
+    ) -> Result<u32, RmError> {
+        if !segment.is_page_aligned() {
+            return Err(RmError::Other(RAM_SEGMENT_UNALIGNED));
+        }
+        let len = segment.len();
+        segment.with_region(|region| self.alloc_os_descriptor(region, HostOffset::ZERO, len))
     }
 
     /// ★★ **GPU-copy broker rung: one display slot** (`docs/design/V3_DISPLAY.md` §8.11,

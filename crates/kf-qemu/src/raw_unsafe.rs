@@ -6,7 +6,34 @@
 pub struct RawRegion {
     ptr: *mut u8,
     len: usize,
+    /// The VMM object that owns this memory (QEMU: the block's `MemoryRegion`), or none. Opaque.
+    owner: Owner,
 }
+
+/// ★ 2026-10-31: the VMM object that keeps a RAM block alive (QEMU: the `MemoryRegion *`), as an
+/// OPAQUE token: safe code may hold and copy it, it cannot read it, and only the layout guard
+/// hands it back to the VMM's hold/release verbs (`ramguard_unsafe.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Owner(*mut core::ffi::c_void);
+
+impl Owner {
+    /// No owner (a region the VMM does not reference-count).
+    pub const NONE: Owner = Owner(core::ptr::null_mut());
+
+    /// Whether there is an owner to hold.
+    #[must_use]
+    pub fn is_some(self) -> bool {
+        !self.0.is_null()
+    }
+}
+
+// ⊘ No `Send`/`Sync` of its own: an `Owner` only ever travels inside a [`RawRegion`], whose manual
+// `Send`/`Sync` (below) covers it, and to the VMM's thread-safe hold/release verbs
+// (`memory_region_ref` / `memory_region_unref` are atomic reference counts).
+
+mod ramguard_unsafe;
+pub use ramguard_unsafe::{CMrHold, MrHold, QemuLayoutGuard};
+// (the verb types `MrRefFn` / `MrUnrefFn` are declared with the other C callbacks below)
 
 // SAFETY: the region is process memory QEMU keeps mapped from registration until the device (or
 // the RAM block) is torn down, which unregisters it here first. Concurrent access is the device's
@@ -24,7 +51,37 @@ impl RawRegion {
     /// every structure holding it (the device unregisters it before QEMU frees the memory).
     #[must_use]
     pub unsafe fn adopt(ptr: *mut u8, len: usize) -> RawRegion {
-        RawRegion { ptr, len }
+        RawRegion {
+            ptr,
+            len,
+            owner: Owner::NONE,
+        }
+    }
+
+    /// [`RawRegion::adopt`] for a region the VMM reference-counts through `owner` (QEMU: the
+    /// block's `MemoryRegion *`; null = none).
+    ///
+    /// # Safety
+    /// As [`RawRegion::adopt`]; and `owner` is null or a VMM object that stays alive for as long as
+    /// the VMM keeps the block registered, and for as long as a hold taken on it through the VMM's
+    /// own verb is held (`ramguard_unsafe.rs`).
+    #[must_use]
+    pub unsafe fn adopt_owned(
+        ptr: *mut u8,
+        len: usize,
+        owner: *mut core::ffi::c_void,
+    ) -> RawRegion {
+        RawRegion {
+            ptr,
+            len,
+            owner: Owner(owner),
+        }
+    }
+
+    /// The owner token (for the layout guard's hold; opaque).
+    #[must_use]
+    pub fn owner(&self) -> Owner {
+        self.owner
     }
 
     /// Length in bytes.
@@ -342,6 +399,11 @@ impl kf_broker::Host for BrokerHooks {
 // `kf3_display_cursor_apply` entry, so on QEMU's main loop with the BQL held; none may block or
 // re-enter an entry.
 
+/// ★ ABI 31: take one reference on a RAM block's owner (QEMU's `memory_region_ref`), any thread.
+pub type MrRefFn = unsafe extern "C" fn(mr: *mut core::ffi::c_void);
+/// ★ ABI 31: give that reference back (QEMU's `memory_region_unref`), any thread.
+pub type MrUnrefFn = unsafe extern "C" fn(mr: *mut core::ffi::c_void);
+
 /// A key edge by Linux evdev code; 1 = QEMU mapped it, 0 = no mapping (dropped).
 pub type InKeyFn =
     unsafe extern "C" fn(opaque: *mut core::ffi::c_void, evdev: u32, down: u32) -> i32;
@@ -571,9 +633,30 @@ pub(crate) fn test_owned_ram(bytes: usize) -> (RawRegion, BackendFd) {
         RawRegion {
             ptr: mem.as_mut_ptr(),
             len: mem.len(),
+            owner: Owner::NONE,
         },
         BackendFd(file.as_raw_fd()),
     )
+}
+
+/// ★ 2026-10-31 test-only: `bytes` (a multiple of 4 KiB) of zeroed, 4 KiB-aligned memory that
+/// lives until process exit, owned by the opaque token `tag` (0 = none) — a RAM block as the VMM
+/// registers it. Safe: the block is a leaked `Vec`, aligned by pointer arithmetic.
+#[cfg(test)]
+pub(crate) fn test_aligned_ram_owned(bytes: usize, tag: usize) -> RawRegion {
+    let mem = Box::leak(vec![0u8; bytes + 4096].into_boxed_slice());
+    let pad = (4096 - (mem.as_ptr() as usize % 4096)) % 4096;
+    RawRegion {
+        ptr: mem.as_mut_ptr().wrapping_add(pad),
+        len: bytes,
+        owner: Owner(core::ptr::without_provenance_mut(tag)),
+    }
+}
+
+/// [`test_aligned_ram_owned`] with no owner.
+#[cfg(test)]
+pub(crate) fn test_aligned_ram(bytes: usize) -> RawRegion {
+    test_aligned_ram_owned(bytes, 0)
 }
 
 /// ★ ABI 23 (`V3_DISPLAY.md` §8.20): the QEMU sink's own conversions, against C-ABI verbs that

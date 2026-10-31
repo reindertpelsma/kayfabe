@@ -93,6 +93,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         space,
         store,
         ram_obj: None,
+        ram_objs: None,
     };
     let publish = |walk: &mut WalkKernel, tag: &str| -> Result<(usize, usize, usize), String> {
         let t0 = std::time::Instant::now();

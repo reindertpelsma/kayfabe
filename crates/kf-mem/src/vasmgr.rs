@@ -726,6 +726,9 @@ pub struct VaStats {
     pub range_unmaps: u64,
     /// Batches / ranges the target refused (their runs then went one by one).
     pub batch_fallbacks: u64,
+    /// ★ 2026-10-31: batched maps not attempted because guest RAM has no file (the optional stitch
+    /// capability is absent; the runs went per run — `ledger::NO_RAM_FD`).
+    pub batch_no_fd: u64,
     /// ★ Review fix 2026-10-10: unchanged pages whose `NV01` host mapping had to be re-made (the
     /// guest split a big leaf and changed part of it — `V3_BATCHED_MAP.md` §8.7), and runs
     /// acknowledged FAILED only because a linked run failed (commit consistency).
@@ -1571,6 +1574,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 .stats
                 .batch_fallbacks
                 .saturating_add(a.batch_fallbacks as u64);
+            self.stats.batch_no_fd = self.stats.batch_no_fd.saturating_add(a.batch_no_fd as u64);
             self.stats.remade_unchanged_pages = self
                 .stats
                 .remade_unchanged_pages
