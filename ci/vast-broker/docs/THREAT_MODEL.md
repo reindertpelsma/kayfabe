@@ -1,6 +1,6 @@
 # Vast CI broker threat model
 
-STATUS: LIVE, 2026-10-27. Purpose: so a reviewer (human or AI agent) does not report a design decision
+STATUS: LIVE, 2026-10-31 (section 9 added; sections 1-8 as of 2026-10-27). Purpose: so a reviewer (human or AI agent) does not report a design decision
 as a vulnerability. Labels: OWNER = stated by the owner on 2026-10-25; CODE READ = checked at
 `origin/master` 93091106d (`path:line`); MEASURED = observed live, with its date.
 
@@ -143,3 +143,65 @@ OWNER: it uses the host-supplied `offer.geolocation`, which a malicious host can
 - A repeated SHA is refused for 24 h, and a failed attempt still reserves a `DAILY_RENTALS` slot (observed
   2026-10-25).
 - `deploy.mjs` only allows listed public vars; `BOOT_LIMIT_MINUTES` is not one (observed 2026-10-25).
+
+## 9. What the gpu-vast check does and does not prove
+
+CODE READ 2026-10-31 at `origin/next` 23505064c (`.github/workflows/gpu-vast.yml`, `gpu-vast-sweep.yml`,
+`scripts/ci/workflow_lint.py`). Settings were read through the GitHub API on the same day; they are not in the
+repository and can change.
+
+**What it is.** A PASS/FAIL signal from a machine the Worker rented. The Worker, the Vast host and the box are
+untrusted and unverifiable from GitHub's side, and attestation cannot cover them, so the check is a test
+tripwire, not build provenance and not a statement about the binaries. A success needs the verdict `PASS`,
+`verified = 1` and state `GRACE` or `NONE` (`gpu-vast.yml:260-264`), apart from the two non-GPU successes
+below.
+
+**GitHub token permissions, per job** (workflow default is `permissions: {}`, `gpu-vast.yml:8`,
+`gpu-vast-sweep.yml:10`):
+
+| Job | Permissions | Talks to the Worker |
+|---|---|---|
+| `gpu` | `id-token: write` only (`gpu-vast.yml:152-153`, `gpu-vast-sweep.yml:23-24`) | yes |
+| `report` | `statuses: write` only (`gpu-vast.yml:216-217`) | no |
+| `pending` | `statuses: write`, `contents: read`, `pull-requests: read`, `actions: read`, `checks: read` (`gpu-vast.yml:24-29`) | no |
+| `policy`, `policy-check` | `contents: read`, `pull-requests: read` (`gpu-vast.yml:69-71`, `109-111`) | no |
+
+The `gpu` job has no `contents`, `statuses` or other repository permission (`id-token: write` only mints the
+OIDC token the Worker verifies), no checkout, no cache and no artifact step. `policy` uses one pinned
+third-party action (`actions/setup-node`, `gpu-vast.yml:75`); `gpu`, `report`, `pending` and `policy-check`
+use none. The Worker secrets (`VAST_BROKER_*`) are referenced only in the `gpu` step (`gpu-vast.yml:182-185`,
+`gpu-vast-sweep.yml:35-38`). `scripts/ci/workflow_lint.py` (run in the `stable` job of `ci.yml`) fails if any
+of these job permissions changes, if a job that touches those secrets gains a `uses:` step, if a workflow
+has no top-level `permissions:`, or if a `uses:` is not a full commit SHA.
+
+**Code that runs.** The runner and controller (`runner.py`, `deployment.json`) are fetched with `curl` from
+`raw.githubusercontent.com` at `$GITHUB_SHA` (`gpu-vast.yml:194-197`; the policy files the same way, `:98`,
+`:135`), and the job refuses any `GITHUB_REF` other than `refs/heads/master` (`:189`). On `pull_request_target`
+`GITHUB_SHA` is the last commit of the base branch, not the PR head (GitHub's events reference lists it as
+"Last commit on default branch"; GitHub behaviour, read 2026-10-31). So a PR cannot change the runner that
+talks to the Worker before it is merged. The PR's own code reaches the box only as the SHA to test.
+
+**Why the result is an explicit commit status, written by a separate job.** `report` posts a `gpu-vast`
+status on the PR head SHA (`TARGET_SHA`, `gpu-vast.yml:17-19`, `:294`) instead of relying on the job's own
+success, for three reasons.
+1. The workflow runs on `pull_request_target` (`:5`), whose workflow run belongs to the base branch, so
+   branch protection needs the `gpu-vast` status on the PR head SHA. That check runs of such a workflow
+   attach to the base commit rather than the head is GitHub behaviour: UNVERIFIED by us (the events page
+   states the base-branch context but not where check runs attach).
+2. The status carries more states than job success or failure: `REUSED` (`:250-254`), `NOT_NEEDED`, which
+   needs two agreeing decisions from `policy` and `policy-check` (`:248`, `:255-259`), and `UNAVAILABLE`,
+   `PROVIDER_FAULT` and the other non-verdict states, which map to `error`, not to a pass or a FAIL
+   (`:238-247`, `:284-286`). Only a Worker `FAIL` verdict maps to `failure` (`:265-266`).
+3. The Worker-facing `gpu` job holds no repository write permission. `report` has no Worker secret; it reads
+   job results and three `gpu` outputs through `env:` (`:217-229`). The state is reduced to a fixed list by
+   a `case` (`:239-246`), the verdict and `verified` are only compared with literals (`:262`, `:265`), and
+   the reuse proof comes from `pending`, not from the Worker, and is validated before use (`:270-283`).
+
+**Owner-configured (repository settings, not in code).** Read through the GitHub API on 2026-10-31:
+`default_workflow_permissions = read` (workflows may not approve pull requests); fork PR approval policy
+`first_time_contributors`; `sha_pinning_required = false`; the `gpu-vast` environment accepts deployments only
+from branch `master` and tag pattern `v*`, has no required reviewers, and allows admin bypass. The owner may
+change any of them; no file in the repository enforces them.
+
+**Not proved.** That the box ran the code it was asked to (the box is untrusted); that a PASS covers anything
+but the tested SHA; that the pinned actions execute as intended (not run by this review).
