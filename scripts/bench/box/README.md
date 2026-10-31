@@ -205,3 +205,12 @@ config. The container it would run in also ends with the session. ⇒ **The sess
 owns it.** That session destroys the box when its work is done. If it stops while the box is still
 alive (a usage limit, a handoff), it writes the instance id, what is running there, and "reattach
 with `vast-url <id>`" into the handoff, so the next session takes ownership explicitly.
+
+## Licensed benchmark data (SPECviewperf private copy)
+
+`fetch_bench_data.sh <name> --sha256 <pin> --out <file>` (or `--extract <dir>` for the `.tar.zst`)
+runs ON a rented CI box and fetches one object of the private R2 copy through the Vast CI Worker
+with the run token from `/run/kf-ci/env`; the box never holds a Cloudflare credential, and neither
+the token nor the presigned URL is printed. `--dry-run` checks arguments and environment and makes
+no request. Test: `bash scripts/bench/box/test_fetch_bench_data.sh` (loopback only). Rules and
+object names: `docs/DOWNLOADS.md`; Worker side: `ci/vast-broker/DEPLOY.md`.
