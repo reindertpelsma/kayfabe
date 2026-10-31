@@ -1,6 +1,8 @@
 //! Allocation-only diagnostic. No host RM verbs, memory, scheduler, or completion.
-//! Native zero maxTSGs selects real default-capacity double buffers; this experiment
-//! deliberately supplies only an unscheduled guest graph object, not those effects.
+//! `maxTSGs = 0` is what the Windows guest sends (measured: the opt-in refuses any other value, and
+//! run53 accepted the allocation); a real allocation would size a double-buffered runlist from it
+//! (`nvos.h:2911-2923`, OGKM 580.65.06). This experiment deliberately supplies only an
+//! unscheduled guest graph object, not those effects.
 
 use crate::rmgraph::{AllocFacts, NodeKey, RmEvent, RmGraph, SoftwareRunlistProbe};
 use crate::rmrpc::{BridgeRefusal, ObjectsRefusal};

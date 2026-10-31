@@ -271,7 +271,7 @@ pub fn validate_evidence(rows: &[Row], exists: impl Fn(&str) -> bool) -> Result<
     Ok(())
 }
 
-fn parse_source(s: &str) -> Result<SourceTag, String> {
+pub(crate) fn parse_source(s: &str) -> Result<SourceTag, String> {
     if let Some(m) = s.strip_prefix("measured:") {
         let parts: Vec<&str> = m.split(',').collect();
         let [die, driver, date] = parts.as_slice() else {

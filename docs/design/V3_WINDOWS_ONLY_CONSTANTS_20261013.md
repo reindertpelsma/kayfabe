@@ -111,6 +111,8 @@ Caveat on the evidence: the notes below come from the inventory (run 641, one di
 
 ## What each row is for
 
+> **Correction, 2026-10-31 (provenance fix).** The row for `0x2081010d` below says its layout is "assumed from a closed-binary export row". That basis is withdrawn: the declared params size 0 is now a `measured:` row (`traces/windows_code43_walls_20261007/run41-requests.log:95`; 5 of 5 real-GPU captures show request and reply of 0 bytes, `docs/design/tier_checks/tier2_compute_host.md` item 8), and the cell is `crates/kf-abi/src/hoststub.rs`. The 40-byte size of `0x20801111` and the class `0xb297` are likewise `measured:` rows of `crates/kf-abi/src/sw_runlist.rs` (see its evidence column).
+
 ### A. NV2080 / NV2081 / NV0080 controls the Windows driver issues
 Most are "GSS-legacy" controls (command bit 15 set): they have no header in any open source. The real GPU answers them; kayfabe answers some from rows captured earlier on a GA106 (RTX 3060, 580.159.04, 2026-08-20) and refuses the rest with status `0x56`.
 
