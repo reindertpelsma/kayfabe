@@ -60,7 +60,7 @@
       GCC_CUP2_RC=0
           reached-cuCtxCreate = yes after ~15s
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x70d1c802be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 8   array = 0x56fc4df6f540   (stride 40)
           item[0] @0x56fc4df6f540  KIND=1  [0x08]=0x70d1c4119010 [0x10]=0x1 [0x18]=0x7ffc73bcace0 [0x20]=0x70d1c7aad7f4
           item[1] @0x56fc4df6f568  KIND=1  [0x08]=0x70d1c4122628 [0x10]=0x1 [0x18]=0x56fc4df6f490 [0x20]=0x70d1c7c1e878
@@ -72,7 +72,7 @@
           item[7] @0x56fc4df6f658  KIND=1  [0x08]=0x70d1c415aab8 [0x10]=0x1 [0x18]=0x0 [0x20]=0x0
       SPINPROBE_RC=0
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x70d1c802be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 8   array = 0x56fc4df6f540   (stride 40)
           item[0] @0x56fc4df6f540  KIND=1  [0x08]=0x70d1c4119010 [0x10]=0x1 [0x18]=0x7ffc73bcace0 [0x20]=0x70d1c7aad7f4
           item[1] @0x56fc4df6f568  KIND=1  [0x08]=0x70d1c4122628 [0x10]=0x1 [0x18]=0x56fc4df6f490 [0x20]=0x70d1c7c1e878
@@ -129,12 +129,12 @@
       GCC_CUP2_RC=0
           reached-cuCtxCreate = yes after ~15s
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x7535e102be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 1   array = 0x7ffe3c98fbf8   (stride 40)
           item[0] @0x7ffe3c98fbf8  KIND=1  [0x08]=0x7535dd134010 [0x10]=0x2 [0x18]=0x5664391ffec0 [0x20]=0x566439089160
       SPINPROBE_RC=0
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x7535e102be1f (libcuda.so.580.159.04+0xc5e1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 1   array = 0x7ffe3c98fbf8   (stride 40)
           item[0] @0x7ffe3c98fbf8  KIND=1  [0x08]=0x7535dd134010 [0x10]=0x2 [0x18]=0x5664391ffec0 [0x20]=0x566439089160
       SPINPROBE_RC=0

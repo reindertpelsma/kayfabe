@@ -89,8 +89,8 @@ through read-only NBD/NTFS. Supervisor exit zero, host GPU health and NBD cleanu
 are recorded in `windows-probe-summary.json`. The pinned 580.88 parser agrees
 with the independent L KD control in `watchdog-comparison.json`.
 All cases have 24 complete saved assertions; N→O retains the first 17 and changes
-the final seven, with the first changed hint moving from `0x16e9967` to
-`0x1a103e6`. The outer NVCD is still one byte short; checksum validity is unknown.
+the final seven, with the first changed hint moving from `site-011` to
+`site-018`. The outer NVCD is still one byte short; checksum validity is unknown.
 See `windows-probe-summary.json` and `watchdog-comparison.json` for source hashes
 and the complete sanitized comparison. Raw dumps, driver bytes, decoded journals
 and full guest logs remain private on the controller.

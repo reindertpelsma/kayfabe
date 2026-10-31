@@ -37,8 +37,8 @@ class CtxBP(gdb.Breakpoint):
         if st["base"] is None:
             b = int(gdb.parse_and_eval("(unsigned long)&cuVDPAUCtxCreate")) & 0xffffffffffffffff
             st["base"] = b
-            RetBP("*0x%x" % (b + 0xf2628), "497b50 RET")   # 0x497c88
-            RetBP("*0x%x" % (b + 0xd5698), "47acc0 RET")   # 0x47acf8
+            RetBP("*0x%x" % (b + 0x0), "497b50 RET")   # offset removed 2026-10-31 (closed-library offset)
+            RetBP("*0x%x" % (b + 0x0), "47acc0 RET")   # offset removed 2026-10-31 (closed-library offset)
             gdb.write("base=0x%x; ret-BPs armed\n" % b)
         return False
 CtxBP("cuCtxCreate_v2")

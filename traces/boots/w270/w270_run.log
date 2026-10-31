@@ -699,7 +699,7 @@ bound=0 | refusals = refusals=255
       GCC_CUP2_RC=0
           reached-cuCtxCreate = yes after ~15s
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x7a67c622be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 1   array = 0x7ffcb0766fc8   (stride 40)
           item[0] @0x7ffcb0766fc8  KIND=1  [0x08]=0x7a67c5e30010 [0x10]=0x2 [0x18]=0x578d2025cf40 [0x20]=0x578d200e6160
               POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
@@ -707,7 +707,7 @@ bound=0 | refusals = refusals=255
                                    SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
       SPINPROBE_RC=0
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x7a67c622be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 1   array = 0x7ffcb0766fc8   (stride 40)
           item[0] @0x7ffcb0766fc8  KIND=1  [0x08]=0x7a67c5e30010 [0x10]=0x2 [0x18]=0x578d2025cf40 [0x20]=0x578d200e6160
               POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
@@ -836,7 +836,7 @@ bound=0 | refusals = refusals=255
       GCC_CUP2_RC=0
           reached-cuCtxCreate = yes after ~15s
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x7b923c22be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 1   array = 0x7ffe5bd467c8   (stride 40)
           item[0] @0x7ffe5bd467c8  KIND=1  [0x08]=0x7b923be17010 [0x10]=0x3 [0x18]=0x589d34f04ec0 [0x20]=0x589d34d8e160
               POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
@@ -844,7 +844,7 @@ bound=0 | refusals = refusals=255
                                    SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
       SPINPROBE_RC=0
       --- steps actually taken = 6000 (of a 6000 budget) ---
-      === ★★★★★ SNAPSHOT at RIP=0x7b923c22be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
           N items = 1   array = 0x7ffe5bd467c8   (stride 40)
           item[0] @0x7ffe5bd467c8  KIND=1  [0x08]=0x7b923be17010 [0x10]=0x3 [0x18]=0x589d34f04ec0 [0x20]=0x589d34d8e160
               POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>

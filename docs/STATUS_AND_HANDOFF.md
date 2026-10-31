@@ -1818,7 +1818,7 @@ the handler only resolves passthrough group members. Next: apply the authored
 host control to Translated members off the GSP lock. This handler change is now
 implemented;101 kf-qemu tests pass, zero new Clippy debt. Run19 at f6aa9d2e
 applies4000us on the actual owned host group; a06c0103 returns0 and watchdog
-hint e38498 disappears. Code43/smi9 persist. Next: kernel GR channels are
+hint site-053 disappears. Code43/smi9 persist. Next: kernel GR channels are
 acknowledged without birth, then GPU_PROMOTE_CTX refuses. Capture exact inline
 promotion entries before implementing a real owned unprivileged GR context.
 The default-off observer is implemented with16 records of at most16 entries;
@@ -1863,7 +1863,7 @@ drops that relation and returns INVALID_STATE before any host channel creation.
 The adjacent 0080170e query is FIFO latency-buffer sizing, also unsupported.
 Code43 persists; run14 retains the same24 saved assertions as run13. This is
 source-backed diagnosis, not a functional repair or proof tying either RPC to
-assertion1a103e6. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
+assertion site-018. [Exact decodings/evidence](../traces/windows_exact_decode_20261007/README.md).
 
 **Latest checkpoint, 2026-10-06:** product `74cd590c` implements GPU TMO and
 indexed CSC tables under the existing opt-in colour flag. The strict Linux
@@ -1875,8 +1875,8 @@ The owner clarified that broader table formats and chroma-correction controls
 must also gain real processing; this checkpoint is not the intended endpoint.
 Windows run13 at `74cd590c` still reports Code43, but reaches 8,330 display
 methods (zero UPDATEs/scanouts) rather than zero methods. Its fresh watchdog
-changes after the same first 17 assertions: `0x169d836` is replaced by
-`0x1a103e6`; no interpretation as an NV_STATUS or completed initialization.
+changes after the same first 17 assertions: `site-044` is replaced by
+`site-018`; no interpretation as an NV_STATUS or completed initialization.
 Product `8dde9b51` additionally executes variable tone segments and 65..1025
 sample tables; GPU fixtures pass, including exact compact extents and hostile
 header rejection. Product `00220cc6` adds real DIRECT8 input/output lookup; all eight SDR GPU
@@ -1917,8 +1917,8 @@ SDR rendering and working gamma do not establish a TMO buffer.
 
 Windows run 12 with implemented DIRECT10 surface-loading declarations still
 has Code 43 / smi exit 9 and zero display methods. Its fresh dump reaches
-`0x169d836`: the display-buffer precondition path, statically pointing to a
-zero-sized TMO descriptor with TMO absent (no live size captured). Do not
+`site-044`: the display-buffer precondition path; the leading hypothesis (an inference)
+is a zero-sized TMO descriptor with TMO absent (no live size captured). Do not
 reintroduce a fake TMO capability. Next Windows work needs a supported path
 avoiding TMO or real bounded TMO processing, with further walls possible.
 Complete dump records remain usable; outer NVCD is one byte short.
@@ -1964,7 +1964,7 @@ See [review and evidence](../traces/antigravity_review_20261006/README.md).
 The controlled O Windows run `boundary-kayfabe-10` completed: Code 43 /
 `nvidia-smi` exit 9 remains, but 455 RPCs (N: 365) now reach the probe's explicit
 display-method refusals. The fresh dump's first changed assertion moved from
-`0x16e9967` to `0x1a103e6`; the first 17 of 24 complete saved assertions match N.
+`site-011` to `site-018`; the first 17 of 24 complete saved assertions match N.
 Outer NVCD remains one byte short, so its checksum cannot be validated. The guest
 shut down cleanly, supervisor exit zero, RTX 4070 healthy, no VM or NBD attachment
 remains. Sanitized evidence is in the review directory; raw private controller
