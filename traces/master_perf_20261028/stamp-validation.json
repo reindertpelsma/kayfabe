@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-28",
+  "scope": "synthetic reporting checks; no hardware data",
+  "expected_red_commit": "b13a334ec3d1b865de10b0e3d6909f6ba5bbae3f",
+  "red": {
+    "tests": 32,
+    "failed": 30,
+    "passed": 2
+  },
+  "green": {
+    "tests": 34,
+    "passed": 34,
+    "failed": 0
+  },
+  "mutations": [
+    {
+      "mutant": "reset_ignored",
+      "old": "if row.get(\"guest_resets\") != []:",
+      "new": "if False:",
+      "killers": [
+        "test_candidate_reset_prevents_both_headline_medians",
+        "test_master_reset_prevents_both_headline_medians",
+        "test_reset_141_invalidates_fast_opengl",
+        "test_reset_153_invalidates_fast_d3d11"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "host_xid_ignored",
+      "old": "if row.get(\"host_xids\") != []:",
+      "new": "if False:",
+      "killers": [
+        "test_host_fault_invalidates_d3d11",
+        "test_host_fault_invalidates_opengl"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "missing_watch_accepted",
+      "old": "if row.get(\"watch_complete\") is not True:",
+      "new": "if False:",
+      "killers": [
+        "test_missing_opengl_watch_is_not_clean",
+        "test_unwatched_d3d11_is_not_clean"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "incomplete_run_accepted",
+      "old": "if row.get(\"finished\") is not True:",
+      "new": "if False:",
+      "killers": [
+        "test_incomplete_d3d11_is_not_a_result",
+        "test_incomplete_opengl_is_not_a_result"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "bad_adapter_accepted",
+      "old": "if row.get(\"adapter_ok\") is not True:",
+      "new": "if False:",
+      "killers": [
+        "test_adapter_failure_invalidates_d3d11",
+        "test_adapter_failure_invalidates_opengl"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "wrong_recipe_accepted",
+      "old": "if row.get(\"settings_ok\") is not True:",
+      "new": "if False:",
+      "killers": [
+        "test_wrong_d3d11_recipe_is_not_accepted",
+        "test_wrong_opengl_recipe_is_not_accepted"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "wrong_revision_accepted",
+      "old": "if arm not in REVISIONS or row.get(\"revision\") != REVISIONS[arm]:",
+      "new": "if False:",
+      "killers": [
+        "test_wrong_candidate_revision_is_rejected",
+        "test_wrong_master_revision_is_rejected"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "nonfinite_numbers_accepted",
+      "old": "if not (all(map(math.isfinite, (fps, low, high, duration))) and 0 <= low <= fps <= high):",
+      "new": "if False:",
+      "killers": [
+        "test_nonfinite_d3d11_fps_is_rejected",
+        "test_nonfinite_opengl_minimum_is_rejected"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "wrong_duration_accepted",
+      "old": "if not 250 <= duration <= 275:",
+      "new": "if False:",
+      "killers": [
+        "test_short_d3d11_duration_is_rejected",
+        "test_wrong_opengl_duration_is_rejected"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "frame_count_ignored",
+      "old": "if (type(frames) is not int or frames <= 0 or fps <= 0\n            or abs(frames / duration - fps) > max(0.1, fps * 0.005)):",
+      "new": "if False:",
+      "killers": [
+        "test_inconsistent_d3d11_frame_count_is_rejected",
+        "test_inconsistent_opengl_frame_count_is_rejected"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "incomplete_group_accepted",
+      "old": "elif len(valid) != 3:",
+      "new": "elif False:",
+      "killers": [
+        "test_two_control_boots_cannot_make_a_complete_headline",
+        "test_two_master_boots_cannot_make_a_complete_headline"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "duplicate_boot_ignored",
+      "old": "duplicate = len({r.get(\"boot\") for r in group}) != len(group)",
+      "new": "duplicate = False",
+      "killers": [
+        "test_duplicate_candidate_boot_is_not_a_fourth_sample",
+        "test_duplicate_master_boot_is_not_a_fourth_sample"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "failed_arm_gets_headlines",
+      "old": "if arm_ok:",
+      "new": "if True:",
+      "killers": [
+        "test_candidate_reset_prevents_both_headline_medians",
+        "test_duplicate_candidate_boot_is_not_a_fourth_sample",
+        "test_duplicate_master_boot_is_not_a_fourth_sample",
+        "test_master_reset_prevents_both_headline_medians",
+        "test_two_control_boots_cannot_make_a_complete_headline",
+        "test_two_master_boots_cannot_make_a_complete_headline"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "mean_substituted_for_median",
+      "old": "statistics.median(fps)",
+      "new": "statistics.mean(fps)",
+      "killers": [
+        "test_candidate_medians_use_middle_values",
+        "test_master_medians_use_middle_values"
+      ],
+      "exit_code": 1
+    },
+    {
+      "mutant": "unplanned_rows_ignored",
+      "old": "if any(r.get(\"arm\") not in REVISIONS or r.get(\"api\") not in APIS for r in rows):",
+      "new": "if False:",
+      "killers": [
+        "test_unplanned_api_cannot_be_silently_ignored",
+        "test_unplanned_arm_cannot_be_silently_ignored"
+      ],
+      "exit_code": 1
+    }
+  ],
+  "extra_red": {
+    "commit": "59a61da07930952cd046900d8d0ec4e817a94090",
+    "tests": 34,
+    "passed": 32,
+    "failed": 2
+  },
+  "bytecode_cache": "Owned cache removed; all mutation subprocesses use python3 -B"
+}
