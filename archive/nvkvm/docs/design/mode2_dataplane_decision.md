@@ -102,10 +102,10 @@ Engineering judgment, Mode-2 vs host:
 
 ## 7. Current bring-up status & the next concrete step
 
-- cuCtxCreate crashes in libcuda compute-context finalization (SIGSEGV at .so offset
-  `0x466560`, `rbp=0`), right after the `AMPERE_COMPUTE_B` (0xc7c0) RM_ALLOC. Host-vs-guest gdb
+- cuCtxCreate crashes in libcuda compute-context finalization (SIGSEGV with `rbp=0`; the .so
+  offset was removed 2026-10-31), right after the `AMPERE_COMPUTE_B` (0xc7c0) RM_ALLOC. Host-vs-guest gdb
   of the *same* libcuda fn proves this is **guest-specific corruption** inside the
-  `0x47acc0 → 0x497b50` RM_ALLOC path (host preserves rbp across the call 8×; guest → rbp=0),
+  RM_ALLOC path (host preserves rbp across the call 8×; guest → rbp=0),
   **not a libcuda bug**. Likely a variable-size stack alloc sized from un-backed GR-context GPU
   state. Ruled out: forge gaps (filled, no change), value smash, exceptions, wrong reads,
   writeback divergence. **Black-box libcuda RE is exhausted.**

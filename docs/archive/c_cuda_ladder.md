@@ -123,8 +123,8 @@ where), never the absence of an intermittent hang.
 
 ### Wall A — the rbp-clobber SIGSEGV in `cuCtxCreate`
 
-- **How it presented.** libcuda SIGSEGVs on an internal worker thread at the instruction
-  `mov -0x38(%rbp),%rax` with **`rbp = 0`**; strace shows `si_addr = 0xffffffffffffffc8` (= −0x38).
+- **How it presented.** libcuda SIGSEGVs on an internal worker thread on a load through
+  **`rbp = 0`**; strace shows `si_addr = 0xffffffffffffffc8` (= −0x38).
   A frame-pointer / stack corruption, not a clean error return, immediately after a **successful**
   `RM_ALLOC` of the GR compute object (class `0xc7c0`, `AMPERE_COMPUTE_B`)
   (`[measured]` `C: docs/design/mode2_cuctxcreate_problem.md:22-28`, 2026-06-06).

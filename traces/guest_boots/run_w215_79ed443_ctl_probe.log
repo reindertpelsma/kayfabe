@@ -110,15 +110,15 @@ pid=1966 state=Rl
     tid 1966  RIP=0x7ffc097d8bb2 [vdso]+0xbb2
     tid 1966  RSP=0x7ffc09786700  orig_rax=228  rax=0
       CANDIDATE [rsp+0x008] 0x7186944eca6d  /usr/lib/x86_64-linux-gnu/libc.so.6+0xc4a6d
-      CANDIDATE [rsp+0x018] 0x718694b185c4  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1b25c4
-      CANDIDATE [rsp+0x048] 0x718694a2c0fc  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xc60fc
-      CANDIDATE [rsp+0x0b8] 0x718694a1ed40  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xb8d40
-      CANDIDATE [rsp+0x118] 0x718694a1f551  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xb9551
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
       CANDIDATE [rsp+0x168] 0x7186944ad7f4  /usr/lib/x86_64-linux-gnu/libc.so.6+0x857f4
-      CANDIDATE [rsp+0x1b8] 0x718694a0cb70  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xa6b70
-      CANDIDATE [rsp+0x208] 0x718694a2a897  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xc4897
-      CANDIDATE [rsp+0x2b8] 0x71869575ca43  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0xdf6a43
-      CANDIDATE [rsp+0x318] 0x718694a6cd32  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x106d32
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
       CANDIDATE [rsp+0x3b8] 0x718694466406  /usr/lib/x86_64-linux-gnu/libc.so.6+0x3e406
       CANDIDATE [rsp+0x3e8] 0x7186944607d5  /usr/lib/x86_64-linux-gnu/libc.so.6+0x387d5
       CANDIDATE [rsp+0x408] 0x718694460d88  /usr/lib/x86_64-linux-gnu/libc.so.6+0x38d88
@@ -135,17 +135,17 @@ pid=1966 state=Rl
       CANDIDATE [rsp+0x7d8] 0x71869a695bfc  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2+0x11bfc
     tid 1967  RIP=0x71869451b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
     tid 1967  RSP=0x7186943fed40  orig_rax=7  rax=-516
-      CANDIDATE [rsp+0x028] 0x718694b19f27  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1b3f27
-      CANDIDATE [rsp+0x0d8] 0x718694c06967  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x2a0967
-      CANDIDATE [rsp+0x158] 0x718694b06d73  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1a0d73
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
       CANDIDATE [rsp+0x188] 0x71869449cb84  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74b84
       CANDIDATE [rsp+0x218] 0x71869449c800  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74800
       CANDIDATE [rsp+0x238] 0x718694529d6c  /usr/lib/x86_64-linux-gnu/libc.so.6+0x101d6c
     tid 2086  RIP=0x71869451b5fd /usr/lib/x86_64-linux-gnu/libc.so.6+0xf35fd
     tid 2086  RSP=0x718692749d40  orig_rax=7  rax=-516
-      CANDIDATE [rsp+0x028] 0x718694b19f27  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1b3f27
-      CANDIDATE [rsp+0x0d8] 0x718694c06967  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x2a0967
-      CANDIDATE [rsp+0x158] 0x718694b06d73  /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04+0x1a0d73
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
       CANDIDATE [rsp+0x188] 0x71869449cb84  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74b84
       CANDIDATE [rsp+0x218] 0x71869449c800  /usr/lib/x86_64-linux-gnu/libc.so.6+0x74800
       CANDIDATE [rsp+0x238] 0x718694529d6c  /usr/lib/x86_64-linux-gnu/libc.so.6+0x101d6c

@@ -53,19 +53,19 @@
     "identical_assertion_prefix": 17,
     "first_previous_failure": {
       "hint_rva": [
-        "0x1a103e6"
+        "site-018"
       ],
       "stack_rvas": [
-        "0x1a103e6",
-        "0x169d057",
-        "0x16b50d1",
-        "0x1615220",
-        "0x1614aed",
-        "0x1959907",
-        "0x1965547",
-        "0x1a346dd",
-        "0x1a4450b",
-        "0x17e4f9e"
+        "site-018",
+        "site-019",
+        "site-020",
+        "site-003",
+        "site-004",
+        "site-005",
+        "site-006",
+        "site-007",
+        "site-008",
+        "site-009"
       ],
       "level": [
         1
@@ -73,19 +73,19 @@
     },
     "first_current_failure": {
       "hint_rva": [
-        "0x169d836"
+        "site-044"
       ],
       "stack_rvas": [
-        "0x169d836",
-        "0x16e93b2",
-        "0x16b4f2a",
-        "0x1615220",
-        "0x1614aed",
-        "0x1959907",
-        "0x1965547",
-        "0x1a346dd",
-        "0x1a4450b",
-        "0x17e4f9e"
+        "site-044",
+        "site-045",
+        "site-002",
+        "site-003",
+        "site-004",
+        "site-005",
+        "site-006",
+        "site-007",
+        "site-008",
+        "site-009"
       ],
       "level": [
         1
@@ -94,34 +94,34 @@
   },
   "complete_failure_chain": [
     [
-      "0x169d836"
+      "site-044"
     ],
     [
-      "0x16b4f33"
+      "site-012"
     ],
     [
-      "0x1615268"
+      "site-013"
     ],
     [
-      "0x1615285"
+      "site-014"
     ],
     [
-      "0x1614af6"
+      "site-015"
     ],
     [
-      "0x1959910"
+      "site-016"
     ],
     [
-      "0x1965bd1"
+      "site-017"
     ]
   ],
-  "interpretation": "Display buffer helper precondition failure before resource operations; static code strongly points to zero-sized TMO descriptor when TMO_PRESENT is absent.",
+  "interpretation": "Display buffer helper precondition failure before resource operations; the leading hypothesis (an inference from the advertised capabilities) is a zero-sized TMO descriptor when TMO_PRESENT is absent.",
   "limits": [
     "Saved complete protobuf records only; inspect each outer NVCD integrity result.",
     "No live descriptor locals; no assertion-level interpretation as NV_STATUS.",
     "Labels/revisions supplied by caller; retain separate run metadata.",
     "Module recognition is a checked580.88 triage profile, not a general Windows ABI.",
-    "No live descriptor size captured; zero-size diagnosis is a static dataflow inference.",
+    "No live descriptor size captured; the zero-size diagnosis is an inference, not a measurement.",
     "Outer NVCD is one byte short; whole checksum cannot be validated.",
     "No Windows LUT kernel execution: no display method was submitted."
   ]
