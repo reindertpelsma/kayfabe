@@ -206,6 +206,9 @@ enum Disposition {
     /// hole in a range the reservation still believes it owns, and the next placement
     /// into that hole would succeed against stale accounting.
     InsideReservation,
+    /// ★ 2026-10-31: **memory the VMM owns**, described to the host but never mapped or unmapped
+    /// by us ([`MappedRegion::adopt_foreign`]). Dropping it must do nothing at all.
+    Foreign,
 }
 
 /// The one place a host CPU address exists in this workspace.
@@ -313,7 +316,10 @@ impl Mapping {
 
 impl Drop for Mapping {
     fn drop(&mut self) {
-        if self.disposition == Disposition::InsideReservation {
+        if matches!(
+            self.disposition,
+            Disposition::InsideReservation | Disposition::Foreign
+        ) {
             return;
         }
 
@@ -431,6 +437,62 @@ pub struct MappedRegion {
 unsafe impl Send for MappedRegion {}
 
 impl MappedRegion {
+    /// ★★★ **Adopt memory the VMM already maps — to DESCRIBE it, never to own it** (2026-10-31,
+    /// `docs/design/V3_GUEST_MEMORY.md` §5). Guest RAM that is not a file is only ever known as
+    /// `translate(gpa, len)` blocks of VMM addresses; an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over one
+    /// host block needs a [`MappedRegion`] to describe ([`crate::Indirect::describing`]). This is
+    /// that region: no `mmap` was made, and dropping it does NOT `munmap` (the VMM's mapping is not
+    /// ours to take down).
+    ///
+    /// The address is taken as an integer, so no pointer crosses a crate boundary; it is stored,
+    /// never dereferenced here ([`MappedRegion::read_into`] and the other accessors would, and a
+    /// foreign region is handed ONLY to the descriptor ioctl — which pins its pages and keeps no
+    /// address).
+    ///
+    /// # Safety
+    /// `[base, base + len)` must be mapped in this process, readable and writable, and stay so for
+    /// as long as this region is used — i.e. until the RM object described from it is freed (RM pins
+    /// the pages; the VMM must not `munmap` them meanwhile). The caller must not use the region's
+    /// byte accessors unless that range is also valid for those accesses.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`] (a null `base` or a zero `len`), [`RawError::Misaligned`] (`base`
+    /// or `len` not a whole host page), [`RawError::LengthOverflow`] (`base + len` wraps),
+    /// [`RawError::TooLargeForHost`].
+    pub unsafe fn adopt_foreign(base: u64, len: u64, prot: HostProt) -> Result<Self, RawError> {
+        if len == 0 {
+            return Err(RawError::ZeroLength {
+                what: "foreign region length",
+            });
+        }
+        let page = HostPageSize::query().bytes();
+        for (what, value) in [
+            ("foreign region base", base),
+            ("foreign region length", len),
+        ] {
+            if value % page != 0 {
+                return Err(RawError::Misaligned {
+                    what,
+                    value,
+                    required: page,
+                });
+            }
+        }
+        base.checked_add(len)
+            .ok_or(RawError::LengthOverflow { offset: base, len })?;
+        let len_host =
+            usize::try_from(len).map_err(|_| RawError::TooLargeForHost { value: len })?;
+        let ptr = usize::try_from(base).map_err(|_| RawError::TooLargeForHost { value: base })?;
+        let base = NonNull::new(ptr as *mut u8).ok_or(RawError::ZeroLength {
+            what: "foreign region base",
+        })?;
+        Ok(MappedRegion {
+            map: Mapping::adopt(base, len_host, Disposition::Foreign),
+            prot,
+            cache: CachePolicy::WriteBack,
+        })
+    }
+
     /// ★★★★★ **Ask the kernel to change this mapping's protection — as a QUESTION, not a
     /// capability.**
     ///
@@ -447,6 +509,13 @@ impl MappedRegion {
     /// [`RawError::Syscall`] with the kernel's `errno` — which is the point: `EACCES` is the
     /// answer that means "the open mode holds", and any other refusal means something else.
     pub fn reprotect(&self, prot: HostProt) -> Result<(), RawError> {
+        // ★ 2026-10-31: a foreign region is the VMM's mapping — never ours to re-protect.
+        if self.map.disposition == Disposition::Foreign {
+            return Err(RawError::Syscall {
+                call: "mprotect (refused: a foreign region is the VMM's mapping)",
+                errno: None,
+            });
+        }
         // SAFETY: the `Mapping` type invariant says `base` is a live mapping of exactly
         // `len_bytes()`, so the range handed to `mprotect` is this mapping and nothing else.
         // `mprotect` reads no memory of ours and writes none; it only changes the VMA's
@@ -675,6 +744,12 @@ impl MappedRegion {
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5) — it faults in the whole range.
     pub fn request_huge_pages(&self) -> Result<HugePageReport, RawError> {
+        if self.map.disposition == Disposition::Foreign {
+            return Err(RawError::Syscall {
+                call: "madvise (refused: a foreign region is the VMM's mapping)",
+                errno: None,
+            });
+        }
         lockwitness::assert_lock_free("request_huge_pages (faults in the whole range)");
         let base = self.map.base.as_ptr();
         let len = self.map.len;
@@ -1513,6 +1588,67 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write as _;
+
+    /// ★ 2026-10-31: a foreign region describes memory the VMM owns. Dropping it must not unmap
+    /// that memory, `reprotect`/`request_huge_pages` must refuse, and a bad base or length is
+    /// refused by name before anything is stored.
+    #[test]
+    fn a_foreign_region_never_unmaps_reprotects_or_advises_the_vmms_memory() {
+        let page_bytes = page().bytes();
+        let owner = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            4 * page_bytes,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        owner.write_from(HostOffset::new(8), &[1, 2, 3, 4]).unwrap();
+        // SAFETY: test-only; `owner` outlives every use of the foreign view below.
+        let base = unsafe { owner.host_span().as_ptr() } as u64;
+        // SAFETY: `[base, base + 4 pages)` is `owner`'s live read-write mapping.
+        let foreign =
+            unsafe { MappedRegion::adopt_foreign(base, 4 * page_bytes, HostProt::ReadWrite) }
+                .unwrap();
+        assert_eq!(foreign.len_bytes(), 4 * page_bytes);
+        assert_eq!(
+            foreign.addr_at(HostOffset::new(page_bytes), 8),
+            Ok(base + page_bytes)
+        );
+        assert!(foreign.reprotect(HostProt::ReadWrite).is_err());
+        assert!(foreign.request_huge_pages().is_err());
+        drop(foreign);
+        // The VMM's mapping is untouched: still mapped, still holding its bytes.
+        let mut back = [0u8; 4];
+        owner.read_into(HostOffset::new(8), &mut back).unwrap();
+        assert_eq!(back, [1, 2, 3, 4]);
+        // Refusals, by name.
+        for (b, l) in [
+            (0u64, page_bytes),
+            (base + 1, page_bytes),
+            (base, page_bytes + 1),
+        ] {
+            // SAFETY: refused before any use.
+            let r = unsafe { MappedRegion::adopt_foreign(b, l, HostProt::ReadWrite) };
+            assert!(r.is_err(), "{b:#x}+{l:#x}");
+        }
+        // SAFETY: refused before any use.
+        assert!(matches!(
+            unsafe { MappedRegion::adopt_foreign(base, 0, HostProt::ReadWrite) },
+            Err(RawError::ZeroLength { .. })
+        ));
+        // SAFETY: refused before any use.
+        assert!(matches!(
+            unsafe {
+                MappedRegion::adopt_foreign(
+                    u64::MAX - page_bytes + 1,
+                    2 * page_bytes,
+                    HostProt::ReadWrite,
+                )
+            },
+            Err(RawError::LengthOverflow { .. })
+        ));
+    }
 
     /// ★★★★★ **The fault-in must be NON-DESTRUCTIVE, and this is the property the whole
     /// call rests on.** `request_huge_pages` forces a write fault on every 4 KiB page, because

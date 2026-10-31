@@ -1092,7 +1092,7 @@ impl Device {
             walker,
             fb_length,
             // ★ P1+P2 §2.6: through the vIOMMU seam.
-            Box::new(move |gpa, len| ram.dma_to_file_range(gpa, len)),
+            Box::new(move |gpa, len| ram.gpu_ram_offset(gpa, len)),
         )
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM

@@ -150,6 +150,10 @@ pub struct Applied {
     /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
     /// run still got its own verdict).
     pub batch_fallbacks: usize,
+    /// ★ 2026-10-31: batched maps NOT attempted because the VMM's guest RAM has no file
+    /// ([`crate::ledger::NO_RAM_FD`]) — the optional stitch capability is absent and the runs went
+    /// one by one. Not in `batch_fallbacks`: nothing was refused.
+    pub batch_no_fd: usize,
     /// ★ 2026-10-09: runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
     /// (a page the diff names with the same mapping is never unmapped nor re-mapped).
     pub kept_runs: usize,
@@ -229,6 +233,17 @@ impl Applied {
     }
 
     fn fallback(&mut self, why: String) {
+        // ★ 2026-10-31: no file behind guest RAM = the stitch capability is absent. Named once in
+        // the log, counted apart, never a refusal.
+        if why == crate::ledger::NO_RAM_FD {
+            static LOGGED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("kf-mem: {why}");
+            }
+            self.batch_no_fd = self.batch_no_fd.saturating_add(1);
+            return;
+        }
         // A target that does not batch at all is not a fallback — it is the per-run path.
         if why != crate::ledger::NOT_BATCHED {
             self.batch_fallbacks = self.batch_fallbacks.saturating_add(1);

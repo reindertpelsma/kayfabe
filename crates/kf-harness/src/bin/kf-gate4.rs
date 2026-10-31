@@ -449,6 +449,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
             space,
             store,
             ram_obj: Some(ram_desc),
+            ram_objs: None,
         },
         ram_fd.as_backing_fd(),
     ));

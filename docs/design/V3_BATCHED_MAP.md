@@ -1,5 +1,10 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**NOTE, 2026-10-31 (owner direction; `V3_GUEST_MEMORY.md`): the stitch below needs a FILE behind guest RAM, and a file is now
+an OPTIONAL capability.** Where the VMM's RAM is not a file, `map_batch` answers `kf_mem::ledger::NO_RAM_FD`, the apply layer
+counts it apart (`batch_no_fd`) and places every row per run, one host object per RAM block. With a memfd nothing here changes.
+Whether the stitch is worth keeping is decided by the owner's A/B (`KF3_NO_BATCHED_MAP=1` vs batched); it is not removed.
+
 **★ CORRECTION (2026-10-10, branch `claude/held-hole-20261010`) — the HELD-hole of the D1-D3 code
 (Windows run 289: 14 leaves `HELD BY HOST`, 4 host Xid 31 `FAULT_PTE`) is a reservation-geometry defect;
 read this before §8.8.1/§8.8.3.** Host RM does not hold the range a micro reservation asks for: it

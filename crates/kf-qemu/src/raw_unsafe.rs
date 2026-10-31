@@ -83,6 +83,46 @@ impl RawRegion {
         true
     }
 
+    /// The VMM address of the region's first byte, as an INTEGER (for `translate`'s plain-integer
+    /// `HostBlock`s). Nothing is ever dereferenced from it; turning an address back into memory
+    /// happens only here, in [`RawRegion::describe_range`].
+    #[must_use]
+    pub fn base_addr(&self) -> u64 {
+        self.ptr.addr() as u64
+    }
+
+    /// ★ 2026-10-31: `[off, off+len)` of this region as a [`kf_linux_raw::MappedRegion`] to
+    /// DESCRIBE to the host RM (an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, which pins the pages) — the
+    /// guest-RAM object of a VMM whose RAM is not a file (`V3_GUEST_MEMORY.md` §5). The region
+    /// does not own the memory and never unmaps it. Bounds-checked against the adopted region.
+    ///
+    /// # Errors
+    /// Out of range, not host-page-aligned, or zero length, by name.
+    pub fn describe_range(
+        &self,
+        off: usize,
+        len: usize,
+    ) -> Result<kf_linux_raw::MappedRegion, kf_linux_raw::RawError> {
+        let p = self
+            .span(off, len)
+            .ok_or(kf_linux_raw::RawError::OutOfRange {
+                offset: off as u64,
+                len: len as u64,
+                object_len: self.len as u64,
+            })?;
+        // SAFETY: `span` bounds-checked `[off, off+len)` inside the adopted region, which QEMU keeps
+        // mapped read-write from registration until the device unregisters the block (`adopt`'s
+        // contract). The descriptor ioctl pins the pages and keeps no address; the returned region
+        // never `munmap`s and is dropped by the caller right after the ioctl.
+        unsafe {
+            kf_linux_raw::MappedRegion::adopt_foreign(
+                p.addr() as u64,
+                len as u64,
+                kf_linux_raw::HostProt::ReadWrite,
+            )
+        }
+    }
+
     /// Copy from the region at `off` into `dst`.
     pub fn read_into(&self, off: usize, dst: &mut [u8]) -> bool {
         let Some(p) = self.span(off, dst.len()) else {
@@ -109,6 +149,19 @@ impl BackendFd {
     #[must_use]
     pub unsafe fn adopt(fd: i32) -> Option<BackendFd> {
         (fd >= 0).then_some(BackendFd(fd))
+    }
+
+    /// ★ 2026-10-31: borrow it for as long as `holder` — the registry (`RamMap`) the block is
+    /// registered in — is borrowed, so [`kf_mem::guestmem::GuestMemory::export_fd`] can return a
+    /// `BorrowedFd` tied to the memory it describes. ⊘ Never closed here. The descriptor is open
+    /// while its block stays registered; a caller uses the borrow for one batch of syscalls, as it
+    /// uses [`BackendFd::borrow`].
+    #[must_use]
+    pub fn borrow_held<'a, T: ?Sized>(&self, holder: &'a T) -> std::os::fd::BorrowedFd<'a> {
+        let _ = holder;
+        // SAFETY: `adopt`'s contract — the descriptor is open while a `BackendFd` of it exists in
+        // the device, and `BorrowedFd` never closes it. The lifetime is the holder's borrow.
+        unsafe { std::os::fd::BorrowedFd::borrow_raw(self.0) }
     }
 
     /// Borrow it for one `mmap`. ⊘ Never closed here.
@@ -574,6 +627,46 @@ pub(crate) fn test_owned_ram(bytes: usize) -> (RawRegion, BackendFd) {
         },
         BackendFd(file.as_raw_fd()),
     )
+}
+
+/// ★ 2026-10-31 test-only: `bytes` of zeroed, 4 KiB-aligned memory that lives until process exit
+/// (a RAM block whose host address a plan and a descriptor can take).
+#[cfg(test)]
+pub(crate) fn test_aligned_ram(bytes: usize) -> RawRegion {
+    let layout = std::alloc::Layout::from_size_align(bytes, 4096).unwrap();
+    // SAFETY: `layout` has a non-zero size; the block is leaked, so it outlives every region.
+    let p = unsafe { std::alloc::alloc_zeroed(layout) };
+    assert!(!p.is_null());
+    RawRegion { ptr: p, len: bytes }
+}
+
+/// ★ 2026-10-31: `describe_range` hands the host RM a region over a block, bounds-checked and
+/// page-aligned, that never unmaps it.
+#[cfg(test)]
+mod describe_tests {
+    use super::*;
+
+    #[test]
+    fn describing_a_block_is_bounds_checked_and_aligned() {
+        let r = test_aligned_ram(0x4000);
+        assert_eq!(r.base_addr() % 4096, 0);
+        let whole = r.describe_range(0, 0x4000).expect("whole block");
+        assert_eq!(whole.len_bytes(), 0x4000);
+        drop(whole); // does not unmap: the block is still ours
+        assert!(r.store_u32(0, 7));
+        assert_eq!(r.load_u32(0), Some(7));
+        assert!(r.describe_range(0x1000, 0x3000).is_ok());
+        for (off, len) in [
+            (0, 0x4001),
+            (0x1000, 0x4000),
+            (usize::MAX, 2),
+            (1, 0x1000),
+            (0, 0x800),
+            (0, 0),
+        ] {
+            assert!(r.describe_range(off, len).is_err(), "{off:#x}+{len:#x}");
+        }
+    }
 }
 
 /// ★ ABI 23 (`V3_DISPLAY.md` §8.20): the QEMU sink's own conversions, against C-ABI verbs that

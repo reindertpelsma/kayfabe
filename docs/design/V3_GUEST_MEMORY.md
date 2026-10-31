@@ -1,9 +1,14 @@
 # V3 — guest RAM is a `translate(gpa, len)`, not a memfd
 
-**STATUS: DESIGN-ONLY, 2026-10-31 (owner direction 2026-10-31).** Step 1 (`kf_mem::guestmem`: the type, the
-contract, the tests) is code; nothing consumes it yet. This note becomes LIVE when step 3 lands (the QEMU RAM
-source implements the trait and the batch path selects on the optional fd capability). Until then the sections
-marked *today* describe what the tree still does.
+**STATUS: LIVE (code), 2026-10-31 (owner direction 2026-10-31); the file-less path is UNTESTED ON HARDWARE.** Step 1
+(`kf_mem::guestmem`: the type and the contract) was DESIGN-ONLY until step 3 landed. Step 3 (this note's §4, §5,
+§6) is code: `kf-qemu`'s `RamMap` implements `GuestMemory`; the GPU-side per-run map carries guest RAM as one host
+object per RAM block when there is no file; the batched map falls back to the per-run path by name. Measured here:
+the GPU-free tests of `kf-mem` (the model host RM), `kf-linux-raw` and `kf-qemu`. NOT measured: any GPU, any
+VM, any QEMU without a memfd. Defaults for a memfd-backed QEMU are unchanged, and no performance change is claimed.
+**Correction folded 2026-10-31 (step 3):** the first version of this note said the per-run path builds "the
+descriptor" from the `translate()` blocks; one OS descriptor describes ONE contiguous address range, so there is
+one object per RAM block (§5), not one descriptor.
 
 ## 1. The rule
 
@@ -57,22 +62,60 @@ returns an error. `kf_mem::guestmem` tests cover that.
 6. **The cap**: exactly 8 192 fragments served; 8 193 refused; merged neighbours do not count; a 65 536-block layout
    asked for everything is refused, not truncated.
 
-## 4. Where it plugs in (*today*, before step 3)
+## 4. Where it plugs in
 
-*Today* the system numbers guest RAM by the memfd file offset. `RamMap::file_range` (kf-qemu `mem.rs`) gives it, the
-VA manager turns a sysmem leaf into `Desired { ram: true, off: file offset }`, the whole-guest-RAM OS descriptor is
-built by mapping the entire memfd, and `RamMap::block_for` accepts only a range inside ONE block. Step 3 makes `RamMap` implement `GuestMemory` over the
-blocks QEMU already registers (`RamBlock { gpa, mem, fd: Option<_>, fd_off }`, `ram_add`'s `fd < 0` case).
+`RamMap` (kf-qemu `mem.rs`) keeps the blocks QEMU registered (`RamBlock { gpa, mem, fd: Option<_>, fd_off }`;
+`ram_add` with `fd < 0` already meant "no file", so no QEMU C change is needed). It now implements `GuestMemory`:
+`translate` builds a `RamLayout` of plain integers from the blocks (the VMM address is `RawRegion::base_addr()`, an
+integer) and answers; a registry that is not a layout (overlapping blocks) backs nothing, at the first byte.
+`export_fd` is `file_range` as a `FdRange` (None without a file, across a block end, in a hole, for length 0).
+The existing consumers (`block_for`, `at_file_offset`, `dma_to_file_range`) are NOT moved to `translate` in this series;
+they still need one block or a file offset, and refuse by name otherwise.
 
-## 5. The optional capability: the stitch
+## 5. The GPU side: RAM offsets, one object per block, the optional stitch
 
-`kf_linux_raw::MappedRegion::stitch` (via `kf_host::HostRm::map_scattered_through`, called from `kf_mem::ledger` and
-`batch.rs`) builds ONE host view out of pieces of the guest memfd and describes it to RM with ONE OS descriptor. It is
-the only consumer that needs a fd. The owner believes it brings no map-side performance win; an A/B will decide
-(`KF3_NO_BATCHED_MAP=1` per-run path vs the default batched path). It is NOT deleted. When the fd capability is absent
-the batch path falls back, by name, to the existing per-run path. See the step-3 PR for the exact fallback.
+**With a memfd (unchanged):** the whole file is ONE host object (`MemPlane::guest_ram_object`), a sysmem row's
+`Desired::off` is a file offset, the batched map stitches pieces of the file (`MappedRegion::stitch`) into one object.
 
-## 6. What this note does not claim
+**Without a file (new):**
+- *Numbering.* `Desired::off` of a guest-RAM row is a **RAM offset**: the position among the bytes of guest RAM in
+  guest-physical order (`kf_mem::ramobj::RamPlan::ram_offset`, reached by `RamMap::gpu_ram_offset`). Blocks adjacent
+  in guest-physical space are adjacent in RAM offsets; a hole costs nothing; a range across a hole is not RAM and is
+  refused by name where leaves are classified (`desired_from_leaves`).
+- *Objects.* `MemPlane::guest_ram_objects` makes one `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` per RAM block, each over
+  that block's VMM mapping (`RawRegion::describe_range` -> `MappedRegion::adopt_foreign`, an unsafe constructor
+  in `kf-linux-raw` that adopts memory it never maps or unmaps; `reprotect`/`request_huge_pages` refuse on it), on
+  the VA thread, once. `RamObjects` is the table (RAM offset -> object, object offset).
+- *The cut.* A host map can only carry bytes of its own object, so a guest-RAM row that spans an object edge is cut
+  there: `SpaceVerbs::ram_cuts` -> `BatchedVas::map_segments` maps one piece per object (all or nothing, each piece
+  recorded and unmapped by its own start, like the pieces of a row across a reservation edge). The model host RM
+  records a violation for any map that reaches past its object's end (a test of the model itself covers it).
+  `HostVas::map` refuses a row that is not inside one object, by name (`Crosses`, `Uncovered`).
+- *The stitch is optional.* `GpuMirror::map_batch` answers `kf_mem::ledger::NO_RAM_FD` when there is no file; the
+  apply layer counts it apart (`Applied::batch_no_fd`, `VaStats::batch_no_fd`), names it once in the log, and places
+  the rows per run. It is not a refusal and not in `batch_fallbacks`. The stitch itself (`MappedRegion::stitch`,
+  `HostRm::map_scattered_through`) is untouched: the owner's A/B (`KF3_NO_BATCHED_MAP=1` per run vs batched) decides
+  its future.
+- *Topology.* The objects describe the addresses the blocks had when they were built. `MemPlane::ram_objects()` is
+  `None` once the registered layout differs (a RAM block added or removed afterwards): rows are then refused by
+  name until a restart. QEMU re-renders RAM at machine reset; with a memfd the file survives that, with VMM memory
+  it may not. UNSURE whether QEMU re-adds anonymous RAM at the same addresses; the conservative answer is refuse.
+
+## 6. What still needs a file (and refuses by name without one)
+
+Everything that numbers guest RAM by FILE offset: `RamMap::file_range`/`at_file_offset`/`dma_to_file_range`
+consumers in `chan.rs` (a Translated channel reading guest memory by gpa, sysmem USERD and notifiers), the T-space
+RAM window (`tspace.rs`, one object over all RAM), PRAMIN pointed at system memory (`ViewOps::place_pramin_ram`),
+the display and GSP queue reads through `block_for` still work (they use the VMM mapping, not a file). Moving the
+channel-plane readers to `translate` is the next step if file-less RAM is to be a supported product configuration;
+this series makes the GPU-side map capable of it and nothing more.
+
+## 7. What this note does not claim
 
 - No performance change. Defaults stay as they are for QEMU (memfd present, behaviour unchanged).
-- Nothing in this note was run on a GPU or a VM. The tests above are the GPU-free tests of the pure type.
+- Nothing in this note was run on a GPU or a VM. The tests are GPU-free: the pure type (§3), the RAM-object table and
+  plan (`kf_mem::ramobj`: per-byte model, plan + table vs `translate`), and the model host RM (`kf_mem::sim`: a row across an
+  object edge, across three objects, across a hole; file-backed vs fragmented give the same translation at every step; the
+  random-diff property on fragmented file-less RAM with unmap and mid-row map refusals injected).
+- The real descriptor over VMM memory (an OS descriptor over an anonymous or hugetlb mapping rather than a memfd view) is the
+  same ioctl but has not been issued; it pins every page for the VM's life, like the memfd object.
