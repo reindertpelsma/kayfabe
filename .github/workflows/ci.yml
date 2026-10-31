@@ -39,6 +39,10 @@ on:
     - cron: '43 2 * * *'
   workflow_dispatch:
 
+# Explicit, so the token is read-only whatever the repository default is (scripts/ci/workflow_lint.py).
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -47,7 +51,7 @@ jobs:
     name: stable — build, test, clippy, fmt, boundary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Vast broker mocks and workflow boundary
         run: |
           npx --yes prettier@3.6.2 --check 'ci/vast-broker/**/*.js' 'ci/vast-broker/**/*.mjs'
@@ -60,7 +64,7 @@ jobs:
           node --test ci/vast-broker/test
           npm ci --prefix ci/vast-admin --ignore-scripts --no-audit --no-fund
           node --test ci/vast-admin/test/*.test.mjs
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
           components: rustfmt, clippy
@@ -74,7 +78,7 @@ jobs:
           # builds kf3's boot-display GOP driver from firmware/kf-gop the same way, and a missing
           # target is a named build error there. Both are listed in rust-toolchain.toml.
           targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Build
         run: cargo build --workspace
       - name: Allow user namespaces for this CI checkout's test executables
@@ -288,6 +292,7 @@ jobs:
         run: |
           python3 scripts/ci/dependencies.py
           python3 scripts/ci/debt.py frozen
+          python3 scripts/ci/workflow_lint.py
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
@@ -2154,8 +2159,8 @@ jobs:
     name: aarch64 — core cross-checks (no x86 assumptions)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
           # ★ aarch64-unknown-uefi (2026-10-03, OWNER_RULINGS §K: the ROM stays arch-neutral and
@@ -2164,7 +2169,7 @@ jobs:
           # workspace is checked for — so this job embeds a real AArch64 driver. UEFI targets link
           # with rust-lld, which ships with the toolchain: no linker to install, no stub needed.
           targets: aarch64-unknown-linux-gnu, aarch64-unknown-uefi
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # ★★ KAYFABE_ISOLATE_IMAGE_STUB=1 — the ONE reviewed opt-out from embedding a real
       # isolate image, and this job is the only place it may be used. This job type-CHECKS
       # for a triple it has neither a musl standard library nor a linker for, and it runs no
@@ -2214,8 +2219,8 @@ jobs:
     name: firmware — kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
           components: rustfmt, clippy
@@ -2350,7 +2355,7 @@ jobs:
     # skip, as the Makefile documents. Added 2026-10-21 (owner: "the broker is something CI can test well").
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Vast Worker admission in workerd (Wrangler dependencies)
         env:
           MINIFLARE_ASSERT_BODIES_CONSUMED: "true"
@@ -2376,12 +2381,12 @@ jobs:
     if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1 (tip of master on 2026-10-31; toolchain: input is explicit)
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
           targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the stable job
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
         run: |
           python3 scripts/ci/runner_namespaces.py
