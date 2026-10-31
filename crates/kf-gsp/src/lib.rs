@@ -150,3 +150,6 @@ pub use ring::{
 pub use rpc::{Disposition, FunctionCodes, RpcAbi, RpcCommand, RpcFunction};
 pub use seq::FalconSecureBooterBoot;
 pub use sysinfo::{StashedSystemInfo, SystemInfoCell};
+
+#[doc(hidden)]
+pub mod guestlog;
