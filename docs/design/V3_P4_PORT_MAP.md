@@ -1,5 +1,12 @@
 # V3 P4 PORT MAP — memory, VA and the BARs
 
+**STATUS: RESEARCH, 2026-09-24 (w826); the opening state word was PROPOSAL until 2026-10-31, when the doc
+checker's allowed set was applied.** A read-only survey (agent) of the P4 design, the v3 crates
+at `v3` HEAD `2df4dfc3` (plus `v3-hostfacts` `28638efa` where noted), and the old tree, in the
+format of `V3_P2_PORT_MAP.md`. Nothing in `/workspace/kf-master` was edited. Line numbers are as of
+`2df4dfc3`. ogkm citations are `research_clones/ogkm-580.159.04` (the target driver). The correction
+below and the status updates after it supersede the survey text where they conflict.
+
 **CORRECTION, 2026-10-31 (owner direction; branch `claude/guestram-step2-bar-sysmem-20261031`): a walked BAR1
 or BAR2 leaf whose aperture is system memory is REFUSED BY NAME and never placed.** Every sentence below
 that has a BAR1/BAR2 window (`kf_mem::cpuwin::CpuWindow`) show "the guest-RAM memfd at a file offset" or place
@@ -25,11 +32,6 @@ window register has its own `_TARGET` field, so PRAMIN is not covered by this co
   (`V3_BAR1_DOORBELL.md`), never as guest-RAM rows. (4) The Windows driver is closed: nothing here is evidence
   about it, and no reverse engineering was used. (5) Whether the hardware accepts a sysmem aperture in a BAR1
   PTE is UNKNOWN. If a guest writes such a PTE it sees scratch, and `sysmem_leaf_refused` says so.
-
-**STATUS: PROPOSAL, 2026-09-24 (w826).** A read-only survey (agent) of the P4 design, the v3 crates
-at `v3` HEAD `2df4dfc3` (plus `v3-hostfacts` `28638efa` where noted), and the old tree, in the
-format of `V3_P2_PORT_MAP.md`. Nothing in `/workspace/kf-master` was edited. Line numbers are as of
-`2df4dfc3`. ogkm citations are `research_clones/ogkm-580.159.04` (the target driver).
 
 **STATUS UPDATE, 2026-09-24 (w826, branch `v3-p4a`): build-order steps 2 and 3 are BUILT, UNRUN on
 hardware.** §2.1(d): `WalkKernel::submit`/`try_collect` (own stream, pinned read-back,
