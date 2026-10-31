@@ -74,7 +74,9 @@ fn walk(roots: &[&str], ext: &str) -> Vec<(String, String)> {
 }
 
 fn rust_sources() -> Vec<(String, String)> {
-    let out = walk(&["crates", "tests"], ".rs");
+    // 2026-10-31: `kayfabe-device` moved to archive/crates/ (archive/README.md); it is still a
+    // reference site for several truncated rows, so it stays in the scanned universe.
+    let out = walk(&["crates", "tests", "archive/crates/kayfabe-device"], ".rs");
     assert!(
         out.len() > 100,
         "the source walk found only {} files — it is not walking the tree, and a gate that \
