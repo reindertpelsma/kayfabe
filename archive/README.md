@@ -40,6 +40,7 @@ or maintained. History was preserved (`git mv`), so `git log --follow` works.
 | `crates/kayfabe-core`, `-fwd`, `-rmrpc`, `-rt`, `-shell` | the old pure core, forwarding plane, RM-RPC bridge and L1 threaded shell |
 | `crates/kayfabe-qemu-raw`, `-vmm-qemu`, `-vmm-kvm` | the old `nvkvm-gpu` QEMU device and VMM adapters |
 | `crates/kayfabe-crec` | the old C-reference replay (v3's is `crates/kf-crec`) |
+| `crates/kayfabe-device` (moved 2026-10-31) | the old register-plane device, 49 734 lines; see the STATUS note below |
 | `tests/` | `kayfabe-tests`, the old conformance suite |
 | `fuzz/` | `kayfabe-fuzz`, cargo-fuzz targets over the old core |
 | `qemu/hw/misc/nvkvm/` | the old device's C QOM overlay |
@@ -49,11 +50,22 @@ or maintained. History was preserved (`git mv`), so `git log --follow` works.
 
 ### What was deliberately NOT archived
 
-Sixteen `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm
-raw-client grader behind the thin-guest suite (`scripts/fastguest/`) and the
-bare-metal baseline — and its dependency closure (`abi`, `arch`, `chips`,
-`completion`, `cuda`, `device`, `doorbell`, `gsp`, `isolate`, `isolate-host`,
-`linux-raw`, `mmu`, `mocks`, `trace`, `util`, `vmm`). Moving the grader onto
-`kf-*` crates would let them follow.
+**STATUS: LIVE, 2026-10-31.** ⊘ Correction, folded above the text it corrects: `kayfabe-device`
+(49 734 lines) is no longer in this list of kept crates. It was kept on 2026-09-26 only because
+`kayfabe-rm-ladder` declared a dependency on it; the ladder's source never names it, and
+`cargo tree -p kayfabe-rm-ladder` shows nothing else in the closure uses it. The declaration was
+removed and the crate moved to `archive/crates/kayfabe-device`, which is **not a workspace member
+and no longer builds or tests**. It last built at `3e51cfcde` (tag `pre-archive-20261031`, the
+`next` tip it was moved from). Its tests were also dropped from `cargo test --workspace`; the
+clippy-debt entries for it were removed, and its claim-ledger debt entries were re-keyed to the new path.
+The kf-abi and kayfabe-abi truncated-row gates still read its files through
+`archive/crates/kayfabe-device`.
+
+Sixteen `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm raw-client grader behind the
+thin-guest suite (`scripts/fastguest/`) and the bare-metal baseline — and the dependency closure it
+actually has (`abi`, `arch`, `chips`, `completion`, `cuda`, `doorbell`, `gsp`, `isolate`,
+`isolate-host`, `linux-raw`, `mmu`, `mocks`, `trace`, `util`, `vmm`). Every one of them is reached
+from `kayfabe-rm-ladder` through normal dependencies (`cargo tree`), so none of them can move until
+the grader is rebuilt on `kf-*` crates, which would let them follow.
 
 The bench defaults to `KF_DEVICE=kf3`; `KF_DEVICE=nvkvm` refuses by name.
