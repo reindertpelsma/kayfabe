@@ -84,6 +84,12 @@ A citation of `crates/kayfabe-{mmu,gsp,mocks,trace,completion,vmm}/...` or of
 resolves to `archive/crates/kayfabe-X/...` and `archive/crates/kayfabe-chips-modules/{src,tests}/...`.
 The tests that went with them, and whether anything in `kf-*` still covers the contract, are listed in the
 pull request that moved them (coverage NEEDS-OWNER items are named there).
+**2026-10-31 (test port):** the contracts that had no `kf-*` counterpart were ported as GPU-free tests; the
+coverage table is in the porting pull request. The GA10x GMMU geometry tests and the walk-kernel corpus
+cross-check now live in `crates/kf-cuda/tests/gmmu_ver2/` (an ogkm-derived, test-only reference decoder), the
+GB202 token and `Arch`-level host-class contracts in `crates/kf-trap/src/tokenindex.rs` and
+`crates/kf-chip/tests/family_from_arch.rs`, and the surviving part of the completion plane in
+`crates/kf-chan/src/completions.rs`.
 
 **STATUS: LIVE, 2026-10-31 (second pass).** **[SUPERSEDED by the third pass above: the owner decision named below was made, `chips` was cut and the five crates and `vmm` moved.]** ⊘ Refinement, folded above the text it refines: six of
 the sixteen crates below link **0 bytes** into the release `kayfabe-rm-ladder` (MEASURED, `nm -S -C`,
