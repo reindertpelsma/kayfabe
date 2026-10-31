@@ -108,7 +108,7 @@ fn the_control_is_classified_and_sized_as_the_sdk_declares_it() {
 
 #[test]
 fn sysmem_is_served_with_the_body_a_real_ga106_wrote_into_a_poisoned_buffer() {
-    // ★★★ `[measured 2026-08-08, real GA106 `GPU-d0913685`, `rmladder --atomics-probe`
+    // ★★★ `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, `rmladder --atomics-probe`
     // (R23), `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`]`: `capType = 0` into a
     // `0xCD`-seeded buffer comes back `NV_OK` with all thirteen ops
     // `bSupported=0x00 attributes=0x00000000` and every entry's three padding bytes still

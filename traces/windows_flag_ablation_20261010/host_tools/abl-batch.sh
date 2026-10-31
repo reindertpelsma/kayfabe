@@ -10,7 +10,7 @@ while :; do
   N=$(cat $A/nextrun); echo $((N+1)) > $A/nextrun
   echo "$(date -Is) run $N name=$name drop=[$drop]" >> $A/batch.log
   echo "$N $name" >> $A/runs.txt
-  bash $W/tdropus/queue.sh $N $BIN $HOLD tdr-run27.sh KF_GUEST_PW=kfsign7 DWM_OVERLAY_OFF=1 SKIP_SHORTS=1 SCROLL_EVERY=3600 RUN_WIN_FLAGS= "ABL_DROP=$drop" > $A/run$N.out 2>&1
+  bash $W/tdropus/queue.sh $N $BIN $HOLD tdr-run27.sh "KF_GUEST_PW=${KF_GUEST_PW:?set KF_GUEST_PW to your own throwaway guest password}" DWM_OVERLAY_OFF=1 SKIP_SHORTS=1 SCROLL_EVERY=3600 RUN_WIN_FLAGS= "ABL_DROP=$drop" > $A/run$N.out 2>&1
   { echo "=== $name"; bash $A/abl-sum.sh $N; } >> $A/results.txt 2>&1
   echo "$(date -Is) run $N done" >> $A/batch.log
 done

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Keep GPU board UUIDs out of traces/ and docs/ (a ratchet: the existing hits may only go down).
+"""Keep GPU board UUIDs out of the tree (a ratchet: the existing hits may only go down).
 
-A GPU UUID (`GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, as `nvidia-smi -L` prints it, or the value
-of a `gpu-uuid=` / `gpu_uuid:` assignment) identifies one physical board. Traces and docs are
-published with the repository, so a board's identifier does not belong in them.
+A GPU UUID (`GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, as `nvidia-smi -L` prints it, the value
+of a `gpu-uuid=` / `gpu_uuid:` assignment, or the `deviceUUID = ` line of `vulkaninfo`, which on
+NVIDIA is the same value) identifies one physical board. The repository is published, so a board's
+identifier does not belong in it.
+
+Synthetic placeholders are not hits: the all-zero UUID, and every UUID that starts with
+`fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e` ("fa4e" for "fake"). Use those in tests, comments and scrubbed
+traces; give each distinct board a different last group so equalities between boards survive.
 
 How the ratchet works. `gpu-uuids-baseline.json` records, per file, a fingerprint of each UUID
 found there and how many times (the fingerprint is a truncated SHA-256 of the lower-cased UUID;
@@ -33,11 +38,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = Path(__file__).resolve().parent / "gpu-uuids-baseline.json"
-SCOPE = ("traces", "docs")
+SCOPE = (
+    "traces", "docs", "crates", "scripts", "tools", "archive", "site", "ci", "broker", "qemu", "cuda",
+)
+SYNTHETIC_PREFIX = "fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e"
 
 _UUID = rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 PATTERN = re.compile(
-    rb"(?:gpu-|gpu[-_]uuid[ \t]*[=:][ \t]*[\"']?)(" + _UUID + rb")(?![0-9a-f])", re.IGNORECASE
+    rb"(?:gpu-|gpu[-_]uuid[ \t]*[=:][ \t]*[\"']?|deviceUUID[ \t]*[=:][ \t]*)("
+    + _UUID
+    + rb")(?![0-9a-f])",
+    re.IGNORECASE,
 )
 NOTE = "Existing hits, fingerprinted. Shrink-only: no_gpu_uuids.py --shrink."
 
@@ -47,9 +58,17 @@ def fingerprint(uuid: bytes) -> str:
     return hashlib.sha256(uuid.lower()).hexdigest()[:16]
 
 
+def synthetic(uuid: bytes) -> bool:
+    """A placeholder, not a board: all zero, or the documented fake prefix."""
+    low = uuid.lower().decode()
+    return set(low.replace("-", "")) <= {"0"} or low.startswith(SYNTHETIC_PREFIX)
+
+
 def scan(data: bytes) -> Counter:
-    """Fingerprint -> occurrences, for every GPU UUID in `data`."""
-    return Counter(fingerprint(m.group(1)) for m in PATTERN.finditer(data))
+    """Fingerprint -> occurrences, for every real-looking GPU UUID in `data`."""
+    return Counter(
+        fingerprint(m.group(1)) for m in PATTERN.finditer(data) if not synthetic(m.group(1))
+    )
 
 
 def tracked(root: Path) -> list[str]:
@@ -146,8 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if new:
         print(
-            "A GPU UUID identifies one board. Scrub it (for example GPU-00000000-0000-0000-"
-            "0000-000000000000) instead of adding it to the baseline."
+            "A GPU UUID identifies one board. Scrub it (for example "
+            f"GPU-{SYNTHETIC_PREFIX}0001) instead of adding it to the baseline."
         )
     if stale:
         print("The baseline lists UUIDs that are gone: run scripts/ci/no_gpu_uuids.py --shrink")

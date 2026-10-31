@@ -55,6 +55,6 @@ GPU0:
 	driverName         = NVIDIA
 	driverInfo         = 580.88
 	conformanceVersion = 1.4.1.3
-	deviceUUID         = 147ee936-c7a6-9291-e31b-a100c9b275e5
+	deviceUUID         = fa4efa4e-fa4e-4fa4-8fa4-fa4efa4ed006
 	driverUUID         = 2a9a7e7f-0f01-5af8-b3d0-6ee0131cf715
 === end rc=0 secs=4 2026-10-11T10:02:01.7137567-07:00

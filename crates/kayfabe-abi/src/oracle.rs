@@ -24,7 +24,7 @@
 //! # ★★★ The class, MEASURED — all eleven, not a sample
 //!
 //! `[measured]` 2026-08-01 on an NVIDIA GeForce RTX 3060 (GA106),
-//! `GPU-e28d7776-e4f9-704b-d392-d46f187343f8`, vast instance `46494693`, host driver open
+//! `GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0002`, vast instance `46494693`, host driver open
 //! **580.159.04** — `research_clones/ogkm-580.159.04` (tag `b81d58e`) rebuilt with a chunked
 //! whole-body print at `rpcRmApiControl_GSP`'s reply, `RmInitAdapter` driven by opening
 //! `/dev/nvidia0`, and widened with `nvidia-smi -q`, which is what reaches `0x20800a4c`.

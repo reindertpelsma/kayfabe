@@ -4909,8 +4909,8 @@ the tail seeded `0xCD`.
 
 | source | GPU | `0x23` | `0x24` |
 |---|---|---|---|
-| `rpctrace_ga106_boot1.bin` seq806 | `GPU-e28d7776-…` | `0x19ece058` | `0xb91e2532` |
-| R21, 2026-08-08, run 1 | `GPU-d0913685-…` | `0x4324d4e9` | `0x8708a4a8` |
+| `rpctrace_ga106_boot1.bin` seq806 | `GPU-fa4e0002-…` | `0x19ece058` | `0xb91e2532` |
+| R21, 2026-08-08, run 1 | `GPU-fa4e0001-…` | `0x4324d4e9` | `0x8708a4a8` |
 | R21, run 2, same box | same | `0x4324d4e9` | `0x8708a4a8` |
 
 **Stable across runs on one part, different between two parts.** Unnamed in both vendored
@@ -5267,7 +5267,7 @@ sweep returned **sixteen identical words** — which reads as *"constant, safe t
 is worth nothing, because an idle PCIe link is a constant link. The measurement below only
 exists because the link was made to move.
 
-#### `[measured 2026-08-08, vh, RTX 3060 (GA106) `GPU-d0913685`, driver 580.159.04 Open, rev `4e79a14`]`
+#### `[measured 2026-08-08, vh, RTX 3060 (GA106) `GPU-fa4e0001`, driver 580.159.04 Open, rev `4e79a14`]`
 
 R22 (`rmladder --bus-info-sweep`) asks all 52 `BUS_GET_INFO_V2` indices one call each, replays
 libcuda's own two requests byte for byte, and then reads `0x2d` sixteen times. Run twice: once
@@ -5454,7 +5454,7 @@ which is exactly why the boot ledger carries `unserviced fn 76 cmd 0x2080182a` o
 suffix and inferring caller-dependence skipped the two flags that say the HAL is bypassed.
 ★ A `_DISPATCH` suffix is a fact about NVOC codegen, not about who is calling.
 
-#### `[measured 2026-08-08, real GA106 `GPU-d0913685`, driver 580.159.04 Open, rev `1d5704dd9`]` R23
+#### `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, driver 580.159.04 Open, rev `1d5704dd9`]` R23
 
 `rmladder --atomics-probe` — eight arms, on the **same bare Subdevice R18 used**, allocating
 nothing. Hypotheses written down before the run: H1 = caller state (every arm refuses),
@@ -5608,7 +5608,7 @@ the way `PCIE_GEN_INFO` poisons a chip row.
 
 ### 14.32 ★★★★ `FB_GET_INFO_V2` SERVED — and the ledger that "proved" it never arrived was **SATURATED** (`[measured 2026-08-08, boots fb1432_20e319b / gt1432_20e319b, rev 20e319b]`)
 
-`[measured 2026-08-08, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-d0913685`, host
+`[measured 2026-08-08, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-fa4e0001`, host
 driver 580.159.04 Open), boots `fb1432_20e319b` and `gt1432_20e319b`, both
 `target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` stamped
 `kayfabe-rev:20e319bc7a37545f0ba5fabb98eb40122475f962`, shipping config,
@@ -5722,7 +5722,7 @@ the Hopper seam is a named line rather than a retrofit.
 
 #### ⊘⊘ The OBVIOUS next step is contradicted by hardware — `LTS_COUNT` is not `ltc × ltsPerLtc`
 
-`[measured 2026-08-08, real GA106 `GPU-d0913685`, `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66`]`:
+`[measured 2026-08-08, real GA106 `GPU-fa4e0001`, `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:66`]`:
 
 The very next `FB_GET_INFO_V2` in the same real trace (`:66`) asks `{0x1a, 0x22, 0x23}` and is
 answered `{0x07, 6, 18}`. `0x22` `LTC_COUNT` is `memory_system.ltc_count` exactly. `0x23`
@@ -5903,7 +5903,7 @@ better host for the suite as well as the bench.
 
 ### 14.33 ★★★★ `CE_GET_ALL_PHYSICAL_CAPS` SERVED — and §14.32's probe plan could never have run, on a control §14.32 read at the wrong boundary
 
-`[measured 2026-08-09, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-d0913685`, host
+`[measured 2026-08-09, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-fa4e0001`, host
 driver 580.159.04 Open), boots `ce1433_0de5ddb` and `gt1433_0de5ddb`, both
 `target/release/libkayfabe_qemu_raw.a` and `qemu-build/qemu-system-x86_64` stamped
 `kayfabe-rev:0de5ddb70a1509ac00ab66e4b833043f604ae524`, shipping config, STOCK guest module]`.
@@ -5921,7 +5921,7 @@ would each have cost a rung.
 > the `capsTbl[4..63]` zeros from ambiguous into positive."*
 
 Every clause is true, and §14.31's trap really is disarmed. `[measured 2026-08-09, real GA106
-`GPU-d0913685`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`:
+`GPU-fa4e0001`, `traces/real_ga106/rmladder_r18_cecaps_real_ga106.txt`]`:
 
 ```text
 info  R18 0x20802a0b    = refused Other(86) (no value measured)
@@ -6103,7 +6103,7 @@ declared query tags before seeding anything.
 
 ### 14.34 ★★★★ `GR_FS_INFO` + the three FB indices §14.32 deferred — and the deferred one's answer was inside the sentence that deferred it
 
-`[measured 2026-08-09, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-d0913685`, host
+`[measured 2026-08-09, vast GA106 bench (`vh`, RTX 3060 `10de:2504`, `GPU-fa4e0001`, host
 driver 580.159.04 Open), rev `373c145`, shipping config, STOCK guest module]`.
 
 #### ⊘⊘ First, the refutation of my own framing — and it is §14.32's sentence, read properly
@@ -6925,7 +6925,7 @@ second, separate statement of the same silicon fact.
 
 `[measured 2026-08-09]`, two boots, **one revision** (`319d29a`), **one environment
 variable** apart. Both artifacts stamped
-`kayfabe-rev:319d29a3cb0f988dc2c85f92c1b2676bae4c17bd`; host GPU `GPU-d0913685` (RTX 3060),
+`kayfabe-rev:319d29a3cb0f988dc2c85f92c1b2676bae4c17bd`; host GPU `GPU-fa4e0001` (RTX 3060),
 host driver 580.159.04; guest 580.159.04 open, **stock**; probe-arm set EMPTY.
 Evidence: `traces/guest_boots/fmb1_319d29a_*` and `traces/guest_boots/iso1_319d29a_real_*`.
 
@@ -7074,7 +7074,7 @@ directly; nothing in that acceptance quantified over *"and a guest doorbell reac
 
 ## 16. §15.6–§15.10 — THE UVM CHANNEL: three stacked walls removed, four boots, and the wall moved twice
 
-`[measured 2026-08-09]`, five boots on the GA106 bench (`vh`, RTX 3060 `GPU-d0913685`, host
+`[measured 2026-08-09]`, five boots on the GA106 bench (`vh`, RTX 3060 `GPU-fa4e0001`, host
 driver 580.159.04, guest 580.159.04 open and **stock**, probe set EMPTY, one device-opening
 consumer per boot). Every claim below names the boot and the **binary's own** `kayfabe-rev`
 stamp.
