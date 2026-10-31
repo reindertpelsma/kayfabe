@@ -10,6 +10,7 @@
 
 # Guests
 
+- [Attach to a VM you already have](attach-to-existing-vm.md)
 - [Linux guest](linux-guest.md)
 - [Windows guest](windows-guest.md)
 - [Display and the broker](display.md)
