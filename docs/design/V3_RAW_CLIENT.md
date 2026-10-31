@@ -114,7 +114,7 @@ The stress arm needs exactly the verbs the host side already uses for the same j
 user buffer, a fixed `NV_ESC_RM_MAP_MEMORY_DMA`, one invalidate, unmap, free
 (`kf-host/src/channel.rs`, `map_scattered_through`: "stitch -> ONE OS descriptor -> ONE fixed MAP_MEMORY_DMA").
 The raw client in a guest issues these verbs to the guest's driver; the guest RM writes the PTEs; kayfabe's VA manager
-sees them. The host stitch costs 20.4 us per piece on the one measured Enscape window (MEASURED upstream,
+sees them. The host stitch costs 20.4 us per piece on the one Enscape window counted in run 8840 (H run,
 `traces/enscape_h_counts_20261029`, 98,304 attempts, 2,005.8 ms), so a faithful synthetic is dominated by exactly the
 code we want to watch.
 
@@ -178,12 +178,12 @@ thresholds calibrated, not on a table.
 
 ### 2.2 The closure, and what the binary really reaches
 
-Edges: `cargo tree --offline -p kayfabe-rm-ladder -e normal,build --features cuda-window` (MEASURED): rm-ladder
+Edges: `cargo tree --offline -p kayfabe-rm-ladder -e normal,build --features cuda-window` (output read by hand): rm-ladder
 declares abi, arch, chips, device, isolate, isolate-host, linux-raw, mmu, util. Transitively: doorbell, mocks, gsp
 (via chips), trace, completion (via gsp), vmm (via isolate-host), cuda (only with the non-default `cuda-window`
 feature), and `kf-abi`/`kf-arch`/`kf-util` (via isolate-host). No `kf-*` crate depends on a `kayfabe-*` crate (#214).
 
-Direct references in `main.rs` (MEASURED, `grep -o 'kayfabe_[a-z_]*::'`): `isolate` 60 (all but a few are `HostHandle`),
+Direct references in `main.rs` (counted with `grep -o 'kayfabe_[a-z_]*::'`): `isolate` 60 (all but a few are `HostHandle`),
 `linux_raw` about 80, `isolate_host::rm` about 70, `abi::submit` 27, `arch::ids` 4, `util::trapwitness::OffTrap` 2, and **zero**
 for `chips`, `device`, `mmu` (comments only).
 
@@ -212,7 +212,7 @@ symbol bytes are std/rodata/closures that carry no crate path, so the table is a
 | cuda | 3,259 (+765) | 0 (feature off) | only `--cuda-window`, which is **not one of the 30 arms** | `kf-cuda` |
 | device | 27,596 (+22,138) | 0 | dead declared dependency, two comments | #214 moves it |
 
-Line counts are MEASURED (`wc -l` of `*.rs` under `src/`; tests = other `.rs`). **INFERRED reachable slab**: ladder
+Line counts come from `wc -l` of `*.rs` under `src/` (tests = other `.rs`). **INFERRED reachable slab**: ladder
 19.4k + `isolate-host` {rm 15.9k non-test, osevent 1.7k, hostabi 1.5k, listobj 0.8k, fdcross 0.4k, export 0.5k,
 guestram 0.4k, `proto` + `isolate` up to 5.7k} + `isolate` 5.8k + `linux-raw` ~12k + `util` ~1.5k + `abi` ~10-15k + `arch`
 ids ~1k = roughly 75-85k lines of the 194k the closure declares. The rest of the closure is compiled and linked out.
