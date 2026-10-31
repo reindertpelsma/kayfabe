@@ -2,6 +2,8 @@
 
 **STATUS: LIVE, 2026-10-11.** Read-only inventory; no crate was edited and no answer is proposed. Tree: `integration/windows-20261010` at `c1aa06b0` (worktree branch `claude/constant-inventory-20261011`). Machine-readable twin: `docs/design/v3_constant_inventory.tsv` (columns: id, name, kind, axes, kayfabe_source, evidence, monitor_attached, notes; same ids as this file).
 
+> **Correction, 2026-10-31 (provenance fix).** Row `ctl-2081010d` below cites `kf-abi/src/hoststub_generated.rs` and a size taken from "the retail export row". That file no longer exists: the cell is the hand-maintained `crates/kf-abi/src/hoststub.rs`, whose message `0xd` and params size `0` are `measured:` rows with cited trace lines, and the closed-binary basis is dropped (see `docs/design/tier_checks/tier2_compute_host.md` item 8). Rows `ctl-20801111` and `const-sw-runlist-object` likewise now point at `crates/kf-abi/src/sw_runlist.rs` (hand-maintained, source-tagged). The machine-readable twin `v3_constant_inventory.tsv` keeps the 2026-10-11 wording; this note governs.
+
 Convention: **M:** = measured (a log line, a capture, a source line read); **I:** = inferred; **unknown** = no evidence. The two are kept apart in every cell. "ogkm" = ogkm 595.84 headers on the controller (`/workspace/ogkm-tars/open-gpu-kernel-modules-595.84`), used for control names; "undefined" = no header in 595.84 defines the id; **other ogkm versions (older tags, newer releases) are not yet checked**, so an "undefined" id may still be defined elsewhere (owner decision: derivations may use any ogkm version).
 
 ## 1. Summary

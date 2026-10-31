@@ -5,11 +5,17 @@
 //! decision is needed for the software runlist"). The owner has NOT decided between (a), (b) and
 //! (c); the controller recommended (b) for one experiment, behind this flag.
 //!
-//! What the control is (read, 2026-10-07): retail Windows 580.88 sends control
-//! [`kf_abi::sw_runlist::EvidenceCell::observed_control`] (`0x20801111`, 40 bytes, no OGKM name or
-//! layout) to put a guest-built runlist on the scheduler; its export row flags it
-//! `ROUTE_TO_PHYSICAL` (kernel-privileged by default). vfio-10 answers it `NV_OK` with the request
-//! echoed. The second graphics TSG of a Windows kernel client is scheduled ONLY by it.
+//! What the control is: Windows 580.88 sends control
+//! [`kf_abi::sw_runlist::EvidenceCell::observed_control`] (`0x20801111`, 40 declared bytes, no
+//! OGKM name or layout; measured, `traces/windows_code43_walls_20261007/run42-requests.log:71`)
+//! after allocating the software-runlist object, to put a guest-built runlist on the scheduler.
+//! A real GPU answers it with the request echoed (reply equals request in 565 of 565
+//! calls of the five Windows captures, `docs/design/tier_checks/tier2_compute_host.tsv`). The second graphics TSG of a Windows kernel
+//! client is scheduled ONLY by it.
+//!
+//! ★ 2026-10-31 (provenance fix): an earlier version of this paragraph quoted the control's
+//! privilege flags from a closed binary's export row. That is withdrawn: nothing here depends on
+//! it, and the control is only ever answered under the guest identity and size checks below.
 //!
 //! What (b) does: kayfabe owns scheduling. Every Translated kernel channel is already scheduled on
 //! the HOST at birth (`kf_chan::host`'s ring birth, an unprivileged `GPFIFO_SCHEDULE` of
