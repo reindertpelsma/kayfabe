@@ -1,0 +1,41 @@
+{
+  "profile_id": "GB202_5090_90MIN",
+  "evidence_alias": "stage-c-box-1",
+  "candidate_die": "GB202",
+  "actual_die": "UNBOUND",
+  "source": "7dcedefea093de078188efd5f712561bde746362",
+  "native_rm_scope": {
+    "architecture": 432,
+    "implementation": 2
+  },
+  "planned_driver": "595.91.07 open",
+  "quote_ceiling_usd_per_hour": "1.50",
+  "perlease_stop_usd": "3.20",
+  "perlease_cap_usd": "3.25",
+  "max_seconds": 5400,
+  "framebuffer_mib": 8192,
+  "work_lead_seconds": 660,
+  "capture_lead_seconds": 600,
+  "independent_cleanup_bound_seconds": 570,
+  "conditional_cleanup_slack_seconds": 30,
+  "native_order": [
+    "planned open driver content + usable native inventory",
+    "two actual nativeRM probes",
+    "canonical gates9 +gate10",
+    "bare30 at180s",
+    "native reference receipt"
+  ],
+  "guest_order": [
+    "kf3 +fastguest build only after nativePASS",
+    "guest30 at180s",
+    "USER births +exact Xid audit"
+  ],
+  "native_falsifier": "identity/RM/driver/gate/bare refusal excludes box before guest; no retry",
+  "guest_falsifier": "failed/crashed/notrun arm or unmatched Xid prevents qualification",
+  "time_falsifier": "slow or missing phase at fixed cutoff yields PARTIAL/UNRUN; never extend or shorten arms",
+  "complete_worst_case_protocol_fits90min": false,
+  "hardware_result": "UNRUN",
+  "closed_authority": true,
+  "permission_to_create": false,
+  "private_exact_preregistration_sha256": "498e58bc4e1194c4f18833148edd0371232bb276749d34df25cd6aadc3f85fa3"
+}
