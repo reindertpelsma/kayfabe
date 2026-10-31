@@ -61,6 +61,27 @@ clippy-debt entries for it were removed, and its claim-ledger debt entries were 
 The kf-abi and kayfabe-abi truncated-row gates still read its files through
 `archive/crates/kayfabe-device`.
 
+**STATUS: LIVE, 2026-10-31 (second pass).** ⊘ Refinement, folded above the text it refines: six of
+the sixteen crates below link **0 bytes** into the release `kayfabe-rm-ladder` (MEASURED, `nm -S -C`,
+`docs/design/V3_RAW_CLIENT.md` §2.2): `mmu`, `gsp`, `mocks`, `trace`, `completion`, `cuda`. Zero linked
+bytes is not zero use: five of the six are **compiled** unconditionally by a live crate and `cuda` under the ladder's `cuda-window` feature,
+so, unlike `kayfabe-device`, none of them is an unused declaration.
+The chain is `kayfabe-isolate-host` -> `kayfabe-chips` -> {`kayfabe-gsp` (`ad10x.rs` uses
+`FalconSecureBooterBoot`), `kayfabe-mocks` (`MockArch` in `ad10x`/`gb20x`/`gh100`)};
+`kayfabe-gsp` -> `kayfabe-trace` (`replay.rs`) -> {`kayfabe-completion`, `kayfabe-mmu`
+(`event.rs`)}; `kayfabe-cuda` is `kayfabe-isolate-host`'s optional `cuda-scratchpad` dependency
+(`cudawalk.rs`, `cudastore.rs`, `rm.rs`), reached from the ladder's opt-in `cuda-window` feature, so
+`--all-features` builds it. The ladder itself and `isolate-host` use **only** `chips::host_classes`
+(`DerivedHostClasses`, `pinned_host_classes`, `CLASSLIST_V2_SIZE`, `decode_classlist`); nothing live uses
+`ga10x`, `ad10x`, `gb20x` or `gh100`. Those four modules are what pull in the five crates, so the five can
+follow only after `kayfabe-chips` is cut down to `host_classes`, which is an owner decision (it edits a
+frozen live crate, and `kayfabe-mmu`'s tests, which use `chips::ga10x::Ga10xGmmu` for the `cuda/walk`
+differential oracle, would go with it). The ladder's declarations of `kayfabe-chips` and `kayfabe-mmu` were removed on
+2026-10-31 (its `main.rs` names neither; they stay in the closure through `isolate-host`). Sub-2 KB crates
+(MEASURED symbol bytes): `chips` 1,590 (the class-list decoder), `doorbell` 1,111 (the generated
+`classgen::FAMILIES` table), `arch` 167 (`ids`), `vmm` 46 (the two-variant `Prot` enum). `vmm` is a
+single-enum inline candidate (its live users are `kayfabe-isolate` and `isolate-host`); none was moved.
+
 Sixteen `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm raw-client grader behind the
 thin-guest suite (`scripts/fastguest/`) and the bare-metal baseline — and the dependency closure it
 actually has (`abi`, `arch`, `chips`, `completion`, `cuda`, `doorbell`, `gsp`, `isolate`,
