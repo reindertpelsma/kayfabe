@@ -583,7 +583,7 @@ pub struct ChipProfile {
     /// family may say about `NV2080_CTRL_BUS_INFO_INDEX_PCIE_GEN_INFO` (`0x2d`).
     ///
     /// ⊘ **Deliberately one enum and not the `u32` the control returns.** `[measured
-    /// 2026-08-08, real GA106 `GPU-d0913685`]` the same physical part answered
+    /// 2026-08-08, real GA106 `GPU-fa4e0001`]` the same physical part answered
     /// `0x00302000` with its PCIe link idle at 2.5 GT/s and `0x00322000` with the link
     /// loaded to 8.0 GT/s, seconds apart. The word packs three generations — `GPU_GEN` (the
     /// die), `GEN` (the slot's negotiated ceiling; `gen3` on a bench whose die is `gen4`)

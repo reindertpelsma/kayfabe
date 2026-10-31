@@ -4,7 +4,7 @@
 or Windows-success claim. Borrowed RTX4070, host595.91.07; Windows580.88 with the
 580.65.06 public guest ABI. Run14 product `b928ab4c5fdf3e847f50978df56016ca76140921`
 adds a bounded diagnostic only. The fresh watchdog has the same 24 saved
-assertions as run13 (including first changed hint `0x1a103e6`); Code43/smi9 persist.
+assertions as run13 (including first changed hint `site-018`); Code43/smi9 persist.
 [Trace](run14-qemu.log.gz), [request excerpt](run14-requests.log),
 [command](run14-command.json), [status](run14-status.json),
 [dump comparison](run14-watchdog-comparison.json), [recovery](run14-recovery.log).

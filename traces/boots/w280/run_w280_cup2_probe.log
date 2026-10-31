@@ -83,8 +83,8 @@ pid=1762 state=Rl
     1763: 7 0x57b38ce0e950 0x3 0xffffffff 0x57b38ce3ccc0 0x0 0x7 0x799ff4bfed40 0x799ff4d1b5fd
     1979: 7 0x57b38cf84570 0x5 0x64 0x0 0x0 0x0 0x799fe8dddd40 0x799ff4d1b5fd
 === guest_spinprobe pid=1762 maps=100 budget=6000 steps ===
---- libcuda mapping: 0x799ff5000000-0x799ffabd4000 (RIP offsets below are relative to this)
---- want offsets: libcuda+0x22be1f libcuda+0x22bedc
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- 3 thread(s); ★ orig_rax >= 0 with state S/D means a BLOCKING SYSCALL, and the whole memory-poll reading below would be VOID ---
     tid 1762   state=R  orig_rax=228    RIP=0x7ffffdfcdbb2  [vdso]+0xbb2  <r-xp [vdso]>
     tid 1762   RSP=0x7ffffdea8970 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0
@@ -92,59 +92,59 @@ pid=1762 state=Rl
     tid 1763   RSP=0x799ff4bfed40 r12=0x0 r13=0x4 r15=0x57b38ce0c9c0
     tid 1979   state=S  orig_rax=7      RIP=0x799ff4d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
     tid 1979   RSP=0x799fe8dddd40 r12=0x0 r13=0xc r15=0x57b38ce33510
-★★ NO THREAD'S RIP WAS INSIDE libcuda. ⊘ Do not read that as 'not spinning' — it may be in the vDSO leg of the same loop. Falling back to tid 1762.
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- single-stepping tid 1762, budget 6000 ---
 --- steps actually taken = 6000 (of a 6000 budget) ---
 --- RIP HISTOGRAM: 512 distinct buckets stored (cap 512); ★ 316 hits fell OUTSIDE the cap and are NOT represented below ---
-        64  0x799ff521f6a0  libcuda.so.580.159.04+0x21f6a0  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6a3  libcuda.so.580.159.04+0x21f6a3  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6a6  libcuda.so.580.159.04+0x21f6a6  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6aa  libcuda.so.580.159.04+0x21f6aa  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6ae  libcuda.so.580.159.04+0x21f6ae  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6b2  libcuda.so.580.159.04+0x21f6b2  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6ba  libcuda.so.580.159.04+0x21f6ba  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6bd  libcuda.so.580.159.04+0x21f6bd  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460820  libcuda.so.580.159.04+0x460820  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460821  libcuda.so.580.159.04+0x460821  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460824  libcuda.so.580.159.04+0x460824  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460826  libcuda.so.580.159.04+0x460826  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460828  libcuda.so.580.159.04+0x460828  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546082c  libcuda.so.580.159.04+0x46082c  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546082e  libcuda.so.580.159.04+0x46082e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460831  libcuda.so.580.159.04+0x460831  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460833  libcuda.so.580.159.04+0x460833  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460834  libcuda.so.580.159.04+0x460834  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460838  libcuda.so.580.159.04+0x460838  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546083b  libcuda.so.580.159.04+0x46083b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546083e  libcuda.so.580.159.04+0x46083e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460844  libcuda.so.580.159.04+0x460844  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460848  libcuda.so.580.159.04+0x460848  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546084b  libcuda.so.580.159.04+0x46084b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     ⊘ 488 further distinct buckets NOT shown (they are stored, just not printed)
-=== ★★★★★ SNAPSHOT at RIP=0x799ff522be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     rdi=0x7ffffdea89fc rsi=0x7ffffdea8ab0 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0 rbx=0x0
-    ⊘ rbx==0 selects the pause-only spin; non-zero selects sched_yield+pause.
-    --- WAIT OBJECT 0x7ffffdea8ab0 ---
-    N items = 2   array = 0x7ffffdea8ad8   (stride 40)
-    item[0] @0x7ffffdea8ad8  KIND=1  [0x08]=0x799ff409f010 [0x10]=0x5 [0x18]=0x799ff5f98a63 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x799ff40a8420, wanted=0x5)
-        S[0x10] limit    = 0x5   (wanted is within the limit)
-        S[0x18] cached   = 0x2   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x57b38ce1c310
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000002 (2)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x799ff409f010 +0x9410 -> S +0x20 -> 0x57b38ce1c310 +0x10 -> 0x20440fff0
-    item[1] @0x7ffffdea8b00  KIND=1  [0x08]=0x799ffac71010 [0x10]=0x45 [0x18]=0x500 [0x20]=0x799ff4e03ac0
-      handler f9e320 — nested wait 4029e0(S=0x799ffac7a420, wanted=0x45)
-        S[0x10] limit    = 0x45   (wanted is within the limit)
-        S[0x18] cached   = 0x5   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x57b38ce49c60
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000005 (5)
                              SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
-        chain            : item[0x08]=0x799ffac71010 +0x9410 -> S +0x20 -> 0x57b38ce49c60 +0x10 -> 0x20440ff70
-    ctx[0x40]+0x72b8 = 0x00000000  (non-zero => spin WITHOUT even the 1 s deadline check)
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 === guest_spinprobe DONE (detached; the target continues) ===
 SPINPROBE_RC=0
 === the mappings the polled address must be joined against ===
@@ -202,8 +202,8 @@ pid=1762 state=Rl
     1763: 219 0x57b38ce0e950 0x3 0xffffffff 0x57b38ce3ccc0 0x0 0x7 0x799ff4bfed40 0x799ff4d1b5fd
     1979: 7 0x57b38cf84570 0x5 0x64 0x0 0x0 0x0 0x799fe8dddd40 0x799ff4d1b5fd
 === guest_spinprobe pid=1762 maps=100 budget=6000 steps ===
---- libcuda mapping: 0x799ff5000000-0x799ffabd4000 (RIP offsets below are relative to this)
---- want offsets: libcuda+0x22be1f libcuda+0x22bedc
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- 3 thread(s); ★ orig_rax >= 0 with state S/D means a BLOCKING SYSCALL, and the whole memory-poll reading below would be VOID ---
     tid 1762   state=R  orig_rax=228    RIP=0x7ffffdfcdbb2  [vdso]+0xbb2  <r-xp [vdso]>
     tid 1762   RSP=0x7ffffdea8970 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0
@@ -211,59 +211,59 @@ pid=1762 state=Rl
     tid 1763   RSP=0x799ff4bfed40 r12=0x0 r13=0x4 r15=0x57b38ce0c9c0
     tid 1979   state=S  orig_rax=7      RIP=0x799ff4d1b5fd  libc.so.6+0x11b5fd  <r-xp /usr/lib/x86_64-linux-gnu/libc.so.6>
     tid 1979   RSP=0x799fe8dddd40 r12=0x0 r13=0xc r15=0x57b38ce33510
-★★ NO THREAD'S RIP WAS INSIDE libcuda. ⊘ Do not read that as 'not spinning' — it may be in the vDSO leg of the same loop. Falling back to tid 1762.
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 --- single-stepping tid 1762, budget 6000 ---
 --- steps actually taken = 6000 (of a 6000 budget) ---
 --- RIP HISTOGRAM: 512 distinct buckets stored (cap 512); ★ 316 hits fell OUTSIDE the cap and are NOT represented below ---
-        64  0x799ff521f6a0  libcuda.so.580.159.04+0x21f6a0  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6a3  libcuda.so.580.159.04+0x21f6a3  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6a6  libcuda.so.580.159.04+0x21f6a6  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6aa  libcuda.so.580.159.04+0x21f6aa  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6ae  libcuda.so.580.159.04+0x21f6ae  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6b2  libcuda.so.580.159.04+0x21f6b2  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6ba  libcuda.so.580.159.04+0x21f6ba  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff521f6bd  libcuda.so.580.159.04+0x21f6bd  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460820  libcuda.so.580.159.04+0x460820  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460821  libcuda.so.580.159.04+0x460821  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460824  libcuda.so.580.159.04+0x460824  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460826  libcuda.so.580.159.04+0x460826  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460828  libcuda.so.580.159.04+0x460828  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546082c  libcuda.so.580.159.04+0x46082c  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546082e  libcuda.so.580.159.04+0x46082e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460831  libcuda.so.580.159.04+0x460831  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460833  libcuda.so.580.159.04+0x460833  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460834  libcuda.so.580.159.04+0x460834  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460838  libcuda.so.580.159.04+0x460838  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546083b  libcuda.so.580.159.04+0x46083b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546083e  libcuda.so.580.159.04+0x46083e  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460844  libcuda.so.580.159.04+0x460844  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff5460848  libcuda.so.580.159.04+0x460848  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
-        64  0x799ff546084b  libcuda.so.580.159.04+0x46084b  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     ⊘ 488 further distinct buckets NOT shown (they are stored, just not printed)
-=== ★★★★★ SNAPSHOT at RIP=0x799ff522be1f (libcuda.so.580.159.04+0x22be1f  <r-xp /usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04>) ===
+[line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
     rdi=0x7ffffdea89fc rsi=0x7ffffdea8ab0 r12=0x7ffffdea89fc r13=0x57b38ce16160 r15=0x7ffffdea8ab0 rbx=0x0
-    ⊘ rbx==0 selects the pause-only spin; non-zero selects sched_yield+pause.
-    --- WAIT OBJECT 0x7ffffdea8ab0 ---
-    N items = 2   array = 0x7ffffdea8ad8   (stride 40)
-    item[0] @0x7ffffdea8ad8  KIND=1  [0x08]=0x799ff409f010 [0x10]=0x5 [0x18]=0x799ff5f98a63 [0x20]=0x0
-      handler f9e320 — nested wait 4029e0(S=0x799ff40a8420, wanted=0x5)
-        S[0x10] limit    = 0x5   (wanted is within the limit)
-        S[0x18] cached   = 0x2   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x57b38ce1c310
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440fff0   pageoff=0xff0   nvidiactl+0x400fff0  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000002 (2)
                              SLOT-JOIN: ★★★ MATCHES a GR SET_REPORT_SEMAPHORE slot page-offset (0xf80..0xff0/16)
-        chain            : item[0x08]=0x799ff409f010 +0x9410 -> S +0x20 -> 0x57b38ce1c310 +0x10 -> 0x20440fff0
-    item[1] @0x7ffffdea8b00  KIND=1  [0x08]=0x799ffac71010 [0x10]=0x45 [0x18]=0x500 [0x20]=0x799ff4e03ac0
-      handler f9e320 — nested wait 4029e0(S=0x799ffac7a420, wanted=0x45)
-        S[0x10] limit    = 0x45   (wanted is within the limit)
-        S[0x18] cached   = 0x5   ★ wanted > cached ⇒ this item is NOT satisfied; it reads
-        S[0x20] desc     = 0x57b38ce49c60
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+      [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
         POLLED ADDRESS     = 0x20440ff70   pageoff=0xf70   nvidiactl+0x400ff70  <rw-s /dev/nvidiactl>
                              VALUE AT IT = 0x00000005 (5)
                              SLOT-JOIN: ★★ MATCHES a CE release-semaphore slot page-offset (0xf00..0xf70/16)
-        chain            : item[0x08]=0x799ffac71010 +0x9410 -> S +0x20 -> 0x57b38ce49c60 +0x10 -> 0x20440ff70
-    ctx[0x40]+0x72b8 = 0x00000000  (non-zero => spin WITHOUT even the 1 s deadline check)
+        [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
+    [line redacted 2026-10-31: offset or layout of a closed NVIDIA library; docs/design/V3_PROVENANCE.md section 2]
 === guest_spinprobe DONE (detached; the target continues) ===
 SPINPROBE_RC=0
 === waiting for cup2's own timeout so CUP2_RC stays comparable to w232..w268 ===

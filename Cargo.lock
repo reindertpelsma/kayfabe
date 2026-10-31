@@ -121,19 +121,6 @@ name = "kayfabe-cuda"
 version = "0.1.0"
 
 [[package]]
-name = "kayfabe-device"
-version = "0.1.0"
-dependencies = [
- "kayfabe-abi",
- "kayfabe-arch",
- "kayfabe-gsp",
- "kayfabe-mmu",
- "kayfabe-trace",
- "kayfabe-util",
- "trybuild",
-]
-
-[[package]]
 name = "kayfabe-doorbell"
 version = "0.1.0"
 
@@ -211,7 +198,6 @@ dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-chips",
- "kayfabe-device",
  "kayfabe-isolate",
  "kayfabe-isolate-host",
  "kayfabe-linux-raw",

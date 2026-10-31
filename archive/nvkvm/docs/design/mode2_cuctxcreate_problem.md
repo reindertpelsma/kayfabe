@@ -19,8 +19,8 @@ module — the host owns the real context. See `memory/mode2_control_forward_vs_
 ## 2. Where we are
 
 - **cuInit, device enumeration, attributes, totalMem: PASS.** The guest reaches `cuCtxCreate`.
-- **`cuCtxCreate` crashes**: libcuda SIGSEGVs on an internal worker thread. Confirmed signature:
-  `mov -0x38(%rbp),%rax` with **`rbp = 0`** (strace shows `SIGSEGV ... si_addr=0xffffffffffffffc8`
+- **`cuCtxCreate` crashes**: libcuda SIGSEGVs on an internal worker thread. Observed signature:
+  a load through **`rbp = 0`** (strace shows `SIGSEGV ... si_addr=0xffffffffffffffc8`
   = −0x38). It's a **frame-pointer / stack corruption**, not a clean error return.
 - The crash happens **immediately after a successful `RM_ALLOC` of the GR compute object (class
   `0xc7c0`, AMPERE_COMPUTE_B)** — that alloc returns `status=0x0` (the guest kernel ACCEPTS it), and

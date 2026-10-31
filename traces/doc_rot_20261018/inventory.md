@@ -194,7 +194,6 @@ INFERRED: each proposed action needs owner review; a dead reference may describe
 | docs/archive/w266_completion_pin_prereg.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |
 | docs/archive/w267_read_the_page_prereg.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |
 | docs/archive/w268_the_cursor_and_the_arm_prereg.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |
-| docs/archive/w269_the_spin_address_prereg.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |
 | docs/archive/w270_the_operand_pin_prereg.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |
 | docs/archive/w271_the_extent_key_prereg.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |
 | docs/archive/w288_error_delivery_gate.md | ARCHIVED | — | — | — | — | — | Keep archive read-only; no classification change. |

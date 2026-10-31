@@ -896,7 +896,7 @@ pub enum WantedTable {
     /// ★ Unlike its neighbour this id carries `NON_PRIVILEGED(0x8)` (flags `0x30349`,
     /// `ogkm-580: g_subdevice_nvoc.c:7585-7598`) **and** `ROUTE_TO_PHYSICAL` with no body in
     /// the vendored tree — reachable and unreadable. So a real part was asked:
-    /// `[measured 2026-08-09, real GA106 `GPU-d0913685`, R24,
+    /// `[measured 2026-08-09, real GA106 `GPU-fa4e0001`, R24,
     /// `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` LCE0..3 answer
     /// `0x20, 0x10, 0x10, 0x20` and **LCE4 refuses `0x56`** — the same engine count
     /// [`kayfabe_abi::cecaps`] measured through two other callers, corroborated here by a
@@ -2140,7 +2140,7 @@ impl CommandPolicy for InitTablePolicy {
             //   resolved, and marked only the ones it could not with bit 31
             //   (`ogkm-580: subdevice_ctrl_gpu_kernel.c:548, 566`). Re-encoding from a table
             //   would overwrite the kernel's own state with a transcription.
-            // - `[measured 2026-08-08, real GA106 (RTX 3060, GPU-d0913685), driver
+            // - `[measured 2026-08-08, real GA106 (RTX 3060, GPU-fa4e0001), driver
             //   580.159.04, `rmladder --gpu-info-sweep` R21]` real GSP returns the untouched
             //   tail verbatim: the sweep seeds every byte past the declared entries with
             //   `0xCD` and reads them back unchanged. So the copy is what hardware does, not
@@ -2182,7 +2182,7 @@ impl CommandPolicy for InitTablePolicy {
             // the chip's die generation — deliberately not a `&'static` table like
             // `forwarded_gpu_info`, because a `&'static [(u32, u32)]` is exactly the shape
             // that invites a measured word to be pasted into it — and the word MOVES:
-            // `[measured 2026-08-08, real GA106 `GPU-d0913685`, R22 runs 1 and 2,
+            // `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, R22 runs 1 and 2,
             // `traces/real_ga106/rmladder_r22_businfo_{sweep,loaded}_real_ga106.txt`]`
             // `0x00302000` with the link idle at 2.5 GT/s and `0x00322000` under load.
             //
@@ -2208,7 +2208,7 @@ impl CommandPolicy for InitTablePolicy {
             }
             // ★★★ The third request-editing arm, and the first whose REFUSAL is itself a
             // measured hardware behaviour rather than an admission of ignorance.
-            // `[measured 2026-08-08, real GA106 `GPU-d0913685`, R23,
+            // `[measured 2026-08-08, real GA106 `GPU-fa4e0001`, R23,
             // `traces/real_ga106/rmladder_r23_atomics_real_ga106.txt`]` a real part answers
             // `capType = SYSMEM(0)` with thirteen `bSupported=FALSE, attributes=0` written
             // into a `0xCD`-seeded buffer, and refuses `_CAPTYPE_GPU(1)`, `_CAPTYPE_P2P(2)`

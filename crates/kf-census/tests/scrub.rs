@@ -20,9 +20,9 @@ use std::rc::Rc;
 // ---- planted board data -------------------------------------------------------------------
 
 const SERIAL: &[u8] = b"SN-1234567890-ABCDEF-SERIAL";
-const UUID_TXT: &[u8] = b"GPU-5d1c9a3e-77b2-4f10-9c3a-0e8d2b6a41f7";
+const UUID_TXT: &[u8] = b"GPU-fa4efa4e-fa4e-4fa4-8fa4-fa4efa4e0005";
 const UUID_RAW: [u8; 16] = [
-    0x5d, 0x1c, 0x9a, 0x3e, 0x77, 0xb2, 0x4f, 0x10, 0x9c, 0x3a, 0x0e, 0x8d, 0x2b, 0x6a, 0x41, 0xf7,
+    0xfa, 0x4e, 0xfa, 0x4e, 0xfa, 0x4e, 0x4f, 0xa4, 0x8f, 0xa4, 0xfa, 0x4e, 0xfa, 0x4e, 0x00, 0x05,
 ];
 const STALE: &[u8] = b"STALE-PADDING-SECRET-0042";
 const CC: &[u8] = b"CC-BUFFER-SECRET-0123";
@@ -216,7 +216,7 @@ fn nothing_planted_survives_in_a_scrubbed_observer_export() {
     // board-looking extras in header, record and footer lines (unknown keys and digests)
     text = text.replacen(
         "\"device\":\"kf3-gpu\"",
-        "\"device\":\"kf3-gpu\",\"gpu_uuid\":\"GPU-5d1c9a3e\",\"serial\":\"SN-1234567890\"",
+        "\"device\":\"kf3-gpu\",\"gpu_uuid\":\"GPU-fa4efa4e\",\"serial\":\"SN-1234567890\"",
         1,
     );
     text = text.replace(
@@ -230,7 +230,7 @@ fn nothing_planted_survives_in_a_scrubbed_observer_export() {
         }
         assert!(!contains_hex(&out, &n), "{name} survived in the export");
     }
-    assert!(!out.contains("GPU-5d1c9a3e") && !out.contains("SN-1234567890"));
+    assert!(!out.contains("GPU-fa4efa4e") && !out.contains("SN-1234567890"));
     assert!(!out.contains("source_sha256"));
     assert!(out.lines().next().unwrap().contains("\"kf_scrubbed\":1"));
     assert!(st.keys_dropped >= 3, "{st:?}");

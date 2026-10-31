@@ -24,14 +24,13 @@ host under `/var/lib/kf-windows-20261005` (`$W`) unless noted; the host's addres
 | Git bundles of hunt branches | `$W/tdrhunt/*.bundle` | few MB | The branches are on origin (`claude/tdr-hunt-20261010`, `claude/tdr-opus-20261010`). | No. |
 | Python venv `__pycache__`, `*.pyc`, caches | everywhere | small | Regenerated automatically. | No. |
 
-## Closed-driver analysis files: kept on the host, names only
+## Closed-driver analysis material: outside this repository, not listed
 
 Standing rule: reverse engineering of the closed NVIDIA driver is for diagnosis only; nothing derived from it and
-no reference to it goes in the repo. Under `$W/re/`: `fn.py` (PE function disassembler helper), `ghidra.zip`,
-`ghidra_12.1.4_PUBLIC/`, `img/` and `img2/` (module images carved from a memory dump). Also `$W/tdropus/vdis.py`
-(disassembler helper marked "never committed"). Their outputs, if any, are not in the repo. Nothing else on the
-host is known to contain decompilation, strings or offsets of the closed driver; `tdr-run*.sh` and `rm_instloc.ps1`
-mention the service name `nvlddmkm` only as a Windows service/ETW filter name.
+no reference to it goes in the repo (`docs/design/V3_PROVENANCE.md` section 2). Any such working material is kept
+outside this repository, in private storage, and is deliberately not listed here (2026-10-31: the file names that
+used to be listed in this section were removed). `tdr-run*.sh` and `rm_instloc.ps1` mention the service name
+`nvlddmkm` only as a Windows service/ETW filter name.
 
 ## Secrets (never in git)
 

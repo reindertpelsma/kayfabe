@@ -8,8 +8,10 @@ default capability table still denies the class. This isolates the known
 StartDevice failure after a refused `0xb297` allocation; it does not implement
 the native RunlistApi constructor or prove Windows will initialize successfully.
 
-Evidence: the [pinned Windows allocation and successful-use audit](https://github.com/reindertpelsma/kayfabe/blob/ff820182/tools/windows-debug-capture/evidence/2026-10-05-nvcd/b297-usage.md)
-and the [independent proprietary Linux/source comparison](https://github.com/reindertpelsma/kayfabe/blob/8223efc9/tools/windows-debug-capture/evidence/runlist-20261005/README.md).
+Evidence: the observed refused `0xb297` allocation and the StartDevice failure that follows
+it (runs in `traces/windows_code43_walls_20261007/`). (2026-10-31: two linked audits of the retail
+driver and of the proprietary Linux driver were removed under `docs/design/V3_PROVENANCE.md`
+section 2; see the public-tree audit for the open owner decision on this cell.)
 
 ## Explicit departures and missing behavior
 
@@ -72,8 +74,8 @@ policy and the FSM's unsupported-command refusal remain unchanged.
 - `0x20801111`: exactly 40 declared parameter bytes, zero parameter flags, and an
   exact complete declared control body are required. Only those 40 bytes are
   printed, as ten raw little-endian words. Labels do not assign unproved field
-  semantics. The code and size are extracted from the pinned Windows caller's
-  instructions at RVAs `0x19c45ec` and `0x19c45e4`; they are diagnostic evidence,
+  semantics. The code and size were taken from the pinned Windows caller (the
+  addresses are not restated here, 2026-10-31); they are diagnostic evidence,
   not control authorization. Transport padding is never inspected.
 - Function 4, publicly named `ALLOC_MEMORY`: the function number comes from the
   existing generated driver matrix. The fixed `rpc_alloc_memory_v13_01` size and
