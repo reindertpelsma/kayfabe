@@ -342,12 +342,16 @@ jobs:
       # `// bite probe: libc::c_int` in `kayfabe-util` and watching the corrected pattern
       # fire on it, then removing it. It does NOT match `libcuda`, which is a different
       # word naming a userspace library this port has to talk ABOUT.
+      # 2026-10-31: `kayfabe-completion`, `-mmu`, `-gsp`, `-trace` and `-vmm` (and `-mocks`, named in
+      # comments below) moved to `archive/crates/` with the chip modules of `kayfabe-chips`
+      # (`archive/README.md`); the three crate lists in this file (this gate, the VMM-vocabulary gate
+      # and the generation-name gate) no longer name them. Comments below that cite those crates
+      # are history, not live scope.
       - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
         run: |
-          pure="crates/kayfabe-completion \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
+          pure="crates/kayfabe-arch \
                 crates/kayfabe-abi \
-                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
+                crates/kayfabe-util crates/kayfabe-isolate \
                 crates/kayfabe-chips"
           if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|\blibc\b|O_NONBLOCK' $pure; then
             echo ""
@@ -398,11 +402,8 @@ jobs:
       # that reason.)
       - name: VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
         run: |
-          portable="crates/kayfabe-completion \
-                    crates/kayfabe-mmu crates/kayfabe-gsp \
-                    crates/kayfabe-arch crates/kayfabe-abi \
-                    crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
-                    crates/kayfabe-vmm \
+          portable="crates/kayfabe-arch crates/kayfabe-abi \
+                    crates/kayfabe-util crates/kayfabe-isolate \
                     crates/kayfabe-chips"
           # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
           # *"…in the core or the shell"* and did not cover the crate literally called
@@ -501,10 +502,9 @@ jobs:
       #    to be a decision somebody writes down.
       - name: Generation-name gate (no concrete chip or driver version in the logic crates)
         run: |
-          pure="crates/kayfabe-completion \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
-                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
-                crates/kayfabe-vmm crates/kayfabe-isolate-host"
+          pure="crates/kayfabe-arch \
+                crates/kayfabe-util crates/kayfabe-isolate \
+                crates/kayfabe-isolate-host"
           hits=$(grep -rniE --exclude-dir=target \
             '\b(kepler|maxwell|turing|ampere|lovelace|hopper|blackwell|rubin)|\b(ada|pascal|volta)\b|\b(g[kmpvab][0-9]{3}|tu1[0-9]{2}|ad1[0-9]{2}|gh[0-9]{3}|v[56][0-9]{2})\b' \
             $pure | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)

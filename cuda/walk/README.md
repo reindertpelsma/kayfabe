@@ -33,6 +33,24 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
 | `evidence/` | dated run logs, each naming its GPU and driver |
 
+> **2026-10-31 correction (test port), folded above the one it corrects:** the Rust half is back, as a
+> TEST-ONLY decoder derived from ogkm: `crates/kf-cuda/tests/gmmu_ver2/` (`reference.rs`, with every field
+> cited to a `file:line` re-read at 580.159.04). `corpus.rs` there decodes `corpus/corpus.bin` and
+> `corpus/real_ga106.bin` on the CPU and compares every leaf with `rust_leaves.txt` / `real_leaves.txt` (the
+> `#` header lines, which name the archived decoder, are not compared), so the two files are again
+> cross-checked against an independent decoder without a GPU: `cargo test -p kf-cuda --test gmmu_ver2`.
+> Regenerate them with `KF_WRITE_EXPECTED=1 cargo test -p kf-cuda --test gmmu_ver2 corpus`; that is a
+> regeneration from the reference decoder, so review the diff against a kernel run. The same directory pins
+> the shipped `kf_format_ver2()` descriptor and `kf_cuda::synth`'s encoders to the driver's level table
+> and `dev_mmu.h`.
+>
+> **[SUPERSEDED in part by the correction above]** *`kayfabe-mmu` is archived (`archive/crates/kayfabe-mmu`,
+> not built), so the Rust half below no longer runs. The committed corpus (`corpus/rust_leaves.txt`,
+> `real_leaves.txt`) is now a frozen expected-output; `./kf_tests` still compares the kernel against it, but
+> nothing regenerates or cross-checks it against a Rust decoder any more.* (The archived walker's file is
+> `archive/crates/kayfabe-mmu/tests/walk_kernel_differential.rs`; the report-ABI seam test
+> `walk_report_seam.rs` is covered by `kf-cuda/tests/walk_abi_matches_the_cu.rs`.)
+
 The Rust half of the differential is
 `crates/kayfabe-mmu/tests/walk_kernel_differential.rs`, and the report ABI's own seam test is
 `crates/kayfabe-mmu/tests/walk_report_seam.rs` against `kayfabe-mmu/src/walkreport.rs`.
@@ -46,11 +64,15 @@ make kf_bench && ./kf_bench          # the cost measurement (see THE WALK'S ACTU
 ./run_on_box.sh tag # from a workstation, against a disposable CUDA container
 ```
 
+> **2026-10-31 correction:** the `KF_WRITE_EXPECTED=1` line below now reads
+> `KF_WRITE_EXPECTED=1 cargo test -p kf-cuda --test gmmu_ver2 corpus` (see the correction above); the
+> `kayfabe-mmu` command it replaced cannot run (crate archived).
+
 The real-driver corpus is regenerated locally, with no GPU:
 
 ```
 python3 kf_real_tables.py                                   # -> corpus/real_ga106.bin
-KF_WRITE_EXPECTED=1 cargo test -p kayfabe-mmu --test walk_kernel_differential
+KF_WRITE_EXPECTED=1 cargo test -p kf-cuda --test gmmu_ver2 corpus
 ```
 
 `nvcc -gencode arch=compute_75,code=compute_75` — **PTX only, no cubin**, so the

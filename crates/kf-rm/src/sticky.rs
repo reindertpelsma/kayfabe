@@ -585,12 +585,12 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     },
     PolicyDisposition {
         name: "PolicyChain",
-        path: "crates/kayfabe-gsp/src/boot.rs",
+        path: "archive/crates/kayfabe-gsp/src/boot.rs",
         disposition: StickyDisposition::Delegates,
     },
     PolicyDisposition {
         name: "EchoOk",
-        path: "crates/kayfabe-gsp/src/boot.rs",
+        path: "archive/crates/kayfabe-gsp/src/boot.rs",
         disposition: StickyDisposition::FixtureOnly,
     },
     PolicyDisposition {
@@ -642,7 +642,7 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     // `CommandObserver` rather than a `CommandPolicy` for that reason.
     PolicyDisposition {
         name: "Observing",
-        path: "crates/kayfabe-gsp/src/boot.rs",
+        path: "archive/crates/kayfabe-gsp/src/boot.rs",
         disposition: StickyDisposition::NeverAnswers,
     },
     // ★★ `#149`. `BarPdePolicy` answers exactly `UPDATE_BAR_PDE` (fn 70) and declines

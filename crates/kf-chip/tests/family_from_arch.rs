@@ -126,3 +126,93 @@ fn classification_is_generic_over_families() {
         "Ada's compute is not Ampere's"
     );
 }
+
+// ---- 2026-10-31: the contracts of the three retired `Arch`-level host-class tests ------------
+//
+// `archive/crates/kayfabe-chips-modules/tests/host_classes_arch_tests.rs` held three tests that
+// built the archived `Ga10xArch`/`Ad10xArch`/`Gh100Arch`/`Gb20xArch` and `MockArch`. v3 has no
+// per-generation `Arch` objects: the profile is `Family::host_classes(host list)`. The contracts
+// carry over as follows (the third is in `kf-trap/src/tokenindex.rs`).
+
+/// Every class id of every kind of one family's set, as a host that lists the whole family would
+/// answer `GET_CLASSLIST_V2`.
+fn whole_family(f: Family) -> Vec<u32> {
+    let set = classes_for(f);
+    Kind::ALL
+        .iter()
+        .flat_map(|k| set.of_kind(*k).iter().copied())
+        .collect()
+}
+
+/// `an_arch_with_no_host_profile_refuses_by_name_rather_than_inventing_one`: a mock that invented
+/// three class ids would let a wrong number reach a real `NV_ESC_RM_ALLOC` with every test green.
+/// In v3 the only source of a host class is the host's own list: a host that lists nothing a
+/// family can use is refused BY NAME (the first required kind it lacks), for every family, and a
+/// host that lists the family's classes answers (NON-VACUITY: the refusal is not just "never
+/// answers").
+#[test]
+fn a_host_that_lists_nothing_usable_is_refused_by_name_for_every_family() {
+    use kf_chip::HostLacksKind;
+    for f in Family::ALL {
+        assert_eq!(
+            f.host_classes(&[]),
+            Err(HostLacksKind {
+                family: f,
+                kind: Kind::ChannelGpfifo
+            }),
+            "{f:?}: an empty host list must be refused, not answered with invented ids"
+        );
+        // Ids that are in no family's set (the old mock's invented `0xF0xx` range).
+        assert!(
+            f.host_classes(&[0xF001, 0xF002, 0xF003]).is_err(),
+            "{f:?}: invented ids are not classes"
+        );
+        assert!(
+            f.host_classes(&whole_family(f)).is_ok(),
+            "{f:?}: NON-VACUITY: its own classes DO answer"
+        );
+    }
+}
+
+/// `each_arch_declares_its_own_profile_and_not_a_composed_ones`: handed a host that lists EVERY
+/// family's classes, each family derives ITS OWN profile -- the newest id within its own set --
+/// never a neighbour's, and the profiles carry distinct names. (The old delegation trap: an `Arch`
+/// that forwarded this seam to a composed `MockArch` compiled and answered for the wrong
+/// generation. The v3 equivalent is a family row that is intersected with the host list wrongly.)
+#[test]
+fn each_family_derives_its_own_profile_from_a_host_listing_every_family() {
+    use kf_arch::HostClasses;
+    let every: Vec<u32> = Family::ALL.iter().flat_map(|f| whole_family(*f)).collect();
+    let mut names = Vec::new();
+    for f in Family::ALL {
+        let set = classes_for(f);
+        let newest = |k: Kind| *set.of_kind(k).iter().max().expect("non-empty");
+        let h = f.host_classes(&every).unwrap();
+        assert_eq!(
+            (
+                h.gpfifo_channel().channel_id().0,
+                h.usermode().usermode_id().0,
+                h.ce_object().ce_object_id().0
+            ),
+            (
+                newest(Kind::ChannelGpfifo),
+                newest(Kind::Usermode),
+                newest(Kind::DmaCopy)
+            ),
+            "{f:?}: the profile must be this family's newest, not a neighbour's"
+        );
+        assert_eq!(
+            h.compute_object().map(|c| c.compute_object_id().0),
+            Some(newest(Kind::Compute)),
+            "{f:?}"
+        );
+        names.push(h.name());
+    }
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        Family::ALL.len(),
+        "five families, five distinct profile names"
+    );
+}

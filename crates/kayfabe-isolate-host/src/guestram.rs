@@ -31,9 +31,9 @@
 //! *an echo is unverifiable by its reply*. There is deliberately no `find`, no `resolve`,
 //! and no `lookup` here.
 
+use kayfabe_isolate::Prot;
 use kayfabe_isolate::{GuestRamGrant, RmError};
 use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion};
-use kayfabe_vmm::Prot;
 use std::collections::BTreeMap;
 use std::os::fd::{AsFd, OwnedFd};
 use std::sync::Mutex;

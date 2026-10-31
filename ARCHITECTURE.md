@@ -101,6 +101,13 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 
+⊘ Correction, 2026-10-31 (folded above the text it corrects): the frozen tree is now ten crates, not
+sixteen. `kayfabe-chips` was cut to its `host_classes` module (the only part the grader uses) and its
+`ga10x`/`ad10x`/`gb20x`/`gh100` modules went to `archive/crates/kayfabe-chips-modules/`; with them went
+the crates only they reached (`kayfabe-mmu`, `-gsp`, `-mocks`, `-trace`, `-completion`), and
+`kayfabe-vmm`, whose one live item (the two-variant `Prot`) now lives in `kayfabe-isolate`. All are in
+`archive/crates/` and do not build (`archive/README.md`).
+
 `crates/kayfabe-*` is the **frozen pre-v3 tree**. It is kept because `kayfabe-rm-ladder`, the
 30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, depends on it.
 No `kf-*` crate depends on a `kayfabe-*` crate. The pre-v3 crates the grader does not reach (including

@@ -235,4 +235,75 @@ mod reference_wrap {
         assert_eq!(q.available(), 3);
         assert_eq!(q.complete_reference(u32::MAX), Err(Refusal::Completion));
     }
+
+    /// 2026-10-31 — the retired #12 guard's contract (`fence_backwards_jump_is_a_loud_refusal_never_a_completion`,
+    /// `fence_arm_is_wrap_correct`) against the absolute-count model: a 32-bit wire reference
+    /// completes exactly the work up to the one absolute count in `[completed, issued]` it names, and
+    /// anything else (a stale value, a backwards write, a count nobody published) is
+    /// `Refusal::Completion` with the ledger untouched. The window is the work in flight, not a typed
+    /// constant. Seeded, with the counts straddling the 32-bit wrap. (No production adapter calls
+    /// `complete_reference`; this pins the rule for the day one does.)
+    #[test]
+    fn a_reference_completes_only_the_work_it_names_and_a_stale_one_completes_nothing() {
+        let mut rng = 0x7265_6631_u64;
+        let mut next = move || {
+            rng = rng.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            let mut z = rng;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            z ^ (z >> 31)
+        };
+        let u32_range = 1u64 << 32;
+        for entries in [4u32, 8, 16] {
+            for base in [
+                0,
+                1,
+                u32_range - 9,
+                u32_range - 3,
+                u32_range - 1,
+                u32_range,
+                u32_range + 1,
+                3 * u32_range - 2,
+            ] {
+                for inflight in 0..entries {
+                    let mut q = Ledger::new(entries, entries).unwrap();
+                    q.issued = base;
+                    q.completed = base;
+                    q.fetched = base;
+                    for get in 0..inflight {
+                        q.publish(Retirement {
+                            generation: 1,
+                            guest_get: get,
+                        })
+                        .unwrap();
+                    }
+                    let (done, issued) = (q.completed, q.issued);
+                    assert_eq!(issued - done, u64::from(inflight));
+                    // every reference around the window, and a seeded spread over the whole space
+                    let mut refs: Vec<u32> = Vec::new();
+                    for d in -6i64..=i64::from(inflight) + 6 {
+                        refs.push((done as i64 + d) as u32);
+                    }
+                    for _ in 0..24 {
+                        refs.push(next() as u32);
+                    }
+                    for r in refs {
+                        let named = (done..=issued).rev().find(|&c| c as u32 == r);
+                        let mut t = q.clone();
+                        match (named, t.complete_reference(r)) {
+                            (Some(c), Ok(got)) => {
+                                assert_eq!(t.completed(), c, "base {base} ref {r:#x}");
+                                assert_eq!(got.len() as u64, c - done);
+                            }
+                            (None, Err(Refusal::Completion)) => {
+                                assert_eq!(t.completed(), done, "a refusal changed state");
+                                assert_eq!(t.pending(), inflight as usize);
+                            }
+                            (m, g) => panic!("base {base} ref {r:#x}: model {m:?}, ledger {g:?}"),
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

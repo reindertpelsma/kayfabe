@@ -1911,3 +1911,87 @@ mod graphics_route_tests {
         );
     }
 }
+
+/// 2026-10-31 — the wrap contract of the host fence compare, ported from the retired
+/// `kayfabe-completion` `fence_arm_is_wrap_correct` / `fence_arm_fires_at_or_after_target_exactly_once`.
+///
+/// The fence every compare below reads is the HOST ring's own (`HostRing::completed`: a word in an
+/// object this ring owns and the engine writes; the guest has no mapping of it), and every `seq`
+/// is one this crate assigned. So the retired "a backwards write is a loud refusal" guard has no
+/// input to guard here: a stale or foreign value cannot arrive. What must hold is the arithmetic:
+/// an absolute count is reached exactly when the 32-bit wire value is at or past it, across the
+/// wrap, for every distance below half the space.
+#[cfg(test)]
+mod fence_order {
+    use super::{MAX_IN_FLIGHT, reached};
+
+    /// The window inside which a wire compare is unambiguous.
+    const HALF: i64 = 1 << 31;
+
+    // The in-flight bound is the reason the compare is sound: it is nowhere near half the space.
+    const _: () = assert!((MAX_IN_FLIGHT as u64) < (1u64 << 31));
+
+    fn splitmix(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    /// The model: counts are absolute (`i64`, no wrap), and "reached" is plain `>=`.
+    fn model(a_abs: i64, b_abs: i64) -> bool {
+        a_abs >= b_abs
+    }
+
+    #[test]
+    fn reached_is_greater_or_equal_on_absolute_counts_across_the_wrap() {
+        // bases on and around every boundary of the 32-bit space, plus seeded ones
+        let mut bases: Vec<i64> = Vec::new();
+        for edge in [0i64, 1 << 16, 1 << 31, 1 << 32] {
+            for off in -4i64..=4 {
+                bases.push(edge + off);
+            }
+        }
+        let mut rng = 0x6b61_7966_6162_6531_u64;
+        for _ in 0..2000 {
+            bases.push((splitmix(&mut rng) % (3u64 << 32)) as i64 + 8);
+        }
+        // distances: every one near zero and near the half window, plus seeded ones
+        let mut deltas: Vec<i64> = (-70..=70).collect();
+        for off in 0..=70 {
+            deltas.push(HALF - 1 - off);
+            deltas.push(-(HALF - 1 - off));
+        }
+        for _ in 0..200 {
+            deltas.push((splitmix(&mut rng) % (2 * HALF as u64 - 1)) as i64 - (HALF - 1));
+        }
+        for &b in &bases {
+            for &d in &deltas {
+                let a = b + d;
+                assert_eq!(
+                    reached(a as u32, b as u32),
+                    model(a, b),
+                    "a={a:#x} b={b:#x} (distance {d})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn at_the_target_is_reached_one_short_is_not_and_the_wrap_does_not_confuse_either() {
+        assert!(reached(14, 14));
+        assert!(!reached(13, 14));
+        assert!(reached(15, 14), "the engine may skip past the exact value");
+        assert!(reached(3, u32::MAX - 2), "wrapped past the target");
+        assert!(
+            !reached(u32::MAX, 3),
+            "before the wrap is behind a wrapped target"
+        );
+        assert!(reached(u32::MAX, u32::MAX));
+        assert!(!reached(u32::MAX - 1, u32::MAX));
+        // half the space ahead is indistinguishable from half behind, and is called behind
+        assert!(!reached(1 << 31, 0));
+        assert!(reached((1 << 31) - 1, 0));
+    }
+}
