@@ -1,10 +1,31 @@
 //! ★★★★★ **THE GUEST'S CPU WINDOWS — BAR2 (and BAR1) as a second apply target, PRAMIN as a pool of
 //! pre-armed views** (`V3_P4_PORT_MAP.md` §2.3(b), §2.4, Q2, Q3; `THE_CONSTRAINTS.md` §49.3, §16).
 //!
+//! ★★★ **CORRECTED 2026-10-31 (owner direction; `docs/design/V3_P4_PORT_MAP.md`, correction at the top): BAR1 and BAR2
+//! NEVER show system memory.** Below, the BAR windows are said to place "the guest-RAM memfd at a
+//! file offset (a sysmem leaf)"; that is withdrawn for [`CpuWindow`] (BAR1, BAR2). A walked BAR
+//! leaf whose aperture is system memory is **refused by name**: nothing is placed (the page shows
+//! scratch), the row is answered [`Mapped::HeldByHost`] (satisfied, never ours — the guest's
+//! invalidate clears, nothing wedges, and its later unmap never reaches this window), and it is
+//! COUNTED ([`WindowStats::sysmem_leaf_refused`], process-wide [`SYSMEM_LEAF_REFUSED`], printed as
+//! `sysmem_leaf_refused` in the device's `mem[...]` line). The worst a guest can do remains
+//! corrupting itself. Why: a BAR is MMIO to the GPU, and a CPU access to guest RAM does not go
+//! through it. Evidence (ogkm 580.65.06): `src/nvidia/src/kernel/gpu/mem_mgr/mem_desc.c:1826-1830`
+//! (`ADDR_SYSMEM`/`ADDR_EGM` → `osMapSystemMemory`, a direct CPU mapping, no BAR) against
+//! `:1838-1899` (only `ADDR_FBMEM` goes through `kbusMapFbApertureSingle`, i.e. BAR1), and
+//! `src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:2549` ("Plain old memmap" for
+//! sysmem). ⚠ Caveats: not every BAR1 caller was audited (`context_dma.c:612` and
+//! `virtual_mem.c:1094` were only skimmed); the Windows driver is closed (no evidence is taken from
+//! it); whether the hardware accepts a sysmem aperture in a BAR1 PTE is UNKNOWN. A guest that
+//! does write such a PTE sees scratch, and the counter says so. **PRAMIN is not a BAR1/BAR2
+//! window and is unchanged** ([`PraminPool`], [`ViewOps::place_pramin_ram`]): the BAR0 window
+//! register has its own system-memory target.
+//!
 //! A guest BAR aperture is ONE host address range under ONE memslot, created at realize and never
 //! unmapped. What each page of it shows is decided by `mmap(MAP_FIXED)` placements inside it:
 //! - a **view of the store** (an armed `NV_ESC_RM_MAP_MEMORY` node of the one reserved object), or
-//! - the **guest-RAM memfd** at a file offset (a sysmem leaf), or
+//! - ⊘ (superseded for BAR1/BAR2 by the correction above; still true for PRAMIN) the **guest-RAM
+//!   memfd** at a file offset (a sysmem leaf), or
 //! - the window's **scratch** — one small memfd TILE per window, mapped again and again (window
 //!   offset `o` shows tile byte `o % T`; `kf_linux_raw::scratch`). ⊘ Never a hole: a memslot over
 //!   an unmapped range, or a `PROT_NONE` one, is `KVM_RUN → EFAULT` and kills the guest
@@ -51,6 +72,11 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
+/// ★ Sysmem leaves any [`CpuWindow`] in this process refused (see the module doc, 2026-10-31).
+/// Printed by the device as `sysmem_leaf_refused` in its `mem[...]` line; per-window values are in
+/// [`WindowStats::sysmem_leaf_refused`] (tests read those).
+pub static SYSMEM_LEAF_REFUSED: AtomicU64 = AtomicU64::new(0);
+
 /// Maximum live guest placements in each CPU window. Store views hold host fds
 /// and VMAs; guest-RAM placements also consume VMAs, so both share this budget.
 /// The single boot-display seed is separate. Refusal occurs before host verbs;
@@ -78,9 +104,17 @@ pub trait ViewOps {
 
     /// Place the guest-RAM memfd's `[file_off, file_off+len)` at window offset `at`.
     ///
+    /// ★ **PRAMIN only** (2026-10-31): [`PraminPool`] calls this when the BAR0 window register's
+    /// target is system memory. [`CpuWindow`] (BAR1, BAR2) never does — it refuses a sysmem leaf
+    /// by name. The default refuses, so an implementation that serves only BAR windows (and every
+    /// test double of one) carries no guest-RAM fd at all.
+    ///
     /// # Errors
     /// No guest-RAM object, or the `mmap` refusal, by name.
-    fn place_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String>;
+    fn place_pramin_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String> {
+        let _ = (at, len, file_off);
+        Err("this window shows no guest RAM".into())
+    }
 
     /// Re-point `[at, at+len)` to the window's scratch.
     ///
@@ -114,9 +148,10 @@ pub trait ViewOps {
 #[derive(Debug)]
 struct Held<V> {
     len: u64,
-    /// `None` for a guest-RAM placement (nothing to release).
+    /// `None` when there is nothing to release (since 2026-10-31 no placement is `None`: a BAR
+    /// never shows guest RAM).
     view: Option<V>,
-    /// The store offset a view shows (`None` for guest RAM) — for the seed's retirement report.
+    /// The store offset a view shows — for the seed's retirement report.
     store_off: Option<u64>,
 }
 
@@ -125,8 +160,9 @@ struct Held<V> {
 pub struct WindowStats {
     /// Store views armed and placed.
     pub views_placed: u64,
-    /// Guest-RAM placements.
-    pub ram_placed: u64,
+    /// ★ Walked sysmem leaves REFUSED by name (2026-10-31): a BAR never shows system memory, the
+    /// page shows scratch and the row is answered `HeldByHost`. Counted, never a decision input.
+    pub sysmem_leaf_refused: u64,
     /// Placements re-pointed to scratch.
     pub sunk: u64,
     /// Views whose aperture was given back.
@@ -582,29 +618,31 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
                 d.va
             ));
         }
+        if d.ram {
+            // ★ 2026-10-31: a BAR never shows system memory (module doc). Nothing is placed, so the
+            // range shows scratch (or whatever scratch our earlier unmap put there). `HeldByHost`,
+            // not an error: an `Err` would leave the guest's invalidate armed and hang its driver.
+            // The log is bounded (a guest chooses how many such leaves it writes).
+            let n = SYSMEM_LEAF_REFUSED.fetch_add(1, Ordering::Relaxed);
+            {
+                let mut st = self.stats.borrow_mut();
+                st.sysmem_leaf_refused = st.sysmem_leaf_refused.saturating_add(1);
+            }
+            if n < 16 {
+                eprintln!(
+                    "kf3: window map {:#x}+{:#x}: sysmem leaf (guest RAM @{:#x}) REFUSED — a BAR aperture never shows system memory; the window shows scratch (counted, sysmem_leaf_refused)",
+                    d.va, d.len, d.off
+                );
+            }
+            return Ok(Mapped::HeldByHost);
+        }
         if self.placed.borrow().len() >= MAX_CPU_WINDOW_PLACEMENTS {
             return self.refuse(format!(
                 "window map {:#x}: placement budget ({MAX_CPU_WINDOW_PLACEMENTS}) exhausted",
                 d.va
             ));
         }
-        let held = if d.ram {
-            if let Err(e) = self.ops.place_ram(d.va, d.len, d.off) {
-                return self.refuse(format!(
-                    "window map {:#x}+{:#x} (guest RAM @{:#x}): {e}",
-                    d.va, d.len, d.off
-                ));
-            }
-            {
-                let mut st = self.stats.borrow_mut();
-                st.ram_placed = st.ram_placed.saturating_add(1);
-            }
-            Held {
-                len: d.len,
-                view: None,
-                store_off: None,
-            }
-        } else {
+        let held = {
             let view = match self.ops.arm_store(d.off, d.len) {
                 Ok(v) => v,
                 Err(e) => {
@@ -978,7 +1016,7 @@ impl<V: ViewOps> PraminPool<V> {
                     let r = match (self.ram_offset)(gpa, len) {
                         Some(foff) => self
                             .ops
-                            .place_ram(at, len, foff)
+                            .place_pramin_ram(at, len, foff)
                             .map(|()| out.ram = out.ram.saturating_add(n32)),
                         None => {
                             out.missed = out.missed.saturating_add(n32);
@@ -1099,7 +1137,7 @@ mod tests {
             self.ops.lock().unwrap().push(Op::View(at, len, *v));
             Ok(())
         }
-        fn place_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String> {
+        fn place_pramin_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String> {
             self.ops.lock().unwrap().push(Op::Ram(at, len, file_off));
             Ok(())
         }
@@ -1184,7 +1222,7 @@ mod tests {
     }
 
     /// ★ Device reset: a BAR1 window that lived a whole guest life (seed retired, guest views of
-    /// the store and of guest RAM placed) comes back as realize left it — no placement, the seed
+    /// the store placed; a sysmem leaf refused, so it holds nothing) comes back as realize left it — no placement, the seed
     /// shown again — every armed view released exactly once, scratch placed before each release.
     #[test]
     fn a_reset_window_is_the_seeded_window_realize_left_and_every_view_is_released() {
@@ -1197,12 +1235,12 @@ mod tests {
         w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true)
             .unwrap();
         assert!(w.seeded().is_none());
-        assert_eq!(w.placements(), 3);
+        assert_eq!(w.placements(), 2);
         let rep = w.reset_to_boot();
         assert_eq!(
             rep,
             WindowReset {
-                unmapped: 3,
+                unmapped: 2,
                 kept: 0,
                 seed: Some(Reseed::Placed { life: 2 }),
                 first_refusal: None
@@ -1331,19 +1369,127 @@ mod tests {
         assert_eq!((s.sunk, s.released, s.view_bytes), (1, 1, 0));
     }
 
+    /// ★ 2026-10-31: a BAR never shows system memory. The row is refused by name (nothing placed,
+    /// the page shows scratch), answered `HeldByHost` (so the guest's invalidate clears), counted.
     #[test]
-    fn a_guest_ram_row_is_placed_from_the_memfd_and_released_as_nothing() {
+    fn a_sysmem_leaf_in_a_bar_is_refused_shows_scratch_and_is_counted() {
         let r = Rec::default();
         let w = CpuWindow::new(&r, 32 << 20);
-        w.map(&d(0x2000, 0x4000_0000, 0x1000, true), true).unwrap();
+        let before = SYSMEM_LEAF_REFUSED.load(Ordering::Relaxed);
+        assert_eq!(
+            w.map(&d(0x2000, 0x4000_0000, 0x1000, true), true),
+            Ok(Mapped::HeldByHost)
+        );
+        // No host verb of any kind: not an arm, not a placement, not even a sink (scratch is
+        // what the page already shows; an earlier unmap of ours put it there).
+        assert!(r.ops.lock().unwrap().is_empty());
+        assert_eq!(w.placements(), 0);
+        let st = w.stats();
+        assert_eq!(
+            (st.sysmem_leaf_refused, st.refused, st.views_placed),
+            (1, 0, 0)
+        );
+        assert!(SYSMEM_LEAF_REFUSED.load(Ordering::Relaxed) > before);
+        // A held row is never ours: the window has nothing to unmap there.
+        assert!(w.unmap(0x2000, true).unwrap_err().contains("no placement"));
+    }
+
+    /// A store view replaced by a sysmem leaf at the same VA: the diff unmaps ours first (scratch,
+    /// release), then the sysmem leaf is refused. The page ends on scratch; the store view is not
+    /// left behind.
+    #[test]
+    fn a_sysmem_leaf_after_a_store_view_leaves_scratch() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 32 << 20);
+        w.map(&d(0x2000, 0x7000, 0x1000, false), true).unwrap();
         w.unmap(0x2000, true).unwrap();
         assert_eq!(
-            *r.ops.lock().unwrap(),
-            vec![
-                Op::Ram(0x2000, 0x1000, 0x4000_0000),
-                Op::Sink(0x2000, 0x1000)
-            ]
+            w.map(&d(0x2000, 0x4000_0000, 0x1000, true), true),
+            Ok(Mapped::HeldByHost)
         );
+        let ops = r.ops.lock().unwrap().clone();
+        assert!(matches!(ops.last(), Some(Op::Release(_))), "{ops:?}");
+        assert!(!ops.iter().any(|o| matches!(o, Op::Ram(..))));
+        assert_eq!(w.placements(), 0);
+    }
+
+    /// The refusal does not depend on the placement budget: with the window full, a sysmem leaf is
+    /// still `HeldByHost` (an `Err` would hang the guest's invalidate), and costs nothing.
+    #[test]
+    fn a_sysmem_leaf_is_refused_the_same_way_when_the_budget_is_exhausted() {
+        let r = Rec::default();
+        let max = MAX_CPU_WINDOW_PLACEMENTS as u64;
+        let w = CpuWindow::new(&r, (max + 4) * 0x1000);
+        for i in 0..max {
+            w.map(&d(i * 0x1000, i * 0x1000, 0x1000, false), true)
+                .unwrap();
+        }
+        assert!(w.map(&d(max * 0x1000, 0, 0x1000, false), true).is_err());
+        assert_eq!(
+            w.map(&d((max + 1) * 0x1000, 0x1000, 0x1000, true), true),
+            Ok(Mapped::HeldByHost)
+        );
+        assert_eq!(w.placements(), MAX_CPU_WINDOW_PLACEMENTS);
+    }
+
+    /// ★ Hostile-guest property: whatever mix of rows a guest's tables produce, a BAR window never
+    /// asks its host verbs to place guest RAM, never panics, never accepts a row outside its
+    /// aperture, and answers every in-aperture sysmem row `HeldByHost`, counted exactly once.
+    #[test]
+    fn hostile_rows_never_make_a_bar_window_place_guest_ram() {
+        let mut x = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            x ^= x >> 12;
+            x ^= x << 25;
+            x ^= x >> 27;
+            x.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        };
+        let bytes = 1u64 << 24;
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, bytes);
+        let mut expect_refused = 0u64;
+        for _ in 0..20_000 {
+            let va = match next() % 4 {
+                0 => next() % (bytes + 0x4000),
+                1 => u64::MAX - next() % 8,
+                2 => bytes - next() % 0x3000,
+                _ => (next() % 4096) * 0x1000,
+            };
+            let len = match next() % 4 {
+                0 => 0,
+                1 => u64::MAX - next() % 8,
+                2 => (1 + next() % 8) * 0x1000,
+                _ => next(),
+            };
+            let off = if next() % 3 == 0 {
+                u64::MAX - next() % 8
+            } else {
+                next()
+            };
+            let ram = next() % 2 == 0;
+            let inside = va.checked_add(len).is_some_and(|e| e <= bytes) && len != 0;
+            let res = w.map(&d(va, off, len, ram), true);
+            if !inside {
+                assert!(res.is_err(), "{va:#x}+{len:#x} outside must be refused");
+            } else if ram {
+                // (A placement of ours still at `va` would be refused first; none is kept here.)
+                assert_eq!(res, Ok(Mapped::HeldByHost), "{va:#x}+{len:#x}");
+                expect_refused += 1;
+            }
+            if res == Ok(Mapped::Placed) {
+                // Take it down again so the window never fills (a store view).
+                w.unmap(va, true).unwrap();
+            }
+        }
+        assert!(
+            !r.ops
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|o| matches!(o, Op::Ram(..)))
+        );
+        assert_eq!(w.stats().sysmem_leaf_refused, expect_refused);
+        assert!(expect_refused > 500, "{expect_refused}");
     }
 
     #[test]
@@ -1564,6 +1710,49 @@ mod tests {
             "one view of store [0, G) at BAR1 offset 0"
         );
         w
+    }
+
+    /// ★ 2026-10-31, through the real apply path: a BAR1 PTE whose aperture is system memory
+    /// (coherent or not) is acknowledged HELD (the guest's invalidate clears; the walker never
+    /// re-emits it), places nothing, and is counted; a vidmem leaf next to it is still applied.
+    #[test]
+    fn a_bar_pte_pointing_at_sysmem_is_acked_held_and_never_maps_guest_ram() {
+        use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_HELD};
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, BAR1);
+        let sys = |va, at, ap| crate::apply::DiffRun {
+            ap,
+            ..vid(va, at, 0x1000)
+        };
+        let a = apply(
+            &w,
+            &[
+                sys(0x1000, 0x4000_0000, crate::ledger::AP_SYS_COHERENT),
+                vid(0x2000, 0x8000, 0x1000),
+                sys(0x3000, 0x4000_1000, crate::ledger::AP_SYS_NONCOHERENT),
+            ],
+        );
+        assert_eq!(
+            a.codes,
+            vec![KFWR_ACK_HELD, KFWR_ACK_APPLIED, KFWR_ACK_HELD]
+        );
+        assert_eq!((a.mapped, a.held), (1, 2));
+        assert_eq!(w.stats().sysmem_leaf_refused, 2);
+        assert_eq!(w.placements(), 1);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![Op::Arm(0x8000, 0x1000), Op::View(0x2000, 0x1000, 0x8000)],
+            "only the vidmem leaf reached a host verb"
+        );
+        // Only sysmem leaves: nothing changed, so no invalidate either.
+        let w2 = CpuWindow::new(&r, BAR1);
+        r.ops.lock().unwrap().clear();
+        let a = apply(
+            &w2,
+            &[sys(0x1000, 0x4000_0000, crate::ledger::AP_SYS_COHERENT)],
+        );
+        assert_eq!(a.codes, vec![KFWR_ACK_HELD]);
+        assert!(r.ops.lock().unwrap().is_empty());
     }
 
     /// ★ RM preserved the console: its first BAR1 map is FB 0 → VA 0. The guest's view is placed
@@ -1827,11 +2016,16 @@ mod tests {
         let r = Rec::default();
         let w = CpuWindow::new(&r, BAR1);
         w.map(&d(0x1000, 0x5000, 0x1000, false), true).unwrap();
-        w.map(&d(0x3000, 0x9000, 0x2000, true), true).unwrap();
+        w.map(&d(0x3000, 0x9000, 0x2000, false), true).unwrap();
+        // A refused sysmem leaf places nothing, so its range is a gap (scratch).
+        w.map(&d(0x6000, 0x9000, 0x1000, true), true).unwrap();
         let c = w.coverage(0, 0x8000);
         assert_eq!(
             c.inside,
-            vec![(0x1000, 0x1000, Some(0x5000)), (0x3000, 0x2000, None)]
+            vec![
+                (0x1000, 0x1000, Some(0x5000)),
+                (0x3000, 0x2000, Some(0x9000))
+            ]
         );
         assert_eq!(
             c.gaps,

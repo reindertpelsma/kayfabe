@@ -67,6 +67,15 @@ pub trait SpaceVerbs {
     /// ★ Whether host RM can SPLIT a mapping lying in `[va, va+len)` (a range unmap that covers
     /// part of it) without damaging the part it keeps — see [`BatchedVas::unmap_range`].
     fn splits_safely(&self, va: u64, len: u64) -> bool;
+    /// ★ 2026-10-31 (`V3_GUEST_MEMORY.md` §5): the RAM offsets strictly inside `(off, off+len)`
+    /// where one host RAM object ends and the next begins ([`crate::ramobj::RamObjects::cuts`]).
+    /// A guest-RAM row is mapped one piece per object: **never one host map across an object
+    /// edge**, because the bytes after the edge are not the bytes of the next object. Default:
+    /// none — the whole of guest RAM is ONE object (a memfd), the case before this verb existed.
+    fn ram_cuts(&self, off: u64, len: u64) -> Vec<u64> {
+        let _ = (off, len);
+        Vec::new()
+    }
     /// ★ 2026-10-09: reserve `[va, va+len)` with a lazy FIXED `NV50_MEMORY_VIRTUAL` (a "micro
     /// reservation"); returns its handle (an `hDma`). Freed with [`SpaceVerbs::free`].
     ///
@@ -131,24 +140,22 @@ impl SpaceVerbs for HostVas<'_> {
     fn splits_safely(&self, va: u64, len: u64) -> bool {
         self.space.guest_reserved(va, len)
     }
+    fn ram_cuts(&self, off: u64, len: u64) -> Vec<u64> {
+        self.ram_objs.map_or_else(Vec::new, |t| t.cuts(off, len))
+    }
     fn reserve(&self, va: u64, len: u64) -> Result<u32, String> {
         self.rm
             .reserve_va(self.space.space, va, len)
             .map_err(|e| format!("reserve {va:#x}+{len:#x}: {e:?}"))
     }
     fn map_row_in(&self, h: u32, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let obj = if d.ram {
-            self.ram_obj
-                .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
-        } else {
-            self.store
-        };
+        let (obj, off) = self.backing_of(d)?;
         held_or(
             self.rm.map_in(
                 h,
                 obj,
                 kf_host::MapBacking::SharedSlice,
-                d.off,
+                off,
                 d.len,
                 d.va,
                 defer,
@@ -190,6 +197,22 @@ impl SpaceVerbs for HostVas<'_> {
             .unmap_in(h, va, size, defer)
             .map_err(|e| format!("unmap {va:#x}+{size:#x} in {h:#x}: {e:?}"))
     }
+}
+
+/// `[s, e)` cut at every ascending `cut` strictly inside it: the pieces, in order, each non-empty.
+fn cut_at(s: u64, e: u64, cuts: &[u64]) -> Vec<(u64, u64)> {
+    let mut out: Vec<(u64, u64)> = Vec::with_capacity(cuts.len().saturating_add(1));
+    let mut from = s;
+    for &c in cuts {
+        if c > from && c < e {
+            out.push((from, c));
+            from = c;
+        }
+    }
+    if from < e {
+        out.push((from, e));
+    }
+    out
 }
 
 /// A FIXED map's answer as [`Mapped`]: an occupied VA is `HeldByHost` (not ours).
@@ -2163,11 +2186,17 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     /// Map `[va, end)` piece by piece (one host map per segment), all or nothing; records each
     /// placed piece. `one(via, start, len)` performs one piece.
+    ///
+    /// `cuts` (ascending VAs, usually empty) are where a piece must END and the next begin even
+    /// inside one segment: a guest-RAM row is cut at every host RAM object edge it spans
+    /// ([`SpaceVerbs::ram_cuts`]), one host map per object. The pieces are recorded individually,
+    /// so an unmap takes each down by its own start.
     fn map_segments(
         &self,
         va: u64,
         end: u64,
         leaf: u64,
+        cuts: &[u64],
         defer: bool,
         one: &dyn Fn(Option<u32>, u64, u64) -> Result<Mapped, String>,
     ) -> Result<Mapped, String> {
@@ -2184,15 +2213,17 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         };
         let mut placed: Vec<Seg> = Vec::new();
         let mut verdict = Ok(Mapped::Placed);
-        for &(via, s, e) in &segs {
-            match one(via, s, e.saturating_sub(s)) {
-                Ok(Mapped::Placed) => placed.push((via, s, e)),
-                other => {
-                    if other == Ok(Mapped::HeldByHost) {
-                        self.note_held(via, s, e);
+        'segs: for &(via, seg_s, seg_e) in &segs {
+            for (s, e) in cut_at(seg_s, seg_e, cuts) {
+                match one(via, s, e.saturating_sub(s)) {
+                    Ok(Mapped::Placed) => placed.push((via, s, e)),
+                    other => {
+                        if other == Ok(Mapped::HeldByHost) {
+                            self.note_held(via, s, e);
+                        }
+                        verdict = other;
+                        break 'segs;
                     }
-                    verdict = other;
-                    break;
                 }
             }
         }
@@ -2258,7 +2289,17 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     pub fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         check_row(d.va, d.len, d.off)?;
         let end = d.va.saturating_add(d.len);
-        self.map_segments(d.va, end, d.leaf, defer, &|via, s, l| {
+        // ★ 2026-10-31: a guest-RAM row is cut at every host RAM object edge inside it.
+        let cuts: Vec<u64> = if d.ram {
+            self.vas
+                .ram_cuts(d.off, d.len)
+                .into_iter()
+                .filter_map(|c| c.checked_sub(d.off).and_then(|r| d.va.checked_add(r)))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.map_segments(d.va, end, d.leaf, &cuts, defer, &|via, s, l| {
             let piece = Desired {
                 va: s,
                 len: l,
@@ -2286,7 +2327,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     pub fn map_sked(&self, sk: &SkedRow, defer: bool) -> Result<Mapped, String> {
         check_row(sk.va, sk.len, sk.off)?;
         let end = sk.va.saturating_add(sk.len);
-        self.map_segments(sk.va, end, BATCH_PAGE, defer, &|via, s, l| {
+        self.map_segments(sk.va, end, BATCH_PAGE, &[], defer, &|via, s, l| {
             let piece = SkedRow {
                 va: s,
                 len: l,

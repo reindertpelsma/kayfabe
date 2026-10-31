@@ -35,7 +35,10 @@
 
 use crate::apply::{ApplyCfg, DiffRun, apply_entry};
 use crate::batch::{BatchedVas, SpaceVerbs};
-use crate::ledger::{AP_SYS_COHERENT, AP_VIDMEM, Desired, MapTarget, Mapped, NOT_BATCHED, SkedRow};
+use crate::ledger::{
+    AP_SYS_COHERENT, AP_VIDMEM, Desired, MapTarget, Mapped, NO_RAM_FD, NOT_BATCHED, SkedRow,
+};
+use crate::ramobj::RamObjects;
 use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_HELD};
 use kf_host::channel::GuestVaRange;
 use kf_host::{MapPerm, VaSpace};
@@ -144,6 +147,13 @@ pub struct SimRm {
     pub injected: u64,
     /// The pages that must keep their translation after every host call (the guard).
     pub guard: Vec<(u64, Backing)>,
+    /// ★ 2026-10-31: guest RAM as ONE OBJECT PER HOST SEGMENT (no file): a guest-RAM row maps from
+    /// the object that carries it, and a host map that reaches past its object's end is a
+    /// VIOLATION. `None`: the single whole-RAM object ([`RAM_OBJ`], the memfd shape).
+    pub ram_segs: Option<RamObjects>,
+    /// ★ 2026-10-31: the VMM's guest RAM has NO file (the optional stitch capability is absent):
+    /// the mirror's batch verb answers [`NO_RAM_FD`], as `kf_qemu::mem::GpuMirror::map_batch` does.
+    pub no_fd: bool,
     /// `gvaspaceFree` found no block (`NV_ASSERT @ gpu_vaspace.c:1639`).
     pub asserts: u32,
     /// Every mirror range unmap, `(va, len)`.
@@ -287,6 +297,8 @@ impl Sim {
             fail_unmaps: None,
             injected: 0,
             guard: Vec::new(),
+            ram_segs: None,
+            no_fd: false,
             asserts: 0,
             ranges: Vec::new(),
             gap_bytes: 0,
@@ -389,6 +401,19 @@ impl SimRm {
                 ));
             }
             return Err(true);
+        }
+        // ★ A host map can only carry bytes of ITS object: past the object's end there are none
+        // (a hole, or another block elsewhere in the VMM). One map across an edge is the defect.
+        if let Some(end) = self.frag_obj_end(obj)
+            && let Some(&(_, pv, pl)) = pieces
+                .iter()
+                .find(|&&(_, pv, pl)| off + (pv - va) + pl > end)
+        {
+            self.violations.push(format!(
+                "map {pv:#x}+{pl:#x} reaches {:#x} past the end ({end:#x}) of RAM object {obj:#x}",
+                off + (pv - va) + pl
+            ));
+            return Err(false);
         }
         for &(h, pv, pl) in pieces {
             self.n.rm_map += 1;
@@ -592,6 +617,14 @@ impl SimRm {
             .iter()
             .find(|m| !m.broken && m.owner == owner && m.va <= va && va < m.va + m.len)?;
         let o = m.off + (va - m.va);
+        if let Some(seg) = self
+            .ram_segs
+            .as_ref()
+            .and_then(|t| t.segments().iter().find(|s| s.obj == m.obj))
+        {
+            // A fragment object: report the RAM offset (the numbering the walker committed).
+            return Some((true, seg.ram_off + (o - seg.obj_off)));
+        }
         Some(match m.obj {
             RAM_OBJ => (true, o),
             STORE_OBJ | FOREIGN_OBJ => (false, o),
@@ -607,6 +640,31 @@ impl SimRm {
             .filter(|m| m.broken && m.owner == Owner::Mirror)
             .map(|m| (m.va, m.len))
             .collect()
+    }
+
+    /// The object and object offset a row `d` is backed by: the segment that carries it when guest
+    /// RAM is fragmented (`Err` when none carries it WHOLE — the batch layer must have cut it),
+    /// else the single whole-RAM object / the store.
+    fn backing_for(&self, d: &Desired) -> Result<(u32, u64), String> {
+        if !d.ram {
+            return Ok((STORE_OBJ, d.off));
+        }
+        match &self.ram_segs {
+            Some(t) => t
+                .resolve(d.off, d.len)
+                .map_err(|e| format!("map {:#x}+{:#x}: guest RAM: {e}", d.va, d.len)),
+            None => Ok((RAM_OBJ, d.off)),
+        }
+    }
+
+    /// The end of fragment object `obj` (its length counted from offset 0), if it is one.
+    fn frag_obj_end(&self, obj: u32) -> Option<u64> {
+        self.ram_segs
+            .as_ref()?
+            .segments()
+            .iter()
+            .find(|s| s.obj == obj)
+            .map(|s| s.obj_off + s.len)
     }
 
     /// Place a FOREIGN mapping (other kayfabe code, same client + `hDma`).
@@ -684,11 +742,11 @@ impl SpaceVerbs for &Sim {
         if self.0.borrow_mut().ext_hit(2) {
             return Err(format!("map {:#x}+{:#x}: refused (injected)", d.va, d.len));
         }
-        let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
+        let (obj, off) = self.0.borrow().backing_for(d)?;
         match self
             .0
             .borrow_mut()
-            .map(d.va, d.len, obj, d.off, Owner::Mirror)
+            .map(d.va, d.len, obj, off, Owner::Mirror)
         {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
@@ -778,6 +836,13 @@ impl SpaceVerbs for &Sim {
     fn splits_safely(&self, va: u64, len: u64) -> bool {
         self.0.borrow().space.guest_reserved(va, len)
     }
+    fn ram_cuts(&self, off: u64, len: u64) -> Vec<u64> {
+        self.0
+            .borrow()
+            .ram_segs
+            .as_ref()
+            .map_or_else(Vec::new, |t| t.cuts(off, len))
+    }
     fn reserve(&self, va: u64, len: u64) -> Result<u32, String> {
         self.0.borrow_mut().reserve(va, len)
     }
@@ -785,8 +850,8 @@ impl SpaceVerbs for &Sim {
         if self.0.borrow_mut().ext_hit(2) {
             return Err(format!("map {:#x} in {h:#x}: refused (injected)", d.va));
         }
-        let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
-        match self.0.borrow_mut().map_through(h, d.va, d.len, obj, d.off) {
+        let (obj, off) = self.0.borrow().backing_for(d)?;
+        match self.0.borrow_mut().map_through(h, d.va, d.len, obj, off) {
             Ok(()) => Ok(Mapped::Placed),
             Err(true) => Ok(Mapped::HeldByHost),
             Err(false) => Err(format!(
@@ -935,6 +1000,9 @@ impl MapTarget for SimMirror<'_> {
     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
         if !self.batching {
             return Err(NOT_BATCHED.into());
+        }
+        if self.sim().0.borrow().no_fd {
+            return Err(NO_RAM_FD.into());
         }
         let res = self
             .bv
