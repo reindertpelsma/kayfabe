@@ -325,8 +325,8 @@ default. Nothing reads a mapped VA between the last map and the invalidate (a de
   does today); the arm **never copies from an unmapped VA** (that is an Xid 31 and a red run for the wrong reason).
 - **Bystander window** (`--stress-bystander`, default on): one more 16 MiB window in the same VA space, mapped once
   before refresh 1 and never touched by the refresh, read by a second `CeRig` thread at ~100 Hz during maps, invalidate
-  and unmaps. Any wrong word or any fault fails the arm. This is the memory rule "unchanged VAs stay accessible during
-  refresh" (`feedback_va_manager_unchanged_va_invariant`) made executable. INFERRED value; UNSURE that a second channel
+  and unmaps. Any wrong word or any fault fails the arm. This makes the owner invariant of 2026-10-10 executable ("unchanged VAs
+  never transiently unmapped", `V3_HOST_PATCH_LIST.md` H6). INFERRED value; UNSURE that a second channel
   does not perturb the timing being measured, so the first calibration runs it both ways.
 
 ### 4.6 Parameters derived from the architecture table, never hardcoded per die
@@ -408,8 +408,8 @@ bounded failure detection, results come from fences and data); no use of `KF3_*`
   gate is not usable; fall back to the absolute caps and the Xid watch only.
 - **F5 coverage**: if `NOTRUN` on the thin guest is common (memory, pagemap, THP), the row is not coverage.
 - **What a synthetic cannot prove about Windows**: WDDM's paging-node scheduling and the 2 s TDR timer itself;
-  dxgkrnl locks held while the guest polls the MMU invalidate trigger bit (the root cause recorded for the earlier
-  hang, `project_windows_hang_root_cause_20261009`); VidMm's own PTE writing path (the Linux RM writes PTEs here,
+  dxgkrnl locks held while the guest polls the MMU invalidate trigger bit (the recorded cause of the earlier Windows hang: an
+  uncleared `MMU_INVALIDATE` at `0xB830B0`, `THE_SURFACE_v3.md`); VidMm's own PTE writing path (the Linux RM writes PTEs here,
   WDDM's kernel driver there, so the *mechanism* differs even if the host-visible rows match); Windows' free-page
   distribution and its VA layout (multi-GB windows, 64 KiB and 2 MiB pages); concurrent 3D, copy and paging nodes;
   DWM and the real application's allocation churn; the NVIDIA Windows driver's own invalidate sequence.
