@@ -423,6 +423,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-rawclient"
+version = "0.1.0"
+dependencies = [
+ "kf-arch",
+ "kf-chip",
+ "kf-harness",
+ "kf-host",
+ "kf-linux-raw",
+]
+
+[[package]]
 name = "kf-rm"
 version = "0.1.0"
 dependencies = [

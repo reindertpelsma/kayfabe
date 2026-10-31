@@ -1,7 +1,74 @@
 # V3 RAW CLIENT — the grader moves into the live tree; the refresh stress is its first new arm
 
-**STATUS: DESIGN-ONLY, 2026-10-31.** Scoping and plan only. Nothing here is built: no crate, no arm, no CI edit.
-Written against `origin/next` 23505064c with PR #214 (`kayfabe-device` to `archive/crates`) in flight. Owner direction
+**STATUS: DESIGN-ONLY, 2026-10-31**, except the part the correction directly below names as built: the framework
+crate and the refresh-stress arm exist and pass their GPU-free tests, and have **never run on a GPU**.
+
+> ⊘ **Correction 2026-10-31 (branch `claude/rawclient-s1s2-20261031`), above the sentence it corrects.** The sentence
+> *"Scoping and plan only. Nothing here is built: no crate, no arm, no CI edit"* is superseded for two items.
+>
+> **Numbering.** The owner's instruction named two steps: **S1** the framework, **S2** the stress row. They are not
+> §5.2's S1 and S2. In §5.2's table they are S1 (skeleton, without the facade `exec`, without `ARMS.tsv`), the
+> arm-without-hardware half of S3, and the safe part of §5.2's S2. §5.2 is unchanged; its S3 is now only "run it on a
+> box with `KF3_MAPLOG=1`".
+>
+> **Built.**
+> - `crates/kf-rawclient` (library plus its own binary `kf-rawclient`; **not** `kayfabe-rm-ladder`, no script builds or
+>   runs it, the literal `30` is untouched, no `ARMS.tsv` yet). Arm registry (`registry.rs`: name, rung stem, doc,
+>   expected seconds native and guest, required capabilities), capability check against host answers
+>   (`caps.rs`: GMMU grain from `kf_chip::Family::mmu_format`, copy-engine class, VA band, readable page frames; no die
+>   table), `--mode bare|native|guest`, `--list-arms`, `--refresh-compare`, the cell line, a watchdog, and the output
+>   contract below.
+> - The arm `--refresh-stress` (`stress/`): all hardware behind one trait (`stress/backend.rs`), the real backend over
+>   `kf_host::HostRm` and `kf_harness::CeRig` (`hw.rs`), a fake backend for the tests. 106 GPU-free tests (plus 6 in `kf-linux-raw`); 14 hand-made mutants of the arm
+>   logic (an oracle that never mismatches, a second invalidate, qualification skipped, a skip counted as a pass,
+>   a deadline that never passes, ...) each fail at least one of them. `cargo check -p kf-rawclient` passes for
+>   `aarch64-unknown-linux-gnu` and `x86_64-unknown-linux-musl` (type-check only; no link was tried).
+> - `kf-linux-raw`: `MappedRegion::advise` (`NoHugePage`, `DontNeed`; the one new `unsafe` block, ratchet 97 -> 98) and
+>   `pagemap.rs` (safe: pagemap words, `smaps` huge-page sum).
+>
+> **Output contract of the new client** (what a suite may parse; the legacy tokens are kept where the suites read them):
+> exit code **0** pass, **1** fail, **2** command line refused by name, **3** not run (decides nothing; the stress arm
+> uses it for an unqualified workload, a missing capability, too little memory, no RM device), **124** watchdog (phase
+> or whole-run deadline; prints `WATCHDOG limit= phase= refresh= batch= waited_ms=`). Lines: `RAWCLIENT_CELL die= family=
+> mmu= drv= kmod= mode= rev=` (§4.6; `rev` comes from `KF_REV`, `unknown` if unset); `CHECK <name> PASS|FAIL|SKIP <why>`
+> (a `SKIP` is a check that could not be made and is never counted as a pass); `RUNGCTL_refresh_stress=PASS|FAIL` (the
+> decoy control); `RUNG_refresh_stress=PASS|FAIL|NOTRUN` with `why=` or `reason= detail=`; one `RAWCLIENT_JSON {...}`
+> record. Stress lines: `STRESS_PARAMS`, `STRESS_QUALIFY` (§4.2 fields, then `max_run_len min_batch_ratio required
+> result`), `STRESS_REFRESH` (§4.7), `STRESS_HIST op=pin|map|inval|unmap|copy` (the `copy` op is an addition),
+> `STRESS_SUMMARY`. `--refresh-compare NATIVE GUEST` prints `STRESS_RATIO ... state=within|exceeds-advisory|exceeds|
+> unusable`, exit 0 / 0 / 1 / 3; it refuses logs whose cells differ in anything but the mode, whose `rev` is `unknown`,
+> whose mode label is wrong, or whose run did not pass.
+>
+> **Where the built arm differs from §4 or leaves a gap (each is a decision for review, none is hidden):**
+> 1. **Unmap postcondition is skipped, not passed.** `kf-host` has no `probe_va` (§2.3.1); the real backend returns
+>    `Probe::Unsupported` and the arm prints `CHECK unmap_postcondition SKIP probe_va-verb-missing`. G1 is therefore
+>    weaker than §4.7 until the verb exists.
+> 2. **No bystander window** (§4.5) and **`--stress-invalidate memop`** is refused by name
+>    (`invalidate-memop-not-built`). Only `DMA_INVALIDATE_TLB` is issued.
+> 3. **Unmaps are not deferred** (each invalidates itself); only the maps defer. UNSURE what the guest RM does.
+> 4. **Decoy.** The decoy runs on the staged page when it matched its signature and on a synthetic page holding the
+>    signature when it did not, so a wrong page does not also read as a broken instrument. A decoy that does not trip
+>    fails the run (`RUNGCTL` FAIL, rc 1), where the legacy convention would print NOTRUN: a blind comparison is the
+>    client's defect.
+> 5. **Thresholds** live in `stress/calibration.rs`, every unobserved one tagged `CALIBRATION-NEEDED`; the ratio does
+>    not gate (`RATIO_GATES = false`). Floors for qualification are a flag (`--stress-min-run-ratio`, default 0.90,
+>    refused outside 0.5..=1.0).
+> 6. **Extra flags**, all validated with named refusals: `--stress-batches/-pages-per-batch/-leaf-bytes/-refreshes/
+>    -sample/-live/-seed/-deadline-s/-hard-cap-s/-phase-s/-mem-cap-mib/-min-run-ratio/-pressure/-shape/-invalidate`.
+>    Defaults are §4's: 24 x 4,096 pages, 3 refreshes, sample 1,536, live 32, deadline 50 s, phase 10 s.
+> 7. **Dependency.** The arm uses `kf_harness::CeRig`; `kf-rawclient` is therefore not yet the musl-minimal build §5.1
+>    wants (UNSURE whether to move the rig).
+> 8. **The real backend was written against the APIs and compiled; it has not run on any GPU.** Whether
+>    `MapBacking::SharedSlice` is right for a fresh OS descriptor, and whether `HostRm::open` works from a guest for this
+>    workload, are still the open items of §4.3 and §7.6.
+>
+> **S3 (next, needs a box).** Provision per `scripts/bench/box/README.md`; build `cargo build --release -p kf-rawclient`;
+> run natively as root: `KF_REV=<sha> kf-rawclient --gpu 0 --mode bare --refresh-stress | tee native.log`; with
+> `KF3_MAPLOG=1` in the QEMU environment run the guest leg through the `KF_TOOL_BIN` lane (`build_fast_guest.sh`,
+> `NVKVM_RAM_MB=3072`) with `--mode guest`; compare with `kf-rawclient --refresh-compare native.log guest.log`. The one
+> question that gates everything is F1 (§4.9): does the QEMU log show about 98,304 single-page rows per refresh?
+
+Scoping and plan below. Written against `origin/next` 23505064c with PR #214 (`kayfabe-device` to `archive/crates`) in flight. Owner direction
 of 2026-10-31: (1) move the raw client `crates/kayfabe-rm-ladder` (the "grader", 30 arms) into the `kf-*` tree so the
 frozen `crates/kayfabe-*` tree can be archived; (2) the new REFRESH STRESS test is an **arm of the raw client**, not a
 one-off, runnable by the gpu-vast CI across drivers and dies; (3) no big bang: a strangler path, old and new verified

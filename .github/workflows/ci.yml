@@ -1769,7 +1769,17 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          # ★★ kf-linux-raw 97 -> 98 (2026-10-31, `claude/rawclient-s1s2-20261031`, V3_RAW_CLIENT.md
+          # §4.2 / S2, the v3 raw client's refresh-stress arm):
+          #   mapping_unsafe.rs (+1): `MappedRegion::advise` — ONE `madvise` block over a closed
+          #   two-variant enum (`RegionAdvice::NoHugePage`, `::DontNeed`). The range is
+          #   `checked_span`-bounded inside the mapping and page-aligned before the call; NoHugePage only
+          #   sets a VMA flag, DontNeed on a ReadWrite private mapping makes the next access read zeros and
+          #   invalidates no address (the type hands out no reference, copies only); a read-only region is
+          #   refused for DontNeed. The arm needs both to BUILD scattered memory it can then census:
+          #   without NOHUGEPAGE a 2 MiB-contiguous run is invisible, without DONTNEED the free lists
+          #   hold no holes. The pagemap/smaps readers beside it (`pagemap.rs`) are safe `std::fs`.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:98 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

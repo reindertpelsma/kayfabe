@@ -288,6 +288,7 @@ mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod memtype;
 pub mod page_size;
+pub mod pagemap;
 pub mod scratch;
 mod signal_unsafe;
 mod sysconf_unsafe;
@@ -312,8 +313,8 @@ pub use host_fd_unsafe::{
 };
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
-    Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, Reservation,
-    VolatileRegion, release_fence,
+    Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, RegionAdvice,
+    Reservation, VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
 pub use scratch::{

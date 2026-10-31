@@ -26,6 +26,7 @@ members = [
     "crates/kf-broker",
     "crates/kf-oprom",
     "crates/kf-census",
+    "crates/kf-rawclient",
     "crates/kf-gop-image",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
@@ -67,6 +68,8 @@ kf-disp = { path = "crates/kf-disp" }
 kf-broker = { path = "crates/kf-broker" }
 kf-oprom = { path = "crates/kf-oprom" }
 kf-census = { path = "crates/kf-census" }
+kf-harness = { path = "crates/kf-harness" }
+kf-rawclient = { path = "crates/kf-rawclient" }
 kf-gop-image = { path = "crates/kf-gop-image" }
 kf-mem = { path = "crates/kf-mem" }
 kf-trap = { path = "crates/kf-trap" }
