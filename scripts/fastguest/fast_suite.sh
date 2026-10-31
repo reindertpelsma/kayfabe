@@ -34,7 +34,7 @@ OUT=$BENCH/${TAG}_suite.out
   echo "rev=$(git -C "$(dirname "$0")/../.." rev-parse --short HEAD 2>/dev/null || echo ?)"
   printf '%-28s %-9s %-5s %s\n' ARM VERDICT secs why
 } > "$OUT"
-pass=0; fail=0; crash=0; notrun=0
+pass=0; fail=0; crash=0; notrun=0; refused=0
 for arm in "${ARMS[@]}"; do
     name=${arm#--}
     line=$(KF_ARMS="$arm" bash "$(dirname "$0")/run_fast_guest.sh" "${TAG}_${name}" "$BUDGET" 2>&1)
@@ -69,6 +69,7 @@ for arm in "${ARMS[@]}"; do
     # binary has had `RUNG_<arm>=NOTRUN` since w381; only this script lacked it.
     notrun_this=0
     case "$v" in
+        REFUSED)  crash=$((crash+1)); refused=1 ;;
         PASS)     pass=$((pass+1)) ;;
         FAIL)     fail=$((fail+1)) ;;
         VMM_DIED) crash=$((crash+1)) ;;
@@ -87,6 +88,12 @@ for arm in "${ARMS[@]}"; do
     cms=$( [ -n "$t0" ] && [ -n "$t1" ] && awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%d", (b-a)*1000}' )
     printf '%-28s %-9s %-5s %s\n' "$arm" "$v" "${secs:-?}s" "$why" >> "$OUT"
     echo "FAST_CELL_ARM arm=$name verdict=$v secs=${secs:-?} client_ms=${cms:-?}" >> "$OUT"
+    if [ "$refused" -eq 1 ]; then
+        remaining=$(( ${#ARMS[@]} - pass - fail - crash - notrun ))
+        notrun=$((notrun + remaining))
+        echo "FAST_SUITE_REFUSED=1 remaining_notrun=$remaining" >> "$OUT"
+        break
+    fi
 done
 # ⊘⊘⊘ **AND THE SUITE USED TO HARDCODE `FAST_SUITE_RC=0`** — it reported a scoreboard and
 # gated on nothing, so a caller chaining on it proceeded over any result at all. `[w824]` five
@@ -95,7 +102,9 @@ done
 # reads as if it were grouped the other way. A gate whose own logic needs a second look is the
 # kind that silently passes.
 rc=0
-if [ "$notrun" -gt 0 ]; then
+if [ "$refused" -eq 1 ]; then
+    rc=3
+elif [ "$notrun" -gt 0 ]; then
     rc=2                                   # the suite did NOT run — distinct from "ran and failed"
 elif [ "$fail" -gt 0 ] || [ "$crash" -gt 0 ]; then
     rc=1
