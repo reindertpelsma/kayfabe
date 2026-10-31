@@ -29,7 +29,7 @@ WORKER_URL = "https://ci.kayfabe.dev"
 # Numeric owner policy defaults are defined once in defaults.json.
 RENTING_ENABLED = "false"
 # SHA-256 of wrangler's emitted module (equals deployment.json; deploy.mjs refuses otherwise).
-DEPLOYED_BUNDLE_SHA256 = "2828bf41ed2574b638a7b6fb535e16b6dba9467c997972917050aa58d0bb0460"
+DEPLOYED_BUNDLE_SHA256 = "5300f350610166edb997ab50ad87fa6e8c61e034db5d03f3fef5bf90f7302e06"
 # Public GitHub account id of the owner (also in every commit author email); never a secret.
 OWNER_GITHUB_ID = "229738317"
 REPOSITORY = "reindertpelsma/kayfabe"
@@ -43,6 +43,9 @@ SWEEP_JOB_WORKFLOW_REF = "reindertpelsma/kayfabe/.github/workflows/gpu-vast-swee
 # RUN_TOKEN_SECRET and OWNER_STOP_TOKEN: independent random base64url strings, >=32 chars.
 # Optional GITHUB_API_TOKEN: read-only GitHub checks and release metadata.
 # BLOB_GITHUB_TOKEN: deprecated asset-only fallback.
+# Optional secrets R2_READ_ACCESS_KEY_ID, R2_READ_SECRET_ACCESS_KEY: READ-ONLY S3 key pair of the private
+# benchmark bucket (route /bench-data/). Public vars R2_ACCOUNT_ID, R2_BUCKET and
+# BENCH_DATA_ALLOWED_COUNTRIES (default US,CA) go in the deploy vars file, not here.
 # No Cloudflare or Vast secret belongs in GitHub Actions.
 
 # Optional PREFERRED_COUNTRIES JSON overrides defaults.json; eligibility always comes first.

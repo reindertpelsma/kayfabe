@@ -14,7 +14,8 @@ export function routeKind(path) {
     new RegExp(
       '^/blob-url/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}/' +
         '[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,100}$',
-    ).test(path)
+    ).test(path) ||
+    /^\/bench-data\/[1-9][0-9]{0,19}-[1-9][0-9]{0,19}\/[A-Za-z0-9._-]{1,100}$/.test(path)
   )
     return 'box';
   return null;

@@ -1,6 +1,11 @@
 # External downloads: sources, terms status and caching rules
 
-**STATUS: RESEARCH, 2026-10-23.** Draft summary; the terms status is not final.
+**STATUS: RESEARCH, 2026-10-31.** Draft summary; the terms status is not final. Since 2026-10-31 the
+code for the private R2 copy exists (Worker route `/bench-data/` and the box helper
+`scripts/bench/box/fetch_bench_data.sh`, section "SPECviewperf private copy: the R2 objects");
+it is merged only when its PR is, and it is not live until the coordinator deploys the Worker and
+sets the R2 secrets (`ci/vast-broker/DEPLOY.md`). The 2026-10-23 text below that says no private
+cache exists describes the revision named in it.
 
 Neutral summary of what the test tooling fetches from outside the project, who fetches it, and
 what the published terms allow. It is not legal advice. The research with verbatim clauses is in
@@ -14,7 +19,8 @@ match Tables A and B below. The terms, robots.txt and licence statements are NOT
 the repo and rest on the private research note. The SPECviewperf lane exists only on branch
 `codex/kayfabe-specviewperf-20261022`, not on master. No private R2 cache exists in the repo
 yet: the cache rules below are the intended policy, and the section "What the scripts do today"
-lists where the code differs.
+lists where the code differs. [SUPERSEDED 2026-10-31 for the R2 cache: the R2 objects, the Worker
+route and the box helper are described in "SPECviewperf private copy: the R2 objects" below.]
 
 Terms status values: `OK auto` (OK to download automatically), `OK cache` (OK as private
 cache), `unclear`, `not allowed` (for the stated use). Caching rule values: `direct` (direct per
@@ -101,7 +107,8 @@ export, trademark clauses). Reading, not advice.
   box is released. Teardown logs record the deletion.
 - Export: SPEC's licence refers to the US export regulations. Fetch only to boxes in an
   allow-list of host countries (US and other countries the owner approves for the licence).
-  The list lives in the box-rental script, and a box outside it never receives the copy.
+  The list lives in the Worker var `BENCH_DATA_ALLOWED_COUNTRIES` (default `US,CA`; the 2026-10-31
+  code replaces "the box-rental script"), and a box outside it never receives the copy.
 - Refresh on every new SPECviewperf release. The licence for a release ends when a later one
   is issued, so re-download, re-accept, re-pin, and remove the old copy.
 - Published numbers follow SPEC's Fair Use Rule: benchmark name and version, trademark line,
@@ -109,6 +116,32 @@ export, trademark clauses). Reading, not advice.
   non-compliant numbers. Ratios between configurations are derived values. When unsure,
   publish only "completed" or "failed". Keep result files from every run (the licence limits
   use to generating performance data).
+
+## SPECviewperf private copy: the R2 objects
+
+STATUS: DESIGN-ONLY until the Worker change is deployed (code in the PR that added this section; no
+deployment, bucket content or Cloudflare setting is checked from the repo).
+
+The private bucket is `kayfabe-bench-enam` (Cloudflare R2, location hint ENAM, private). Its
+objects for SPECviewperf 15.0.0 are:
+
+| R2 key | Name the box asks the Worker for | Role |
+|---|---|---|
+| `specviewperf-15.0.0/specviewperf-15.0.0.tar.zst` | `specviewperf-15.0.0.tar.zst` | the benchmark tree, about 25 GB |
+| `specviewperf-15.0.0/CHECKSUMS.txt` | `specviewperf-15.0.0.CHECKSUMS.txt` | checksums of the copy |
+| `specviewperf-15.0.0/SPEC_General_License.pdf` | `specviewperf-15.0.0.SPEC_General_License.pdf` | the licence text kept beside the copy |
+| `specviewperf-15.0.0/original/SPECviewperf-Setup-15.0.0.exe` | `specviewperf-15.0.0.SPECviewperf-Setup.exe` | the original installer, unmodified |
+
+How a rented box gets them: it calls the Vast CI Worker with its run token and the Worker answers
+with a redirect to a presigned URL that lives at most 20 minutes, only while the run is live, only
+for a box in the countries of the export allow-list (Worker var `BENCH_DATA_ALLOWED_COUNTRIES`,
+default `US,CA`), at most 4 URLs per object per run. The box never holds a Cloudflare credential.
+`scripts/bench/box/fetch_bench_data.sh <name> --sha256 <pin> --out <file>` downloads with resume
+into a `.part` file and renames only after the sha256 pin matches; with `--extract <dir>` it
+streams `zstd -d | tar -x` and never stores the 25 GB archive. The pins (the `.tar.zst` and
+`CHECKSUMS.txt` hashes) are not in the repo yet: the owner pins them at the first upload. The
+2 GiB per-run ceiling named under "Download etiquette" stays an example for third-party hosts; the
+owner-hosted cache is excluded from it.
 
 ## Download etiquette
 
@@ -142,7 +175,10 @@ The rules above are the target. Where the code differs:
   bad file stays in the cache until removed (the next run dies on the same mismatch).
 - User-Agent: `appdisk.py` sends `Mozilla/5.0 (kayfabe-appmatrix)`, not a descriptive contact
   string. `win_vm.sh` sends curl's default.
+- [SUPERSEDED 2026-10-31 in part: the private R2 route, the country allow-list (a Worker var, not
+  the box-rental script) and the box helper exist in code, see "SPECviewperf private copy: the R2
+  objects"; nothing is deployed or checked on a box yet, and teardown deletion of the copy is
+  still the box destruction, with no separate deletion log.]
 - Not implemented yet: exponential backoff with jitter, `Retry-After`, the 10 s spacing for
-  spec.org hosts, a per-run byte ceiling, the private R2 cache, the country allow-list and
-  teardown deletion of the SPECviewperf copy, the unpinned Geekbench and CUDA samples fetches,
+  spec.org hosts, a per-run byte ceiling, teardown deletion of the SPECviewperf copy, the unpinned Geekbench and CUDA samples fetches,
   and a CI check that PR jobs download nothing heavy.

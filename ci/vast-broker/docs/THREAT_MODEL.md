@@ -205,3 +205,24 @@ change any of them; no file in the repository enforces them.
 
 **Not proved.** That the box ran the code it was asked to (the box is untrusted); that a PASS covers anything
 but the tested SHA; that the pinned actions execute as intended (not run by this review).
+
+## 9. Bench-data download (licensed benchmark copy in private R2)
+
+CODE READ 2026-10-31 (`src/benchdata.js`, `src/sigv4.js`, `src/index.js`; owner-approved design; the
+route is not live until the coordinator deploys and sets the secrets listed in DEPLOY.md):
+a box with a live run token can ask `GET /bench-data/<run>-<attempt>/<name>` and receive a 302 to a
+presigned S3 GET URL for one of four allow-listed objects of the private bucket. The Worker holds
+a read-only R2 S3 key pair and signs locally; the box never holds a Cloudflare credential.
+
+| What a hostile host or box learns or can do | Why it is accepted |
+| --- | --- |
+| A presigned URL valid for at most 20 minutes (and not past the run's deadline) to a licensed object, up to 4 per object per run. | Once downloaded, the same bytes sit on the box's disk and the root user of the box can read them anyway; the URL adds nothing the bytes do not. The copy is deleted at teardown (`docs/DOWNLOADS.md`, "SPECviewperf private copy: handling rules"), and the box is destroyed. |
+| It can pass the URL on to another machine within those 20 minutes. | Same as copying the file out; the licence control is the owner's approval of each SHA and the box lifetime, not secrecy of the bytes on the box. The cap bounds the bandwidth a leaked URL can serve (4 x 4 objects per run at most). Not a new class of risk beyond the existing blob-url design. |
+| Nothing about the bucket: no listing, no other key, no key pair, no bucket name beyond the host and path inside the URL. | The bucket name and account id appear in the URL path and host; they are not secrets. Only the signature is. Signing is read-only and scoped to the one bucket by the token. |
+| A box can ask from a machine that spoofs its country. | INFERRED from the design: the export rule is a best-effort precondition, judged on the country Cloudflare derives for the request (`CF-IPCountry`), plus the recorded host country when it is known. Both are host-influenced (proxies, spoofed offer geolocation), like the denied-countries list in section 6: a compliance control against honest mistakes, not a security boundary. Missing or unknown country is refused. |
+| A token from an ended run or another run. | Refused before signing: the run-token signature and claims, the record being open and unexpired, the provider reporting the instance running and the next deadline not passed (the same checks as `/blob-url`). A URL minted before the run ended can still be used until it expires; it cannot be revoked, which is why it lives at most 20 minutes and never past the deadline. |
+
+NOT VERIFIABLE FROM CODE: that the R2 token is read-only and bucket-scoped, that the bucket is
+private (no public access, no custom domain), and which countries the owner's licence review
+approves. All three are Cloudflare or owner settings. Keep the verdict rule: a box's verdict stays
+untrusted data; the download route changes no verdict path and no code the box runs.
